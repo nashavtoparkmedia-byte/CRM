@@ -2383,6 +2383,73 @@ function providerIdFromEmptyOp180Snapshot(payload) {
   return ids.length === 1 ? ids[0] : null
 }
 
+async function recoverProviderStoreLiveTextById(chatId, providerMessageId, reason = 'provider_store_live_recovery') {
+  const chatIdStr = normalizeMaxChatId(chatId)
+  const providerId = String(providerMessageId || '').toLowerCase()
+  if (!chatIdStr || !isRealMaxMessageId(providerId) || !page || !isReady) {
+    return { skipped: 'provider_store_recovery_not_ready' }
+  }
+
+  const route = resolveUiRouteIdForChat(chatIdStr)
+  const uiRouteId = route.uiRouteId
+  if (!/^\d{1,15}$/.test(String(uiRouteId || ''))) {
+    return { skipped: 'provider_store_recovery_route_missing' }
+  }
+
+  let providerMessage
+  try {
+    providerMessage = await new MaxWebReplyBridge(page).readProviderMessage(
+      chatIdStr,
+      providerId,
+      { uiChatId: String(uiRouteId) },
+    )
+  } catch (error) {
+    console.warn(`[providerStoreRecovery] lookup failed chatId=${chatIdStr} id=${providerId}: ${error.message}`)
+    return { skipped: 'provider_store_lookup_failed' }
+  }
+
+  if (String(providerMessage?.providerMessageId || '').toLowerCase() !== providerId
+    || Number(providerMessage?.routeMatchCount || 0) !== 1) {
+    return { skipped: 'provider_store_identity_mismatch' }
+  }
+  if (providerMessage.isOutgoing) return { skipped: 'provider_store_outgoing_echo' }
+  const text = typeof providerMessage.exactText === 'string' && providerMessage.exactText.length > 0
+    ? providerMessage.exactText
+    : providerMessage.text
+  if (!text) return { skipped: 'provider_store_text_missing' }
+
+  const peerProviderUserId = dialogPeerProviderUserId(chatIdStr)
+  const result = await forwardToWebhook({
+    externalId: providerId,
+    chatId: chatIdStr,
+    rawChatId: chatIdStr,
+    protocolChatId: chatIdStr,
+    uiRouteId: String(uiRouteId),
+    providerAccountId: process.env.MAX_PERSONAL_ACCOUNT_ID || null,
+    providerUserId: peerProviderUserId,
+    ...(peerProviderUserId ? { senderId: peerProviderUserId } : {}),
+    text,
+    timestamp: providerMessage.timestamp || Date.now(),
+    messageType: 'text',
+    attachments: [],
+    isOutgoing: false,
+    source: 'provider_store_recovery',
+    recoveryReason: reason,
+    ...(providerMessage.replyToExternalId ? { replyToExternalId: providerMessage.replyToExternalId } : {}),
+  })
+
+  if (result.status >= 200 && result.status < 300 && !result.skipped) {
+    transport?.confirmPendingLiveTextIdForDomRecovery?.(chatIdStr, providerId)
+    console.log(`[providerStoreRecovery] recovered chatId=${chatIdStr} id=${providerId} text="${String(text).slice(0, 50)}"`)
+    return { success: true, externalId: providerId, text, webhook: result }
+  }
+  return {
+    skipped: result.skipped || 'crm_webhook_not_accepted',
+    status: result.status,
+    externalId: providerId,
+  }
+}
+
 function resolveEmptyOp71DomRecoveryChatId(decodedChatId, maxAgeMs = 15_000) {
   const decoded = decodedChatId != null ? String(decodedChatId) : null
   if (!transport?._recentOp128ChatIds) {
@@ -5795,6 +5862,14 @@ async function init() {
             if (registration?.registered) {
               console.log(`[op180live] provider id queued chatId:${liveChatId} id:${liveProviderId}`)
             }
+            enqueueInboundProjection(liveChatId, () =>
+              recoverProviderStoreLiveTextById(liveChatId, liveProviderId, 'op180_empty_messages_reactions')
+            ).then(result => {
+              if (result?.success) return
+              console.warn(`[op180live] provider-store recovery skipped chatId=${liveChatId} id=${liveProviderId} result=${JSON.stringify(result || {})}`)
+            }).catch(error => {
+              console.warn(`[op180live] provider-store recovery failed chatId=${liveChatId} id=${liveProviderId}: ${error.message}`)
+            })
           }
         }
         const byMessage = extractReactionCountersFromMap(data.payload.messagesReactions)
@@ -6078,17 +6153,27 @@ const physicalTextSenderRuntime = createPhysicalTextSenderRuntime({
       uiRouteId: webRouteId,
     }),
     sendViaUi: ({ protocolChatId, webRouteId, text }) => sendTextViaUi(webRouteId, text, protocolChatId),
-    startProviderAck: ({ protocolChatId, text }) => waitForUiSendAck(transport, 12_000, {
+    sendReplyViaUi: ({ protocolChatId, webRouteId, text, replyToProviderMessageId, clientMessageId, attemptId }) =>
+      new MaxWebReplyBridge(page).sendReply(
+        protocolChatId,
+        text,
+        replyToProviderMessageId,
+        stableTextCid(clientMessageId || attemptId),
+        { uiChatId: webRouteId },
+      ),
+    startProviderAck: ({ protocolChatId, text, replyToProviderMessageId }) => waitForUiSendAck(transport, 12_000, {
       chatId: protocolChatId,
       text,
+      ...(replyToProviderMessageId ? { replyToMessageId: replyToProviderMessageId } : {}),
     }),
-    resolveProviderMessageId: ({ protocolChatId, webRouteId, text, sentAt, excludedProviderMessageIds }) => resolveOutboundProviderMessageId({
+    resolveProviderMessageId: ({ protocolChatId, webRouteId, text, sentAt, excludedProviderMessageIds, replyToProviderMessageId }) => resolveOutboundProviderMessageId({
       bridge: new MaxWebReplyBridge(page),
       protocolChatId,
       uiRouteId: webRouteId,
       text,
       sentAt,
       excludedProviderMessageIds,
+      replyToProviderMessageId,
     }),
     isRealProviderMessageId: isRealMaxMessageId,
   })),

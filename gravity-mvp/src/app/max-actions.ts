@@ -214,12 +214,12 @@ export async function sendMaxPersonalMessage(
 
     try {
         if (process.env.MAX_PERSONAL_DURABLE_TEXT_ENABLED === 'true') {
-            if (quotedMsgId || quotedContext?.text) throw new Error('Personal MAX durable sender currently accepts plain text only')
             const { sendPersonalMaxDurableText } = await import('@/lib/PersonalMaxGatewayClient')
             const data = await sendPersonalMaxDurableText({
                 protocolChatId: cleanTarget,
                 text: message,
                 clientMessageId,
+                replyToProviderMessageId: quotedMsgId || null,
             })
             return {
                 success: data.success !== false,

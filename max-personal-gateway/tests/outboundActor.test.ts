@@ -122,6 +122,32 @@ test('one hundred identical texts remain one hundred physical commands with one 
   assert.equal(new Set(rows.map(row => row.payloadSha256)).size, 1)
 })
 
+test('reply target is part of immutable text command identity', async () => {
+  const { actor, client } = harness()
+  await actor.enqueueCommand(command('plain-command', 'conversation-a', 'same body', 'plain-client'))
+  await actor.enqueueCommand({
+    ...command('reply-command', 'conversation-a', 'same body', 'reply-client'),
+    replyToProviderMessageId: 'd301abcdef01234567',
+  })
+
+  const rows = client.commandRows()
+  assert.equal(rows.length, 2)
+  assert.deepEqual(rows.map(row => row.commandPayload), [
+    { kind: 'text', text: 'same body' },
+    { kind: 'text', text: 'same body', replyToProviderMessageId: 'd301abcdef01234567' },
+  ])
+  assert.notEqual(rows[0].payloadSha256, rows[1].payloadSha256)
+})
+
+test('malformed reply target is refused before command creation', async () => {
+  const { actor, client } = harness()
+  await rejectsCode(actor.enqueueCommand({
+    ...command('bad-reply-command'),
+    replyToProviderMessageId: 'not-a-provider-id',
+  }), 'INVALID_INPUT')
+  assert.equal(client.commandRows().length, 0)
+})
+
 test('commandId and clientMessageId retries are idempotent while semantic conflicts fail closed', async () => {
   const { actor, client } = harness()
   const input = command('retry-command', 'conversation-a', 'payload', 'logical-client')

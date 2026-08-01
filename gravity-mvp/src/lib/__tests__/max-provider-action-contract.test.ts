@@ -12,10 +12,23 @@ vi.mock('@/lib/prisma', () => ({
 
 import { sendMaxPersonalMessage } from '@/app/max-actions'
 
+function stubDurableCrypto() {
+    const bytes = (value: number) => Uint8Array.from({ length: 32 }, () => value).buffer
+    vi.stubGlobal('crypto', {
+        randomUUID: vi.fn(() => '00000000-0000-4000-8000-000000000000'),
+        subtle: {
+            digest: vi.fn(async () => bytes(0x11)),
+            importKey: vi.fn(async () => ({}) as CryptoKey),
+            sign: vi.fn(async () => bytes(0x22)),
+        },
+    })
+}
+
 describe('MAX outbound provider action contract', () => {
     beforeEach(() => {
         vi.restoreAllMocks()
         process.env.MAX_SCRAPER_URL = 'http://max-scraper.fixture'
+        stubDurableCrypto()
     })
 
     afterEach(() => {
@@ -45,6 +58,52 @@ describe('MAX outbound provider action contract', () => {
         expect(String(url)).toBe('http://max-personal-gateway:8080/v1/personal-max/commands/text')
         expect(options.headers['x-max-command-signature']).toMatch(/^[0-9a-f]{64}$/)
         expect(JSON.parse(options.body)).toMatchObject({ protocolChatId: '900001', clientMessageId: 'crm-message-1' })
+    })
+
+    it('routes an enabled reply through durable gateway with only provider reply identity', async () => {
+        process.env.MAX_PERSONAL_DURABLE_TEXT_ENABLED = 'true'
+        process.env.MAX_PERSONAL_GATEWAY_URL = 'http://max-personal-gateway:8080'
+        process.env.MAX_PERSONAL_ACCOUNT_ID = 'account-a'
+        process.env.MAX_PERSONAL_TEXT_COMMAND_HMAC_SECRET = 'command-test-secret-0000000000000000000000'
+        const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+            success: true, externalId: 'd301abcdef01234568', chatId: '900001',
+            deliveryConfirmed: true, deliveryStatus: 'accepted_by_max', dispatchId: 'dispatch-reply',
+        }), { status: 200 }))
+        vi.stubGlobal('fetch', fetchMock)
+
+        await sendMaxPersonalMessage(
+            '900001',
+            'Ответ',
+            undefined,
+            'd301abcdef01234567',
+            '511708938',
+            'client-reply',
+            { text: 'quoted text must not be the reply identity', sentAt: '2026-08-01T06:51:07.548Z', direction: 'outbound' },
+        )
+
+        expect(fetchMock).toHaveBeenCalledTimes(1)
+        const durableBody = JSON.parse(fetchMock.mock.calls[0][1].body)
+        expect(durableBody).toMatchObject({
+            protocolChatId: '900001',
+            text: 'Ответ',
+            clientMessageId: 'client-reply',
+            replyToProviderMessageId: 'd301abcdef01234567',
+        })
+        expect(durableBody).not.toHaveProperty('quotedText')
+        expect(durableBody).not.toHaveProperty('uiChatId')
+    })
+
+    it('rejects malformed durable reply targets before network I/O', async () => {
+        process.env.MAX_PERSONAL_DURABLE_TEXT_ENABLED = 'true'
+        process.env.MAX_PERSONAL_GATEWAY_URL = 'http://max-personal-gateway:8080'
+        process.env.MAX_PERSONAL_ACCOUNT_ID = 'account-a'
+        process.env.MAX_PERSONAL_TEXT_COMMAND_HMAC_SECRET = 'command-test-secret-0000000000000000000000'
+        const fetchMock = vi.fn()
+        vi.stubGlobal('fetch', fetchMock)
+
+        await expect(sendMaxPersonalMessage('900001', 'Ответ', undefined, 'not-a-provider-id', undefined, 'client-invalid-reply'))
+            .rejects.toThrow('Personal MAX durable reply target is invalid')
+        expect(fetchMock).not.toHaveBeenCalled()
     })
 
     it('rejects credentialed or non-exact durable gateway bindings before network I/O', async () => {

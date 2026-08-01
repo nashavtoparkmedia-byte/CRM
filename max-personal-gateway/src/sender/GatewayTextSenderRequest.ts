@@ -4,6 +4,7 @@ import type { BuildTextSenderRequestInput, TextSenderAuthenticationV1, TextSende
 
 const IDENTIFIER = /^[^\p{Cc}]{1,256}$/u
 const ACCOUNT = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/
+const REAL_MAX_MESSAGE_ID = /^d301[0-9a-f]{14}$/i
 
 function identifier(value: unknown, field: string): asserts value is string {
   if (typeof value !== 'string' || value !== value.trim() || value === '*' || !IDENTIFIER.test(value)) throw new Error(`${field} is invalid`)
@@ -28,6 +29,9 @@ export function buildTextSenderRequest(input: BuildTextSenderRequestInput): Text
   if (input.payload.kind !== 'text' || typeof input.payload.text !== 'string' || input.payload.text.length === 0 || Buffer.byteLength(input.payload.text, 'utf8') > 65_536) {
     throw new Error('text payload is invalid')
   }
+  if (input.payload.replyToProviderMessageId !== undefined && !REAL_MAX_MESSAGE_ID.test(input.payload.replyToProviderMessageId)) {
+    throw new Error('reply target provider message id is invalid')
+  }
   if (!Number.isFinite(input.requestedAt.valueOf()) || !Number.isFinite(input.deadlineAt.valueOf()) || input.deadlineAt <= input.requestedAt) throw new Error('request time bounds are invalid')
   return Object.freeze({
     schemaVersion: TEXT_SENDER_SCHEMA_VERSION,
@@ -41,7 +45,11 @@ export function buildTextSenderRequest(input: BuildTextSenderRequestInput): Text
     idempotencyKey: input.idempotencyKey,
     ownerInstanceId: input.ownerInstanceId,
     fencingToken: input.fencingToken.toString(10),
-    payload: Object.freeze({ kind: 'text' as const, text: input.payload.text }),
+    payload: Object.freeze({
+      kind: 'text' as const,
+      text: input.payload.text,
+      ...(input.payload.replyToProviderMessageId ? { replyToProviderMessageId: input.payload.replyToProviderMessageId } : {}),
+    }),
     requestedAt: input.requestedAt.toISOString(),
     deadlineAt: input.deadlineAt.toISOString(),
   })

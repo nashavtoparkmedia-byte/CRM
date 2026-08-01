@@ -62,6 +62,40 @@ test('takes a normalized provider-store baseline before repeated-text resolution
   assert.deepEqual(snapshot, ['d30100000000000000aa'])
 })
 
+test('passes reply target into exact provider-store resolution', async () => {
+  let observed = null
+  const bridge = {
+    async resolveProviderId(chatId, context, route) {
+      observed = { chatId, context, route }
+      return { providerMessageId: 'd30100000000000000ef' }
+    },
+  }
+
+  const providerId = await resolveOutboundProviderMessageId({
+    bridge,
+    protocolChatId: '902454841098',
+    uiRouteId: '511708938',
+    text: 'reply body',
+    sentAt: 1_785_567_153_000,
+    replyToProviderMessageId: 'd301abcdef01234567',
+    excludedProviderMessageIds: ['d30100000000000000aa'],
+    delayMs: 0,
+    waitFn: async () => {},
+  })
+
+  assert.equal(providerId, 'd30100000000000000ef')
+  assert.deepEqual(observed, {
+    chatId: '902454841098',
+    context: {
+      text: 'reply body',
+      sentAt: 1_785_567_153_000,
+      direction: 'outbound',
+      replyToProviderMessageId: 'd301abcdef01234567',
+    },
+    route: { uiChatId: '511708938', excludedProviderMessageIds: ['d30100000000000000aa'] },
+  })
+})
+
 test('does not promote an ambiguous or malformed store result', async () => {
   const bridge = {
     async resolveProviderId() {

@@ -14,6 +14,7 @@ import type { TextSenderRuntimeConfig } from './config.ts'
 
 const COMMAND_NAMESPACE = 'personal-max-command-v1'
 const SAFE_CODE = /^[A-Z0-9_]{1,128}$/
+const REAL_MAX_MESSAGE_ID = /^d301[0-9a-f]{14}$/i
 
 export interface GatewayTextCommand {
   readonly schemaVersion: 1
@@ -21,6 +22,7 @@ export interface GatewayTextCommand {
   readonly protocolChatId: string
   readonly text: string
   readonly clientMessageId: string
+  readonly replyToProviderMessageId?: string
 }
 
 export interface GatewayCommandAuthentication {
@@ -78,11 +80,12 @@ function senderResponse(value: unknown, attemptId: string): Readonly<Record<stri
 function exactCommand(value: unknown): GatewayTextCommand {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new TextCanaryError('COMMAND_INVALID')
   const item = value as Record<string, unknown>
-  if (item.schemaVersion !== 1 || Object.keys(item).some(key => !['schemaVersion', 'accountId', 'protocolChatId', 'text', 'clientMessageId'].includes(key))
+  if (item.schemaVersion !== 1 || Object.keys(item).some(key => !['schemaVersion', 'accountId', 'protocolChatId', 'text', 'clientMessageId', 'replyToProviderMessageId'].includes(key))
     || typeof item.accountId !== 'string' || typeof item.protocolChatId !== 'string' || !/^\d{5,15}$/.test(item.protocolChatId)
     || typeof item.text !== 'string' || item.text.length < 1 || Buffer.byteLength(item.text, 'utf8') > 65_536
     || typeof item.clientMessageId !== 'string' || item.clientMessageId.length < 1 || item.clientMessageId.length > 256
-    || /\p{Cc}/u.test(item.clientMessageId)) throw new TextCanaryError('COMMAND_INVALID')
+    || /\p{Cc}/u.test(item.clientMessageId)
+    || (item.replyToProviderMessageId !== undefined && (typeof item.replyToProviderMessageId !== 'string' || !REAL_MAX_MESSAGE_ID.test(item.replyToProviderMessageId)))) throw new TextCanaryError('COMMAND_INVALID')
   return item as unknown as GatewayTextCommand
 }
 
@@ -159,6 +162,7 @@ export class TextCanaryService {
         clientMessageId: command.clientMessageId,
         commandKind: 'text',
         text: command.text,
+        replyToProviderMessageId: command.replyToProviderMessageId,
         source: 'gravity',
       })
       const result = await this.#execute(enqueued.command.commandId, command.accountId, route.conversationKey)
@@ -210,9 +214,13 @@ export class TextCanaryService {
       (this.#client as any).maxOutboundDispatch.findUnique({ where: { commandId: request.commandId } }),
       (this.#client as any).maxOutboundDispatchAttempt.findUnique({ where: { attemptId: request.attemptId } }),
     ])
+    const commandReplyTo = typeof command?.commandPayload?.replyToProviderMessageId === 'string'
+      ? command.commandPayload.replyToProviderMessageId
+      : undefined
     if (!command || !dispatch || !attempt || command.accountId !== request.accountId || command.conversationKey !== request.conversationKey
       || command.clientMessageId !== request.clientMessageId || command.commandPayload?.kind !== 'text'
       || command.commandPayload?.text !== request.payload?.text
+      || commandReplyTo !== request.payload?.replyToProviderMessageId
       || dispatch.dispatchId !== attempt.dispatchId || dispatch.currentAttemptId !== request.attemptId
       || attempt.attemptCorrelationId !== request.attemptCorrelationId || attempt.senderOwnerId !== request.ownerInstanceId
       || String(attempt.senderFencingEpoch) !== request.fencingToken || attempt.routeVersion !== request.route.routeVersion
@@ -302,7 +310,11 @@ export class TextCanaryService {
       clientMessageId: command.clientMessageId,
       idempotencyKey: opaque('idempotency', attemptId),
       ownerInstanceId: this.#sessionOwnerInstanceId, fencingToken: owner.lease.fencingToken,
-      payload: { kind: 'text', text: (command.commandPayload as any).text },
+      payload: {
+        kind: 'text',
+        text: (command.commandPayload as any).text,
+        ...((command.commandPayload as any).replyToProviderMessageId ? { replyToProviderMessageId: (command.commandPayload as any).replyToProviderMessageId } : {}),
+      },
       requestedAt: new Date(), deadlineAt: new Date(Date.now() + this.#config.requestTimeoutMs),
     })
     const authentication = signTextSenderRequest(request, {

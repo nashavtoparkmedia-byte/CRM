@@ -122,6 +122,56 @@ test('repeated identical text excludes every provider id present before the phys
   assert.deepEqual(resolutions[0].excludedProviderMessageIds, [oldId])
 })
 
+test('reply uses one reply provider action and confirms exact provider id', async () => {
+  const calls = []
+  const result = await sendProviderConfirmedUiText({
+    request: request({
+      attemptId: 'attempt-reply',
+      clientMessageId: 'client-reply',
+      payload: { text: 'reply body', replyToProviderMessageId: 'd301abcdef01234567' },
+    }),
+    snapshotProviderMessageIds: async input => { calls.push(['snapshot', input]); return [] },
+    startProviderAck: input => { calls.push(['ack', input]); return Promise.resolve(null) },
+    sendViaUi: async input => { calls.push(['plain-send', input]); return true },
+    sendReplyViaUi: async input => {
+      calls.push(['reply-send', input])
+      return { providerMessageId: 'd301abcdef01234568' }
+    },
+    resolveProviderMessageId: async input => { calls.push(['store', input]); return null },
+    isRealProviderMessageId: exactId,
+  })
+
+  assert.equal(result.outcome, 'PROVIDER_CONFIRMED')
+  assert.equal(result.providerMessageId, 'd301abcdef01234568')
+  assert.deepEqual(calls.map(call => call[0]), ['snapshot', 'ack', 'reply-send'])
+  assert.equal(calls[1][1].replyToProviderMessageId, 'd301abcdef01234567')
+  assert.deepEqual(calls[2][1], {
+    protocolChatId: '902454841098',
+    webRouteId: '511708938',
+    text: 'reply body',
+    replyToProviderMessageId: 'd301abcdef01234567',
+    clientMessageId: 'client-reply',
+    attemptId: 'attempt-reply',
+  })
+})
+
+test('reply refuses before physical action when reply bridge is unavailable', async () => {
+  let plainSends = 0
+  const result = await sendProviderConfirmedUiText({
+    request: request({ payload: { text: 'reply body', replyToProviderMessageId: 'd301abcdef01234567' } }),
+    snapshotProviderMessageIds: emptySnapshot,
+    startProviderAck: () => Promise.resolve(null),
+    sendViaUi: async () => { plainSends += 1; return true },
+    resolveProviderMessageId: async () => null,
+    isRealProviderMessageId: exactId,
+  })
+
+  assert.equal(result.outcome, 'REFUSED_BEFORE_SEND')
+  assert.equal(result.safeCode, 'REPLY_TARGET_UNSENDABLE')
+  assert.equal(result.physicalProviderCalled, false)
+  assert.equal(plainSends, 0)
+})
+
 test('snapshot failure refuses before send and never creates an unknown physical outcome', async () => {
   let sends = 0
   const result = await sendProviderConfirmedUiText({

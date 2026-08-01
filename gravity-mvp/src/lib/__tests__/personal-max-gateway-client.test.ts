@@ -3,6 +3,18 @@ import { sendPersonalMaxDurableText } from '../PersonalMaxGatewayClient'
 
 const protocolChatId = '902454841098'
 
+function stubDurableCrypto() {
+  const bytes = (value: number) => Uint8Array.from({ length: 32 }, () => value).buffer
+  vi.stubGlobal('crypto', {
+    randomUUID: vi.fn(() => '00000000-0000-4000-8000-000000000000'),
+    subtle: {
+      digest: vi.fn(async () => bytes(0x11)),
+      importKey: vi.fn(async () => ({}) as CryptoKey),
+      sign: vi.fn(async () => bytes(0x22)),
+    },
+  })
+}
+
 function gatewayResponse(dispatchId: unknown): Response {
   return new Response(JSON.stringify({
     success: true,
@@ -20,6 +32,7 @@ describe('Personal MAX durable gateway response contract', () => {
     vi.stubEnv('MAX_PERSONAL_GATEWAY_URL', 'http://max-personal-gateway:8080')
     vi.stubEnv('MAX_PERSONAL_ACCOUNT_ID', 'account-a')
     vi.stubEnv('MAX_PERSONAL_TEXT_COMMAND_HMAC_SECRET', 'test-command-secret-000000000000000000000000')
+    stubDurableCrypto()
   })
 
   afterEach(() => {
@@ -36,6 +49,28 @@ describe('Personal MAX durable gateway response contract', () => {
 
     expect(beforeDispatch.dispatchId).toBeNull()
     expect(afterDispatch.dispatchId).toBe('dispatch-a')
+  })
+
+  it('includes reply provider identity in the authenticated durable command body', async () => {
+    let capturedBody: Record<string, unknown> | null = null
+    vi.stubGlobal('fetch', vi.fn(async (_url, options: any) => {
+      capturedBody = JSON.parse(String(options.body))
+      return gatewayResponse('dispatch-reply')
+    }))
+
+    await sendPersonalMaxDurableText({
+      protocolChatId,
+      text: 'durable reply',
+      clientMessageId: 'client-reply',
+      replyToProviderMessageId: 'd301abcdef01234567',
+    })
+
+    expect(capturedBody).toMatchObject({
+      protocolChatId,
+      text: 'durable reply',
+      clientMessageId: 'client-reply',
+      replyToProviderMessageId: 'd301abcdef01234567',
+    })
   })
 
   it('rejects malformed queued dispatch identity', async () => {

@@ -24,6 +24,7 @@ async function sendProviderConfirmedUiText(options) {
   const {
     request,
     sendViaUi,
+    sendReplyViaUi,
     startProviderAck,
     snapshotProviderMessageIds,
     resolveProviderMessageId,
@@ -34,12 +35,17 @@ async function sendProviderConfirmedUiText(options) {
   const protocolChatId = String(request?.route?.protocolChatId || '')
   const webRouteId = String(request?.route?.webRouteId || '')
   const text = request?.payload?.text
+  const replyToProviderMessageId = request?.payload?.replyToProviderMessageId || null
   if (!/^\d{5,15}$/.test(protocolChatId) || !/^\d{5,15}$/.test(webRouteId)
     || typeof text !== 'string' || text.length === 0
     || typeof sendViaUi !== 'function' || typeof startProviderAck !== 'function'
     || typeof snapshotProviderMessageIds !== 'function'
     || typeof resolveProviderMessageId !== 'function' || typeof isRealProviderMessageId !== 'function') {
     return refused('EXACT_WEB_ROUTE_MISSING')
+  }
+  if (replyToProviderMessageId !== null
+    && (!isRealProviderMessageId(replyToProviderMessageId) || typeof sendReplyViaUi !== 'function')) {
+    return refused('REPLY_TARGET_UNSENDABLE')
   }
 
   let excludedProviderMessageIds
@@ -56,7 +62,7 @@ async function sendProviderConfirmedUiText(options) {
   let ackPromise
   try {
     // Register the exact own-echo listener before the single physical action.
-    ackPromise = Promise.resolve(startProviderAck({ protocolChatId, text }))
+    ackPromise = Promise.resolve(startProviderAck({ protocolChatId, text, replyToProviderMessageId }))
       .catch(() => null)
   } catch {
     ackPromise = Promise.resolve(null)
@@ -64,16 +70,40 @@ async function sendProviderConfirmedUiText(options) {
 
   const sentAt = Number(clock())
   let actionAccepted = false
+  let directProviderMessageId = null
   try {
-    actionAccepted = await sendViaUi({ protocolChatId, webRouteId, text })
+    if (replyToProviderMessageId) {
+      const replyResult = await sendReplyViaUi({
+        protocolChatId,
+        webRouteId,
+        text,
+        replyToProviderMessageId,
+        clientMessageId: request.clientMessageId,
+        attemptId: request.attemptId,
+      })
+      directProviderMessageId = isRealProviderMessageId(replyResult?.providerMessageId)
+        ? String(replyResult.providerMessageId)
+        : null
+      actionAccepted = replyResult === true || directProviderMessageId !== null
+    } else {
+      actionAccepted = await sendViaUi({ protocolChatId, webRouteId, text })
+    }
   } catch {
     return unknown('UI_PROVIDER_ACTION_OUTCOME_UNKNOWN')
   }
   if (actionAccepted !== true) return unknown('UI_PROVIDER_ACTION_OUTCOME_UNKNOWN')
+  if (directProviderMessageId) {
+    return Object.freeze({
+      outcome: 'PROVIDER_CONFIRMED',
+      safeCode: 'EXACT_PROVIDER_CONFIRMATION',
+      physicalProviderCalled: true,
+      providerMessageId: directProviderMessageId,
+    })
+  }
 
   let storeId = null
   try {
-    storeId = await resolveProviderMessageId({ protocolChatId, webRouteId, text, sentAt, excludedProviderMessageIds })
+    storeId = await resolveProviderMessageId({ protocolChatId, webRouteId, text, sentAt, excludedProviderMessageIds, replyToProviderMessageId })
   } catch {}
   if (isRealProviderMessageId(storeId)) {
     return Object.freeze({
@@ -99,7 +129,7 @@ async function sendProviderConfirmedUiText(options) {
   // starts. Re-read the store once after that bounded wait; never repeat the UI
   // action and never promote a DOM-only identifier.
   try {
-    storeId = await resolveProviderMessageId({ protocolChatId, webRouteId, text, sentAt, excludedProviderMessageIds })
+    storeId = await resolveProviderMessageId({ protocolChatId, webRouteId, text, sentAt, excludedProviderMessageIds, replyToProviderMessageId })
   } catch {}
   const providerMessageId = isRealProviderMessageId(storeId) ? String(storeId) : null
   if (!isRealProviderMessageId(providerMessageId)) return unknown('EXACT_PROVIDER_ID_MISSING')

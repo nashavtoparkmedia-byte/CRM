@@ -590,6 +590,20 @@ test('op180 provider id with loose media is not queued as live text recovery', (
   assert.ok(op180Block.indexOf('emitPendingLooseMediaMessage') < op180Block.indexOf('registerPendingLiveTextIdForDomRecovery'))
 })
 
+test('op180 provider id queues bounded provider-store text recovery', () => {
+  const source = fs.readFileSync(require.resolve('../index'), 'utf8')
+  const op180Start = source.indexOf('if (data.opcode === 180 && data.payload?.messagesReactions)')
+  const op180End = source.indexOf('const byMessage = extractReactionCountersFromMap', op180Start)
+  const op180Block = source.slice(op180Start, op180End)
+
+  assert.notEqual(op180Start, -1)
+  assert.notEqual(op180End, -1)
+  assert.match(source, /async function recoverProviderStoreLiveTextById/)
+  assert.match(op180Block, /registerPendingLiveTextIdForDomRecovery/)
+  assert.match(op180Block, /recoverProviderStoreLiveTextById\(liveChatId, liveProviderId, 'op180_empty_messages_reactions'\)/)
+  assert.ok(op180Block.indexOf('recoverProviderStoreLiveTextById') > op180Block.indexOf('registerPendingLiveTextIdForDomRecovery'))
+})
+
 test('loose media provider id emits media message with real provider identity', () => {
   const transport = new TransportInterceptor()
   const chatId = '902454841098'

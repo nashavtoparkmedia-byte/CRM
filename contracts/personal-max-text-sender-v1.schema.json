@@ -28,7 +28,7 @@
     "payload": {
       "type": "object", "additionalProperties": false,
       "required": ["kind", "text"],
-      "properties": {"kind": {"const": "text"}, "text": {"type": "string", "minLength": 1, "maxLength": 65536}}
+      "properties": {"kind": {"const": "text"}, "text": {"type": "string", "minLength": 1, "maxLength": 65536}, "replyToProviderMessageId": {"type": "string", "pattern": "^d301[0-9a-fA-F]{14}$"}}
     },
     "requestedAt": {"type": "string", "format": "date-time"},
     "deadlineAt": {"type": "string", "format": "date-time"}

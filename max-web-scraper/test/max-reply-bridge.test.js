@@ -181,6 +181,24 @@ test('repeated outbound text cannot reuse an id from the pre-action provider sna
   assert.equal(result.reason, 'unique_strict_match')
 })
 
+test('outbound reply confirmation requires the exact reply target when supplied', () => {
+  const sentAtMs = Date.parse('2026-08-01T06:52:33.000Z')
+  const wrongTarget = 'd3019f4dcf27c35ec1'
+  const exactTarget = 'd3019f4dcf27c35ec2'
+  const result = selectReplyTargetCandidate([
+    { id: providerDecimalFromId('d3019f4dcf27c35ec3'), text: 'Ответ', timestamp: sentAtMs + 40, isOutgoing: true, replyToId: providerDecimalFromId(wrongTarget) },
+    { id: providerDecimalFromId('d3019f4dcf27c35ec4'), text: 'Ответ', timestamp: sentAtMs + 80, isOutgoing: true, replyToId: providerDecimalFromId(exactTarget) },
+  ], {
+    text: 'Ответ',
+    sentAt: sentAtMs,
+    direction: 'outbound',
+    replyToProviderMessageId: exactTarget,
+  })
+
+  assert.equal(result.providerMessageId, 'd3019f4dcf27c35ec4')
+  assert.equal(result.reason, 'unique_strict_match')
+})
+
 test('only a pre-action repeated-text match remains unknown until a new provider row appears', () => {
   const sentAtMs = Date.parse('2026-07-30T09:09:26.000Z')
   const oldId = 'd3019f4dcf27c35ec1'

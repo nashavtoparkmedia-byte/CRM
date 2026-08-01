@@ -29,7 +29,7 @@ export interface TextSenderRequestV1 {
   readonly idempotencyKey: string
   readonly ownerInstanceId: string
   readonly fencingToken: string
-  readonly payload: { readonly kind: 'text'; readonly text: string }
+  readonly payload: { readonly kind: 'text'; readonly text: string; readonly replyToProviderMessageId?: string }
   readonly requestedAt: string
   readonly deadlineAt: string
 }

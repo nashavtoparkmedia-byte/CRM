@@ -50,6 +50,42 @@ function unknownMaxDelivery(protocolChatId: string, webRouteId: unknown) {
     }
 }
 
+const PERSONAL_MAX_PRE_ACTION_REFUSALS = new Set([
+    'COMMAND_INVALID',
+    'PHYSICAL_SENDER_DISABLED',
+    'TEXT_SENDER_DISABLED',
+    'WRONG_ACCOUNT',
+    'ROUTE_NOT_SENDABLE',
+    'CONVERSATION_NOT_ALLOWLISTED',
+    'REPLY_TARGET_UNSENDABLE',
+    'PAYLOAD_UNSUPPORTED',
+    'ROUTE_MISMATCH',
+    'COMMAND_AUTH_REJECTED',
+    'CONTENT_TYPE_REJECTED',
+])
+
+function personalMaxPreActionFailure(errorMessage: string | null | undefined): string | null {
+    const message = String(errorMessage || '')
+    if (/Personal MAX durable (?:text command|reply target) is invalid/i.test(message)) {
+        return 'COMMAND_INVALID'
+    }
+    if (/Personal MAX durable sender binding is invalid/i.test(message)) {
+        return 'COMMAND_INVALID'
+    }
+    const refused = message.match(/Personal MAX durable sender refused:\s*([A-Z0-9_]{1,128})/)
+    if (refused && PERSONAL_MAX_PRE_ACTION_REFUSALS.has(refused[1])) return refused[1]
+    return null
+}
+
+function failedBeforeProviderAction(protocolChatId: string, webRouteId: unknown, safeCode: string) {
+    return {
+        ...unknownMaxDelivery(protocolChatId, webRouteId),
+        status: 'hard_failed',
+        failurePhase: 'before_provider_action',
+        safeErrorCode: safeCode,
+    }
+}
+
 export class MessageService {
     /**
      * Lists all conversations with their drivers and last messages.
@@ -694,6 +730,7 @@ export class MessageService {
                         externalId: maxExternalId,
                         protocolChatId: rawExternalChatId,
                         webRouteId: maxMetadata.oldExternalChatId || maxMetadata.uiChatId || null,
+                        ...(providerQuotedMsgId ? { replyToProviderMessageId: providerQuotedMsgId } : {}),
                     }
                     if (deliveryStatus === 'failed') {
                         errorMessage = durableStatus === 'retryable_failed'
@@ -800,11 +837,21 @@ export class MessageService {
             errorMessage = provErr.message
             if (channel === 'max') {
                 const maxMetadata = (targetChat.metadata || {}) as any
-                deliveryStatus = 'sent'
-                maxDeliveryMetadata = unknownMaxDelivery(
-                    rawExternalChatId,
-                    maxMetadata.oldExternalChatId || maxMetadata.uiChatId,
-                )
+                const preActionSafeCode = personalMaxPreActionFailure(errorMessage)
+                if (preActionSafeCode) {
+                    deliveryStatus = 'failed'
+                    maxDeliveryMetadata = failedBeforeProviderAction(
+                        rawExternalChatId,
+                        maxMetadata.oldExternalChatId || maxMetadata.uiChatId,
+                        preActionSafeCode,
+                    )
+                } else {
+                    deliveryStatus = 'sent'
+                    maxDeliveryMetadata = unknownMaxDelivery(
+                        rawExternalChatId,
+                        maxMetadata.oldExternalChatId || maxMetadata.uiChatId,
+                    )
+                }
             } else {
                 deliveryStatus = 'failed'
             }
@@ -825,6 +872,7 @@ export class MessageService {
             if (errorMessage) {
                 metadata.error = errorMessage
                 metadata.errorCode = maxDeliveryMetadata?.status === 'retryable_failed'
+                    || maxDeliveryMetadata?.failurePhase === 'before_provider_action'
                     ? 'MAX_PRE_ACTION_FAILURE'
                     : getErrorCode(errorMessage)
                 metadata.errorSchemaVersion = ERROR_SCHEMA_VERSION

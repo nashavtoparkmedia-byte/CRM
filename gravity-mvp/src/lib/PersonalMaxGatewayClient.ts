@@ -1,7 +1,36 @@
-import { createHash, createHmac, randomUUID } from 'node:crypto'
-
 const COMMAND_NAMESPACE = 'personal-max-command-v1'
 const REAL_MAX_MESSAGE_ID = /^d301[0-9a-f]{14}$/i
+const encoder = new TextEncoder()
+
+function utf8Bytes(value: string): Uint8Array {
+    return encoder.encode(value)
+}
+
+function hex(bytes: ArrayBuffer): string {
+    return Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('')
+}
+
+function durableCrypto(): Crypto {
+    if (!globalThis.crypto?.subtle || typeof globalThis.crypto.randomUUID !== 'function') {
+        throw new Error('Personal MAX durable sender crypto is unavailable')
+    }
+    return globalThis.crypto
+}
+
+async function sha256Hex(value: string): Promise<string> {
+    return hex(await durableCrypto().subtle.digest('SHA-256', utf8Bytes(value)))
+}
+
+async function hmacSha256Hex(secret: Uint8Array, value: string): Promise<string> {
+    const key = await durableCrypto().subtle.importKey(
+        'raw',
+        secret,
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign'],
+    )
+    return hex(await durableCrypto().subtle.sign('HMAC', key, utf8Bytes(value)))
+}
 
 function binding() {
     const baseUrl = process.env.MAX_PERSONAL_GATEWAY_URL || ''
@@ -11,37 +40,43 @@ function binding() {
     const privateTarget = base.hostname === 'max-personal-gateway'
       ? base.port === '8080'
       : ['127.0.0.1', 'localhost'].includes(base.hostname) && base.port !== ''
+    const secretBytes = utf8Bytes(secret)
     if (base.protocol !== 'http:' || !privateTarget || base.username || base.password || base.search || base.hash
         || !['', '/'].includes(base.pathname)
-        || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(accountId) || Buffer.byteLength(secret) < 32) {
+        || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(accountId) || secretBytes.byteLength < 32) {
         throw new Error('Personal MAX durable sender binding is invalid')
     }
     const url = new URL('/v1/personal-max/commands/text', base)
-    return { url, accountId, secret: Buffer.from(secret) }
+    return { url, accountId, secret: secretBytes }
 }
 
 export async function sendPersonalMaxDurableText(input: {
     protocolChatId: string
     text: string
     clientMessageId?: string
+    replyToProviderMessageId?: string | null
 }) {
     const { url, accountId, secret } = binding()
-    if (!/^\d{5,15}$/.test(input.protocolChatId) || !input.text || Buffer.byteLength(input.text, 'utf8') > 65_536) {
+    if (!/^\d{5,15}$/.test(input.protocolChatId) || !input.text || utf8Bytes(input.text).byteLength > 65_536) {
         throw new Error('Personal MAX durable text command is invalid')
     }
+    const replyToProviderMessageId = input.replyToProviderMessageId || null
+    if (replyToProviderMessageId !== null && !REAL_MAX_MESSAGE_ID.test(replyToProviderMessageId)) {
+        throw new Error('Personal MAX durable reply target is invalid')
+    }
+    const crypto = durableCrypto()
     const body = JSON.stringify({
         schemaVersion: 1,
         accountId,
         protocolChatId: input.protocolChatId,
         text: input.text,
-        clientMessageId: input.clientMessageId || randomUUID(),
+        clientMessageId: input.clientMessageId || crypto.randomUUID(),
+        ...(replyToProviderMessageId ? { replyToProviderMessageId } : {}),
     })
     const timestamp = new Date().toISOString()
-    const nonce = randomUUID()
-    const bodyHash = createHash('sha256').update(body).digest('hex')
-    const signature = createHmac('sha256', secret)
-        .update(`${COMMAND_NAMESPACE}\nPOST\n/v1/personal-max/commands/text\n${timestamp}\n${nonce}\n${bodyHash}`)
-        .digest('hex')
+    const nonce = crypto.randomUUID()
+    const bodyHash = await sha256Hex(body)
+    const signature = await hmacSha256Hex(secret, `${COMMAND_NAMESPACE}\nPOST\n/v1/personal-max/commands/text\n${timestamp}\n${nonce}\n${bodyHash}`)
     const response = await fetch(url, {
         method: 'POST',
         headers: {

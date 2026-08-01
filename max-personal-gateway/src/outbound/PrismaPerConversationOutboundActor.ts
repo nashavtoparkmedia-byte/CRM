@@ -157,17 +157,26 @@ function positiveDuration(value: number, field: string): void {
   }
 }
 
-function commandPayload(text: string): { readonly kind: 'text'; readonly text: string } {
+const REAL_MAX_MESSAGE_ID_RE = /^d301[0-9a-f]{14}$/i
+
+function commandPayload(text: string, replyToProviderMessageId?: string | null): { readonly kind: 'text'; readonly text: string; readonly replyToProviderMessageId?: string } {
   if (typeof text !== 'string' || text.length === 0) {
     throw new OutboundActorError('INVALID_INPUT', 'Text command payload is required')
   }
   if (Buffer.byteLength(text, 'utf8') > MAX_OUTBOUND_TEXT_BYTES) {
     throw new OutboundActorError('INVALID_INPUT', 'Text command payload exceeds the safe size limit')
   }
-  return Object.freeze({ kind: 'text' as const, text })
+  if (replyToProviderMessageId != null && !REAL_MAX_MESSAGE_ID_RE.test(replyToProviderMessageId)) {
+    throw new OutboundActorError('INVALID_INPUT', 'Reply target provider message id is invalid')
+  }
+  return Object.freeze({
+    kind: 'text' as const,
+    text,
+    ...(replyToProviderMessageId ? { replyToProviderMessageId } : {}),
+  })
 }
 
-function payloadHash(payload: { readonly kind: 'text'; readonly text: string }): string {
+function payloadHash(payload: { readonly kind: 'text'; readonly text: string; readonly replyToProviderMessageId?: string }): string {
   return createHash('sha256').update(JSON.stringify(payload), 'utf8').digest('hex')
 }
 
@@ -283,7 +292,7 @@ export class PrismaPerConversationOutboundActor implements PerConversationOutbou
     if (!['gravity', 'api', 'replay', 'synthetic_test'].includes(input.source)) {
       throw new OutboundActorError('INVALID_INPUT', 'Command source is not supported')
     }
-    const payload = commandPayload(input.text)
+    const payload = commandPayload(input.text, input.replyToProviderMessageId)
     const hash = payloadHash(payload)
     for (let concurrencyAttempt = 0; concurrencyAttempt < 16; concurrencyAttempt += 1) {
       try {

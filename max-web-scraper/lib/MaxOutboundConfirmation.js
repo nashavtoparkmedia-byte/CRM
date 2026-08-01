@@ -13,6 +13,7 @@ async function resolveOutboundProviderMessageId(options = {}) {
     uiRouteId,
     text,
     sentAt,
+    replyToProviderMessageId = null,
     attempts = 4,
     delayMs = 250,
     waitFn = wait,
@@ -24,7 +25,7 @@ async function resolveOutboundProviderMessageId(options = {}) {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const result = await bridge.resolveProviderId(
       protocolChatId,
-      { text, sentAt, direction: 'outbound' },
+      { text, sentAt, direction: 'outbound', ...(replyToProviderMessageId ? { replyToProviderMessageId } : {}) },
       { uiChatId: uiRouteId, excludedProviderMessageIds },
     ).catch(() => null)
     if (isRealMaxMessageId(result?.providerMessageId)) {

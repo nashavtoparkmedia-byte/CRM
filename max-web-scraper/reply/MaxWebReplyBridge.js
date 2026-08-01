@@ -47,6 +47,9 @@ function selectReplyTargetCandidate(candidates, context = {}, options = {}) {
   const expectedDirection = context.direction === 'outbound'
     ? true
     : (context.direction === 'inbound' ? false : null)
+  const expectedReplyToProviderMessageId = REAL_MAX_MESSAGE_ID_RE.test(String(context.replyToProviderMessageId || ''))
+    ? String(context.replyToProviderMessageId).toLowerCase()
+    : null
   const maxDistanceMs = Number(options.maxDistanceMs) || 120_000
   const ambiguityMarginMs = Number(options.ambiguityMarginMs) || 150
   const excludedProviderMessageIds = new Set(
@@ -58,6 +61,13 @@ function selectReplyTargetCandidate(candidates, context = {}, options = {}) {
   for (const candidate of Array.isArray(candidates) ? candidates : []) {
     if (normalizeReplyText(candidate?.text) !== expectedText) continue
     if (expectedDirection !== null && Boolean(candidate?.isOutgoing) !== expectedDirection) continue
+    if (expectedReplyToProviderMessageId !== null) {
+      let candidateReplyToProviderMessageId = null
+      try {
+        if (candidate?.replyToId) candidateReplyToProviderMessageId = providerIdFromDecimal(candidate.replyToId)
+      } catch {}
+      if (candidateReplyToProviderMessageId !== expectedReplyToProviderMessageId) continue
+    }
 
     let providerMessageId
     try {

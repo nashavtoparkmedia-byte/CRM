@@ -167,6 +167,21 @@ test('11 media/reply payload is unsupported', async () => {
   assert.equal((await execute(h, body)).outcome, 'UNSUPPORTED'); assert.equal(h.adapter.calls.length, 0)
 })
 
+test('11b exact reply target payload remains inside the fenced text contract', async () => {
+  const h = harness()
+  const body = request({ payload: { kind: 'text', text: 'reply text', replyToProviderMessageId: 'd301abcdef01234567' } })
+  const result = await execute(h, body)
+  assert.equal(result.outcome, 'PROVIDER_CONFIRMED')
+  assert.equal(h.adapter.calls.length, 1)
+})
+
+test('11c malformed reply target payload is unsupported before adapter', async () => {
+  const h = harness()
+  const body = request({ payload: { kind: 'text', text: 'reply text', replyToProviderMessageId: 'not-a-provider-id' } })
+  assert.equal((await execute(h, body)).outcome, 'UNSUPPORTED')
+  assert.equal(h.adapter.calls.length, 0)
+})
+
 test('12 duplicate request with new nonce returns prior outcome without a second call', async () => {
   const h = harness(); const body = request()
   const first = await execute(h, body); const second = await execute(h, body)

@@ -7,6 +7,7 @@ export type OutboundReservationState = 'reserved' | 'released' | 'handed_off' | 
 export interface OutboundTextCommandPayload {
   readonly kind: 'text'
   readonly text: string
+  readonly replyToProviderMessageId?: string
 }
 
 export interface EnqueueOutboundCommandInput {
@@ -16,6 +17,7 @@ export interface EnqueueOutboundCommandInput {
   readonly clientMessageId?: string
   readonly commandKind: 'text'
   readonly text: string
+  readonly replyToProviderMessageId?: string | null
   readonly source: OutboundCommandSource
 }
 

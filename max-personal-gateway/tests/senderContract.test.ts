@@ -32,6 +32,24 @@ test('gateway request uses exact route and canonical decimal fencing token witho
   assert.equal('phone' in built || 'displayName' in built, false)
 })
 
+test('gateway request carries reply target as signed provider identity only', () => {
+  const built = buildTextSenderRequest({
+    accountId: 'account-a', conversationKey: 'conversation-a',
+    route: { routeVersion: 3, protocolChatId: 'protocol-exact', providerUserId: 'provider-exact', webRouteId: 'web-exact' },
+    commandId: 'command-reply', attemptId: 'attempt-reply', attemptCorrelationId: 'correlation-reply', clientMessageId: 'client-reply',
+    idempotencyKey: 'idempotency-reply', ownerInstanceId: 'owner-1', fencingToken: 42n,
+    payload: { kind: 'text', text: 'reply body', replyToProviderMessageId: 'd301abcdef01234567' },
+    requestedAt: timestamp, deadlineAt: new Date(timestamp.valueOf() + 30_000),
+  })
+
+  assert.deepEqual(built.payload, {
+    kind: 'text',
+    text: 'reply body',
+    replyToProviderMessageId: 'd301abcdef01234567',
+  })
+  assert.match(canonicalTextSenderBody(built), /replyToProviderMessageId/)
+})
+
 test('gateway and scraper produce the same canonical body digest and sender-namespace HMAC', () => {
   const built = request(); const key = Buffer.alloc(32, 9)
   const gateway = signTextSenderRequest(built, { keyId: 'synthetic-key', secret: key, timestamp, nonce: 'synthetic-nonce' })
@@ -57,5 +75,6 @@ test('request builder rejects zero fence, non-text payload, and phone-style rout
   }
   assert.throws(() => buildTextSenderRequest({ ...base, fencingToken: 0n }))
   assert.throws(() => buildTextSenderRequest({ ...base, fencingToken: 1n, payload: { kind: 'media' as never, text: 'x' } }))
+  assert.throws(() => buildTextSenderRequest({ ...base, fencingToken: 1n, payload: { kind: 'text' as const, text: 'reply', replyToProviderMessageId: 'not-provider-id' } }))
   assert.throws(() => buildTextSenderRequest({ ...base, fencingToken: 1n, route: { ...base.route, protocolChatId: '+79990000000\n' } }))
 })

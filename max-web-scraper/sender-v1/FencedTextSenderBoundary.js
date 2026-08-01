@@ -46,6 +46,10 @@ function identifier(value, maximum = 256) {
   return typeof value === 'string' && value.length > 0 && value.length <= maximum && value === value.trim() && !/[\p{Cc}]/u.test(value) && value !== '*'
 }
 
+function realMaxMessageId(value) {
+  return /^d301[0-9a-f]{14}$/i.test(String(value || ''))
+}
+
 function validateRequest(request) {
   if (!request || typeof request !== 'object' || request.schemaVersion !== 1) return 'CONTRACT_INVALID'
   const topLevelFields = new Set(['schemaVersion', 'accountId', 'conversationKey', 'route', 'commandId', 'attemptId', 'attemptCorrelationId', 'clientMessageId', 'idempotencyKey', 'ownerInstanceId', 'fencingToken', 'payload', 'requestedAt', 'deadlineAt'])
@@ -61,7 +65,8 @@ function validateRequest(request) {
   if (request.route.providerUserId !== null && !identifier(request.route.providerUserId)) return 'ROUTE_INVALID'
   if (request.route.webRouteId !== null && !identifier(request.route.webRouteId)) return 'ROUTE_INVALID'
   if (!request.payload || request.payload.kind !== 'text' || typeof request.payload.text !== 'string' || request.payload.text.length === 0 || Buffer.byteLength(request.payload.text, 'utf8') > 65_536) return 'PAYLOAD_UNSUPPORTED'
-  if (Object.keys(request.payload).some(key => !['kind', 'text'].includes(key)) || 'phone' in request || 'displayName' in request || 'reply' in request || 'reaction' in request) return 'PAYLOAD_UNSUPPORTED'
+  if (Object.keys(request.payload).some(key => !['kind', 'text', 'replyToProviderMessageId'].includes(key)) || 'phone' in request || 'displayName' in request || 'reply' in request || 'reaction' in request) return 'PAYLOAD_UNSUPPORTED'
+  if (request.payload.replyToProviderMessageId !== undefined && !realMaxMessageId(request.payload.replyToProviderMessageId)) return 'PAYLOAD_UNSUPPORTED'
   const requestedAt = new Date(request.requestedAt); const deadlineAt = new Date(request.deadlineAt)
   if (!Number.isFinite(requestedAt.valueOf()) || !Number.isFinite(deadlineAt.valueOf()) || deadlineAt <= requestedAt) return 'CONTRACT_INVALID'
   return null
