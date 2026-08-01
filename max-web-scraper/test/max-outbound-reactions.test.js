@@ -40,6 +40,7 @@ test('reaction add frame uses browser header and exact provider message id', () 
     true,
   )
 
+  assert.equal(frame[1], 0x01, 'native MAX reaction request frames use cmd=1')
   assert.equal(frame[5], OP.SEND_REACTION)
   assert.equal(frame[6], 0x00, 'synthetic reaction payload is uncompressed')
   assert.equal((frame[8] << 8) | frame[9], frame.length - 10)
@@ -61,6 +62,7 @@ test('reaction remove frame targets the same provider message without reaction p
     true,
   )
 
+  assert.equal(frame[1], 0x01, 'native MAX remove-reaction request frames use cmd=1')
   assert.equal(frame[5], OP.REMOVE_REACTION)
   assert.equal(frame[6], 0x00, 'synthetic remove-reaction payload is uncompressed')
   assert.equal((frame[8] << 8) | frame[9], frame.length - 10)

@@ -666,8 +666,9 @@ class TransportInterceptor {
         try {
           const buf = Buffer.from(response.payloadData, 'base64')
           if (buf.length >= 9 && buf[0] === 0x0a) {
-            const opcode  = buf[5]
-            const cmd     = buf[6]
+            const opcode  = (buf[4] << 8) | buf[5]
+            const cmd     = buf[1]
+            const compression = buf[6]
             const fseq    = (buf[2] << 8) | buf[3]
             // Отслеживаем последний fseq (browser + наши фреймы) — op:71 использует max+1
             if (fseq > this._browserLastBinFrameSeq) this._browserLastBinFrameSeq = fseq
@@ -687,10 +688,10 @@ class TransportInterceptor {
             // op:128 cmd:1 (browser mark-as-received) contains chatId in payload.
             // MAX doesn't send op:130 unless the user has the chat open, so this
             // outgoing frame is the only reliable source of chatId after op:128 empty notification.
-            if (opcode === 0x80 && cmd === 0x01 && buf.length > 12) {
+            if (opcode === 0x80 && cmd === 0x01 && compression === 0x00 && buf.length > 10) {
               try {
-                // Payload starts after 9-byte header + 3-byte prefix = byte 12
-                const decoded = maxMsgpackDecodeAll(buf.slice(12))
+                // Native MAX request payload starts after the 10-byte header.
+                const decoded = maxMsgpackDecodeAll(buf.slice(10))
                 const rawChatId = decoded?.chatId ?? decoded?.[0]?.chatId
                 if (rawChatId != null && rawChatId !== 0) {
                   // Browser encodes chatId as lower 32 bits only. Resolve full chatId
@@ -2197,7 +2198,7 @@ class TransportInterceptor {
     const frameSeq = (++this._browserLastBinFrameSeq) & 0xffff
     const header = Buffer.alloc(10)
     header[0] = 0x0a
-    header[1] = 0x00
+    header[1] = 0x01
     header[2] = (frameSeq >> 8) & 0xff
     header[3] = frameSeq & 0xff
     header[4] = 0x00

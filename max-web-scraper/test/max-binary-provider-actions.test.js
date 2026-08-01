@@ -23,6 +23,7 @@ test('reply frame uses native MAX op64 reply payload shape', () => {
   )
 
   assert.equal(frame[0], 0x0a)
+  assert.equal(frame[1], 0x01, 'native MAX request frames use cmd=1')
   assert.equal(frame[5], OP.SEND_MESSAGE)
   assert.equal(frame[6], 0x00, 'synthetic op64 payload is uncompressed')
   assert.equal(frame[7], 0x00)
