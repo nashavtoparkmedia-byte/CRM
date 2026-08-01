@@ -1,9 +1,23 @@
 {
-  "release": "contact-resolution-rc2",
-  "baselineDecision": "qualified C2",
+  "release": "personal-max-text-v1-rc2-outbound-burst-hotfix",
+  "baselineDecision": "qualified RC2",
   "shadowDefault": "off",
   "prismaSchemaChanged": false,
-  "productionDeployPerformed": false,
-  "productionEnvChanged": false,
-  "notes": "Final image metadata is recorded in external audit build logs and OCI labels. This manifest is source-controlled handover metadata."
+  "productionDeployPerformed": true,
+  "productionEnvChanged": true,
+  "canonicalSourcePath": "/home/codexbot/releases/personal-max-text-v1",
+  "acceptedRuntimeCommit": "e2711dc02d0669a753edd5a5b79ddce40e83f285",
+  "activeImages": [
+    "crm/gravity-mvp:personal-max-rc2-burst-e2711dc02d06",
+    "crm/max-personal-gateway:personal-max-rc2-burst-e2711dc02d06",
+    "crm/max-web-scraper:personal-max-rc2-burst-e2711dc02d06"
+  ],
+  "backup": {
+    "path": "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/production-before-rc2-burst-hotfix-dc34017-20260801T192334Z.dump",
+    "sha256": "6739120d597de28043a2e8099167e86e597a5391096da84c560e3fb6f0cb414c",
+    "pgRestoreList": "PASS",
+    "isolatedRestore": "PASS"
+  },
+  "evidenceDirectory": "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z",
+  "notes": "RC2 fixes outbound burst stall and route projection loss. Final image metadata is recorded in evidence logs and OCI labels. This manifest is source-controlled handover metadata."
 }

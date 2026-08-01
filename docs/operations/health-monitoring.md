@@ -84,6 +84,34 @@ Uptime Kuma «HTTP 200 only» mode) can therefore treat the endpoint
 as binary: 200 = green, anything else = trouble. The JSON body lets
 the operator dig into *which* dep is down.
 
+## Personal MAX Text v1 RC2 monitoring overlay
+
+Personal MAX Text v1 is also guarded by the installed operational monitor:
+
+```bash
+sudo /usr/local/sbin/crm-health-monitor.sh --dry-run
+```
+
+The RC2 monitor rules treat these as transport safety failures, not UI-only warnings:
+
+- persistent Personal MAX queue after the configured grace window;
+- unresolved unknown attempts;
+- open reconciliation;
+- wrong-account or wrong-route counters;
+- active route conflicts;
+- duplicate provider actions;
+- scraper authentication or WebSocket loss after the configured grace window;
+- CRM profile/channel route projection loss for an identity that has a durable active route.
+
+First action for route/account, reconciliation, unresolved unknown or duplicate-provider-action failures is default-off and privacy-safe evidence capture. Do not press Retry until the ledger proves no physical provider action happened or exact provider-store reconciliation has closed the outcome.
+
+The accepted RC2 backup binding for the cron template is:
+
+```text
+PERSONAL_MAX_TEXT_V1_BACKUP_PATH=/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/production-before-rc2-burst-hotfix-dc34017-20260801T192334Z.dump
+PERSONAL_MAX_TEXT_V1_BACKUP_SHA256=6739120d597de28043a2e8099167e86e597a5391096da84c560e3fb6f0cb414c
+```
+
 ---
 
 ## Status semantics (incl. monitor's view)

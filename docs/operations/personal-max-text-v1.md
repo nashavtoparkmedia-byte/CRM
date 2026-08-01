@@ -1,6 +1,12 @@
 # Personal MAX Text v1 operations runbook
 
-This runbook describes the accepted production release of Personal MAX Text v1. It is for operators, not only developers. It contains no secrets and no user message payloads.
+This runbook describes the accepted production release candidate of Personal MAX Text v1. It is for operators, not only developers. It contains no secrets and no user message payloads.
+
+Current accepted operational candidate: **Personal MAX Text v1 RC2**.
+
+Accepted runtime commit: `e2711dc02d0669a753edd5a5b79ddce40e83f285`.
+
+RC2 supersedes RC1 for production operations. It fixes the 2026-08-01 outbound burst stall where `11` was physically present in MAX but stayed unresolved in CRM, and where the same contact could falsely show route loss in the CRM profile/channel check.
 
 Canonical release source path:
 
@@ -64,6 +70,8 @@ Healthy production looks like this:
 - restart counts for the three Personal MAX containers are stable at 0 after the last rollout;
 - disk free is above the configured threshold;
 - the accepted backup file exists and matches its SHA-256.
+- the contact profile projects the durable Personal MAX route as known for the routed identity;
+- route/account safety counters remain zero after restart and replay.
 
 ## 4. How to check each signal
 
@@ -130,6 +138,8 @@ Keep default-off until reconciliation is resolved. Use read-only provider-store 
 ### Wrong route or wrong account
 
 Enable default-off immediately. Verify route registry identities, account owner fence and active browser owner. Do not send a canary until the conflict is closed.
+
+RC2 rule: a CRM profile/channel symptom such as “no route” or “provider account not found” for a contact that has an active durable route is a transport safety incident, not a cosmetic UI issue. The UI projection and durable sender must resolve through the same account-scoped durable route registry.
 
 ### Duplicate provider action
 
@@ -203,20 +213,24 @@ Then run the normal operating-state checks from section 3.
 
 The accepted backup is:
 
-`/var/backups/personal-max-soak-reliability-final-20260801T075734Z/production-before-op180-rollout-8a9e7f79d912-20260801T143056Z.dump`
+`/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/production-before-rc2-burst-hotfix-dc34017-20260801T192334Z.dump`
 
 Expected SHA-256:
 
-`58d55cd2f895bc7ffbc72c8ff9b9b1fbc59649a9df573166dd47e2dfa40a03de`
+`6739120d597de28043a2e8099167e86e597a5391096da84c560e3fb6f0cb414c`
 
 Verify:
 
 ```bash
-sudo sha256sum /var/backups/personal-max-soak-reliability-final-20260801T075734Z/production-before-op180-rollout-8a9e7f79d912-20260801T143056Z.dump
-sudo docker exec -i crm-postgres pg_restore --list < /var/backups/personal-max-soak-reliability-final-20260801T075734Z/production-before-op180-rollout-8a9e7f79d912-20260801T143056Z.dump >/tmp/pmax-restore-list.txt
+sudo sha256sum /var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/production-before-rc2-burst-hotfix-dc34017-20260801T192334Z.dump
+sudo docker exec -i crm-postgres pg_restore --list < /var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/production-before-rc2-burst-hotfix-dc34017-20260801T192334Z.dump >/tmp/pmax-restore-list.txt
 ```
 
-For release acceptance, an isolated disposable Postgres restore already passed. Do not restore into production for a routine check.
+For RC2 release acceptance, an isolated disposable Postgres restore passed with `--network none`. Evidence:
+
+`/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/isolated-restore-check-v3.txt`
+
+Do not restore into production for a routine check.
 
 ## 12. Privacy-safe incident evidence
 
@@ -268,4 +282,24 @@ Do not:
 8. Create or verify a fresh backup.
 9. Roll forward with `--no-build --pull never` from `/home/codexbot/releases/personal-max-text-v1`.
 10. Verify gateway ready, scraper health, CRM path, queue=0, reconciliation=0, unresolved unknown=0, restartCount stable and sender operational.
-11. Run a bounded provider check only if the release gate explicitly allows it.
+11. Verify route projection from the contact profile and channel check before enabling outbound.
+12. Run a bounded provider check only if the release gate explicitly allows it.
+
+## 15. RC2 outbound burst hotfix evidence
+
+Incident sequence:
+
+`11 → 12 → 12 → 12 → 1 → 13 → 14`
+
+Accepted RC2 result:
+
+- `11` was reconciled by exact provider-store evidence without blind retry or a replacement CRM bubble;
+- the six existing queued commands were released in FIFO order;
+- the three `12` messages remained three separate logical operations with separate provider ids;
+- queue, open reconciliation, unresolved unknown attempts, wrong-account, wrong-route and duplicate provider action counters are all zero;
+- restart/replay and rollback→roll-forward did not create additional provider actions;
+- production is operational-enabled with DOM fallback disabled and emergency default-off still available.
+
+Primary evidence directory:
+
+`/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z`

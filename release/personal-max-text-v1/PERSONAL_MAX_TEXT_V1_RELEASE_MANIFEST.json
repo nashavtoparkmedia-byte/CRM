@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "releaseName": "Personal MAX Text v1",
-  "releaseVersion": "v1.0.0-production",
-  "releaseStatus": "production_operational_enabled",
+  "releaseVersion": "v1.0.0-rc2",
+  "releaseStatus": "rc2_operational_enabled_user_check_ready",
   "canonicalBranch": "release/personal-max-text-v1",
-  "canonicalCommit": "8a9e7f79d91268ee4baf11ae5c440041875de424",
+  "canonicalCommit": "e2711dc02d0669a753edd5a5b79ddce40e83f285",
   "canonicalSourcePath": "/home/codexbot/releases/personal-max-text-v1",
   "futureDeploySource": {
     "path": "/home/codexbot/releases/personal-max-text-v1",
@@ -31,8 +31,8 @@
   },
   "acceptedCommitRange": {
     "first": "2da33a12b5f5b95b708cc8975dd36c6fd0aab903",
-    "last": "8a9e7f79d91268ee4baf11ae5c440041875de424",
-    "count": 102
+    "last": "e2711dc02d0669a753edd5a5b79ddce40e83f285",
+    "count": 104
   },
   "acceptedCommits": [
     "2da33a12b5f5b95b708cc8975dd36c6fd0aab903 2026-07-26 feat(max-personal): add raw transport event journal foundation",
@@ -136,7 +136,9 @@
     "9556e17f632edaf47e139c5bf90905796c5b4f31 2026-08-01 Harden MAX reply preflight outcome classification",
     "efb6cbb19905635c067abb06f81b60aeb69134aa 2026-08-01 Allow current MAX Web reply send primitives",
     "220e989e065e3abe1b36178a82cade16a8dff899 2026-08-01 Use current MAX Web reply send action",
-    "8a9e7f79d91268ee4baf11ae5c440041875de424 2026-08-01 Recover chatless MAX op180 text by provider id"
+    "8a9e7f79d91268ee4baf11ae5c440041875de424 2026-08-01 Recover chatless MAX op180 text by provider id",
+    "dc34017f8f6ec1578fae6cb5109c770625ee292f 2026-08-01 Fix Personal MAX burst confirmation recovery",
+    "e2711dc02d0669a753edd5a5b79ddce40e83f285 2026-08-01 Fix Personal MAX exact unknown resolution"
   ],
   "productionServices": [
     "gravity-mvp",
@@ -148,24 +150,24 @@
   "activeProductionImages": [
     {
       "service": "gravity-mvp",
-      "image": "crm/gravity-mvp:personal-max-soak-reliability-cfbea13dc0b3",
-      "imageId": "sha256:e438faa1800cc2aa4c743fe62efd3e1126e63d51d85fc9f04912eca54f961bce",
+      "image": "crm/gravity-mvp:personal-max-rc2-burst-e2711dc02d06",
+      "imageId": "sha256:5bf5dc14e7927bc1383415650aac7db641938561d688a403642badba19aaf4c5",
       "repoDigest": null,
-      "ociRevision": "cfbea13dc0b3cbf05d2fe5955e16d9820f9919e4"
+      "ociRevision": "e2711dc02d0669a753edd5a5b79ddce40e83f285"
     },
     {
       "service": "max-personal-gateway",
-      "image": "crm/max-personal-gateway:personal-max-soak-reliability-d9be0ed47e17",
-      "imageId": "sha256:15ff55b5152f5cf43cd3eee436957116220a244650afe58960079bf30391cc75",
+      "image": "crm/max-personal-gateway:personal-max-rc2-burst-e2711dc02d06",
+      "imageId": "sha256:7d099f795d31e762896b6dffb412dc337105d7f79f6254eb3b280d4e319fb296",
       "repoDigest": null,
-      "ociRevision": "d9be0ed47e174d0cbaeb7ccaa2980cae40e6a5b4"
+      "ociRevision": "e2711dc02d0669a753edd5a5b79ddce40e83f285"
     },
     {
       "service": "max-web-scraper",
-      "image": "crm/max-web-scraper:personal-max-soak-reliability-8a9e7f79d912",
-      "imageId": "sha256:aa7a2b44ad8d5f64960165cdab90d892d944465e92a939861d161a45bdfb306e",
+      "image": "crm/max-web-scraper:personal-max-rc2-burst-e2711dc02d06",
+      "imageId": "sha256:e330fdc4acc119e99d2f7772f139b710cacfdd44ed5c49572089501fc588fb20",
       "repoDigest": null,
-      "ociRevision": "8a9e7f79d91268ee4baf11ae5c440041875de424"
+      "ociRevision": "e2711dc02d0669a753edd5a5b79ddce40e83f285"
     }
   ],
   "migrations": {
@@ -207,35 +209,39 @@
     "secretValuesIncluded": false
   },
   "backup": {
-    "path": "/var/backups/personal-max-soak-reliability-final-20260801T075734Z/production-before-op180-rollout-8a9e7f79d912-20260801T143056Z.dump",
-    "sha256": "58d55cd2f895bc7ffbc72c8ff9b9b1fbc59649a9df573166dd47e2dfa40a03de",
-    "sizeBytes": 87549112,
-    "ownerGroupMode": "root:codexbot 0644",
+    "path": "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/production-before-rc2-burst-hotfix-dc34017-20260801T192334Z.dump",
+    "sha256": "6739120d597de28043a2e8099167e86e597a5391096da84c560e3fb6f0cb414c",
+    "sizeBytes": 89650188,
+    "ownerGroupMode": "root:codexbot 0640",
     "pgRestoreList": "PASS",
-    "isolatedRestore": "PASS"
+    "isolatedRestore": "PASS",
+    "isolatedRestoreEvidence": "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/isolated-restore-check-v3.txt"
   },
   "rollbackImages": [
-    "crm/gravity-mvp:personal-max-soak-reliability-5969a59f069f",
-    "crm/gravity-mvp:personal-max-soak-reliability-d9be0ed47e17",
-    "crm/gravity-mvp:personal-max-soak-reliability-e8c587043a91",
-    "crm/max-personal-gateway:personal-max-soak-reliability-bb9fd33a7c6f",
-    "crm/max-personal-gateway:personal-max-soak-reliability-2f6c509ff44b",
-    "crm/max-web-scraper:personal-max-soak-reliability-220e989e065e",
-    "crm/max-web-scraper:personal-max-soak-reliability-efb6cbb19905",
-    "crm/max-web-scraper:personal-max-soak-reliability-9556e17f632e",
-    "crm/max-web-scraper:personal-max-soak-reliability-cfbea13dc0b3"
+    "crm/gravity-mvp:personal-max-rc2-burst-dc34017f8f6e",
+    "crm/max-personal-gateway:personal-max-rc2-burst-dc34017f8f6e",
+    "crm/max-web-scraper:personal-max-rc2-burst-dc34017f8f6e",
+    "crm/gravity-mvp:personal-max-rc2-burst-e2711dc02d06",
+    "crm/max-personal-gateway:personal-max-rc2-burst-e2711dc02d06",
+    "crm/max-web-scraper:personal-max-rc2-burst-e2711dc02d06"
   ],
   "finalTests": [
     "bash -n scripts/health-monitor.sh PASS",
     "Personal MAX monitor root dry-run PASS",
     "Personal MAX monitor Telegram test mode PASS",
-    "max-web-scraper targeted op180 provider recovery PASS 7/7",
-    "max-web-scraper full test suite PASS 246/246",
-    "gravity-mvp full Vitest suite PASS 539 tests",
+    "max-web-scraper targeted outbound recovery regression PASS",
+    "max-web-scraper full test suite PASS 248/248",
+    "max-personal-gateway full test suite PASS 279/279",
+    "max-personal-gateway typecheck PASS",
+    "gravity-mvp Personal MAX targeted route/account suites PASS 22/22",
+    "gravity-mvp full Vitest suite PASS 543 tests passed, 28 skipped",
     "secret scan PASS",
     "source-to-image binding PASS",
     "pg_restore --list PASS",
     "isolated restore PASS",
+    "sequence 71 exact provider confirmation repair PASS without blind retry",
+    "sequence 72-77 existing queued burst completion PASS in FIFO",
+    "provider snapshot PASS 11 -> 12 -> 12 -> 12 -> 1 -> 13 -> 14",
     "default-off rollback then operational roll-forward PASS"
   ],
   "soakStatistics": {
@@ -247,6 +253,27 @@
       "separateEqualTextMessages": 3,
       "duplicateProviderIds": 0
     },
+    "rc2OutboundBurst": {
+      "incidentWindowUtc": "2026-08-01T18:44:00Z/2026-08-01T18:47:00Z",
+      "providerStoreTextsInOrder": [
+        "11",
+        "12",
+        "12",
+        "12",
+        "1",
+        "13",
+        "14"
+      ],
+      "providerStoreCount": 7,
+      "uniqueProviderIds": 7,
+      "crmCount": 7,
+      "orderMatches": true,
+      "separateEqualTextMessages": 3,
+      "duplicateProviderIds": 0,
+      "duplicateProviderActions": 0,
+      "wrongAccount": 0,
+      "wrongRoute": 0
+    },
     "finalRuntime": {
       "gatewayReadyHttp": 200,
       "scraperHealthHttp": 200,
@@ -257,7 +284,10 @@
       "unresolvedUnknownAttempts": 0,
       "openReconciliation": 0,
       "routeConflicts": 0,
-      "restartCount": 0
+      "restartCount": 0,
+      "routeKnownInContactProfile": true,
+      "activePersonalMaxRoutes": 1,
+      "senderEnabled": true
     }
   },
   "monitoring": {
@@ -268,9 +298,29 @@
     "stateDirectory": "/var/lib/crm/health-state",
     "telegramAlertSource": "ALERT_BOT_TOKEN and ALERT_CHAT_ID from /opt/crm/.env.production",
     "testMode": "--test-only --test-alert",
-    "secretValuesIncluded": false
+    "secretValuesIncluded": false,
+    "rc2Rules": [
+      "Alert and default-off first if queue remains non-zero after grace.",
+      "Alert and forbid blind retry if unresolved unknown attempts or open reconciliation are non-zero.",
+      "Alert and default-off first if wrong-account, wrong-route or active route conflict counters are non-zero.",
+      "Alert if duplicate provider actions become non-zero.",
+      "Treat route projection loss in CRM as a transport safety incident, not a cosmetic UI defect."
+    ]
   },
   "evidencePaths": [
+    "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/pre-rollout-state.txt",
+    "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/backup-summary.txt",
+    "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/pg-restore-list.txt",
+    "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/isolated-restore-check-v3.txt",
+    "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/immutable-images-e2711dc.txt",
+    "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/sequence71-exact-provider-confirmation-repair.json",
+    "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/sender-store-exact-unknown-resolution-e2711dc.json",
+    "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/sequence72-77-existing-burst-completion-e2711dc.json",
+    "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/provider-snapshot-after-burst.summary.json",
+    "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/final-post-replay-db-verification.json",
+    "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/final-contact-profile-route-known.json",
+    "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/rollback-and-rollforward-e2711dc.log",
+    "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/final-operational-readiness-after-replay.raw.txt",
     "/var/backups/personal-max-soak-reliability-final-20260801T075734Z/final-operational-health-corrected-8a9e7f79d912-20260801T144942Z.json",
     "/var/backups/personal-max-soak-reliability-final-20260801T075734Z/final-user-burst-provider-snapshot-after-final-roll-forward-20260801T145032Z.summary.json",
     "/var/backups/personal-max-soak-reliability-final-20260801T075734Z/final-user-burst-crm-verification-after-final-roll-forward-20260801T145032Z.json",
@@ -286,6 +336,7 @@
     "Text-only release for the confirmed single Personal MAX account.",
     "Provider confirmation means MAX accepted the message; it does not imply recipient delivery/read.",
     "Loss of MAX web authentication still requires owner re-authentication.",
+    "RC2 repaired one pre-existing burst incident by exact provider-store evidence; it did not create replacement CRM bubbles or blind retries for 11/12/1/13/14.",
     "Operational source is canonical in Git; active containers are immutable local Docker images, not registry-pushed repo digests.",
     "The dirty /opt/crm baseline was not rewritten during consolidation."
   ],
@@ -300,5 +351,5 @@
     "DOM fallback"
   ],
   "createdAt": "2026-08-01T16:10:00Z",
-  "acceptedAt": "2026-08-01T14:50:32Z"
+  "acceptedAt": "2026-08-01T20:12:00Z"
 }
