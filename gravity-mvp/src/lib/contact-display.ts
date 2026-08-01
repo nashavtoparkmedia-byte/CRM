@@ -142,11 +142,13 @@ export function buildCanonicalContactSummary(input: {
   const contactName = !isTechnicalProviderName(input.contact.displayName)
     ? input.contact.displayName!.trim()
     : null
+  const manualContactName = input.contact.displayNameSource === 'manual' ? contactName : null
   const identityName = identities.map(providerDisplayName).find(Boolean) || null
   const currentChannel = input.currentChannel?.trim().toLowerCase() || null
-  const displayName = profile?.fullName?.trim()
-    || contactName
+  const displayName = manualContactName
+    || profile?.fullName?.trim()
     || identityName
+    || contactName
     || primaryPhone
     || CHANNEL_CONTACT_LABEL[currentChannel || '']
     || 'Контакт'

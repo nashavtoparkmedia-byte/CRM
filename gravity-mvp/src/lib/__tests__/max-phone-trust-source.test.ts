@@ -61,4 +61,13 @@ describe('MAX trusted phone source contract', () => {
     expect(duplicateBlock).toContain('deduped: true')
     expect(duplicateBlock).not.toContain('prisma.message.create')
   })
+
+  test('MAX name sync can recover a phone fallback without overwriting curated CRM names', () => {
+    const route = read('gravity-mvp/src/app/api/webhook/max/sync-names/route.ts')
+    expect(route).toContain('function isPhoneLikePlaceholderName')
+    expect(route).toContain('if (isPhoneLikePlaceholderName(t)) return true')
+    expect(route).toContain('displayNameSource: true')
+    expect(route).toContain("!['manual', 'yandex'].includes(contact.displayNameSource || '')")
+    expect(route).toContain("data: { displayName: newName, displayNameSource: 'channel' }")
+  })
 })

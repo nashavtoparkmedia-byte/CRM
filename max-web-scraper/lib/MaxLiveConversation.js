@@ -73,6 +73,43 @@ function stableProviderOrder(left, right) {
   return String(left?.providerMessageId || '').localeCompare(String(right?.providerMessageId || ''))
 }
 
+function providerMessageIdFromDecimal(value) {
+  try {
+    let numeric = BigInt(String(value))
+    if (numeric < 0n) numeric += 1n << 64n
+    const providerMessageId = `d3${numeric.toString(16).padStart(16, '0')}`
+    return REAL_PROVIDER_MESSAGE_ID.test(providerMessageId) ? providerMessageId : null
+  } catch {
+    return null
+  }
+}
+
+function replySnapshotFields(candidate, candidatesByDecimalId, ownerUserId, providerUserId) {
+  const replyToProviderMessageId = providerMessageIdFromDecimal(candidate?.replyToId)
+  if (!replyToProviderMessageId) return {}
+  const target = candidatesByDecimalId.get(String(candidate.replyToId)) || null
+  const quotedTimestamp = target?.timestamp
+    ? (Number(target.timestamp) > 0 && Number(target.timestamp) < 1e12
+      ? Number(target.timestamp) * 1000
+      : Number(target.timestamp))
+    : null
+  const quotedText = typeof candidate?.quotedText === 'string' && candidate.quotedText.trim()
+    ? candidate.quotedText
+    : (typeof target?.text === 'string' ? target.text : '')
+  const quotedDirection = target
+    ? (target.isOutgoing ? 'outbound' : 'inbound')
+    : null
+  return {
+    replyToProviderMessageId,
+    quotedTextPreview: quotedText ? quotedText.slice(0, 240) : null,
+    quotedDirection,
+    quotedTimestamp: Number.isFinite(quotedTimestamp) ? quotedTimestamp : null,
+    quotedProviderUserId: target
+      ? (target.isOutgoing ? String(ownerUserId) : String(providerUserId))
+      : null,
+  }
+}
+
 function buildProviderHistorySnapshot({
   accountId,
   protocolChatId,
@@ -112,15 +149,15 @@ function buildProviderHistorySnapshot({
 
   const seen = new Set()
   const messages = []
+  const candidatesByDecimalId = new Map()
+  for (const candidate of Array.isArray(candidates) ? candidates : []) {
+    if (candidate?.id == null) continue
+    candidatesByDecimalId.set(String(candidate.id), candidate)
+  }
   for (const candidate of Array.isArray(candidates) ? candidates : []) {
     const rawTimestamp = Number(candidate?.timestamp)
     const timestamp = rawTimestamp > 0 && rawTimestamp < 1e12 ? rawTimestamp * 1000 : rawTimestamp
-    let providerMessageId = null
-    try {
-      let numeric = BigInt(String(candidate?.id))
-      if (numeric < 0n) numeric += 1n << 64n
-      providerMessageId = `d3${numeric.toString(16).padStart(16, '0')}`
-    } catch {}
+    const providerMessageId = providerMessageIdFromDecimal(candidate?.id)
     if (!REAL_PROVIDER_MESSAGE_ID.test(String(providerMessageId || ''))
       || !Number.isFinite(timestamp) || timestamp < start || timestamp > end
       || seen.has(providerMessageId)) continue
@@ -141,6 +178,7 @@ function buildProviderHistorySnapshot({
         quarantineReason: text.reason,
         messageType,
         attachmentCount,
+        ...replySnapshotFields(candidate, candidatesByDecimalId, ownerUserId, providerUserId),
       })
       seen.add(providerMessageId)
       continue
@@ -155,6 +193,7 @@ function buildProviderHistorySnapshot({
       quarantineReason: text.reason,
       messageType,
       attachmentCount,
+      ...replySnapshotFields(candidate, candidatesByDecimalId, ownerUserId, providerUserId),
     })
     seen.add(providerMessageId)
   }
@@ -188,7 +227,9 @@ module.exports = {
   buildProviderHistorySnapshot,
   low32RouteId,
   normalizeRussianPhone,
+  providerMessageIdFromDecimal,
   protocolChatIdForUiRouteCandidate,
   providerPeerUserId,
+  replySnapshotFields,
   stableProviderOrder,
 }

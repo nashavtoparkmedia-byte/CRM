@@ -31,6 +31,22 @@ describe('canonical Contact display summary', () => {
     expect(summary.channelCount).toBe(3)
   })
 
+  test('keeps an explicit manual CRM name above an attached DriverProfile', () => {
+    const summary = buildCanonicalContactSummary({
+      contact: {
+        displayName: 'Имя оператора',
+        displayNameSource: 'manual',
+        mainDriverId: 'driver-1',
+      },
+      profiles: [
+        { id: 'driver-1', fullName: 'Имя из профиля', phone: '+79990838709' },
+      ],
+      currentChannel: 'max',
+    })
+
+    expect(summary.displayName).toBe('Имя оператора')
+  })
+
   test('uses park priority when the Contact has no valid main profile', () => {
     const summary = buildCanonicalContactSummary({
       contact: { displayName: 'MAX:1', mainDriverId: null },
@@ -54,7 +70,7 @@ describe('canonical Contact display summary', () => {
 
     expect(buildCanonicalContactSummary({
       contact: {
-        displayName: 'MAX:902158371854',
+        displayName: '+79990838709',
         identities: [{ channel: 'max', externalId: '902158371854', displayName: 'Евгений MAX' }],
       },
       currentChannel: 'max',

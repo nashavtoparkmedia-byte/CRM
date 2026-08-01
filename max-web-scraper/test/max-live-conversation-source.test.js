@@ -3,6 +3,7 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
+const { buildProviderHistorySnapshot, providerMessageIdFromDecimal } = require('../lib/MaxLiveConversation')
 
 const source = fs.readFileSync('index.js', 'utf8')
 
@@ -71,4 +72,48 @@ test('forwarding metadata never mutates exact provider text', () => {
   assert.match(block, /forwardedFrom:/)
   assert.doesNotMatch(block, /const prefix/)
   assert.doesNotMatch(block, /text:\s*payload\.text\s*\?/)
+})
+
+test('read-only history snapshot preserves provider reply context', () => {
+  const targetProviderId = 'd3019fb3ab8bcb0673'
+  const replyProviderId = 'd3019fb3b2a7db2aed'
+  const targetDecimal = BigInt(`0x${targetProviderId.slice(2)}`).toString()
+  const replyDecimal = BigInt(`0x${replyProviderId.slice(2)}`).toString()
+  assert.equal(providerMessageIdFromDecimal(targetDecimal), targetProviderId)
+
+  const snapshot = buildProviderHistorySnapshot({
+    accountId: 'max-personal-81d98d8cc9fc95c1f1c0461f',
+    protocolChatId: '902197592419',
+    uiRouteId: '254460259',
+    providerUserId: '901985778243',
+    ownerUserId: '902171753248',
+    phone: '+79990838709',
+    phoneEvidence: null,
+    providerChatId: '902197592419',
+    routeMatchCount: 1,
+    windowStart: '2026-07-30T20:30:00.000Z',
+    windowEnd: '2026-07-30T20:50:00.000Z',
+    candidates: [{
+      id: targetDecimal,
+      text: 'Почему не дает режим спринт?',
+      timestamp: Date.parse('2026-07-30T20:36:31.947Z'),
+      isOutgoing: false,
+      attachmentCount: 0,
+    }, {
+      id: replyDecimal,
+      text: 'из-за отсутствия выписки',
+      timestamp: Date.parse('2026-07-30T20:44:17.883Z'),
+      isOutgoing: true,
+      replyToId: targetDecimal,
+      quotedText: 'Почему не дает режим спринт?',
+      attachmentCount: 0,
+    }],
+  })
+
+  const reply = snapshot.messages.find(message => message.providerMessageId === replyProviderId)
+  assert.equal(reply.replyToProviderMessageId, targetProviderId)
+  assert.equal(reply.quotedTextPreview, 'Почему не дает режим спринт?')
+  assert.equal(reply.quotedDirection, 'inbound')
+  assert.equal(reply.quotedProviderUserId, '901985778243')
+  assert.equal(reply.quotedTimestamp, Date.parse('2026-07-30T20:36:31.947Z'))
 })

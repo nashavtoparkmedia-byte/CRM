@@ -19,8 +19,15 @@ function isPlaceholderName(name?: string | null): boolean {
     if (!t) return true
     if (/^(TG|MAX|WA|Telegram|Max|WhatsApp)\s+\d+$/i.test(t)) return true
     if (/^\d+$/.test(t)) return true
+    if (isPhoneLikePlaceholderName(t)) return true
     if (/^[.\s\-]+$/.test(t)) return true
     return false
+}
+
+function isPhoneLikePlaceholderName(name: string): boolean {
+    if (/[А-Яа-яA-Za-z]{2,}/.test(name)) return false
+    const digits = name.replace(/\D/g, '')
+    return digits.length >= 10 && digits.length <= 15
 }
 
 /**
@@ -92,12 +99,12 @@ export async function POST(req: NextRequest) {
             if (chat.contactId) {
                 const contact = await prisma.contact.findUnique({
                     where: { id: chat.contactId },
-                    select: { id: true, displayName: true },
+                    select: { id: true, displayName: true, displayNameSource: true },
                 })
-                if (contact && isPlaceholderName(contact.displayName)) {
+                if (contact && !['manual', 'yandex'].includes(contact.displayNameSource || '') && isPlaceholderName(contact.displayName)) {
                     await prisma.contact.update({
                         where: { id: contact.id },
-                        data: { displayName: newName },
+                        data: { displayName: newName, displayNameSource: 'channel' },
                     })
                 }
             }

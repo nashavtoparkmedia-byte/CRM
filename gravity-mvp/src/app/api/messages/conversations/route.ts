@@ -4,8 +4,6 @@ import { prisma } from '@/lib/prisma'
 import { buildCanonicalContactSummary } from '@/lib/contact-display'
 import { resolveCanonicalContactId, type CanonicalContactLookup } from '@/lib/contacts/canonical-contact'
 
-const PROFILE_CHANNELS = ['max', 'whatsapp', 'telegram']
-
 interface ConversationContactRecord {
     id: string
     displayName: string | null
@@ -143,12 +141,10 @@ export async function GET() {
                     contactResolutionStatus: resolution?.kind ?? 'unresolved',
                 }
             }
-            const providerChannels = contact.phones.length > 0
-                ? PROFILE_CHANNELS
-                : Array.from(new Set([
-                    ...contact.identities.map(identity => identity.channel),
-                    ...(conversation.allChannels || [conversation.channel]),
-                ]))
+            const providerChannels = Array.from(new Set([
+                ...contact.identities.map(identity => identity.channel),
+                ...(conversation.allChannels || [conversation.channel]),
+            ]))
             const canonicalSummary = buildCanonicalContactSummary({
                 contact,
                 profiles: profilesByContactId.get(contact.id) || [],
