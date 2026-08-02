@@ -828,7 +828,7 @@ SQL
 
 profile_gate() {
   local contact_id=$1 expected_phone=$2 expected_source=$3
-  docker exec crm-gravity-mvp node - "$contact_id" "$expected_phone" "$expected_source" <<'NODE'
+  docker exec -i crm-gravity-mvp node - "$contact_id" "$expected_phone" "$expected_source" <<'NODE'
 const [contactId, expectedPhone, expectedSource] = process.argv.slice(2)
 const fail = (reason, data) => {
   process.stdout.write(JSON.stringify({ ok: false, reason, data }))
@@ -847,7 +847,7 @@ const expected = {
   phoneCount: phones.filter(item => item.phone === expectedPhone && item.isActive !== false).length,
   maxChannelCount: maxChannels.length,
   maxIdentityCount: maxIdentities.length,
-  maxRouteKnown: maxChannels[0]?.personalMaxRouteKnown ?? false,
+  maxRouteKnown: maxIdentities.some(item => item.personalMaxRouteKnown === true),
   hasExpectedSource: maxIdentities.some(item => item.externalId === expectedSource),
 }
 if (expected.primaryPhone !== expectedPhone) fail('primary_phone', expected)
@@ -861,7 +861,7 @@ NODE
 
 search_gate() {
   local phone=$1 expected_contact=$2
-  docker exec crm-gravity-mvp node - "$phone" "$expected_contact" <<'NODE'
+  docker exec -i crm-gravity-mvp node - "$phone" "$expected_contact" <<'NODE'
 const [phone, expectedContact] = process.argv.slice(2)
 const res = await fetch(`http://127.0.0.1:3002/api/contacts/search?q=${encodeURIComponent(phone)}&limit=5`)
 const body = await res.json().catch(() => ({}))
@@ -877,7 +877,7 @@ NODE
 
 archive_redirect_gate() {
   local archived_contact=$1 expected_contact=$2
-  docker exec crm-gravity-mvp node - "$archived_contact" "$expected_contact" <<'NODE'
+  docker exec -i crm-gravity-mvp node - "$archived_contact" "$expected_contact" <<'NODE'
 const [archivedContact, expectedContact] = process.argv.slice(2)
 const res = await fetch(`http://127.0.0.1:3002/api/contacts/${archivedContact}`)
 const body = await res.json().catch(() => ({}))
