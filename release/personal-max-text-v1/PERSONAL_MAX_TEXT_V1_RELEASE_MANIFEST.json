@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
   "releaseName": "Personal MAX Text v1",
-  "releaseVersion": "v1.0.0-rc2",
-  "releaseStatus": "rc2_operational_enabled_user_check_ready",
+  "releaseVersion": "v1.0.0-rc3",
+  "releaseStatus": "rc3_contact_identity_consolidation_user_check_ready",
   "canonicalBranch": "release/personal-max-text-v1",
-  "canonicalCommit": "e2711dc02d0669a753edd5a5b79ddce40e83f285",
+  "canonicalCommit": "f97532cb6903f033c070856b4a8c207df8e35026",
   "canonicalSourcePath": "/home/codexbot/releases/personal-max-text-v1",
   "futureDeploySource": {
     "path": "/home/codexbot/releases/personal-max-text-v1",
@@ -31,8 +31,8 @@
   },
   "acceptedCommitRange": {
     "first": "2da33a12b5f5b95b708cc8975dd36c6fd0aab903",
-    "last": "e2711dc02d0669a753edd5a5b79ddce40e83f285",
-    "count": 104
+    "last": "f97532cb6903f033c070856b4a8c207df8e35026",
+    "count": 118
   },
   "acceptedCommits": [
     "2da33a12b5f5b95b708cc8975dd36c6fd0aab903 2026-07-26 feat(max-personal): add raw transport event journal foundation",
@@ -138,7 +138,21 @@
     "220e989e065e3abe1b36178a82cade16a8dff899 2026-08-01 Use current MAX Web reply send action",
     "8a9e7f79d91268ee4baf11ae5c440041875de424 2026-08-01 Recover chatless MAX op180 text by provider id",
     "dc34017f8f6ec1578fae6cb5109c770625ee292f 2026-08-01 Fix Personal MAX burst confirmation recovery",
-    "e2711dc02d0669a753edd5a5b79ddce40e83f285 2026-08-01 Fix Personal MAX exact unknown resolution"
+    "e2711dc02d0669a753edd5a5b79ddce40e83f285 2026-08-01 Fix Personal MAX exact unknown resolution",
+    "9341c7e406380e5fb05f675ff0b7d377f8a38cee 2026-08-01 Document Personal MAX Text RC2 burst hotfix",
+    "cd13e6beda3312dcf2de0b67d56e83ed61325723 2026-08-01 Record Personal MAX RC2 reachability evidence",
+    "d2e7ee56b6c389e710cb8046e2e2f905b99a5938 2026-08-01 fix(personal-max): consolidate max contact identity routing",
+    "eddd9302eafbec50100bcaf0f084e3962483b2c5 2026-08-01 fix(personal-max): align rc3 default-off preflight",
+    "5ed84fb8e45783d37dbf25e7cb2bf8ee8d473a66 2026-08-01 fix(personal-max): validate rc3 backups without owner role",
+    "4205a20e421f03d0039b7f2dde58462126479f6c 2026-08-01 fix(personal-max): harden rc3 isolated restore cleanup",
+    "ebd7ffa9e33aadde10ab76ece9a4bab69382378b 2026-08-01 fix(personal-max): tolerate pre-task production schema",
+    "738d0461be1f4ce8212c543238352549084ca511 2026-08-01 fix(personal-max): record rc3 restore preflight diagnostics",
+    "0d44973956189a986019ee822f5dd23fbc1b31c9 2026-08-01 fix(personal-max): wait for stable rc3 restore readiness",
+    "bb10afa5df404b7a194156c5cbb9c9ae52a1e2c7 2026-08-01 fix(personal-max): use hashed rc3 route idempotency keys",
+    "26362d4ff8ec1f29d4cca019a2acacb7900bd22a 2026-08-01 fix(personal-max): quiet rc3 sql evidence output",
+    "452002745a1ab6d0ed389c788473d5bd635ced74 2026-08-01 fix(personal-max): keep rc3 final gate temp facts",
+    "796c18a261d1281df64cbb59f95053b7b13f2b4c 2026-08-01 fix(personal-max): close confirmed stale rc3 attempts",
+    "f97532cb6903f033c070856b4a8c207df8e35026 2026-08-02 fix(personal-max): execute rc3 profile gates in container"
   ],
   "productionServices": [
     "gravity-mvp",
@@ -150,24 +164,24 @@
   "activeProductionImages": [
     {
       "service": "gravity-mvp",
-      "image": "crm/gravity-mvp:personal-max-rc2-burst-e2711dc02d06",
-      "imageId": "sha256:5bf5dc14e7927bc1383415650aac7db641938561d688a403642badba19aaf4c5",
-      "repoDigest": null,
-      "ociRevision": "e2711dc02d0669a753edd5a5b79ddce40e83f285"
+      "image": "crm/gravity-mvp:personal-max-rc3-contact-f97532cb6903",
+      "imageId": "sha256:8054d07a3e6fa3e6ee3a8e0d65ab317aebf8fcd015c39f4f93d4593d4f6de7a9",
+      "repoDigest": "crm/gravity-mvp@sha256:8054d07a3e6fa3e6ee3a8e0d65ab317aebf8fcd015c39f4f93d4593d4f6de7a9",
+      "ociRevision": "f97532cb6903f033c070856b4a8c207df8e35026"
     },
     {
       "service": "max-personal-gateway",
-      "image": "crm/max-personal-gateway:personal-max-rc2-burst-e2711dc02d06",
-      "imageId": "sha256:7d099f795d31e762896b6dffb412dc337105d7f79f6254eb3b280d4e319fb296",
-      "repoDigest": null,
-      "ociRevision": "e2711dc02d0669a753edd5a5b79ddce40e83f285"
+      "image": "crm/max-personal-gateway:personal-max-rc3-contact-f97532cb6903",
+      "imageId": "sha256:1859c44327ba4e2264728534c334b81f8ee0cdbd56ebe28c50bb62dffadfc0c1",
+      "repoDigest": "crm/max-personal-gateway@sha256:1859c44327ba4e2264728534c334b81f8ee0cdbd56ebe28c50bb62dffadfc0c1",
+      "ociRevision": "f97532cb6903f033c070856b4a8c207df8e35026"
     },
     {
       "service": "max-web-scraper",
-      "image": "crm/max-web-scraper:personal-max-rc2-burst-e2711dc02d06",
-      "imageId": "sha256:e330fdc4acc119e99d2f7772f139b710cacfdd44ed5c49572089501fc588fb20",
-      "repoDigest": null,
-      "ociRevision": "e2711dc02d0669a753edd5a5b79ddce40e83f285"
+      "image": "crm/max-web-scraper:personal-max-rc3-contact-f97532cb6903",
+      "imageId": "sha256:a1ea7e8ac2b98e2e71aa9566abd6033893859fc8282652a43f5d83ed51a292bb",
+      "repoDigest": "crm/max-web-scraper@sha256:a1ea7e8ac2b98e2e71aa9566abd6033893859fc8282652a43f5d83ed51a292bb",
+      "ociRevision": "f97532cb6903f033c070856b4a8c207df8e35026"
     }
   ],
   "migrations": {
@@ -209,18 +223,15 @@
     "secretValuesIncluded": false
   },
   "backup": {
-    "path": "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/production-before-rc2-burst-hotfix-dc34017-20260801T192334Z.dump",
-    "sha256": "6739120d597de28043a2e8099167e86e597a5391096da84c560e3fb6f0cb414c",
-    "sizeBytes": 89650188,
+    "path": "/var/backups/personal-max-rc3-contact-identity-20260802T001545Z/production-before-rc3-contact-identity.dump",
+    "sha256": "61608ed2daca1a9fb05a3d4c00ed09acdd177e62f6bf7e9a134d6badc9d6e064",
+    "sizeBytes": 104662211,
     "ownerGroupMode": "root:codexbot 0640",
     "pgRestoreList": "PASS",
     "isolatedRestore": "PASS",
-    "isolatedRestoreEvidence": "/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/isolated-restore-check-v3.txt"
+    "isolatedRestoreEvidence": "/var/backups/personal-max-rc3-contact-identity-20260802T001545Z/isolated-restore-check.log"
   },
   "rollbackImages": [
-    "crm/gravity-mvp:personal-max-rc2-burst-dc34017f8f6e",
-    "crm/max-personal-gateway:personal-max-rc2-burst-dc34017f8f6e",
-    "crm/max-web-scraper:personal-max-rc2-burst-dc34017f8f6e",
     "crm/gravity-mvp:personal-max-rc2-burst-e2711dc02d06",
     "crm/max-personal-gateway:personal-max-rc2-burst-e2711dc02d06",
     "crm/max-web-scraper:personal-max-rc2-burst-e2711dc02d06"
@@ -245,7 +256,14 @@
     "ContactIdentity reachability repair PASS for existing MAX identity, no new Contact/Chat/Channel",
     "CRM profile route projection PASS reachabilityStatus=confirmed personalMaxRouteKnown=true",
     "channel reachability check PASS confirmed account, no provider-account-not-found",
-    "default-off rollback then operational roll-forward PASS"
+    "default-off rollback then operational roll-forward PASS",
+    "RC3 contact identity production runner dry-run PASS",
+    "RC3 contact identity data repair PASS: source archived=2, target phone owners=2, route bindings A=3/B=3",
+    "RC3 existing bubble outbound verification PASS: target_bubbles=1, target_commands=1, target_physical_actions=1, target_provider_ids=1",
+    "RC3 stale confirmed attempts closure PASS: unresolved_unknown=0, open_queue=0, open_reconciliation=0",
+    "RC3 profile/search/archive redirect gates PASS for both affected MAX contacts",
+    "RC3 source-to-image binding PASS for gravity, gateway and scraper",
+    "RC3 restart/replay and rollback→roll-forward PASS with no additional provider actions"
   ],
   "soakStatistics": {
     "finalInboundBurst": {
@@ -277,6 +295,31 @@
       "wrongAccount": 0,
       "wrongRoute": 0
     },
+    "rc3ContactIdentityConsolidation": {
+      "incidentWindowUtc": "2026-08-01T20:53:00Z/2026-08-01T21:00:00Z",
+      "targetContactCount": 2,
+      "archivedSourceContactCount": 2,
+      "activePhoneOwnerCount": 2,
+      "activeRouteBindingsA": 3,
+      "activeRouteBindingsB": 3,
+      "existingBubbleRetried": true,
+      "newCrmBubbleCreated": false,
+      "targetCommandCount": 1,
+      "targetPhysicalActionCount": 1,
+      "targetProviderIdCount": 1,
+      "providerMessageId": "d3019fbfa543a836eb",
+      "providerStorePresence": "exactly_once",
+      "queue": 0,
+      "openReconciliation": 0,
+      "unresolvedUnknownAttempts": 0,
+      "duplicateProviderActions": 0,
+      "wrongContact": 0,
+      "wrongPhone": 0,
+      "wrongRoute": 0,
+      "restartReplay": true,
+      "rollback": true,
+      "rollForward": true
+    },
     "finalRuntime": {
       "gatewayReadyHttp": 200,
       "scraperHealthHttp": 200,
@@ -289,7 +332,7 @@
       "routeConflicts": 0,
       "restartCount": 0,
       "routeKnownInContactProfile": true,
-      "activePersonalMaxRoutes": 1,
+      "activePersonalMaxRoutes": 2,
       "senderEnabled": true
     }
   },
@@ -302,12 +345,13 @@
     "telegramAlertSource": "ALERT_BOT_TOKEN and ALERT_CHAT_ID from /opt/crm/.env.production",
     "testMode": "--test-only --test-alert",
     "secretValuesIncluded": false,
-    "rc2Rules": [
+    "rc3Rules": [
       "Alert and default-off first if queue remains non-zero after grace.",
       "Alert and forbid blind retry if unresolved unknown attempts or open reconciliation are non-zero.",
       "Alert and default-off first if wrong-account, wrong-route or active route conflict counters are non-zero.",
       "Alert if duplicate provider actions become non-zero.",
-      "Treat route projection loss in CRM as a transport safety incident, not a cosmetic UI defect."
+      "Treat route projection loss in CRM as a transport safety incident, not a cosmetic UI defect.",
+      "Treat Contact identity split, missing provider-proven phone persistence or duplicate MAX channel projection as a transport safety incident."
     ]
   },
   "evidencePaths": [
@@ -337,13 +381,29 @@
     "/var/backups/personal-max-soak-reliability-final-20260801T075734Z/final-release-monitor-install-20260801T161354Z.log",
     "/var/backups/personal-max-soak-reliability-final-20260801T075734Z/final-release-monitor-prime-and-test-20260801T161421Z.log",
     "/var/backups/personal-max-soak-reliability-final-20260801T075734Z/final-release-source-checks-20260801T161621Z.log",
-    "/var/backups/personal-max-soak-reliability-final-20260801T075734Z/final-release-secret-value-scan-20260801T161644Z.txt"
+    "/var/backups/personal-max-soak-reliability-final-20260801T075734Z/final-release-secret-value-scan-20260801T161644Z.txt",
+    "/var/backups/personal-max-rc3-contact-identity-20260802T001545Z/data-repair-dry-run-before.private.json",
+    "/var/backups/personal-max-rc3-contact-identity-20260802T001545Z/data-repair-apply.private.json",
+    "/var/backups/personal-max-rc3-contact-identity-20260802T001545Z/data-repair-dry-run-after.private.json",
+    "/var/backups/personal-max-rc3-contact-identity-20260802T001545Z/immutable-images.txt",
+    "/var/backups/personal-max-rc3-contact-identity-20260802T001545Z/provider-snapshot-target-message.private.json",
+    "/var/backups/personal-max-rc3-contact-identity-20260802T001545Z/profile-gate-a.json",
+    "/var/backups/personal-max-rc3-contact-identity-20260802T001545Z/profile-gate-b.json",
+    "/var/backups/personal-max-rc3-contact-identity-20260802T001545Z/search-gate-a.json",
+    "/var/backups/personal-max-rc3-contact-identity-20260802T001545Z/search-gate-b.json",
+    "/var/backups/personal-max-rc3-contact-identity-20260802T001545Z/archive-redirect-gate-a.json",
+    "/var/backups/personal-max-rc3-contact-identity-20260802T001545Z/archive-redirect-gate-b.json",
+    "/var/backups/personal-max-rc3-contact-identity-20260802T001545Z/final-database-gate.private.json",
+    "/var/backups/personal-max-rc3-contact-identity-20260802T001545Z/final-database-gate-after-rollforward.private.json",
+    "/var/backups/personal-max-rc3-contact-identity-20260802T001545Z/final-runtime-snapshot.json",
+    "/var/backups/personal-max-rc3-contact-identity-20260802T001545Z/final-report.json"
   ],
   "knownLimitations": [
     "Text-only release for the confirmed single Personal MAX account.",
     "Provider confirmation means MAX accepted the message; it does not imply recipient delivery/read.",
     "Loss of MAX web authentication still requires owner re-authentication.",
     "RC2 repaired one pre-existing burst incident by exact provider-store evidence; it did not create replacement CRM bubbles or blind retries for 11/12/1/13/14.",
+    "RC3 repaired the two-contact Personal MAX identity split and the existing outbound bubble by exact route/provider evidence; it did not create replacement CRM bubbles or blind retries.",
     "Operational source is canonical in Git; active containers are immutable local Docker images, not registry-pushed repo digests.",
     "The dirty /opt/crm baseline was not rewritten during consolidation."
   ],
@@ -358,5 +418,5 @@
     "DOM fallback"
   ],
   "createdAt": "2026-08-01T16:10:00Z",
-  "acceptedAt": "2026-08-01T20:26:00Z"
+  "acceptedAt": "2026-08-02T00:25:00Z"
 }

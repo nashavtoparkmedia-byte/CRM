@@ -84,7 +84,7 @@ Uptime Kuma «HTTP 200 only» mode) can therefore treat the endpoint
 as binary: 200 = green, anything else = trouble. The JSON body lets
 the operator dig into *which* dep is down.
 
-## Personal MAX Text v1 RC2 monitoring overlay
+## Personal MAX Text v1 RC3 monitoring overlay
 
 Personal MAX Text v1 is also guarded by the installed operational monitor:
 
@@ -92,7 +92,7 @@ Personal MAX Text v1 is also guarded by the installed operational monitor:
 sudo /usr/local/sbin/crm-health-monitor.sh --dry-run
 ```
 
-The RC2 monitor rules treat these as transport safety failures, not UI-only warnings:
+The RC3 monitor rules treat these as transport safety failures, not UI-only warnings:
 
 - persistent Personal MAX queue after the configured grace window;
 - unresolved unknown attempts;
@@ -102,14 +102,16 @@ The RC2 monitor rules treat these as transport safety failures, not UI-only warn
 - duplicate provider actions;
 - scraper authentication or WebSocket loss after the configured grace window;
 - CRM profile/channel route projection loss for an identity that has a durable active route.
+- Contact identity split where provider-proven phone owner, Chat owner and durable route owner are not the same canonical Contact;
+- provider-proven phone shown in a CRM header but missing from the canonical Contact profile.
 
 First action for route/account, reconciliation, unresolved unknown or duplicate-provider-action failures is default-off and privacy-safe evidence capture. Do not press Retry until the ledger proves no physical provider action happened or exact provider-store reconciliation has closed the outcome.
 
-The accepted RC2 backup binding for the cron template is:
+The accepted RC3 backup binding for the cron template is:
 
 ```text
-PERSONAL_MAX_TEXT_V1_BACKUP_PATH=/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/production-before-rc2-burst-hotfix-dc34017-20260801T192334Z.dump
-PERSONAL_MAX_TEXT_V1_BACKUP_SHA256=6739120d597de28043a2e8099167e86e597a5391096da84c560e3fb6f0cb414c
+PERSONAL_MAX_TEXT_V1_BACKUP_PATH=/var/backups/personal-max-rc3-contact-identity-20260802T001545Z/production-before-rc3-contact-identity.dump
+PERSONAL_MAX_TEXT_V1_BACKUP_SHA256=61608ed2daca1a9fb05a3d4c00ed09acdd177e62f6bf7e9a134d6badc9d6e064
 ```
 
 ---

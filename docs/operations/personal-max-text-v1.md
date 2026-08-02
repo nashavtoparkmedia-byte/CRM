@@ -2,11 +2,11 @@
 
 This runbook describes the accepted production release candidate of Personal MAX Text v1. It is for operators, not only developers. It contains no secrets and no user message payloads.
 
-Current accepted operational candidate: **Personal MAX Text v1 RC2**.
+Current accepted operational candidate: **Personal MAX Text v1 RC3 contact identity consolidation — user-check ready**.
 
-Accepted runtime commit: `e2711dc02d0669a753edd5a5b79ddce40e83f285`.
+Accepted runtime commit: `f97532cb6903f033c070856b4a8c207df8e35026`.
 
-RC2 supersedes RC1 for production operations. It fixes the 2026-08-01 outbound burst stall where `11` was physically present in MAX but stayed unresolved in CRM, and where the same contact could falsely show route loss in the CRM profile/channel check.
+RC3 supersedes RC2 as the current operational candidate. It preserves the RC2 outbound burst/FIFO fixes and adds provider-proven phone persistence, audit-safe Contact identity consolidation, canonical phone search/profile projection, and exact retry repair for the existing outbound bubble affected by route loss. RC3 is not “released to operations” until the Product Owner separately accepts the final visual check.
 
 Canonical release source path:
 
@@ -141,6 +141,8 @@ Enable default-off immediately. Verify route registry identities, account owner 
 
 RC2 rule: a CRM profile/channel symptom such as “no route” or “provider account not found” for a contact that has an active durable route is a transport safety incident, not a cosmetic UI issue. The UI projection and durable sender must resolve through the same account-scoped durable route registry.
 
+RC3 rule: a provider-proven Personal MAX phone that appears in the CRM header but is missing from the Contact profile, or a split between phone owner, Chat owner and route owner, is a transport safety incident. Do not use manual merge/add-phone as the first repair. Enable default-off if identity, phone or route ownership is ambiguous, then use exact provider/account/route evidence and an audited repair plan.
+
 ### Duplicate provider action
 
 Stop sending via default-off. Preserve dispatch ledger, provider confirmation evidence and scraper durable sender state. Do not delete duplicate evidence.
@@ -211,24 +213,24 @@ Then run the normal operating-state checks from section 3.
 
 ## 11. Backup verification
 
-The accepted backup is:
+The accepted RC3 backup is:
 
-`/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/production-before-rc2-burst-hotfix-dc34017-20260801T192334Z.dump`
+`/var/backups/personal-max-rc3-contact-identity-20260802T001545Z/production-before-rc3-contact-identity.dump`
 
 Expected SHA-256:
 
-`6739120d597de28043a2e8099167e86e597a5391096da84c560e3fb6f0cb414c`
+`61608ed2daca1a9fb05a3d4c00ed09acdd177e62f6bf7e9a134d6badc9d6e064`
 
 Verify:
 
 ```bash
-sudo sha256sum /var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/production-before-rc2-burst-hotfix-dc34017-20260801T192334Z.dump
-sudo docker exec -i crm-postgres pg_restore --list < /var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/production-before-rc2-burst-hotfix-dc34017-20260801T192334Z.dump >/tmp/pmax-restore-list.txt
+sudo sha256sum /var/backups/personal-max-rc3-contact-identity-20260802T001545Z/production-before-rc3-contact-identity.dump
+sudo docker exec -i crm-postgres pg_restore --list < /var/backups/personal-max-rc3-contact-identity-20260802T001545Z/production-before-rc3-contact-identity.dump >/tmp/pmax-restore-list.txt
 ```
 
-For RC2 release acceptance, an isolated disposable Postgres restore passed with `--network none`. Evidence:
+For RC3 acceptance, an isolated disposable Postgres restore passed with `--network none`. Evidence:
 
-`/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z/isolated-restore-check-v3.txt`
+`/var/backups/personal-max-rc3-contact-identity-20260802T001545Z/isolated-restore-check.log`
 
 Do not restore into production for a routine check.
 
@@ -305,3 +307,26 @@ Accepted RC2 result:
 Primary evidence directory:
 
 `/var/backups/personal-max-rc2-burst-hotfix-20260801T192257Z`
+
+## 16. RC3 contact identity consolidation evidence
+
+Accepted RC3 result:
+
+- two affected Personal MAX contacts have exactly one canonical active Contact each;
+- both provider-proven phones are persisted as active primary ContactPhone rows on the canonical Contact;
+- phone search opens the live canonical card with history, not the archived source card;
+- active durable route bindings are present for both canonical conversations;
+- the existing outbound bubble affected by route loss has exactly one command, one physical action and one provider id;
+- no replacement CRM bubble and no blind retry were created;
+- queue, open reconciliation, unresolved unknown attempts, wrong-contact, wrong-phone, wrong-route and duplicate provider action counters are all zero;
+- profile/search/archive redirect gates passed for both affected contacts;
+- restart/replay and rollback→roll-forward did not create additional provider actions;
+- production is operational-enabled with DOM fallback disabled and emergency default-off still available.
+
+Primary evidence directory:
+
+`/var/backups/personal-max-rc3-contact-identity-20260802T001545Z`
+
+Final production report:
+
+`/var/tmp/personal-max-rc3-contact-identity-production.json`
