@@ -14,8 +14,12 @@ export class ConversationWorkflowService {
   /**
    * Called by ALL inbound handlers (TG, MAX, WA) after saving the message.
    */
-  static async onInboundMessage(chatId: string, sentAt: Date): Promise<void> {
-    const rows = await prisma.$queryRaw<Array<{ status: string }>>`
+  static async onInboundMessage(
+    chatId: string,
+    sentAt: Date,
+    db: Pick<Prisma.TransactionClient, '$queryRaw' | '$executeRaw'> = prisma,
+  ): Promise<void> {
+    const rows = await db.$queryRaw<Array<{ status: string }>>`
       SELECT status FROM "Chat" WHERE id = ${chatId}
     `
     if (rows.length === 0) return
@@ -26,11 +30,15 @@ export class ConversationWorkflowService {
       newStatus = 'open'
     }
 
-    await prisma.$executeRaw`
+    await db.$executeRaw`
       UPDATE "Chat"
       SET "unreadCount" = "unreadCount" + 1,
           "requiresResponse" = true,
-          "lastInboundAt" = ${sentAt},
+          "lastInboundAt" = CASE
+            WHEN "lastInboundAt" IS NULL OR "lastInboundAt" < ${sentAt}
+              THEN ${sentAt}
+            ELSE "lastInboundAt"
+          END,
           status = ${newStatus},
           "updatedAt" = NOW()
       WHERE id = ${chatId}
@@ -42,11 +50,19 @@ export class ConversationWorkflowService {
    * Only increments unreadCount and updates lastInboundAt.
    * Does NOT set requiresResponse, does NOT transition status.
    */
-  static async onGroupInboundMessage(chatId: string, sentAt: Date): Promise<void> {
-    await prisma.$executeRaw`
+  static async onGroupInboundMessage(
+    chatId: string,
+    sentAt: Date,
+    db: Pick<Prisma.TransactionClient, '$executeRaw'> = prisma,
+  ): Promise<void> {
+    await db.$executeRaw`
       UPDATE "Chat"
       SET "unreadCount" = "unreadCount" + 1,
-          "lastInboundAt" = ${sentAt},
+          "lastInboundAt" = CASE
+            WHEN "lastInboundAt" IS NULL OR "lastInboundAt" < ${sentAt}
+              THEN ${sentAt}
+            ELSE "lastInboundAt"
+          END,
           "updatedAt" = NOW()
       WHERE id = ${chatId}
     `

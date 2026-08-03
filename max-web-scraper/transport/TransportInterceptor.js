@@ -5,13 +5,63 @@ const path = require('path')
 const { createHash } = require('crypto')
 const { TextDecoder } = require('util')
 const { NoopCaptureAdapter } = require('../capture/LiveCaptureAdapter')
+const { Opcode19DeliverySpool } = require('../inbound/Opcode19DeliverySpool')
 const { normalizeProviderTimestamp } = require('../lib/MaxMessageOrdering')
 const { assessProviderText } = require('../lib/MaxLiveConversation')
+const {
+  bindOpcode19ReconnectMessage,
+  decodeOpcode19ReconnectPayload,
+} = require('./Opcode19ReconnectDecoder')
 
 // Persist last known message IDs across container restarts so catch-up op:71
 // works even when op:48 doesn't include all chats in its startup push.
 const LAST_MSG_IDS_PATH = path.join(__dirname, '..', 'user_data', 'last-msg-ids.json')
 const UTF8_FATAL_DECODER = new TextDecoder('utf-8', { fatal: true })
+
+function isDurableOpcode19Acknowledgement(value, message) {
+  return Boolean(
+    value && typeof value === 'object'
+    && value.durable === true
+    && typeof value.messageId === 'string' && value.messageId.length > 0
+    && typeof value.chatInternalId === 'string' && value.chatInternalId.length > 0
+    && String(value.providerMessageId || '') === String(message?.id || '')
+    && String(value.chatId || '') === String(message?.chatId || '')
+  )
+}
+
+function sanitizedOpcode19CapturePayload(bound) {
+  const candidate = bound?.candidate
+  const binding = bound?.binding
+  if (!candidate || !binding) {
+    throw Object.assign(new Error('bound opcode-19 capture identity is incomplete'), {
+      code: 'OPCODE19_CAPTURE_BINDING_INCOMPLETE',
+    })
+  }
+  const providerOccurredAt = new Date(candidate.providerTimestampMs)
+  if (!Number.isFinite(providerOccurredAt.valueOf())) {
+    throw Object.assign(new Error('bound opcode-19 provider timestamp is invalid'), {
+      code: 'OPCODE19_CAPTURE_TIMESTAMP_INVALID',
+    })
+  }
+  return {
+    kind: 'message',
+    direction: 'inbound',
+    providerMessageId: candidate.providerMessageId,
+    senderProviderUserId: binding.senderProviderUserId,
+    protocolChatId: binding.protocolChatId,
+    webRouteId: binding.webRouteId,
+    providerOccurredAt: providerOccurredAt.toISOString(),
+    text: candidate.text,
+    attachments: [],
+    providerAccountId: binding.accountId,
+    routeEvidence: [
+      { identityKind: 'provider_user_id', identityValue: binding.senderProviderUserId },
+      { identityKind: 'protocol_chat_id', identityValue: binding.protocolChatId },
+      { identityKind: 'web_route_id', identityValue: binding.webRouteId },
+    ],
+    opcode19ReconnectSnapshot: candidate.rawSnapshotEvidence,
+  }
+}
 
 function cleanMaxString(value) {
   if (value == null) return null
@@ -575,6 +625,7 @@ class TransportInterceptor {
     this._wsReadyCallbacks     = []
     this._lastSeenMsgId        = new Map() // chatId → last seen msgId (dedup for op:53 push)
     this._emittedMsgIds        = new Map() // messageId -> timestamp, cross-source dedup for op:53/op:71/op:128
+    this._inflightDurableEmits = new Map() // reconnect provider ID -> in-flight delivery Promise
     this._recentActiveChatIds  = new Map() // chatId → timestamp, обновляется из op:53
     this._lastMsgRawHex        = new Map() // chatId → raw hex bytes of lastMessage ID ext8 data
     this._confirmedMessageAnchorAt = new Map() // chatId → runtime confirmation timestamp; persisted anchors are not live proof
@@ -590,7 +641,12 @@ class TransportInterceptor {
     this._activeUiChatId       = null
     this._captureAdapter       = captureAdapter
     this._captureSocketGeneration = 0
+    this._authenticatedOwnerSocketGeneration = 0
     this._captureHookFailureCount = 0
+    this._opcode19BindingResolver = null
+    this._opcode19DeliverySpool = null
+    this._opcode19DeliverySpoolPath = path.join(__dirname, '..', 'user_data', 'opcode19-delivery-spool')
+    this._opcode19PendingDeliveries = new Set()
 
     // Load persisted message IDs from previous sessions.
     // This lets us catch up chats that op:48 doesn't include in its startup push.
@@ -1029,6 +1085,39 @@ class TransportInterceptor {
     }
   }
 
+  _resolveOpcode19ReconnectBinding(decoded) {
+    if (typeof this._opcode19BindingResolver !== 'function') {
+      return { ok: false, reason: 'binding_resolver_unavailable' }
+    }
+    const authenticatedOwnerProviderUserId = this.authenticatedOwnerProviderUserIdForCurrentSocket()
+    if (!authenticatedOwnerProviderUserId) {
+      return { ok: false, reason: 'owner_not_authenticated_for_socket' }
+    }
+    let context
+    try {
+      context = this._opcode19BindingResolver(decoded.candidate, {
+        authenticatedOwnerProviderUserId,
+      })
+    } catch (error) {
+      return { ok: false, reason: 'binding_resolver_failed', errorCode: error?.code || 'resolver_error' }
+    }
+    if (context && typeof context.then === 'function') {
+      return { ok: false, reason: 'async_binding_resolver_not_supported' }
+    }
+    return bindOpcode19ReconnectMessage(decoded, context)
+  }
+
+  authenticatedOwnerProviderUserIdForCurrentSocket() {
+    if (!this._myUserId) return null
+    // Unit/legacy transports that never receive the ws_created diagnostic have
+    // no generation boundary to cross. Once generations are observable, an
+    // owner from a previous socket is never reusable as current evidence.
+    if (this._captureSocketGeneration === 0) return this._myUserId
+    return this._authenticatedOwnerSocketGeneration === this._captureSocketGeneration
+      ? this._myUserId
+      : null
+  }
+
   _processDecodedFrame(data) {
     // DEBUG: log all non-presence frames
     if (data.opcode !== OP.PRESENCE) {
@@ -1082,8 +1171,20 @@ class TransportInterceptor {
       this._fireWsReady()
       if (id) {
         this._myUserId = String(id)
+        this._authenticatedOwnerSocketGeneration = this._captureSocketGeneration || 1
         console.log('[Transport] My userId:', this._myUserId)
         for (const h of this._wsAuthHandlers) try { h(this._myUserId) } catch {}
+      }
+      if (data._opcode19Message) {
+        const bound = data._opcode19Message
+        const msg = this._normalizedOpcode19Message(bound)
+        if (msg) {
+          const pending = this._deliverOpcode19ReconnectMessage(msg, bound)
+            .catch(error => {
+              console.error(`[Transport] opcode19 durable delivery retained id=${msg.id} code=${error?.code || 'DELIVERY_FAILED'}`)
+            })
+          this._trackOpcode19PendingDelivery(pending)
+        }
       }
     }
 
@@ -1091,20 +1192,27 @@ class TransportInterceptor {
     // но op:53 (push chats) содержит owner = наш userId.
     // Payload бывает двух видов: {"chats":[...]} или напрямую массив [...].
     // Если auth ещё не прошла — определяем userId из первого же op:53.
-    if (data.opcode === 53 && !this._myUserId) {
+    if (data.opcode === 53) {
       const chats = data.payload?.chats ?? (Array.isArray(data.payload) ? data.payload : null)
       if (Array.isArray(chats)) {
-        for (const chat of chats) {
-          if (chat && typeof chat === 'object' && chat.owner) {
-            this._myUserId = String(chat.owner)
+        const owners = [...new Set(chats
+          .filter(chat => chat && typeof chat === 'object' && chat.owner)
+          .map(chat => String(chat.owner)))]
+        if (owners.length === 1) {
+          const owner = owners[0]
+          const generation = this._captureSocketGeneration || 1
+          const ownerChanged = owner !== this._myUserId
+          const generationRefreshed = this._authenticatedOwnerSocketGeneration !== generation
+          this._myUserId = owner
+          this._authenticatedOwnerSocketGeneration = generation
+          if (ownerChanged || generationRefreshed) {
             console.log('[Transport] Auth via op:53 owner:', this._myUserId)
             this._wsConnected = true
             this._fireWsReady()
             for (const h of this._wsAuthHandlers) try { h(this._myUserId) } catch {}
-            break
           }
         }
-      } else {
+      } else if (!this._myUserId) {
         const chatIdRaw = this._extractChatIdDeep(data.payload) ?? this._activeUiChatId
         const messages = this._extractMessagesDeep(data.payload)
         if (chatIdRaw != null && messages.length > 0) {
@@ -1520,18 +1628,68 @@ class TransportInterceptor {
     // and the live CRM projection silently misses it.
     if (opcode === OP.INCOMING_MSG) payload = unwrapNestedMaxMessagePayload(payload)
 
-    const data = { opcode, cmd: mappedCmd, seq: reqSeq, payload, _frameSeq: frameSeq }
+    let opcode19Decoded = null
+    let opcode19Bound = null
+    if (opcode === OP.AUTH) {
+      opcode19Decoded = decodeOpcode19ReconnectPayload(payload)
+      if (opcode19Decoded.ok) {
+        let retained = false
+        try {
+          this._persistDecodedOpcode19Candidate(opcode19Decoded)
+          retained = true
+        } catch (error) {
+          console.error(`[Transport] opcode19 reconnect snapshot spool failed: ${error?.code || 'SPOOL_FAILED'}`)
+        }
+        if (retained) {
+          const resolved = this._resolveOpcode19ReconnectBinding(opcode19Decoded)
+          if (resolved.ok && this._myUserId && resolved.binding.ownerProviderUserId === this._myUserId) {
+            opcode19Bound = resolved
+          } else {
+            console.warn(`[Transport] opcode19 reconnect snapshot retained without delivery: ${resolved.reason || (!this._myUserId ? 'owner_not_authenticated' : 'owner_mismatch')}`)
+          }
+        }
+      }
+    }
+
+    const data = {
+      opcode,
+      cmd: mappedCmd,
+      seq: reqSeq,
+      payload,
+      _frameSeq: frameSeq,
+      ...(opcode19Bound ? { _opcode19Message: opcode19Bound } : {}),
+    }
 
     // Persist the decoded representation of this exact physical frame. The raw
     // binary form remains the fail-closed fallback above, but a successfully
     // decoded payload is replayable by the versioned normalizer instead of
     // being permanently quarantined as opaque bytes.
     let captureRaw = originalRaw
-    try { captureRaw = JSON.stringify(payload) } catch {}
+    try {
+      captureRaw = JSON.stringify(opcode19Bound
+        ? sanitizedOpcode19CapturePayload(opcode19Bound)
+        : (opcode19Decoded?.ok ? {
+            kind: 'opcode19_reconnect_candidate',
+            providerMessageId: opcode19Decoded.candidate.providerMessageId,
+            providerTimestampMs: opcode19Decoded.candidate.providerTimestampMs,
+            text: opcode19Decoded.candidate.text,
+            senderProviderUserId: opcode19Decoded.candidate.senderProviderUserId,
+            protocolChatId: opcode19Decoded.candidate.protocolChatId,
+            senderLow32: opcode19Decoded.candidate.senderLow32,
+            webRouteLow32: opcode19Decoded.candidate.webRouteLow32,
+            opcode19ReconnectSnapshot: opcode19Decoded.candidate.rawSnapshotEvidence,
+          }
+          : payload))
+    } catch {}
     this._capturePhysicalFrame(captureRaw, {
       ...captureMetadata,
-      providerEventId: payload?.message?.id?.hex ?? payload?.message?.id ?? null,
-      eventType: payload?.message ? 'message' : null,
+      providerEventId: opcode19Decoded?.candidate?.providerMessageId
+        ?? payload?.message?.id?.hex
+        ?? payload?.message?.id
+        ?? null,
+      eventType: opcode19Bound || payload?.message
+        ? 'message'
+        : (opcode19Decoded?.ok ? 'message_candidate' : null),
     })
 
     if (opcode !== OP.PRESENCE) {
@@ -2418,6 +2576,161 @@ class TransportInterceptor {
     return !!this._myUserId
   }
 
+  setOpcode19ReconnectBindingResolver(resolver) {
+    if (resolver !== null && typeof resolver !== 'function') {
+      throw new TypeError('opcode-19 binding resolver must be a function or null')
+    }
+    this._opcode19BindingResolver = resolver
+    return this
+  }
+
+  setOpcode19DeliverySpool(spool) {
+    if (!spool || typeof spool.put !== 'function' || typeof spool.list !== 'function'
+      || typeof spool.acknowledge !== 'function') {
+      throw new TypeError('opcode-19 delivery spool contract is invalid')
+    }
+    this._opcode19DeliverySpool = spool
+    return this
+  }
+
+  _getOpcode19DeliverySpool() {
+    if (!this._opcode19DeliverySpool) {
+      this._opcode19DeliverySpool = new Opcode19DeliverySpool(this._opcode19DeliverySpoolPath)
+    }
+    return this._opcode19DeliverySpool
+  }
+
+  _trackOpcode19PendingDelivery(promise) {
+    this._opcode19PendingDeliveries.add(promise)
+    promise.finally(() => this._opcode19PendingDeliveries.delete(promise)).catch(() => {})
+    return promise
+  }
+
+  async waitForOpcode19Deliveries(timeoutMs = 2000) {
+    const boundedTimeout = Number.isSafeInteger(timeoutMs) && timeoutMs >= 1 && timeoutMs <= 30_000
+      ? timeoutMs
+      : 2000
+    const deadline = Date.now() + boundedTimeout
+    while (this._opcode19PendingDeliveries.size > 0 && Date.now() < deadline) {
+      const remaining = Math.max(1, deadline - Date.now())
+      await Promise.race([
+        Promise.allSettled([...this._opcode19PendingDeliveries]),
+        new Promise(resolve => setTimeout(resolve, remaining)),
+      ])
+    }
+    return {
+      settled: this._opcode19PendingDeliveries.size === 0,
+      pending: this._opcode19PendingDeliveries.size,
+    }
+  }
+
+  getOpcode19DeliveryHealth() {
+    if (!this._opcode19DeliverySpool && !fs.existsSync(this._opcode19DeliverySpoolPath)) {
+      return { pending: 0, state: 'empty' }
+    }
+    try {
+      return this._getOpcode19DeliverySpool().getHealth()
+    } catch (error) {
+      return { pending: null, state: 'unavailable', errorCode: error?.code || 'SPOOL_UNAVAILABLE' }
+    }
+  }
+
+  _opcode19SpoolRecord(candidate) {
+    return {
+      schemaVersion: 1,
+      providerMessageId: candidate.providerMessageId,
+      source: 'opcode19_reconnect_snapshot',
+      candidate,
+    }
+  }
+
+  _persistDecodedOpcode19Candidate(decoded) {
+    if (!decoded?.ok) throw Object.assign(new Error('opcode-19 decoded candidate is invalid'), {
+      code: 'OPCODE19_DECODED_CANDIDATE_INVALID',
+    })
+    return this._getOpcode19DeliverySpool().put(this._opcode19SpoolRecord(decoded.candidate))
+  }
+
+  _normalizedOpcode19Message(bound) {
+    const msg = this._normalizeMaxMsg(bound.messageEnvelope)
+    if (!msg) return null
+    msg.source = 'reconnect_snapshot'
+    msg.requiresDurableAck = true
+    msg.providerAccountId = bound.binding.accountId
+    msg.uiRouteId = bound.binding.webRouteId
+    msg.opcode19Binding = { ...bound.binding }
+    msg.opcode19ReconnectEvidence = bound.candidate.rawSnapshotEvidence
+    return msg
+  }
+
+  async _deliverOpcode19ReconnectMessage(msg, bound) {
+    const spool = this._getOpcode19DeliverySpool()
+    const stored = spool.put(this._opcode19SpoolRecord(bound.candidate))
+    if (!this._myUserId || bound.binding.ownerProviderUserId !== this._myUserId) {
+      throw Object.assign(new Error('opcode-19 authenticated owner is not proven'), {
+        code: 'OPCODE19_OWNER_NOT_AUTHENTICATED',
+      })
+    }
+    const firstForRoute = spool.list().find(entry => (
+      String(entry.record?.candidate?.webRouteLow32 || '') === String(bound.candidate.webRouteLow32)
+    ))
+    if (firstForRoute && firstForRoute.providerMessageId !== msg.id) {
+      throw Object.assign(new Error('an older opcode-19 delivery for this route is still pending'), {
+        code: 'OPCODE19_ROUTE_PREDECESSOR_PENDING',
+      })
+    }
+    const acknowledgement = await this._emit(msg, { requireDurableAck: true })
+    const removed = spool.acknowledge(msg.id, stored.contentHash)
+    if (removed.removed && spool.getHealth().pending > 0) {
+      const continuation = Promise.resolve()
+        .then(() => this.drainOpcode19DeliverySpool())
+        .catch(error => {
+          console.error(`[Transport] opcode19 continuation drain failed code=${error?.code || 'DRAIN_FAILED'}`)
+        })
+      this._trackOpcode19PendingDelivery(continuation)
+    }
+    return acknowledgement
+  }
+
+  async drainOpcode19DeliverySpool() {
+    const spool = this._getOpcode19DeliverySpool()
+    const pending = spool.list()
+    const result = { attempted: 0, acknowledged: 0, retained: pending.length, stoppedReason: null }
+    const blockedRoutes = new Set()
+    for (const entry of pending) {
+      const routeKey = String(
+        entry.record?.candidate?.protocolChatId
+        || entry.record?.candidate?.webRouteLow32
+        || 'unknown-route',
+      )
+      if (blockedRoutes.has(routeKey)) continue
+      result.attempted += 1
+      const decoded = { ok: true, candidate: entry.record.candidate }
+      const rebound = this._resolveOpcode19ReconnectBinding(decoded)
+      if (!rebound.ok || !this._myUserId || rebound.binding.ownerProviderUserId !== this._myUserId) {
+        result.stoppedReason ||= rebound.reason || (!this._myUserId ? 'owner_not_authenticated' : 'binding_changed')
+        blockedRoutes.add(routeKey)
+        continue
+      }
+      const message = this._normalizedOpcode19Message(rebound)
+      if (!message) {
+        result.stoppedReason ||= 'message_normalization_failed'
+        blockedRoutes.add(routeKey)
+        continue
+      }
+      try {
+        await this._emit(message, { requireDurableAck: true })
+        spool.acknowledge(entry.providerMessageId, entry.contentHash)
+        result.acknowledged += 1
+        result.retained -= 1
+      } catch (error) {
+        result.stoppedReason ||= error?.code || 'delivery_failed'
+        blockedRoutes.add(routeKey)
+      }
+    }
+    return result
+  }
+
   onMessage(handler) {
     this._messageHandlers.push(handler)
   }
@@ -2511,29 +2824,80 @@ class TransportInterceptor {
 
   // ─── Внутренние ─────────────────────────────────────────────────────────
 
-  _emit(msg) {
-    if (msg) {
-      const now = Date.now()
-      for (const [id, ts] of this._emittedMsgIds.entries()) {
-        if (now - ts > 10 * 60 * 1000) this._emittedMsgIds.delete(id)
-      }
-      const attachmentSig = Array.isArray(msg.attachments)
-        ? msg.attachments.map(a => [a.type, a.url, a.name, a.size, a.videoId, a.fileId, a.photoId].join(':')).join('|')
-        : ''
-      const dedupKey = msg.id
-        ? `id:${msg.id}`
-        : `sig:${msg.chatId || ''}:${msg.from || ''}:${msg.timestamp || ''}:${msg.text || ''}:${attachmentSig}`
-      if (this._emittedMsgIds.has(dedupKey)) {
-        console.log(`[Transport] skip duplicate emit ${dedupKey.slice(0, 80)}`)
-        return
-      }
-      this._emittedMsgIds.set(dedupKey, now)
+  _emit(msg, options = {}) {
+    const now = Date.now()
+    for (const [id, ts] of this._emittedMsgIds.entries()) {
+      if (now - ts > 10 * 60 * 1000) this._emittedMsgIds.delete(id)
     }
-    for (const h of this._messageHandlers) {
-      try { h(msg) } catch (e) {
-        console.error('[Transport] Handler error:', e.message)
+    const attachmentSig = Array.isArray(msg?.attachments)
+      ? msg.attachments.map(a => [a.type, a.url, a.name, a.size, a.videoId, a.fileId, a.photoId].join(':')).join('|')
+      : ''
+    const dedupKey = msg?.id
+      ? `id:${msg.id}`
+      : `sig:${msg?.chatId || ''}:${msg?.from || ''}:${msg?.timestamp || ''}:${msg?.text || ''}:${attachmentSig}`
+
+    if (options.requireDurableAck === true) {
+      if (!msg?.id || !/^d301[0-9a-f]{14}$/i.test(String(msg.id))) {
+        return Promise.reject(Object.assign(new Error('durable opcode-19 emit requires a real provider ID'), {
+          code: 'OPCODE19_PROVIDER_ID_REQUIRED',
+        }))
+      }
+      const inflight = this._inflightDurableEmits.get(dedupKey)
+      if (inflight) return inflight
+      if (this._messageHandlers.length === 0) {
+        return Promise.reject(Object.assign(new Error('no durable opcode-19 message handler is registered'), {
+          code: 'OPCODE19_DURABLE_HANDLER_UNAVAILABLE',
+        }))
+      }
+
+      let resolveDelivery
+      let rejectDelivery
+      const delivery = new Promise((resolve, reject) => {
+        resolveDelivery = resolve
+        rejectDelivery = reject
+      })
+      this._inflightDurableEmits.set(dedupKey, delivery)
+
+      // Invoke handlers synchronously, as before. Promise settlement is awaited
+      // only for the reconnect durable-ack decision.
+      const results = []
+      for (const handler of this._messageHandlers) {
+        try { results.push(Promise.resolve(handler(msg))) } catch (error) { results.push(Promise.reject(error)) }
+      }
+      Promise.all(results).then(values => {
+        const acknowledgement = values.find(value => isDurableOpcode19Acknowledgement(value, msg))
+        if (!acknowledgement) {
+          throw Object.assign(new Error('message handlers did not return an exact durable CRM acknowledgement'), {
+            code: 'OPCODE19_DURABLE_ACK_REQUIRED',
+          })
+        }
+        this._emittedMsgIds.set(dedupKey, Date.now())
+        resolveDelivery(acknowledgement)
+      }).catch(rejectDelivery)
+      delivery.then(
+        () => this._inflightDurableEmits.delete(dedupKey),
+        () => this._inflightDurableEmits.delete(dedupKey),
+      )
+      return delivery
+    }
+
+    if (this._emittedMsgIds.has(dedupKey)) {
+      console.log(`[Transport] skip duplicate emit ${dedupKey.slice(0, 80)}`)
+      return Promise.resolve({ durable: false, deduped: true })
+    }
+    this._emittedMsgIds.set(dedupKey, now)
+    const results = []
+    for (const handler of this._messageHandlers) {
+      try { results.push(Promise.resolve(handler(msg))) } catch (error) {
+        console.error('[Transport] Handler error:', error.message)
       }
     }
+    return Promise.allSettled(results).then(settled => {
+      for (const item of settled) {
+        if (item.status === 'rejected') console.error('[Transport] Handler error:', item.reason?.message || item.reason)
+      }
+      return { durable: false, delivered: true }
+    })
   }
 }
 
@@ -2543,5 +2907,7 @@ module.exports = {
   maxMsgpackDecodeAll,
   unwrapNestedMaxMessagePayload,
   maxReplyTargetId,
+  sanitizedOpcode19CapturePayload,
+  isDurableOpcode19Acknowledgement,
   selectPendingLiveDomCandidates,
 }

@@ -57,9 +57,66 @@ test('MAX webhook history/catch-up does not promote existing chats as new activi
   const route = read('gravity-mvp/src/app/api/webhooks/max/route.ts')
 
   assert.match(route, /const isHistoryReplay = source === 'history' \|\| source === 'catchup'/)
-  assert.match(route, /!isOutgoing && !isHistoryReplay/)
-  assert.match(route, /\.\.\.\(isHistoryReplay \? \{\} : \{ lastMessageAt: sentAt \}\)/)
+  assert.match(route, /if \(!requiresDurableRecoverySemantics && !isHistoryReplay\) \{\s+await advanceMaxChatLastMessageAt\(chat\.id, sentAt\)/)
+  assert.match(route, /!requiresDurableRecoverySemantics && !isOutgoing && !isHistoryReplay/)
+  assert.doesNotMatch(route, /\.\.\.\(isHistoryReplay \? \{\} : \{ lastMessageAt: sentAt \}\)/)
   assert.match(route, /\.\.\.\(source \? \{ source \} : \{\}\)/)
+})
+
+test('MAX live inbound is locally acknowledged only after durable CRM persistence', () => {
+  const scraper = read('max-web-scraper/index.js')
+  const start = scraper.indexOf('async function handleIncoming(')
+  const end = scraper.indexOf('// ─── Отправка текста через WS opcode 64', start)
+  const block = scraper.slice(start, end)
+  const durableBlock = block.slice(block.indexOf('let result'))
+
+  assert.match(block, /const requiresDurableAck =/)
+  assert.match(block, /if \(!requiresDurableAck\) messageSync\.markSeen\(msg\)/)
+  assert.match(block, /requiresDurableAck\s+\? forwardDurableOpcode19ToWebhook\(payload, assertCurrentDurableBinding\)\s+: forwardToWebhook\(payload\)/)
+  assert.match(durableBlock, /requireDurableMaxWebhookAcknowledgement\(result\)/)
+  assertBefore(
+    durableBlock,
+    'requireDurableMaxWebhookAcknowledgement(result)',
+    'messageSync.markSeen(msg)',
+    'provider identity must be marked seen only after durable CRM acknowledgement',
+  )
+  assertBefore(
+    durableBlock,
+    'messageSync.markSeen(msg)',
+    "path.join(__dirname, 'last_activity.json')",
+    'activity cursor must advance only after durable CRM acknowledgement',
+  )
+  assert.match(scraper, /transport\.onMessage\(msg => enqueueInboundProjection/)
+})
+
+test('opcode 19 reconnect delivery is account-scoped, exactly route-bound and retried from a durable spool', () => {
+  const scraper = read('max-web-scraper/index.js')
+  const transport = read('max-web-scraper/transport/TransportInterceptor.js')
+  const delivery = read('max-web-scraper/inbound/CrmWebhookDelivery.js')
+
+  assert.match(scraper, /new Opcode19DeliverySpool\(\s*path\.join\(USER_DATA_DIR, 'opcode19-delivery-spool', opcode19AccountScope\)/)
+  assert.match(scraper, /transport\.setOpcode19ReconnectBindingResolver\(opcode19ReconnectBindingContext\)/)
+  assert.match(scraper, /protocolChatIdForUiRouteCandidate\(candidate\.webRouteLow32, chatCache\)/)
+  assert.match(scraper, /providerPeerUserId\(chat, ownerProviderUserId\)/)
+  assert.match(scraper, /String\(protocolChatId\) !== String\(candidate\.protocolChatId \|\| ''\)/)
+  assert.match(scraper, /String\(senderProviderUserId\) !== String\(candidate\.senderProviderUserId \|\| ''\)/)
+  assert.match(scraper, /low32RouteId\(senderProviderUserId\) !== String\(candidate\.senderLow32\)/)
+  assert.match(scraper, /routeOwnerAccountId: accountId/)
+  assert.match(scraper, /fencingToken: `socket-\$\{transport\._captureSocketGeneration \|\| 1\}`/)
+  assert.match(scraper, /requireCurrentOpcode19Binding\(msg, transport/)
+  assert.ok(
+    (scraper.match(/requireCurrentOpcode19Binding\(msg, transport/g) || []).length >= 2,
+    'opcode19 binding must be checked at ingress and again at the synchronous pre-POST fence',
+  )
+  assert.match(scraper, /postJsonAfterSynchronousFence\(CRM_WEBHOOK_URL, normalizedPayload/)
+  assert.match(delivery, /options\.assertCurrent\(\)\s+return postJson\(urlValue, payload, options\)/)
+  assert.match(scraper, /OPCODE19_RUNTIME_FENCE_CHANGED/)
+  assert.match(scraper, /scheduleOpcode19DeliveryDrain\('chat-cache-op48'\)/)
+  assert.match(scraper, /scheduleOpcode19DeliveryDrain\('chat-cache-op53'\)/)
+  assert.match(scraper, /scheduleOpcode19DeliveryDrain\('message-handler-ready'\)/)
+  assert.match(scraper, /scheduleOpcode19DeliveryDrain\('ws-auth'\)/)
+  assert.match(transport, /_persistDecodedOpcode19Candidate\(opcode19Decoded\)/)
+  assert.match(transport, /await this\._emit\(message, \{ requireDurableAck: true \}\)\s+spool\.acknowledge/)
 })
 
 test('MAX history and catch-up payloads carry explicit source markers', () => {

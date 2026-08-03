@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import { MAX_INBOUND_NORMALIZER_VERSION } from '../src/inbound/constants.ts'
@@ -8,6 +9,9 @@ import { MaxInboundNormalizer } from '../src/inbound/MaxInboundNormalizer.ts'
 import { VersionedInboundParserRegistry } from '../src/inbound/parserRegistry.ts'
 import type { NormalizeRawObservationInput, NormalizedMessageEnvelope } from '../src/inbound/types.ts'
 import type { JsonValue } from '../src/journal/types.ts'
+
+const require = createRequire(import.meta.url)
+const { sanitizedOpcode19CapturePayload } = require('../../max-web-scraper/transport/TransportInterceptor.js')
 
 const observedAt = new Date('2026-07-26T10:00:00.000Z')
 
@@ -60,6 +64,39 @@ test('pure normalizer is deterministic, non-mutating, and preserves exact text a
   assert.equal(envelope.providerOccurredAt, '2026-07-26T09:59:59.000Z')
   assert.equal(first.events[0]?.providerMessageId, 'Msg-001')
   assert.match(first.events[0]!.semanticSha256, /^[0-9a-f]{64}$/)
+})
+
+test('bound opcode 19 capture uses the sanitized message contract end to end', () => {
+  const payload = sanitizedOpcode19CapturePayload({
+    candidate: {
+      providerMessageId: 'd3019fc8d4774a04bc',
+      providerTimestampMs: Date.parse('2026-08-03T18:13:15.210Z'),
+      text: 'ывапро',
+      rawSnapshotEvidence: { sha256: 'b'.repeat(64), carrierIndex: 7 },
+    },
+    binding: {
+      accountId: 'max-personal-account',
+      senderProviderUserId: '902264026154',
+      protocolChatId: '902454841098',
+      webRouteId: '511708938',
+    },
+  }) as JsonValue
+  const outcome = new MaxInboundNormalizer(new VersionedInboundParserRegistry())
+    .normalizeRawObservation(input(payload, { sourceTransport: 'max_websocket' }))
+  const envelope = messagePayload(outcome)
+
+  assert.equal(envelope.providerMessageId, 'd3019fc8d4774a04bc')
+  assert.equal(envelope.senderProviderUserId, '902264026154')
+  assert.equal(envelope.protocolChatId, '902454841098')
+  assert.equal(envelope.webRouteId, '511708938')
+  assert.equal(envelope.providerOccurredAt, '2026-08-03T18:13:15.210Z')
+  assert.equal(envelope.text, 'ывапро')
+  assert.equal(envelope.direction, 'inbound')
+  assert.deepEqual(outcome.events.slice(1).map(event => [event.eventKind, event.providerUserId, event.protocolChatId, event.webRouteId]), [
+    ['route_evidence', '902264026154', null, null],
+    ['route_evidence', null, '902454841098', null],
+    ['route_evidence', null, null, '511708938'],
+  ])
 })
 
 test('message fixtures cover inbound/outbound, history/live, rapid and identical physical semantics', () => {

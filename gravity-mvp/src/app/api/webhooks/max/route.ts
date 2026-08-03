@@ -1,7 +1,7 @@
 'use server'
 
 import { NextResponse } from 'next/server'
-import type { Message, MessageType } from '@prisma/client'
+import type { Message, MessageType, Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { emitMessageReceived } from '@/lib/messageEvents'
 import { broadcastChatMessage } from '@/lib/messageStreamBus'
@@ -57,6 +57,43 @@ function metadataRecord(metadata: unknown): Record<string, unknown> {
   return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
     ? metadata as Record<string, unknown>
     : {}
+}
+
+type DurableMaxStoredMessage = Pick<
+  Message,
+  'chatId' | 'metadata' | 'sentAt' | 'content' | 'direction' | 'channel'
+>
+
+type DurableMaxExpectedIdentity = {
+  accountId: string
+  protocolChatId: string
+  uiRouteId: string
+  providerUserId: string
+  content: string
+  sentAt: Date
+  chatInternalId?: string
+}
+
+function matchesDurableMaxIdentity(
+  stored: DurableMaxStoredMessage,
+  expected: DurableMaxExpectedIdentity,
+): boolean {
+  const metadata = metadataRecord(stored.metadata)
+  return Boolean(
+    expected.accountId
+    && expected.protocolChatId
+    && expected.uiRouteId
+    && expected.providerUserId
+    && (!expected.chatInternalId || stored.chatId === expected.chatInternalId)
+    && stored.channel === 'max'
+    && stored.direction === 'inbound'
+    && stored.content === expected.content
+    && stored.sentAt.getTime() === expected.sentAt.getTime()
+    && String(metadata.providerAccountId || '') === expected.accountId
+    && String(metadata.protocolChatId || '') === expected.protocolChatId
+    && String(metadata.uiRouteId || '') === expected.uiRouteId
+    && String(metadata.providerUserId || '') === expected.providerUserId
+  )
 }
 
 function sanitizeMaxValue(value: unknown): unknown {
@@ -134,6 +171,23 @@ type MaxWebhookBody = {
 function normalizeMaxChatId(chatId: unknown): string {
   const raw = String(chatId)
   return MAX_CHAT_ID_ALIASES[raw] || raw
+}
+
+async function advanceMaxChatLastMessageAt(
+  chatId: string,
+  sentAt: Date,
+  db: Pick<Prisma.TransactionClient, 'chat'> = prisma,
+): Promise<void> {
+  await db.chat.updateMany({
+    where: {
+      id: chatId,
+      OR: [
+        { lastMessageAt: null },
+        { lastMessageAt: { lt: sentAt } },
+      ],
+    },
+    data: { lastMessageAt: sentAt },
+  })
 }
 
 function attachmentName(att: AttachmentLike): string {
@@ -328,6 +382,39 @@ export async function POST(request: Request) {
       externalIdString.startsWith('max-recovered-')
     )
     const isHistoryReplay = source === 'history' || source === 'catchup'
+    const requiresDurableRecoverySemantics = source === 'reconnect_snapshot' || source === 'raw_journal_replay'
+    if (requiresDurableRecoverySemantics && (
+      isOutgoing
+      || !externalIdString
+      || !REAL_PERSONAL_MAX_MESSAGE_ID.test(externalIdString)
+      || !providerAccountId
+      || !protocolChatId
+      || !uiRouteId
+      || !providerUserId
+    )) {
+      maxRuntimeTrace('webhook.skipped', {
+        providerMessageId: externalIdString,
+        chatId: String(chatId),
+        reason: 'durable_identity_incomplete',
+      })
+      return NextResponse.json({
+        success: false,
+        error: 'Personal MAX durable recovery identity is incomplete',
+        code: 'MAX_DURABLE_IDENTITY_INCOMPLETE',
+      }, { status: 409 })
+    }
+    const durableRecoveryIdentity: DurableMaxExpectedIdentity | null = requiresDurableRecoverySemantics
+      ? {
+          accountId: providerAccountId || configuredAccountId || '',
+          protocolChatId: normalizeMaxChatId(protocolChatId || chatId),
+          uiRouteId: uiRouteId == null ? '' : String(uiRouteId),
+          providerUserId: providerUserId == null
+            ? (senderId == null ? '' : String(senderId))
+            : String(providerUserId),
+          content: String(text || ''),
+          sentAt,
+        }
+      : null
     const allowLiveDomTextRecovery = Boolean(
       isTextProviderEvent &&
       isPlaceholderTextId &&
@@ -413,9 +500,31 @@ export async function POST(request: Request) {
     if (isTextProviderEvent && externalIdString) {
       const existingText = await prisma.message.findUnique({
         where: { externalId: externalIdString },
-        select: { id: true, chatId: true, metadata: true, sentAt: true },
+        select: {
+          id: true,
+          chatId: true,
+          metadata: true,
+          sentAt: true,
+          content: true,
+          direction: true,
+          channel: true,
+        },
       })
       if (existingText) {
+        if (durableRecoveryIdentity) {
+          if (!matchesDurableMaxIdentity(existingText, durableRecoveryIdentity)) {
+            maxRuntimeTrace('webhook.provider_identity_conflict', {
+              providerMessageId: externalIdString,
+              chatId: String(chatId),
+              source,
+            })
+            return NextResponse.json({
+              success: false,
+              error: 'Personal MAX provider identity conflict',
+              code: 'MAX_PROVIDER_IDENTITY_CONFLICT',
+            }, { status: 409 })
+          }
+        }
         let resolvedReplyToExternalId = replyToExternalIdString
         const normalizedReplyQuote = replyQuoteTextString || ''
         if (!resolvedReplyToExternalId && source === 'live_dom_reply_enrichment' && normalizedReplyQuote) {
@@ -558,7 +667,6 @@ export async function POST(request: Request) {
           where: { id: existingBySender.id },
           data: {
             externalChatId,
-            ...(isHistoryReplay ? {} : { lastMessageAt: sentAt }),
             ...(senderName && existingBySender.name?.startsWith('MAX:') ? { name: senderName } : {}),
             metadata: {
               ...existingMetadata,
@@ -603,7 +711,6 @@ export async function POST(request: Request) {
       await prisma.chat.update({
         where: { id: chat.id },
         data: {
-          ...(isHistoryReplay ? {} : { lastMessageAt: sentAt }),
           // Обновляем имя если раньше было только MAX:ID
           ...(senderName && chat.name?.startsWith('MAX:') ? { name: senderName } : {}),
           // Обновляем senderId / phone в metadata
@@ -622,6 +729,13 @@ export async function POST(request: Request) {
           } : {}),
         },
       })
+    }
+
+    // Preserve the established normal inbound/outbound ordering: chat activity
+    // is advanced before workflow and before Message upsert. Only the new
+    // reconnect/replay path moves these effects into its durable transaction.
+    if (!requiresDurableRecoverySemantics && !isHistoryReplay) {
+      await advanceMaxChatLastMessageAt(chat.id, sentAt)
     }
 
     // Map messageType to Prisma MessageType enum.
@@ -765,44 +879,111 @@ export async function POST(request: Request) {
       }
     }
 
-    // Workflow: update status/unread/requiresResponse via centralized service
-    if (!isOutgoing && !isHistoryReplay) {
+    // Workflow ordering for normal opcode 128/180 and provider-store recovery
+    // stays identical to the accepted baseline. A failure here leaves no
+    // Message row, so the existing retry can still repair the activity state.
+    if (!requiresDurableRecoverySemantics && !isOutgoing && !isHistoryReplay) {
       await ConversationWorkflowService.onInboundMessage(chat.id, sentAt)
-    } else if (isOutgoing && !isHistoryReplay) {
+    } else if (!requiresDurableRecoverySemantics && isOutgoing && !isHistoryReplay) {
       await ConversationWorkflowService.onOutboundMessage(chat.id, sentAt)
+    }
+
+    const messageCreateData: Prisma.MessageCreateManyInput = {
+      chatId:    chat.id,
+      direction: isOutgoing ? 'outbound' : 'inbound',
+      type:      msgType,
+      content,
+      channel:   'max',
+      externalId: externalIdString,
+      status:    isNativeMaxOutbound ? 'sent' : 'delivered',
+      sentAt,   // validated above
+      metadata:  {
+        senderId: providerUserIdString || senderId,
+        maxChatId: externalChatId,
+        maxRawChatId: rawExternalChatId,
+        protocolChatId: externalChatId,
+        uiRouteId: uiRouteId ? String(uiRouteId) : rawExternalChatId,
+        providerAccountId: providerAccountId || configuredAccountId || null,
+        providerUserId: providerUserIdString,
+        attachments: attachments || [],
+        ...(attachmentResolutionMetadata ? { attachmentResolution: attachmentResolutionMetadata } : {}),
+        ...(source ? { source } : {}),
+        ...(nativeMetadata || {}),
+        ...providerReplyMetadata,
+        ...(forwardedFrom ? { forwardedFrom } : {}),
+      },
+    }
+    const persistMessage = (db: Pick<Prisma.TransactionClient, 'message'>) =>
+      db.message.upsert({
+        where:  { externalId: externalIdString || `max-${chatId}-${Date.now()}` },
+        update: {},
+        create: messageCreateData,
+      })
+
+    // The reconnect/replay ACK boundary is atomic: if workflow or monotonic
+    // activity advancement fails, the Message insert rolls back and remains
+    // safely retryable instead of becoming an early-return duplicate.
+    let durableRecoveryWasDeduped = false
+    if (!message && requiresDurableRecoverySemantics) {
+      const durablePersistence = await prisma.$transaction(async tx => {
+        const insertion = await tx.message.createMany({
+          data: [messageCreateData],
+          skipDuplicates: true,
+        })
+        if (insertion.count !== 0 && insertion.count !== 1) {
+          throw Object.assign(new Error('Unexpected Personal MAX durable insert count'), {
+            code: 'MAX_DURABLE_INSERT_COUNT_INVALID',
+          })
+        }
+        const persisted = externalIdString
+          ? await tx.message.findUnique({ where: { externalId: externalIdString } })
+          : null
+        const exactIdentity = durableRecoveryIdentity
+          ? { ...durableRecoveryIdentity, chatInternalId: chat.id, content }
+          : null
+        if (!persisted || !exactIdentity || !matchesDurableMaxIdentity(persisted, exactIdentity)) {
+          throw Object.assign(new Error('Personal MAX provider identity conflict during durable persistence'), {
+            code: 'MAX_PROVIDER_IDENTITY_CONFLICT',
+          })
+        }
+        if (insertion.count === 1) {
+          await ConversationWorkflowService.onInboundMessage(chat.id, sentAt, tx)
+          await advanceMaxChatLastMessageAt(chat.id, sentAt, tx)
+        }
+        return { message: persisted, deduped: insertion.count === 0 }
+      })
+      message = durablePersistence.message
+      durableRecoveryWasDeduped = durablePersistence.deduped
+    }
+
+    // A concurrent request can pass the early lookup before the winning
+    // transaction commits. Treat createMany(count=0) exactly like the early
+    // provider-ID duplicate path: acknowledge it, but do not emit workflow,
+    // contact, attachment, or application side effects a second time.
+    if (message && durableRecoveryWasDeduped) {
+      await maxContactResolutionShadow.session?.complete({
+        status: 'no_contact',
+        reason: 'legacy_contact_resolution_not_reached',
+      })
+      maxRuntimeTrace('webhook.duplicate', {
+        providerMessageId: externalIdString,
+        chatId: String(chatId),
+        text,
+        chatInternalId: message.chatId,
+        messageId: message.id,
+        raceDeduped: true,
+      })
+      return NextResponse.json({
+        success: true,
+        chatInternalId: message.chatId,
+        messageId: message.id,
+        deduped: true,
+      })
     }
 
     // Create Message (skip if already seen)
     if (!message) {
-      message = await prisma.message.upsert({
-        where:  { externalId: externalIdString || `max-${chatId}-${Date.now()}` },
-        update: {},
-        create: {
-          chatId:    chat.id,
-          direction: isOutgoing ? 'outbound' : 'inbound',
-          type:      msgType,
-          content,
-          channel:   'max',
-          externalId: externalIdString,
-          status:    isNativeMaxOutbound ? 'sent' : 'delivered',
-          sentAt,   // validated above
-          metadata:  {
-            senderId: providerUserIdString || senderId,
-            maxChatId: externalChatId,
-            maxRawChatId: rawExternalChatId,
-            protocolChatId: externalChatId,
-            uiRouteId: uiRouteId ? String(uiRouteId) : rawExternalChatId,
-            providerAccountId: providerAccountId || configuredAccountId || null,
-            providerUserId: providerUserIdString,
-            attachments: attachments || [],
-            ...(attachmentResolutionMetadata ? { attachmentResolution: attachmentResolutionMetadata } : {}),
-            ...(source ? { source } : {}),
-            ...(nativeMetadata || {}),
-            ...providerReplyMetadata,
-            ...(forwardedFrom ? { forwardedFrom } : {}),
-          },
-        },
-      })
+      message = await persistMessage(prisma)
     }
     if (attachmentResolutionMetadata?.status === 'resolved') {
       const existingMetadata = metadataRecord(message.metadata)
@@ -933,6 +1114,16 @@ export async function POST(request: Request) {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     maxRuntimeTrace('webhook.error', { error: message })
+    const errorCode = err && typeof err === 'object' && 'code' in err
+      ? String((err as { code?: unknown }).code || '')
+      : ''
+    if (errorCode === 'MAX_PROVIDER_IDENTITY_CONFLICT') {
+      return NextResponse.json({
+        success: false,
+        error: 'Personal MAX provider identity conflict',
+        code: errorCode,
+      }, { status: 409 })
+    }
     opsLog('error', 'webhook_max_error', { channel: 'max', error: message })
     return NextResponse.json({ error: 'Internal Server Error', details: message }, { status: 500 })
   }

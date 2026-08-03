@@ -49,11 +49,17 @@ const {
   snapshotOutboundProviderMessageIds,
 } = require('./lib/MaxOutboundConfirmation')
 const { createLiveCaptureAdapterFromEnvironment } = require('./capture/LiveCaptureAdapter')
+const {
+  postJsonAfterSynchronousFence,
+  requireDurableMaxWebhookAcknowledgement,
+} = require('./inbound/CrmWebhookDelivery')
+const { Opcode19DeliverySpool } = require('./inbound/Opcode19DeliverySpool')
 const { createPhysicalTextSenderRuntime } = require('./sender-v1/runtime')
 const { sendProviderConfirmedUiText } = require('./sender-v1/ProviderConfirmedUiTextSender')
 const {
   assessProviderText,
   buildProviderHistorySnapshot,
+  low32RouteId,
   protocolChatIdForUiRouteCandidate,
   providerPeerUserId,
 } = require('./lib/MaxLiveConversation')
@@ -839,15 +845,71 @@ async function forwardToWebhook(payload) {
   })
 }
 
+async function forwardDurableOpcode19ToWebhook(payload, assertCurrentBinding) {
+  const normalizedPayload = {
+    ...payload,
+    chatId: payload.chatId != null ? normalizeMaxChatId(payload.chatId) : payload.chatId,
+    rawChatId: payload.rawChatId || payload.chatId,
+  }
+  const result = await postJsonAfterSynchronousFence(CRM_WEBHOOK_URL, normalizedPayload, {
+    timeoutMs: process.env.MAX_PERSONAL_CRM_WEBHOOK_TIMEOUT_MS,
+    assertCurrent: assertCurrentBinding,
+  })
+  trackImportedMessage(normalizedPayload.chatId, normalizedPayload.timestamp)
+  return result
+}
+
+function currentOpcode19RuntimeIdentity(msg, transport) {
+  const protocolChatId = String(msg?.chatId || '')
+  const route = resolveUiRouteIdForChat(protocolChatId)
+  return {
+    accountId: String(process.env.MAX_PERSONAL_ACCOUNT_ID || ''),
+    protocolChatId,
+    providerUserId: dialogPeerProviderUserId(protocolChatId),
+    uiRouteId: route.uiRouteId,
+    authenticatedOwnerProviderUserId: String(
+      transport?.authenticatedOwnerProviderUserIdForCurrentSocket?.() || '',
+    ),
+    socketFence: `socket-${transport?._captureSocketGeneration || 1}`,
+  }
+}
+
+function requireCurrentOpcode19Binding(msg, transport, current) {
+  const binding = msg?.opcode19Binding
+  const valid = binding && typeof binding === 'object'
+    && String(binding.accountId || '') === String(current.accountId || '')
+    && String(binding.routeOwnerAccountId || '') === String(current.accountId || '')
+    && String(binding.ownerProviderUserId || '') === String(current.authenticatedOwnerProviderUserId || '')
+    && String(binding.protocolChatId || '') === String(current.protocolChatId || '')
+    && String(binding.senderProviderUserId || '') === String(current.providerUserId || '')
+    && String(binding.webRouteId || '') === String(current.uiRouteId || '')
+    && String(binding.fencingToken || '') === String(current.socketFence || '')
+    && String(msg.providerAccountId || '') === String(current.accountId || '')
+    && String(msg.uiRouteId || '') === String(current.uiRouteId || '')
+    && String(msg.from || '') === String(current.providerUserId || '')
+  if (!valid) {
+    throw Object.assign(new Error('opcode-19 account, route, owner, or socket fence changed before CRM delivery'), {
+      code: 'OPCODE19_RUNTIME_FENCE_CHANGED',
+    })
+  }
+  return binding
+}
+
 // ─── Обработка входящего сообщения ───────────────────────────────────────────
 
 async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
   const rawChatId = msg.chatId
   if (msg.chatId != null) msg = { ...msg, chatId: normalizeMaxChatId(msg.chatId), rawChatId }
+  const requiresDurableAck = msg.requiresDurableAck === true
+    || msg.source === 'reconnect_snapshot'
+    || msg.source === 'raw_journal_replay'
 
   const protocolChatId = String(msg.chatId || '')
   const route = resolveUiRouteIdForChat(protocolChatId)
   const providerUserId = dialogPeerProviderUserId(protocolChatId)
+  const opcode19Binding = msg.source === 'reconnect_snapshot'
+    ? requireCurrentOpcode19Binding(msg, transport, currentOpcode19RuntimeIdentity(msg, transport))
+    : null
   if (msg.id && /^d301[0-9a-f]{14}$/i.test(String(msg.id)) && msg.textQuarantineReason) {
     try {
       const recovered = await new MaxWebReplyBridge(page).readProviderMessage(
@@ -890,8 +952,14 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
     return
   }
 
-  if (messageSync.isDuplicate(msg)) return
-  messageSync.markSeen(msg)
+  // A reconnect/replay item is allowed to reach CRM even when the local cache
+  // says it was seen. The process may have crashed after CRM committed the
+  // Message but before the durable opcode-19 spool was acknowledged. The CRM
+  // externalId constraint is the authoritative idempotency fence in that case.
+  if (!requiresDurableAck && messageSync.isDuplicate(msg)) {
+    return { durable: false, skipped: 'local_provider_id_duplicate' }
+  }
+  if (!requiresDurableAck) messageSync.markSeen(msg)
 
   if (!msg.isOutgoing && !transport?._myUserId && msg.status) {
     const status = String(msg.status).toUpperCase()
@@ -913,10 +981,10 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
   let payload = MessageParser.toCrmPayload(msg)
   payload = {
     ...payload,
-    providerAccountId: process.env.MAX_PERSONAL_ACCOUNT_ID || null,
-    protocolChatId,
-    uiRouteId: route.uiRouteId,
-    providerUserId,
+    providerAccountId: opcode19Binding?.accountId || process.env.MAX_PERSONAL_ACCOUNT_ID || null,
+    protocolChatId: opcode19Binding?.protocolChatId || protocolChatId,
+    uiRouteId: opcode19Binding?.webRouteId || route.uiRouteId,
+    providerUserId: opcode19Binding?.senderProviderUserId || providerUserId,
     ...(providerUserId && !msg.isOutgoing ? { senderId: providerUserId } : {}),
   }
   if (msg.rawChatId && String(msg.rawChatId) !== String(msg.chatId)) {
@@ -1101,19 +1169,41 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
     }
   }
 
+  let result
   try {
-    const result = await forwardToWebhook(payload)
-    if (result.status >= 200 && result.status < 300) {
-      if (result.skipped) {
+    const assertCurrentDurableBinding = msg.source === 'reconnect_snapshot'
+      ? () => requireCurrentOpcode19Binding(msg, transport, currentOpcode19RuntimeIdentity(msg, transport))
+      : () => {}
+    result = await (requiresDurableAck
+      ? forwardDurableOpcode19ToWebhook(payload, assertCurrentDurableBinding)
+      : forwardToWebhook(payload))
+  } catch (error) {
+    console.error('[App] Webhook forward failed (network):', error.message, '— chatId:', payload.chatId)
+    if (requiresDurableAck) throw error
+  }
+
+  let durableAck = null
+  if (requiresDurableAck) {
+    try {
+      durableAck = requireDurableMaxWebhookAcknowledgement(result)
+    } catch (error) {
+      if (result?.skipped) {
         console.warn(`[App] CRM webhook skipped_by_crm_webhook=${result.skipped} chatId=${payload.chatId} externalId=${payload.externalId || 'none'} text="${(payload.text || '').slice(0, 50)}"`)
       } else {
-        console.log(`[App] → CRM: chatId=${payload.chatId} text="${(payload.text || '').slice(0, 50)}"`)
+        console.error(`[App] CRM webhook did not durably acknowledge chatId=${payload.chatId} status=${result?.status ?? 'unknown'}`)
       }
-    } else {
-      console.error(`[App] CRM webhook вернул ${result.status} для chatId=${payload.chatId} — сообщение потеряно! body:`, result.data?.slice(0, 200))
+      throw error
     }
-  } catch (e) {
-    console.error('[App] Webhook forward failed (network):', e.message, '— chatId:', payload.chatId)
+    console.log(`[App] → CRM durable: chatId=${payload.chatId} messageId=${durableAck.messageId} deduped=${durableAck.deduped} text="${(payload.text || '').slice(0, 50)}"`)
+    messageSync.markSeen(msg)
+  } else if (result?.status >= 200 && result.status < 300) {
+    if (result.skipped) {
+      console.warn(`[App] CRM webhook skipped_by_crm_webhook=${result.skipped} chatId=${payload.chatId} externalId=${payload.externalId || 'none'} text="${(payload.text || '').slice(0, 50)}"`)
+    } else {
+      console.log(`[App] → CRM: chatId=${payload.chatId} text="${(payload.text || '').slice(0, 50)}"`)
+    }
+  } else if (result) {
+    console.error(`[App] CRM webhook вернул ${result.status} для chatId=${payload.chatId} — сообщение потеряно! body:`, result.data?.slice(0, 200))
   }
 
   // Сохраняем timestamp последней активности для catch-up при рестарте
@@ -1126,6 +1216,14 @@ async function handleIncoming(msg, mediaPipeline, messageSync, transport) {
 
   // Запоминаем chatId для catch-up при рестарте
   rememberKnownChatId(payload.chatId)
+
+  return requiresDurableAck
+    ? {
+        ...durableAck,
+        providerMessageId: payload.externalId || null,
+        chatId: payload.chatId,
+      }
+    : { durable: false, delivered: Boolean(result?.status >= 200 && result.status < 300) }
 }
 
 // ─── Отправка текста через WS opcode 64 ──────────────────────────────────────
@@ -5780,6 +5878,12 @@ async function shutdown(signal) {
   // journal drain one bounded final attempt, then detach preserves any pending
   // spool records for the next owner-process start.
   try { await transport.stopCaptureAndFlush(2000) } catch {}
+  try {
+    const opcode19Settled = await transport.waitForOpcode19Deliveries(2000)
+    if (!opcode19Settled.settled) {
+      console.warn(`[App] opcode19 delivery retained for restart pending=${opcode19Settled.pending}`)
+    }
+  } catch {}
   try { transport.detach() } catch {}
 
   // Close Playwright context so Chromium child processes don't linger
@@ -5837,6 +5941,67 @@ const contactStore = new ContactStore()
 const inboundMessageQueue = new PerKeyTaskQueue()
 
 const chatCache = new Map()  // chatId → chat object (собирается из opcode 48 при старте)
+const opcode19AccountScope = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(String(process.env.MAX_PERSONAL_ACCOUNT_ID || ''))
+  ? String(process.env.MAX_PERSONAL_ACCOUNT_ID)
+  : 'unconfigured-account'
+transport.setOpcode19DeliverySpool(new Opcode19DeliverySpool(
+  path.join(USER_DATA_DIR, 'opcode19-delivery-spool', opcode19AccountScope),
+))
+
+function opcode19ReconnectBindingContext(candidate, options = {}) {
+  const accountId = String(process.env.MAX_PERSONAL_ACCOUNT_ID || '')
+  const ownerProviderUserId = String(options.authenticatedOwnerProviderUserId || '')
+  const context = { accountId, ownerProviderUserId, bindings: [] }
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(accountId)
+    || !/^\d{9,15}$/.test(ownerProviderUserId)
+    || ownerProviderUserId !== String(transport._myUserId || '')
+    || !/^\d{1,10}$/.test(String(candidate?.webRouteLow32 || ''))
+    || !/^\d{1,10}$/.test(String(candidate?.senderLow32 || ''))) {
+    return context
+  }
+
+  const protocolChatId = protocolChatIdForUiRouteCandidate(candidate.webRouteLow32, chatCache)
+  const chat = protocolChatId ? chatCache.get(protocolChatId) : null
+  const senderProviderUserId = providerPeerUserId(chat, ownerProviderUserId)
+  const route = protocolChatId ? resolveUiRouteIdForChat(protocolChatId) : null
+  if (!chat || !protocolChatId || !senderProviderUserId || !route
+    || String(protocolChatId) !== String(candidate.protocolChatId || '')
+    || String(senderProviderUserId) !== String(candidate.senderProviderUserId || '')
+    || String(route.uiRouteId) !== String(candidate.webRouteLow32)
+    || low32RouteId(senderProviderUserId) !== String(candidate.senderLow32)) {
+    return context
+  }
+
+  context.bindings.push({
+    accountId,
+    ownerProviderUserId,
+    protocolChatId: String(protocolChatId),
+    senderProviderUserId: String(senderProviderUserId),
+    webRouteId: String(route.uiRouteId),
+    routeOwnerAccountId: accountId,
+    fencingToken: `socket-${transport._captureSocketGeneration || 1}`,
+  })
+  return context
+}
+
+transport.setOpcode19ReconnectBindingResolver(opcode19ReconnectBindingContext)
+
+let opcode19DeliveryDrain = Promise.resolve()
+function scheduleOpcode19DeliveryDrain(reason) {
+  opcode19DeliveryDrain = opcode19DeliveryDrain
+    .then(() => transport.drainOpcode19DeliverySpool())
+    .then(result => {
+      if (result.acknowledged > 0 || result.retained > 0) {
+        console.log(`[App] opcode19 spool drain reason=${reason} acknowledged=${result.acknowledged} retained=${result.retained} stopped=${result.stoppedReason || 'none'}`)
+      }
+      return result
+    })
+    .catch(error => {
+      console.error(`[App] opcode19 spool drain failed reason=${reason} code=${error?.code || 'DRAIN_FAILED'}`)
+      return { attempted: 0, acknowledged: 0, retained: null, stoppedReason: error?.code || 'DRAIN_FAILED' }
+    })
+  return opcode19DeliveryDrain
+}
 
 // messageIds исходящих сообщений, чьё echo мы перехватываем в /send-message.
 // handleIncoming пропустит эти echo чтобы не создать дубль-чат до того как
@@ -5938,7 +6103,10 @@ async function init() {
           const id = chat.id ?? chat.chatId
           if (id && id !== 0) { chatCache.set(String(id), chat); added++ }
         }
-        if (added > 0) console.log(`[ChatCache] +${added} чатов, всего: ${chatCache.size}`)
+        if (added > 0) {
+          console.log(`[ChatCache] +${added} чатов, всего: ${chatCache.size}`)
+          scheduleOpcode19DeliveryDrain('chat-cache-op48')
+        }
       } catch (e) { console.error('[App] onRawFrame GET_CHATS error:', e.message) }
     }
     if (data.opcode === 71) {
@@ -5975,7 +6143,10 @@ async function init() {
             const id = chat.id ?? chat.chatId
             if (id && id !== 0 && !chatCache.has(String(id))) { chatCache.set(String(id), chat); added++ }
           }
-          if (added > 0) console.log(`[ChatCache] op:53 +${added} чатов, всего: ${chatCache.size}`)
+          if (added > 0) {
+            console.log(`[ChatCache] op:53 +${added} чатов, всего: ${chatCache.size}`)
+            scheduleOpcode19DeliveryDrain('chat-cache-op53')
+          }
         }
       } catch (e) { console.error('[App] onRawFrame op53 chatCache error:', e.message) }
     }
@@ -6176,13 +6347,10 @@ async function init() {
     }
   })
 
-  transport.onMessage(msg => {
-    enqueueInboundProjection(msg?.chatId, () =>
-      handleIncoming(msg, mediaPipeline, sync, transport)
-    ).catch(e =>
-      console.error('[App] handleIncoming error:', e.message)
-    )
-  })
+  transport.onMessage(msg => enqueueInboundProjection(msg?.chatId, () =>
+    handleIncoming(msg, mediaPipeline, sync, transport)
+  ))
+  scheduleOpcode19DeliveryDrain('message-handler-ready')
 
   // Синхронизация реакций, поставленных пользователем через MAX веб-интерфейс (фоллбэк)
   // Опкод 135 (сервер push) надёжнее, но на случай если он не пришёл — перехватываем
@@ -6248,6 +6416,7 @@ async function init() {
 
   // WS-авторизация (opcode 19) — первичный и надёжный триггер
   transport.onWsAuth(async (userId) => {
+    scheduleOpcode19DeliveryDrain('ws-auth')
     if (isReady) {
       // Exponential backoff: если reconnect'ы идут слишком часто — притормаживаем
       const now = Date.now()
@@ -7263,6 +7432,7 @@ app.get('/contacts', (req, res) => {
 
 app.get('/health', (req, res) => {
   const capture = transport?.getCaptureHealth?.() || null
+  const opcode19Delivery = transport?.getOpcode19DeliveryHealth?.() || null
   res.json({
     status: isReady ? 'ready' : 'initializing',
     isReady,
@@ -7282,6 +7452,11 @@ app.get('/health', (req, res) => {
       captureEnvelopeIdCollisionCount: capture.captureEnvelopeIdCollisionCount,
       ingressIdempotentRetryCount: capture.ingressIdempotentRetryCount,
       hookFailureCount: capture.hookFailureCount,
+    },
+    opcode19Delivery: opcode19Delivery && {
+      pending: opcode19Delivery.pending,
+      state: opcode19Delivery.state,
+      errorCode: opcode19Delivery.errorCode || null,
     },
   })
 })
