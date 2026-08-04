@@ -1,6 +1,6 @@
 "use client"
 
-import { Phone, PhoneOff, MicOff, Mic } from "lucide-react"
+import { Phone, PhoneOff, MicOff, Mic, Volume2, VolumeX } from "lucide-react"
 import { useSip } from "@/lib/sip/SipContext"
 import { useEffect, useState } from "react"
 
@@ -11,7 +11,15 @@ import { useEffect, useState } from "react"
  *  - Active call state with elapsed time, mute, and hangup controls
  */
 export default function CallToolbar() {
-    const { status, extension, activeCall, hangup, toggleMute } = useSip()
+    const {
+        status,
+        extension,
+        activeCall,
+        hangup,
+        toggleMute,
+        callAlertAudioStatus,
+        enableCallAlerts,
+    } = useSip()
     const [elapsed, setElapsed] = useState(0)
 
     useEffect(() => {
@@ -56,13 +64,39 @@ export default function CallToolbar() {
     }
 
     return (
-        <div
-            className="flex items-center gap-1.5 bg-secondary px-2.5 py-1 rounded-full text-[12px]"
-            title={statusTitle(status, extension)}
-        >
-            <span className={`h-[2px] w-[2px] rounded-full ${statusColor(status)}`}/>
-            <Phone className="h-3.5 w-3.5 text-muted-foreground"/>
-            <span className="text-muted-foreground">{extension ?? '—'}</span>
+        <div className="flex items-center gap-1.5">
+            <div
+                className="flex items-center gap-1.5 bg-secondary px-2.5 py-1 rounded-full text-[12px]"
+                title={statusTitle(status, extension)}
+            >
+                <span className={`h-[2px] w-[2px] rounded-full ${statusColor(status)}`}/>
+                <Phone className="h-3.5 w-3.5 text-muted-foreground"/>
+                <span className="text-muted-foreground">{extension ?? '—'}</span>
+            </div>
+
+            {callAlertAudioStatus === 'needs-interaction' && (
+                <button
+                    type="button"
+                    onClick={() => { void enableCallAlerts() }}
+                    title="Chrome требует один клик, чтобы разрешить рингтон входящих звонков"
+                    className="flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[12px] font-medium text-amber-900 hover:bg-amber-100"
+                >
+                    <VolumeX className="h-3.5 w-3.5"/>
+                    <span className="max-xl:hidden">Включить звук</span>
+                </button>
+            )}
+
+            {callAlertAudioStatus === 'unsupported' && (
+                <span title="Браузер не поддерживает звук звонка" className="rounded-full bg-secondary p-1.5 text-muted-foreground">
+                    <VolumeX className="h-3.5 w-3.5"/>
+                </span>
+            )}
+
+            {callAlertAudioStatus === 'ready' && (
+                <span title="Звук входящих звонков включён" className="text-green-600">
+                    <Volume2 className="h-3.5 w-3.5"/>
+                </span>
+            )}
         </div>
     )
 }

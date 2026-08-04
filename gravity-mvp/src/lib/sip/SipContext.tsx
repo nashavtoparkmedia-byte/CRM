@@ -15,6 +15,11 @@
  */
 
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
+import {
+    enableCallAlertAudio,
+    subscribeCallAlertAudioStatus,
+    type CallAlertAudioStatus,
+} from '@/lib/sip/callAlertAudio'
 
 // Codecs we keep in outbound SDP offers.
 // Megafon SBC silently drops INVITEs whose first audio codec is opus (or anything
@@ -88,6 +93,15 @@ export interface IncomingCallInfo {
     session: any                     // JsSIP RTCSession
 }
 
+export interface IncomingCallAlertInfo {
+    callId: string
+    fromNumber: string
+    toNumber: string
+    displayName: string | null
+    driverId: string | null
+    contactId: string | null
+}
+
 export interface ActiveCallInfo {
     direction: 'inbound' | 'outbound'
     peerNumber: string
@@ -109,7 +123,10 @@ interface SipApi {
     status: SipStatus
     extension: string | null
     incomingCall: IncomingCallInfo | null
+    incomingAlert: IncomingCallAlertInfo | null
     activeCall: ActiveCallInfo | null
+    callAlertAudioStatus: CallAlertAudioStatus
+    enableCallAlerts(): Promise<void>
     call(phoneNumber: string): Promise<void>
     answer(): void
     decline(): void
@@ -169,11 +186,35 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
     const [status, setStatus] = useState<SipStatus>('idle')
     const [extension, setExtension] = useState<string | null>(null)
     const [incomingCall, setIncomingCall] = useState<IncomingCallInfo | null>(null)
+    const [incomingAlert, setIncomingAlert] = useState<IncomingCallAlertInfo | null>(null)
     const [activeCall, setActiveCall] = useState<ActiveCallInfo | null>(null)
+    // Use a deterministic SSR/client initial value; the subscription below
+    // replaces it with the real browser capability immediately after mount.
+    const [callAlertAudioStatus, setCallAlertAudioStatus] = useState<CallAlertAudioStatus>('needs-interaction')
 
     const uaRef = useRef<any>(null)
     const audioRef = useRef<HTMLAudioElement | null>(null)
     const pcConfigRef = useRef<RTCConfiguration>(DEFAULT_TURN_PC_CONFIG)
+
+    async function enableCallAlerts() {
+        await enableCallAlertAudio()
+    }
+
+    // Keep one Web Audio context alive after the first real user interaction.
+    // Incoming calls arrive over WebSocket/SSE, which does not count as a user
+    // gesture and therefore cannot unlock sound in Chrome on its own.
+    useEffect(() => subscribeCallAlertAudioStatus(setCallAlertAudioStatus), [])
+
+    useEffect(() => {
+        if (callAlertAudioStatus !== 'needs-interaction') return
+        const unlock = () => { void enableCallAlertAudio() }
+        document.addEventListener('click', unlock, { capture: true, once: true })
+        document.addEventListener('keydown', unlock, { capture: true, once: true })
+        return () => {
+            document.removeEventListener('click', unlock, true)
+            document.removeEventListener('keydown', unlock, true)
+        }
+    }, [callAlertAudioStatus])
 
     // Update forwarding callbacks on every render so the singleton UA always
     // dispatches events to the currently mounted component's handlers.
@@ -420,18 +461,38 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         es.onmessage = ev => {
             try {
                 const data = JSON.parse(ev.data)
-                if (data.type === 'incoming' && incomingCall && !incomingCall.callId) {
-                    // Match the JsSIP-detected incoming with the DB call id
-                    setIncomingCall(prev => prev ? { ...prev, callId: data.data.callId, driverId: data.data.driverId, contactId: data.data.contactId, displayName: prev.displayName ?? data.data.displayName } : prev)
+                if (data.type === 'incoming') {
+                    // This event is global: every open CRM browser receives it,
+                    // including browsers that FreeSWITCH did not choose as the
+                    // SIP media destination. They still need to ring visibly
+                    // and audibly so a manager never misses the call.
+                    setIncomingAlert(data.data)
+                    // The browser that did receive the SIP INVITE can enrich
+                    // its answerable session with the persisted Call metadata.
+                    setIncomingCall(prev => prev && !prev.callId
+                        ? {
+                            ...prev,
+                            callId: data.data.callId,
+                            driverId: data.data.driverId,
+                            contactId: data.data.contactId,
+                            displayName: prev.displayName ?? data.data.displayName,
+                        }
+                        : prev)
                 }
-                if (data.type === 'ended' && activeCall) {
+                if (data.type === 'answered') {
+                    setIncomingAlert(prev => prev?.callId === data.data.callId ? null : prev)
+                    setIncomingCall(prev => prev?.callId === data.data.callId ? null : prev)
+                }
+                if (data.type === 'ended') {
+                    setIncomingAlert(prev => prev?.callId === data.data.callId ? null : prev)
+                    setIncomingCall(prev => prev?.callId === data.data.callId ? null : prev)
                     // Server confirmed end — clean local state if not already
                     setActiveCall(null)
                 }
             } catch {}
         }
         return () => es.close()
-    }, [incomingCall, activeCall])
+    }, [])
 
     function attachRemoteAudio(session: any) {
         session.on('peerconnection', () => {
@@ -542,12 +603,15 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
             return
         }
 
+        const matchingAlert = incomingAlert && phoneDigits(incomingAlert.fromNumber) === phoneDigits(fromNumber)
+            ? incomingAlert
+            : null
         setIncomingCall({
-            callId: null,
+            callId: matchingAlert?.callId ?? null,
             fromNumber,
-            displayName,
-            driverId: null,
-            contactId: null,
+            displayName: displayName ?? matchingAlert?.displayName ?? null,
+            driverId: matchingAlert?.driverId ?? null,
+            contactId: matchingAlert?.contactId ?? null,
             session,
         })
 
@@ -561,6 +625,7 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         })
         session.on('accepted', () => {
             setIncomingCall(null)
+            setIncomingAlert(null)
             setActiveCall({
                 direction: 'inbound',
                 peerNumber: fromNumber,
@@ -703,6 +768,7 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         if (!incomingCall) return
         incomingCall.session.terminate()
         setIncomingCall(null)
+        setIncomingAlert(null)
     }
 
     function hangup() {
@@ -731,6 +797,7 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
         if (incomingCall) {
             try { incomingCall.session.terminate() } catch {}
             setIncomingCall(null)
+            setIncomingAlert(null)
         }
     }
 
@@ -774,8 +841,12 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
     }
 
     return (
-        <SipContext.Provider value={{ status, extension, incomingCall, activeCall, call, answer, decline, hangup, toggleMute, startPlaceholderOutbound, cancelPlaceholderOutbound, setActiveCallFsUuid }}>
+        <SipContext.Provider value={{ status, extension, incomingCall, incomingAlert, activeCall, callAlertAudioStatus, enableCallAlerts, call, answer, decline, hangup, toggleMute, startPlaceholderOutbound, cancelPlaceholderOutbound, setActiveCallFsUuid }}>
             {children}
         </SipContext.Provider>
     )
+}
+
+function phoneDigits(value: string): string {
+    return value.replace(/\D/g, '')
 }
