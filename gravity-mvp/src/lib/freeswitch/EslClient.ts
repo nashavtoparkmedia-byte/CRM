@@ -28,7 +28,7 @@ import { opsLog } from '@/lib/opsLog'
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
 import { broadcastCall } from '@/lib/callStreamBus'
 import { broadcastChatMessage } from '@/lib/messageStreamBus'
-import { getSipExtensionForUser } from '@/lib/sip/extensions'
+import { getSipExtensionForUser, getUserIdForSipExtension } from '@/lib/sip/extensions'
 import { processRecording } from '@/lib/freeswitch/recordingProcessor'
 import { ContactService } from '@/lib/ContactService'
 import { mapHangupCauseToStatus, callStatusLabel, type CallDirection } from '@/lib/calls/status'
@@ -275,17 +275,22 @@ async function handleChannelCreate(evt: any): Promise<void> {
             contactId: contactId ?? undefined,
         })
 
-        broadcastCall({
-            type: 'incoming',
-            data: {
-                callId: call.id,
-                fromNumber: call.fromNumber,
-                toNumber: call.toNumber,
-                driverId,
-                contactId,
-                displayName,
-            },
-        })
+        // Only a real inbound trunk leg is an attention event. Outbound
+        // click-to-call rows pass through the same CHANNEL_CREATE handler but
+        // must not make every open CRM browser play an incoming ringtone.
+        if (direction === 'inbound') {
+            broadcastCall({
+                type: 'incoming',
+                data: {
+                    callId: call.id,
+                    fromNumber: call.fromNumber,
+                    toNumber: call.toNumber,
+                    driverId,
+                    contactId,
+                    displayName,
+                },
+            })
+        }
     } catch (err: any) {
         // P2002 = unique constraint (fsUuid already exists) — dedupe is intentional
         if (err.code === 'P2002') return
@@ -322,7 +327,7 @@ async function handleChannelAnswer(evt: any): Promise<void> {
     // We don't broadcast 'answered' from this branch — the trunk leg's
     // ANSWER carries the canonical answeredAt timestamp.
     const answeringExtension = header(evt, 'Caller-Callee-ID-Number')
-    const managerId = answeringExtension ? extensionToUserId(answeringExtension) : null
+    const managerId = answeringExtension ? getUserIdForSipExtension(answeringExtension) : null
     if (!managerId || managerId === call.managerId) return
 
     await prisma.call.update({
@@ -534,13 +539,6 @@ export async function syncCallToChat(call: any): Promise<void> {
 
 // Status mapping moved to src/lib/calls/status.ts — single source of truth
 // for the FS-cause → Call.status → UI label/color/icon pipeline.
-
-function extensionToUserId(extension: string): string | null {
-    // Reverse mapping from sip/extensions.ts — small enough to inline
-    if (extension === '101') return 'u1'
-    if (extension === '102') return 'u2'
-    return null
-}
 
 /**
  * Click-to-call: originate a call from a manager's extension to an external

@@ -113,12 +113,18 @@
     <!-- wan: coturn on VPS relays via public IP (e.g. 155.212.130.14) -->
     <param name="apply-candidate-acl" value="wan.auto"/>
 
-    <!-- Allow only one active registration per user agent.
-         When a new REGISTER arrives, the oldest binding is evicted.
-         Prevents ghost registrations from accumulating across page reloads
-         (each reload generates a new random Contact URI, so without this
-         FreeSWITCH keeps all of them and sofia_contact returns stale ones). -->
-    <param name="max-reg-count" value="1"/>
+    <!-- A manager may keep CRM open on several computers/browser profiles.
+         Track registrations by Contact URI so every live device can ring.
+         SipContext persists one Contact id per browser profile, which means
+         reloads replace their own binding while different devices coexist. -->
+    <param name="multiple-registrations" value="contact"/>
+    <param name="max-registrations-per-extension" value="10"/>
+
+    <!-- Prune browser contacts whose WS/TCP connection disappeared instead
+         of letting a dead registration slow down the next ring group. -->
+    <param name="tcp-unreg-on-socket-close" value="true"/>
+    <param name="all-reg-options-ping" value="true"/>
+    <param name="unregister-on-options-fail" value="true"/>
 
     <!-- No blind registrations -->
     <param name="accept-blind-reg" value="false"/>
