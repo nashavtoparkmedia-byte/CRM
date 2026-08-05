@@ -1,6 +1,6 @@
 "use client"
 
-import { Phone, PhoneOff, MicOff, Mic, Volume2, VolumeX } from "lucide-react"
+import { Phone, PhoneOff, MicOff, Mic, RefreshCw, Volume2, VolumeX } from "lucide-react"
 import { useSip } from "@/lib/sip/SipContext"
 import { useEffect, useState } from "react"
 
@@ -19,6 +19,7 @@ export default function CallToolbar() {
         toggleMute,
         callAlertAudioStatus,
         enableCallAlerts,
+        reconnect,
     } = useSip()
     const [elapsed, setElapsed] = useState(0)
 
@@ -65,14 +66,20 @@ export default function CallToolbar() {
 
     return (
         <div className="flex items-center gap-1.5">
-            <div
+            <button
+                type="button"
+                onClick={() => { if (status !== 'registered') void reconnect() }}
+                disabled={status === 'registered' || status === 'connecting'}
                 className="flex items-center gap-1.5 bg-secondary px-2.5 py-1 rounded-full text-[12px]"
                 title={statusTitle(status, extension)}
             >
                 <span className={`h-[2px] w-[2px] rounded-full ${statusColor(status)}`}/>
-                <Phone className="h-3.5 w-3.5 text-muted-foreground"/>
+                {status === 'connecting'
+                    ? <RefreshCw className="h-3.5 w-3.5 animate-spin text-muted-foreground"/>
+                    : <Phone className="h-3.5 w-3.5 text-muted-foreground"/>
+                }
                 <span className="text-muted-foreground">{extension ?? '—'}</span>
-            </div>
+            </button>
 
             {callAlertAudioStatus === 'needs-interaction' && (
                 <button
