@@ -20,7 +20,10 @@ def test_browser_softphone_recovers_and_each_tab_has_its_own_contact() -> None:
     assert re.search(r"ua\.start\(\).*?_uaStarting = false", context, re.S)
     assert "window.addEventListener('focus', ensureRegistered)" in context
     assert "crm_user_id=([^;]*)" in context
-    assert "sessionStorage.getItem(key)" in context
+    assert "getRuntimeContactUser(creds.extension)" in context
+    assert "const _runtimeContactUsers = new Map<string, string>()" in context
+    assert "crypto.randomUUID()" in context
+    assert "sessionStorage.getItem(key)" not in context
     assert "localStorage.getItem(key)" not in context
     assert "Подключить рабочее место" in popup
     assert "identity-required" in context

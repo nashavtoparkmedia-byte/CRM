@@ -174,6 +174,28 @@ let _singletonPcConfig: RTCConfiguration = DEFAULT_TURN_PC_CONFIG
 // React mount calls all see it and skip duplicate UA creation.
 let _uaStarting = false
 
+// One Contact URI per live JavaScript page. `sessionStorage` cannot provide
+// this guarantee: Chrome copies it when a tab is duplicated, so both tabs
+// register the same Contact and the newer REGISTER silently replaces the
+// older one. A module-level value is isolated per tab/page runtime, while
+// still remaining stable across SipProvider remounts and reconnect attempts.
+const _runtimeContactUsers = new Map<string, string>()
+
+function getRuntimeContactUser(extension: string): string {
+    const existing = _runtimeContactUsers.get(extension)
+    if (existing) return existing
+
+    let entropy: string
+    try {
+        entropy = crypto.randomUUID().replace(/-/g, '').slice(0, 16)
+    } catch {
+        entropy = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
+    }
+    const contactUser = `crm${entropy}`
+    _runtimeContactUsers.set(extension, contactUser)
+    return contactUser
+}
+
 // Forwarding callbacks — updated on every render, called by the singleton UA.
 const _sipCallbacks = {
     onRegistered: null as (() => void) | null,
@@ -473,19 +495,10 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
             // (Verified: REGISTER with Via WS → 401 challenge; with Via WSS → dropped.)
             socket.via_transport = 'WS'
 
-            // Persist the Contact URI user-part for this tab, not the whole
-            // browser profile. sessionStorage survives a reload but is isolated
-            // per tab, so two open CRM tabs receive two distinct registrations
-            // and both can answer. FreeSWITCH removes dead WS contacts through
-            // tcp-unreg-on-socket-close / OPTIONS health checks.
-            const contactUser = (() => {
-                const key = `__sip_contact_user_${creds.extension}__`
-                try {
-                    let v = sessionStorage.getItem(key)
-                    if (!v) { v = Math.random().toString(36).slice(2, 10); sessionStorage.setItem(key, v) }
-                    return v
-                } catch { return Math.random().toString(36).slice(2, 10) }
-            })()
+            // Use a page-runtime Contact id so even Chrome's "Duplicate tab"
+            // creates an independent FreeSWITCH registration. A reload gets a
+            // fresh id; the old WS contact is removed when its socket closes.
+            const contactUser = getRuntimeContactUser(creds.extension)
 
             const ua = new JsSIP.UA({
                 uri: creds.sipUri,
