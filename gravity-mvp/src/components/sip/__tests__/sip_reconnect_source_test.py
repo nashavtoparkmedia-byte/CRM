@@ -23,6 +23,10 @@ def test_browser_softphone_recovers_and_each_tab_has_its_own_contact() -> None:
     assert "sessionStorage.getItem(key)" in context
     assert "localStorage.getItem(key)" not in context
     assert "Подключить рабочее место" in popup
+    assert "identity-required" in context
+    assert "res.status === 401 || res.status === 403" in context
+    assert "Выбрать пользователя" in popup
+    assert "window.location.assign('/login')" in popup
     assert "void reconnect()" in popup
     assert "status !== 'registered'" in toolbar
 

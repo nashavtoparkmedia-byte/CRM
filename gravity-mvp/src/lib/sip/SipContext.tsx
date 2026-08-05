@@ -81,7 +81,7 @@ function transformSdpForMegafon(sdp: string): string {
     return out.join('\r\n')
 }
 
-export type SipStatus = 'idle' | 'connecting' | 'registered' | 'unregistered' | 'failed' | 'disabled'
+export type SipStatus = 'idle' | 'connecting' | 'registered' | 'unregistered' | 'failed' | 'disabled' | 'identity-required'
 export type CallState = 'ringing' | 'connecting' | 'active' | 'ended'
 
 export interface IncomingCallInfo {
@@ -400,6 +400,16 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
                 const res = await fetch('/api/calls/sip-credentials', { cache: 'no-store' })
                 if (!res.ok) {
                     _uaStarting = false
+                    if (res.status === 401 || res.status === 403) {
+                        // A manager identity is required before the server may
+                        // disclose SIP credentials. Keep the global call alert
+                        // visible, but stop retrying until the manager chooses
+                        // their CRM user (the cookie watchdog below reconnects
+                        // immediately after that choice).
+                        sipDisabledRef.current = true
+                        setStatus('identity-required')
+                        return
+                    }
                     setStatus('failed')
                     scheduleReconnect(5000)
                     return
