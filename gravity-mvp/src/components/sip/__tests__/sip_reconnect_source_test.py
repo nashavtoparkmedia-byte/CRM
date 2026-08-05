@@ -19,6 +19,8 @@ def test_browser_softphone_recovers_and_each_tab_has_its_own_contact() -> None:
     assert "scheduleReconnect" in context
     assert re.search(r"ua\.start\(\).*?_uaStarting = false", context, re.S)
     assert "window.addEventListener('focus', ensureRegistered)" in context
+    assert "window.addEventListener('online', ensureRegistered)" in context
+    assert "document.visibilityState !== 'visible'" not in context
     assert "crm_user_id=([^;]*)" in context
     assert "getRuntimeContactUser(creds.extension)" in context
     assert "const _runtimeContactUsers = new Map<string, string>()" in context

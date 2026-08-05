@@ -578,7 +578,12 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
                 void reconnect()
                 return
             }
-            if (document.visibilityState !== 'visible' || sipDisabledRef.current) return
+            // A CRM tab must stay answerable even while it is in the
+            // background. In particular, Chrome fires `online` after an
+            // internet outage without making the tab visible; gating the
+            // watchdog on visibility left that tab unregistered until the
+            // manager focused it manually.
+            if (sipDisabledRef.current) return
             if (!_singletonUa || (!_uaStarting && !_singletonUa.isRegistered?.())) {
                 scheduleReconnect(0)
             }
