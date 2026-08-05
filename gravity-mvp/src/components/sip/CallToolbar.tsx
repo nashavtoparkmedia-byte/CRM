@@ -68,7 +68,10 @@ export default function CallToolbar() {
         <div className="flex items-center gap-1.5">
             <button
                 type="button"
-                onClick={() => { if (status !== 'registered') void reconnect() }}
+                onClick={() => {
+                    if (status === 'identity-required') window.location.assign('/login')
+                    else if (status !== 'registered') void reconnect()
+                }}
                 disabled={status === 'registered' || status === 'connecting'}
                 className="flex items-center gap-1.5 bg-secondary px-2.5 py-1 rounded-full text-[12px]"
                 title={statusTitle(status, extension)}
@@ -121,6 +124,7 @@ function statusTitle(s: string, ext: string | null): string {
     switch (s) {
         case 'registered': return `SIP подключён, добавочный ${ext ?? '?'}`
         case 'connecting': return 'Подключение к SIP…'
+        case 'identity-required': return 'Выберите пользователя CRM, чтобы принимать звонки'
         case 'failed': return 'Ошибка подключения SIP. Проверьте FreeSWITCH'
         case 'unregistered': return 'SIP отключён'
         default: return 'SIP неактивен'
