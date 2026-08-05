@@ -54,7 +54,14 @@ declare global {
     var __eslReconnectTimer: NodeJS.Timeout | null
     // eslint-disable-next-line no-var
     var __eslReconnectDelay: number | undefined
+    // eslint-disable-next-line no-var
+    var __eslCallReconcileTimer: NodeJS.Timeout | null
+    // eslint-disable-next-line no-var
+    var __eslCallReconcileRunning: boolean | undefined
 }
+
+const STALE_CALL_GRACE_MS = 90_000
+const CALL_RECONCILE_INTERVAL_MS = 30_000
 
 // modesl is a CJS module — its `Connection` import is a runtime value, not a
 // TypeScript type. Type accessor expressions like `Connection | null` thus
@@ -91,6 +98,7 @@ function connect(): void {
         opsLog('info', 'esl_connected', { operation: 'esl' })
         reconnectDelay = 2000
         conn.subscribe(EVENTS_OF_INTEREST.join(' '))
+        ensureStaleCallReconciler()
     })
 
     conn.on('esl::event::CHANNEL_CREATE::*', (evt: any) => {
@@ -127,6 +135,130 @@ function connect(): void {
     })
 
     setConnection(conn)
+}
+
+function uuidExists(conn: any, fsUuid: string): Promise<boolean | null> {
+    return new Promise(resolve => {
+        let settled = false
+        const finish = (value: boolean | null) => {
+            if (settled) return
+            settled = true
+            clearTimeout(timeout)
+            resolve(value)
+        }
+        const timeout = setTimeout(() => finish(null), 2500)
+
+        try {
+            conn.api(`uuid_exists ${fsUuid}`, (res: any) => {
+                const body = (typeof res?.getBody === 'function' ? res.getBody() : String(res)).trim().toLowerCase()
+                if (body === 'true') finish(true)
+                else if (body === 'false') finish(false)
+                else finish(null)
+            })
+        } catch {
+            finish(null)
+        }
+    })
+}
+
+/**
+ * Recover Call rows when the ESL listener misses a terminal event (for
+ * example during a short reconnect or process restart). FreeSWITCH remains
+ * the source of truth: a row is finalized only after `uuid_exists` confirms
+ * that its channel is gone. The grace period avoids touching fresh rows while
+ * CHANNEL_CREATE / CHANNEL_HANGUP_COMPLETE are still racing through ESL.
+ */
+export async function reconcileStaleCalls(): Promise<number> {
+    if ((globalThis as any).__eslCallReconcileRunning) return 0
+    const conn = getConnection()
+    if (!conn) return 0
+
+    ;(globalThis as any).__eslCallReconcileRunning = true
+    let recovered = 0
+    try {
+        const candidates = await prisma.call.findMany({
+            where: {
+                status: { in: ['ringing', 'active'] },
+                fsUuid: { not: null },
+                startedAt: { lt: new Date(Date.now() - STALE_CALL_GRACE_MS) },
+            },
+            orderBy: { startedAt: 'asc' },
+            take: 100,
+        })
+
+        for (const call of candidates) {
+            if (!call.fsUuid) continue
+            const exists = await uuidExists(conn, call.fsUuid)
+            if (exists !== false) continue
+
+            const endedAt = new Date()
+            const status = call.status === 'active'
+                ? 'completed'
+                : call.direction === 'inbound' ? 'missed' : 'no_answer'
+            const durationSec = call.answeredAt
+                ? Math.max(1, Math.round((endedAt.getTime() - call.answeredAt.getTime()) / 1000))
+                : null
+
+            // Guard against a real hangup handler winning the race after our
+            // uuid_exists check. Only the still-stale state may be replaced.
+            const result = await prisma.call.updateMany({
+                where: { id: call.id, status: call.status },
+                data: {
+                    status: status as any,
+                    endedAt,
+                    durationSec,
+                    hangupCause: 'RECOVERED_STALE_CHANNEL',
+                },
+            })
+            if (result.count === 0) continue
+
+            const updated = await prisma.call.findUnique({ where: { id: call.id } })
+            if (!updated) continue
+            recovered++
+            opsLog('warn', 'stale_call_recovered', {
+                operation: 'call',
+                callId: updated.id,
+                fsUuid: updated.fsUuid ?? undefined,
+                status,
+            })
+            broadcastCall({
+                type: 'ended',
+                data: {
+                    callId: updated.id,
+                    endedAt: updated.endedAt!.toISOString(),
+                    durationSec: updated.durationSec,
+                    status,
+                },
+            })
+            try {
+                await syncCallToChat(updated)
+            } catch (err: any) {
+                opsLog('error', 'stale_call_chat_sync_failed', {
+                    operation: 'call',
+                    callId: updated.id,
+                    error: err.message,
+                })
+            }
+        }
+    } finally {
+        ;(globalThis as any).__eslCallReconcileRunning = false
+    }
+    return recovered
+}
+
+function ensureStaleCallReconciler(): void {
+    void reconcileStaleCalls().catch(err =>
+        opsLog('error', 'stale_call_reconcile_failed', { operation: 'call', error: err.message })
+    )
+    if ((globalThis as any).__eslCallReconcileTimer) return
+
+    const timer = setInterval(() => {
+        void reconcileStaleCalls().catch(err =>
+            opsLog('error', 'stale_call_reconcile_failed', { operation: 'call', error: err.message })
+        )
+    }, CALL_RECONCILE_INTERVAL_MS)
+    timer.unref()
+    ;(globalThis as any).__eslCallReconcileTimer = timer
 }
 
 function scheduleReconnect(): void {
