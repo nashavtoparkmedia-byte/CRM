@@ -182,7 +182,9 @@ export async function reconcileStaleCalls(): Promise<number> {
                 fsUuid: { not: null },
                 startedAt: { lt: new Date(Date.now() - STALE_CALL_GRACE_MS) },
             },
-            orderBy: { startedAt: 'asc' },
+            // Operators care about the call that just disappeared first.
+            // Older historical backlog is still drained in later batches.
+            orderBy: { startedAt: 'desc' },
             take: 100,
         })
 
