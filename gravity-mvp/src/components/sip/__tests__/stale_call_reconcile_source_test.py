@@ -12,6 +12,7 @@ def test_stale_calls_are_reconciled_against_freeswitch() -> None:
     assert "uuid_exists ${fsUuid}" in source
     assert "exists !== false" in source
     assert "status: { in: ['ringing', 'active'] }" in source
+    assert "orderBy: { startedAt: 'desc' }" in source
     assert "call.direction === 'inbound' ? 'missed' : 'no_answer'" in source
     assert "hangupCause: 'RECOVERED_STALE_CHANNEL'" in source
     assert "where: { id: call.id, status: call.status }" in source
