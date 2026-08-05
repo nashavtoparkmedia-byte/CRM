@@ -127,6 +127,7 @@ interface SipApi {
     activeCall: ActiveCallInfo | null
     callAlertAudioStatus: CallAlertAudioStatus
     enableCallAlerts(): Promise<void>
+    reconnect(): Promise<void>
     call(phoneNumber: string): Promise<void>
     answer(): void
     decline(): void
@@ -178,6 +179,7 @@ const _sipCallbacks = {
     onRegistered: null as (() => void) | null,
     onUnregistered: null as (() => void) | null,
     onRegistrationFailed: null as ((e: any) => void) | null,
+    onDisconnected: null as ((e: any) => void) | null,
     onIncomingSession: null as ((session: any, request: any) => void) | null,
     onOutgoingSession: null as ((session: any) => void) | null,
 }
@@ -188,6 +190,7 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
     const [incomingCall, setIncomingCall] = useState<IncomingCallInfo | null>(null)
     const [incomingAlert, setIncomingAlert] = useState<IncomingCallAlertInfo | null>(null)
     const [activeCall, setActiveCall] = useState<ActiveCallInfo | null>(null)
+    const [uaGeneration, setUaGeneration] = useState(0)
     // Use a deterministic SSR/client initial value; the subscription below
     // replaces it with the real browser capability immediately after mount.
     const [callAlertAudioStatus, setCallAlertAudioStatus] = useState<CallAlertAudioStatus>('needs-interaction')
@@ -195,9 +198,47 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
     const uaRef = useRef<any>(null)
     const audioRef = useRef<HTMLAudioElement | null>(null)
     const pcConfigRef = useRef<RTCConfiguration>(DEFAULT_TURN_PC_CONFIG)
+    const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const identityCookieRef = useRef<string | null>(null)
+    const sipDisabledRef = useRef(false)
 
     async function enableCallAlerts() {
         await enableCallAlertAudio()
+    }
+
+    function clearReconnectTimer() {
+        if (!reconnectTimerRef.current) return
+        clearTimeout(reconnectTimerRef.current)
+        reconnectTimerRef.current = null
+    }
+
+    /**
+     * Recreate the browser UA after a dropped WebSocket, a failed REGISTER,
+     * or a CRM identity switch. The old implementation only tried once on
+     * the first React mount. A browser opened before the manager was selected
+     * could therefore receive the global SSE alert forever while having no
+     * SIP session — exactly the state in which the popup cannot offer Answer.
+     */
+    async function reconnect() {
+        clearReconnectTimer()
+        sipDisabledRef.current = false
+        const oldUa = _singletonUa
+        _singletonUa = null
+        _uaStarting = false
+        uaRef.current = null
+        try { oldUa?.stop?.() } catch {}
+        setIncomingCall(null)
+        setExtension(null)
+        setStatus('connecting')
+        setUaGeneration(value => value + 1)
+    }
+
+    function scheduleReconnect(delayMs = 3000) {
+        if (sipDisabledRef.current || reconnectTimerRef.current) return
+        reconnectTimerRef.current = setTimeout(() => {
+            reconnectTimerRef.current = null
+            void reconnect()
+        }, delayMs)
     }
 
     // Keep one Web Audio context alive after the first real user interaction.
@@ -218,9 +259,22 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
 
     // Update forwarding callbacks on every render so the singleton UA always
     // dispatches events to the currently mounted component's handlers.
-    _sipCallbacks.onRegistered = () => setStatus('registered')
-    _sipCallbacks.onUnregistered = () => setStatus('unregistered')
-    _sipCallbacks.onRegistrationFailed = () => setStatus('failed')
+    _sipCallbacks.onRegistered = () => {
+        clearReconnectTimer()
+        setStatus('registered')
+    }
+    _sipCallbacks.onUnregistered = () => {
+        setStatus('unregistered')
+        scheduleReconnect()
+    }
+    _sipCallbacks.onRegistrationFailed = () => {
+        setStatus('failed')
+        scheduleReconnect()
+    }
+    _sipCallbacks.onDisconnected = () => {
+        setStatus('unregistered')
+        scheduleReconnect()
+    }
     _sipCallbacks.onIncomingSession = (session, request) => handleIncomingSession(session, request)
     _sipCallbacks.onOutgoingSession = (session) => handleOutgoingSession(session)
 
@@ -344,14 +398,25 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
             let creds: any
             try {
                 const res = await fetch('/api/calls/sip-credentials', { cache: 'no-store' })
-                if (!res.ok) { _uaStarting = false; setStatus('failed'); return }
+                if (!res.ok) {
+                    _uaStarting = false
+                    setStatus('failed')
+                    scheduleReconnect(5000)
+                    return
+                }
                 creds = await res.json()
-            } catch { _uaStarting = false; setStatus('failed'); return }
+            } catch {
+                _uaStarting = false
+                setStatus('failed')
+                scheduleReconnect(5000)
+                return
+            }
             if (cancelled) { _uaStarting = false; return }
 
             if (creds.enabled === false) {
                 // Телефония не настроена (нет SIP_WS_URL) — не поднимать UA вовсе
                 _uaStarting = false
+                sipDisabledRef.current = true
                 setStatus('disabled')
                 return
             }
@@ -383,6 +448,7 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
                 console.error('[SIP] JsSIP module shape unexpected:', Object.keys(jssipModule), Object.keys(JsSIP ?? {}))
                 _uaStarting = false
                 setStatus('failed')
+                scheduleReconnect(5000)
                 return
             }
             // Dev-mode logging — comment out for production noise reduction.
@@ -397,16 +463,16 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
             // (Verified: REGISTER with Via WS → 401 challenge; with Via WSS → dropped.)
             socket.via_transport = 'WS'
 
-            // Persist the Contact URI user-part across page reloads so FreeSWITCH
-            // sees the same Contact every time and REPLACES the existing binding
-            // (same AOR + same Contact → UPDATE). Without this, each reload generates
-            // a new random user-part, FS creates a new binding alongside the old one,
-            // and sofia_contact keeps returning the stale dead WS port.
+            // Persist the Contact URI user-part for this tab, not the whole
+            // browser profile. sessionStorage survives a reload but is isolated
+            // per tab, so two open CRM tabs receive two distinct registrations
+            // and both can answer. FreeSWITCH removes dead WS contacts through
+            // tcp-unreg-on-socket-close / OPTIONS health checks.
             const contactUser = (() => {
                 const key = `__sip_contact_user_${creds.extension}__`
                 try {
-                    let v = localStorage.getItem(key)
-                    if (!v) { v = Math.random().toString(36).slice(2, 10); localStorage.setItem(key, v) }
+                    let v = sessionStorage.getItem(key)
+                    if (!v) { v = Math.random().toString(36).slice(2, 10); sessionStorage.setItem(key, v) }
                     return v
                 } catch { return Math.random().toString(36).slice(2, 10) }
             })()
@@ -429,7 +495,10 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
             ua.on('registrationFailed', (e: any) => { console.error('[SIP] registrationFailed', e?.cause, e); _sipCallbacks.onRegistrationFailed?.(e) })
             ua.on('connecting', () => console.info('[SIP] ua connecting'))
             ua.on('connected', () => console.info('[SIP] ua connected'))
-            ua.on('disconnected', (e: any) => console.warn('[SIP] ua disconnected', e?.code, e?.reason))
+            ua.on('disconnected', (e: any) => {
+                console.warn('[SIP] ua disconnected', e?.code, e?.reason)
+                _sipCallbacks.onDisconnected?.(e)
+            })
 
             ua.on('newRTCSession', (data: any) => {
                 const session = data.session
@@ -446,13 +515,63 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
             _singletonUa = ua
             _singletonPcConfig = pcConfigRef.current
             uaRef.current = ua
-            ua.start()
+            try {
+                ua.start()
+                // Creation is complete once the UA owns its WebSocket. The
+                // singleton itself prevents duplicates from here on; keeping
+                // this guard true forever would stop the watchdog from
+                // recovering a silently lost REGISTER state.
+                _uaStarting = false
+            } catch (error) {
+                console.error('[SIP] ua.start() failed', error)
+                _singletonUa = null
+                _uaStarting = false
+                setStatus('failed')
+                scheduleReconnect(5000)
+            }
         })()
 
         // Cleanup: keep the singleton UA alive across React remounts.
         // Only the module-level reference persists; the component's uaRef
         // is cleared so stale refs don't accumulate.
         return () => { cancelled = true; uaRef.current = null }
+    }, [uaGeneration])
+
+    // Keep the softphone registered for the whole browser lifetime. This also
+    // notices the crm_user_id cookie changing after the manager selector uses
+    // router.refresh(): React may preserve SipProvider, so a mount-only effect
+    // is not sufficient to switch from the old extension to the new one.
+    useEffect(() => {
+        const readIdentityCookie = () => {
+            const match = document.cookie.match(/(?:^|;\s*)crm_user_id=([^;]*)/)
+            return match ? decodeURIComponent(match[1]) : null
+        }
+        identityCookieRef.current = readIdentityCookie()
+
+        const ensureRegistered = () => {
+            const identity = readIdentityCookie()
+            if (identity !== identityCookieRef.current) {
+                identityCookieRef.current = identity
+                void reconnect()
+                return
+            }
+            if (document.visibilityState !== 'visible' || sipDisabledRef.current) return
+            if (!_singletonUa || (!_uaStarting && !_singletonUa.isRegistered?.())) {
+                scheduleReconnect(0)
+            }
+        }
+
+        const interval = setInterval(ensureRegistered, 5000)
+        window.addEventListener('focus', ensureRegistered)
+        window.addEventListener('online', ensureRegistered)
+        document.addEventListener('visibilitychange', ensureRegistered)
+        return () => {
+            clearInterval(interval)
+            clearReconnectTimer()
+            window.removeEventListener('focus', ensureRegistered)
+            window.removeEventListener('online', ensureRegistered)
+            document.removeEventListener('visibilitychange', ensureRegistered)
+        }
     }, [])
 
     // --- Sync with server events ---
@@ -841,7 +960,7 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
     }
 
     return (
-        <SipContext.Provider value={{ status, extension, incomingCall, incomingAlert, activeCall, callAlertAudioStatus, enableCallAlerts, call, answer, decline, hangup, toggleMute, startPlaceholderOutbound, cancelPlaceholderOutbound, setActiveCallFsUuid }}>
+        <SipContext.Provider value={{ status, extension, incomingCall, incomingAlert, activeCall, callAlertAudioStatus, enableCallAlerts, reconnect, call, answer, decline, hangup, toggleMute, startPlaceholderOutbound, cancelPlaceholderOutbound, setActiveCallFsUuid }}>
             {children}
         </SipContext.Provider>
     )

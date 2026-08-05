@@ -1,6 +1,6 @@
 "use client"
 
-import { Phone, PhoneOff, User, Volume2, VolumeX } from "lucide-react"
+import { Phone, PhoneOff, RefreshCw, User, Volume2, VolumeX } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 import { useSip } from "@/lib/sip/SipContext"
@@ -24,8 +24,11 @@ export default function IncomingCallPopup() {
         answer,
         decline,
         activeCall,
+        status,
+        extension,
         callAlertAudioStatus,
         enableCallAlerts,
+        reconnect,
     } = useSip()
     const [elapsed, setElapsed] = useState(0)
     const [isAnswering, setIsAnswering] = useState(false)
@@ -186,9 +189,26 @@ export default function IncomingCallPopup() {
                     </button>
                 </div>
             ) : (
-                <div className="flex items-center gap-2 px-4 py-3 text-[12px] text-muted-foreground">
-                    <Volume2 className="h-4 w-4 text-primary"/>
-                    Звонок поступил на подключённое рабочее место
+                <div className="px-4 py-3">
+                    <div className="flex items-start gap-2 text-[12px] text-muted-foreground">
+                        <Volume2 className="mt-0.5 h-4 w-4 shrink-0 text-primary"/>
+                        <span>
+                            {status === 'registered'
+                                ? `Звонок принят другим SIP-окном${extension ? ` · ${extension}` : ''}`
+                                : 'В этом браузере SIP-телефон не подключён'}
+                        </span>
+                    </div>
+                    {status !== 'registered' && (
+                        <button
+                            type="button"
+                            onClick={() => { void reconnect() }}
+                            disabled={status === 'connecting'}
+                            className="mt-2 flex w-full items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-[12px] font-medium text-white hover:bg-primary/90 disabled:opacity-60"
+                        >
+                            <RefreshCw className={`h-4 w-4 ${status === 'connecting' ? 'animate-spin' : ''}`}/>
+                            {status === 'connecting' ? 'Подключаю рабочее место…' : 'Подключить рабочее место'}
+                        </button>
+                    )}
                 </div>
             )}
         </div>
