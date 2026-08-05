@@ -196,7 +196,7 @@ export default function IncomingCallPopup() {
                             {status === 'identity-required'
                                 ? 'Выберите пользователя CRM, чтобы принимать звонки в этом браузере'
                                 : status === 'registered'
-                                ? `Звонок принят другим SIP-окном${extension ? ` · ${extension}` : ''}`
+                                ? `Подключаю звонок к этому браузеру${extension ? ` · ${extension}` : ''}`
                                 : 'В этом браузере SIP-телефон не подключён'}
                         </span>
                     </div>

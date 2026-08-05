@@ -36,6 +36,9 @@ import { mapHangupCauseToStatus, callStatusLabel, type CallDirection } from '@/l
 const FS_ESL_HOST = process.env.FS_ESL_HOST ?? '127.0.0.1'
 const FS_ESL_PORT = Number(process.env.FS_ESL_PORT ?? 8021)
 const FS_ESL_PASSWORD = process.env.ESL_PASSWORD ?? 'ClueCon'
+const MEGAFON_INBOUND_DID = normalizePhoneE164(
+    process.env.MEGAFON_NUMBER ?? process.env.MEGAFON_SIP_USERNAME ?? '+79221853150'
+) ?? '+79221853150'
 
 const EVENTS_OF_INTEREST = [
     'CHANNEL_CREATE',
@@ -62,6 +65,10 @@ declare global {
 
 const STALE_CALL_GRACE_MS = 90_000
 const CALL_RECONCILE_INTERVAL_MS = 30_000
+// Do not drain years of abandoned/scanner rows into the live phone-chat list.
+// Reconciliation is an operational safety net for terminal events missed by
+// the current process, so only recently created calls belong in its scope.
+const STALE_CALL_LOOKBACK_MS = 10 * 60_000
 
 // modesl is a CJS module — its `Connection` import is a runtime value, not a
 // TypeScript type. Type accessor expressions like `Connection | null` thus
@@ -176,14 +183,18 @@ export async function reconcileStaleCalls(): Promise<number> {
     ;(globalThis as any).__eslCallReconcileRunning = true
     let recovered = 0
     try {
+        const now = Date.now()
         const candidates = await prisma.call.findMany({
             where: {
                 status: { in: ['ringing', 'active'] },
                 fsUuid: { not: null },
-                startedAt: { lt: new Date(Date.now() - STALE_CALL_GRACE_MS) },
+                startedAt: {
+                    gt: new Date(now - STALE_CALL_LOOKBACK_MS),
+                    lt: new Date(now - STALE_CALL_GRACE_MS),
+                },
             },
             // Operators care about the call that just disappeared first.
-            // Older historical backlog is still drained in later batches.
+            // Historical backlog is deliberately outside this live repair.
             orderBy: { startedAt: 'desc' },
             take: 100,
         })
@@ -302,6 +313,16 @@ function isTrunkLeg(evt: any): boolean {
     return false
 }
 
+/**
+ * The public SIP socket is reachable from the internet, so scanners can send
+ * a syntactically valid 11-digit Caller ID to arbitrary destinations. ESL sees
+ * CHANNEL_CREATE before the XML dialplan rejects those probes. Only the DID
+ * registered with Megafon is allowed to create a CRM row or browser alert.
+ */
+function isExpectedInboundDid(rawNumber: string): boolean {
+    return normalizePhoneE164(rawNumber) === MEGAFON_INBOUND_DID
+}
+
 async function handleChannelCreate(evt: any): Promise<void> {
     if (!isTrunkLeg(evt)) return
 
@@ -328,11 +349,11 @@ async function handleChannelCreate(evt: any): Promise<void> {
     const localNumber = direction === 'inbound' ? calleeNumber : callerNumber
     const e164 = normalizePhoneE164(remoteNumber)
 
-    // Drop SIP scanner probes before touching the DB. Real phone numbers always
-    // normalize to E.164; short/bogus CallerIDs like "401" or "10001" return
-    // null from normalizePhoneE164 and are never real callers.
+    // Drop SIP scanner probes before touching the DB. Checking only Caller ID
+    // is insufficient because scanners spoof valid-looking 11-digit numbers.
+    // A real Megafon inbound call is always addressed to our registered DID.
     // Outbound calls are always legitimate (we dialed them ourselves).
-    if (direction === 'inbound' && e164 === null) return
+    if (direction === 'inbound' && (e164 === null || !isExpectedInboundDid(localNumber))) return
 
     let driverId: string | null = null
     let contactId: string | null = null
