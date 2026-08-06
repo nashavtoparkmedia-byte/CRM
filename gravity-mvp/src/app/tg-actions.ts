@@ -637,6 +637,7 @@ async function processOutboundMirrorMessage(message: any, connectionId: string, 
                 data: { externalId: externalMsgId },
             })
         }
+        await ensureOutboundTelegramAttachment(message, existing.id, msgType, loggerPrefix)
         console.log(`[${loggerPrefix}] DEDUP: skipped msgId=${externalMsgId} (existing=${existing.id})`)
         return
     }
@@ -655,28 +656,7 @@ async function processOutboundMirrorMessage(message: any, connectionId: string, 
         },
     })
 
-    // Download media if present
-    if (mediaInfo && msgType !== 'text' && message.downloadMedia) {
-        try {
-            const buffer = await downloadTgMediaWithRetry(() => message.downloadMedia({ progressCallback: null }))
-            if (buffer) {
-                const mimeType = message.media?.document?.mimeType || (msgType === 'image' ? 'image/jpeg' : 'application/octet-stream')
-                const fileName = message.media?.document?.attributes?.find((a: any) => a.fileName)?.fileName || null
-                await (prisma as any).messageAttachment.create({
-                    data: {
-                        messageId: saved.id,
-                        type: msgType,
-                        mimeType,
-                        fileName,
-                        fileSize: buffer.length,
-                        data: buffer,
-                    },
-                })
-            }
-        } catch (mediaErr: any) {
-            console.error(`[${loggerPrefix}] Media download failed:`, mediaErr.message)
-        }
-    }
+    await ensureOutboundTelegramAttachment(message, saved.id, msgType, loggerPrefix)
 
     // Update chat's lastMessageAt
     await (prisma.chat as any).update({
@@ -689,6 +669,47 @@ async function processOutboundMirrorMessage(message: any, connectionId: string, 
     emitMessageReceived(saved).catch(e =>
         console.error(`[${loggerPrefix}] emitMessageReceived error:`, e.message)
     )
+}
+
+async function ensureOutboundTelegramAttachment(
+    message: any,
+    messageId: string,
+    msgType: string,
+    loggerPrefix: string,
+): Promise<void> {
+    if (msgType === 'text' || !message.downloadMedia) return
+
+    try {
+        const existingAttachment = await (prisma.messageAttachment as any).findFirst({
+            where: { messageId },
+            select: { id: true },
+        })
+        if (existingAttachment) return
+
+        const buffer = await downloadTgMediaWithRetry(() =>
+            message.downloadMedia({ progressCallback: null })
+        )
+        if (!buffer) return
+
+        const mimeType = message.media?.document?.mimeType ||
+            (msgType === 'image' ? 'image/jpeg' : 'application/octet-stream')
+        const fileName = message.media?.document?.attributes
+            ?.find((attribute: any) => attribute.fileName)?.fileName || null
+        const dataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`
+
+        await (prisma.messageAttachment as any).create({
+            data: {
+                messageId,
+                type: msgType,
+                url: dataUrl,
+                mimeType,
+                fileName,
+                fileSize: buffer.length,
+            },
+        })
+    } catch (mediaErr: any) {
+        console.error(`[${loggerPrefix}] Media download failed:`, mediaErr.message)
+    }
 }
 
 async function catchUpMissedMessages(client: TelegramClient, connectionId: string) {

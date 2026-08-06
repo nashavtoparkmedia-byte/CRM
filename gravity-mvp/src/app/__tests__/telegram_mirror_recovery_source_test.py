@@ -46,11 +46,28 @@ def test_external_outbound_can_create_a_new_crm_chat() -> None:
     assert "ContactService.ensureChatLinked" in body
 
 
+def test_external_outbound_media_is_persisted_and_backfilled() -> None:
+    actions = (SRC / "app/tg-actions.ts").read_text(encoding="utf-8")
+    assert "ensureOutboundTelegramAttachment(message, existing.id" in actions
+    assert "ensureOutboundTelegramAttachment(message, saved.id" in actions
+    assert "const dataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`" in actions
+    attachment = re.search(
+        r"async function ensureOutboundTelegramAttachment.*?\n}\n\nasync function catchUpMissedMessages",
+        actions,
+        re.S,
+    )
+    assert attachment
+    body = attachment.group(0)
+    assert "url: dataUrl" in body
+    assert "data: buffer" not in body
+
+
 if __name__ == "__main__":
     tests = [
         test_telegram_uses_private_http_connect_proxy,
         test_catchup_replays_read_inbound_and_outbound_messages,
         test_external_outbound_can_create_a_new_crm_chat,
+        test_external_outbound_media_is_persisted_and_backfilled,
     ]
     for test in tests:
         test()
