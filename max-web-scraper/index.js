@@ -31,6 +31,7 @@ const USER_DATA_DIR        = path.join(__dirname, 'user_data')
 const PHONE_CHATID_CACHE   = path.join(USER_DATA_DIR, 'phone_chatid_cache.json')
 const KNOWN_CHATS_PATH     = path.join(USER_DATA_DIR, 'known_chats.json')
 const LEGACY_KNOWN_CHATS_PATH = path.join(__dirname, 'known_chats.json')
+const BIDIRECTIONAL_HISTORY_RECOVERY_FLAG = path.join(USER_DATA_DIR, '.bidirectional_history_recovery_v1')
 const LIVE_DOM_WINDOW_CONTEXT_SLACK = 2
 const UI_CHAT_ID_OVERRIDES = {
   // MAX exposes different IDs for websocket history and the web.max.ru route.
@@ -40,6 +41,8 @@ const UI_CHAT_ID_OVERRIDES = {
   '902454841098': '511708938',
   // Live inbound fallback observed in prod: protocol dialog id differs from browser route.
   '901943199056': '66896',
+  // Sergey: protocol dialog 902136564252, browser route /193432092.
+  '902136564252': '193432092',
 }
 
 function protocolChatIdForUiRoute(routeId) {
@@ -311,6 +314,27 @@ function cachedPhoneForChatId(...chatIds) {
     if (phone) return phone
   }
   return null
+}
+
+async function runOneTimeBidirectionalHistoryRecovery() {
+  if (fs.existsSync(BIDIRECTIONAL_HISTORY_RECOVERY_FLAG)) {
+    return { status: 'already_completed' }
+  }
+
+  const sinceTs = Date.now() - 7 * 24 * 60 * 60 * 1000
+  console.log(`[MirrorRecovery] Importing MAX history since ${new Date(sinceTs).toISOString()}`)
+  const result = await initialSync.runIfNeeded('last_n_days', { sinceTs })
+  if (result?.status === 'failed') {
+    throw new Error('MAX bidirectional history recovery failed')
+  }
+
+  fs.mkdirSync(USER_DATA_DIR, { recursive: true })
+  fs.writeFileSync(BIDIRECTIONAL_HISTORY_RECOVERY_FLAG, JSON.stringify({
+    completedAt: new Date().toISOString(),
+    sinceTs,
+    result,
+  }))
+  return result
 }
 
 // ─── Счётчик статистики импорта ──────────────────────────────────────────────
@@ -5386,6 +5410,13 @@ async function init() {
 
     const syncResult = await initialSync.runIfNeeded(HISTORY_IMPORT_MODE)
     console.log('[App] Initial sync:', syncResult)
+
+    try {
+      const recoveryResult = await runOneTimeBidirectionalHistoryRecovery()
+      console.log('[MirrorRecovery] Result:', recoveryResult)
+    } catch (e) {
+      console.error('[MirrorRecovery] Error:', e.message)
+    }
 
     // PR-П: периодический name-sync для outbound-only placeholder-чатов.
     // Запускается раз в час: спрашивает CRM список Без-Имени MAX-чатов,
