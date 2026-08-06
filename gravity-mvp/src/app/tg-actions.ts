@@ -8,6 +8,29 @@ import QRCode from 'qrcode'
 import { revalidatePath } from 'next/cache'
 import { NewMessage, Raw } from 'telegram/events'
 import * as registry from '@/lib/TransportRegistry'
+import { TelegramHttpConnectSocket } from '@/lib/telegram/TelegramHttpConnectSocket'
+
+function getTelegramTransportOptions(): { options: Record<string, unknown>, label: string | null } {
+    const socksHost = process.env.TG_PROXY_HOST
+    const socksPort = process.env.TG_PROXY_PORT ? parseInt(process.env.TG_PROXY_PORT, 10) : undefined
+    if (socksHost && socksPort) {
+        return {
+            options: { proxy: { ip: socksHost, port: socksPort, socksType: 5 as const } },
+            label: `SOCKS5 ${socksHost}:${socksPort}`,
+        }
+    }
+
+    const httpHost = process.env.TG_HTTP_PROXY_HOST
+    const httpPort = process.env.TG_HTTP_PROXY_PORT ? parseInt(process.env.TG_HTTP_PROXY_PORT, 10) : undefined
+    if (httpHost && httpPort) {
+        return {
+            options: { networkSocket: TelegramHttpConnectSocket as any },
+            label: `HTTP CONNECT ${httpHost}:${httpPort}`,
+        }
+    }
+
+    return { options: {}, label: null }
+}
 
 // Global map to keep track of active login clients for QR
 // Note: In a production serverless environment, this would need a different approach (like a separate service or Redis)
@@ -22,8 +45,10 @@ const activeLogins = new Map<string, {
 export async function getTelegramAuthQR(apiId: number, apiHash: string) {
     console.log(`[TG-AUTH] Starting QR generation for API ID: ${apiId}`)
     const stringSession = new StringSession('')
+    const transport = getTelegramTransportOptions()
     const client = new TelegramClient(stringSession, apiId, apiHash, {
         connectionRetries: 5,
+        ...transport.options,
     })
 
     await client.connect()
@@ -539,8 +564,50 @@ async function processOutboundMirrorMessage(message: any, connectionId: string, 
     if (!validated) return
     const sentAt = validated
 
-    const chat = await (prisma.chat as any).findUnique({ where: { externalChatId } })
-    if (!chat) return  // unknown recipient — skip
+    let chat = await (prisma.chat as any).findUnique({ where: { externalChatId } })
+    if (!chat) {
+        let recipient: any = message.chat ?? null
+        if (!recipient && typeof message.getChat === 'function') {
+            try { recipient = await message.getChat() } catch { /* fallback below */ }
+        }
+        const recipientName = (() => {
+            const firstName = (recipient?.firstName ?? '').trim()
+            const lastName = (recipient?.lastName ?? '').trim()
+            const fullName = [firstName, lastName].filter(Boolean).join(' ').trim()
+            if (fullName) return fullName
+            if (recipient?.username) return `@${recipient.username}`
+            return `TG ${recipientId}`
+        })()
+
+        chat = await (prisma.chat as any).upsert({
+            where: { externalChatId },
+            create: {
+                externalChatId,
+                channel: 'telegram',
+                name: recipientName,
+                lastMessageAt: sentAt,
+                status: 'new',
+                metadata: { connectionId },
+            },
+            update: { lastMessageAt: sentAt },
+        })
+
+        try {
+            const contactResult = await ContactService.resolveContact(
+                'telegram', recipientId, null, recipientName,
+            )
+            await ContactService.ensureChatLinked(
+                chat.id, contactResult.contact.id, contactResult.identity.id,
+            )
+        } catch (contactErr: any) {
+            console.error(`[${loggerPrefix}] ContactService error (non-blocking): ${contactErr.message}`)
+        }
+        try {
+            await DriverMatchService.linkChatToDriver(chat.id, { telegramId: recipientId })
+        } catch { /* an unlinked outbound chat is still valid */ }
+
+        console.log(`[${loggerPrefix}] AUTO-CREATED outbound chat=${chat.id} for externalChatId=${externalChatId}`)
+    }
 
     const msgType = mediaInfo?.type || 'text'
     const contentForDedup = text
@@ -631,12 +698,15 @@ async function catchUpMissedMessages(client: TelegramClient, connectionId: strin
         let processedCount = 0
         for (const dialog of dialogs) {
             if (!dialog.isUser) continue
-            const total = (dialog.unreadCount || 0) + 5 // also grab a few sent to catch our outbounds
-            const messages = await client.getMessages(dialog.entity, { limit: Math.min(total, 20) })
+            // A message may already be marked read in Telegram Web before CRM
+            // reconnects. Always replay a recent window in both directions;
+            // the processors are idempotent by external message ID.
+            const total = Math.min(Math.max((dialog.unreadCount || 0) + 10, 20), 50)
+            const messages = await client.getMessages(dialog.entity, { limit: total })
             for (const msg of messages.reverse()) {
                 if (msg?.out) {
                     await processOutboundMirrorMessage(msg, connectionId, 'TG-CATCHUP-OUT')
-                } else if (dialog.unreadCount > 0) {
+                } else {
                     await processInboundTelegramMessage(msg, connectionId, 'TG-CATCHUP')
                 }
                 processedCount++
@@ -907,11 +977,7 @@ async function getTelegramClient(connection: any) {
     const instanceId = registry.beginNewInstance(connection.id)
     tgInstanceIds.set(connection.id, instanceId)
 
-    const proxyHost = process.env.TG_PROXY_HOST
-    const proxyPort = process.env.TG_PROXY_PORT ? parseInt(process.env.TG_PROXY_PORT, 10) : undefined
-    const proxyConfig = proxyHost && proxyPort
-        ? { ip: proxyHost, port: proxyPort, socksType: 5 as const }
-        : undefined
+    const transport = getTelegramTransportOptions()
 
     const client = new TelegramClient(
         new StringSession(connection.sessionString),
@@ -919,12 +985,12 @@ async function getTelegramClient(connection: any) {
         connection.apiHash,
         {
             connectionRetries: 5,
-            ...(proxyConfig ? { proxy: proxyConfig } : {}),
+            ...transport.options,
         }
     )
 
-    if (proxyConfig) {
-        console.log(`[TG-CLIENT] Using SOCKS5 proxy ${proxyHost}:${proxyPort}`)
+    if (transport.label) {
+        console.log(`[TG-CLIENT] Using ${transport.label}`)
     }
 
     await client.connect()

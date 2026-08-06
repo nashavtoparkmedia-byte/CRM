@@ -354,6 +354,10 @@ services:
       # сессия писалась в node_modules/.wwebjs_auth внутри образа и стиралась при
       # каждом редеплое → WA-подключение слетало. Должен совпадать с mount ниже.
       WA_AUTH_PATH: /app/whatsapp_auth
+      # GramJS needs raw MTProto TCP, while the private Xray bridge exposes an
+      # HTTP proxy. The CRM adapter opens CONNECT tunnels through this endpoint.
+      TG_HTTP_PROXY_HOST: 172.19.0.1
+      TG_HTTP_PROXY_PORT: "10810"
     volumes:
       # Записи звонков и медиа — write-through в S3, но локальный кэш нужен
       - gravity_recordings:/app/recordings
