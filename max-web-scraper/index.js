@@ -32,6 +32,7 @@ const PHONE_CHATID_CACHE   = path.join(USER_DATA_DIR, 'phone_chatid_cache.json')
 const KNOWN_CHATS_PATH     = path.join(USER_DATA_DIR, 'known_chats.json')
 const LEGACY_KNOWN_CHATS_PATH = path.join(__dirname, 'known_chats.json')
 const BIDIRECTIONAL_HISTORY_RECOVERY_FLAG = path.join(USER_DATA_DIR, '.bidirectional_history_recovery_v1')
+const MAPPED_DOM_HISTORY_RECOVERY_FLAG = path.join(USER_DATA_DIR, '.mapped_dom_history_recovery_v1')
 const LIVE_DOM_WINDOW_CONTEXT_SLACK = 2
 const UI_CHAT_ID_OVERRIDES = {
   // MAX exposes different IDs for websocket history and the web.max.ru route.
@@ -343,6 +344,39 @@ async function runBidirectionalHistoryRecoverySafely() {
     console.log('[MirrorRecovery] Result:', recoveryResult)
   } catch (e) {
     console.error('[MirrorRecovery] Error:', e.message)
+  }
+}
+
+async function runOneTimeMappedDomHistoryRecovery() {
+  if (fs.existsSync(MAPPED_DOM_HISTORY_RECOVERY_FLAG)) {
+    return { status: 'already_completed' }
+  }
+
+  const chatId = '902136564252'
+  console.log(`[MappedDomRecovery] Recovering recent MAX Web history for chatId=${chatId}`)
+  const result = await forwardRecentDomMessages(chatId, 'startup_mapped_history_recovery', {
+    includeOutgoing: true,
+    includeOutgoingMedia: true,
+  })
+  if (!result?.success) {
+    throw new Error(`Mapped DOM recovery saved no messages: ${JSON.stringify(result)}`)
+  }
+
+  fs.mkdirSync(USER_DATA_DIR, { recursive: true })
+  fs.writeFileSync(MAPPED_DOM_HISTORY_RECOVERY_FLAG, JSON.stringify({
+    completedAt: new Date().toISOString(),
+    chatId,
+    result,
+  }))
+  return result
+}
+
+async function runMappedDomHistoryRecoverySafely() {
+  try {
+    const recoveryResult = await runOneTimeMappedDomHistoryRecovery()
+    console.log('[MappedDomRecovery] Result:', recoveryResult)
+  } catch (e) {
+    console.error('[MappedDomRecovery] Error:', e.message)
   }
 }
 
@@ -5410,6 +5444,7 @@ async function init() {
       const result = await initialSync.runIfNeeded('from_connection_time')
       console.log('[App] Reconnect catch-up:', result)
       await runBidirectionalHistoryRecoverySafely()
+      await runMappedDomHistoryRecoverySafely()
       return
     }
 
@@ -5422,6 +5457,7 @@ async function init() {
     console.log('[App] Initial sync:', syncResult)
 
     await runBidirectionalHistoryRecoverySafely()
+    await runMappedDomHistoryRecoverySafely()
 
     // PR-П: периодический name-sync для outbound-only placeholder-чатов.
     // Запускается раз в час: спрашивает CRM список Без-Имени MAX-чатов,

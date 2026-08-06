@@ -24,11 +24,20 @@ def test_live_dom_recovery_includes_messages_sent_from_max_web():
     assert "includeOutgoing: true" in recovery
 
 
+def test_mapped_dialog_recovers_visible_history_in_both_directions():
+    assert "MAPPED_DOM_HISTORY_RECOVERY_FLAG = path.join(USER_DATA_DIR" in INDEX
+    assert "forwardRecentDomMessages(chatId, 'startup_mapped_history_recovery'" in INDEX
+    assert "includeOutgoing: true" in INDEX
+    assert "includeOutgoingMedia: true" in INDEX
+    assert INDEX.count("await runMappedDomHistoryRecoverySafely()") == 2
+
+
 if __name__ == "__main__":
     tests = [
         test_sergey_protocol_dialog_maps_to_browser_route,
         test_recent_bidirectional_history_is_recovered_once_per_persistent_session,
         test_live_dom_recovery_includes_messages_sent_from_max_web,
+        test_mapped_dialog_recovers_visible_history_in_both_directions,
     ]
     for test in tests:
         test()
