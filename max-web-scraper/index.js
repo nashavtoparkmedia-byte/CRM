@@ -337,6 +337,15 @@ async function runOneTimeBidirectionalHistoryRecovery() {
   return result
 }
 
+async function runBidirectionalHistoryRecoverySafely() {
+  try {
+    const recoveryResult = await runOneTimeBidirectionalHistoryRecovery()
+    console.log('[MirrorRecovery] Result:', recoveryResult)
+  } catch (e) {
+    console.error('[MirrorRecovery] Error:', e.message)
+  }
+}
+
 // ─── Счётчик статистики импорта ──────────────────────────────────────────────
 
 let importSession = null  // { jobId, crmApiUrl, startedAt, messagesImported, chatsSet, minMessageDate, maxMessageDate }
@@ -5400,6 +5409,7 @@ async function init() {
       console.log('[App] WS reconnected, userId:', userId, '— catch-up...')
       const result = await initialSync.runIfNeeded('from_connection_time')
       console.log('[App] Reconnect catch-up:', result)
+      await runBidirectionalHistoryRecoverySafely()
       return
     }
 
@@ -5411,12 +5421,7 @@ async function init() {
     const syncResult = await initialSync.runIfNeeded(HISTORY_IMPORT_MODE)
     console.log('[App] Initial sync:', syncResult)
 
-    try {
-      const recoveryResult = await runOneTimeBidirectionalHistoryRecovery()
-      console.log('[MirrorRecovery] Result:', recoveryResult)
-    } catch (e) {
-      console.error('[MirrorRecovery] Error:', e.message)
-    }
+    await runBidirectionalHistoryRecoverySafely()
 
     // PR-П: периодический name-sync для outbound-only placeholder-чатов.
     // Запускается раз в час: спрашивает CRM список Без-Имени MAX-чатов,

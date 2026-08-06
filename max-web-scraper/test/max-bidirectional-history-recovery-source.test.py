@@ -13,7 +13,8 @@ def test_recent_bidirectional_history_is_recovered_once_per_persistent_session()
     assert "async function runOneTimeBidirectionalHistoryRecovery()" in INDEX
     assert "initialSync.runIfNeeded('last_n_days', { sinceTs })" in INDEX
     assert "Date.now() - 7 * 24 * 60 * 60 * 1000" in INDEX
-    assert "await runOneTimeBidirectionalHistoryRecovery()" in INDEX
+    assert "async function runBidirectionalHistoryRecoverySafely()" in INDEX
+    assert INDEX.count("await runBidirectionalHistoryRecoverySafely()") == 2
 
 
 def test_live_dom_recovery_includes_messages_sent_from_max_web():
