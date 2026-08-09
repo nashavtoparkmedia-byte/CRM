@@ -37,3 +37,5 @@ export type {
     SetContactDisplayNameResultV1,
     SetContactDisplayNameStatusV1,
 } from './set-contact-display-name-command'
+
+export * from './contact-phone-commands'

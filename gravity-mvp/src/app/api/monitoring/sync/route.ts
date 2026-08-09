@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { normalizePhoneE164 } from '@/lib/phoneUtils';
+import { CREATE_CONTACT_PHONE_COMMAND_V1, DEACTIVATE_CONTACT_PHONE_COMMAND_V1 } from '@/contracts/contacts/v1';
+import { createContactPhoneV1, deactivateContactPhoneV1 } from '@/modules/contacts/public/v1';
 
 // In-memory mutex to prevent parallel sync runs
 let syncRunning = false;
@@ -150,9 +152,9 @@ export async function syncContactForDriver(
             }
 
             if (currentYandexPhone && currentYandexPhone.phone !== normalizedE164) {
-                await prisma.contactPhone.update({
-                    where: { id: currentYandexPhone.id },
-                    data: { isActive: false },
+                await deactivateContactPhoneV1({
+                    contract: DEACTIVATE_CONTACT_PHONE_COMMAND_V1,
+                    contactPhoneId: currentYandexPhone.id,
                 });
                 deactivated++;
 
@@ -162,18 +164,17 @@ export async function syncContactForDriver(
                     }
                 } else {
                     try {
-                        const newPhone = await prisma.contactPhone.create({
-                            data: {
-                                contactId: existing.id,
-                                phone: normalizedE164,
-                                source: 'yandex',
-                                isPrimary: true,
-                            },
+                        const { contactPhoneId: newPhoneId } = await createContactPhoneV1({
+                            contract: CREATE_CONTACT_PHONE_COMMAND_V1,
+                            contactId: existing.id,
+                            phone: normalizedE164,
+                            source: 'yandex',
+                            isPrimary: true,
                         });
                         created++;
 
                         if (existing.primaryPhoneId === currentYandexPhone.id) {
-                            updates.primaryPhoneId = newPhone.id;
+                            updates.primaryPhoneId = newPhoneId;
                         }
                     } catch (err: any) {
                         if (!isUniqueConstraintError(err)) throw err;
@@ -202,17 +203,16 @@ export async function syncContactForDriver(
                     }
                 } else {
                     try {
-                        const newPhone = await prisma.contactPhone.create({
-                            data: {
-                                contactId: existing.id,
-                                phone: normalizedE164,
-                                source: 'yandex',
-                                isPrimary: !existing.primaryPhoneId,
-                            },
+                        const { contactPhoneId: newPhoneId } = await createContactPhoneV1({
+                            contract: CREATE_CONTACT_PHONE_COMMAND_V1,
+                            contactId: existing.id,
+                            phone: normalizedE164,
+                            source: 'yandex',
+                            isPrimary: !existing.primaryPhoneId,
                         });
                         created++;
                         if (!existing.primaryPhoneId) {
-                            updates.primaryPhoneId = newPhone.id;
+                            updates.primaryPhoneId = newPhoneId;
                         }
                     } catch (err: any) {
                         if (!isUniqueConstraintError(err)) throw err;
@@ -345,19 +345,18 @@ export async function syncContactForDriver(
             }
         } else {
             try {
-                const newPhone = await prisma.contactPhone.create({
-                    data: {
-                        contactId: contact.id,
-                        phone: normalizedE164,
-                        source: 'yandex',
-                        isPrimary: true,
-                    },
+                const { contactPhoneId } = await createContactPhoneV1({
+                    contract: CREATE_CONTACT_PHONE_COMMAND_V1,
+                    contactId: contact.id,
+                    phone: normalizedE164,
+                    source: 'yandex',
+                    isPrimary: true,
                 });
-                newPhoneId = newPhone.id;
+                newPhoneId = contactPhoneId;
 
                 await prisma.contact.update({
                     where: { id: contact.id },
-                    data: { primaryPhoneId: newPhone.id },
+                    data: { primaryPhoneId: contactPhoneId },
                 });
             } catch (err: any) {
                 if (!isUniqueConstraintError(err)) throw err;

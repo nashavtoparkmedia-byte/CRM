@@ -74,13 +74,14 @@
     "architecture/isolation/messaging/pipeline-event-log-v1/module-manifest-amendments.json",
     "architecture/isolation/messaging/max-message-v1/module-manifest-amendments.json",
     "architecture/isolation/messaging/max-chat-v1/module-manifest-amendments.json",
-    "architecture/isolation/fleet-operations/driver-action-v1/module-manifest-amendments.json"
+    "architecture/isolation/fleet-operations/driver-action-v1/module-manifest-amendments.json",
+    "architecture/isolation/contacts/fleet-contact-phone-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007-FLEET-DRIVER-ACTION",
-  "registry_base_commit": "d2c8d0ad5e2e6ea5c8d75d2ce84b36e68a67430f",
+  "registry_milestone": "CRM-ARCH-007-CONTACTS-FLEET-CONTACT-PHONE",
+  "registry_base_commit": "45c1bdd8872ec0920e8a7e8f74a1feb76c7aa214",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",
