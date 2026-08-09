@@ -23,8 +23,8 @@ import { ContactService } from '@/lib/ContactService'
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
 import type { ChatChannel } from '@prisma/client'
 import type { LeadSource } from './types'
-import { RECEIVE_MESSAGE_COMMAND_V1 } from '@/contracts/messaging/v1'
-import { receiveMessageV1 } from '@/modules/messaging/public/v1'
+import { ENSURE_LEAD_CONVERSATION_COMMAND_V1, RECEIVE_MESSAGE_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { ensureLeadConversationV1, receiveMessageV1 } from '@/modules/messaging/public/v1'
 
 // LeadSource → ChatChannel. У нас сейчас полное совпадение (avito,
 // whatsapp, telegram, phone), но 'site' не имеет канала в чатах.
@@ -119,51 +119,16 @@ export async function ingestLead(input: IngestLeadInput): Promise<IngestLeadResu
   // Сначала ищем существующий чат для этого контакта и канала. Если
   // есть — переиспользуем (повторные отклики ложатся в тот же чат).
   // Если нет — создаём.
-  let chat = await prisma.chat.findFirst({
-    where: {
-      contactId: resolved.contact.id,
-      channel,
-    },
-    orderBy: { lastMessageAt: 'desc' },
+  const chat = await ensureLeadConversationV1({
+    contract: ENSURE_LEAD_CONVERSATION_COMMAND_V1,
+    contactId: resolved.contact.id,
+    contactIdentityId: resolved.identity.id,
+    channel,
+    externalChatId: `${input.source}:contact:${resolved.contact.id}`,
+    name: input.chatTitle ?? input.candidateName ?? null,
+    receivedAt: input.receivedAt,
+    metadata: { source: input.source, ...input.sourceMeta },
   })
-
-  if (!chat) {
-    // Уникальный externalChatId. Берём первый externalId источника —
-    // дальше Chat может содержать сообщения от других откликов того же
-    // контакта; externalChatId остаётся «именем рождения». Префикс
-    // канала — чтобы не было коллизий с другими источниками в этой
-    // таблице.
-    const externalChatId = `${input.source}:contact:${resolved.contact.id}`
-    chat = await prisma.chat.create({
-      data: {
-        channel,
-        externalChatId,
-        contactId: resolved.contact.id,
-        contactIdentityId: resolved.identity.id,
-        name: input.chatTitle ?? input.candidateName ?? null,
-        status: 'new',
-        requiresResponse: true,
-        lastMessageAt: input.receivedAt,
-        lastInboundAt: input.receivedAt,
-        metadata: {
-          source: input.source,
-          ...input.sourceMeta,
-        },
-      },
-    })
-  } else {
-    // Чат уже существовал — обновим last-inbound маркеры. Без этого
-    // повторный отклик не «всплывёт» наверх в /messages.
-    await prisma.chat.update({
-      where: { id: chat.id },
-      data: {
-        lastMessageAt: input.receivedAt,
-        lastInboundAt: input.receivedAt,
-        requiresResponse: true,
-        unreadCount: { increment: 1 },
-      },
-    })
-  }
 
   // ─── Step 3: Append Message (idempotent by externalId) ─────────────
   const messageExternalId = `${input.source}:msg:${input.sourceExternalId}`
@@ -176,7 +141,7 @@ export async function ingestLead(input: IngestLeadInput): Promise<IngestLeadResu
 
   const receivedMessage = await receiveMessageV1({
     contract: RECEIVE_MESSAGE_COMMAND_V1,
-    chatId: chat.id,
+    chatId: chat.chatId,
     content: messageContent,
     sentAt: input.receivedAt.toISOString(),
     externalId: messageExternalId,
@@ -195,7 +160,7 @@ export async function ingestLead(input: IngestLeadInput): Promise<IngestLeadResu
 
   return {
     contactId: resolved.contact.id,
-    chatId: chat.id,
+    chatId: chat.chatId,
     messageId: receivedMessage.messageId,
     taskId,
     contactCreated: resolved.isNew,

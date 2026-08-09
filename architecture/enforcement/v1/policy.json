@@ -69,13 +69,14 @@
     "architecture/isolation/fleet-operations/api-connections-v1/module-manifest-amendments.json",
     "architecture/isolation/messaging/configuration-import-jobs-v1/module-manifest-amendments.json",
     "architecture/isolation/messaging/call-timeline-v1/module-manifest-amendments.json",
-    "architecture/isolation/messaging/communication-triggers-v1/module-manifest-amendments.json"
+    "architecture/isolation/messaging/communication-triggers-v1/module-manifest-amendments.json",
+    "architecture/isolation/messaging/avito-chat-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007-MESSAGING-COMMUNICATION-TRIGGERS",
-  "registry_base_commit": "39c9ec7245972d5f327d4bbe29dd76f8d2e62282",
+  "registry_milestone": "CRM-ARCH-007-MESSAGING-AVITO-CHAT",
+  "registry_base_commit": "24c366de7ae221ecf0aabadb4eb3ec49848086bd",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",

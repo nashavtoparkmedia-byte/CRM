@@ -23,7 +23,7 @@ check('external id retained', consumer.includes('`${input.source}:msg:${input.so
 check('received instant retained', consumer.includes('sentAt: input.receivedAt.toISOString()'), 'sentAt drifted')
 check('metadata retained', consumer.includes('source: input.source') && consumer.includes('sourceExternalId: input.sourceExternalId') && consumer.includes('...input.sourceMeta'), 'metadata drifted')
 check('owner message id returned', consumer.includes('messageId: receivedMessage.messageId'), 'result semantics drifted')
-check('adjacent Chat plan unchanged', /prisma\.chat\.create/.test(consumer) && /prisma\.chat\.update/.test(consumer), 'neighboring plan moved')
+check('adjacent Chat plan uses accepted owner route', !/prisma\.chat\.(create|update)/.test(consumer) && consumer.includes('ENSURE_LEAD_CONVERSATION_COMMAND_V1') && consumer.includes('ensureLeadConversationV1({'), 'neighboring plan is neither legacy nor isolated')
 check('ReceiveMessage command predeclared', messaging.commands.includes('ReceiveMessageCommand.v1'), 'manifest command absent')
 check('Avito Messaging dependency pre-approved', avito.allowed_dependencies.some((item) => item.context === 'messaging' && item.surface === 'messaging.public'), 'approved dependency absent')
 
