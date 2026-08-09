@@ -1,0 +1,1 @@
+{"schema":"yoko.crm.module-manifest-amendments.v1","version":1,"milestone":"CRM-ARCH-007-MESSAGING-WHATSAPP-MESSAGE","amendments":[{"context":"messaging","add_commands":["CreateChannelMessageCommand.v1","PatchMessageDeliveryCommand.v1"],"reason":"Expose provider message creation and delivery reconciliation through Messaging."}]}

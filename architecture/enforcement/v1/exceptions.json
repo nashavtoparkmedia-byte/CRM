@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007-TELEGRAM-DRIVER-LINK",
-  "base_commit": "9a26670b21b67ebd4530b8ee9a18ded173fa9cd3",
+  "milestone": "CRM-ARCH-007-MESSAGING-WHATSAPP-MESSAGE",
+  "base_commit": "8459d207724a25be61034660711236deb9f7ba96",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "b51f9fef003cfd72cf30530c806d4e9ef38e4bbf2891c2a4be3653211a0011df",
+  "finding_digest": "c42ca6b0eb9dce212e89c1823b8afcbabee681cf4de847b9ae0fcb5ea02614e5",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,7 +13,7 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 89,
+    "direct_foreign_prisma_write": 81,
     "direct_provider_transport_access": 38,
     "internal_module_import": 379,
     "non_public_cross_context_import": 536,
@@ -23381,26 +23381,10 @@
       ]
     },
     {
-      "fingerprint": "arch_6b7d779e677414774200915e",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 262,
-      "ordinal": 1,
-      "owner_context": "whatsapp_channel",
-      "target_context": "messaging",
-      "subject": "Message.create",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_904bb6b629b77b16"
-      ]
-    },
-    {
       "fingerprint": "arch_e60772e3f9ebde07a1d1ee97",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 530,
+      "line_at_baseline": 529,
       "ordinal": 1,
       "owner_context": "whatsapp_channel",
       "target_context": "messaging",
@@ -23413,42 +23397,10 @@
       ]
     },
     {
-      "fingerprint": "arch_78bd9194a721be3f2d0a3405",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 629,
-      "ordinal": 1,
-      "owner_context": "whatsapp_channel",
-      "target_context": "messaging",
-      "subject": "Message.update",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_904bb6b629b77b16"
-      ]
-    },
-    {
-      "fingerprint": "arch_b0b127ca8c90ad75d10ab874",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 639,
-      "ordinal": 2,
-      "owner_context": "whatsapp_channel",
-      "target_context": "messaging",
-      "subject": "Message.create",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_904bb6b629b77b16"
-      ]
-    },
-    {
       "fingerprint": "arch_31481a0483575164764dbedb",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 673,
+      "line_at_baseline": 668,
       "ordinal": 1,
       "owner_context": "whatsapp_channel",
       "target_context": "messaging",
@@ -23461,42 +23413,10 @@
       ]
     },
     {
-      "fingerprint": "arch_ca7eba113251069578cf89e2",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 1219,
-      "ordinal": 2,
-      "owner_context": "whatsapp_channel",
-      "target_context": "messaging",
-      "subject": "Message.update",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_904bb6b629b77b16"
-      ]
-    },
-    {
-      "fingerprint": "arch_ed6290c4eaae097752614451",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 1229,
-      "ordinal": 3,
-      "owner_context": "whatsapp_channel",
-      "target_context": "messaging",
-      "subject": "Message.create",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_904bb6b629b77b16"
-      ]
-    },
-    {
       "fingerprint": "arch_d73b36411e91bf840859f332",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 1437,
+      "line_at_baseline": 1428,
       "ordinal": 2,
       "owner_context": "whatsapp_channel",
       "target_context": "operations_observability",
@@ -23512,7 +23432,7 @@
       "fingerprint": "arch_82f888a4f017712881338752",
       "rule": "undeclared_dependency",
       "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 1437,
+      "line_at_baseline": 1428,
       "ordinal": 2,
       "owner_context": "whatsapp_channel",
       "target_context": "operations_observability",
@@ -23528,7 +23448,7 @@
       "fingerprint": "arch_86dc398672446ad6fcf8e54b",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 1491,
+      "line_at_baseline": 1482,
       "ordinal": 3,
       "owner_context": "whatsapp_channel",
       "target_context": "operations_observability",
@@ -23544,7 +23464,7 @@
       "fingerprint": "arch_4563400400a19dadda205f90",
       "rule": "undeclared_dependency",
       "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 1491,
+      "line_at_baseline": 1482,
       "ordinal": 3,
       "owner_context": "whatsapp_channel",
       "target_context": "operations_observability",
@@ -23560,7 +23480,7 @@
       "fingerprint": "arch_52ef481fab61e1d91414811b",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 1696,
+      "line_at_baseline": 1687,
       "ordinal": 2,
       "owner_context": "whatsapp_channel",
       "target_context": "messaging",
@@ -23573,42 +23493,10 @@
       ]
     },
     {
-      "fingerprint": "arch_ec07b642a251dbafd46f9a79",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 1730,
-      "ordinal": 3,
-      "owner_context": "whatsapp_channel",
-      "target_context": "messaging",
-      "subject": "Message.update",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_904bb6b629b77b16"
-      ]
-    },
-    {
-      "fingerprint": "arch_0405acd63affdbeedd3faebf",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 1739,
-      "ordinal": 4,
-      "owner_context": "whatsapp_channel",
-      "target_context": "messaging",
-      "subject": "Message.create",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_904bb6b629b77b16"
-      ]
-    },
-    {
       "fingerprint": "arch_b22d22fb2c13492d22da480d",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 1752,
+      "line_at_baseline": 1726,
       "ordinal": 3,
       "owner_context": "whatsapp_channel",
       "target_context": "messaging",
@@ -23624,7 +23512,7 @@
       "fingerprint": "arch_d58a6fdbf95230f98a4c09c6",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 2036,
+      "line_at_baseline": 2010,
       "ordinal": 2,
       "owner_context": "whatsapp_channel",
       "target_context": "messaging",
@@ -23637,26 +23525,10 @@
       ]
     },
     {
-      "fingerprint": "arch_c994714f9211cbdd6a3337cf",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 2129,
-      "ordinal": 5,
-      "owner_context": "whatsapp_channel",
-      "target_context": "messaging",
-      "subject": "Message.create",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_904bb6b629b77b16"
-      ]
-    },
-    {
       "fingerprint": "arch_150fb08ba982131de16ce871",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 2165,
+      "line_at_baseline": 2138,
       "ordinal": 4,
       "owner_context": "whatsapp_channel",
       "target_context": "messaging",

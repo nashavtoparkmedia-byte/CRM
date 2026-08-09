@@ -22,6 +22,8 @@ import { createDeleteMessageHandlerV1,createReplaceExternalMessageHandlerV1,crea
 import { legacyPrismaExternalMessagePortV1 } from './legacy-prisma-external-message-adapter'
 import { createCreateExternalConversationHandlerV1,createPatchExternalConversationHandlerV1 } from './external-conversation-handler'
 import { legacyPrismaExternalConversationPortV1 } from './legacy-prisma-external-conversation-adapter'
+import { createCreateChannelMessageHandlerV1,createPatchMessageDeliveryHandlerV1 } from './channel-message-handler'
+import { legacyPrismaChannelMessagePortV1 } from './legacy-prisma-channel-message-adapter'
 
 export { createAttachMessageMediaHandlerV1 } from './attach-message-media-handler'
 export type { AttachMessageMediaPersistencePortV1 } from './attach-message-media-handler'
@@ -76,3 +78,7 @@ export { createCreateExternalConversationHandlerV1,createPatchExternalConversati
 export type { ExternalConversationPersistencePortV1 } from './external-conversation-handler'
 export const patchExternalConversationV1=createPatchExternalConversationHandlerV1(legacyPrismaExternalConversationPortV1)
 export const createExternalConversationV1=createCreateExternalConversationHandlerV1(legacyPrismaExternalConversationPortV1)
+export { createCreateChannelMessageHandlerV1,createPatchMessageDeliveryHandlerV1 } from './channel-message-handler'
+export type { ChannelMessagePersistencePortV1 } from './channel-message-handler'
+export const createChannelMessageV1=createCreateChannelMessageHandlerV1(legacyPrismaChannelMessagePortV1)
+export const patchMessageDeliveryV1=createPatchMessageDeliveryHandlerV1(legacyPrismaChannelMessagePortV1)

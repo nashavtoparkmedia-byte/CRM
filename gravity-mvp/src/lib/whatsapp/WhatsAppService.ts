@@ -11,8 +11,8 @@ import { broadcastChatMessage } from '@/lib/messageStreamBus'
 import * as registry from '@/lib/TransportRegistry'
 import { opsLog } from '@/lib/opsLog'
 import { WWEBJS_AUTH_DIR } from '@/lib/whatsapp/WhatsAppCleanup'
-import { ATTACH_MESSAGE_MEDIA_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, type HistoryImportJobPatchV1 } from '@/contracts/messaging/v1'
-import { attachMessageMediaV1, patchHistoryImportJobV1 } from '@/modules/messaging/public/v1'
+import { ATTACH_MESSAGE_MEDIA_COMMAND_V1, CREATE_CHANNEL_MESSAGE_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, PATCH_MESSAGE_DELIVERY_COMMAND_V1, type HistoryImportJobPatchV1 } from '@/contracts/messaging/v1'
+import { attachMessageMediaV1, createChannelMessageV1, patchHistoryImportJobV1, patchMessageDeliveryV1 } from '@/modules/messaging/public/v1'
 
 // 25MB per file. Was 10MB but modern iPhone photos (12MP JPEG) and
 // short videos easily exceed that — skipped media left the UI with
@@ -259,18 +259,17 @@ async function handleLiveGroupMessage(msg: Message, connectionId: string): Promi
     if (existing) return
 
     const unifiedType = mapToUnifiedMessageType(msg.type)
-    const savedMsg = await prisma.message.create({
-        data: {
-            chatId: unifiedChat.id,
-            direction: isOutbound ? 'outbound' : 'inbound',
-            type: unifiedType,
-            content: waContentWithFallback(msg.body, msg.type),
-            externalId: msg.id._serialized,
-            channel: 'whatsapp',
-            sentAt: ts,
-            status: isOutbound ? 'delivered' : undefined,
-            metadata: (msg as any).author ? { groupAuthor: (msg as any).author } : undefined,
-        },
+    const { message: savedMsg } = await createChannelMessageV1({
+        contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1,
+        chatId: unifiedChat.id,
+        direction: isOutbound ? 'outbound' : 'inbound',
+        type: unifiedType,
+        content: waContentWithFallback(msg.body, msg.type),
+        externalId: msg.id._serialized,
+        channel: 'whatsapp',
+        sentAt: ts,
+        status: isOutbound ? 'delivered' : undefined,
+        metadata: (msg as any).author ? { groupAuthor: (msg as any).author } : undefined,
     })
 
     // Media — reuse the same helper the 1:1 path uses.
@@ -626,28 +625,24 @@ async function syncHistory(connectionId: string, client: Client) {
                             if (existing) {
                                 if (!existing.externalId) {
                                     try {
-                                        await prisma.message.update({
-                                            where: { id: existing.id },
-                                            data: { externalId: msg.id }
-                                        })
+                                        await patchMessageDeliveryV1({ contract: PATCH_MESSAGE_DELIVERY_COMMAND_V1, messageId: existing.id, externalId: msg.id })
                                     } catch (updErr: any) {
                                         if (updErr.code !== 'P2002') throw updErr
                                         // Another message already has this externalId — skip silently
                                     }
                                 }
                             } else {
-                                const savedMsg = await prisma.message.create({
-                                    data: {
-                                        chatId: unifiedChat.id,
-                                        direction: msg.fromMe ? 'outbound' : 'inbound',
-                                        type: mapToUnifiedMessageType(msg.type),
-                                        content: waContentWithFallback(msg.body, msg.type),
-                                        externalId: msg.id,
-                                        channel: 'whatsapp',
-                                        sentAt: ts,
-                                        // Outbound came from phone — already delivered.
-                                        status: msg.fromMe ? 'delivered' : undefined,
-                                    }
+                                const { message: savedMsg } = await createChannelMessageV1({
+                                    contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1,
+                                    chatId: unifiedChat.id,
+                                    direction: msg.fromMe ? 'outbound' : 'inbound',
+                                    type: mapToUnifiedMessageType(msg.type),
+                                    content: waContentWithFallback(msg.body, msg.type),
+                                    externalId: msg.id,
+                                    channel: 'whatsapp',
+                                    sentAt: ts,
+                                    // Outbound came from phone — already delivered.
+                                    status: msg.fromMe ? 'delivered' : undefined,
                                 })
 
                                 // Media download — backfill path.
@@ -1216,26 +1211,22 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                 console.log(`[WA-SERVICE] DB-DEDUP: skipped duplicate ${direction} msgId=${msg.id._serialized} (existing=${existingUnified.id})`)
                 if (!existingUnified.externalId) {
                     try {
-                        await prisma.message.update({
-                            where: { id: existingUnified.id },
-                            data: { externalId: msg.id._serialized }
-                        })
+                        await patchMessageDeliveryV1({ contract: PATCH_MESSAGE_DELIVERY_COMMAND_V1, messageId: existingUnified.id, externalId: msg.id._serialized })
                     } catch (updErr: any) {
                         if (updErr.code !== 'P2002') throw updErr
                     }
                 }
             } else {
                 const msgType = mapToUnifiedMessageType(msg.type)
-                const savedMsg = await prisma.message.create({
-                    data: {
-                        chatId: unifiedChat.id,
-                        direction,
-                        type: msgType,
-                        content: waContentWithFallback(msg.body, msg.type),
-                        externalId: msg.id._serialized,
-                        sentAt: ts,
-                        status: isOutbound ? 'delivered' : undefined,
-                    }
+                const { message: savedMsg } = await createChannelMessageV1({
+                    contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1,
+                    chatId: unifiedChat.id,
+                    direction,
+                    type: msgType,
+                    content: waContentWithFallback(msg.body, msg.type),
+                    externalId: msg.id._serialized,
+                    sentAt: ts,
+                    status: isOutbound ? 'delivered' : undefined,
                 })
 
                 // Download and save media attachment (image, voice, video, document, sticker).
@@ -1727,26 +1718,9 @@ export async function sendMessage(connectionId: string, chatId: string, text: st
 
         if (existing) {
             console.log(`[WA-SERVICE] Found existing optimistic message ${existing.id}, updating with externalId ${msg.id._serialized}`)
-            await prisma.message.update({
-                where: { id: existing.id },
-                data: { 
-                    externalId: msg.id._serialized,
-                    status: 'delivered',
-                    sentAt: ts // Update to actual sent time from WA
-                }
-            })
+            await patchMessageDeliveryV1({ contract: PATCH_MESSAGE_DELIVERY_COMMAND_V1, messageId: existing.id, externalId: msg.id._serialized, status: 'delivered', sentAt: ts })
         } else {
-            await prisma.message.create({
-                data: {
-                    chatId: unifiedChat.id,
-                    direction: 'outbound',
-                    type: 'text',
-                    content: text,
-                    externalId: msg.id._serialized,
-                    sentAt: ts,
-                    status: 'delivered'
-                }
-            })
+            await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: unifiedChat.id, direction: 'outbound', type: 'text', content: text, externalId: msg.id._serialized, sentAt: ts, status: 'delivered' })
         }
 
         await prisma.chat.update({
@@ -2126,21 +2100,20 @@ export async function importWhatsAppHistory(
 
                         totalMessages++
                         if (!existing) {
-                            const savedMsg = await prisma.message.create({
-                                data: {
-                                    chatId: unifiedChat.id,
-                                    direction: msg.fromMe ? 'outbound' : 'inbound',
-                                    type: mapToUnifiedMessageType(msg.type),
-                                    content: waContentWithFallback(msg.body, msg.type),
-                                    externalId: msgId,
-                                    channel: 'whatsapp',
-                                    sentAt: ts,
-                                    // Backfilled outbound messages came from
-                                    // WA Web's own Store — they already shipped
-                                    // from the phone. Mark delivered so the UI
-                                    // doesn't flag them with "Повторить".
-                                    status: msg.fromMe ? 'delivered' : undefined,
-                                }
+                            const { message: savedMsg } = await createChannelMessageV1({
+                                contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1,
+                                chatId: unifiedChat.id,
+                                direction: msg.fromMe ? 'outbound' : 'inbound',
+                                type: mapToUnifiedMessageType(msg.type),
+                                content: waContentWithFallback(msg.body, msg.type),
+                                externalId: msgId,
+                                channel: 'whatsapp',
+                                sentAt: ts,
+                                // Backfilled outbound messages came from
+                                // WA Web's own Store — they already shipped
+                                // from the phone. Mark delivered so the UI
+                                // doesn't flag them with "Повторить".
+                                status: msg.fromMe ? 'delivered' : undefined,
                             })
                             newMessages++
 
