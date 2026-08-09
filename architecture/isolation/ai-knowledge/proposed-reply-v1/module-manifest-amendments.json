@@ -1,0 +1,1 @@
+{"schema":"yoko.crm.module-manifest-amendments.v1","version":1,"milestone":"CRM-ARCH-007-AI-KNOWLEDGE-PROPOSED-REPLY","amendments":[{"context":"ai_knowledge","add_commands":["UpsertProposedReplyCommand.v1","PatchProposedReplyCommand.v1"],"reason":"Expose generated-proposal upsert and lifecycle persistence through AI Knowledge."}]}

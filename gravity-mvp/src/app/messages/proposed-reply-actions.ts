@@ -22,8 +22,8 @@ import { cookies } from 'next/headers'
 import { generateShadowReplyForChat } from '@/lib/pipeline/shadowReply'
 import { writeAuditEntry } from '@/lib/ai/knowledge/auditLog'
 import { runCoach, type CoachResult, type CoachSuggestion } from '@/lib/ai/knowledge/coach'
-import { APPLY_KNOWLEDGE_ITEM_COACH_EDIT_COMMAND_V1, VERIFY_KNOWLEDGE_ITEM_COMMAND_V1 } from '@/contracts/ai-knowledge/v1'
-import { applyKnowledgeItemCoachEditV1, verifyKnowledgeItemV1 } from '@/modules/ai-knowledge/public/v1'
+import { APPLY_KNOWLEDGE_ITEM_COACH_EDIT_COMMAND_V1, PATCH_PROPOSED_REPLY_COMMAND_V1, UPSERT_PROPOSED_REPLY_COMMAND_V1, VERIFY_KNOWLEDGE_ITEM_COMMAND_V1 } from '@/contracts/ai-knowledge/v1'
+import { applyKnowledgeItemCoachEditV1, patchProposedReplyV1, upsertProposedReplyV1, verifyKnowledgeItemV1 } from '@/modules/ai-knowledge/public/v1'
 
 const CACHE_TTL_MIN = 15
 
@@ -150,56 +150,33 @@ export async function getOrGenerateProposedReply(chatId: string): Promise<Propos
 
     // 5. Upsert (race-safe — UNIQUE constraint на messageId)
     const expiresAt = new Date(Date.now() + CACHE_TTL_MIN * 60 * 1000)
-    const saved = await prisma.aiProposedReply.upsert({
-        where: { messageId: lastInbound.id },
-        create: {
-            messageId:    lastInbound.id,
-            chatId,
-            text:         result.text,
-            confidence:   result.confidence,
-            decisionMode: result.decisionMode,
-            reasoning:    result.reasoning,
-            sources:      result.sources as any,
-            expiresAt,
-        },
-        update: {
-            text:         result.text,
-            confidence:   result.confidence,
-            decisionMode: result.decisionMode,
-            reasoning:    result.reasoning,
-            sources:      result.sources as any,
-            expiresAt,
-            generatedAt:  new Date(),
-            dismissedAt:  null,  // re-generated означает снова видимый
-            takenAt:      null,  // и не «взят в работу»
-            sentMessageId: null,
-        },
+    const saved = await upsertProposedReplyV1({
+        contract: UPSERT_PROPOSED_REPLY_COMMAND_V1,
+        messageId: lastInbound.id,
+        chatId,
+        text: result.text,
+        confidence: result.confidence,
+        decisionMode: result.decisionMode,
+        reasoning: result.reasoning,
+        sources: result.sources,
+        expiresAt,
     })
-    return serialize(saved)
+    return serialize(saved.proposal)
 }
 
 /** Менеджер нажал «Взять в работу» — записываем timestamp. */
 export async function markProposedReplyTaken(id: string): Promise<void> {
-    await prisma.aiProposedReply.update({
-        where: { id },
-        data:  { takenAt: new Date() },
-    })
+    await patchProposedReplyV1({ contract: PATCH_PROPOSED_REPLY_COMMAND_V1, proposalId: id, patch: { takenAt: new Date() } })
 }
 
 /** После реальной отправки сообщения менеджером — link на Message.id. */
 export async function markProposedReplySent(id: string, sentMessageId: string): Promise<void> {
-    await prisma.aiProposedReply.update({
-        where: { id },
-        data:  { sentMessageId },
-    })
+    await patchProposedReplyV1({ contract: PATCH_PROPOSED_REPLY_COMMAND_V1, proposalId: id, patch: { sentMessageId } })
 }
 
 /** Менеджер нажал «Скрыть» — не показываем proposal пока не пришёт новое inbound. */
 export async function dismissProposedReply(id: string): Promise<void> {
-    await prisma.aiProposedReply.update({
-        where: { id },
-        data:  { dismissedAt: new Date() },
-    })
+    await patchProposedReplyV1({ contract: PATCH_PROPOSED_REPLY_COMMAND_V1, proposalId: id, patch: { dismissedAt: new Date() } })
 }
 
 /**
@@ -242,10 +219,7 @@ export async function confirmProposedReplyCorrect(proposalId: string): Promise<C
     const sources = proposal.sources as Array<{ id: string; title: string }> | null
     if (!sources || sources.length === 0) {
         // Нет используемых items — нечего verified. Mark anyway чтобы не пере-fetch.
-        await prisma.aiProposedReply.update({
-            where: { id: proposalId },
-            data: { confirmedCorrectAt: new Date() },
-        })
+        await patchProposedReplyV1({ contract: PATCH_PROPOSED_REPLY_COMMAND_V1, proposalId, patch: { confirmedCorrectAt: new Date() } })
         return { verifiedCount: 0, items: [] }
     }
 
@@ -307,10 +281,7 @@ export async function confirmProposedReplyCorrect(proposalId: string): Promise<C
     }
 
     // 4. Mark proposal as confirmed
-    await prisma.aiProposedReply.update({
-        where: { id: proposalId },
-        data: { confirmedCorrectAt: new Date() },
-    })
+    await patchProposedReplyV1({ contract: PATCH_PROPOSED_REPLY_COMMAND_V1, proposalId, patch: { confirmedCorrectAt: new Date() } })
 
     console.log(`[ai-intern] confirmed proposal ${proposalId}: verified ${verified.length} items`)
 

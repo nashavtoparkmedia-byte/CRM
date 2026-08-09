@@ -12,6 +12,8 @@ import { createAttachManualKnowledgeSourceHandlerV1,createDisableKnowledgeSource
 import { legacyPrismaKnowledgeSourcePortV1 } from './legacy-prisma-knowledge-source-adapter'
 import { createApplyKnowledgeItemCoachEditHandlerV1,createVerifyKnowledgeItemHandlerV1 } from './knowledge-item-review-handler'
 import { legacyPrismaKnowledgeItemReviewPortV1 } from './legacy-prisma-knowledge-item-review-adapter'
+import { createPatchProposedReplyHandlerV1,createUpsertProposedReplyHandlerV1 } from './proposed-reply-handler'
+import { legacyPrismaProposedReplyPortV1 } from './legacy-prisma-proposed-reply-adapter'
 
 export { createRecordKnowledgeUsageHandlerV1 } from './record-knowledge-usage-handler'
 export type { RecordKnowledgeUsagePersistencePortV1 } from './record-knowledge-usage-handler'
@@ -36,3 +38,7 @@ export { createApplyKnowledgeItemCoachEditHandlerV1,createVerifyKnowledgeItemHan
 export type { KnowledgeItemReviewPersistencePortV1 } from './knowledge-item-review-handler'
 export const verifyKnowledgeItemV1=createVerifyKnowledgeItemHandlerV1(legacyPrismaKnowledgeItemReviewPortV1)
 export const applyKnowledgeItemCoachEditV1=createApplyKnowledgeItemCoachEditHandlerV1(legacyPrismaKnowledgeItemReviewPortV1)
+export { createPatchProposedReplyHandlerV1,createUpsertProposedReplyHandlerV1 } from './proposed-reply-handler'
+export type { ProposedReplyPersistencePortV1 } from './proposed-reply-handler'
+export const upsertProposedReplyV1=createUpsertProposedReplyHandlerV1(legacyPrismaProposedReplyPortV1)
+export const patchProposedReplyV1=createPatchProposedReplyHandlerV1(legacyPrismaProposedReplyPortV1)
