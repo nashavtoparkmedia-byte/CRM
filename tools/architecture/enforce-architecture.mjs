@@ -203,6 +203,7 @@ function applyManifestAmendments(manifests, amendments) {
                 ['add_public_surface', 'public_surface'],
                 ['add_internal_surface', 'internal_surface'],
                 ['add_events', 'events'],
+                ['add_commands', 'commands'],
             ]
             for (const [source, target] of additions) {
                 if (amendment[source]) manifest[target] = [...new Set([...(manifest[target] ?? []), ...amendment[source]])]

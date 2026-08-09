@@ -1,0 +1,6 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1", "milestone": "CRM-ARCH-007-CONTACTS-TELEGRAM-NAME", "base_commit": "cc1259ce201257bb78c1069c136723ca630c13f8", "captured_at": "2026-08-09T15:55:05Z",
+  "consumer": "gravity-mvp/src/app/api/webhook/telegram/route.ts", "consumer_sha256": "420991e3e0660244f43933330115574169ff847758da424eb6007cc1017bc8d5",
+  "behavior": ["only existing contacts with username and @ display candidate enter promotion", "only displayNameSource channel may update", "missing contact is a no-op", "manual and yandex names remain preserved", "failure remains inside existing nonblocking catch"],
+  "v1_sha256": "9d757eb8ea90856fd7beb02012f5f09e034a9fb51edcfb8542caba192701f764"
+}

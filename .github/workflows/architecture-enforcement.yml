@@ -58,6 +58,8 @@ jobs:
 
       - name: Enforce Contacts boundary for Telegram
         run: node tools/architecture/check-contacts-telegram-boundary.mjs
+      - name: Enforce Contacts Telegram channel-name v2 boundary
+        run: node tools/architecture/check-contacts-telegram-name-boundary.mjs
 
       - name: Verify versioned contract behavior
         run: |
@@ -68,6 +70,7 @@ jobs:
           node tools/architecture/test-work-management-completion.mjs
           node tools/architecture/test-contacts-resolution.mjs
           node tools/architecture/test-contacts-identity.mjs
+          node tools/architecture/test-contacts-resolution-v2.mjs
 
       - name: Preserve Identity security behavior
         run: |

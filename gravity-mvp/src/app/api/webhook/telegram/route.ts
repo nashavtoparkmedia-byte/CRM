@@ -11,6 +11,8 @@ import {
     REPLACE_IDENTITY_PROFILE_V1,
 } from '@/contracts/contacts/v1'
 import { attachContactIdentityV1 } from '@/modules/contacts/public/v1'
+import { PROMOTE_CHANNEL_DISPLAY_NAME_V2, RESOLVE_CONTACT_COMMAND_V2 } from '@/contracts/contacts/v2'
+import { resolveContactV2 } from '@/modules/contacts/public/v2'
 
 export async function POST(req: NextRequest) {
     try {
@@ -163,16 +165,12 @@ export async function POST(req: NextRequest) {
                 // so the header immediately reflects the username instead of old first_name.
                 // Does NOT touch contacts edited manually (displayNameSource = 'manual' or 'yandex').
                 if (!contactResult.isNew && username && tgDisplayName.startsWith('@')) {
-                    const existing = await prisma.contact.findUnique({
-                        where: { id: contactResult.contact.id },
-                        select: { displayNameSource: true },
+                    await resolveContactV2({
+                        contract: RESOLVE_CONTACT_COMMAND_V2,
+                        operation: PROMOTE_CHANNEL_DISPLAY_NAME_V2,
+                        contactId: contactResult.contact.id,
+                        candidateDisplayName: tgDisplayName,
                     })
-                    if (existing?.displayNameSource === 'channel') {
-                        await prisma.contact.update({
-                            where: { id: contactResult.contact.id },
-                            data: { displayName: tgDisplayName },
-                        })
-                    }
                 }
                 await ContactService.ensureChatLinked(
                     unifiedChat.id,

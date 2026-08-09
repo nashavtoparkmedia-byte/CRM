@@ -18,6 +18,6 @@ check('legacy metadata mapping stays in adapter', adapter.includes('username: ha
 check('legacy null coercion remains in caller', consumer.includes('handle: username || null') && consumer.includes('givenName: firstName || null') && consumer.includes('familyName: lastName || null'), 'null behavior drifted')
 check('Contacts declares AttachContactIdentityCommand.v1', contacts.commands.includes('AttachContactIdentityCommand.v1'), 'manifest command absent')
 check('Telegram dependency on Contacts is allowed', telegram.allowed_dependencies.some((d) => d.context === 'contacts'), 'dependency absent')
-check('neighboring Contact update remains visible', consumer.includes('prisma.contact.update'), 'scope broadened')
+check('neighboring Contact resolution remains explicit through public v2', consumer.includes('RESOLVE_CONTACT_COMMAND_V2') && consumer.includes('resolveContactV2({'), 'channel-name owner boundary absent')
 process.stdout.write(`${JSON.stringify({ status: failures.length ? 'FAIL' : 'PASS', checks, failures }, null, 2)}\n`)
 if (failures.length) process.exitCode = 1

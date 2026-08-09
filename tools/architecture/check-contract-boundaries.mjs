@@ -108,6 +108,8 @@ assertCheck(
 const telegramIdentityConsumer = source('gravity-mvp/src/app/api/webhook/telegram/route.ts')
 assertCheck('representative Telegram consumer uses AttachContactIdentityCommand.v1', telegramIdentityConsumer.includes('ATTACH_CONTACT_IDENTITY_COMMAND_V1') && telegramIdentityConsumer.includes('attachContactIdentityV1({'), 'versioned identity command absent')
 assertCheck('foreign ContactIdentity update removed from Telegram consumer', !/prisma\.contactIdentity\.update\s*\(/.test(telegramIdentityConsumer), 'direct ContactIdentity update remains')
+assertCheck('Telegram channel-name consumer uses ResolveContactCommand.v2', telegramIdentityConsumer.includes('RESOLVE_CONTACT_COMMAND_V2') && telegramIdentityConsumer.includes('resolveContactV2({'), 'versioned v2 contact command absent')
+assertCheck('foreign Contact update removed from Telegram consumer', !/prisma\.contact\.update\s*\(/.test(telegramIdentityConsumer), 'direct Contact update remains')
 
 const handler = source('gravity-mvp/src/modules/work-management/public/v1/create-task-handler.ts')
 assertCheck(
