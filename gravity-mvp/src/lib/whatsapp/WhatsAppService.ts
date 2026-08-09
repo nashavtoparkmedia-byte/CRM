@@ -11,8 +11,8 @@ import { broadcastChatMessage } from '@/lib/messageStreamBus'
 import * as registry from '@/lib/TransportRegistry'
 import { opsLog } from '@/lib/opsLog'
 import { WWEBJS_AUTH_DIR } from '@/lib/whatsapp/WhatsAppCleanup'
-import { ATTACH_MESSAGE_MEDIA_COMMAND_V1, CREATE_CHANNEL_MESSAGE_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, PATCH_MESSAGE_DELIVERY_COMMAND_V1, type HistoryImportJobPatchV1 } from '@/contracts/messaging/v1'
-import { attachMessageMediaV1, createChannelMessageV1, patchHistoryImportJobV1, patchMessageDeliveryV1 } from '@/modules/messaging/public/v1'
+import { ATTACH_MESSAGE_MEDIA_COMMAND_V1, CREATE_CHANNEL_MESSAGE_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, PATCH_MESSAGE_DELIVERY_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, type HistoryImportJobPatchV1 } from '@/contracts/messaging/v1'
+import { attachMessageMediaV1, createChannelMessageV1, patchChannelConversationV1, patchHistoryImportJobV1, patchMessageDeliveryV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
 
 // 25MB per file. Was 10MB but modern iPhone photos (12MP JPEG) and
 // short videos easily exceed that — skipped media left the UI with
@@ -526,17 +526,14 @@ async function syncHistory(connectionId: string, client: Client) {
                 // Normalize externalChatId so live + sync + import all use
                 // the same key — otherwise we get duplicate Chat rows.
                 const syncCanonicalExt = canonicalWaExternalChatId(chatRaw.id._serialized)
-                const unifiedSyncChat = await prisma.chat.upsert({
-                    where: { externalChatId: syncCanonicalExt },
-                    update: { name: chatRaw.name, chatType: isGroupChat ? 'group' : 'private' },
-                    create: {
-                        externalChatId: syncCanonicalExt,
-                        channel: 'whatsapp',
-                        name: chatRaw.name,
-                        chatType: isGroupChat ? 'group' : 'private',
-                        metadata: { connectionId }
-                    }
-                })
+                const unifiedSyncChat = (await upsertChannelConversationV1({
+                    contract: UPSERT_CHANNEL_CONVERSATION_COMMAND_V1,
+                    externalChatId: syncCanonicalExt,
+                    channel: 'whatsapp',
+                    name: chatRaw.name,
+                    chatType: isGroupChat ? 'group' : 'private',
+                    metadata: { connectionId },
+                })).conversation as NonNullable<Awaited<ReturnType<typeof prisma.chat.findUnique>>>
 
                 // Contact resolution: only for private chats. For groups
                 // the JID is the group id, not a phone — no contact to link.
@@ -665,10 +662,7 @@ async function syncHistory(connectionId: string, client: Client) {
                         where: { id: chatRaw.id._serialized },
                         data: { lastMessageAt: maxTimestamp }
                     })
-                    await prisma.chat.update({
-                        where: { externalChatId: syncCanonicalExt },
-                        data: { lastMessageAt: maxTimestamp }
-                    })
+                    await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { externalChatId: syncCanonicalExt }, patch: { lastMessageAt: maxTimestamp } })
                 }
             } catch (chatErr) {
                 console.error(`[WA-SERVICE] Failed to sync chat ${chatRaw.id._serialized}:`, chatErr)
@@ -1684,10 +1678,7 @@ export async function sendMessage(connectionId: string, chatId: string, text: st
     if (unifiedChat) {
         if (unifiedChat.externalChatId !== normalizedTarget) {
             try {
-                unifiedChat = await prisma.chat.update({
-                    where: { id: unifiedChat.id },
-                    data: { externalChatId: normalizedTarget }
-                });
+                unifiedChat = (await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { externalChatId: normalizedTarget } })).conversation as typeof unifiedChat;
             } catch (updateErr: any) {
                 // P2002 = another chat already has normalizedTarget as externalChatId.
                 // This happens when a phone-format chat was created while the @lid chat
@@ -1723,10 +1714,7 @@ export async function sendMessage(connectionId: string, chatId: string, text: st
             await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: unifiedChat.id, direction: 'outbound', type: 'text', content: text, externalId: msg.id._serialized, sentAt: ts, status: 'delivered' })
         }
 
-        await prisma.chat.update({
-            where: { id: unifiedChat.id },
-            data: { lastMessageAt: ts }
-        })
+        await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: ts } })
     }
 
     return { externalId: msg.id._serialized }
@@ -2007,17 +1995,14 @@ export async function importWhatsAppHistory(
 
                 // Normalize externalChatId to keep live + sync + import in sync.
                 const importCanonicalExt = canonicalWaExternalChatId(chatRaw.id._serialized)
-                const unifiedChat = await prisma.chat.upsert({
-                    where: { externalChatId: importCanonicalExt },
-                    update: { name: chatRaw.name, chatType: isGroupChat ? 'group' : 'private' },
-                    create: {
-                        externalChatId: importCanonicalExt,
-                        channel: 'whatsapp',
-                        name: chatRaw.name,
-                        chatType: isGroupChat ? 'group' : 'private',
-                        metadata: { connectionId: connId }
-                    }
-                })
+                const unifiedChat = (await upsertChannelConversationV1({
+                    contract: UPSERT_CHANNEL_CONVERSATION_COMMAND_V1,
+                    externalChatId: importCanonicalExt,
+                    channel: 'whatsapp',
+                    name: chatRaw.name,
+                    chatType: isGroupChat ? 'group' : 'private',
+                    metadata: { connectionId: connId },
+                })).conversation as NonNullable<Awaited<ReturnType<typeof prisma.chat.findUnique>>>
 
                 // Contact resolution: only for private (1:1) chats.
                 // Group JIDs are room ids, not phones.
@@ -2135,7 +2120,7 @@ export async function importWhatsAppHistory(
                 // Update lastMessageAt
                 if (chatMaxTs) {
                     await prisma.whatsAppChat.update({ where: { id: chatRaw.id._serialized }, data: { lastMessageAt: chatMaxTs } })
-                    await prisma.chat.update({ where: { externalChatId: importCanonicalExt }, data: { lastMessageAt: chatMaxTs } })
+                    await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { externalChatId: importCanonicalExt }, patch: { lastMessageAt: chatMaxTs } })
                 }
 
                 // Periodic job progress update (every 5 chats)

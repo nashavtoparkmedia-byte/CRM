@@ -13,6 +13,8 @@
  * Используется в WhatsAppService.syncHistory и WhatsAppService.importHistory.
  */
 import { prisma } from '@/lib/prisma'
+import { PATCH_CHANNEL_CONVERSATION_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { patchChannelConversationV1 } from '@/modules/messaging/public/v1'
 
 function isPlaceholder(name: string | null | undefined): boolean {
     if (!name) return true
@@ -61,12 +63,11 @@ export async function enrichWaChatNameFromSibling(
     const goodSibling = siblings.find(s => !isPlaceholder(s.name))
     if (!goodSibling) return null
 
-    const updates: any = { name: goodSibling.name }
-    if (!driverId && goodSibling.driverId) {
-        updates.driverId = goodSibling.driverId
-    }
-
-    await prisma.chat.update({ where: { id: chatId }, data: updates })
+    await patchChannelConversationV1({
+        contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1,
+        selector: { chatId },
+        patch: { name: goodSibling.name, ...(!driverId && goodSibling.driverId ? { driverId: goodSibling.driverId } : {}) },
+    })
     console.log(`[wa-enrich] chat=${chatId} name "${currentName ?? 'null'}" → "${goodSibling.name}" (donor ${goodSibling.id})`)
     return goodSibling.name as string
 }
