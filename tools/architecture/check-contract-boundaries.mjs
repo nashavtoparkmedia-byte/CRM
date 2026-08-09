@@ -137,6 +137,11 @@ assertCheck('foreign bot Chat update removed',!/prisma\.chat\.update/.test(botSy
 const whatsappAttachmentConsumer=source('gravity-mvp/src/lib/whatsapp/WhatsAppService.ts')
 assertCheck('WhatsApp media uses AttachMessageMediaCommand.v1',whatsappAttachmentConsumer.includes('ATTACH_MESSAGE_MEDIA_COMMAND_V1')&&whatsappAttachmentConsumer.includes('attachMessageMediaV1({'),'Messaging media command absent')
 assertCheck('foreign WhatsApp MessageAttachment create removed',!/prisma\.messageAttachment\.create/.test(whatsappAttachmentConsumer),'direct MessageAttachment create remains')
+const maxAttachmentConsumer=source('gravity-mvp/src/app/api/webhooks/max/route.ts')
+assertCheck('MAX media uses AttachMessageMediaCommand.v2',maxAttachmentConsumer.includes('ATTACH_MESSAGE_MEDIA_COMMAND_V2')&&maxAttachmentConsumer.includes('attachMessageMediaV2({'),'Messaging media v2 command absent')
+assertCheck('MAX deletion uses DeleteMessageMediaCommand.v1',maxAttachmentConsumer.includes('DELETE_MESSAGE_MEDIA_COMMAND_V1')&&maxAttachmentConsumer.includes('deleteMessageMediaV1({'),'Messaging media delete command absent')
+assertCheck('foreign MAX MessageAttachment create removed',!/prisma\.messageAttachment\.create/.test(maxAttachmentConsumer),'direct MAX MessageAttachment create remains')
+assertCheck('foreign MAX MessageAttachment delete removed',!/prisma\.messageAttachment\.deleteMany/.test(maxAttachmentConsumer),'direct MAX MessageAttachment delete remains')
 
 const handler = source('gravity-mvp/src/modules/work-management/public/v1/create-task-handler.ts')
 assertCheck(

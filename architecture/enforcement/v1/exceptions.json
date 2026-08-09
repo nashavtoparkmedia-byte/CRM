@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007-MESSAGING-WHATSAPP-ATTACHMENT",
-  "base_commit": "20b10682f72c4539aa66f86e691bf06016039aa8",
+  "milestone": "CRM-ARCH-007-MESSAGING-MAX-ATTACHMENTS",
+  "base_commit": "4b57c2f26aba0ef4f12cb5a1a73a50e7ec3e0cd9",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "983a01da5713b16186c00bc2ab5c7c134a9c5d84f6348ca4e387e72bdce3a56e",
+  "finding_digest": "b835d93c385b77e6308156adf401214e9bdb2fa67ada1a1887b3157c9eeb5613",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,7 +13,7 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 174,
+    "direct_foreign_prisma_write": 172,
     "direct_provider_transport_access": 38,
     "internal_module_import": 379,
     "non_public_cross_context_import": 536,
@@ -4999,26 +4999,10 @@
       ]
     },
     {
-      "fingerprint": "arch_a17170e5284176851f63873c",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
-      "line_at_baseline": 138,
-      "ordinal": 1,
-      "owner_context": "max_channel",
-      "target_context": "messaging",
-      "subject": "MessageAttachment.deleteMany",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_577f6451590e697c"
-      ]
-    },
-    {
       "fingerprint": "arch_e81bacdb1602a41968e1aac4",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
-      "line_at_baseline": 139,
+      "line_at_baseline": 146,
       "ordinal": 1,
       "owner_context": "max_channel",
       "target_context": "messaging",
@@ -5034,7 +5018,7 @@
       "fingerprint": "arch_c07f30e1f5db504e4d81ea69",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
-      "line_at_baseline": 281,
+      "line_at_baseline": 288,
       "ordinal": 1,
       "owner_context": "max_channel",
       "target_context": "messaging",
@@ -5050,7 +5034,7 @@
       "fingerprint": "arch_b1ad951a77aef590ef1fa47f",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
-      "line_at_baseline": 315,
+      "line_at_baseline": 322,
       "ordinal": 2,
       "owner_context": "max_channel",
       "target_context": "messaging",
@@ -5066,7 +5050,7 @@
       "fingerprint": "arch_5c10998f1ca35a467e5a8978",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
-      "line_at_baseline": 335,
+      "line_at_baseline": 342,
       "ordinal": 1,
       "owner_context": "max_channel",
       "target_context": "messaging",
@@ -5082,7 +5066,7 @@
       "fingerprint": "arch_e8f52d2769c6e403b397b622",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
-      "line_at_baseline": 352,
+      "line_at_baseline": 359,
       "ordinal": 3,
       "owner_context": "max_channel",
       "target_context": "messaging",
@@ -5098,7 +5082,7 @@
       "fingerprint": "arch_96c7a3614adec92bb13d3ee9",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
-      "line_at_baseline": 426,
+      "line_at_baseline": 433,
       "ordinal": 1,
       "owner_context": "max_channel",
       "target_context": "messaging",
@@ -5114,7 +5098,7 @@
       "fingerprint": "arch_2bf723a25b61e2f66da91b3f",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
-      "line_at_baseline": 505,
+      "line_at_baseline": 512,
       "ordinal": 1,
       "owner_context": "max_channel",
       "target_context": "messaging",
@@ -5124,22 +5108,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "migration_a5a1040630dc288c"
-      ]
-    },
-    {
-      "fingerprint": "arch_9cde299492fa1ca8b4cc4fd5",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
-      "line_at_baseline": 539,
-      "ordinal": 1,
-      "owner_context": "max_channel",
-      "target_context": "messaging",
-      "subject": "MessageAttachment.create",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_577f6451590e697c"
       ]
     },
     {

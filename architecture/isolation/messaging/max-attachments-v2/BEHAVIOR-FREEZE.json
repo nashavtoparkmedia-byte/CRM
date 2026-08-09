@@ -1,0 +1,24 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1",
+  "milestone": "CRM-ARCH-007-MESSAGING-MAX-ATTACHMENTS",
+  "base_commit": "4b57c2f26aba0ef4f12cb5a1a73a50e7ec3e0cd9",
+  "captured_at": "2026-08-09T17:29:46Z",
+  "consumer": "gravity-mvp/src/app/api/webhooks/max/route.ts",
+  "consumer_sha256": "6798e7a275d8957edb5894d4f3056a6dda48475df603d71b705790697331c267",
+  "behavior": [
+    "confirmed deletion looks up Message by normalized external id",
+    "all MessageAttachment rows are deleted before the neighboring Message delete",
+    "delete logging, broadcast and response behavior remain unchanged",
+    "ingestion loads existing attachment URLs for the selected Message",
+    "missing and duplicate URLs are skipped and newly accepted URLs join the seen set before persistence",
+    "attachment type retains the file fallback",
+    "URL, display-name helper, nullable size helper and nullable MIME coercion remain exact",
+    "owner persistence failures retain visibility through the route's existing outer error boundary"
+  ],
+  "out_of_scope": [
+    "neighboring MAX Message and Chat persistence plans",
+    "MAX provider transport, sanitization and contact shadow behavior",
+    "attachment dedup policy changes",
+    "database schema or production activation"
+  ]
+}

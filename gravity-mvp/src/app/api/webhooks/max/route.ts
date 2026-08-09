@@ -12,6 +12,10 @@ import { startMaxContactResolutionShadow } from '@/lib/contacts/max-contact-reso
 import type { LegacyContactResolutionOutcome } from '@/lib/contacts/contact-resolution-shadow.types'
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
 import { opsLog } from '@/lib/opsLog'
+import { DELETE_MESSAGE_MEDIA_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { ATTACH_MESSAGE_MEDIA_COMMAND_V2 } from '@/contracts/messaging/v2'
+import { deleteMessageMediaV1 } from '@/modules/messaging/public/v1'
+import { attachMessageMediaV2 } from '@/modules/messaging/public/v2'
 
 function metadataRecord(metadata: unknown): Record<string, unknown> {
   return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
@@ -135,7 +139,10 @@ export async function POST(request: Request) {
     if (deleted && externalId) {
       const msg = await prisma.message.findUnique({ where: { externalId: String(externalId) } })
       if (msg) {
-        await prisma.messageAttachment.deleteMany({ where: { messageId: msg.id } })
+        await deleteMessageMediaV1({
+          contract: DELETE_MESSAGE_MEDIA_COMMAND_V1,
+          messageId: msg.id,
+        })
         await prisma.message.delete({ where: { id: msg.id } })
         console.log(`[MAX Webhook] deleted externalId=${externalId}`)
         // Broadcast directly (skip AI pipeline — message is gone)
@@ -536,15 +543,14 @@ export async function POST(request: Request) {
         if (!att.url) continue
         if (seenUrls.has(att.url)) continue
         seenUrls.add(att.url)
-        await prisma.messageAttachment.create({
-          data: {
-            messageId: message.id,
-            type:      att.type || 'file',
-            url:       att.url,
-            fileName:  attachmentDisplayName(att),
-            fileSize:  attachmentSize(att),
-            mimeType:  att.mimeType || null,
-          },
+        await attachMessageMediaV2({
+          contract: ATTACH_MESSAGE_MEDIA_COMMAND_V2,
+          messageId: message.id,
+          mediaType: att.type || 'file',
+          url: att.url,
+          fileName: attachmentDisplayName(att),
+          fileSize: attachmentSize(att),
+          mimeType: att.mimeType || null,
         })
       }
     }

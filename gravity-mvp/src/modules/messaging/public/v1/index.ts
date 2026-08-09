@@ -1,5 +1,7 @@
 import { createAttachMessageMediaHandlerV1 } from './attach-message-media-handler'
 import { legacyPrismaAttachMessageMediaPortV1 } from './legacy-prisma-attach-message-media-adapter'
+import { createDeleteMessageMediaHandlerV1 } from './delete-message-media-handler'
+import { legacyPrismaDeleteMessageMediaPortV1 } from './legacy-prisma-delete-message-media-adapter'
 import { createReceiveMessageHandlerV1 } from './receive-message-handler'
 import { legacyPrismaReceiveMessagePortV1 } from './legacy-prisma-receive-message-adapter'
 import { createSendMessageHandlerV1 } from './send-message-handler'
@@ -10,6 +12,9 @@ import { legacyPrismaUpdateConversationPortV1 } from './legacy-prisma-update-con
 export { createAttachMessageMediaHandlerV1 } from './attach-message-media-handler'
 export type { AttachMessageMediaPersistencePortV1 } from './attach-message-media-handler'
 export const attachMessageMediaV1 = createAttachMessageMediaHandlerV1(legacyPrismaAttachMessageMediaPortV1)
+export { createDeleteMessageMediaHandlerV1 } from './delete-message-media-handler'
+export type { DeleteMessageMediaPersistencePortV1 } from './delete-message-media-handler'
+export const deleteMessageMediaV1 = createDeleteMessageMediaHandlerV1(legacyPrismaDeleteMessageMediaPortV1)
 export { createReceiveMessageHandlerV1 } from './receive-message-handler'
 export type { ReceiveMessagePersistencePortV1 } from './receive-message-handler'
 export const receiveMessageV1 = createReceiveMessageHandlerV1(legacyPrismaReceiveMessagePortV1)

@@ -1,0 +1,42 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1",
+  "milestone": "CRM-ARCH-007-MESSAGING-MAX-ATTACHMENTS",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "4b57c2f26aba0ef4f12cb5a1a73a50e7ec3e0cd9",
+  "context": "messaging",
+  "caller_context": "max_channel",
+  "plan": {
+    "id": "migration_577f6451590e697c",
+    "sites": [
+      {
+        "id": "write_501686995ba695c7fdb6",
+        "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
+        "model": "MessageAttachment",
+        "method": "deleteMany",
+        "contract": "messaging.DeleteMessageMediaCommand.v1"
+      },
+      {
+        "id": "write_faf522b2187dd47ac213",
+        "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
+        "model": "MessageAttachment",
+        "method": "create",
+        "contract": "messaging.AttachMessageMediaCommand.v2"
+      }
+    ]
+  },
+  "versioning": "AttachMessageMediaCommand.v1 remains byte-identical; v2 adds nullable fileSize for MAX",
+  "dependency": "max_channel -> messaging.public pre-approved",
+  "command_amendment": "Messaging adds AttachMessageMediaCommand.v2 and DeleteMessageMediaCommand.v1",
+  "consumer_before_sha256": "6798e7a275d8957edb5894d4f3056a6dda48475df603d71b705790697331c267",
+  "consumer_after_sha256": "16d882af42b3d5a78b1cc7e43e5efb74438bd4a1a0e6d4144debc427cd866986",
+  "enforcement": {
+    "before": 1508,
+    "after": 1506,
+    "retired": [
+      "arch_a17170e5284176851f63873c",
+      "arch_9cde299492fa1ca8b4cc4fd5"
+    ],
+    "new_capacity": 0
+  },
+  "rollback": "4b57c2f26aba0ef4f12cb5a1a73a50e7ec3e0cd9"
+}
