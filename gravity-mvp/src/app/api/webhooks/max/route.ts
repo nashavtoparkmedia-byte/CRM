@@ -12,9 +12,9 @@ import { startMaxContactResolutionShadow } from '@/lib/contacts/max-contact-reso
 import type { LegacyContactResolutionOutcome } from '@/lib/contacts/contact-resolution-shadow.types'
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
 import { opsLog } from '@/lib/opsLog'
-import { DELETE_MESSAGE_MEDIA_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { DELETE_MESSAGE_COMMAND_V1, DELETE_MESSAGE_MEDIA_COMMAND_V1, REPLACE_EXTERNAL_MESSAGE_COMMAND_V1, UPSERT_EXTERNAL_MESSAGE_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { ATTACH_MESSAGE_MEDIA_COMMAND_V2 } from '@/contracts/messaging/v2'
-import { deleteMessageMediaV1 } from '@/modules/messaging/public/v1'
+import { deleteMessageMediaV1, deleteMessageV1, replaceExternalMessageV1, upsertExternalMessageV1 } from '@/modules/messaging/public/v1'
 import { attachMessageMediaV2 } from '@/modules/messaging/public/v2'
 
 function metadataRecord(metadata: unknown): Record<string, unknown> {
@@ -143,7 +143,7 @@ export async function POST(request: Request) {
           contract: DELETE_MESSAGE_MEDIA_COMMAND_V1,
           messageId: msg.id,
         })
-        await prisma.message.delete({ where: { id: msg.id } })
+        await deleteMessageV1({ contract: DELETE_MESSAGE_COMMAND_V1, messageId: msg.id })
         console.log(`[MAX Webhook] deleted externalId=${externalId}`)
         // Broadcast directly (skip AI pipeline — message is gone)
         broadcastChatMessage(msg.chatId, { ...msg, deleted: true })
@@ -430,16 +430,15 @@ export async function POST(request: Request) {
         orderBy: { sentAt: 'desc' },
       })
       if (nearbyDomMessage) {
-        message = await prisma.message.update({
-          where: { id: nearbyDomMessage.id },
-          data: {
-            externalId: externalIdString,
-            type: msgType,
-            content,
-            sentAt,
-            metadata: { ...metadataRecord(nearbyDomMessage.metadata), senderId, maxChatId: externalChatId, maxRawChatId: rawExternalChatId, attachments: attachments || [], ...(replyToExternalIdString ? { replyToExternalId: replyToExternalIdString } : {}), ...(forwardedFrom ? { forwardedFrom } : {}) },
-          },
-        })
+        message = (await replaceExternalMessageV1({
+          contract: REPLACE_EXTERNAL_MESSAGE_COMMAND_V1,
+          messageId: nearbyDomMessage.id,
+          externalId: externalIdString,
+          type: msgType,
+          content,
+          sentAt,
+          metadata: { ...metadataRecord(nearbyDomMessage.metadata), senderId, maxChatId: externalChatId, maxRawChatId: rawExternalChatId, attachments: attachments || [], ...(replyToExternalIdString ? { replyToExternalId: replyToExternalIdString } : {}), ...(forwardedFrom ? { forwardedFrom } : {}) },
+        })).message as Message
         console.log(`[MAX Webhook] upgraded DOM externalId ${nearbyDomMessage.externalId} → ${externalIdString}`)
       }
     } else if (msgType === 'text' && externalIdString && !externalIdString.startsWith('max-dom-') && !externalIdString.startsWith('max-recovered-')) {
@@ -509,21 +508,18 @@ export async function POST(request: Request) {
 
     // Create Message (skip if already seen)
     if (!message) {
-      message = await prisma.message.upsert({
-        where:  { externalId: externalIdString || `max-${chatId}-${Date.now()}` },
-        update: {},
-        create: {
-          chatId:    chat.id,
-          direction: isOutgoing ? 'outbound' : 'inbound',
-          type:      msgType,
-          content,
-          channel:   'max',
-          externalId: externalIdString,
-          status:    'delivered',
-          sentAt,   // validated above
-          metadata:  { senderId, maxChatId: externalChatId, maxRawChatId: rawExternalChatId, attachments: attachments || [], ...(source ? { source } : {}), ...(replyToExternalIdString ? { replyToExternalId: replyToExternalIdString } : {}), ...(forwardedFrom ? { forwardedFrom } : {}) },
-        },
-      })
+      message = (await upsertExternalMessageV1({
+        contract: UPSERT_EXTERNAL_MESSAGE_COMMAND_V1,
+        lookupExternalId: externalIdString || `max-${chatId}-${Date.now()}`,
+        chatId: chat.id,
+        direction: isOutgoing ? 'outbound' : 'inbound',
+        type: msgType,
+        content,
+        channel: 'max',
+        externalId: externalIdString,
+        sentAt, // validated above
+        metadata: { senderId, maxChatId: externalChatId, maxRawChatId: rawExternalChatId, attachments: attachments || [], ...(source ? { source } : {}), ...(replyToExternalIdString ? { replyToExternalId: replyToExternalIdString } : {}), ...(forwardedFrom ? { forwardedFrom } : {}) },
+      })).message as Message
     }
 
     // Save attachments. Dedup by url first — MAX scraper sometimes sends
