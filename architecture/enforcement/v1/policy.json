@@ -82,13 +82,14 @@
     "architecture/isolation/messaging/whatsapp-message-v1/module-manifest-amendments.json",
     "architecture/isolation/messaging/whatsapp-chat-v1/module-manifest-amendments.json",
     "architecture/isolation/messaging/retention-message-v1/module-manifest-amendments.json",
-    "architecture/isolation/messaging/telegram-binary-media-v1/module-manifest-amendments.json"
+    "architecture/isolation/messaging/telegram-binary-media-v1/module-manifest-amendments.json",
+    "architecture/isolation/messaging/max-maintenance-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007-MESSAGING-TELEGRAM-BINARY-MEDIA",
-  "registry_base_commit": "efb22f14f3e84b906bbdfcd5270dd7ebaee065a3",
+  "registry_milestone": "CRM-ARCH-007-MESSAGING-MAX-MAINTENANCE",
+  "registry_base_commit": "033fc7d52bb67ffb56dec98ca0c6da173c3a11a3",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",

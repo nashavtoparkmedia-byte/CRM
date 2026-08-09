@@ -30,6 +30,8 @@ import { createDeleteRetainedMessagesHandlerV1,createPurgeMessageRetryMetadataHa
 import { legacyPrismaMessageRetentionPortV1 } from './legacy-prisma-message-retention-adapter'
 import { createAttachBinaryMessageMediaHandlerV1 } from './attach-binary-message-media-handler'
 import { legacyPrismaAttachBinaryMessageMediaPortV1 } from './legacy-prisma-attach-binary-message-media-adapter'
+import { createDeleteConversationsByIdHandlerV1,createDeleteLegacyExternalConversationsHandlerV1,createDeleteQueuedMessagesForConnectionHandlerV1,createDeliverQueuedMessagesForConnectionHandlerV1 } from './channel-maintenance-handler'
+import { legacyPrismaChannelMaintenancePortV1 } from './legacy-prisma-channel-maintenance-adapter'
 
 export { createAttachMessageMediaHandlerV1 } from './attach-message-media-handler'
 export type { AttachMessageMediaPersistencePortV1 } from './attach-message-media-handler'
@@ -99,3 +101,9 @@ export const purgeMessageRetryMetadataV1=createPurgeMessageRetryMetadataHandlerV
 export { createAttachBinaryMessageMediaHandlerV1 } from './attach-binary-message-media-handler'
 export type { AttachBinaryMessageMediaPersistencePortV1 } from './attach-binary-message-media-handler'
 export const attachBinaryMessageMediaV1=createAttachBinaryMessageMediaHandlerV1(legacyPrismaAttachBinaryMessageMediaPortV1)
+export { createDeleteConversationsByIdHandlerV1,createDeleteLegacyExternalConversationsHandlerV1,createDeleteQueuedMessagesForConnectionHandlerV1,createDeliverQueuedMessagesForConnectionHandlerV1 } from './channel-maintenance-handler'
+export type { ChannelMaintenancePersistencePortV1 } from './channel-maintenance-handler'
+export const deliverQueuedMessagesForConnectionV1=createDeliverQueuedMessagesForConnectionHandlerV1(legacyPrismaChannelMaintenancePortV1)
+export const deleteQueuedMessagesForConnectionV1=createDeleteQueuedMessagesForConnectionHandlerV1(legacyPrismaChannelMaintenancePortV1)
+export const deleteLegacyExternalConversationsV1=createDeleteLegacyExternalConversationsHandlerV1(legacyPrismaChannelMaintenancePortV1)
+export const deleteConversationsByIdV1=createDeleteConversationsByIdHandlerV1(legacyPrismaChannelMaintenancePortV1)

@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
+import { DELETE_CONVERSATIONS_BY_ID_COMMAND_V1, DELETE_LEGACY_EXTERNAL_CONVERSATIONS_COMMAND_V1, DELETE_QUEUED_MESSAGES_FOR_CONNECTION_COMMAND_V1, DELIVER_QUEUED_MESSAGES_FOR_CONNECTION_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { deleteConversationsByIdV1, deleteLegacyExternalConversationsV1, deleteQueuedMessagesForConnectionV1, deliverQueuedMessagesForConnectionV1 } from '@/modules/messaging/public/v1'
 
 // Get all saved MAX bots
 export async function getMaxConnections() {
@@ -104,15 +106,15 @@ export async function resumeMaxConnection(id: string, catchUp: boolean) {
         })
         if (buffered.length > 0) {
             const ids = buffered.map((m: any) => m.id)
-            await (prisma as any).message.updateMany({ where: { id: { in: ids } }, data: { status: 'delivered', metadata: { connectionId: id, buffered: false } } })
             const chatIds = [...new Set(buffered.map((m: any) => m.chatId))] as string[]
-            for (const chatId of chatIds) {
+            const conversations = chatIds.map(chatId => {
                 const latest = buffered.filter((m: any) => m.chatId === chatId).sort((a: any, b: any) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime())[0]
-                await (prisma.chat as any).update({ where: { id: chatId }, data: { lastMessageAt: latest.sentAt } })
-            }
+                return { id: chatId, lastMessageAt: latest.sentAt as Date }
+            })
+            await deliverQueuedMessagesForConnectionV1({ contract: DELIVER_QUEUED_MESSAGES_FOR_CONNECTION_COMMAND_V1, connectionId: id, messageIds: ids, conversations })
         }
     } else {
-        await (prisma as any).message.deleteMany({ where: { status: 'queued', channel: 'max', metadata: { path: ['connectionId'], equals: id } } }).catch(() => {})
+        await deleteQueuedMessagesForConnectionV1({ contract: DELETE_QUEUED_MESSAGES_FOR_CONNECTION_COMMAND_V1, connectionId: id }).catch(() => {})
     }
     await prisma.maxConnection.update({ where: { id }, data: { isActive: true } as any })
     revalidatePath('/settings/integrations/max')
@@ -136,16 +138,13 @@ export async function deleteMaxMessages(id: string) {
 
     try {
         // Use raw SQL for reliable bulk deletion — CASCADE handles Messages → Attachments → EventLogs
-        await (prisma as any).$executeRawUnsafe(
-            `DELETE FROM "Chat" WHERE channel = 'max'`
-        )
+        await deleteLegacyExternalConversationsV1({ contract: DELETE_LEGACY_EXTERNAL_CONVERSATIONS_COMMAND_V1 })
         console.log(`[MAX-ACTIONS] Successfully deleted ${chatIds.length} MAX chats and all related data`)
     } catch (e: any) {
         console.error(`[MAX-ACTIONS] DELETE failed:`, e.message)
         // Fallback: delete in order if raw SQL fails
         try {
-            await (prisma.message as any).deleteMany({ where: { chatId: { in: chatIds } } })
-            await (prisma.chat as any).deleteMany({ where: { id: { in: chatIds } } })
+            await deleteConversationsByIdV1({ contract: DELETE_CONVERSATIONS_BY_ID_COMMAND_V1, conversationIds: chatIds })
             console.log(`[MAX-ACTIONS] Fallback deletion succeeded`)
         } catch (e2: any) {
             console.error(`[MAX-ACTIONS] Fallback deletion also failed:`, e2.message)

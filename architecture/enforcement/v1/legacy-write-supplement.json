@@ -5,33 +5,6 @@
   "reason": "The executable scanner recognizes five pre-existing production write forms that were not indexed by the CRM-ARCH-003 evidence extractor. They remain violations and receive exact, expiring exceptions; the accepted CRM-ARCH-003 artifact is not rewritten.",
   "sites": [
     {
-      "fingerprint": "arch_5dd61dbae39fafe245c5b1ae",
-      "file": "gravity-mvp/src/app/max-actions.ts",
-      "line_at_baseline": 107,
-      "caller_context": "max_channel",
-      "owner_context": "messaging",
-      "operation": "Message.updateMany",
-      "retirement": "Replace with a versioned Messaging owner command and remove the exact exception after parity verification."
-    },
-    {
-      "fingerprint": "arch_8e4c5d3c583288dde4056aae",
-      "file": "gravity-mvp/src/app/max-actions.ts",
-      "line_at_baseline": 115,
-      "caller_context": "max_channel",
-      "owner_context": "messaging",
-      "operation": "Message.deleteMany",
-      "retirement": "Replace with a versioned Messaging owner command and remove the exact exception after parity verification."
-    },
-    {
-      "fingerprint": "arch_8eb66d560a5b62ee921986c3",
-      "file": "gravity-mvp/src/app/max-actions.ts",
-      "line_at_baseline": 139,
-      "caller_context": "max_channel",
-      "owner_context": "messaging",
-      "operation": "raw:$executeRawUnsafe:Chat",
-      "retirement": "Replace with a versioned Messaging owner command and remove the exact exception after parity verification."
-    },
-    {
       "fingerprint": "arch_6f648e03c4845461fa2569fc",
       "file": "gravity-mvp/src/lib/execution-lock.ts",
       "line_at_baseline": 22,
@@ -42,7 +15,7 @@
     }
   ],
   "controls": {
-    "site_count": 4,
+    "site_count": 1,
     "exact_fingerprint_exceptions": true,
     "wildcards": false,
     "deadline": "2026-12-31"

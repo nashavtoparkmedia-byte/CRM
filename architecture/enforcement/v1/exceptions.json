@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007-MESSAGING-TELEGRAM-BINARY-MEDIA",
-  "base_commit": "efb22f14f3e84b906bbdfcd5270dd7ebaee065a3",
+  "milestone": "CRM-ARCH-007-MESSAGING-MAX-MAINTENANCE",
+  "base_commit": "033fc7d52bb67ffb56dec98ca0c6da173c3a11a3",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "a60f3150e033bb6724fa360c667d227e5a60a855ac674fe35dbf95e914490f31",
+  "finding_digest": "0f5817215962971e9ba912993dc3264bd253287a33a48b6b65dbd31d152e52af",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,7 +13,7 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 70,
+    "direct_foreign_prisma_write": 67,
     "direct_provider_transport_access": 38,
     "internal_module_import": 379,
     "non_public_cross_context_import": 536,
@@ -8578,58 +8578,10 @@
       ]
     },
     {
-      "fingerprint": "arch_5dd61dbae39fafe245c5b1ae",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/max-actions.ts",
-      "line_at_baseline": 107,
-      "ordinal": 1,
-      "owner_context": "max_channel",
-      "target_context": "messaging",
-      "subject": "Message.updateMany",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "CRM-ARCH-006-supplement:arch_5dd61dbae39fafe245c5b1ae"
-      ]
-    },
-    {
-      "fingerprint": "arch_8e4c5d3c583288dde4056aae",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/max-actions.ts",
-      "line_at_baseline": 115,
-      "ordinal": 1,
-      "owner_context": "max_channel",
-      "target_context": "messaging",
-      "subject": "Message.deleteMany",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "CRM-ARCH-006-supplement:arch_8e4c5d3c583288dde4056aae"
-      ]
-    },
-    {
-      "fingerprint": "arch_8eb66d560a5b62ee921986c3",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/max-actions.ts",
-      "line_at_baseline": 139,
-      "ordinal": 1,
-      "owner_context": "max_channel",
-      "target_context": "messaging",
-      "subject": "raw:$executeRawUnsafe:Chat",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "CRM-ARCH-006-supplement:arch_8eb66d560a5b62ee921986c3"
-      ]
-    },
-    {
       "fingerprint": "arch_e3ce43db097a3bae1923480a",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/max-actions.ts",
-      "line_at_baseline": 159,
+      "line_at_baseline": 158,
       "ordinal": 1,
       "owner_context": "max_channel",
       "target_context": "contacts",
@@ -8645,7 +8597,7 @@
       "fingerprint": "arch_f914bfe820278a5f131c9c9b",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/max-actions.ts",
-      "line_at_baseline": 159,
+      "line_at_baseline": 158,
       "ordinal": 1,
       "owner_context": "max_channel",
       "target_context": "contacts",
