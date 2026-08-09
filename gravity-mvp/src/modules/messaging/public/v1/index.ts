@@ -10,6 +10,8 @@ import { createUpdateConversationHandlerV1 } from './update-conversation-handler
 import { legacyPrismaUpdateConversationPortV1 } from './legacy-prisma-update-conversation-adapter'
 import { createCancelHistoryImportJobHandlerV1,createDeleteHistoryImportJobsForChannelHandlerV1,createDeleteHistoryImportJobsForConnectionHandlerV1,createDeleteHistoryImportJobHandlerV1,createPatchHistoryImportJobHandlerV1,createQueueHistoryImportJobHandlerV1,createUpdateHistoryImportJobHandlerV1 } from './history-import-job-handler'
 import { legacyPrismaHistoryImportJobPortV1 } from './legacy-prisma-history-import-job-adapter'
+import { createSyncCallTimelineHandlerV1 } from './sync-call-timeline-handler'
+import { legacyPrismaSyncCallTimelinePortV1 } from './legacy-prisma-sync-call-timeline-adapter'
 
 export { createAttachMessageMediaHandlerV1 } from './attach-message-media-handler'
 export type { AttachMessageMediaPersistencePortV1 } from './attach-message-media-handler'
@@ -38,3 +40,6 @@ export const deleteHistoryImportJobsForChannelV1=createDeleteHistoryImportJobsFo
 export { createCancelHistoryImportJobHandlerV1,createQueueHistoryImportJobHandlerV1 } from './history-import-job-handler'
 export const queueHistoryImportJobV1=createQueueHistoryImportJobHandlerV1(legacyPrismaHistoryImportJobPortV1)
 export const cancelHistoryImportJobV1=createCancelHistoryImportJobHandlerV1(legacyPrismaHistoryImportJobPortV1)
+export { createSyncCallTimelineHandlerV1 } from './sync-call-timeline-handler'
+export type { SyncCallTimelinePersistencePortV1,SyncCallTimelinePersistenceResultV1 } from './sync-call-timeline-handler'
+export const syncCallTimelineV1=createSyncCallTimelineHandlerV1(legacyPrismaSyncCallTimelinePortV1)

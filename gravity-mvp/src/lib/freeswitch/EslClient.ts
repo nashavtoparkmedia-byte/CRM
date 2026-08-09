@@ -32,6 +32,8 @@ import { getSipExtensionForUser, getUserIdForSipExtension } from '@/lib/sip/exte
 import { processRecording } from '@/lib/freeswitch/recordingProcessor'
 import { ContactService } from '@/lib/ContactService'
 import { mapHangupCauseToStatus, callStatusLabel, type CallDirection } from '@/lib/calls/status'
+import { SYNC_CALL_TIMELINE_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { syncCallTimelineV1 } from '@/modules/messaging/public/v1'
 
 const FS_ESL_HOST = process.env.FS_ESL_HOST ?? '127.0.0.1'
 const FS_ESL_PORT = Number(process.env.FS_ESL_PORT ?? 8021)
@@ -556,39 +558,6 @@ export async function syncCallToChat(call: any): Promise<void> {
     if (!peer) return
     const externalChatId = `phone:${peer}`
 
-    let chat = await prisma.chat.findUnique({ where: { externalChatId } })
-    if (!chat) {
-        chat = await prisma.chat.create({
-            data: {
-                channel: 'phone',
-                externalChatId,
-                contactId: call.contactId,
-                driverId: call.driverId ?? undefined,
-                name: peer,
-            },
-        })
-    } else if (!chat.contactId || (call.driverId && !chat.driverId)) {
-        chat = await prisma.chat.update({
-            where: { id: chat.id },
-            data: {
-                contactId: chat.contactId ?? call.contactId,
-                driverId: chat.driverId ?? call.driverId ?? undefined,
-            },
-        })
-    }
-
-    // Idempotency: don't double-insert if this Call was already synced.
-    // If the existing row's label/status doesn't match the latest Call state
-    // (e.g. we re-ran sync after status finalized), update it in place
-    // instead of skipping — keeps the chat label fresh.
-    const existing = await prisma.message.findFirst({
-        where: {
-            chatId: chat.id,
-            type: 'call',
-            metadata: { path: ['callId'], equals: call.id } as any,
-        },
-    })
-
     const direction = call.direction as 'inbound' | 'outbound'
     const content = callStatusLabel(direction, call.status, call.durationSec)
     // Keep `disposition` for one release for backward-compat with any
@@ -598,77 +567,22 @@ export async function syncCallToChat(call: any): Promise<void> {
         call.status === 'rejected' || call.status === 'busy' ? 'rejected' :
         'missed'
 
-    if (existing) {
-        const oldMeta = (existing.metadata ?? {}) as any
-        if (existing.content !== content || oldMeta.status !== call.status || oldMeta.durationSec !== (call.durationSec ?? null)) {
-            await prisma.message.update({
-                where: { id: existing.id },
-                data: {
-                    content,
-                    metadata: {
-                        callId: call.id,
-                        status: call.status,
-                        disposition,
-                        durationSec: call.durationSec ?? null,
-                    } as any,
-                },
-            })
-            broadcastChatMessage(chat.id, {
-                id: existing.id,
-                chatId: chat.id,
-                channel: 'phone',
-                type: 'call',
-                direction: call.direction,
-                content,
-                sentAt: existing.sentAt,
-                metadata: { callId: call.id, status: call.status, disposition, durationSec: call.durationSec ?? null },
-            })
-        }
-        return
-    }
-
-    const created = await prisma.message.create({
-        data: {
-            chatId: chat.id,
-            channel: 'phone',
-            type: 'call',
-            direction: call.direction,
-            content,
-            sentAt: call.startedAt,
-            // 'delivered' — calls aren't text messages awaiting delivery,
-            // they're historical records. This also keeps them safe from
-            // MessageService.recoverStuckMessages which scans status='sent'.
-            status: 'delivered',
-            metadata: {
-                callId: call.id,
-                status: call.status,
-                disposition, // legacy field, kept for one release
-                durationSec: call.durationSec ?? null,
-            } as any,
-        },
-    })
-
-    await prisma.chat.update({
-        where: { id: chat.id },
-        data: {
-            lastMessageAt: call.endedAt ?? new Date(),
-            lastInboundAt: call.direction === 'inbound' ? (call.endedAt ?? new Date()) : undefined,
-            lastOutboundAt: call.direction === 'outbound' ? (call.endedAt ?? new Date()) : undefined,
-        },
-    })
-
-    // Push the new message to /api/messages/stream subscribers so the open
-    // chat tab paints it without a refresh.
-    broadcastChatMessage(chat.id, {
-        id: created.id,
-        chatId: chat.id,
-        channel: 'phone',
-        type: 'call',
-        direction: call.direction,
+    const result = await syncCallTimelineV1({
+        contract: SYNC_CALL_TIMELINE_COMMAND_V1,
+        externalChatId,
+        contactId: call.contactId,
+        driverId: call.driverId ?? null,
+        peer,
+        callId: call.id,
+        direction,
+        callStatus: call.status,
+        durationSec: call.durationSec ?? null,
         content,
-        sentAt: created.sentAt,
-        metadata: created.metadata,
+        disposition,
+        startedAt: call.startedAt,
+        endedAt: call.endedAt ?? null,
     })
+    if (result.action !== 'unchanged') broadcastChatMessage(result.chatId, result.message)
 }
 
 // Status mapping moved to src/lib/calls/status.ts — single source of truth

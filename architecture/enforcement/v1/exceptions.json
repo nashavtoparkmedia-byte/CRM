@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007-MESSAGING-CONFIGURATION-IMPORT-JOBS",
-  "base_commit": "fe434a96fd43f23528183fe7482ca60570357ac7",
+  "milestone": "CRM-ARCH-007-MESSAGING-CALL-TIMELINE",
+  "base_commit": "5037cf4d37b415b9df97a856b5e79a0e3d94d60c",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "169a85b469321b863f9a2e7f0c7fcdd23ee2d6e740e0d68c9178945521c9e878",
+  "finding_digest": "770e266f45c4832a05de6f76fc770eac2ccf034a7e5515bfe0c7802c99cf0bbb",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,7 +13,7 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 140,
+    "direct_foreign_prisma_write": 135,
     "direct_provider_transport_access": 38,
     "internal_module_import": 379,
     "non_public_cross_context_import": 536,
@@ -21879,86 +21879,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:calling/calls>contacts/contacts"
-      ]
-    },
-    {
-      "fingerprint": "arch_63b6fdc9c6b73b91fe5e0e81",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
-      "line_at_baseline": 561,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "messaging",
-      "subject": "Chat.create",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_e3f1d4c8021a234a"
-      ]
-    },
-    {
-      "fingerprint": "arch_56063517f5efb8724bcc6afa",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
-      "line_at_baseline": 571,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "messaging",
-      "subject": "Chat.update",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_e3f1d4c8021a234a"
-      ]
-    },
-    {
-      "fingerprint": "arch_cdef081c71d0481ae08847fd",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
-      "line_at_baseline": 604,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "messaging",
-      "subject": "Message.update",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_cc4d8c99d5a71ef5"
-      ]
-    },
-    {
-      "fingerprint": "arch_7f7647cbb747be947b58c1fe",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
-      "line_at_baseline": 630,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "messaging",
-      "subject": "Message.create",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_cc4d8c99d5a71ef5"
-      ]
-    },
-    {
-      "fingerprint": "arch_64128b32e86abc734cc7272f",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
-      "line_at_baseline": 651,
-      "ordinal": 2,
-      "owner_context": "calling",
-      "target_context": "messaging",
-      "subject": "Chat.update",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_e3f1d4c8021a234a"
       ]
     },
     {

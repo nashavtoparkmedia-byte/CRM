@@ -1,0 +1,1 @@
+{"schema":"yoko.crm.module-manifest-amendments.v1","version":1,"milestone":"CRM-ARCH-007-MESSAGING-CALL-TIMELINE","amendments":[{"context":"messaging","add_commands":["SyncCallTimelineCommand.v1"],"reason":"Move idempotent phone-call Chat and Message persistence behind the Messaging public boundary while Calling retains transport and broadcast orchestration."}]}
