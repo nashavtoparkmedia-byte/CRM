@@ -129,6 +129,9 @@ assertCheck('Inbox has no owner-internal Fleet import',!inboxFleetConsumer.inclu
 const leadMessageConsumer=source('gravity-mvp/src/lib/leads/intake.ts')
 assertCheck('Avito lead intake uses ReceiveMessageCommand.v1',leadMessageConsumer.includes('RECEIVE_MESSAGE_COMMAND_V1')&&leadMessageConsumer.includes('receiveMessageV1({'),'Messaging receive command absent')
 assertCheck('foreign lead Message create removed',!/prisma\.message\.create/.test(leadMessageConsumer),'direct lead Message create remains')
+const botSystemMessageConsumer=source('gravity-mvp/src/app/api/webhooks/bot/route.ts')
+assertCheck('Bot system notification uses SendMessageCommand.v1',botSystemMessageConsumer.includes('SEND_MESSAGE_COMMAND_V1')&&botSystemMessageConsumer.includes('sendMessageV1({'),'Messaging send command absent')
+assertCheck('foreign bot Message create removed',!/prisma\.message\.create/.test(botSystemMessageConsumer),'direct bot Message create remains')
 
 const handler = source('gravity-mvp/src/modules/work-management/public/v1/create-task-handler.ts')
 assertCheck(

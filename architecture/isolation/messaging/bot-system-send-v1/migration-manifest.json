@@ -1,0 +1,30 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1",
+  "milestone": "CRM-ARCH-007-MESSAGING-BOT-SYSTEM-SEND",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "6701fd23b42ef2e49a76807ebcf0220d300e1c4c",
+  "context": "messaging",
+  "caller_context": "platform_shell",
+  "plan": {
+    "id": "migration_e8090a3214acadc2",
+    "site_id": "write_b31065023f37d6312d97",
+    "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+    "model": "Message",
+    "method": "create"
+  },
+  "contract": "messaging.SendMessageCommand.v1",
+  "operation": "append_system_notification",
+  "dependency": "platform_shell -> messaging.public pre-approved",
+  "consumer_before_sha256": "25bf678220787cde4b4dd5b3723bfc44bad56ce530e726be1e10a0349b4bbcf3",
+  "consumer_after_sha256": "68b95da3a82a5bbb2acf5aee29755dbaaa67cdc4cfec1a4f4679fe2408f949c9",
+  "enforcement": {
+    "before": 1511,
+    "after": 1510,
+    "retired": [
+      "arch_7612be8c3a4751ac61167fdc"
+    ],
+    "new_capacity": 0
+  },
+  "neighboring_chat_plan": "migration_d1f7fa71cd1fca3c remains open",
+  "rollback": "6701fd23b42ef2e49a76807ebcf0220d300e1c4c"
+}

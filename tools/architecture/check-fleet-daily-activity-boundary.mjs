@@ -23,7 +23,7 @@ check('activity classifications retained', ['eventType === \'message\' && direct
 check('unmatched events skip summary', consumer.includes('if (dailyActivity) {'), 'no-op guard drifted')
 check('command amendment exact', amendment.amendments.some((item) => item.context === 'fleet_operations' && item.add_commands?.includes('RecordDriverDailyActivityCommand.v1')), 'command amendment drifted')
 check('dependency amendment exact', amendment.amendments.some((item) => item.context === 'messaging' && item.add_allowed_dependencies?.some((dependency) => dependency.context === 'fleet_operations' && dependency.surface === 'fleet_operations.public')), 'dependency amendment drifted')
-check('legacy Inbox non-public debt remains explicit', registry.exceptions.filter((item) => item.file === 'gravity-mvp/src/app/inbox/InboxClient.tsx' && item.target_context === 'fleet_operations' && ['internal_module_import', 'non_public_cross_context_import'].includes(item.rule)).length === 4, 'dependency edge masked non-public imports')
+check('later Inbox debt retirement remains explicit', registry.exceptions.every((item) => !(item.file === 'gravity-mvp/src/app/inbox/InboxClient.tsx' && item.target_context === 'fleet_operations')), 'retired Inbox Fleet exception returned')
 
 process.stdout.write(`${JSON.stringify({ status: failures.length ? 'FAIL' : 'PASS', checks, failures }, null, 2)}\n`)
 if (failures.length) process.exitCode = 1

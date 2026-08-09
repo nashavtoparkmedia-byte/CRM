@@ -1,0 +1,30 @@
+{
+  "schema": "yoko.crm.context-isolation-verification.v1",
+  "milestone": "CRM-ARCH-007-MESSAGING-BOT-SYSTEM-SEND",
+  "verified_at": "2026-08-09T17:05:12Z",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "architecture": {
+    "files": 830,
+    "contexts": 16,
+    "findings": 1510,
+    "exceptions": 1510,
+    "finding_digest": "daecfdcafdb4197f315a307864ab48347b8727637849a3accaaa646f257b1962",
+    "registry_sha256": "31d63f8b81e8d30dbe7be5eebcca629bae2ba4faa15ed1d32e312dd766058052",
+    "dependency_cycles": 0
+  },
+  "tests": {
+    "messaging_bot_system_send_behavior": "14/14 PASS",
+    "messaging_bot_system_send_controls": "14/14 PASS",
+    "contract_controls": "62/62 PASS",
+    "enforcement": "16/16 PASS",
+    "auth": "33/33 PASS",
+    "calling": "93/93 PASS",
+    "current_baseline_context_contract_outbox_identity_work_management_contacts_fleet_and_messaging_controls": "PASS"
+  },
+  "typescript": "28 baseline / 28 candidate / 0 normalized differences",
+  "eslint": "36 inherited bot-route diagnostics / 36 candidate diagnostics; new owner and contract files 0",
+  "checker_reconciliation": "Fleet daily-activity cumulative checker was updated to assert the later accepted Inbox Fleet exception retirement instead of requiring the retired historical debt.",
+  "historical_evidence_note": "CRM-ARCH-002 evidence remains checksum-authoritative for its frozen input identity; its byte-count validator is not reinterpreted as a current-tree validator.",
+  "secret_values_read_or_emitted": false,
+  "production_mutated": false
+}

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { APPEND_SYSTEM_NOTIFICATION_V1, SEND_MESSAGE_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { sendMessageV1 } from '@/modules/messaging/public/v1'
 
 const BOT_API_URL = process.env.BOT_API_URL || 'http://localhost:4000/api/bot'
 
@@ -346,17 +348,14 @@ async function notifyManagerPendingLink({ telegramId, username, phone }: {
         const userLabel = username ? `@${username}` : `TG ID ${telegramId}`
         const phoneLabel = phone ? `+${phone.replace(/^\+/, '')}` : 'не известен'
 
-        await prisma.message.create({
-            data: {
-                chatId: chat.id,
-                direction: 'system',
-                type: 'system',
-                channel: 'telegram',
-                content: `⚠️ Запрос привязки TG Бота\n\nВодитель ${userLabel} не найден в Яндекс Флит.\nТелефон: ${phoneLabel}\nTG ID: ${telegramId}\n\nПривяжите вручную: карточка контакта → «Привязать к водителю».`,
-                status: 'sent',
-                externalId: `bot_link_req_${telegramId}_${Date.now()}`,
-                sentAt: new Date(),
-            },
+        await sendMessageV1({
+            contract: SEND_MESSAGE_COMMAND_V1,
+            operation: APPEND_SYSTEM_NOTIFICATION_V1,
+            chatId: chat.id,
+            channel: 'telegram',
+            content: `⚠️ Запрос привязки TG Бота\n\nВодитель ${userLabel} не найден в Яндекс Флит.\nТелефон: ${phoneLabel}\nTG ID: ${telegramId}\n\nПривяжите вручную: карточка контакта → «Привязать к водителю».`,
+            externalId: `bot_link_req_${telegramId}_${Date.now()}`,
+            sentAt: new Date().toISOString(),
         })
 
         await prisma.chat.update({

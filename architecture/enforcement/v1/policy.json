@@ -54,8 +54,8 @@
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007-MESSAGING-LEAD-RECEIVE",
-  "registry_base_commit": "61aad510960717943c75448863c8677de20fcff7",
+  "registry_milestone": "CRM-ARCH-007-MESSAGING-BOT-SYSTEM-SEND",
+  "registry_base_commit": "6701fd23b42ef2e49a76807ebcf0220d300e1c4c",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",

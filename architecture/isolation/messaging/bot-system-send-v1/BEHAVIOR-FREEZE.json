@@ -1,0 +1,24 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1",
+  "milestone": "CRM-ARCH-007-MESSAGING-BOT-SYSTEM-SEND",
+  "base_commit": "6701fd23b42ef2e49a76807ebcf0220d300e1c4c",
+  "captured_at": "2026-08-09T16:57:15Z",
+  "consumer": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+  "consumer_sha256": "25bf678220787cde4b4dd5b3723bfc44bad56ce530e726be1e10a0349b4bbcf3",
+  "behavior": [
+    "Telegram chat is looked up by channel and String(telegramId), and an absent chat returns without writes",
+    "username and phone labels retain their exact fallback and normalization rules",
+    "notification text and formatting remain exact",
+    "Message persistence is fixed to system direction, system type, sent status and telegram channel",
+    "external id remains bot_link_req_<telegramId>_<Date.now()>",
+    "a fresh current instant is persisted as sentAt",
+    "Message persists before the neighboring Chat update",
+    "the outer catch remains nonblocking and logs only the caught error message"
+  ],
+  "out_of_scope": [
+    "neighboring Chat.update plan migration_d1f7fa71cd1fca3c",
+    "DriverTelegram, BotChatMessage and DriverAction writes in the same route",
+    "provider transport behavior",
+    "database schema or production activation"
+  ]
+}

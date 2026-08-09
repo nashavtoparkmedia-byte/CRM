@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007-MESSAGING-LEAD-RECEIVE",
-  "base_commit": "61aad510960717943c75448863c8677de20fcff7",
+  "milestone": "CRM-ARCH-007-MESSAGING-BOT-SYSTEM-SEND",
+  "base_commit": "6701fd23b42ef2e49a76807ebcf0220d300e1c4c",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "b68ec9f1ea4459afde5012840b104c878973cfb13a40503a2e62e1f89fe8dd10",
+  "finding_digest": "daecfdcafdb4197f315a307864ab48347b8727637849a3accaaa646f257b1962",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,7 +13,7 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 177,
+    "direct_foreign_prisma_write": 176,
     "direct_provider_transport_access": 38,
     "internal_module_import": 379,
     "non_public_cross_context_import": 536,
@@ -4674,22 +4674,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "migration_26a0af43f7c4670a"
-      ]
-    },
-    {
-      "fingerprint": "arch_7612be8c3a4751ac61167fdc",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
-      "line_at_baseline": 349,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "messaging",
-      "subject": "Message.create",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_e8090a3214acadc2"
       ]
     },
     {
