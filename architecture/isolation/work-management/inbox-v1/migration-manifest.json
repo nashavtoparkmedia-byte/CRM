@@ -1,0 +1,49 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1",
+  "milestone": "CRM-ARCH-007-WORK-MANAGEMENT-INBOX",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "5d6116a495bfca65a95c1caaae65eff92e701ab4",
+  "context": "work_management",
+  "caller_context": "messaging",
+  "plan": {
+    "id": "migration_6f85afe6aae4abca",
+    "site_id": "write_50c6693c8fbe6eaf3147",
+    "file": "gravity-mvp/src/app/inbox/actions.ts",
+    "baseline_line": 108,
+    "model": "ManagerTask",
+    "method": "update"
+  },
+  "public_contract": {
+    "command": "work_management.CompleteTaskCommand.v1",
+    "result": "work_management.CompleteTaskResult.v1",
+    "outcomes": [
+      "done",
+      "skipped"
+    ],
+    "manifest_declaration": "CompleteTaskCommand.v1"
+  },
+  "owner_boundary": {
+    "handler": "gravity-mvp/src/modules/work-management/public/v1/complete-task-handler.ts",
+    "compatibility_adapter": "gravity-mvp/src/modules/work-management/public/v1/legacy-prisma-completion-adapter.ts"
+  },
+  "consumer_migration": {
+    "file": "gravity-mvp/src/app/inbox/actions.ts",
+    "before_sha256": "e2f1213aac2e364d732e9cbe9c004c69584f7be175e329c695776b5ffe51c620",
+    "after_sha256": "b8df932121036e5d056db7fd8a7d9bf82354f71af79d3461df5b90faf0919d63",
+    "direct_manager_task_mutation_removed": true
+  },
+  "enforcement": {
+    "before_findings": 1526,
+    "after_findings": 1525,
+    "retired_fingerprints": [
+      "arch_26627ba4cf729a07629e8c8b"
+    ],
+    "new_exception_capacity": 0
+  },
+  "rollback": {
+    "type": "source-only",
+    "target": "5d6116a495bfca65a95c1caaae65eff92e701ab4",
+    "database_rollback_required": false,
+    "runtime_rollback_required": false
+  }
+}

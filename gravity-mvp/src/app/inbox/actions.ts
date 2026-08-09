@@ -1,6 +1,8 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
+import { COMPLETE_TASK_COMMAND_V1 } from '@/contracts/work-management/v1'
+import { completeTaskV1 } from '@/modules/work-management/public/v1'
 import { revalidatePath } from 'next/cache'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -105,13 +107,11 @@ export async function getManagerTasks(
 }
 
 export async function resolveTask(taskId: string, resolution: 'done' | 'skipped') {
-    await prisma.managerTask.update({
-        where: { id: taskId },
-        data: {
-            status: resolution,
-            resolvedAt: new Date(),
-            resolvedBy: 'manager', // in production, would use actual user
-        },
+    await completeTaskV1({
+        contract: COMPLETE_TASK_COMMAND_V1,
+        taskId,
+        outcome: resolution,
+        resolvedBy: 'manager', // in production, would use actual user
     })
     revalidatePath('/inbox')
 }

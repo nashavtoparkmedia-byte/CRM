@@ -50,12 +50,16 @@ jobs:
       - name: Enforce Work Management assignment boundary
         run: node tools/architecture/check-work-management-boundary.mjs
 
+      - name: Enforce Work Management inbox boundary
+        run: node tools/architecture/check-work-management-inbox-boundary.mjs
+
       - name: Verify versioned contract behavior
         run: |
           node tools/architecture/test-contracts.mjs
           node tools/architecture/test-outbox.mjs
           node tools/architecture/test-identity-access.mjs
           node tools/architecture/test-work-management-assignment.mjs
+          node tools/architecture/test-work-management-completion.mjs
 
       - name: Preserve Identity security behavior
         run: |

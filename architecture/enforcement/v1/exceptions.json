@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007-WORK-MANAGEMENT",
-  "base_commit": "f77a797b459986ea1b84a8fd9db8261e3b25a814",
+  "milestone": "CRM-ARCH-007-WORK-MANAGEMENT-INBOX",
+  "base_commit": "5d6116a495bfca65a95c1caaae65eff92e701ab4",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "26447c14597696d330cef3e8abf22143443827471bc926b3711d9a11044c09b7",
+  "finding_digest": "dcbe8787f936e5b53ba64ab8bf8dcbb73455641d0fbd4528b808a43d353e103e",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,7 +13,7 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 186,
+    "direct_foreign_prisma_write": 185,
     "direct_provider_transport_access": 38,
     "internal_module_import": 381,
     "non_public_cross_context_import": 538,
@@ -8539,22 +8539,6 @@
         "dependency:fleet_operations/drivers>platform_shell/gravity_core",
         "dependency:fleet_operations/drivers>platform_shell/gravity_ui",
         "dependency:fleet_operations/yandex_fleet>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_26627ba4cf729a07629e8c8b",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/inbox/actions.ts",
-      "line_at_baseline": 108,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "work_management",
-      "subject": "ManagerTask.update",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_6f85afe6aae4abca"
       ]
     },
     {

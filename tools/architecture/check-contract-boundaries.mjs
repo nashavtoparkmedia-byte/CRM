@@ -79,6 +79,19 @@ assertCheck(
     'owner-internal task event import remains',
 )
 
+const inboxConsumer = source('gravity-mvp/src/app/inbox/actions.ts')
+assertCheck(
+    'representative Messaging consumer uses CompleteTaskCommand.v1',
+    inboxConsumer.includes('COMPLETE_TASK_COMMAND_V1')
+        && inboxConsumer.includes('completeTaskV1({'),
+    'versioned completion command invocation is absent',
+)
+assertCheck(
+    'foreign ManagerTask update removed from Messaging consumer',
+    !/prisma\.managerTask\.update\s*\(/.test(inboxConsumer),
+    'direct foreign Prisma ManagerTask update remains',
+)
+
 const handler = source('gravity-mvp/src/modules/work-management/public/v1/create-task-handler.ts')
 assertCheck(
     'owner handler depends on a persistence port',
