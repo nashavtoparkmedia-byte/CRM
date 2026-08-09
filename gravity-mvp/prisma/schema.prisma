@@ -865,6 +865,35 @@ model Call {
   @@index([aiOutcome, startedAt(sort: Desc)])
 }
 
+/// Reliable cross-module integration events. Domain state and the outbox row
+/// are written in one transaction; a bounded publisher advances rows through
+/// retry_wait to published or dead_letter. Payloads are versioned contracts,
+/// not provider implementation records.
+model DomainOutboxEvent {
+  id             String             @id @default(cuid())
+  eventId        String             @unique
+  eventType      String
+  eventVersion   Int
+  aggregateType  String
+  aggregateId    String
+  payload        Json
+  status         DomainOutboxStatus @default(pending)
+  attempts       Int                @default(0)
+  maxAttempts    Int                @default(5)
+  availableAt    DateTime           @default(now())
+  claimedAt      DateTime?
+  publishedAt    DateTime?
+  lastError      String?            @db.VarChar(1000)
+  correlationId  String?
+  causationId    String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([status, availableAt, createdAt])
+  @@index([aggregateType, aggregateId, createdAt])
+  @@map("domain_outbox_events")
+}
+
 /// Per-utterance transcript of an AI-driven call: each row is one finalized
 /// chunk of speech (user — STT output; assistant — LLM reply; tool — function call).
 /// Used for live UI transcript and post-hoc review.
@@ -2018,6 +2047,14 @@ enum TaskPriority {
   low
 }
 
+enum DomainOutboxStatus {
+  pending
+  processing
+  retry_wait
+  published
+  dead_letter
+}
+
 enum AiAgentMode {
   off
   suggest_only
@@ -2221,4 +2258,3 @@ enum AiOutcome {
   dropped_no_input
   error
 }
-

@@ -5,7 +5,8 @@
  *   1. Read the WAV file FreeSWITCH wrote to the shared volume
  *   2. Re-encode to MP3 (stereo 64kbps — adequate for voice + transcription)
  *   3. Upload to S3/MinIO
- *   4. Update the Call row with recordingPath (object key)
+ *   4. Atomically update Call.recordingPath and append RecordingReady.v1
+ *      to the transactional outbox
  *   5. Best-effort cleanup of the local WAV
  *
  * Stage 4 (transcription) will read recordings directly from S3 by Call.recordingPath
@@ -18,11 +19,10 @@ import { existsSync } from 'fs'
 import os from 'os'
 import ffmpeg from 'fluent-ffmpeg'
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg'
-import { prisma } from '@/lib/prisma'
 import { opsLog } from '@/lib/opsLog'
 import { uploadFile, S3_BUCKET } from '@/lib/storage/minio'
 import { broadcastCall } from '@/lib/callStreamBus'
-import { enqueueTranscribe } from '@/lib/queue/queues'
+import { persistRecordingReadyV1 } from '@/modules/calling/public/v1'
 // Plain CommonJS helper — pure retry policy for the MinIO upload, no
 // generic abstraction. See `./recording-upload-retry.js` for the
 // hardcoded policy (3 attempts, [2000, 5000] ms backoffs, transient-
@@ -63,7 +63,6 @@ function withTimeout<T>(p: Promise<T>, ms: number, stage: string): Promise<T> {
 
 const ENCODE_TIMEOUT_MS = Number(process.env.RECORDING_ENCODE_TIMEOUT_MS ?? 60_000)
 const UPLOAD_TIMEOUT_MS = Number(process.env.RECORDING_UPLOAD_TIMEOUT_MS ?? 30_000)
-const ENQUEUE_TIMEOUT_MS = Number(process.env.RECORDING_ENQUEUE_TIMEOUT_MS ?? 2_000)
 
 export async function processRecording(args: {
     callId: string
@@ -75,7 +74,7 @@ export async function processRecording(args: {
     // a single «recording_processing_failed» line that didn't say which
     // stage broke. Now every stage either logs success or a tagged error,
     // so operators can see at a glance whether the WAV was found, encoded,
-    // uploaded, persisted, and queued.
+    // uploaded, persisted, and committed to the durable queue.
     if (!args.recordingFile) {
         opsLog('warn', 'recording_skipped_no_file', {
             operation: 'recording', callId: args.callId,
@@ -137,15 +136,18 @@ export async function processRecording(args: {
             objectKey, uploadMs: Date.now() - upStart,
         })
 
-        await prisma.call.update({
-            where: { id: args.callId },
-            data: { recordingPath: objectKey },
+        const outboxEvent = await persistRecordingReadyV1({
+            callId: args.callId,
+            recordingPath: objectKey,
+            correlationId: args.callId,
+            causationId: args.fsUuid,
         })
 
         opsLog('info', 'recording_uploaded', {
             operation: 'recording',
             callId: args.callId,
             objectKey,
+            outboxEventId: outboxEvent.eventId,
             totalMs: Date.now() - startedAt,
         })
 
@@ -155,21 +157,15 @@ export async function processRecording(args: {
             data: { callId: args.callId, recordingPath: objectKey },
         })
 
-        // Hand off to the transcription queue (Stage 4). If Redis is down or
-        // the queue can't accept the job, log and continue — the recording
-        // itself is already safely in S3, so the user can still listen to it.
-        try {
-            await withTimeout(enqueueTranscribe(args.callId), ENQUEUE_TIMEOUT_MS, 'enqueueTranscribe')
-            opsLog('info', 'recording_stage_transcribe_enqueued', {
-                operation: 'recording', callId: args.callId,
-            })
-        } catch (err: any) {
-            opsLog('error', 'transcribe_enqueue_failed', {
-                operation: 'recording',
-                callId: args.callId,
-                error: err.message,
-            })
-        }
+        // Stage 4 handoff is now durable: the Call.recordingPath update and
+        // RecordingReady.v1 outbox event committed atomically above. A bounded
+        // publisher retries Redis delivery and exposes poison rows as
+        // dead_letter instead of losing the enqueue on a transient outage.
+        opsLog('info', 'recording_stage_transcribe_outbox_committed', {
+            operation: 'recording',
+            callId: args.callId,
+            outboxEventId: outboxEvent.eventId,
+        })
 
         // Cleanup local copies. Best-effort — failure here is not fatal.
         await fs.unlink(wavHostPath).catch(() => {})

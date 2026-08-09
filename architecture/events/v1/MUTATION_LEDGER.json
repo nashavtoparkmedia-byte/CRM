@@ -1,0 +1,18 @@
+{
+  "schema": "yoko.crm.architecture-mutation-ledger.v1",
+  "milestone": "CRM-ARCH-005",
+  "generated_at": "2026-08-09T14:16:25Z",
+  "production_mutations": [],
+  "runtime_mutations": [],
+  "database_mutations": [],
+  "protected_worktree_mutations": [],
+  "architecture_worktree_changes": [
+    "RecordingReady.v1 versioned event contract",
+    "expand-only DomainOutboxEvent Prisma schema and migration",
+    "atomic Calling recording/outbox owner operation",
+    "generic bounded outbox publisher and Prisma store adapter",
+    "idempotent Calling transcription consumer and platform composition",
+    "preview tests, architecture controls, migration/activation evidence and two reviews"
+  ],
+  "result": "NO_PRODUCTION_RUNTIME_DATABASE_OR_PROTECTED_WORKTREE_MUTATION"
+}

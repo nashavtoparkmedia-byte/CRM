@@ -1,0 +1,18 @@
+{
+  "schema": "yoko.crm.production-activation-gate.v1",
+  "milestone": "CRM-ARCH-005",
+  "status": "NOT_AUTHORIZED_YET",
+  "reason": "No isolated PostgreSQL preview database execution, production backup, or exact deployment preflight has been performed.",
+  "prerequisites": [
+    { "id": "exact_migration_identity", "status": "PASS" },
+    { "id": "expand_only_proof", "status": "PASS" },
+    { "id": "source_contract_tests", "status": "PASS" },
+    { "id": "preview_postgresql_execution", "status": "PENDING" },
+    { "id": "production_database_identity", "status": "PENDING" },
+    { "id": "verified_backup", "status": "PENDING" },
+    { "id": "rollback_target", "status": "PENDING_AT_DEPLOYMENT" },
+    { "id": "health_and_regression_gate", "status": "PENDING_AT_DEPLOYMENT" }
+  ],
+  "production_database_mutated": false,
+  "production_runtime_mutated": false
+}

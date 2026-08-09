@@ -1,0 +1,61 @@
+{
+  "schema": "yoko.crm.events-verification.v1",
+  "milestone": "CRM-ARCH-005",
+  "verified_at": "2026-08-09T14:16:25Z",
+  "result": "PASS_CONTINUE",
+  "selected_event_flows": 1,
+  "rejected_eventification_candidates": 4,
+  "migration": {
+    "path": "gravity-mvp/prisma/migrations/20260809140000_add_domain_outbox/migration.sql",
+    "sha256": "433b0d503f054ed6a8161a059e2650d5e401829dabe8c9d992a1d1763eef0016",
+    "policy": "EXPAND_ONLY",
+    "prisma_schema_validate": "PASS",
+    "schema_to_sql_diff": "PASS",
+    "preview_postgresql_execution": "NOT_EXECUTED_NO_ISOLATED_PREVIEW_DATABASE",
+    "production_applied": false
+  },
+  "outbox_tests": {
+    "passed": 16,
+    "failed": 0
+  },
+  "outbox_architecture_controls": {
+    "passed": 14,
+    "failed": 0
+  },
+  "contract_boundary_controls": {
+    "passed": 14,
+    "failed": 0
+  },
+  "protected_calling_tests": {
+    "passed": 93,
+    "failed": 0,
+    "files": 5
+  },
+  "targeted_eslint": {
+    "new_module_findings": 0,
+    "modified_legacy_file_non_baseline_findings": 0,
+    "note": "The inherited no-explicit-any findings in instrumentation and recordingProcessor were excluded only for those two legacy files; all other rules remained enabled."
+  },
+  "typescript_project_check": {
+    "baseline_existing_errors": 28,
+    "candidate_existing_errors": 28,
+    "diagnostic_signature_parity": "PASS",
+    "new_diagnostics": 0
+  },
+  "reliability": {
+    "atomic_domain_and_outbox_write": true,
+    "publisher_idempotent": true,
+    "consumer_idempotent": true,
+    "bounded_batch": 25,
+    "bounded_publish_timeout_ms": 5000,
+    "bounded_attempts": 5,
+    "stale_claim_recovery": true,
+    "dead_letter_visible": true,
+    "correlation_and_causation": true,
+    "secret_safe_error_storage": true
+  },
+  "production_activation": "NOT_AUTHORIZED_YET",
+  "production_mutated": false,
+  "runtime_mutated": false,
+  "database_mutated": false
+}

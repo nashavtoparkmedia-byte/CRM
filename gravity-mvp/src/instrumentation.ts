@@ -258,15 +258,28 @@ export async function register() {
         }
 
         // ── Call processing pipeline (BullMQ): transcribe + analyze ──────
-        // Stage 4. Workers pick up jobs enqueued by recordingProcessor and
-        // by each other (transcribe → analyze). Safe to start before Redis
-        // is up; the workers will retry on connect.
+        // Stage 4. Workers pick up jobs published from RecordingReady.v1 and
+        // jobs enqueued by each other (transcribe → analyze). Safe to start
+        // before Redis is up; the workers will retry on connect.
         try {
             const { startCallProcessingWorkers } = await import('@/lib/queue')
             startCallProcessingWorkers()
             opsLog('info', 'call_workers_started', { operation: 'startup' })
         } catch (err: any) {
             opsLog('error', 'call_workers_start_failed', { operation: 'startup', error: err.message })
+        }
+
+        // ── Transactional outbox publisher ──────────────────────────────
+        // The expand migration is deployed before this compatible code.
+        // Atomic claims make concurrent Next.js processes safe; consumers use
+        // stable idempotency keys and poison events remain visible.
+        try {
+            const { startDomainOutboxPublisherV1 } = await import('@/modules/platform-shell/public/v1')
+            const outboxInterval = startDomainOutboxPublisherV1()
+            OperationalJobs.registerInterval(outboxInterval)
+            opsLog('info', 'domain_outbox_publisher_started', { operation: 'startup' })
+        } catch (err: any) {
+            opsLog('error', 'domain_outbox_publisher_start_failed', { operation: 'startup', error: err.message })
         }
 
         // Yandex Fleet sync: target time 03:00 server time, daily.

@@ -1,0 +1,21 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "base": "architecture/contexts/v1",
+  "milestone": "CRM-ARCH-005",
+  "amendments": [
+    {
+      "context": "calling",
+      "add_public_surface": ["RecordingReadyEvent.v1", "PersistRecordingReadyCommand.v1"],
+      "add_events": ["calling.RecordingReady.v1"],
+      "add_internal_surface": ["gravity-mvp/src/modules/calling/internal"],
+      "reason": "Atomic recording persistence emits the versioned integration event through the Calling owner boundary."
+    },
+    {
+      "context": "platform_shell",
+      "add_public_surface": ["DomainOutboxPublisher.v1"],
+      "add_internal_surface": ["gravity-mvp/src/infrastructure/outbox"],
+      "add_owned_infrastructure_state": ["gravity-mvp/prisma/schema.prisma:DomainOutboxEvent"],
+      "reason": "Outbox persistence and dispatch state are shared infrastructure, not business-domain ownership."
+    }
+  ]
+}
