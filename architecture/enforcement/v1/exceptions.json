@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007-FLEET-DRIVER-IMPORT",
-  "base_commit": "c582fbeda7f7a80be2c3e404f526acb90b21fe91",
+  "milestone": "CRM-ARCH-007-AI-KNOWLEDGE-ITEM-REVIEW",
+  "base_commit": "0691fda4e2c2930e756420971255be211b716899",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "d2861fb7432d9a39e10897a426454ed59f19120dd0cb6a56640a4bc477d36e82",
+  "finding_digest": "83dbd3117fec37d165d205a517a5d1f26d7220f70d697b99eab8daccdd54149a",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,7 +13,7 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 160,
+    "direct_foreign_prisma_write": 158,
     "direct_provider_transport_access": 38,
     "internal_module_import": 379,
     "non_public_cross_context_import": 536,
@@ -10368,7 +10368,7 @@
       "fingerprint": "arch_7a523e4a2c4c3621a88cfa69",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
-      "line_at_baseline": 151,
+      "line_at_baseline": 153,
       "ordinal": 1,
       "owner_context": "messaging",
       "target_context": "ai_knowledge",
@@ -10384,7 +10384,7 @@
       "fingerprint": "arch_75dffd0ad02249ad4a797b1c",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
-      "line_at_baseline": 181,
+      "line_at_baseline": 183,
       "ordinal": 1,
       "owner_context": "messaging",
       "target_context": "ai_knowledge",
@@ -10400,7 +10400,7 @@
       "fingerprint": "arch_53b9ebccbba0c3337bf044b8",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
-      "line_at_baseline": 189,
+      "line_at_baseline": 191,
       "ordinal": 2,
       "owner_context": "messaging",
       "target_context": "ai_knowledge",
@@ -10416,7 +10416,7 @@
       "fingerprint": "arch_17d0fa7a2f2a99e5bab4843c",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
-      "line_at_baseline": 197,
+      "line_at_baseline": 199,
       "ordinal": 3,
       "owner_context": "messaging",
       "target_context": "ai_knowledge",
@@ -10432,7 +10432,7 @@
       "fingerprint": "arch_b26463058a1e416c319e7f0f",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
-      "line_at_baseline": 243,
+      "line_at_baseline": 245,
       "ordinal": 4,
       "owner_context": "messaging",
       "target_context": "ai_knowledge",
@@ -10445,26 +10445,10 @@
       ]
     },
     {
-      "fingerprint": "arch_9eaad7e23218fd9ed0d25bda",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
-      "line_at_baseline": 278,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "ai_knowledge",
-      "subject": "raw:$executeRaw:AiKnowledgeItem",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_c30c02edcc5831fa"
-      ]
-    },
-    {
       "fingerprint": "arch_593a7be5b29c0d2d2bb4e10c",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
-      "line_at_baseline": 317,
+      "line_at_baseline": 310,
       "ordinal": 5,
       "owner_context": "messaging",
       "target_context": "ai_knowledge",
@@ -10474,22 +10458,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "migration_e49c8cabc83892c7"
-      ]
-    },
-    {
-      "fingerprint": "arch_e71636dec2c066e0a4e047e0",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
-      "line_at_baseline": 445,
-      "ordinal": 2,
-      "owner_context": "messaging",
-      "target_context": "ai_knowledge",
-      "subject": "raw:$executeRaw:AiKnowledgeItem",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_c30c02edcc5831fa"
       ]
     },
     {

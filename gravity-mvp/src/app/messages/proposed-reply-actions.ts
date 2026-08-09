@@ -22,6 +22,8 @@ import { cookies } from 'next/headers'
 import { generateShadowReplyForChat } from '@/lib/pipeline/shadowReply'
 import { writeAuditEntry } from '@/lib/ai/knowledge/auditLog'
 import { runCoach, type CoachResult, type CoachSuggestion } from '@/lib/ai/knowledge/coach'
+import { APPLY_KNOWLEDGE_ITEM_COACH_EDIT_COMMAND_V1, VERIFY_KNOWLEDGE_ITEM_COMMAND_V1 } from '@/contracts/ai-knowledge/v1'
+import { applyKnowledgeItemCoachEditV1, verifyKnowledgeItemV1 } from '@/modules/ai-knowledge/public/v1'
 
 const CACHE_TTL_MIN = 15
 
@@ -275,16 +277,7 @@ export async function confirmProposedReplyCorrect(proposalId: string): Promise<C
             }
 
             // Update: isVerified=true, status='active' (промоция draft→active)
-            await prisma.$executeRaw`
-                UPDATE "AiKnowledgeItem"
-                SET "isVerified" = true,
-                    "verifiedBy" = ${actor},
-                    "verifiedAt" = NOW(),
-                    status = 'active'::"AiKnowledgeStatus",
-                    "isActive" = true,
-                    "updatedAt" = NOW()
-                WHERE id = ${src.id}
-            `
+            await verifyKnowledgeItemV1({ contract: VERIFY_KNOWLEDGE_ITEM_COMMAND_V1, itemId: src.id, verifiedBy: actor })
 
             // Audit log с metadata о источнике этого verify
             await writeAuditEntry({
@@ -442,17 +435,7 @@ export async function applyCoachSuggestions(
                 // Применяем всё равно, но в audit metadata пишем drift=true
             }
 
-            await prisma.$executeRaw`
-                UPDATE "AiKnowledgeItem"
-                SET "canonicalStatement" = ${s.newValue},
-                    "updatedAt" = NOW(),
-                    "isVerified" = true,
-                    "verifiedBy" = ${actor},
-                    "verifiedAt" = NOW(),
-                    status = 'active'::"AiKnowledgeStatus",
-                    "isActive" = true
-                WHERE id = ${s.itemId}
-            `
+            await applyKnowledgeItemCoachEditV1({ contract: APPLY_KNOWLEDGE_ITEM_COACH_EDIT_COMMAND_V1, itemId: s.itemId, canonicalStatement: s.newValue, verifiedBy: actor })
 
             await writeAuditEntry({
                 itemId: s.itemId,

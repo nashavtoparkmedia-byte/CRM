@@ -10,6 +10,8 @@ import { createQueueKnowledgeExtractionHandlerV1 } from './queue-knowledge-extra
 import { legacyPrismaQueueKnowledgeExtractionPortV1 } from './legacy-prisma-queue-knowledge-extraction-adapter'
 import { createAttachManualKnowledgeSourceHandlerV1,createDisableKnowledgeSourcesHandlerV1 } from './knowledge-source-handler'
 import { legacyPrismaKnowledgeSourcePortV1 } from './legacy-prisma-knowledge-source-adapter'
+import { createApplyKnowledgeItemCoachEditHandlerV1,createVerifyKnowledgeItemHandlerV1 } from './knowledge-item-review-handler'
+import { legacyPrismaKnowledgeItemReviewPortV1 } from './legacy-prisma-knowledge-item-review-adapter'
 
 export { createRecordKnowledgeUsageHandlerV1 } from './record-knowledge-usage-handler'
 export type { RecordKnowledgeUsagePersistencePortV1 } from './record-knowledge-usage-handler'
@@ -30,3 +32,7 @@ export { createAttachManualKnowledgeSourceHandlerV1,createDisableKnowledgeSource
 export type { KnowledgeSourcePersistencePortV1 } from './knowledge-source-handler'
 export const attachManualKnowledgeSourceV1=createAttachManualKnowledgeSourceHandlerV1(legacyPrismaKnowledgeSourcePortV1)
 export const disableKnowledgeSourcesV1=createDisableKnowledgeSourcesHandlerV1(legacyPrismaKnowledgeSourcePortV1)
+export { createApplyKnowledgeItemCoachEditHandlerV1,createVerifyKnowledgeItemHandlerV1 } from './knowledge-item-review-handler'
+export type { KnowledgeItemReviewPersistencePortV1 } from './knowledge-item-review-handler'
+export const verifyKnowledgeItemV1=createVerifyKnowledgeItemHandlerV1(legacyPrismaKnowledgeItemReviewPortV1)
+export const applyKnowledgeItemCoachEditV1=createApplyKnowledgeItemCoachEditHandlerV1(legacyPrismaKnowledgeItemReviewPortV1)

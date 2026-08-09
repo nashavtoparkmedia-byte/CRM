@@ -1,0 +1,1 @@
+{"schema":"yoko.crm.module-manifest-amendments.v1","version":1,"milestone":"CRM-ARCH-007-AI-KNOWLEDGE-ITEM-REVIEW","amendments":[{"context":"ai_knowledge","add_commands":["VerifyKnowledgeItemCommand.v1","ApplyKnowledgeItemCoachEditCommand.v1"],"reason":"Expose trainer verification and approved coach-edit persistence through AI Knowledge."}]}
