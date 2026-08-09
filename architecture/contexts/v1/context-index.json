@@ -1,0 +1,131 @@
+{
+  "contexts": [
+    {
+      "context": "ai_knowledge",
+      "path": "architecture/contexts/v1/manifests/ai_knowledge.json",
+      "sha256": "01e38e0d0d9661392e353b1b49a972b44f58c3c5227510e5b396ab40a961424f"
+    },
+    {
+      "context": "analytics_reporting",
+      "path": "architecture/contexts/v1/manifests/analytics_reporting.json",
+      "sha256": "a607e88b0e89ac8f3836769b79ec54ebd84adc66c21389f33a1a4ec6a08bd5d5"
+    },
+    {
+      "context": "avito_acquisition",
+      "path": "architecture/contexts/v1/manifests/avito_acquisition.json",
+      "sha256": "4b0cdcd2ee3cf31bc235eac616c74d250778a9d1f835c61fde96ef092de822ea"
+    },
+    {
+      "context": "calling",
+      "path": "architecture/contexts/v1/manifests/calling.json",
+      "sha256": "2dac46bc1189d60e2c8016b81248d72991fd937a9a18115c58d007fc351d6ad9"
+    },
+    {
+      "context": "configuration",
+      "path": "architecture/contexts/v1/manifests/configuration.json",
+      "sha256": "31a6f0e3813bc050c84dac7d05a7ad9adb82bc89089660e0c690ce52f0643861"
+    },
+    {
+      "context": "contacts",
+      "path": "architecture/contexts/v1/manifests/contacts.json",
+      "sha256": "467a25acefed32c8ba4fe9554fa81441134d269bb564ab3ba563ce9376dadca3"
+    },
+    {
+      "context": "edge_delivery",
+      "path": "architecture/contexts/v1/manifests/edge_delivery.json",
+      "sha256": "1dc7974922660a719fdf3f727bb5dcbb51d91a84fb07f0c47a5fdee5cad21779"
+    },
+    {
+      "context": "fleet_operations",
+      "path": "architecture/contexts/v1/manifests/fleet_operations.json",
+      "sha256": "c58a62d3f59559c34b4858f7b496026e30036b423cba494fe00e784962c56905"
+    },
+    {
+      "context": "identity_access",
+      "path": "architecture/contexts/v1/manifests/identity_access.json",
+      "sha256": "6a7ea375f7529102b1871dd07d310e71a8b4731f399af047209fc923d57dbfd8"
+    },
+    {
+      "context": "max_channel",
+      "path": "architecture/contexts/v1/manifests/max_channel.json",
+      "sha256": "465abcbbea00b4e520cdc53d3c925f126475280184538e77cc4f51d3dc4ac00c"
+    },
+    {
+      "context": "messaging",
+      "path": "architecture/contexts/v1/manifests/messaging.json",
+      "sha256": "a43006cc8fba25a93c5a914dee4642b533fc96ff32ff6c1459b9639256be3df3"
+    },
+    {
+      "context": "operations_observability",
+      "path": "architecture/contexts/v1/manifests/operations_observability.json",
+      "sha256": "2d30eafc73c4b35a9bbde955f15ecb5c16ee31ec622a2b9a43687feed7612df6"
+    },
+    {
+      "context": "platform_shell",
+      "path": "architecture/contexts/v1/manifests/platform_shell.json",
+      "sha256": "a8df4e7df0a4fd5aa0f5b987855dddf07a7953ea24d4f9293668827d1182b409"
+    },
+    {
+      "context": "telegram_channel",
+      "path": "architecture/contexts/v1/manifests/telegram_channel.json",
+      "sha256": "d0a0137c4845629a07a3a900b8b75bb9af7564c3573cd7fdb139987544ed962a"
+    },
+    {
+      "context": "whatsapp_channel",
+      "path": "architecture/contexts/v1/manifests/whatsapp_channel.json",
+      "sha256": "e21b6dcc6d90ca590887a70a4bc8123f51468483679f1f3f26a2f977698d1061"
+    },
+    {
+      "context": "work_management",
+      "path": "architecture/contexts/v1/manifests/work_management.json",
+      "sha256": "d1f2cdb50130e560f8fed6e20ebd5ef33af0e6f082139f96183cba9f7b197e4e"
+    }
+  ],
+  "controls": {
+    "context_decisions": {
+      "path": "architecture/contexts/v1/context-decisions.json",
+      "sha256": "e2c3f419b4c3ff8a705fbc2d4d5c5630b27b39ef6843c2afe1403f44776c8d2e"
+    },
+    "credential_access": {
+      "path": "architecture/evidence/v1/credential-access.json",
+      "sha256": "9d6402a05dd1cb6f125ead1bb53e481122f31d1dc6cfd81bad6bc26e6c4cba82"
+    },
+    "dependency_graph": {
+      "path": "architecture/evidence/v1/dependency-graph.json",
+      "sha256": "39aaf49f5ad61cda26fd1f74f1cf7f847a066a8b05445f64ba8fd6e6bbeafee6"
+    },
+    "generator": {
+      "path": "tools/architecture/generate-context-manifests.mjs",
+      "sha256": "dc2a9ee8500d73022ca03fcf9f6edebab63daedad98cf095bfc966b97881cba2"
+    },
+    "module_inventory": {
+      "path": "architecture/evidence/v1/module-inventory.json",
+      "sha256": "d56f88b821e23ec7066c311ca26cb3574e79c96abc82a587959a7dbd5e9787a7"
+    },
+    "ownership_candidates": {
+      "path": "architecture/evidence/v1/data-ownership-candidates.json",
+      "sha256": "2e77497773b597933383a1b0d77dfdb09393e33a9d011cdd87dde1bb6543696e"
+    },
+    "raw_write_owner_overrides": {
+      "path": "architecture/contexts/v1/raw-write-owner-overrides.json",
+      "sha256": "4d3bc537cf366228d3f11b99dd397311945fc42079a9324907a33c25e6fa933a"
+    },
+    "write_sites": {
+      "path": "architecture/evidence/v1/write-sites.json",
+      "sha256": "d735e74f924fb2e5e42c3116db657490bc1f663c3b432d28df232fc86ad675a5"
+    }
+  },
+  "generated_from": "CRM-ARCH-002 PASS_CONTINUE",
+  "outputs": {
+    "dependency_transition_plan": {
+      "path": "architecture/contexts/v1/dependency-transition-plan.json",
+      "sha256": "0b0d8576aa65e752dfcb4e9ef7f27766ca1414aba671a218f6972168dbf095a6"
+    },
+    "foreign_write_migration_plan": {
+      "path": "architecture/contexts/v1/foreign-write-migration-plan.json",
+      "sha256": "2592a2977d618b2dec4810223dfca81f55862ac4f3d133bdbcedada13a5b3b8a"
+    }
+  },
+  "schema": "yoko.crm.context-index.v1",
+  "version": 1
+}

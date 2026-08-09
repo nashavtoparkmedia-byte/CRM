@@ -1,0 +1,4697 @@
+{
+  "coverage": {
+    "classifications": {
+      "FOREIGN": 178,
+      "LEGACY": 2,
+      "SHARED_AMBIGUOUS": 15
+    },
+    "covered_site_ids": [
+      "write_02fdce7c52468a789697",
+      "write_04c25a84a4a9dfcba440",
+      "write_05e8ac85f66a64f176f1",
+      "write_068635c3b0499435e333",
+      "write_08c0886b73384f03384c",
+      "write_099d053aef059df77198",
+      "write_0bfac2c2f4b18061277c",
+      "write_0e10a9872662f5177dfd",
+      "write_1033021b935800b7c543",
+      "write_13b000db8cc8797befb2",
+      "write_144557bcd831e0b2d281",
+      "write_1704acf38508b9152c94",
+      "write_17a3b41210c629fb11d1",
+      "write_19234456e203ccbc5cc0",
+      "write_19b48454f4bf7db96636",
+      "write_1b19b5b4e8d72dd3ccf1",
+      "write_1b324e34783baefb83e4",
+      "write_1c796fedc114ce0d1a21",
+      "write_1cfbf127ef804271a1e4",
+      "write_1d2319afc3087e490c05",
+      "write_1d6b56ed3c5ab85a86e4",
+      "write_1f20eba2f3f6a7773151",
+      "write_1faedc5b57b84bfb1c59",
+      "write_20acf80ae13aa7ac515c",
+      "write_21c21c6aa02a1cf1d8ad",
+      "write_2258c74b0d023b78e20b",
+      "write_27eacfe6e2da8766f32c",
+      "write_28c34f08dfde4445cb87",
+      "write_291a0cf4175bb6e75e9f",
+      "write_2b1e287e7430e251bec4",
+      "write_2cf803c0b99e7211aca0",
+      "write_2e5374a6dc731813ea9f",
+      "write_30faae9f6131b1ceedd9",
+      "write_33d7461a2a56a1fb0f06",
+      "write_355a39b19f01996062b1",
+      "write_37655092c5ac87dae5f4",
+      "write_3773971fa5f1951e4569",
+      "write_37878789b949a928c705",
+      "write_37ea485c68a0d3782ea6",
+      "write_38da01dbcf59888b8608",
+      "write_399549dcea0547077429",
+      "write_3afaecdcce19259e75f3",
+      "write_3c1cbcb8bca849a03398",
+      "write_3cb10412ef560eedb208",
+      "write_3d9324b83bd57a2a7be2",
+      "write_4291099f11b00625ac32",
+      "write_4395b91e97deaef1ac80",
+      "write_43b8c1b63ea6260e28f4",
+      "write_464f7275f9f9cf12bccd",
+      "write_46f60cf1da05fef3f066",
+      "write_4b517a4b7406404d00af",
+      "write_4c01f63d9a9ee0f8a848",
+      "write_4dbcea8a3f4bd9da8272",
+      "write_4f1f5c32b41a39ae4ffd",
+      "write_501686995ba695c7fdb6",
+      "write_501e2bc936f20724986e",
+      "write_50c6693c8fbe6eaf3147",
+      "write_50d8d17303207a5480a6",
+      "write_5412d8b707f4f20532ed",
+      "write_54e8d34376d80c09c59d",
+      "write_5538470d45d761866f52",
+      "write_555d53cf52f306e83f98",
+      "write_59fcea34f1dc7c97e666",
+      "write_5bcd8bf229bb63b9231b",
+      "write_5c207c67575abf380264",
+      "write_5e28947541ce309ce304",
+      "write_6293b6fa3afc52b19a6e",
+      "write_669073d20c64028a67f6",
+      "write_66dd3ddf77ce451ae891",
+      "write_6a3608f1cd4ae55f2ae7",
+      "write_6b9855c423c0a8da4e9b",
+      "write_6c78be689490c7c96868",
+      "write_6cb60ab6ccd74b66613c",
+      "write_6f0d997a1a7967f249f2",
+      "write_6f6e90b081e4cea005e5",
+      "write_70dea0af6558c4ff4b1e",
+      "write_7112a66db9cc3b12d04a",
+      "write_71a47ca1c539e87a9494",
+      "write_72e8bcab012d8236fb34",
+      "write_736ab685e6d676b1b477",
+      "write_757b939c1d568f802e76",
+      "write_76c74fcff3e2c070d16d",
+      "write_7886b4303184e85fa328",
+      "write_7b582e9e533557641dc2",
+      "write_7e1ee66329f5bb074296",
+      "write_7fd78df60ab9b3ebd6a3",
+      "write_8042ba204e90795246e4",
+      "write_82410caac682a0617f9e",
+      "write_83b7d6fbbbb0d9236699",
+      "write_84ec3f06b52a8c35848f",
+      "write_856143bd152e27055ae3",
+      "write_87839afa5a18d07982a5",
+      "write_89291d1122e4ad58870a",
+      "write_8a8dab0fa5910fd43ef8",
+      "write_8ac2ad8d2aa22cfabf45",
+      "write_8badc5d3366eb5515588",
+      "write_8df4203a17392c35e560",
+      "write_8f0fa060f2c4beba5f4e",
+      "write_8fc77a2457d1b4ad4351",
+      "write_9b3cac18e8734a7a8b4a",
+      "write_9c50b2592fe0580bab8e",
+      "write_9d6522948608a8335e8f",
+      "write_9dc8766eacf1bbbeff88",
+      "write_a2e317cb6829dec49543",
+      "write_a3ff755602bb1e5668df",
+      "write_a418740b9891445fbb4e",
+      "write_a48218f392e91d535043",
+      "write_a4998030a26da93d246f",
+      "write_a4b1a1a494348d39a10a",
+      "write_a69a8f7c55fe6b8615a6",
+      "write_a7ae8331f174aa977563",
+      "write_a7ccceca05a5229127ad",
+      "write_a8795930cf0c09053cc7",
+      "write_a8ef0e01e73cfa39e362",
+      "write_abce569197ffa03c5570",
+      "write_ac8a2f0295f3bf300ca4",
+      "write_aca9bfef0d536c856eaa",
+      "write_ad92e80cbeac88fa49a7",
+      "write_ae9917cad473d0ee533b",
+      "write_afe2302f54f9f07d2dc8",
+      "write_b0d9ee16dd40f574409b",
+      "write_b0ff355bc3ec01477c9b",
+      "write_b23eea42780b7a961651",
+      "write_b31065023f37d6312d97",
+      "write_b4c64aa463dded00553e",
+      "write_b52fbffae3bbc225a252",
+      "write_b57f8f2c69edbffa7244",
+      "write_b635958e6667c3b16eaa",
+      "write_b73129ba2c457bcd73bd",
+      "write_b758114ced0815e604d2",
+      "write_b805717d021a39e37d14",
+      "write_b9e61bf063b273b89cf8",
+      "write_ba5e8ead40fab27023a2",
+      "write_bc3bbf7598bc2ae88477",
+      "write_bd3963c641de5591e0b7",
+      "write_bdcc77e16e61cf03e0d8",
+      "write_bff216372108ae6487cf",
+      "write_c051a6e69c079e8a77a0",
+      "write_c09fdaef6fb1ad31455e",
+      "write_c29760ca83541e6f8d20",
+      "write_c37c4973fce86faf788c",
+      "write_c3cd4a1faca8b61ae881",
+      "write_c40ff0bfaac12a8efe22",
+      "write_c6551ef61961373c0af6",
+      "write_c8fedbdea977b7fca832",
+      "write_c9b528fc95e874db36fe",
+      "write_cdea9b2062197c5185c6",
+      "write_ce16f6e21dfeb0ad29c9",
+      "write_ceb316d7a101d8281fde",
+      "write_cf0ad2b1898621a01197",
+      "write_cfb1a486a42a6ac768fa",
+      "write_d069341f5099d04c546d",
+      "write_d176e94064e8cfbf83a8",
+      "write_d36c0b80a9a462ad3095",
+      "write_d6f7e8d593dc75082ec0",
+      "write_d7bff58329bf9acd78a7",
+      "write_d8f9d22b7ab4632728cc",
+      "write_daca6d50429e639b59ad",
+      "write_dba695a05a50e31a24a2",
+      "write_dc407bc68f3d855ac40c",
+      "write_dda1bd072febb4d2cb6a",
+      "write_de4169972b8fc3e21f7d",
+      "write_de4da0cf7edfd9d3c137",
+      "write_de6223008dc3e404e5b1",
+      "write_e14f2108a8ec98b9257f",
+      "write_e1c92e6b35f51dda9ecf",
+      "write_e23b39baf001c1b453ec",
+      "write_e293fb9b3e2ed1ed21f2",
+      "write_e379641d80f186bab372",
+      "write_e3e8a9390d6afd3c0202",
+      "write_e460c822b3554cae9cc2",
+      "write_e6a7b9a36a42988e6b20",
+      "write_e71afd32bed27d918108",
+      "write_e7905ab0cbf78a959e51",
+      "write_e9262cb66a0b4b88a877",
+      "write_e9a0ea26e6f2104dcf59",
+      "write_ea4880fd08f417423b70",
+      "write_ec7d44ca0e2e6a162499",
+      "write_ec88539ff98a879074cd",
+      "write_ed73555c95d4727c74d7",
+      "write_edf60cf61d8390f161cb",
+      "write_ef7c722a80606d8c6f0b",
+      "write_effcdf1b91c557c61093",
+      "write_f10b970c4039118bba6a",
+      "write_f19513420b0b38a16f79",
+      "write_f249bb83d39da02558d0",
+      "write_f2a6c229c0fa3da6265c",
+      "write_f3df390bb40095ccc932",
+      "write_f4602ed7d64c6d2d4a68",
+      "write_f4d432b33e7c51d8bfb7",
+      "write_f6ec72ac60437459047b",
+      "write_f84ab18aa682aa4f0a93",
+      "write_f94e58011e32f81ee19f",
+      "write_faf522b2187dd47ac213",
+      "write_fe762dd301af2b7a2e8a"
+    ],
+    "plans": 79,
+    "sites_requiring_migration": 195
+  },
+  "plans": [
+    {
+      "caller_context": "whatsapp_channel",
+      "caller_modules": [
+        "whatsapp_provider"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_038d96774ba66c22",
+      "models": [
+        "Chat"
+      ],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 7,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/whatsapp/enrichChatName.ts",
+          "id": "write_3cb10412ef560eedb208",
+          "line": 69,
+          "method": "update",
+          "module": "whatsapp_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
+          "id": "write_ba5e8ead40fab27023a2",
+          "line": 529,
+          "method": "upsert",
+          "module": "whatsapp_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
+          "id": "write_5c207c67575abf380264",
+          "line": 672,
+          "method": "update",
+          "module": "whatsapp_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
+          "id": "write_02fdce7c52468a789697",
+          "line": 1695,
+          "method": "update",
+          "module": "whatsapp_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
+          "id": "write_33d7461a2a56a1fb0f06",
+          "line": 1751,
+          "method": "update",
+          "module": "whatsapp_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
+          "id": "write_5bcd8bf229bb63b9231b",
+          "line": 2035,
+          "method": "upsert",
+          "module": "whatsapp_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
+          "id": "write_856143bd152e27055ae3",
+          "line": 2164,
+          "method": "update",
+          "module": "whatsapp_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "messaging.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "configuration",
+      "caller_modules": [
+        "settings"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_04d2e3ce1fdbef50",
+      "models": [
+        "AiAgentProfile"
+      ],
+      "owner_contexts": [
+        "calling"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 3,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_d176e94064e8cfbf83a8",
+          "line": 557,
+          "method": "create",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_4f1f5c32b41a39ae4ffd",
+          "line": 592,
+          "method": "update",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_72e8bcab012d8236fb34",
+          "line": 608,
+          "method": "delete",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "calling.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "avito_acquisition",
+      "caller_modules": [
+        "avito",
+        "leads"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_08ae2450b82ef247",
+      "models": [
+        "Chat"
+      ],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 3,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/webhooks/avito/route.ts",
+          "id": "write_555d53cf52f306e83f98",
+          "line": 184,
+          "method": "update",
+          "module": "avito",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/leads/intake.ts",
+          "id": "write_1033021b935800b7c543",
+          "line": 135,
+          "method": "create",
+          "module": "leads",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/leads/intake.ts",
+          "id": "write_099d053aef059df77198",
+          "line": 155,
+          "method": "update",
+          "module": "leads",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "messaging.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "operations_observability",
+      "caller_modules": [
+        "monitoring"
+      ],
+      "classifications": [
+        "SHARED_AMBIGUOUS"
+      ],
+      "id": "migration_0ed08765d767793e",
+      "models": [
+        "ApiLog",
+        "CommunicationEvent",
+        "DriverEvent"
+      ],
+      "owner_contexts": [
+        "fleet_operations",
+        "messaging"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "SHARED_AMBIGUOUS",
+          "file": "gravity-mvp/src/lib/RetentionCleanup.ts",
+          "id": "write_f4d432b33e7c51d8bfb7",
+          "line": 208,
+          "method": "$executeRawUnsafe",
+          "module": "monitoring",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "typed compatibility operation around the current raw SQL call",
+        "enforcement": "block reintroduction only after exact table scopes are split and owner commands are live",
+        "migration": "identify/split table scope; introduce one owner command per context; dual-verify; switch caller; retire raw path",
+        "target_surface": "fleet_operations.public, messaging.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "messaging",
+      "caller_modules": [
+        "messages"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_0f4314be5092e299",
+      "models": [
+        "DriverDaySummary"
+      ],
+      "owner_contexts": [
+        "fleet_operations"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/communications.ts",
+          "id": "write_a4998030a26da93d246f",
+          "line": 51,
+          "method": "upsert",
+          "module": "messages",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "fleet_operations.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "platform_shell",
+      "caller_modules": [
+        "gravity_core"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_152c887cb9c50943",
+      "models": [
+        "DriverTelegram"
+      ],
+      "owner_contexts": [
+        "telegram_channel"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 8,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/bot-link/route.ts",
+          "id": "write_43b8c1b63ea6260e28f4",
+          "line": 70,
+          "method": "deleteMany",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/bot-link/route.ts",
+          "id": "write_f84ab18aa682aa4f0a93",
+          "line": 71,
+          "method": "deleteMany",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/bot-link/route.ts",
+          "id": "write_2e5374a6dc731813ea9f",
+          "line": 72,
+          "method": "create",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/bot-users/route.ts",
+          "id": "write_e7905ab0cbf78a959e51",
+          "line": 96,
+          "method": "deleteMany",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "id": "write_83b7d6fbbbb0d9236699",
+          "line": 138,
+          "method": "update",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "id": "write_b805717d021a39e37d14",
+          "line": 184,
+          "method": "update",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "id": "write_068635c3b0499435e333",
+          "line": 302,
+          "method": "upsert",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "id": "write_d36c0b80a9a462ad3095",
+          "line": 843,
+          "method": "update",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "telegram_channel.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "work_management",
+      "caller_modules": [
+        "tasks"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_188449b58f2615c8",
+      "models": [
+        "health_snapshots"
+      ],
+      "owner_contexts": [
+        "operations_observability"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/tasks/manager-health-config.ts",
+          "id": "write_4b517a4b7406404d00af",
+          "line": 392,
+          "method": "$executeRawUnsafe",
+          "module": "tasks",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "operations_observability.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "fleet_operations",
+      "caller_modules": [
+        "yandex_fleet"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_1920130eec2c7506",
+      "models": [
+        "Contact"
+      ],
+      "owner_contexts": [
+        "contacts"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 6,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/monitoring/sync/route.ts",
+          "id": "write_0e10a9872662f5177dfd",
+          "line": 241,
+          "method": "update",
+          "module": "yandex_fleet",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/monitoring/sync/route.ts",
+          "id": "write_b0ff355bc3ec01477c9b",
+          "line": 284,
+          "method": "update",
+          "module": "yandex_fleet",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/monitoring/sync/route.ts",
+          "id": "write_b57f8f2c69edbffa7244",
+          "line": 301,
+          "method": "create",
+          "module": "yandex_fleet",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/monitoring/sync/route.ts",
+          "id": "write_5412d8b707f4f20532ed",
+          "line": 341,
+          "method": "update",
+          "module": "yandex_fleet",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/monitoring/sync/route.ts",
+          "id": "write_8ac2ad8d2aa22cfabf45",
+          "line": 358,
+          "method": "update",
+          "module": "yandex_fleet",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/monitoring/sync/route.ts",
+          "id": "write_1b19b5b4e8d72dd3ccf1",
+          "line": 376,
+          "method": "update",
+          "module": "yandex_fleet",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "contacts.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "platform_shell",
+      "caller_modules": [
+        "gravity_core"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_1e5e17cb2e9c36b5",
+      "models": [
+        "Driver"
+      ],
+      "owner_contexts": [
+        "fleet_operations"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/scripts/force-clear-locks.ts",
+          "id": "write_30faae9f6131b1ceedd9",
+          "line": 7,
+          "method": "updateMany",
+          "module": "gravity_core",
+          "role": "script",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "fleet_operations.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "ai_knowledge",
+      "caller_modules": [
+        "ai_knowledge"
+      ],
+      "classifications": [
+        "LEGACY"
+      ],
+      "id": "migration_1ede9e2ac70ee04b",
+      "models": [
+        "AiKnowledgeSource"
+      ],
+      "owner_contexts": [
+        "ai_knowledge"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "LEGACY",
+          "file": "gravity-mvp/src/lib/ai/knowledge/legacyMigration.ts",
+          "id": "write_de6223008dc3e404e5b1",
+          "line": 184,
+          "method": "$executeRaw",
+          "module": "ai_knowledge",
+          "role": "legacy",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "context-internal owner service behind the existing call shape",
+        "enforcement": "block direct cross-module Prisma writes after internal callers switch",
+        "migration": "introduce internal owner operation; preserve response semantics; switch bounded sites; remove direct Prisma access",
+        "target_surface": "ai_knowledge.internal"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "work_management",
+      "caller_modules": [
+        "tasks"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_1f144ffb62dd0b3c",
+      "models": [
+        "Driver"
+      ],
+      "owner_contexts": [
+        "fleet_operations"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 2,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/tasks/excel-actions.ts",
+          "id": "write_e460c822b3554cae9cc2",
+          "line": 776,
+          "method": "update",
+          "module": "tasks",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/tasks/excel-actions.ts",
+          "id": "write_4395b91e97deaef1ac80",
+          "line": 795,
+          "method": "create",
+          "module": "tasks",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "fleet_operations.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "fleet_operations",
+      "caller_modules": [
+        "yandex_fleet",
+        "yfs"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_214b69c1fb1df987",
+      "models": [
+        "Driver"
+      ],
+      "owner_contexts": [
+        "fleet_operations"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 3,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/monitoring/fleet-check/callback/route.ts",
+          "id": "write_9dc8766eacf1bbbeff88",
+          "line": 43,
+          "method": "update",
+          "module": "yandex_fleet",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/monitoring/sync/route.ts",
+          "id": "write_e293fb9b3e2ed1ed21f2",
+          "line": 467,
+          "method": "upsert",
+          "module": "yandex_fleet",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "yandex-fleet-scraper/src/scripts/heal-account.ts",
+          "id": "write_82410caac682a0617f9e",
+          "line": 8,
+          "method": "$executeRawUnsafe",
+          "module": "yfs",
+          "role": "script",
+          "schema": "yandex-fleet-scraper/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "context-internal owner service behind the existing call shape",
+        "enforcement": "block direct cross-module Prisma writes after internal callers switch",
+        "migration": "introduce internal owner operation; preserve response semantics; switch bounded sites; remove direct Prisma access",
+        "target_surface": "fleet_operations.internal"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "max_channel",
+      "caller_modules": [
+        "max_provider"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_22eff9f42e71a832",
+      "models": [
+        "Contact"
+      ],
+      "owner_contexts": [
+        "contacts"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/webhook/max/sync-names/route.ts",
+          "id": "write_f3df390bb40095ccc932",
+          "line": 98,
+          "method": "update",
+          "module": "max_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "contacts.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "platform_shell",
+      "caller_modules": [
+        "gravity_core"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_26a0af43f7c4670a",
+      "models": [
+        "BotChatMessage"
+      ],
+      "owner_contexts": [
+        "telegram_channel"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 2,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/bot-users/route.ts",
+          "id": "write_50d8d17303207a5480a6",
+          "line": 101,
+          "method": "deleteMany",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "id": "write_c051a6e69c079e8a77a0",
+          "line": 318,
+          "method": "create",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "telegram_channel.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "operations_observability",
+      "caller_modules": [
+        "monitoring"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_2a7e12329db0980a",
+      "models": [
+        "Task"
+      ],
+      "owner_contexts": [
+        "work_management"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/RetentionCleanup.ts",
+          "id": "write_1f20eba2f3f6a7773151",
+          "line": 254,
+          "method": "$executeRaw",
+          "module": "monitoring",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "work_management.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "calling",
+      "caller_modules": [
+        "ai_calls"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_2ba3110591093c08",
+      "models": [
+        "Call"
+      ],
+      "owner_contexts": [
+        "calling"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 4,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/ai-calls/mock/route.ts",
+          "id": "write_ec7d44ca0e2e6a162499",
+          "line": 93,
+          "method": "create",
+          "module": "ai_calls",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/ai-calls/mock/route.ts",
+          "id": "write_8a8dab0fa5910fd43ef8",
+          "line": 151,
+          "method": "update",
+          "module": "ai_calls",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/ai-calls/sessions/[id]/transcript-item/route.ts",
+          "id": "write_c3cd4a1faca8b61ae881",
+          "line": 45,
+          "method": "update",
+          "module": "ai_calls",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/ai-calls/start/route.ts",
+          "id": "write_17a3b41210c629fb11d1",
+          "line": 101,
+          "method": "create",
+          "module": "ai_calls",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "context-internal owner service behind the existing call shape",
+        "enforcement": "block direct cross-module Prisma writes after internal callers switch",
+        "migration": "introduce internal owner operation; preserve response semantics; switch bounded sites; remove direct Prisma access",
+        "target_surface": "calling.internal"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "telegram_channel",
+      "caller_modules": [
+        "telegram_provider"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_2fa76a81f50975bf",
+      "models": [
+        "ContactIdentity"
+      ],
+      "owner_contexts": [
+        "contacts"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/webhook/telegram/route.ts",
+          "id": "write_66dd3ddf77ce451ae891",
+          "line": 178,
+          "method": "update",
+          "module": "telegram_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "contacts.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "messaging",
+      "caller_modules": [
+        "messages"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_30341c5551662f55",
+      "models": [
+        "Contact"
+      ],
+      "owner_contexts": [
+        "contacts"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/messages/link-chat-actions.ts",
+          "id": "write_5538470d45d761866f52",
+          "line": 94,
+          "method": "update",
+          "module": "messages",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "contacts.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "configuration",
+      "caller_modules": [
+        "settings"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_30dc23eb89df8b76",
+      "models": [
+        "AiRetrievalPolicy"
+      ],
+      "owner_contexts": [
+        "ai_knowledge"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_13b000db8cc8797befb2",
+          "line": 1301,
+          "method": "$executeRawUnsafe",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "ai_knowledge.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "configuration",
+      "caller_modules": [
+        "settings"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_32c0e2377e609527",
+      "models": [
+        "CommunicationTrigger"
+      ],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 4,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/triggers/actions.ts",
+          "id": "write_1d2319afc3087e490c05",
+          "line": 36,
+          "method": "create",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/triggers/actions.ts",
+          "id": "write_7fd78df60ab9b3ebd6a3",
+          "line": 49,
+          "method": "update",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/triggers/actions.ts",
+          "id": "write_bd3963c641de5591e0b7",
+          "line": 57,
+          "method": "delete",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/triggers/actions.ts",
+          "id": "write_b758114ced0815e604d2",
+          "line": 62,
+          "method": "update",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "messaging.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "fleet_operations",
+      "caller_modules": [
+        "yandex_fleet"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_3a25fc02145eb8cf",
+      "models": [
+        "ContactPhone"
+      ],
+      "owner_contexts": [
+        "contacts"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 4,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/monitoring/sync/route.ts",
+          "id": "write_ae9917cad473d0ee533b",
+          "line": 153,
+          "method": "update",
+          "module": "yandex_fleet",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/monitoring/sync/route.ts",
+          "id": "write_757b939c1d568f802e76",
+          "line": 165,
+          "method": "create",
+          "module": "yandex_fleet",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/monitoring/sync/route.ts",
+          "id": "write_ed73555c95d4727c74d7",
+          "line": 205,
+          "method": "create",
+          "module": "yandex_fleet",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/monitoring/sync/route.ts",
+          "id": "write_a7ccceca05a5229127ad",
+          "line": 348,
+          "method": "create",
+          "module": "yandex_fleet",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "contacts.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "analytics_reporting",
+      "caller_modules": [
+        "analytics"
+      ],
+      "classifications": [
+        "SHARED_AMBIGUOUS"
+      ],
+      "id": "migration_3b35a508fa1bce00",
+      "models": [
+        "intervention_actions"
+      ],
+      "owner_contexts": [
+        "operations_observability"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 3,
+      "sites": [
+        {
+          "classification": "SHARED_AMBIGUOUS",
+          "file": "gravity-mvp/src/app/team-overview/actions.ts",
+          "id": "write_6b9855c423c0a8da4e9b",
+          "line": 825,
+          "method": "$executeRawUnsafe",
+          "module": "analytics",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "SHARED_AMBIGUOUS",
+          "file": "gravity-mvp/src/app/team-overview/actions.ts",
+          "id": "write_ef7c722a80606d8c6f0b",
+          "line": 826,
+          "method": "$executeRawUnsafe",
+          "module": "analytics",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "SHARED_AMBIGUOUS",
+          "file": "gravity-mvp/src/app/team-overview/actions.ts",
+          "id": "write_4c01f63d9a9ee0f8a848",
+          "line": 827,
+          "method": "$executeRawUnsafe",
+          "module": "analytics",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "typed compatibility operation around the current raw SQL call",
+        "enforcement": "block reintroduction only after exact table scopes are split and owner commands are live",
+        "migration": "identify/split table scope; introduce one owner command per context; dual-verify; switch caller; retire raw path",
+        "target_surface": "operations_observability.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "telegram_channel",
+      "caller_modules": [
+        "telegram_provider"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_3b4198ada8c5ffad",
+      "models": [
+        "HistoryImportJob"
+      ],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 3,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/tg-actions.ts",
+          "id": "write_2258c74b0d023b78e20b",
+          "line": 1572,
+          "method": "$executeRawUnsafe",
+          "module": "telegram_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/tg-actions.ts",
+          "id": "write_19b48454f4bf7db96636",
+          "line": 1674,
+          "method": "$executeRaw",
+          "module": "telegram_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/tg-actions.ts",
+          "id": "write_6a3608f1cd4ae55f2ae7",
+          "line": 1679,
+          "method": "$executeRaw",
+          "module": "telegram_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "messaging.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "platform_shell",
+      "caller_modules": [
+        "gravity_core"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_3edf8273887f2fd4",
+      "models": [
+        "AiDecisionLog"
+      ],
+      "owner_contexts": [
+        "ai_knowledge"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/pipeline/PipelineWorker.ts",
+          "id": "write_b52fbffae3bbc225a252",
+          "line": 159,
+          "method": "$executeRaw",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "ai_knowledge.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "operations_observability",
+      "caller_modules": [
+        "monitoring"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_3f742dab88bb3d62",
+      "models": [
+        "Chat"
+      ],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/RetentionCleanup.ts",
+          "id": "write_6c78be689490c7c96868",
+          "line": 253,
+          "method": "$executeRaw",
+          "module": "monitoring",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "messaging.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "platform_shell",
+      "caller_modules": [
+        "gravity_core"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_40e1670f51050e92",
+      "models": [
+        "Contact"
+      ],
+      "owner_contexts": [
+        "contacts"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/__tests__/driver-matching-safety.test.ts",
+          "id": "write_59fcea34f1dc7c97e666",
+          "line": 549,
+          "method": "update",
+          "module": "gravity_core",
+          "role": "test",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "contacts.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "analytics_reporting",
+      "caller_modules": [
+        "analytics"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_420421d559f606ce",
+      "models": [
+        "intervention_actions"
+      ],
+      "owner_contexts": [
+        "operations_observability"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 2,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/team-overview/actions.ts",
+          "id": "write_89291d1122e4ad58870a",
+          "line": 844,
+          "method": "$executeRawUnsafe",
+          "module": "analytics",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/team-overview/actions.ts",
+          "id": "write_9b3cac18e8734a7a8b4a",
+          "line": 899,
+          "method": "$executeRawUnsafe",
+          "module": "analytics",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "operations_observability.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "operations_observability",
+      "caller_modules": [
+        "monitoring"
+      ],
+      "classifications": [
+        "SHARED_AMBIGUOUS"
+      ],
+      "id": "migration_529d8eb560e3986d",
+      "models": [
+        "stability_check_log"
+      ],
+      "owner_contexts": [
+        "operations_observability"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "SHARED_AMBIGUOUS",
+          "file": "gravity-mvp/src/lib/stability-check.ts",
+          "id": "write_aca9bfef0d536c856eaa",
+          "line": 77,
+          "method": "$executeRawUnsafe",
+          "module": "monitoring",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "context-internal owner service behind the existing call shape",
+        "enforcement": "block direct cross-module Prisma writes after internal callers switch",
+        "migration": "introduce internal owner operation; preserve response semantics; switch bounded sites; remove direct Prisma access",
+        "target_surface": "operations_observability.internal"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "work_management",
+      "caller_modules": [
+        "tasks"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_54bbbf68952db919",
+      "models": [
+        "health_score_history"
+      ],
+      "owner_contexts": [
+        "operations_observability"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/tasks/manager-health-config.ts",
+          "id": "write_4dbcea8a3f4bd9da8272",
+          "line": 406,
+          "method": "$executeRawUnsafe",
+          "module": "tasks",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "operations_observability.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "work_management",
+      "caller_modules": [
+        "tasks"
+      ],
+      "classifications": [
+        "SHARED_AMBIGUOUS"
+      ],
+      "id": "migration_55ddc71f7450c415",
+      "models": [
+        "health_snapshots"
+      ],
+      "owner_contexts": [
+        "operations_observability"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 2,
+      "sites": [
+        {
+          "classification": "SHARED_AMBIGUOUS",
+          "file": "gravity-mvp/src/lib/tasks/manager-health-config.ts",
+          "id": "write_6f0d997a1a7967f249f2",
+          "line": 348,
+          "method": "$executeRawUnsafe",
+          "module": "tasks",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "SHARED_AMBIGUOUS",
+          "file": "gravity-mvp/src/lib/tasks/manager-health-config.ts",
+          "id": "write_6f6e90b081e4cea005e5",
+          "line": 349,
+          "method": "$executeRawUnsafe",
+          "module": "tasks",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "typed compatibility operation around the current raw SQL call",
+        "enforcement": "block reintroduction only after exact table scopes are split and owner commands are live",
+        "migration": "identify/split table scope; introduce one owner command per context; dual-verify; switch caller; retire raw path",
+        "target_surface": "operations_observability.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "configuration",
+      "caller_modules": [
+        "settings"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_56494330426e3744",
+      "models": [
+        "ScoringThreshold"
+      ],
+      "owner_contexts": [
+        "fleet_operations"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/scoring/actions.ts",
+          "id": "write_08c0886b73384f03384c",
+          "line": 24,
+          "method": "upsert",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "fleet_operations.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "max_channel",
+      "caller_modules": [
+        "max_provider"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_577f6451590e697c",
+      "models": [
+        "MessageAttachment"
+      ],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 2,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
+          "id": "write_501686995ba695c7fdb6",
+          "line": 138,
+          "method": "deleteMany",
+          "module": "max_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
+          "id": "write_faf522b2187dd47ac213",
+          "line": 539,
+          "method": "create",
+          "module": "max_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "messaging.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "work_management",
+      "caller_modules": [
+        "tasks"
+      ],
+      "classifications": [
+        "SHARED_AMBIGUOUS"
+      ],
+      "id": "migration_58c9e0e2295698d0",
+      "models": [
+        "health_score_history"
+      ],
+      "owner_contexts": [
+        "operations_observability"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 2,
+      "sites": [
+        {
+          "classification": "SHARED_AMBIGUOUS",
+          "file": "gravity-mvp/src/lib/tasks/manager-health-config.ts",
+          "id": "write_5e28947541ce309ce304",
+          "line": 350,
+          "method": "$executeRawUnsafe",
+          "module": "tasks",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "SHARED_AMBIGUOUS",
+          "file": "gravity-mvp/src/lib/tasks/manager-health-config.ts",
+          "id": "write_cdea9b2062197c5185c6",
+          "line": 351,
+          "method": "$executeRawUnsafe",
+          "module": "tasks",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "typed compatibility operation around the current raw SQL call",
+        "enforcement": "block reintroduction only after exact table scopes are split and owner commands are live",
+        "migration": "identify/split table scope; introduce one owner command per context; dual-verify; switch caller; retire raw path",
+        "target_surface": "operations_observability.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "platform_shell",
+      "caller_modules": [
+        "gravity_core"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_5a688a3d12805612",
+      "models": [
+        "DriverAction"
+      ],
+      "owner_contexts": [
+        "fleet_operations"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 4,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "id": "write_abce569197ffa03c5570",
+          "line": 675,
+          "method": "create",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "id": "write_84ec3f06b52a8c35848f",
+          "line": 746,
+          "method": "create",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "id": "write_ec88539ff98a879074cd",
+          "line": 763,
+          "method": "create",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "id": "write_ad92e80cbeac88fa49a7",
+          "line": 877,
+          "method": "updateMany",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "fleet_operations.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "configuration",
+      "caller_modules": [
+        "settings"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_5b68d1e7487106e9",
+      "models": [
+        "KnowledgeBaseEntry"
+      ],
+      "owner_contexts": [
+        "ai_knowledge"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 3,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_d6f7e8d593dc75082ec0",
+          "line": 247,
+          "method": "$executeRaw",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_f2a6c229c0fa3da6265c",
+          "line": 272,
+          "method": "$executeRawUnsafe",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_6293b6fa3afc52b19a6e",
+          "line": 281,
+          "method": "$executeRaw",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "ai_knowledge.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "operations_observability",
+      "caller_modules": [
+        "monitoring"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_5ec12c4fca542cb5",
+      "models": [
+        "Contact"
+      ],
+      "owner_contexts": [
+        "contacts"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/RetentionCleanup.ts",
+          "id": "write_a7ae8331f174aa977563",
+          "line": 255,
+          "method": "$executeRaw",
+          "module": "monitoring",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "contacts.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "platform_shell",
+      "caller_modules": [
+        "gravity_core"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_64d66948aba8a911",
+      "models": [
+        "ApiConnection"
+      ],
+      "owner_contexts": [
+        "fleet_operations"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 3,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/actions.ts",
+          "id": "write_fe762dd301af2b7a2e8a",
+          "line": 22,
+          "method": "create",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/actions.ts",
+          "id": "write_d7bff58329bf9acd78a7",
+          "line": 30,
+          "method": "update",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/actions.ts",
+          "id": "write_f6ec72ac60437459047b",
+          "line": 39,
+          "method": "delete",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "fleet_operations.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "avito_acquisition",
+      "caller_modules": [
+        "leads"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_65ec0d3f452a8288",
+      "models": [
+        "avito_responses"
+      ],
+      "owner_contexts": [
+        "avito_acquisition"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/leads/sync/route.ts",
+          "id": "write_3d9324b83bd57a2a7be2",
+          "line": 74,
+          "method": "update",
+          "module": "leads",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "context-internal owner service behind the existing call shape",
+        "enforcement": "block direct cross-module Prisma writes after internal callers switch",
+        "migration": "introduce internal owner operation; preserve response semantics; switch bounded sites; remove direct Prisma access",
+        "target_surface": "avito_acquisition.internal"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "configuration",
+      "caller_modules": [
+        "settings"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_680fe1d8da7e82ff",
+      "models": [
+        "HistoryImportJob"
+      ],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 3,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_e23b39baf001c1b453ec",
+          "line": 340,
+          "method": "$executeRaw",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_a8795930cf0c09053cc7",
+          "line": 392,
+          "method": "$executeRaw",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_edf60cf61d8390f161cb",
+          "line": 406,
+          "method": "$executeRaw",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "messaging.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "fleet_operations",
+      "caller_modules": [
+        "yandex_fleet"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_69afe4f783ba235a",
+      "models": [
+        "DriverDaySummary"
+      ],
+      "owner_contexts": [
+        "fleet_operations"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/YandexFleetService.ts",
+          "id": "write_a69a8f7c55fe6b8615a6",
+          "line": 162,
+          "method": "upsert",
+          "module": "yandex_fleet",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "context-internal owner service behind the existing call shape",
+        "enforcement": "block direct cross-module Prisma writes after internal callers switch",
+        "migration": "introduce internal owner operation; preserve response semantics; switch bounded sites; remove direct Prisma access",
+        "target_surface": "fleet_operations.internal"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "messaging",
+      "caller_modules": [
+        "messages"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_6f85afe6aae4abca",
+      "models": [
+        "ManagerTask"
+      ],
+      "owner_contexts": [
+        "work_management"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/inbox/actions.ts",
+          "id": "write_50c6693c8fbe6eaf3147",
+          "line": 108,
+          "method": "update",
+          "module": "messages",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "work_management.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "configuration",
+      "caller_modules": [
+        "settings"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_7b0251f9f4b375a3",
+      "models": [
+        "AiAgentConfig"
+      ],
+      "owner_contexts": [
+        "calling"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 5,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_dc407bc68f3d855ac40c",
+          "line": 96,
+          "method": "$executeRawUnsafe",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_2cf803c0b99e7211aca0",
+          "line": 106,
+          "method": "$executeRawUnsafe",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_8fc77a2457d1b4ad4351",
+          "line": 150,
+          "method": "$executeRaw",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_daca6d50429e639b59ad",
+          "line": 620,
+          "method": "upsert",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_37ea485c68a0d3782ea6",
+          "line": 781,
+          "method": "$executeRaw",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "calling.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "operations_observability",
+      "caller_modules": [
+        "monitoring"
+      ],
+      "classifications": [
+        "SHARED_AMBIGUOUS"
+      ],
+      "id": "migration_7d7acf7ee34466df",
+      "models": [
+        "perf_log"
+      ],
+      "owner_contexts": [
+        "operations_observability"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 2,
+      "sites": [
+        {
+          "classification": "SHARED_AMBIGUOUS",
+          "file": "gravity-mvp/src/lib/perf-monitor.ts",
+          "id": "write_c40ff0bfaac12a8efe22",
+          "line": 54,
+          "method": "$executeRawUnsafe",
+          "module": "monitoring",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "SHARED_AMBIGUOUS",
+          "file": "gravity-mvp/src/lib/perf-monitor.ts",
+          "id": "write_9c50b2592fe0580bab8e",
+          "line": 58,
+          "method": "$executeRawUnsafe",
+          "module": "monitoring",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "context-internal owner service behind the existing call shape",
+        "enforcement": "block direct cross-module Prisma writes after internal callers switch",
+        "migration": "introduce internal owner operation; preserve response semantics; switch bounded sites; remove direct Prisma access",
+        "target_surface": "operations_observability.internal"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "contacts",
+      "caller_modules": [
+        "contacts"
+      ],
+      "classifications": [
+        "SHARED_AMBIGUOUS"
+      ],
+      "id": "migration_7dbe4c76a5d45428",
+      "models": [
+        "Chat",
+        "ContactIdentity"
+      ],
+      "owner_contexts": [
+        "contacts",
+        "messaging"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "SHARED_AMBIGUOUS",
+          "file": "gravity-mvp/src/lib/ContactService.ts",
+          "id": "write_04c25a84a4a9dfcba440",
+          "line": 377,
+          "method": "$executeRaw",
+          "module": "contacts",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "typed compatibility operation around the current raw SQL call",
+        "enforcement": "block reintroduction only after exact table scopes are split and owner commands are live",
+        "migration": "identify/split table scope; introduce one owner command per context; dual-verify; switch caller; retire raw path",
+        "target_surface": "contacts.public, messaging.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "analytics_reporting",
+      "caller_modules": [
+        "analytics"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_7f387b2b1d46c88f",
+      "models": [
+        "Task"
+      ],
+      "owner_contexts": [
+        "work_management"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/team-overview/actions.ts",
+          "id": "write_e6a7b9a36a42988e6b20",
+          "line": 662,
+          "method": "update",
+          "module": "analytics",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "work_management.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "operations_observability",
+      "caller_modules": [
+        "monitoring"
+      ],
+      "classifications": [
+        "SHARED_AMBIGUOUS"
+      ],
+      "id": "migration_83674fb3b03070e7",
+      "models": [
+        "integrity_check_log"
+      ],
+      "owner_contexts": [
+        "operations_observability"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "SHARED_AMBIGUOUS",
+          "file": "gravity-mvp/src/lib/IntegrityChecker.ts",
+          "id": "write_54e8d34376d80c09c59d",
+          "line": 42,
+          "method": "$executeRawUnsafe",
+          "module": "monitoring",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "context-internal owner service behind the existing call shape",
+        "enforcement": "block direct cross-module Prisma writes after internal callers switch",
+        "migration": "introduce internal owner operation; preserve response semantics; switch bounded sites; remove direct Prisma access",
+        "target_surface": "operations_observability.internal"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "fleet_operations",
+      "caller_modules": [
+        "drivers"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_856fc8f0d6ec6935",
+      "models": [
+        "CommunicationEvent"
+      ],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 2,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/drivers/actions.ts",
+          "id": "write_a8ef0e01e73cfa39e362",
+          "line": 390,
+          "method": "create",
+          "module": "drivers",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/drivers/actions.ts",
+          "id": "write_e3e8a9390d6afd3c0202",
+          "line": 417,
+          "method": "create",
+          "module": "drivers",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "messaging.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "contacts",
+      "caller_modules": [
+        "contacts"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_8591eeb00f3ae958",
+      "models": [
+        "Chat"
+      ],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 11,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/contacts/[id]/chats/route.ts",
+          "id": "write_6cb60ab6ccd74b66613c",
+          "line": 128,
+          "method": "create",
+          "module": "contacts",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/contacts/[id]/chats/route.ts",
+          "id": "write_1faedc5b57b84bfb1c59",
+          "line": 145,
+          "method": "update",
+          "module": "contacts",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/contacts/start-conversation/route.ts",
+          "id": "write_c37c4973fce86faf788c",
+          "line": 87,
+          "method": "create",
+          "module": "contacts",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/contacts/start-conversation/route.ts",
+          "id": "write_7112a66db9cc3b12d04a",
+          "line": 105,
+          "method": "update",
+          "module": "contacts",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/ContactMergeService.ts",
+          "id": "write_f4602ed7d64c6d2d4a68",
+          "line": 303,
+          "method": "updateMany",
+          "module": "contacts",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/ContactMergeService.ts",
+          "id": "write_464f7275f9f9cf12bccd",
+          "line": 325,
+          "method": "updateMany",
+          "module": "contacts",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/ContactMergeService.ts",
+          "id": "write_c09fdaef6fb1ad31455e",
+          "line": 385,
+          "method": "updateMany",
+          "module": "contacts",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/ContactMergeService.ts",
+          "id": "write_3afaecdcce19259e75f3",
+          "line": 488,
+          "method": "updateMany",
+          "module": "contacts",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/ContactMergeService.ts",
+          "id": "write_d8f9d22b7ab4632728cc",
+          "line": 527,
+          "method": "updateMany",
+          "module": "contacts",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/ContactMergeService.ts",
+          "id": "write_7b582e9e533557641dc2",
+          "line": 536,
+          "method": "updateMany",
+          "module": "contacts",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/ContactService.ts",
+          "id": "write_de4da0cf7edfd9d3c137",
+          "line": 360,
+          "method": "update",
+          "module": "contacts",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "messaging.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "max_channel",
+      "caller_modules": [
+        "max_provider"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_891ed67c317c43a7",
+      "models": [
+        "Chat"
+      ],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 5,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/webhook/max/sync-names/route.ts",
+          "id": "write_38da01dbcf59888b8608",
+          "line": 86,
+          "method": "update",
+          "module": "max_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
+          "id": "write_9d6522948608a8335e8f",
+          "line": 281,
+          "method": "update",
+          "module": "max_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
+          "id": "write_f10b970c4039118bba6a",
+          "line": 315,
+          "method": "update",
+          "module": "max_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
+          "id": "write_20acf80ae13aa7ac515c",
+          "line": 335,
+          "method": "create",
+          "module": "max_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
+          "id": "write_28c34f08dfde4445cb87",
+          "line": 352,
+          "method": "update",
+          "module": "max_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "messaging.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "fleet_operations",
+      "caller_modules": [
+        "yandex_fleet"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_89c109d8493365b2",
+      "models": [
+        "DriverEvent"
+      ],
+      "owner_contexts": [
+        "fleet_operations"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 2,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/monitoring/fleet-check/callback/route.ts",
+          "id": "write_291a0cf4175bb6e75e9f",
+          "line": 53,
+          "method": "create",
+          "module": "yandex_fleet",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/monitoring/fleet-check/callback/route.ts",
+          "id": "write_f249bb83d39da02558d0",
+          "line": 69,
+          "method": "create",
+          "module": "yandex_fleet",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "context-internal owner service behind the existing call shape",
+        "enforcement": "block direct cross-module Prisma writes after internal callers switch",
+        "migration": "introduce internal owner operation; preserve response semantics; switch bounded sites; remove direct Prisma access",
+        "target_surface": "fleet_operations.internal"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "whatsapp_channel",
+      "caller_modules": [
+        "whatsapp_provider"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_8d3a1b917de0c590",
+      "models": [
+        "HistoryImportJob"
+      ],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 2,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/integrations/whatsapp/whatsapp-actions.ts",
+          "id": "write_e14f2108a8ec98b9257f",
+          "line": 253,
+          "method": "$executeRaw",
+          "module": "whatsapp_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
+          "id": "write_ce16f6e21dfeb0ad29c9",
+          "line": 2260,
+          "method": "$executeRawUnsafe",
+          "module": "whatsapp_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "messaging.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "whatsapp_channel",
+      "caller_modules": [
+        "whatsapp_provider"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_904bb6b629b77b16",
+      "models": [
+        "Message"
+      ],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 8,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
+          "id": "write_1cfbf127ef804271a1e4",
+          "line": 260,
+          "method": "create",
+          "module": "whatsapp_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
+          "id": "write_cfb1a486a42a6ac768fa",
+          "line": 628,
+          "method": "update",
+          "module": "whatsapp_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
+          "id": "write_c6551ef61961373c0af6",
+          "line": 638,
+          "method": "create",
+          "module": "whatsapp_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
+          "id": "write_37878789b949a928c705",
+          "line": 1218,
+          "method": "update",
+          "module": "whatsapp_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
+          "id": "write_501e2bc936f20724986e",
+          "line": 1228,
+          "method": "create",
+          "module": "whatsapp_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
+          "id": "write_a3ff755602bb1e5668df",
+          "line": 1729,
+          "method": "update",
+          "module": "whatsapp_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
+          "id": "write_37655092c5ac87dae5f4",
+          "line": 1738,
+          "method": "create",
+          "module": "whatsapp_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
+          "id": "write_1c796fedc114ce0d1a21",
+          "line": 2128,
+          "method": "create",
+          "module": "whatsapp_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "messaging.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "configuration",
+      "caller_modules": [
+        "settings"
+      ],
+      "classifications": [
+        "SHARED_AMBIGUOUS"
+      ],
+      "id": "migration_9295b8793940d1b7",
+      "models": [
+        "config_change_log"
+      ],
+      "owner_contexts": [
+        "configuration"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "SHARED_AMBIGUOUS",
+          "file": "gravity-mvp/src/lib/config-validator.ts",
+          "id": "write_399549dcea0547077429",
+          "line": 232,
+          "method": "$executeRawUnsafe",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "context-internal owner service behind the existing call shape",
+        "enforcement": "block direct cross-module Prisma writes after internal callers switch",
+        "migration": "introduce internal owner operation; preserve response semantics; switch bounded sites; remove direct Prisma access",
+        "target_surface": "configuration.internal"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "configuration",
+      "caller_modules": [
+        "settings"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_9896cb76f4eeb68a",
+      "models": [
+        "AiDecisionLog"
+      ],
+      "owner_contexts": [
+        "ai_knowledge"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_3773971fa5f1951e4569",
+          "line": 305,
+          "method": "$executeRaw",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "ai_knowledge.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "operations_observability",
+      "caller_modules": [
+        "monitoring"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_9fd5889e5d1307c9",
+      "models": [
+        "Message"
+      ],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 3,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/RetentionCleanup.ts",
+          "id": "write_bdcc77e16e61cf03e0d8",
+          "line": 151,
+          "method": "$executeRaw",
+          "module": "monitoring",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/RetentionCleanup.ts",
+          "id": "write_e9a0ea26e6f2104dcf59",
+          "line": 168,
+          "method": "$executeRaw",
+          "module": "monitoring",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/RetentionCleanup.ts",
+          "id": "write_27eacfe6e2da8766f32c",
+          "line": 188,
+          "method": "$executeRaw",
+          "module": "monitoring",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "messaging.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "max_channel",
+      "caller_modules": [
+        "max_provider"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_a5a1040630dc288c",
+      "models": [
+        "Message"
+      ],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 3,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
+          "id": "write_3c1cbcb8bca849a03398",
+          "line": 139,
+          "method": "delete",
+          "module": "max_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
+          "id": "write_b9e61bf063b273b89cf8",
+          "line": 426,
+          "method": "update",
+          "module": "max_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
+          "id": "write_b23eea42780b7a961651",
+          "line": 505,
+          "method": "upsert",
+          "module": "max_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "messaging.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "platform_shell",
+      "caller_modules": [
+        "gravity_core"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_af31e260c06c121e",
+      "models": [
+        "HistoryImportJob"
+      ],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 2,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/import-jobs/[id]/route.ts",
+          "id": "write_1b324e34783baefb83e4",
+          "line": 10,
+          "method": "$executeRaw",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/import-jobs/[id]/route.ts",
+          "id": "write_ea4880fd08f417423b70",
+          "line": 55,
+          "method": "$executeRawUnsafe",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "messaging.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "platform_shell",
+      "caller_modules": [
+        "gravity_core"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_b13277983c0d719d",
+      "models": [
+        "MessageEventLog"
+      ],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 3,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/pipeline/PipelineWorker.ts",
+          "id": "write_87839afa5a18d07982a5",
+          "line": 31,
+          "method": "$executeRaw",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/pipeline/PipelineWorker.ts",
+          "id": "write_ac8a2f0295f3bf300ca4",
+          "line": 50,
+          "method": "$executeRaw",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/pipeline/PipelineWorker.ts",
+          "id": "write_70dea0af6558c4ff4b1e",
+          "line": 61,
+          "method": "$executeRaw",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "messaging.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "configuration",
+      "caller_modules": [
+        "settings"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_b3ef43569ca981b9",
+      "models": [
+        "AiExtractionJob"
+      ],
+      "owner_contexts": [
+        "ai_knowledge"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_cf0ad2b1898621a01197",
+          "line": 726,
+          "method": "$executeRaw",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "ai_knowledge.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "operations_observability",
+      "caller_modules": [
+        "monitoring"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_b4fdd0f46a4b6413",
+      "models": [
+        "DriverAttention"
+      ],
+      "owner_contexts": [
+        "fleet_operations"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/monitoring/attention/[id]/route.ts",
+          "id": "write_bc3bbf7598bc2ae88477",
+          "line": 23,
+          "method": "update",
+          "module": "monitoring",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "fleet_operations.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "ai_knowledge",
+      "caller_modules": [
+        "ai_knowledge"
+      ],
+      "classifications": [
+        "LEGACY"
+      ],
+      "id": "migration_b83e3f6c604949b1",
+      "models": [
+        "AiKnowledgeItem"
+      ],
+      "owner_contexts": [
+        "ai_knowledge"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "LEGACY",
+          "file": "gravity-mvp/src/lib/ai/knowledge/legacyMigration.ts",
+          "id": "write_e1c92e6b35f51dda9ecf",
+          "line": 167,
+          "method": "$executeRaw",
+          "module": "ai_knowledge",
+          "role": "legacy",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "context-internal owner service behind the existing call shape",
+        "enforcement": "block direct cross-module Prisma writes after internal callers switch",
+        "migration": "introduce internal owner operation; preserve response semantics; switch bounded sites; remove direct Prisma access",
+        "target_surface": "ai_knowledge.internal"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "messaging",
+      "caller_modules": [
+        "messages"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_c30c02edcc5831fa",
+      "models": [
+        "AiKnowledgeItem"
+      ],
+      "owner_contexts": [
+        "ai_knowledge"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 2,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
+          "id": "write_2b1e287e7430e251bec4",
+          "line": 278,
+          "method": "$executeRaw",
+          "module": "messages",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
+          "id": "write_de4169972b8fc3e21f7d",
+          "line": 445,
+          "method": "$executeRaw",
+          "module": "messages",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "ai_knowledge.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "operations_observability",
+      "caller_modules": [
+        "monitoring"
+      ],
+      "classifications": [
+        "SHARED_AMBIGUOUS"
+      ],
+      "id": "migration_c857bd5ae3189a0b",
+      "models": [
+        "cron_health_log"
+      ],
+      "owner_contexts": [
+        "operations_observability"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "SHARED_AMBIGUOUS",
+          "file": "gravity-mvp/src/lib/cron-health.ts",
+          "id": "write_effcdf1b91c557c61093",
+          "line": 30,
+          "method": "$executeRawUnsafe",
+          "module": "monitoring",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "context-internal owner service behind the existing call shape",
+        "enforcement": "block direct cross-module Prisma writes after internal callers switch",
+        "migration": "introduce internal owner operation; preserve response semantics; switch bounded sites; remove direct Prisma access",
+        "target_surface": "operations_observability.internal"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "platform_shell",
+      "caller_modules": [
+        "gravity_core"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_ca65203b883c6533",
+      "models": [
+        "AiKnowledgeUsageLog"
+      ],
+      "owner_contexts": [
+        "ai_knowledge"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/pipeline/PipelineWorker.ts",
+          "id": "write_19234456e203ccbc5cc0",
+          "line": 229,
+          "method": "$executeRaw",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "ai_knowledge.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "calling",
+      "caller_modules": [
+        "calls"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_cc4d8c99d5a71ef5",
+      "models": [
+        "Message"
+      ],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 2,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
+          "id": "write_e379641d80f186bab372",
+          "line": 604,
+          "method": "update",
+          "module": "calls",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
+          "id": "write_f94e58011e32f81ee19f",
+          "line": 630,
+          "method": "create",
+          "module": "calls",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "messaging.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "work_management",
+      "caller_modules": [
+        "tasks"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_cf5479ae3da99ee5",
+      "models": [
+        "scenario_field_settings"
+      ],
+      "owner_contexts": [
+        "configuration"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 2,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/tasks/scenario-settings.ts",
+          "id": "write_669073d20c64028a67f6",
+          "line": 108,
+          "method": "$executeRaw",
+          "module": "tasks",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/tasks/scenario-settings.ts",
+          "id": "write_a418740b9891445fbb4e",
+          "line": 134,
+          "method": "$executeRaw",
+          "module": "tasks",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "configuration.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "platform_shell",
+      "caller_modules": [
+        "gravity_core"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_d1f7fa71cd1fca3c",
+      "models": [
+        "Chat"
+      ],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 2,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "id": "write_c9b528fc95e874db36fe",
+          "line": 362,
+          "method": "update",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/__tests__/max-contact-resolution-shadow.test.ts",
+          "id": "write_1d6b56ed3c5ab85a86e4",
+          "line": 360,
+          "method": "update",
+          "module": "gravity_core",
+          "role": "test",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "messaging.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "avito_acquisition",
+      "caller_modules": [
+        "leads"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_ddfe2f0b09f6ba87",
+      "models": [
+        "Message"
+      ],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/leads/intake.ts",
+          "id": "write_f19513420b0b38a16f79",
+          "line": 180,
+          "method": "create",
+          "module": "leads",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "messaging.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "telegram_channel",
+      "caller_modules": [
+        "telegram_provider"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_df330f5e98d139d5",
+      "models": [
+        "Contact"
+      ],
+      "owner_contexts": [
+        "contacts"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/webhook/telegram/route.ts",
+          "id": "write_a4b1a1a494348d39a10a",
+          "line": 166,
+          "method": "update",
+          "module": "telegram_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "contacts.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "platform_shell",
+      "caller_modules": [
+        "gravity_core"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_df999fc22f6019db",
+      "models": [
+        "ApiLog"
+      ],
+      "owner_contexts": [
+        "fleet_operations"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 2,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/actions.ts",
+          "id": "write_0bfac2c2f4b18061277c",
+          "line": 38,
+          "method": "deleteMany",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/actions.ts",
+          "id": "write_7e1ee66329f5bb074296",
+          "line": 106,
+          "method": "create",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "fleet_operations.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "configuration",
+      "caller_modules": [
+        "settings"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_e067061cee092028",
+      "models": [
+        "AiKnowledgeSource"
+      ],
+      "owner_contexts": [
+        "ai_knowledge"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 2,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_c8fedbdea977b7fca832",
+          "line": 1167,
+          "method": "$executeRaw",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_1704acf38508b9152c94",
+          "line": 2415,
+          "method": "$executeRaw",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "ai_knowledge.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "calling",
+      "caller_modules": [
+        "ai_calls"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_e380f7963fd3d784",
+      "models": [
+        "Task"
+      ],
+      "owner_contexts": [
+        "work_management"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 2,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/ai-calls/mock/route.ts",
+          "id": "write_d069341f5099d04c546d",
+          "line": 127,
+          "method": "create",
+          "module": "ai_calls",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/ai-calls/sessions/[id]/finalize/route.ts",
+          "id": "write_144557bcd831e0b2d281",
+          "line": 145,
+          "method": "create",
+          "module": "ai_calls",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "work_management.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "calling",
+      "caller_modules": [
+        "calls"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_e3f1d4c8021a234a",
+      "models": [
+        "Chat"
+      ],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 3,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
+          "id": "write_4291099f11b00625ac32",
+          "line": 561,
+          "method": "create",
+          "module": "calls",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
+          "id": "write_46f60cf1da05fef3f066",
+          "line": 571,
+          "method": "update",
+          "module": "calls",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
+          "id": "write_b4c64aa463dded00553e",
+          "line": 651,
+          "method": "update",
+          "module": "calls",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "messaging.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "messaging",
+      "caller_modules": [
+        "messages"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_e49c8cabc83892c7",
+      "models": [
+        "AiProposedReply"
+      ],
+      "owner_contexts": [
+        "ai_knowledge"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 6,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
+          "id": "write_e9262cb66a0b4b88a877",
+          "line": 151,
+          "method": "upsert",
+          "module": "messages",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
+          "id": "write_8f0fa060f2c4beba5f4e",
+          "line": 181,
+          "method": "update",
+          "module": "messages",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
+          "id": "write_b73129ba2c457bcd73bd",
+          "line": 189,
+          "method": "update",
+          "module": "messages",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
+          "id": "write_a48218f392e91d535043",
+          "line": 197,
+          "method": "update",
+          "module": "messages",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
+          "id": "write_736ab685e6d676b1b477",
+          "line": 243,
+          "method": "update",
+          "module": "messages",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
+          "id": "write_a2e317cb6829dec49543",
+          "line": 317,
+          "method": "update",
+          "module": "messages",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "ai_knowledge.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "platform_shell",
+      "caller_modules": [
+        "gravity_core"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_e8090a3214acadc2",
+      "models": [
+        "Message"
+      ],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+          "id": "write_b31065023f37d6312d97",
+          "line": 349,
+          "method": "create",
+          "module": "gravity_core",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "messaging.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "configuration",
+      "caller_modules": [
+        "settings"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_eafe85fb377d05e3",
+      "models": [
+        "AiKnowledgeItem"
+      ],
+      "owner_contexts": [
+        "ai_knowledge"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 13,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_7886b4303184e85fa328",
+          "line": 897,
+          "method": "$executeRawUnsafe",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_e71afd32bed27d918108",
+          "line": 919,
+          "method": "$executeRaw",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_dda1bd072febb4d2cb6a",
+          "line": 944,
+          "method": "$executeRaw",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_c29760ca83541e6f8d20",
+          "line": 967,
+          "method": "$executeRaw",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_05e8ac85f66a64f176f1",
+          "line": 974,
+          "method": "$executeRaw",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_b635958e6667c3b16eaa",
+          "line": 1020,
+          "method": "$executeRaw",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_8042ba204e90795246e4",
+          "line": 1073,
+          "method": "$executeRaw",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_76c74fcff3e2c070d16d",
+          "line": 1088,
+          "method": "$executeRaw",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_ceb316d7a101d8281fde",
+          "line": 1101,
+          "method": "$executeRaw",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_bff216372108ae6487cf",
+          "line": 1148,
+          "method": "$executeRaw",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_71a47ca1c539e87a9494",
+          "line": 2470,
+          "method": "$executeRaw",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_afe2302f54f9f07d2dc8",
+          "line": 2494,
+          "method": "$executeRaw",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+          "id": "write_b0d9ee16dd40f574409b",
+          "line": 2640,
+          "method": "$executeRaw",
+          "module": "settings",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "ai_knowledge.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "fleet_operations",
+      "caller_modules": [
+        "drivers"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_ec3ef196a15c342e",
+      "models": [
+        "DriverTelegram"
+      ],
+      "owner_contexts": [
+        "telegram_channel"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 2,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/drivers/[id]/actions.ts",
+          "id": "write_21c21c6aa02a1cf1d8ad",
+          "line": 26,
+          "method": "upsert",
+          "module": "drivers",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/app/drivers/[id]/actions.ts",
+          "id": "write_8df4203a17392c35e560",
+          "line": 50,
+          "method": "delete",
+          "module": "drivers",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "telegram_channel.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "whatsapp_channel",
+      "caller_modules": [
+        "whatsapp_provider"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_f2e2a093cfd6bc54",
+      "models": [
+        "MessageAttachment"
+      ],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 1,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
+          "id": "write_dba695a05a50e31a24a2",
+          "line": 322,
+          "method": "create",
+          "module": "whatsapp_provider",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "messaging.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    },
+    {
+      "caller_context": "contacts",
+      "caller_modules": [
+        "contacts"
+      ],
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "migration_fd97166bff08d508",
+      "models": [
+        "Task"
+      ],
+      "owner_contexts": [
+        "work_management"
+      ],
+      "recovery": "compatibility facade remains available until site-level parity and owner-side persistence are verified",
+      "site_count": 2,
+      "sites": [
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/ContactMergeService.ts",
+          "id": "write_8badc5d3366eb5515588",
+          "line": 328,
+          "method": "updateMany",
+          "module": "contacts",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        },
+        {
+          "classification": "FOREIGN",
+          "file": "gravity-mvp/src/lib/ContactMergeService.ts",
+          "id": "write_355a39b19f01996062b1",
+          "line": 545,
+          "method": "updateMany",
+          "module": "contacts",
+          "role": "production",
+          "schema": "gravity-mvp/prisma/schema.prisma"
+        }
+      ],
+      "strategy": {
+        "adapter": "owner-context command invoked through a compatibility facade",
+        "enforcement": "add boundary rule after all listed sites switch",
+        "migration": "add command; preserve response semantics; dual-write or shadow-compare where safe; switch bounded sites; remove direct Prisma access",
+        "target_surface": "work_management.public"
+      },
+      "verification": [
+        "existing behavior contract tests",
+        "owner command integration tests",
+        "site-level parity evidence",
+        "no direct foreign Prisma write after switch"
+      ]
+    }
+  ],
+  "schema": "yoko.crm.foreign-write-migration-plan.v1",
+  "version": 1
+}

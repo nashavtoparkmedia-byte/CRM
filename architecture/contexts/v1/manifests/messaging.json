@@ -1,0 +1,216 @@
+{
+  "allowed_dependencies": [
+    {
+      "context": "contacts",
+      "surface": "contacts.public"
+    },
+    {
+      "context": "identity_access",
+      "surface": "identity_access.public"
+    },
+    {
+      "context": "work_management",
+      "surface": "work_management.public"
+    },
+    {
+      "context": "ai_knowledge",
+      "surface": "ai_knowledge.public"
+    }
+  ],
+  "commands": [
+    "ReceiveMessageCommand.v1",
+    "SendMessageCommand.v1",
+    "AttachMessageMediaCommand.v1",
+    "ImportMessageHistoryCommand.v1"
+  ],
+  "compatibility_strategy": "Keep MessageService and stream buses as compatibility facades; provider-specific delivery moves behind versioned channel ports.",
+  "context": {
+    "id": "messaging",
+    "name": "Messaging"
+  },
+  "credential_relationships": {
+    "database_models": [
+      "AiAgentConfig",
+      "MaxConnection",
+      "TelegramConnection",
+      "WhatsAppConnection"
+    ],
+    "environment_names": [
+      "MAX_SCRAPER_PHONE",
+      "MAX_SCRAPER_URL",
+      "NEXT_PUBLIC_FORCE_SHOW_ALL_CHANNELS",
+      "TELEGRAM_BOT_URL"
+    ],
+    "policy": "Names and access locations only. Values stay inside the owning adapter and never cross a public contract."
+  },
+  "events": [
+    "MessageReceived.v1",
+    "MessageSent.v1",
+    "ConversationChanged.v1"
+  ],
+  "evidence": {
+    "dependency_edges": 12,
+    "source_snapshot_sha256": "2713db175062bb673dcca2d97e80c2ae204a2f257438036c6db2506587dfad7d",
+    "write_sites_requiring_migration": 11
+  },
+  "forbidden_dependencies": [
+    "credentialValuesInContracts",
+    "directForeignPrismaWrites",
+    "direct_provider_sdk",
+    "providerImplementationImportsOutsideOwningContext",
+    "provider_session_state",
+    "unversionedCrossContextPayloads"
+  ],
+  "foreign_write_migration_plans": [
+    "migration_038d96774ba66c22",
+    "migration_08ae2450b82ef247",
+    "migration_0ed08765d767793e",
+    "migration_0f4314be5092e299",
+    "migration_30341c5551662f55",
+    "migration_32c0e2377e609527",
+    "migration_3b4198ada8c5ffad",
+    "migration_3f742dab88bb3d62",
+    "migration_577f6451590e697c",
+    "migration_680fe1d8da7e82ff",
+    "migration_6f85afe6aae4abca",
+    "migration_7dbe4c76a5d45428",
+    "migration_856fc8f0d6ec6935",
+    "migration_8591eeb00f3ae958",
+    "migration_891ed67c317c43a7",
+    "migration_8d3a1b917de0c590",
+    "migration_904bb6b629b77b16",
+    "migration_9fd5889e5d1307c9",
+    "migration_a5a1040630dc288c",
+    "migration_af31e260c06c121e",
+    "migration_b13277983c0d719d",
+    "migration_c30c02edcc5831fa",
+    "migration_cc4d8c99d5a71ef5",
+    "migration_d1f7fa71cd1fca3c",
+    "migration_ddfe2f0b09f6ba87",
+    "migration_e3f1d4c8021a234a",
+    "migration_e49c8cabc83892c7",
+    "migration_e8090a3214acadc2",
+    "migration_f2e2a093cfd6bc54"
+  ],
+  "internal_surface": [
+    "gravity-mvp/src/lib/MessageService.ts",
+    "gravity-mvp/src/lib/ConversationWorkflowService.ts",
+    "gravity-mvp/src/app/messages"
+  ],
+  "owned_data": [
+    {
+      "current_writer_modules": [
+        "avito",
+        "calls",
+        "contacts",
+        "gravity_core",
+        "leads",
+        "max_provider",
+        "messages",
+        "monitoring",
+        "whatsapp_provider"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:Chat",
+      "mapped_table": null,
+      "model": "Chat",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "drivers",
+        "messages"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:CommunicationEvent",
+      "mapped_table": null,
+      "model": "CommunicationEvent",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "settings"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:CommunicationTrigger",
+      "mapped_table": null,
+      "model": "CommunicationTrigger",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [],
+      "id": "gravity-mvp/prisma/schema.prisma:GroupVisibility",
+      "mapped_table": null,
+      "model": "GroupVisibility",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "gravity_core",
+        "settings",
+        "telegram_provider",
+        "whatsapp_provider"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:HistoryImportJob",
+      "mapped_table": null,
+      "model": "HistoryImportJob",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "calls",
+        "gravity_core",
+        "leads",
+        "max_provider",
+        "messages",
+        "monitoring",
+        "whatsapp_provider"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:Message",
+      "mapped_table": null,
+      "model": "Message",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "max_provider",
+        "messages",
+        "whatsapp_provider"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:MessageAttachment",
+      "mapped_table": null,
+      "model": "MessageAttachment",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "gravity_core",
+        "messages"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:MessageEventLog",
+      "mapped_table": null,
+      "model": "MessageEventLog",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    }
+  ],
+  "protected": true,
+  "provider_relationships": [
+    {
+      "adapter_modules": [
+        "telegram_channel",
+        "max_channel",
+        "whatsapp_channel"
+      ],
+      "name": "channel_adapters",
+      "role": "outbound/inbound ports"
+    }
+  ],
+  "public_surface": [
+    "ConversationView.v1",
+    "MessageView.v1",
+    "MessageStream.v1"
+  ],
+  "responsibility": "Channel-neutral conversations, messages, attachments, communication triggers and history import state.",
+  "schema": "yoko.crm.module-manifest.v1",
+  "technical_modules": [
+    "messages"
+  ],
+  "version": 1
+}

@@ -1,0 +1,254 @@
+{
+  "allowed_dependencies": [
+    {
+      "context": "contacts",
+      "surface": "contacts.public"
+    },
+    {
+      "context": "identity_access",
+      "surface": "identity_access.public"
+    }
+  ],
+  "commands": [
+    "SynchronizeFleetCommand.v1",
+    "UpdateDriverStateCommand.v1",
+    "RunDriverCheckCommand.v1"
+  ],
+  "compatibility_strategy": "Keep YFS API/worker and current Gravity sync entry points stable; introduce owner commands before redirecting cross-module writes.",
+  "context": {
+    "id": "fleet_operations",
+    "name": "Fleet Operations"
+  },
+  "credential_relationships": {
+    "database_models": [
+      "Account",
+      "ApiConnection"
+    ],
+    "environment_names": [
+      "BOT_API_URL",
+      "CHROME_PROFILE_DIR",
+      "CHROME_USER_DATA_DIR",
+      "CRM_WEBHOOK_URL",
+      "CRON_SECRET",
+      "DATABASE_URL",
+      "FLEET_COOKIES_PATH",
+      "FLEET_DAILY_LIMIT",
+      "MAP_LEFT_PAD",
+      "MAP_RIGHT_PAD",
+      "NODE_ENV",
+      "PLAYWRIGHT_HEADLESS",
+      "PORT",
+      "PROBE_CDP_URL",
+      "PROBE_DRIVER_ID",
+      "PROBE_DRIVER_NAME",
+      "PROBE_ORDER_ID",
+      "PROBE_PARK_ID",
+      "REDIS_HOST",
+      "REDIS_PASSWORD",
+      "REDIS_PORT",
+      "SCRAPER_API_URL",
+      "STORAGESTATE_ENC_KEY",
+      "YANDEX_LOGIN",
+      "YANDEX_PARK_ID",
+      "YANDEX_PASSWORD"
+    ],
+    "policy": "Names and access locations only. Values stay inside the owning adapter and never cross a public contract."
+  },
+  "events": [
+    "DriverUpdated.v1",
+    "FleetSyncCompleted.v1",
+    "DriverCheckCompleted.v1"
+  ],
+  "evidence": {
+    "dependency_edges": 9,
+    "source_snapshot_sha256": "2713db175062bb673dcca2d97e80c2ae204a2f257438036c6db2506587dfad7d",
+    "write_sites_requiring_migration": 20
+  },
+  "forbidden_dependencies": [
+    "channel_provider_internal",
+    "credentialValuesInContracts",
+    "directForeignPrismaWrites",
+    "providerImplementationImportsOutsideOwningContext",
+    "task_storage_internal",
+    "unversionedCrossContextPayloads"
+  ],
+  "foreign_write_migration_plans": [
+    "migration_0ed08765d767793e",
+    "migration_0f4314be5092e299",
+    "migration_1920130eec2c7506",
+    "migration_1e5e17cb2e9c36b5",
+    "migration_1f144ffb62dd0b3c",
+    "migration_214b69c1fb1df987",
+    "migration_3a25fc02145eb8cf",
+    "migration_56494330426e3744",
+    "migration_5a688a3d12805612",
+    "migration_64d66948aba8a911",
+    "migration_69afe4f783ba235a",
+    "migration_856fc8f0d6ec6935",
+    "migration_89c109d8493365b2",
+    "migration_b4fdd0f46a4b6413",
+    "migration_df999fc22f6019db",
+    "migration_ec3ef196a15c342e"
+  ],
+  "internal_surface": [
+    "gravity-mvp/src/app/drivers",
+    "gravity-mvp/src/lib/YandexFleetService.ts",
+    "yandex-fleet-scraper/src"
+  ],
+  "owned_data": [
+    {
+      "current_writer_modules": [
+        "gravity_core"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:ApiConnection",
+      "mapped_table": null,
+      "model": "ApiConnection",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "gravity_core"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:ApiLog",
+      "mapped_table": null,
+      "model": "ApiLog",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [],
+      "id": "gravity-mvp/prisma/schema.prisma:DailyParkStats",
+      "mapped_table": null,
+      "model": "DailyParkStats",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "drivers",
+        "gravity_core",
+        "tasks",
+        "yandex_fleet"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:Driver",
+      "mapped_table": null,
+      "model": "Driver",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "gravity_core"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:DriverAction",
+      "mapped_table": null,
+      "model": "DriverAction",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "drivers",
+        "monitoring"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:DriverAttention",
+      "mapped_table": null,
+      "model": "DriverAttention",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "drivers",
+        "messages",
+        "yandex_fleet"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:DriverDaySummary",
+      "mapped_table": null,
+      "model": "DriverDaySummary",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "drivers",
+        "yandex_fleet"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:DriverEvent",
+      "mapped_table": null,
+      "model": "DriverEvent",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "drivers",
+        "settings"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:ScoringThreshold",
+      "mapped_table": null,
+      "model": "ScoringThreshold",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "yandex_fleet"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:SyncStatus",
+      "mapped_table": null,
+      "model": "SyncStatus",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "yfs"
+      ],
+      "id": "yandex-fleet-scraper/prisma/schema.prisma:Account",
+      "mapped_table": null,
+      "model": "Account",
+      "schema": "yandex-fleet-scraper/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [],
+      "id": "yandex-fleet-scraper/prisma/schema.prisma:AuditLog",
+      "mapped_table": null,
+      "model": "AuditLog",
+      "schema": "yandex-fleet-scraper/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "yfs"
+      ],
+      "id": "yandex-fleet-scraper/prisma/schema.prisma:Check",
+      "mapped_table": null,
+      "model": "Check",
+      "schema": "yandex-fleet-scraper/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "yfs"
+      ],
+      "id": "yandex-fleet-scraper/prisma/schema.prisma:CheckResult",
+      "mapped_table": null,
+      "model": "CheckResult",
+      "schema": "yandex-fleet-scraper/prisma/schema.prisma"
+    }
+  ],
+  "protected": true,
+  "provider_relationships": [
+    {
+      "adapter_modules": [
+        "yandex_fleet",
+        "yfs"
+      ],
+      "name": "yandex_fleet",
+      "role": "external fleet system"
+    }
+  ],
+  "public_surface": [
+    "DriverView.v1",
+    "FleetSyncStatus.v1",
+    "DriverCheckResult.v1"
+  ],
+  "responsibility": "Driver/fleet state, Yandex synchronization and isolated YFS checking workflow.",
+  "schema": "yoko.crm.module-manifest.v1",
+  "technical_modules": [
+    "drivers",
+    "yandex_fleet",
+    "yfs"
+  ],
+  "version": 1
+}

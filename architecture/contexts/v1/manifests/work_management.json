@@ -1,0 +1,124 @@
+{
+  "allowed_dependencies": [
+    {
+      "context": "contacts",
+      "surface": "contacts.public"
+    },
+    {
+      "context": "fleet_operations",
+      "surface": "fleet_operations.public"
+    },
+    {
+      "context": "identity_access",
+      "surface": "identity_access.public"
+    }
+  ],
+  "commands": [
+    "CreateTaskCommand.v1",
+    "AssignTaskCommand.v1",
+    "CompleteTaskCommand.v1",
+    "RecordTaskUsageCommand.v1"
+  ],
+  "compatibility_strategy": "Preserve current server actions as adapters and migrate callers command-by-command with task-event parity checks.",
+  "context": {
+    "id": "work_management",
+    "name": "Work Management"
+  },
+  "credential_relationships": {
+    "database_models": [],
+    "environment_names": [],
+    "policy": "Names and access locations only. Values stay inside the owning adapter and never cross a public contract."
+  },
+  "events": [
+    "TaskCreated.v1",
+    "TaskAssigned.v1",
+    "TaskCompleted.v1"
+  ],
+  "evidence": {
+    "dependency_edges": 8,
+    "source_snapshot_sha256": "2713db175062bb673dcca2d97e80c2ae204a2f257438036c6db2506587dfad7d",
+    "write_sites_requiring_migration": 10
+  },
+  "forbidden_dependencies": [
+    "credentialValuesInContracts",
+    "directForeignPrismaWrites",
+    "message_transport",
+    "providerImplementationImportsOutsideOwningContext",
+    "provider_implementation",
+    "unversionedCrossContextPayloads"
+  ],
+  "foreign_write_migration_plans": [
+    "migration_188449b58f2615c8",
+    "migration_1f144ffb62dd0b3c",
+    "migration_2a7e12329db0980a",
+    "migration_54bbbf68952db919",
+    "migration_55ddc71f7450c415",
+    "migration_58c9e0e2295698d0",
+    "migration_6f85afe6aae4abca",
+    "migration_7f387b2b1d46c88f",
+    "migration_cf5479ae3da99ee5",
+    "migration_e380f7963fd3d784",
+    "migration_fd97166bff08d508"
+  ],
+  "internal_surface": [
+    "gravity-mvp/src/lib/tasks",
+    "gravity-mvp/src/app/tasks",
+    "gravity-mvp/src/app/my-day"
+  ],
+  "owned_data": [
+    {
+      "current_writer_modules": [
+        "messages",
+        "tasks"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:ManagerTask",
+      "mapped_table": null,
+      "model": "ManagerTask",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "ai_calls",
+        "analytics",
+        "contacts",
+        "monitoring",
+        "tasks"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:Task",
+      "mapped_table": "tasks",
+      "model": "Task",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "tasks"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:TaskEvent",
+      "mapped_table": "task_events",
+      "model": "TaskEvent",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "tasks"
+      ],
+      "id": "runtime_raw_sql:usage_events",
+      "mapped_table": "usage_events",
+      "model": "usage_events",
+      "schema": "runtime_raw_sql"
+    }
+  ],
+  "protected": true,
+  "provider_relationships": [],
+  "public_surface": [
+    "TaskView.v1",
+    "TaskQuery.v1",
+    "TaskUsageSummary.v1"
+  ],
+  "responsibility": "Tasks, manager work queues, task events and usage observation for work-management flows.",
+  "schema": "yoko.crm.module-manifest.v1",
+  "technical_modules": [
+    "tasks"
+  ],
+  "version": 1
+}

@@ -1,0 +1,57 @@
+{
+  "allowed_dependencies": [
+    {
+      "context": "platform_shell",
+      "surface": "platform_shell.public"
+    },
+    {
+      "context": "telegram_channel",
+      "surface": "telegram_channel.public"
+    },
+    {
+      "context": "calling",
+      "surface": "calling.public"
+    }
+  ],
+  "commands": [],
+  "compatibility_strategy": "Keep all current public paths stable; route changes require additive aliases and Nginx syntax/health verification.",
+  "context": {
+    "id": "edge_delivery",
+    "name": "Edge Delivery"
+  },
+  "credential_relationships": {
+    "database_models": [],
+    "environment_names": [],
+    "policy": "Names and access locations only. Values stay inside the owning adapter and never cross a public contract."
+  },
+  "events": [],
+  "evidence": {
+    "dependency_edges": 0,
+    "source_snapshot_sha256": "2713db175062bb673dcca2d97e80c2ae204a2f257438036c6db2506587dfad7d",
+    "write_sites_requiring_migration": 0
+  },
+  "forbidden_dependencies": [
+    "credentialValuesInContracts",
+    "directForeignPrismaWrites",
+    "domain_database",
+    "providerImplementationImportsOutsideOwningContext",
+    "provider_credentials",
+    "unversionedCrossContextPayloads"
+  ],
+  "foreign_write_migration_plans": [],
+  "internal_surface": [
+    "deploy/nginx"
+  ],
+  "owned_data": [],
+  "protected": true,
+  "provider_relationships": [],
+  "public_surface": [
+    "ExternalHttpRoutes.v1"
+  ],
+  "responsibility": "Nginx routing, TLS termination and stable external route compatibility.",
+  "schema": "yoko.crm.module-manifest.v1",
+  "technical_modules": [
+    "nginx"
+  ],
+  "version": 1
+}

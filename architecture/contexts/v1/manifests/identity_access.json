@@ -1,0 +1,60 @@
+{
+  "allowed_dependencies": [],
+  "commands": [
+    "AuthenticateUserCommand.v1",
+    "EndUserSessionCommand.v1"
+  ],
+  "compatibility_strategy": "Preserve current cookie/session semantics behind an identity public adapter until all callers migrate.",
+  "context": {
+    "id": "identity_access",
+    "name": "Identity and Access"
+  },
+  "credential_relationships": {
+    "database_models": [],
+    "environment_names": [],
+    "policy": "Names and access locations only. Values stay inside the owning adapter and never cross a public contract."
+  },
+  "events": [
+    "UserAuthenticated.v1"
+  ],
+  "evidence": {
+    "dependency_edges": 1,
+    "source_snapshot_sha256": "2713db175062bb673dcca2d97e80c2ae204a2f257438036c6db2506587dfad7d",
+    "write_sites_requiring_migration": 0
+  },
+  "forbidden_dependencies": [
+    "credentialValuesInContracts",
+    "directForeignPrismaWrites",
+    "message_transport",
+    "providerImplementationImportsOutsideOwningContext",
+    "provider_credentials",
+    "unversionedCrossContextPayloads"
+  ],
+  "foreign_write_migration_plans": [],
+  "internal_surface": [
+    "gravity-mvp/src/lib/users",
+    "gravity-mvp/src/app/login",
+    "gravity-mvp/src/app/users"
+  ],
+  "owned_data": [
+    {
+      "current_writer_modules": [],
+      "id": "gravity-mvp/prisma/schema.prisma:CrmUser",
+      "mapped_table": "crm_users",
+      "model": "CrmUser",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    }
+  ],
+  "protected": true,
+  "provider_relationships": [],
+  "public_surface": [
+    "CurrentUserQuery.v1",
+    "UserIdentity.v1"
+  ],
+  "responsibility": "CRM operator identity, authentication state and authorization-facing user lookup.",
+  "schema": "yoko.crm.module-manifest.v1",
+  "technical_modules": [
+    "users"
+  ],
+  "version": 1
+}
