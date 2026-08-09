@@ -54,13 +54,14 @@
     "architecture/isolation/messaging/max-attachments-v2/module-manifest-amendments.json",
     "architecture/isolation/fleet-operations/clear-check-status-v1/module-manifest-amendments.json",
     "architecture/isolation/ai-knowledge/usage-log-v1/module-manifest-amendments.json",
-    "architecture/isolation/ai-knowledge/decision-log-v1/module-manifest-amendments.json"
+    "architecture/isolation/ai-knowledge/decision-log-v1/module-manifest-amendments.json",
+    "architecture/isolation/ai-knowledge/decision-review-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007-AI-DECISION-LOG",
-  "registry_base_commit": "4139039f5909dfba7fa24f2f18863eef9394617c",
+  "registry_milestone": "CRM-ARCH-007-AI-DECISION-REVIEW",
+  "registry_base_commit": "19f210641f023fcdf5ee79c3b8f8336eb9eb08ec",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",

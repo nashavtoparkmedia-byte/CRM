@@ -1,0 +1,6 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "CRM-ARCH-007-AI-DECISION-REVIEW",
+  "amendments": [{"context": "ai_knowledge", "add_commands": ["ReviewAiDecisionCommand.v1"], "reason": "Expose operator verdict persistence through the AI Knowledge owner boundary."}]
+}

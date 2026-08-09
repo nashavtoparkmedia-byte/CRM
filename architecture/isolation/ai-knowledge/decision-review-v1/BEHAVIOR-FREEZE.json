@@ -1,0 +1,10 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1",
+  "milestone": "CRM-ARCH-007-AI-DECISION-REVIEW",
+  "base_commit": "19f210641f023fcdf5ee79c3b8f8336eb9eb08ec",
+  "captured_at": "2026-08-09T18:14:57Z",
+  "consumer": "gravity-mvp/src/app/settings/ai/actions.ts",
+  "consumer_before_sha256": "297e9fb8bc6053fa80238334b4df66eea45b988582dd09157cb1de1378c2c034",
+  "behavior": ["setOperatorVerdict remains available without the admin-only guard", "exact good, bad and fixed verdict vocabulary is preserved", "the matching AiDecisionLog row is marked reviewedByOperator=true and receives the verdict", "settings/ai revalidation occurs only after successful persistence", "persistence and revalidation failures remain silently swallowed by the existing compatibility catch"],
+  "out_of_scope": ["decision-log creation", "retrieval policy and AI configuration", "authorization redesign", "schema, database, runtime and production activation"]
+}

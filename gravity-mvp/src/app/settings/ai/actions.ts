@@ -8,6 +8,8 @@ import { revalidatePath } from 'next/cache'
 import { importTelegramHistory } from '@/app/tg-actions'
 import { importWhatsAppHistory } from '@/lib/whatsapp/WhatsAppService'
 import { getUsers } from '@/lib/users/user-service'
+import { REVIEW_AI_DECISION_COMMAND_V1 } from '@/contracts/ai-knowledge/v1'
+import { reviewAiDecisionV1 } from '@/modules/ai-knowledge/public/v1'
 
 // ─── Role guard ───────────────────────────────────────────────────
 //
@@ -302,11 +304,7 @@ export async function getDecisionLogs(filters?: {
 
 export async function setOperatorVerdict(logId: string, verdict: 'good' | 'bad' | 'fixed') {
     try {
-        await prisma.$executeRaw`
-            UPDATE "AiDecisionLog"
-            SET "reviewedByOperator" = true, "operatorVerdict" = ${verdict}
-            WHERE id = ${logId}
-        `
+        await reviewAiDecisionV1({ contract: REVIEW_AI_DECISION_COMMAND_V1, logId, verdict })
         revalidatePath('/settings/ai')
     } catch { /* ignore */ }
 }
