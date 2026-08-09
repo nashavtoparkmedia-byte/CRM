@@ -1,0 +1,26 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1",
+  "milestone": "CRM-ARCH-007-AI-KNOWLEDGE-USAGE-LOG",
+  "base_commit": "426047fb80ae8d778c0e3de36df71340eca53367",
+  "captured_at": "2026-08-09T18:01:05Z",
+  "consumer": "gravity-mvp/src/lib/pipeline/PipelineWorker.ts",
+  "consumer_before_sha256": "b4989aaa2679e565f9af6b415c3d899f023264a19e63c174c4149a327e93a9a0",
+  "behavior": [
+    "one AiKnowledgeUsageLog record is attempted for each retrieval trace candidate in trace order",
+    "usedInPrompt requires runtime mode, answer policy and membership in usable items",
+    "usedInReply additionally requires an actually sent reply",
+    "policyDecision retains used, skipped-item reason, escalation and no-knowledge classification",
+    "record ids retain the kul_<time>_<random> caller-generated format",
+    "runtimeContext remains the database enum value chat_reply",
+    "retrieval and rerank scores, shadow mode and nullable escalation reason retain exact mapping",
+    "usedAt remains a database NOW() timestamp",
+    "each persistence failure is swallowed independently so later candidates and the pipeline continue",
+    "the surrounding UsageLog catch and its console error boundary remain unchanged"
+  ],
+  "out_of_scope": [
+    "AiDecisionLog persistence and migration plan migration_3edf8273887f2fd4",
+    "retrieval, rerank or policy decisions",
+    "AI provider calls, credentials or response generation",
+    "schema, database, service, runtime or production activation"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "CRM-ARCH-007-AI-KNOWLEDGE-USAGE-LOG",
+  "amendments": [
+    {
+      "context": "ai_knowledge",
+      "add_commands": [
+        "RecordKnowledgeUsageCommand.v1"
+      ],
+      "reason": "Expose pipeline knowledge-usage audit persistence through the AI Knowledge owner boundary."
+    }
+  ]
+}

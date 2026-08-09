@@ -7,6 +7,8 @@ import { decisionEngine, DecisionResult } from './DecisionEngine'
 import { responseGenerator } from './ResponseGenerator'
 import { RETRIEVAL_PROMPT_VERSION } from '@/lib/ai/knowledge/retrievalPrompt'
 import type { KnowledgeRetrievalResult } from './ContextBuilder'
+import { RECORD_KNOWLEDGE_USAGE_COMMAND_V1 } from '@/contracts/ai-knowledge/v1'
+import { recordKnowledgeUsageV1 } from '@/modules/ai-knowledge/public/v1'
 
 /**
  * PipelineWorker — обрабатывает входящие сообщения через очередь MessageEventLog.
@@ -226,27 +228,19 @@ export class PipelineWorker {
         policyDecision = 'filtered_no_knowledge'
       }
       const id = 'kul_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)
-      await prisma.$executeRaw`
-        INSERT INTO "AiKnowledgeUsageLog" (
-          id, "itemId", "runtimeContext", "decisionLogId", "messageId",
-          "retrievalScore", "rerankScore", "usedInReply",
-          "policyDecision", "shadowMode", "escalationReason",
-          "usedAt"
-        ) VALUES (
-          ${id},
-          ${cand.item.id},
-          'chat_reply'::"AiKnowledgeRuntime",
-          ${decisionLogId},
-          ${messageId},
-          ${cand.prefilterScore},
-          ${cand.rerankScore},
-          ${usedInReply},
-          ${policyDecision},
-          ${kr.mode === 'shadow'},
-          ${escReason},
-          NOW()
-        )
-      `.catch(() => { /* tolerant per-item */ })
+      await recordKnowledgeUsageV1({
+        contract: RECORD_KNOWLEDGE_USAGE_COMMAND_V1,
+        id,
+        itemId: cand.item.id,
+        decisionLogId,
+        messageId,
+        retrievalScore: cand.prefilterScore,
+        rerankScore: cand.rerankScore,
+        usedInReply,
+        policyDecision,
+        shadowMode: kr.mode === 'shadow',
+        escalationReason: escReason,
+      }).catch(() => { /* tolerant per-item */ })
     }
   }
 }
