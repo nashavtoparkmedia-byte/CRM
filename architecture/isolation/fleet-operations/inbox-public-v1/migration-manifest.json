@@ -1,0 +1,37 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1",
+  "milestone": "CRM-ARCH-007-FLEET-INBOX-PUBLIC",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "2fed07d99da8e11b078b5f77738faaf8640f1558",
+  "context": "fleet_operations",
+  "caller_context": "messaging",
+  "dependency_reference": "dependency:messaging/messages>fleet_operations/drivers",
+  "sites": [
+    {
+      "file": "gravity-mvp/src/app/inbox/InboxClient.tsx",
+      "legacy_target": "gravity-mvp/src/app/drivers/actions.ts",
+      "public_target": "gravity-mvp/src/modules/fleet-operations/public/v1/log-manager-call-action.ts"
+    },
+    {
+      "file": "gravity-mvp/src/app/inbox/InboxClient.tsx",
+      "legacy_target": "gravity-mvp/src/app/drivers/components/SegmentBadge.tsx",
+      "public_target": "gravity-mvp/src/modules/fleet-operations/public/v1/segment-badge.tsx"
+    }
+  ],
+  "contract": "fleet_operations.LogManagerCallCommand.v1",
+  "consumer_before_sha256": "ce811f22a0383d68f414c14b84f33372c9b45624ae5090c1cc6000b2d6098ea6",
+  "consumer_after_sha256": "4ddeec9b535afc0dd999481e9c945c9326a597a894e265f6f68f89d394214954",
+  "legacy_implementation_sha256_before_and_after": "ebcf7d309cf4c468a173b41974189c81dd085a0760cb15d113d3757f16690512",
+  "enforcement": {
+    "before": 1516,
+    "after": 1512,
+    "retired": [
+      "arch_4577335f001cdd4455232878",
+      "arch_177146bad9a3d8f834a4adb2",
+      "arch_92d56df426dec1c7e2ebcf39",
+      "arch_daa2e1e56c4f6cb4b2e28cd8"
+    ],
+    "new_capacity": 0
+  },
+  "rollback": "2fed07d99da8e11b078b5f77738faaf8640f1558"
+}

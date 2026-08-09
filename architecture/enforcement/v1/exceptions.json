@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007-FLEET-DAILY-ACTIVITY",
-  "base_commit": "58cfd054e6b55840d0c5d26a1edcad61a6e0e301",
+  "milestone": "CRM-ARCH-007-FLEET-INBOX-PUBLIC",
+  "base_commit": "2fed07d99da8e11b078b5f77738faaf8640f1558",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "90a68c4c924437a26f354cdb58d1cf03e35a3c898dd8e3bd48b1461530fd1892",
+  "finding_digest": "c7a5b7ec98f1c210a1afd38ff09c406b77ba1204ba9f7de41dc7e64beb89e4e3",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -15,8 +15,8 @@
   "summary": {
     "direct_foreign_prisma_write": 178,
     "direct_provider_transport_access": 38,
-    "internal_module_import": 381,
-    "non_public_cross_context_import": 538,
+    "internal_module_import": 379,
+    "non_public_cross_context_import": 536,
     "undeclared_dependency": 381
   },
   "exceptions": [
@@ -8475,70 +8475,6 @@
         "dependency:fleet_operations/drivers>platform_shell/gravity_core",
         "dependency:fleet_operations/drivers>platform_shell/gravity_ui",
         "dependency:fleet_operations/yandex_fleet>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_4577335f001cdd4455232878",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/inbox/InboxClient.tsx",
-      "line_at_baseline": 18,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "fleet_operations",
-      "subject": "messages>drivers:gravity-mvp/src/app/drivers/actions.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>fleet_operations/drivers"
-      ]
-    },
-    {
-      "fingerprint": "arch_177146bad9a3d8f834a4adb2",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/inbox/InboxClient.tsx",
-      "line_at_baseline": 18,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "fleet_operations",
-      "subject": "messages>drivers:gravity-mvp/src/app/drivers/actions.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>fleet_operations/drivers"
-      ]
-    },
-    {
-      "fingerprint": "arch_92d56df426dec1c7e2ebcf39",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/inbox/InboxClient.tsx",
-      "line_at_baseline": 19,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "fleet_operations",
-      "subject": "messages>drivers:gravity-mvp/src/app/drivers/components/SegmentBadge.tsx",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>fleet_operations/drivers"
-      ]
-    },
-    {
-      "fingerprint": "arch_daa2e1e56c4f6cb4b2e28cd8",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/inbox/InboxClient.tsx",
-      "line_at_baseline": 19,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "fleet_operations",
-      "subject": "messages>drivers:gravity-mvp/src/app/drivers/components/SegmentBadge.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>fleet_operations/drivers"
       ]
     },
     {

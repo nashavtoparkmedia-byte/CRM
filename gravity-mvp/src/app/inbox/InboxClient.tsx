@@ -15,8 +15,9 @@ import {
 } from "lucide-react"
 import type { InboxTask } from "./actions"
 import { resolveTask } from "./actions"
-import { logManagerCall } from "../drivers/actions"
-import { SegmentBadge } from "../drivers/components/SegmentBadge"
+import { LOG_MANAGER_CALL_COMMAND_V1 } from "@/contracts/fleet-operations/v1"
+import { logManagerCallV1 } from "@/modules/fleet-operations/public/v1/log-manager-call-action"
+import { SegmentBadge } from "@/modules/fleet-operations/public/v1/segment-badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import Link from "next/link"
@@ -54,7 +55,10 @@ function TaskCard({
     const [callLogged, setCallLogged] = useState(false)
 
     const handleCall = async () => {
-        await logManagerCall(task.driverId)
+        await logManagerCallV1({
+            contract: LOG_MANAGER_CALL_COMMAND_V1,
+            driverId: task.driverId,
+        })
         setCallLogged(true)
         setTimeout(() => setCallLogged(false), 2000)
     }

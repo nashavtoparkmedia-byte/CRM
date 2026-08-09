@@ -1,0 +1,14 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "CRM-ARCH-007-FLEET-INBOX-PUBLIC",
+  "amendments": [
+    {
+      "context": "fleet_operations",
+      "add_commands": [
+        "LogManagerCallCommand.v1"
+      ],
+      "reason": "Expose Inbox manager-call invocation through a versioned Fleet compatibility action."
+    }
+  ]
+}

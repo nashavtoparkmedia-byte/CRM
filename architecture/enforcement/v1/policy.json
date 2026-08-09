@@ -48,13 +48,14 @@
     "architecture/isolation/fleet-operations/driver-attention-v1/module-manifest-amendments.json",
     "architecture/isolation/fleet-operations/scoring-thresholds-v1/module-manifest-amendments.json",
     "architecture/isolation/contacts/manual-link-display-name-v1/module-manifest-amendments.json",
-    "architecture/isolation/fleet-operations/daily-activity-v1/module-manifest-amendments.json"
+    "architecture/isolation/fleet-operations/daily-activity-v1/module-manifest-amendments.json",
+    "architecture/isolation/fleet-operations/inbox-public-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007-FLEET-DAILY-ACTIVITY",
-  "registry_base_commit": "58cfd054e6b55840d0c5d26a1edcad61a6e0e301",
+  "registry_milestone": "CRM-ARCH-007-FLEET-INBOX-PUBLIC",
+  "registry_base_commit": "2fed07d99da8e11b078b5f77738faaf8640f1558",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",

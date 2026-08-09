@@ -1,0 +1,29 @@
+{
+  "schema": "yoko.crm.context-isolation-verification.v1",
+  "milestone": "CRM-ARCH-007-FLEET-INBOX-PUBLIC",
+  "verified_at": "2026-08-09T16:44:45Z",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "architecture": {
+    "files": 819,
+    "contexts": 16,
+    "findings": 1512,
+    "exceptions": 1512,
+    "finding_digest": "c7a5b7ec98f1c210a1afd38ff09c406b77ba1204ba9f7de41dc7e64beb89e4e3",
+    "registry_sha256": "a4c5a0438c1881375272e3db2eeb5199b6d97cad018ec9183b2f68b3f7e028f5",
+    "dependency_cycles": 0,
+    "remaining_inbox_fleet_import_exceptions": 0
+  },
+  "tests": {
+    "fleet_inbox_public_behavior": "8/8 PASS",
+    "fleet_inbox_public_controls": "11/11 PASS",
+    "contract_controls": "54/54 PASS",
+    "enforcement": "16/16 PASS",
+    "auth": "33/33 PASS",
+    "calling": "93/93 PASS",
+    "current_baseline_context_contract_outbox_identity_work_management_contacts_and_fleet_controls": "PASS"
+  },
+  "typescript": "28 baseline / 28 candidate / 0 normalized differences",
+  "eslint": "3 inherited Inbox warnings / 3 candidate warnings; new public files 0",
+  "legacy_manager_call_implementation": "byte-identical compatibility implementation; persistence migration not claimed",
+  "production_mutated": false
+}
