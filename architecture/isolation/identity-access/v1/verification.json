@@ -1,0 +1,63 @@
+{
+  "schema": "yoko.crm.context-isolation-verification.v1",
+  "version": 1,
+  "milestone": "CRM-ARCH-007",
+  "context": "identity_access",
+  "verified_at": "2026-08-09T15:04:06Z",
+  "result": "PASS_CONTINUE",
+  "identity_contract_tests": {
+    "passed": 13,
+    "failed": 0
+  },
+  "identity_boundary_controls": {
+    "passed": 12,
+    "failed": 0
+  },
+  "frozen_identity_security_tests": {
+    "passed": 33,
+    "failed": 0,
+    "files": 3
+  },
+  "architecture_enforcement": {
+    "production_files": 775,
+    "contexts": 16,
+    "findings": 1529,
+    "exceptions": 1529,
+    "uncovered": 0,
+    "stale": 0,
+    "expired": 0,
+    "unexceptionable": 0,
+    "finding_digest": "3f74627b399aacc586df494779b763d86c35886a77fb25cdc7325ff1a4c1004c",
+    "registry_sha256": "4893de3d2aef918f70906bb7dfd7c30ab0df72c7b7fc35affc3fd2f21b8ab00b",
+    "registry_reproducible": true,
+    "removed_exact_exceptions": 6
+  },
+  "inherited_controls": {
+    "architecture_enforcement_tests": "16/16 PASS",
+    "context_manifest_validation": "PASS",
+    "contract_boundary_controls": "17/17 PASS",
+    "contract_tests": "11/11 PASS",
+    "outbox_controls": "14/14 PASS",
+    "outbox_tests": "16/16 PASS",
+    "protected_calling_tests": "93/93 PASS"
+  },
+  "lint": {
+    "new_identity_files_errors": 0,
+    "topbar_baseline_errors": 2,
+    "topbar_candidate_errors": 2,
+    "topbar_new_errors": 0,
+    "topbar_removed_warnings": 2
+  },
+  "typescript_project_check": {
+    "baseline_errors": 28,
+    "candidate_errors": 28,
+    "counted_file_line_code_signature_differences": 0,
+    "new_diagnostics": 0
+  },
+  "legacy_identity_sources_byte_identical": true,
+  "secret_safety": "PASS",
+  "database_mutated": false,
+  "runtime_mutated": false,
+  "production_mutated": false,
+  "deployed": false
+}

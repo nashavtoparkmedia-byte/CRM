@@ -122,7 +122,9 @@ async function main() {
     const registry = {
         schema: 'yoko.crm.architecture-exception-registry.v1',
         version: 1,
-        generated_from: 'CRM-ARCH-005 commit f4ede0b0a95818f51ada7d03a452b9b1d5402d4a',
+        milestone: scan.policy.registry_milestone,
+        base_commit: scan.policy.registry_base_commit,
+        generated_from: 'current source tree bound by finding_digest',
         finding_digest: digest(scan.findings),
         policy: {
             exact_fingerprint_only: true,

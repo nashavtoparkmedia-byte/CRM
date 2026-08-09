@@ -661,6 +661,8 @@ export function evaluateFindings(findings, registry, policy, now = new Date()) {
         if (
             registry.schema !== 'yoko.crm.architecture-exception-registry.v1'
             || registry.version !== 1
+            || registry.milestone !== policy.registry_milestone
+            || registry.base_commit !== policy.registry_base_commit
             || registry.policy?.exact_fingerprint_only !== true
             || registry.policy?.stale_exceptions_fail !== true
             || registry.policy?.expired_exceptions_fail !== true

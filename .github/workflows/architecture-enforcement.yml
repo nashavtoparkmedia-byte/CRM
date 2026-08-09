@@ -16,7 +16,7 @@ concurrency:
 jobs:
   architecture:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Check out exact revision
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -25,6 +25,9 @@ jobs:
         run: |
           node --version
           node -e "const major=Number(process.versions.node.split('.')[0]); if (major < 20) process.exit(1)"
+
+      - name: Install locked test toolchain without lifecycle scripts
+        run: npm ci --prefix gravity-mvp --ignore-scripts --no-audit --no-fund
 
       - name: Validate context manifests and checksums
         run: node tools/architecture/validate-context-manifests.mjs
@@ -40,3 +43,19 @@ jobs:
 
       - name: Preserve outbox controls
         run: node tools/architecture/check-outbox-architecture.mjs
+
+      - name: Enforce Identity public boundary
+        run: node tools/architecture/check-identity-boundary.mjs
+
+      - name: Verify versioned contract behavior
+        run: |
+          node tools/architecture/test-contracts.mjs
+          node tools/architecture/test-outbox.mjs
+          node tools/architecture/test-identity-access.mjs
+
+      - name: Preserve Identity security behavior
+        run: |
+          node --test \
+            gravity-mvp/src/lib/users/__tests__/user-service.test.js \
+            gravity-mvp/src/lib/users/__tests__/login.test.js \
+            gravity-mvp/src/lib/users/__tests__/user-crud.test.js

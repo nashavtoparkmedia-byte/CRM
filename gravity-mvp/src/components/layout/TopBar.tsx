@@ -3,7 +3,18 @@
 import { User, LogOut, ChevronDown, Shield, Briefcase, Inbox } from "lucide-react";
 import Link from "next/link";
 import { useState, useEffect } from 'react';
-import { getUsers, getCurrentUser, login, logout } from '@/lib/users/user-service';
+import {
+    AUTHENTICATE_USER_COMMAND_V1,
+    CURRENT_USER_QUERY_V1,
+    END_USER_SESSION_COMMAND_V1,
+    LIST_USER_IDENTITIES_QUERY_V1,
+} from '@/contracts/identity-access/v1';
+import {
+    authenticateUserV1,
+    endUserSessionV1,
+    listUserIdentitiesV1,
+    queryCurrentUserV1,
+} from '@/modules/identity-access/public/v1/identity-actions';
 import GlobalSearch from "@/components/layout/GlobalSearch";
 import CallToolbar from "@/components/sip/CallToolbar";
 
@@ -13,8 +24,10 @@ export default function TopBar() {
     const [isOpen, setIsOpen] = useState(false);
 
     useEffect(() => {
-        getUsers().then(setUsers);
-        getCurrentUser().then(setCurrentUser);
+        listUserIdentitiesV1({ contract: LIST_USER_IDENTITIES_QUERY_V1 })
+            .then(({ users: identities }) => setUsers(identities));
+        queryCurrentUserV1({ contract: CURRENT_USER_QUERY_V1 })
+            .then(({ user }) => setCurrentUser(user));
     }, []);
     
     return (
@@ -54,8 +67,10 @@ export default function TopBar() {
                                          <button 
                                              key={u.id}
                                              onClick={async () => {
-                                                 const { login } = await import('@/lib/users/user-service');
-                                                 await login(u.id);
+                                                 await authenticateUserV1({
+                                                     contract: AUTHENTICATE_USER_COMMAND_V1,
+                                                     targetUserId: u.id,
+                                                 });
                                                  setIsOpen(false);
                                                  window.location.reload();
                                              }}
@@ -84,8 +99,7 @@ export default function TopBar() {
                     {currentUser && (
                         <button 
                             onClick={async () => {
-                                const { logout } = await import('@/lib/users/user-service');
-                                await logout();
+                                await endUserSessionV1({ contract: END_USER_SESSION_COMMAND_V1 });
                                 window.location.href = '/login';
                             }}
                             className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors ml-1 cursor-pointer"

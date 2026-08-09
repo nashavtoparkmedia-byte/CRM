@@ -1,0 +1,41 @@
+{
+  "schema": "yoko.crm.identity-behavior-freeze.v1",
+  "version": 1,
+  "milestone": "CRM-ARCH-007",
+  "base_commit": "99af9c696198c47089e1d6727580724d4df1e571",
+  "captured_at": "2026-08-09T15:04:06Z",
+  "protected_sources": [
+    {
+      "path": "gravity-mvp/src/lib/users/user-service.ts",
+      "sha256": "cc026e94b3907bf3d4271a6f3d79d9dd05d04e67bc2439a4cab0baa185ef2f6f",
+      "candidate_byte_identical": true
+    },
+    {
+      "path": "gravity-mvp/src/lib/users/auth-helpers.js",
+      "sha256": "c935ead6eaa8e19be1b71124c6bf6fbe7d6053d77173fc446171f1a21b4af95a",
+      "candidate_byte_identical": true
+    }
+  ],
+  "representative_consumer": {
+    "path": "gravity-mvp/src/components/layout/TopBar.tsx",
+    "baseline_sha256": "897cb98cc484b26d7c56d378f46e15b2c5a76a1c5ee45fc1c995d8d32b88b14a",
+    "candidate_sha256": "49f454df4daff06476c2cc4ce1a0dc4f51df436a93e314884f7be4edbc2f4ab4",
+    "preserved_navigation": [
+      "window.location.reload() after identity selection",
+      "window.location.href = /login after session end"
+    ]
+  },
+  "frozen_security_tests": {
+    "files": 3,
+    "passed": 33,
+    "failed": 0,
+    "covers": [
+      "anonymous resolves to null and never to u3",
+      "manager identity escalation denied",
+      "unknown identity denied",
+      "user management role guards",
+      "last privileged operator cannot be deleted or demoted"
+    ]
+  },
+  "behavior_changes_authorized": false
+}

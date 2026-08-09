@@ -242,10 +242,18 @@ test('unexceptionable rule cannot be baselined', () => {
 })
 
 test('strict registry finding digest drift fails', () => {
-    const strictPolicy = { ...policy, strict_exception_registry: true, exception_review_deadline: '2026-12-31' }
+    const strictPolicy = {
+        ...policy,
+        strict_exception_registry: true,
+        exception_review_deadline: '2026-12-31',
+        registry_milestone: 'FIXTURE',
+        registry_base_commit: 'fixture-base',
+    }
     const registry = {
         schema: 'yoko.crm.architecture-exception-registry.v1',
         version: 1,
+        milestone: 'FIXTURE',
+        base_commit: 'fixture-base',
         finding_digest: 'not-the-current-digest',
         policy: {
             exact_fingerprint_only: true,

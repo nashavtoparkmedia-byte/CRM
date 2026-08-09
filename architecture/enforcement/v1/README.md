@@ -41,7 +41,7 @@ node tools/architecture/generate-architecture-exceptions.mjs \
   --output architecture/enforcement/v1/exceptions.json
 ```
 
-Generation refuses any unexceptionable finding or finding type without a reviewed exception policy. The registry baselines 1,535 findings from CRM-ARCH-005: 187 foreign writes, 38 provider transports, 385 internal imports, 542 non-public imports, and 383 undeclared dependencies. Five stricter-scanner write findings absent from the earlier migration-plan extractor are preserved separately in `legacy-write-supplement.json`.
+Generation refuses any unexceptionable finding or finding type without a reviewed exception policy. CRM-ARCH-006 initially baselined 1,535 findings. After the first CRM-ARCH-007 consumer migration, the current registry contains 1,529: 187 foreign writes, 38 provider transports, 382 internal imports, 539 non-public imports, and 383 undeclared dependencies. The exact scanned source tree is bound by `finding_digest`, while the policy records the milestone and base commit. Five stricter-scanner write findings absent from the earlier migration-plan extractor are preserved separately in `legacy-write-supplement.json`.
 
 ## False-positive controls
 

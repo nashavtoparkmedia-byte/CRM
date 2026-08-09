@@ -41,10 +41,15 @@
       "reason": "same transaction as Calling aggregate write; declared by CRM-ARCH-005 outbox manifest"
     }
   ],
-  "manifest_amendments": ["architecture/events/v1/module-manifest-amendments.json"],
+  "manifest_amendments": [
+    "architecture/events/v1/module-manifest-amendments.json",
+    "architecture/isolation/identity-access/v1/module-manifest-amendments.json"
+  ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
+  "registry_milestone": "CRM-ARCH-007",
+  "registry_base_commit": "99af9c696198c47089e1d6727580724d4df1e571",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",

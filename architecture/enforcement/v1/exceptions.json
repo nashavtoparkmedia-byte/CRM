@@ -1,8 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "generated_from": "CRM-ARCH-005 commit f4ede0b0a95818f51ada7d03a452b9b1d5402d4a",
-  "finding_digest": "fd80a8a62af89261b3efba431994fadcb0778e10d986088a8f1f06a1ba2e43de",
+  "milestone": "CRM-ARCH-007",
+  "base_commit": "99af9c696198c47089e1d6727580724d4df1e571",
+  "generated_from": "current source tree bound by finding_digest",
+  "finding_digest": "3f74627b399aacc586df494779b763d86c35886a77fb25cdc7325ff1a4c1004c",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,8 +15,8 @@
   "summary": {
     "direct_foreign_prisma_write": 187,
     "direct_provider_transport_access": 38,
-    "internal_module_import": 385,
-    "non_public_cross_context_import": 542,
+    "internal_module_import": 382,
+    "non_public_cross_context_import": 539,
     "undeclared_dependency": 383
   },
   "exceptions": [
@@ -20423,102 +20425,6 @@
       "migration_references": [
         "dependency:platform_shell/gravity_core>configuration/settings",
         "dependency:platform_shell/gravity_ui>configuration/settings"
-      ]
-    },
-    {
-      "fingerprint": "arch_5ca012440a09264441f44e62",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/components/layout/TopBar.tsx",
-      "line_at_baseline": 6,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "identity_access",
-      "subject": "gravity_ui>users:gravity-mvp/src/lib/users/user-service.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_ui>identity_access/users"
-      ]
-    },
-    {
-      "fingerprint": "arch_e0bf468866fecebf784b8762",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/components/layout/TopBar.tsx",
-      "line_at_baseline": 6,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "identity_access",
-      "subject": "gravity_ui>users:gravity-mvp/src/lib/users/user-service.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_ui>identity_access/users"
-      ]
-    },
-    {
-      "fingerprint": "arch_a69cb0a7030c07563278a0d0",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/components/layout/TopBar.tsx",
-      "line_at_baseline": 57,
-      "ordinal": 2,
-      "owner_context": "platform_shell",
-      "target_context": "identity_access",
-      "subject": "gravity_ui>users:gravity-mvp/src/lib/users/user-service.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_ui>identity_access/users"
-      ]
-    },
-    {
-      "fingerprint": "arch_cb2c8730a6c39a792a6631ba",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/components/layout/TopBar.tsx",
-      "line_at_baseline": 57,
-      "ordinal": 2,
-      "owner_context": "platform_shell",
-      "target_context": "identity_access",
-      "subject": "gravity_ui>users:gravity-mvp/src/lib/users/user-service.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_ui>identity_access/users"
-      ]
-    },
-    {
-      "fingerprint": "arch_ac8506d59c99476cd7477bdb",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/components/layout/TopBar.tsx",
-      "line_at_baseline": 87,
-      "ordinal": 3,
-      "owner_context": "platform_shell",
-      "target_context": "identity_access",
-      "subject": "gravity_ui>users:gravity-mvp/src/lib/users/user-service.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_ui>identity_access/users"
-      ]
-    },
-    {
-      "fingerprint": "arch_494ea10e1c67e560cb37536a",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/components/layout/TopBar.tsx",
-      "line_at_baseline": 87,
-      "ordinal": 3,
-      "owner_context": "platform_shell",
-      "target_context": "identity_access",
-      "subject": "gravity_ui>users:gravity-mvp/src/lib/users/user-service.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_ui>identity_access/users"
       ]
     },
     {
