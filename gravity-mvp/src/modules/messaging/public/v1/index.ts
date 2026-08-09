@@ -28,6 +28,8 @@ import { createPatchChannelConversationHandlerV1,createUpsertChannelConversation
 import { legacyPrismaChannelConversationPortV1 } from './legacy-prisma-channel-conversation-adapter'
 import { createDeleteRetainedMessagesHandlerV1,createPurgeMessageRetryMetadataHandlerV1 } from './message-retention-handler'
 import { legacyPrismaMessageRetentionPortV1 } from './legacy-prisma-message-retention-adapter'
+import { createAttachBinaryMessageMediaHandlerV1 } from './attach-binary-message-media-handler'
+import { legacyPrismaAttachBinaryMessageMediaPortV1 } from './legacy-prisma-attach-binary-message-media-adapter'
 
 export { createAttachMessageMediaHandlerV1 } from './attach-message-media-handler'
 export type { AttachMessageMediaPersistencePortV1 } from './attach-message-media-handler'
@@ -94,3 +96,6 @@ export { createDeleteRetainedMessagesHandlerV1,createPurgeMessageRetryMetadataHa
 export type { MessageRetentionPersistencePortV1 } from './message-retention-handler'
 export const deleteRetainedMessagesV1=createDeleteRetainedMessagesHandlerV1(legacyPrismaMessageRetentionPortV1)
 export const purgeMessageRetryMetadataV1=createPurgeMessageRetryMetadataHandlerV1(legacyPrismaMessageRetentionPortV1)
+export { createAttachBinaryMessageMediaHandlerV1 } from './attach-binary-message-media-handler'
+export type { AttachBinaryMessageMediaPersistencePortV1 } from './attach-binary-message-media-handler'
+export const attachBinaryMessageMediaV1=createAttachBinaryMessageMediaHandlerV1(legacyPrismaAttachBinaryMessageMediaPortV1)

@@ -8,8 +8,8 @@ import QRCode from 'qrcode'
 import { revalidatePath } from 'next/cache'
 import { NewMessage, Raw } from 'telegram/events'
 import * as registry from '@/lib/TransportRegistry'
-import { deleteHistoryImportJobsForChannelV1, deleteHistoryImportJobsForConnectionV1, patchHistoryImportJobV1 } from '@/modules/messaging/public/v1'
-import { DELETE_HISTORY_IMPORT_JOBS_FOR_CHANNEL_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CONNECTION_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { attachBinaryMessageMediaV1, deleteHistoryImportJobsForChannelV1, deleteHistoryImportJobsForConnectionV1, patchHistoryImportJobV1 } from '@/modules/messaging/public/v1'
+import { ATTACH_BINARY_MESSAGE_MEDIA_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CHANNEL_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CONNECTION_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1 } from '@/contracts/messaging/v1'
 
 // Global map to keep track of active login clients for QR
 // Note: In a production serverless environment, this would need a different approach (like a separate service or Redis)
@@ -597,15 +597,13 @@ async function processOutboundMirrorMessage(message: any, connectionId: string, 
             if (buffer) {
                 const mimeType = message.media?.document?.mimeType || (msgType === 'image' ? 'image/jpeg' : 'application/octet-stream')
                 const fileName = message.media?.document?.attributes?.find((a: any) => a.fileName)?.fileName || null
-                await (prisma as any).messageAttachment.create({
-                    data: {
-                        messageId: saved.id,
-                        type: msgType,
-                        mimeType,
-                        fileName,
-                        fileSize: buffer.length,
-                        data: buffer,
-                    },
+                await attachBinaryMessageMediaV1({
+                    contract: ATTACH_BINARY_MESSAGE_MEDIA_COMMAND_V1,
+                    messageId: saved.id,
+                    mediaType: msgType,
+                    mimeType,
+                    fileName,
+                    data: buffer,
                 })
             }
         } catch (mediaErr: any) {

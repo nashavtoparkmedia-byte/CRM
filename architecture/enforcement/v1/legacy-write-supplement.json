@@ -32,15 +32,6 @@
       "retirement": "Replace with a versioned Messaging owner command and remove the exact exception after parity verification."
     },
     {
-      "fingerprint": "arch_04d59d6e6c7bf73882dc7c58",
-      "file": "gravity-mvp/src/app/tg-actions.ts",
-      "line_at_baseline": 598,
-      "caller_context": "telegram_channel",
-      "owner_context": "messaging",
-      "operation": "MessageAttachment.create",
-      "retirement": "Replace with a versioned Messaging owner command and remove the exact exception after parity verification."
-    },
-    {
       "fingerprint": "arch_6f648e03c4845461fa2569fc",
       "file": "gravity-mvp/src/lib/execution-lock.ts",
       "line_at_baseline": 22,
@@ -51,7 +42,7 @@
     }
   ],
   "controls": {
-    "site_count": 5,
+    "site_count": 4,
     "exact_fingerprint_exceptions": true,
     "wildcards": false,
     "deadline": "2026-12-31"
