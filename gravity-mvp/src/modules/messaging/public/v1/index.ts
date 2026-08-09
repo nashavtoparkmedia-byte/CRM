@@ -8,7 +8,7 @@ import { createSendMessageHandlerV1 } from './send-message-handler'
 import { legacyPrismaSendMessagePortV1 } from './legacy-prisma-send-message-adapter'
 import { createUpdateConversationHandlerV1 } from './update-conversation-handler'
 import { legacyPrismaUpdateConversationPortV1 } from './legacy-prisma-update-conversation-adapter'
-import { createDeleteHistoryImportJobsForChannelHandlerV1,createDeleteHistoryImportJobsForConnectionHandlerV1,createDeleteHistoryImportJobHandlerV1,createPatchHistoryImportJobHandlerV1,createUpdateHistoryImportJobHandlerV1 } from './history-import-job-handler'
+import { createCancelHistoryImportJobHandlerV1,createDeleteHistoryImportJobsForChannelHandlerV1,createDeleteHistoryImportJobsForConnectionHandlerV1,createDeleteHistoryImportJobHandlerV1,createPatchHistoryImportJobHandlerV1,createQueueHistoryImportJobHandlerV1,createUpdateHistoryImportJobHandlerV1 } from './history-import-job-handler'
 import { legacyPrismaHistoryImportJobPortV1 } from './legacy-prisma-history-import-job-adapter'
 
 export { createAttachMessageMediaHandlerV1 } from './attach-message-media-handler'
@@ -35,3 +35,6 @@ export const deleteHistoryImportJobsForConnectionV1=createDeleteHistoryImportJob
 export const patchHistoryImportJobV1=createPatchHistoryImportJobHandlerV1(legacyPrismaHistoryImportJobPortV1)
 export { createDeleteHistoryImportJobsForChannelHandlerV1 } from './history-import-job-handler'
 export const deleteHistoryImportJobsForChannelV1=createDeleteHistoryImportJobsForChannelHandlerV1(legacyPrismaHistoryImportJobPortV1)
+export { createCancelHistoryImportJobHandlerV1,createQueueHistoryImportJobHandlerV1 } from './history-import-job-handler'
+export const queueHistoryImportJobV1=createQueueHistoryImportJobHandlerV1(legacyPrismaHistoryImportJobPortV1)
+export const cancelHistoryImportJobV1=createCancelHistoryImportJobHandlerV1(legacyPrismaHistoryImportJobPortV1)

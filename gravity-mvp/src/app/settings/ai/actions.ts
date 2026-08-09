@@ -12,6 +12,8 @@ import { ATTACH_MANUAL_KNOWLEDGE_SOURCE_COMMAND_V1, DISABLE_KNOWLEDGE_SOURCES_CO
 import { attachManualKnowledgeSourceV1, disableKnowledgeSourcesV1, queueKnowledgeExtractionV1, reviewAiDecisionV1, updateRetrievalPolicyV1 } from '@/modules/ai-knowledge/public/v1'
 import { CREATE_AI_AGENT_PROFILE_COMMAND_V1, DELETE_AI_AGENT_PROFILE_COMMAND_V1, UPDATE_AI_AGENT_PROFILE_COMMAND_V1 } from '@/contracts/calling/v1'
 import { createAiAgentProfileV1, deleteAiAgentProfileV1, updateAiAgentProfileV1 } from '@/modules/calling/public/v1'
+import { CANCEL_HISTORY_IMPORT_JOB_COMMAND_V1, DELETE_HISTORY_IMPORT_JOB_COMMAND_V1, QUEUE_HISTORY_IMPORT_JOB_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { cancelHistoryImportJobV1, deleteHistoryImportJobV1, queueHistoryImportJobV1 } from '@/modules/messaging/public/v1'
 
 // ─── Role guard ───────────────────────────────────────────────────
 //
@@ -337,19 +339,7 @@ export async function createImportJob(data: {
     const daysBack = data.daysBack ?? null
     const connId = data.connectionId ?? null
     try {
-        await prisma.$executeRaw`
-            INSERT INTO "HistoryImportJob" (id, channels, mode, "daysBack", "connectionId", status, "chatsScanned", "contactsFound", "messagesImported", "createdAt")
-            VALUES (
-                ${id},
-                ${data.channels}::text[],
-                ${data.mode}::"AiImportMode",
-                ${daysBack},
-                ${connId},
-                'queued'::"AiImportStatus",
-                0, 0, 0,
-                NOW()
-            )
-        `
+        await queueHistoryImportJobV1({ contract: QUEUE_HISTORY_IMPORT_JOB_COMMAND_V1, jobId: id, channels: data.channels, mode: data.mode, daysBack, connectionId: connId })
     } catch (e: any) {
         console.error('[AI Import] createImportJob error:', e.message)
     }
@@ -389,11 +379,7 @@ export async function createImportJob(data: {
 export async function cancelImportJob(id: string) {
     await assertCanEditAi()
     try {
-        await prisma.$executeRaw`
-            UPDATE "HistoryImportJob"
-            SET status = 'failed'::"AiImportStatus", "resultType" = 'failed', "finishedAt" = NOW()
-            WHERE id = ${id} AND status IN ('queued'::"AiImportStatus", 'running'::"AiImportStatus")
-        `
+        await cancelHistoryImportJobV1({ contract: CANCEL_HISTORY_IMPORT_JOB_COMMAND_V1, jobId: id })
         revalidatePath('/settings/ai')
     } catch (e: any) {
         console.error('[AI Import] cancelImportJob error:', e.message)
@@ -403,7 +389,7 @@ export async function cancelImportJob(id: string) {
 export async function deleteImportJob(id: string) {
     await assertCanEditAi()
     try {
-        await prisma.$executeRaw`DELETE FROM "HistoryImportJob" WHERE id = ${id}`
+        await deleteHistoryImportJobV1({ contract: DELETE_HISTORY_IMPORT_JOB_COMMAND_V1, jobId: id })
         revalidatePath('/settings/ai')
     } catch (e: any) {
         console.error('[AI Import] deleteImportJob error:', e.message)
