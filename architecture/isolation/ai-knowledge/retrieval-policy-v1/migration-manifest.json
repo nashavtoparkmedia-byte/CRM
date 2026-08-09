@@ -1,0 +1,6 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1", "milestone": "CRM-ARCH-007-AI-RETRIEVAL-POLICY", "status": "PASS_CONTINUE_SOURCE_GATE", "base_commit": "4d9b75164942411b7d1a68808e1f29150b8d5993", "context": "ai_knowledge", "caller_context": "configuration",
+  "plan": {"id": "migration_30dc23eb89df8b76", "site_id": "write_13b000db8cc8797befb2", "file": "gravity-mvp/src/app/settings/ai/actions.ts", "model": "AiRetrievalPolicy", "method": "$executeRawUnsafe", "role": "production"},
+  "contract": "ai_knowledge.UpdateRetrievalPolicyCommand.v1", "manifest_status": "predeclared command; no amendment", "dependency": "configuration -> ai_knowledge.public pre-approved", "consumer_before_sha256": "7494ea6fb3c4500bb7836592dbe2fa2a81269a10386f4e70cf2c7ea28dd40fcf", "consumer_after_sha256": "3c63b66eecfec016be76a88f03d9c1b8f934da74cb97bcc83da9cb3a8a5a1111",
+  "enforcement": {"before": 1502, "after": 1501, "retired": ["arch_d39e7e5de7147ff911d0fe1d"], "new_capacity": 0}, "execution_performed": false, "rollback": "4d9b75164942411b7d1a68808e1f29150b8d5993"
+}

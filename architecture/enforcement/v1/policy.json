@@ -60,8 +60,8 @@
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007-AI-DECISION-REVIEW",
-  "registry_base_commit": "19f210641f023fcdf5ee79c3b8f8336eb9eb08ec",
+  "registry_milestone": "CRM-ARCH-007-AI-RETRIEVAL-POLICY",
+  "registry_base_commit": "4d9b75164942411b7d1a68808e1f29150b8d5993",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",

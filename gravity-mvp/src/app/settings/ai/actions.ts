@@ -8,8 +8,8 @@ import { revalidatePath } from 'next/cache'
 import { importTelegramHistory } from '@/app/tg-actions'
 import { importWhatsAppHistory } from '@/lib/whatsapp/WhatsAppService'
 import { getUsers } from '@/lib/users/user-service'
-import { REVIEW_AI_DECISION_COMMAND_V1 } from '@/contracts/ai-knowledge/v1'
-import { reviewAiDecisionV1 } from '@/modules/ai-knowledge/public/v1'
+import { REVIEW_AI_DECISION_COMMAND_V1, UPDATE_RETRIEVAL_POLICY_COMMAND_V1 } from '@/contracts/ai-knowledge/v1'
+import { reviewAiDecisionV1, updateRetrievalPolicyV1 } from '@/modules/ai-knowledge/public/v1'
 
 // ─── Role guard ───────────────────────────────────────────────────
 //
@@ -1279,27 +1279,8 @@ export interface RetrievalPolicyPatch {
  */
 export async function saveRetrievalPolicy(patch: RetrievalPolicyPatch): Promise<void> {
     const actor = await requireAdminUserId()
-    const fields: string[] = []
-    const vals: any[] = []
-    const allowed: Array<keyof RetrievalPolicyPatch> = [
-        'minConfidenceForReply', 'sensitiveConfidenceMargin',
-        'minSourceCountForReply', 'verifiedScoreBoost',
-        'excludeArchived', 'excludeSuperseded', 'excludeDraft',
-        'conflictEscalates', 'rerankEnabled', 'rerankTopN', 'prefilterTopN',
-    ]
-    for (const k of allowed) {
-        if (patch[k] === undefined) continue
-        fields.push(`"${k}" = $${fields.length + 1}`)
-        vals.push(patch[k])
-    }
-    if (fields.length === 0) return
-    fields.push(`"updatedAt" = NOW()`)
-    fields.push(`"updatedBy" = $${vals.length + 1}`)
-    vals.push(actor)
-    await prisma.$executeRawUnsafe(
-        `UPDATE "AiRetrievalPolicy" SET ${fields.join(', ')} WHERE id = 'singleton'`,
-        ...vals,
-    )
+    const result = await updateRetrievalPolicyV1({ contract: UPDATE_RETRIEVAL_POLICY_COMMAND_V1, actorId: actor, patch })
+    if (!result.updated) return
     revalidatePath('/settings/ai')
 }
 

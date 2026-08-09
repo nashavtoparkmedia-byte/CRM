@@ -1,0 +1,5 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1", "milestone": "CRM-ARCH-007-AI-RETRIEVAL-POLICY", "base_commit": "4d9b75164942411b7d1a68808e1f29150b8d5993", "captured_at": "2026-08-09T18:21:05Z", "consumer": "gravity-mvp/src/app/settings/ai/actions.ts", "consumer_before_sha256": "7494ea6fb3c4500bb7836592dbe2fa2a81269a10386f4e70cf2c7ea28dd40fcf",
+  "behavior": ["admin identity is resolved before patch handling", "exact eleven-field allowlist excludes shadowMode and runtimeEnabled", "defined patch values are bound in fixed allowlist order", "empty patch performs no persistence and no revalidation", "updatedAt uses database NOW() and updatedBy is the last bound actor value", "the singleton policy row remains the only update target", "owner failure remains visible and settings revalidation occurs only after a real successful update"],
+  "out_of_scope": ["policy reads and env runtime truth", "range-policy redesign", "AI providers and credentials", "schema, database, runtime and production activation"]
+}
