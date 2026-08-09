@@ -1,0 +1,1655 @@
+{
+  "baseline_milestone": "CRM-ARCH-001",
+  "baseline_schema": "yoko.crm.authoritative-baseline.v1",
+  "generated_from": "CRM-ARCH-001 accepted composite baseline",
+  "models": [
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:ApiConnection",
+      "mapped_table": null,
+      "model": "ApiConnection",
+      "owner_candidate": "yandex_fleet",
+      "reader_modules": [
+        "drivers",
+        "gravity_core",
+        "yandex_fleet"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 3,
+      "writer_modules": [
+        "gravity_core"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:ApiLog",
+      "mapped_table": null,
+      "model": "ApiLog",
+      "owner_candidate": "yandex_fleet",
+      "reader_modules": [
+        "gravity_core"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 2,
+      "writer_modules": [
+        "gravity_core"
+      ]
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:SyncStatus",
+      "mapped_table": null,
+      "model": "SyncStatus",
+      "owner_candidate": "yandex_fleet",
+      "reader_modules": [
+        "yandex_fleet"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 1,
+      "writer_modules": [
+        "yandex_fleet"
+      ]
+    },
+    {
+      "classifications": [],
+      "id": "gravity-mvp/prisma/schema.prisma:TelegramConnection",
+      "mapped_table": null,
+      "model": "TelegramConnection",
+      "owner_candidate": "telegram_provider",
+      "reader_modules": [
+        "messages",
+        "monitoring",
+        "settings"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:MaxConnection",
+      "mapped_table": null,
+      "model": "MaxConnection",
+      "owner_candidate": "max_provider",
+      "reader_modules": [
+        "max_provider",
+        "messages",
+        "settings"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 7,
+      "writer_modules": [
+        "max_provider"
+      ]
+    },
+    {
+      "classifications": [],
+      "id": "gravity-mvp/prisma/schema.prisma:DriverMax",
+      "mapped_table": null,
+      "model": "DriverMax",
+      "owner_candidate": "max_provider",
+      "reader_modules": [],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [],
+      "id": "gravity-mvp/prisma/schema.prisma:MaxPersonalSession",
+      "mapped_table": null,
+      "model": "MaxPersonalSession",
+      "owner_candidate": "max_provider",
+      "reader_modules": [],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:WhatsAppConnection",
+      "mapped_table": null,
+      "model": "WhatsAppConnection",
+      "owner_candidate": "whatsapp_provider",
+      "reader_modules": [
+        "gravity_core",
+        "messages",
+        "monitoring",
+        "settings",
+        "whatsapp_provider"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 10,
+      "writer_modules": [
+        "whatsapp_provider"
+      ]
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:WhatsAppChat",
+      "mapped_table": null,
+      "model": "WhatsAppChat",
+      "owner_candidate": "whatsapp_provider",
+      "reader_modules": [
+        "ai_knowledge",
+        "monitoring",
+        "settings",
+        "whatsapp_provider"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 11,
+      "writer_modules": [
+        "whatsapp_provider"
+      ]
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:WhatsAppMessage",
+      "mapped_table": null,
+      "model": "WhatsAppMessage",
+      "owner_candidate": "whatsapp_provider",
+      "reader_modules": [
+        "monitoring",
+        "whatsapp_provider"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 8,
+      "writer_modules": [
+        "whatsapp_provider"
+      ]
+    },
+    {
+      "classifications": [],
+      "id": "gravity-mvp/prisma/schema.prisma:WhatsAppChatRoster",
+      "mapped_table": null,
+      "model": "WhatsAppChatRoster",
+      "owner_candidate": "whatsapp_provider",
+      "reader_modules": [
+        "monitoring"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:DriverTelegram",
+      "mapped_table": null,
+      "model": "DriverTelegram",
+      "owner_candidate": "telegram_provider",
+      "reader_modules": [
+        "drivers",
+        "gravity_core",
+        "messages",
+        "telegram_provider",
+        "yandex_fleet"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 14,
+      "writer_modules": [
+        "drivers",
+        "gravity_core",
+        "telegram_provider"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:BotChatMessage",
+      "mapped_table": null,
+      "model": "BotChatMessage",
+      "owner_candidate": "telegram_provider",
+      "reader_modules": [
+        "gravity_core",
+        "telegram_provider"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 4,
+      "writer_modules": [
+        "gravity_core",
+        "telegram_provider"
+      ]
+    },
+    {
+      "classifications": [],
+      "id": "gravity-mvp/prisma/schema.prisma:Bot",
+      "mapped_table": "bots",
+      "model": "Bot",
+      "owner_candidate": "telegram_bot",
+      "reader_modules": [
+        "messages"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [],
+      "id": "gravity-mvp/prisma/schema.prisma:Survey",
+      "mapped_table": "surveys",
+      "model": "Survey",
+      "owner_candidate": "telegram_bot",
+      "reader_modules": [],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [],
+      "id": "gravity-mvp/prisma/schema.prisma:Question",
+      "mapped_table": "questions",
+      "model": "Question",
+      "owner_candidate": "telegram_bot",
+      "reader_modules": [],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [],
+      "id": "gravity-mvp/prisma/schema.prisma:User",
+      "mapped_table": "users",
+      "model": "User",
+      "owner_candidate": "telegram_bot",
+      "reader_modules": [
+        "monitoring"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [],
+      "id": "gravity-mvp/prisma/schema.prisma:Answer",
+      "mapped_table": "answers",
+      "model": "Answer",
+      "owner_candidate": "telegram_bot",
+      "reader_modules": [],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [],
+      "id": "gravity-mvp/prisma/schema.prisma:AnalyticsEvent",
+      "mapped_table": "analytics_events",
+      "model": "AnalyticsEvent",
+      "owner_candidate": "telegram_bot",
+      "reader_modules": [],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [],
+      "id": "gravity-mvp/prisma/schema.prisma:Broadcast",
+      "mapped_table": "broadcasts",
+      "model": "Broadcast",
+      "owner_candidate": "telegram_bot",
+      "reader_modules": [],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [],
+      "id": "gravity-mvp/prisma/schema.prisma:BroadcastStat",
+      "mapped_table": "broadcast_stats",
+      "model": "BroadcastStat",
+      "owner_candidate": "telegram_bot",
+      "reader_modules": [],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:Driver",
+      "mapped_table": null,
+      "model": "Driver",
+      "owner_candidate": "drivers",
+      "reader_modules": [
+        "ai_calls",
+        "analytics",
+        "calls",
+        "contacts",
+        "drivers",
+        "gravity_core",
+        "messages",
+        "monitoring",
+        "tasks",
+        "yandex_fleet"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 9,
+      "writer_modules": [
+        "drivers",
+        "gravity_core",
+        "tasks",
+        "yandex_fleet"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:DriverAction",
+      "mapped_table": null,
+      "model": "DriverAction",
+      "owner_candidate": "drivers",
+      "reader_modules": [],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 4,
+      "writer_modules": [
+        "gravity_core"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER",
+        "SHARED_AMBIGUOUS"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:Chat",
+      "mapped_table": null,
+      "model": "Chat",
+      "owner_candidate": "messages",
+      "reader_modules": [
+        "ai_knowledge",
+        "calls",
+        "contacts",
+        "gravity_core",
+        "leads",
+        "max_provider",
+        "messages",
+        "monitoring",
+        "settings",
+        "telegram_provider",
+        "whatsapp_provider"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 46,
+      "writer_modules": [
+        "avito",
+        "calls",
+        "contacts",
+        "gravity_core",
+        "leads",
+        "max_provider",
+        "messages",
+        "monitoring",
+        "whatsapp_provider"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:Message",
+      "mapped_table": null,
+      "model": "Message",
+      "owner_candidate": "messages",
+      "reader_modules": [
+        "ai_knowledge",
+        "calls",
+        "contacts",
+        "gravity_core",
+        "leads",
+        "max_provider",
+        "max_scraper",
+        "messages",
+        "monitoring",
+        "settings",
+        "telegram_provider",
+        "whatsapp_provider"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 22,
+      "writer_modules": [
+        "calls",
+        "gravity_core",
+        "leads",
+        "max_provider",
+        "messages",
+        "monitoring",
+        "whatsapp_provider"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:MessageAttachment",
+      "mapped_table": null,
+      "model": "MessageAttachment",
+      "owner_candidate": "messages",
+      "reader_modules": [
+        "max_provider",
+        "messages"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 4,
+      "writer_modules": [
+        "max_provider",
+        "messages",
+        "whatsapp_provider"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:MessageEventLog",
+      "mapped_table": null,
+      "model": "MessageEventLog",
+      "owner_candidate": "messages",
+      "reader_modules": [],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 4,
+      "writer_modules": [
+        "gravity_core",
+        "messages"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:DriverEvent",
+      "mapped_table": null,
+      "model": "DriverEvent",
+      "owner_candidate": "drivers",
+      "reader_modules": [
+        "drivers"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 5,
+      "writer_modules": [
+        "drivers",
+        "yandex_fleet"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:DriverAttention",
+      "mapped_table": null,
+      "model": "DriverAttention",
+      "owner_candidate": "drivers",
+      "reader_modules": [
+        "monitoring"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 2,
+      "writer_modules": [
+        "drivers",
+        "monitoring"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:DriverDaySummary",
+      "mapped_table": null,
+      "model": "DriverDaySummary",
+      "owner_candidate": "drivers",
+      "reader_modules": [
+        "analytics",
+        "drivers",
+        "tasks"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 5,
+      "writer_modules": [
+        "drivers",
+        "messages",
+        "yandex_fleet"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:ScoringThreshold",
+      "mapped_table": null,
+      "model": "ScoringThreshold",
+      "owner_candidate": "drivers",
+      "reader_modules": [
+        "drivers",
+        "settings"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 2,
+      "writer_modules": [
+        "drivers",
+        "settings"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:CommunicationEvent",
+      "mapped_table": null,
+      "model": "CommunicationEvent",
+      "owner_candidate": "messages",
+      "reader_modules": [
+        "messages",
+        "tasks"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 3,
+      "writer_modules": [
+        "drivers",
+        "messages"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:CommunicationTrigger",
+      "mapped_table": null,
+      "model": "CommunicationTrigger",
+      "owner_candidate": "messages",
+      "reader_modules": [
+        "settings",
+        "tasks"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 4,
+      "writer_modules": [
+        "settings"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:ManagerTask",
+      "mapped_table": null,
+      "model": "ManagerTask",
+      "owner_candidate": "tasks",
+      "reader_modules": [
+        "messages",
+        "tasks"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 2,
+      "writer_modules": [
+        "messages",
+        "tasks"
+      ]
+    },
+    {
+      "classifications": [],
+      "id": "gravity-mvp/prisma/schema.prisma:DailyParkStats",
+      "mapped_table": null,
+      "model": "DailyParkStats",
+      "owner_candidate": "drivers",
+      "reader_modules": [
+        "analytics"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:Contact",
+      "mapped_table": null,
+      "model": "Contact",
+      "owner_candidate": "contacts",
+      "reader_modules": [
+        "ai_calls",
+        "contacts",
+        "max_provider",
+        "messages",
+        "monitoring",
+        "tasks",
+        "telegram_provider",
+        "yandex_fleet"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 24,
+      "writer_modules": [
+        "contacts",
+        "gravity_core",
+        "max_provider",
+        "messages",
+        "monitoring",
+        "telegram_provider",
+        "yandex_fleet"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:ContactPhone",
+      "mapped_table": null,
+      "model": "ContactPhone",
+      "owner_candidate": "contacts",
+      "reader_modules": [
+        "calls",
+        "contacts",
+        "monitoring",
+        "whatsapp_provider",
+        "yandex_fleet"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 17,
+      "writer_modules": [
+        "contacts",
+        "yandex_fleet"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER",
+        "SHARED_AMBIGUOUS"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:ContactIdentity",
+      "mapped_table": null,
+      "model": "ContactIdentity",
+      "owner_candidate": "contacts",
+      "reader_modules": [
+        "contacts",
+        "leads",
+        "messages",
+        "monitoring"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 10,
+      "writer_modules": [
+        "contacts",
+        "telegram_provider"
+      ]
+    },
+    {
+      "classifications": [],
+      "id": "gravity-mvp/prisma/schema.prisma:ContactMerge",
+      "mapped_table": null,
+      "model": "ContactMerge",
+      "owner_candidate": "contacts",
+      "reader_modules": [
+        "contacts",
+        "monitoring"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:Task",
+      "mapped_table": "tasks",
+      "model": "Task",
+      "owner_candidate": "tasks",
+      "reader_modules": [
+        "analytics",
+        "monitoring",
+        "tasks"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 24,
+      "writer_modules": [
+        "ai_calls",
+        "analytics",
+        "contacts",
+        "monitoring",
+        "tasks"
+      ]
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:TaskEvent",
+      "mapped_table": "task_events",
+      "model": "TaskEvent",
+      "owner_candidate": "tasks",
+      "reader_modules": [
+        "analytics",
+        "monitoring",
+        "tasks"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 8,
+      "writer_modules": [
+        "tasks"
+      ]
+    },
+    {
+      "classifications": [],
+      "id": "gravity-mvp/prisma/schema.prisma:CrmUser",
+      "mapped_table": "crm_users",
+      "model": "CrmUser",
+      "owner_candidate": "users",
+      "reader_modules": [
+        "analytics",
+        "tasks"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:Call",
+      "mapped_table": null,
+      "model": "Call",
+      "owner_candidate": "calls",
+      "reader_modules": [
+        "ai_calls",
+        "ai_knowledge",
+        "calls",
+        "monitoring",
+        "settings"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 11,
+      "writer_modules": [
+        "ai_calls",
+        "calls"
+      ]
+    },
+    {
+      "classifications": [],
+      "id": "gravity-mvp/prisma/schema.prisma:AiCallMessage",
+      "mapped_table": null,
+      "model": "AiCallMessage",
+      "owner_candidate": "ai_calls",
+      "reader_modules": [],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [],
+      "id": "gravity-mvp/prisma/schema.prisma:AiProviderSetting",
+      "mapped_table": null,
+      "model": "AiProviderSetting",
+      "owner_candidate": "ai_calls",
+      "reader_modules": [],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiCallProject",
+      "mapped_table": null,
+      "model": "AiCallProject",
+      "owner_candidate": "ai_calls",
+      "reader_modules": [
+        "ai_calls"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 1,
+      "writer_modules": [
+        "ai_calls"
+      ]
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiCallScenario",
+      "mapped_table": null,
+      "model": "AiCallScenario",
+      "owner_candidate": "ai_calls",
+      "reader_modules": [
+        "ai_calls"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 4,
+      "writer_modules": [
+        "ai_calls"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiAgentProfile",
+      "mapped_table": null,
+      "model": "AiAgentProfile",
+      "owner_candidate": "ai_calls",
+      "reader_modules": [
+        "settings"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 3,
+      "writer_modules": [
+        "settings"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiAgentConfig",
+      "mapped_table": null,
+      "model": "AiAgentConfig",
+      "owner_candidate": "ai_calls",
+      "reader_modules": [
+        "ai_knowledge",
+        "gravity_core",
+        "messages",
+        "settings"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 5,
+      "writer_modules": [
+        "settings"
+      ]
+    },
+    {
+      "classifications": [],
+      "id": "gravity-mvp/prisma/schema.prisma:TelephonyAiConfig",
+      "mapped_table": null,
+      "model": "TelephonyAiConfig",
+      "owner_candidate": "ai_calls",
+      "reader_modules": [],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:KnowledgeBaseEntry",
+      "mapped_table": null,
+      "model": "KnowledgeBaseEntry",
+      "owner_candidate": "ai_knowledge",
+      "reader_modules": [
+        "ai_knowledge",
+        "gravity_core",
+        "settings"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 3,
+      "writer_modules": [
+        "settings"
+      ]
+    },
+    {
+      "classifications": [],
+      "id": "gravity-mvp/prisma/schema.prisma:AiKnowledgeSection",
+      "mapped_table": null,
+      "model": "AiKnowledgeSection",
+      "owner_candidate": "ai_knowledge",
+      "reader_modules": [
+        "ai_knowledge",
+        "settings"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "LEGACY",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiKnowledgeItem",
+      "mapped_table": null,
+      "model": "AiKnowledgeItem",
+      "owner_candidate": "ai_knowledge",
+      "reader_modules": [
+        "ai_knowledge",
+        "messages",
+        "settings"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 20,
+      "writer_modules": [
+        "ai_knowledge",
+        "messages",
+        "settings"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "LEGACY",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiKnowledgeSource",
+      "mapped_table": null,
+      "model": "AiKnowledgeSource",
+      "owner_candidate": "ai_knowledge",
+      "reader_modules": [
+        "ai_knowledge",
+        "settings"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 6,
+      "writer_modules": [
+        "ai_knowledge",
+        "settings"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiKnowledgeUsageLog",
+      "mapped_table": null,
+      "model": "AiKnowledgeUsageLog",
+      "owner_candidate": "ai_knowledge",
+      "reader_modules": [
+        "ai_knowledge"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 1,
+      "writer_modules": [
+        "gravity_core"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiRetrievalPolicy",
+      "mapped_table": null,
+      "model": "AiRetrievalPolicy",
+      "owner_candidate": "ai_knowledge",
+      "reader_modules": [
+        "ai_knowledge",
+        "settings"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 1,
+      "writer_modules": [
+        "settings"
+      ]
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiKnowledgeAuditLog",
+      "mapped_table": null,
+      "model": "AiKnowledgeAuditLog",
+      "owner_candidate": "ai_knowledge",
+      "reader_modules": [
+        "ai_knowledge"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 1,
+      "writer_modules": [
+        "ai_knowledge"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiExtractionJob",
+      "mapped_table": null,
+      "model": "AiExtractionJob",
+      "owner_candidate": "ai_knowledge",
+      "reader_modules": [
+        "ai_knowledge",
+        "settings"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 4,
+      "writer_modules": [
+        "ai_knowledge",
+        "settings"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiDecisionLog",
+      "mapped_table": null,
+      "model": "AiDecisionLog",
+      "owner_candidate": "ai_knowledge",
+      "reader_modules": [
+        "ai_knowledge",
+        "gravity_core",
+        "settings"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 2,
+      "writer_modules": [
+        "gravity_core",
+        "settings"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiProposedReply",
+      "mapped_table": null,
+      "model": "AiProposedReply",
+      "owner_candidate": "ai_knowledge",
+      "reader_modules": [
+        "messages"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 6,
+      "writer_modules": [
+        "messages"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:HistoryImportJob",
+      "mapped_table": null,
+      "model": "HistoryImportJob",
+      "owner_candidate": "messages",
+      "reader_modules": [
+        "settings"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 10,
+      "writer_modules": [
+        "gravity_core",
+        "settings",
+        "telegram_provider",
+        "whatsapp_provider"
+      ]
+    },
+    {
+      "classifications": [],
+      "id": "gravity-mvp/prisma/schema.prisma:GroupVisibility",
+      "mapped_table": null,
+      "model": "GroupVisibility",
+      "owner_candidate": "messages",
+      "reader_modules": [],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:config_change_log",
+      "mapped_table": null,
+      "model": "config_change_log",
+      "owner_candidate": "settings",
+      "reader_modules": [
+        "settings"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 2,
+      "writer_modules": [
+        "settings"
+      ]
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:cron_health_log",
+      "mapped_table": null,
+      "model": "cron_health_log",
+      "owner_candidate": "monitoring",
+      "reader_modules": [
+        "monitoring"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 2,
+      "writer_modules": [
+        "monitoring"
+      ]
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:execution_lock",
+      "mapped_table": null,
+      "model": "execution_lock",
+      "owner_candidate": "monitoring",
+      "reader_modules": [
+        "monitoring"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 4,
+      "writer_modules": [
+        "monitoring"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:health_score_history",
+      "mapped_table": null,
+      "model": "health_score_history",
+      "owner_candidate": "monitoring",
+      "reader_modules": [
+        "tasks"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 1,
+      "writer_modules": [
+        "tasks"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:health_snapshots",
+      "mapped_table": null,
+      "model": "health_snapshots",
+      "owner_candidate": "monitoring",
+      "reader_modules": [],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 1,
+      "writer_modules": [
+        "tasks"
+      ]
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:integrity_check_log",
+      "mapped_table": null,
+      "model": "integrity_check_log",
+      "owner_candidate": "monitoring",
+      "reader_modules": [
+        "monitoring"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 2,
+      "writer_modules": [
+        "monitoring"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:intervention_actions",
+      "mapped_table": null,
+      "model": "intervention_actions",
+      "owner_candidate": "monitoring",
+      "reader_modules": [
+        "analytics"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 2,
+      "writer_modules": [
+        "analytics"
+      ]
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:perf_log",
+      "mapped_table": null,
+      "model": "perf_log",
+      "owner_candidate": "monitoring",
+      "reader_modules": [
+        "monitoring"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 3,
+      "writer_modules": [
+        "monitoring"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:scenario_field_settings",
+      "mapped_table": null,
+      "model": "scenario_field_settings",
+      "owner_candidate": "settings",
+      "reader_modules": [
+        "tasks"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 2,
+      "writer_modules": [
+        "tasks"
+      ]
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:stability_check_log",
+      "mapped_table": null,
+      "model": "stability_check_log",
+      "owner_candidate": "monitoring",
+      "reader_modules": [
+        "monitoring"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 2,
+      "writer_modules": [
+        "monitoring"
+      ]
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:avito_accounts",
+      "mapped_table": null,
+      "model": "avito_accounts",
+      "owner_candidate": "avito",
+      "reader_modules": [
+        "avito",
+        "leads"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 10,
+      "writer_modules": [
+        "avito"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:avito_responses",
+      "mapped_table": null,
+      "model": "avito_responses",
+      "owner_candidate": "avito",
+      "reader_modules": [
+        "avito",
+        "leads"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 4,
+      "writer_modules": [
+        "avito",
+        "leads"
+      ]
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:avito_jobs",
+      "mapped_table": null,
+      "model": "avito_jobs",
+      "owner_candidate": "avito",
+      "reader_modules": [],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 2,
+      "writer_modules": [
+        "avito"
+      ]
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:avito_activity_log",
+      "mapped_table": null,
+      "model": "avito_activity_log",
+      "owner_candidate": "avito",
+      "reader_modules": [
+        "avito"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 2,
+      "writer_modules": [
+        "avito"
+      ]
+    },
+    {
+      "classifications": [],
+      "id": "gravity-mvp/prisma/schema.prisma:avito_phone_reveal_attempts",
+      "mapped_table": null,
+      "model": "avito_phone_reveal_attempts",
+      "owner_candidate": "avito",
+      "reader_modules": [],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [],
+      "id": "gravity-mvp/prisma/schema.prisma:avito_account_snapshot",
+      "mapped_table": null,
+      "model": "avito_account_snapshot",
+      "owner_candidate": "avito",
+      "reader_modules": [],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:avito_app_settings",
+      "mapped_table": null,
+      "model": "avito_app_settings",
+      "owner_candidate": "avito",
+      "reader_modules": [
+        "avito"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 5,
+      "writer_modules": [
+        "avito"
+      ]
+    },
+    {
+      "classifications": [],
+      "id": "gravity-mvp/prisma/schema.prisma:avito_auth_users",
+      "mapped_table": null,
+      "model": "avito_auth_users",
+      "owner_candidate": "avito",
+      "reader_modules": [],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [],
+      "id": "gravity-mvp/prisma/schema.prisma:avito_auth_sessions",
+      "mapped_table": null,
+      "model": "avito_auth_sessions",
+      "owner_candidate": "avito",
+      "reader_modules": [],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [],
+      "id": "gravity-mvp/prisma/schema.prisma:avito_crm_outbox_events",
+      "mapped_table": null,
+      "model": "avito_crm_outbox_events",
+      "owner_candidate": "avito",
+      "reader_modules": [],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [],
+      "id": "gravity-mvp/prisma/schema.prisma:AiCallEvent",
+      "mapped_table": null,
+      "model": "AiCallEvent",
+      "owner_candidate": "ai_calls",
+      "reader_modules": [],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "tg-bot/prisma/schema.prisma:Bot",
+      "mapped_table": "bots",
+      "model": "Bot",
+      "owner_candidate": "telegram_bot",
+      "reader_modules": [
+        "telegram_bot"
+      ],
+      "schema": "tg-bot/prisma/schema.prisma",
+      "write_sites": 5,
+      "writer_modules": [
+        "telegram_bot"
+      ]
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "tg-bot/prisma/schema.prisma:Survey",
+      "mapped_table": "surveys",
+      "model": "Survey",
+      "owner_candidate": "telegram_bot",
+      "reader_modules": [
+        "telegram_bot"
+      ],
+      "schema": "tg-bot/prisma/schema.prisma",
+      "write_sites": 6,
+      "writer_modules": [
+        "telegram_bot"
+      ]
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "tg-bot/prisma/schema.prisma:Question",
+      "mapped_table": "questions",
+      "model": "Question",
+      "owner_candidate": "telegram_bot",
+      "reader_modules": [
+        "telegram_bot"
+      ],
+      "schema": "tg-bot/prisma/schema.prisma",
+      "write_sites": 4,
+      "writer_modules": [
+        "telegram_bot"
+      ]
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "tg-bot/prisma/schema.prisma:User",
+      "mapped_table": "users",
+      "model": "User",
+      "owner_candidate": "telegram_bot",
+      "reader_modules": [
+        "telegram_bot"
+      ],
+      "schema": "tg-bot/prisma/schema.prisma",
+      "write_sites": 5,
+      "writer_modules": [
+        "telegram_bot"
+      ]
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "tg-bot/prisma/schema.prisma:Answer",
+      "mapped_table": "answers",
+      "model": "Answer",
+      "owner_candidate": "telegram_bot",
+      "reader_modules": [
+        "telegram_bot"
+      ],
+      "schema": "tg-bot/prisma/schema.prisma",
+      "write_sites": 3,
+      "writer_modules": [
+        "telegram_bot"
+      ]
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "tg-bot/prisma/schema.prisma:AnalyticsEvent",
+      "mapped_table": "analytics_events",
+      "model": "AnalyticsEvent",
+      "owner_candidate": "telegram_bot",
+      "reader_modules": [
+        "telegram_bot"
+      ],
+      "schema": "tg-bot/prisma/schema.prisma",
+      "write_sites": 3,
+      "writer_modules": [
+        "telegram_bot"
+      ]
+    },
+    {
+      "classifications": [],
+      "id": "tg-bot/prisma/schema.prisma:Broadcast",
+      "mapped_table": "broadcasts",
+      "model": "Broadcast",
+      "owner_candidate": "telegram_bot",
+      "reader_modules": [
+        "telegram_bot"
+      ],
+      "schema": "tg-bot/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [],
+      "id": "tg-bot/prisma/schema.prisma:BroadcastStat",
+      "mapped_table": "broadcast_stats",
+      "model": "BroadcastStat",
+      "owner_candidate": "telegram_bot",
+      "reader_modules": [],
+      "schema": "tg-bot/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "yandex-fleet-scraper/prisma/schema.prisma:Account",
+      "mapped_table": null,
+      "model": "Account",
+      "owner_candidate": "yfs",
+      "reader_modules": [
+        "yfs"
+      ],
+      "schema": "yandex-fleet-scraper/prisma/schema.prisma",
+      "write_sites": 8,
+      "writer_modules": [
+        "yfs"
+      ]
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "yandex-fleet-scraper/prisma/schema.prisma:Check",
+      "mapped_table": null,
+      "model": "Check",
+      "owner_candidate": "yfs",
+      "reader_modules": [
+        "yfs"
+      ],
+      "schema": "yandex-fleet-scraper/prisma/schema.prisma",
+      "write_sites": 6,
+      "writer_modules": [
+        "yfs"
+      ]
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "yandex-fleet-scraper/prisma/schema.prisma:CheckResult",
+      "mapped_table": null,
+      "model": "CheckResult",
+      "owner_candidate": "yfs",
+      "reader_modules": [],
+      "schema": "yandex-fleet-scraper/prisma/schema.prisma",
+      "write_sites": 1,
+      "writer_modules": [
+        "yfs"
+      ]
+    },
+    {
+      "classifications": [],
+      "id": "yandex-fleet-scraper/prisma/schema.prisma:AuditLog",
+      "mapped_table": null,
+      "model": "AuditLog",
+      "owner_candidate": "yfs",
+      "reader_modules": [],
+      "schema": "yandex-fleet-scraper/prisma/schema.prisma",
+      "write_sites": 0,
+      "writer_modules": []
+    },
+    {
+      "classifications": [
+        "OWNER"
+      ],
+      "id": "runtime_raw_sql:usage_events",
+      "mapped_table": "usage_events",
+      "model": "usage_events",
+      "owner_candidate": "tasks",
+      "reader_modules": [],
+      "schema": "runtime_raw_sql",
+      "write_sites": 1,
+      "writer_modules": [
+        "tasks"
+      ]
+    }
+  ],
+  "notes": [
+    "Candidates are technical ownership inputs, not final bounded-context decisions.",
+    "Duplicated Telegram bot models in Gravity and tg-bot schemas are assigned to telegram_bot; Gravity writes are therefore visible as FOREIGN.",
+    "YFS models are schema-scoped to yandex-fleet-scraper even where generic names overlap other domains."
+  ],
+  "schema_version": 1,
+  "source_snapshot_sha256": "2713db175062bb673dcca2d97e80c2ae204a2f257438036c6db2506587dfad7d",
+  "totals": {
+    "models": 96,
+    "unresolved_owners": 0
+  }
+}

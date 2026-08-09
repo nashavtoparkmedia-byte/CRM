@@ -1,0 +1,28 @@
+{
+  "schema": "yoko.crm.data-ownership-candidates.v1",
+  "rules": {
+    "ApiConnection":"yandex_fleet", "ApiLog":"yandex_fleet", "SyncStatus":"yandex_fleet",
+    "TelegramConnection":"telegram_provider", "MaxConnection":"max_provider", "DriverMax":"max_provider", "MaxPersonalSession":"max_provider",
+    "WhatsAppConnection":"whatsapp_provider", "WhatsAppChat":"whatsapp_provider", "WhatsAppMessage":"whatsapp_provider", "WhatsAppChatRoster":"whatsapp_provider",
+    "DriverTelegram":"telegram_provider", "BotChatMessage":"telegram_provider",
+    "Bot":"telegram_bot", "Survey":"telegram_bot", "Question":"telegram_bot", "User":"telegram_bot", "Answer":"telegram_bot", "AnalyticsEvent":"telegram_bot", "Broadcast":"telegram_bot", "BroadcastStat":"telegram_bot",
+    "Driver":"drivers", "DriverAction":"drivers", "DriverEvent":"drivers", "DriverAttention":"drivers", "DriverDaySummary":"drivers", "DailyParkStats":"drivers", "ScoringThreshold":"drivers",
+    "Chat":"messages", "Message":"messages", "MessageAttachment":"messages", "MessageEventLog":"messages", "CommunicationEvent":"messages", "CommunicationTrigger":"messages",
+    "ManagerTask":"tasks", "Task":"tasks", "TaskEvent":"tasks", "usage_events":"tasks",
+    "Contact":"contacts", "ContactPhone":"contacts", "ContactIdentity":"contacts", "ContactMerge":"contacts",
+    "CrmUser":"users",
+    "Call":"calls", "AiCallMessage":"ai_calls", "AiProviderSetting":"ai_calls", "AiCallProject":"ai_calls", "AiCallScenario":"ai_calls", "AiAgentProfile":"ai_calls", "AiAgentConfig":"ai_calls", "TelephonyAiConfig":"ai_calls", "AiCallEvent":"ai_calls",
+    "KnowledgeBaseEntry":"ai_knowledge", "AiKnowledgeSection":"ai_knowledge", "AiKnowledgeItem":"ai_knowledge", "AiKnowledgeSource":"ai_knowledge", "AiKnowledgeUsageLog":"ai_knowledge", "AiRetrievalPolicy":"ai_knowledge", "AiKnowledgeAuditLog":"ai_knowledge", "AiExtractionJob":"ai_knowledge", "AiDecisionLog":"ai_knowledge", "AiProposedReply":"ai_knowledge",
+    "HistoryImportJob":"messages", "GroupVisibility":"messages",
+    "config_change_log":"settings", "scenario_field_settings":"settings",
+    "cron_health_log":"monitoring", "execution_lock":"monitoring", "health_score_history":"monitoring", "health_snapshots":"monitoring", "integrity_check_log":"monitoring", "intervention_actions":"monitoring", "perf_log":"monitoring", "stability_check_log":"monitoring",
+    "avito_accounts":"avito", "avito_responses":"avito", "avito_jobs":"avito", "avito_activity_log":"avito", "avito_phone_reveal_attempts":"avito", "avito_account_snapshot":"avito", "avito_app_settings":"avito", "avito_auth_users":"avito", "avito_auth_sessions":"avito", "avito_crm_outbox_events":"avito",
+    "Account":"yfs", "Check":"yfs", "CheckResult":"yfs", "AuditLog":"yfs"
+  },
+  "shared_or_ambiguous": [],
+  "notes": [
+    "Candidates are technical ownership inputs, not final bounded-context decisions.",
+    "Duplicated Telegram bot models in Gravity and tg-bot schemas are assigned to telegram_bot; Gravity writes are therefore visible as FOREIGN.",
+    "YFS models are schema-scoped to yandex-fleet-scraper even where generic names overlap other domains."
+  ]
+}
