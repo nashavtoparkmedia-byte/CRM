@@ -55,13 +55,14 @@
     "architecture/isolation/fleet-operations/clear-check-status-v1/module-manifest-amendments.json",
     "architecture/isolation/ai-knowledge/usage-log-v1/module-manifest-amendments.json",
     "architecture/isolation/ai-knowledge/decision-log-v1/module-manifest-amendments.json",
-    "architecture/isolation/ai-knowledge/decision-review-v1/module-manifest-amendments.json"
+    "architecture/isolation/ai-knowledge/decision-review-v1/module-manifest-amendments.json",
+    "architecture/isolation/ai-knowledge/extraction-queue-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007-AI-RETRIEVAL-POLICY",
-  "registry_base_commit": "4d9b75164942411b7d1a68808e1f29150b8d5993",
+  "registry_milestone": "CRM-ARCH-007-AI-EXTRACTION-QUEUE",
+  "registry_base_commit": "c3ccc57107bb967ebbcf9eaa3083242c17d11580",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",

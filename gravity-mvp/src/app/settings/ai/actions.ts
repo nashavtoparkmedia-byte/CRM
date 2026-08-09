@@ -8,8 +8,8 @@ import { revalidatePath } from 'next/cache'
 import { importTelegramHistory } from '@/app/tg-actions'
 import { importWhatsAppHistory } from '@/lib/whatsapp/WhatsAppService'
 import { getUsers } from '@/lib/users/user-service'
-import { REVIEW_AI_DECISION_COMMAND_V1, UPDATE_RETRIEVAL_POLICY_COMMAND_V1 } from '@/contracts/ai-knowledge/v1'
-import { reviewAiDecisionV1, updateRetrievalPolicyV1 } from '@/modules/ai-knowledge/public/v1'
+import { QUEUE_KNOWLEDGE_EXTRACTION_COMMAND_V1, REVIEW_AI_DECISION_COMMAND_V1, UPDATE_RETRIEVAL_POLICY_COMMAND_V1 } from '@/contracts/ai-knowledge/v1'
+import { queueKnowledgeExtractionV1, reviewAiDecisionV1, updateRetrievalPolicyV1 } from '@/modules/ai-knowledge/public/v1'
 
 // ─── Role guard ───────────────────────────────────────────────────
 //
@@ -721,19 +721,7 @@ export async function startKnowledgeExtraction(
     const id = 'kbj_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)
     const scopeJson = JSON.stringify(scope ?? { mode: 'last_90d' })
 
-    await prisma.$executeRaw`
-        INSERT INTO "AiExtractionJob" (
-            id, status, "sourceType", scope,
-            "extractionQualityTier", "createdAt"
-        ) VALUES (
-            ${id},
-            'queued'::"AiExtractionStatus",
-            'chat_message'::"AiKnowledgeSourceOrigin",
-            ${scopeJson}::jsonb,
-            ${qualityTier},
-            NOW()
-        )
-    `
+    await queueKnowledgeExtractionV1({ contract: QUEUE_KNOWLEDGE_EXTRACTION_COMMAND_V1, jobId: id, scopeJson, qualityTier })
     revalidatePath('/settings/ai')
 
     // Fire-and-forget. Errors логируются внутри runExtraction.

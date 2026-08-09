@@ -6,6 +6,8 @@ import { createReviewAiDecisionHandlerV1 } from './review-ai-decision-handler'
 import { legacyPrismaReviewAiDecisionPortV1 } from './legacy-prisma-review-ai-decision-adapter'
 import { createUpdateRetrievalPolicyHandlerV1 } from './update-retrieval-policy-handler'
 import { legacyPrismaUpdateRetrievalPolicyPortV1 } from './legacy-prisma-update-retrieval-policy-adapter'
+import { createQueueKnowledgeExtractionHandlerV1 } from './queue-knowledge-extraction-handler'
+import { legacyPrismaQueueKnowledgeExtractionPortV1 } from './legacy-prisma-queue-knowledge-extraction-adapter'
 
 export { createRecordKnowledgeUsageHandlerV1 } from './record-knowledge-usage-handler'
 export type { RecordKnowledgeUsagePersistencePortV1 } from './record-knowledge-usage-handler'
@@ -19,3 +21,6 @@ export const reviewAiDecisionV1 = createReviewAiDecisionHandlerV1(legacyPrismaRe
 export { createUpdateRetrievalPolicyHandlerV1 } from './update-retrieval-policy-handler'
 export type { UpdateRetrievalPolicyPersistencePortV1 } from './update-retrieval-policy-handler'
 export const updateRetrievalPolicyV1 = createUpdateRetrievalPolicyHandlerV1(legacyPrismaUpdateRetrievalPolicyPortV1)
+export { createQueueKnowledgeExtractionHandlerV1 } from './queue-knowledge-extraction-handler'
+export type { QueueKnowledgeExtractionPersistencePortV1 } from './queue-knowledge-extraction-handler'
+export const queueKnowledgeExtractionV1=createQueueKnowledgeExtractionHandlerV1(legacyPrismaQueueKnowledgeExtractionPortV1)
