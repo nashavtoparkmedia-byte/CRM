@@ -73,13 +73,14 @@
     "architecture/isolation/messaging/avito-chat-v1/module-manifest-amendments.json",
     "architecture/isolation/messaging/pipeline-event-log-v1/module-manifest-amendments.json",
     "architecture/isolation/messaging/max-message-v1/module-manifest-amendments.json",
-    "architecture/isolation/messaging/max-chat-v1/module-manifest-amendments.json"
+    "architecture/isolation/messaging/max-chat-v1/module-manifest-amendments.json",
+    "architecture/isolation/fleet-operations/driver-action-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007-MESSAGING-MAX-CHAT",
-  "registry_base_commit": "28cc9ed9769118f2e39a5045eeae971a3ac09776",
+  "registry_milestone": "CRM-ARCH-007-FLEET-DRIVER-ACTION",
+  "registry_base_commit": "d2c8d0ad5e2e6ea5c8d75d2ce84b36e68a67430f",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",

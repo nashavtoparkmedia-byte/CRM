@@ -9,6 +9,8 @@ import {
     UPDATE_CONVERSATION_COMMAND_V1,
 } from '@/contracts/messaging/v1'
 import { sendMessageV1, updateConversationV1 } from '@/modules/messaging/public/v1'
+import { MIRROR_DRIVER_ACTION_RESULT_COMMAND_V1, RECORD_DRIVER_ACTION_COMMAND_V1 } from '@/contracts/fleet-operations/v1'
+import { mirrorDriverActionResultV1, recordDriverActionV1 } from '@/modules/fleet-operations/public/v1'
 
 const BOT_API_URL = process.env.BOT_API_URL || 'http://localhost:4000/api/bot'
 
@@ -672,7 +674,8 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
         })
     }
     if (!driver?.yandexDriverId) {
-        await prisma.driverAction.create({
+        await recordDriverActionV1({
+            contract: RECORD_DRIVER_ACTION_COMMAND_V1,
             data: {
                 driverId: mapping.driverId,
                 kind,
@@ -743,7 +746,8 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
         }
         scraperTaskId = json.taskId
     } catch (e: any) {
-        await prisma.driverAction.create({
+        await recordDriverActionV1({
+            contract: RECORD_DRIVER_ACTION_COMMAND_V1,
             data: {
                 driverId: driver.id,
                 kind,
@@ -760,7 +764,8 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
     }
 
     // 3. Audit row in CRM
-    const action = await prisma.driverAction.create({
+    const { action } = await recordDriverActionV1({
+        contract: RECORD_DRIVER_ACTION_COMMAND_V1,
         data: {
             driverId: driver.id,
             kind,
@@ -874,16 +879,15 @@ async function handlePollDriverAction(payload: any) {
 
     // Mirror state into DriverAction row (best-effort — race with parallel polls is fine).
     if (scraperState.status && scraperState.status !== 'PENDING') {
-        await prisma.driverAction.updateMany({
-            where: { scraperTaskId: taskId, status: 'PENDING' },
-            data: {
-                status: scraperState.status,
-                result: scraperState.result ?? undefined,
-                errorMessage: scraperState.errorMessage ?? null,
-                shortOrderId: scraperState.result?.shortOrderId ?? undefined,
-                orderId: scraperState.result?.orderLongId ?? undefined,
-                completedAt: new Date(),
-            },
+        await mirrorDriverActionResultV1({
+            contract: MIRROR_DRIVER_ACTION_RESULT_COMMAND_V1,
+            scraperTaskId: taskId,
+            status: scraperState.status,
+            result: scraperState.result ?? undefined,
+            errorMessage: scraperState.errorMessage ?? null,
+            shortOrderId: scraperState.result?.shortOrderId ?? undefined,
+            orderId: scraperState.result?.orderLongId ?? undefined,
+            completedAt: new Date(),
         }).catch(() => {})
     }
 

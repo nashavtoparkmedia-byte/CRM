@@ -12,6 +12,8 @@ import { createResolveImportedDriverHandlerV1 } from './resolve-imported-driver-
 import { legacyPrismaResolveImportedDriverPortV1 } from './legacy-prisma-resolve-imported-driver-adapter'
 import { createCreateApiConnectionHandlerV1,createDeleteApiConnectionHandlerV1,createUpdateApiConnectionNameHandlerV1 } from './api-connection-handler'
 import { legacyPrismaApiConnectionPortV1 } from './legacy-prisma-api-connection-adapter'
+import { createMirrorDriverActionResultHandlerV1,createRecordDriverActionHandlerV1 } from './driver-action-handler'
+import { legacyPrismaDriverActionPortV1 } from './legacy-prisma-driver-action-adapter'
 export { createUpdateDriverStateHandlerV1 } from './update-driver-state-handler'
 export type { UpdateDriverStatePersistencePortV1 } from './update-driver-state-handler'
 export const updateDriverStateV1=createUpdateDriverStateHandlerV1(legacyPrismaUpdateDriverStatePortV1)
@@ -36,3 +38,7 @@ export type { ApiConnectionPersistencePortV1 } from './api-connection-handler'
 export const createApiConnectionV1=createCreateApiConnectionHandlerV1(legacyPrismaApiConnectionPortV1)
 export const updateApiConnectionNameV1=createUpdateApiConnectionNameHandlerV1(legacyPrismaApiConnectionPortV1)
 export const deleteApiConnectionV1=createDeleteApiConnectionHandlerV1(legacyPrismaApiConnectionPortV1)
+export { createMirrorDriverActionResultHandlerV1,createRecordDriverActionHandlerV1 } from './driver-action-handler'
+export type { DriverActionPersistencePortV1 } from './driver-action-handler'
+export const recordDriverActionV1=createRecordDriverActionHandlerV1(legacyPrismaDriverActionPortV1)
+export const mirrorDriverActionResultV1=createMirrorDriverActionResultHandlerV1(legacyPrismaDriverActionPortV1)

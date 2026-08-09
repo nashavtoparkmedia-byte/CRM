@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007-MESSAGING-MAX-CHAT",
-  "base_commit": "28cc9ed9769118f2e39a5045eeae971a3ac09776",
+  "milestone": "CRM-ARCH-007-FLEET-DRIVER-ACTION",
+  "base_commit": "d2c8d0ad5e2e6ea5c8d75d2ce84b36e68a67430f",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "fa957c9a450b971cbdfd073d0e729f8c2692a8c4f8b4f23cb6cbaf6a96a32738",
+  "finding_digest": "6b5bce6af87141dd995fe5a19d16e0c0d39a255d502012f975e46a7fe139efca",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,7 +13,7 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 117,
+    "direct_foreign_prisma_write": 113,
     "direct_provider_transport_access": 38,
     "internal_module_import": 379,
     "non_public_cross_context_import": 536,
@@ -4456,7 +4456,7 @@
       "fingerprint": "arch_7386bbc72c6f4b056899a1d8",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
-      "line_at_baseline": 147,
+      "line_at_baseline": 149,
       "ordinal": 1,
       "owner_context": "platform_shell",
       "target_context": "telegram_channel",
@@ -4472,7 +4472,7 @@
       "fingerprint": "arch_1734f8336c539b3a8b64b5d6",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
-      "line_at_baseline": 193,
+      "line_at_baseline": 195,
       "ordinal": 2,
       "owner_context": "platform_shell",
       "target_context": "telegram_channel",
@@ -4488,7 +4488,7 @@
       "fingerprint": "arch_a102592208d2e445ca742d72",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
-      "line_at_baseline": 311,
+      "line_at_baseline": 313,
       "ordinal": 1,
       "owner_context": "platform_shell",
       "target_context": "telegram_channel",
@@ -4501,58 +4501,10 @@
       ]
     },
     {
-      "fingerprint": "arch_38092301012756bc6aba9494",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
-      "line_at_baseline": 675,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "fleet_operations",
-      "subject": "DriverAction.create",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_5a688a3d12805612"
-      ]
-    },
-    {
-      "fingerprint": "arch_58ae56ba2e66e65df7686cc3",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
-      "line_at_baseline": 746,
-      "ordinal": 2,
-      "owner_context": "platform_shell",
-      "target_context": "fleet_operations",
-      "subject": "DriverAction.create",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_5a688a3d12805612"
-      ]
-    },
-    {
-      "fingerprint": "arch_e3673a48993f7f21ae03e781",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
-      "line_at_baseline": 763,
-      "ordinal": 3,
-      "owner_context": "platform_shell",
-      "target_context": "fleet_operations",
-      "subject": "DriverAction.create",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_5a688a3d12805612"
-      ]
-    },
-    {
       "fingerprint": "arch_6dce62f673ee8ed8e2caa57e",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
-      "line_at_baseline": 843,
+      "line_at_baseline": 848,
       "ordinal": 3,
       "owner_context": "platform_shell",
       "target_context": "telegram_channel",
@@ -4562,22 +4514,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "migration_152c887cb9c50943"
-      ]
-    },
-    {
-      "fingerprint": "arch_1a3f48ff829ddcfbcf3f0f04",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
-      "line_at_baseline": 877,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "fleet_operations",
-      "subject": "DriverAction.updateMany",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_5a688a3d12805612"
       ]
     },
     {
