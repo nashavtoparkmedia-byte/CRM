@@ -7,8 +7,8 @@ import { decisionEngine, DecisionResult } from './DecisionEngine'
 import { responseGenerator } from './ResponseGenerator'
 import { RETRIEVAL_PROMPT_VERSION } from '@/lib/ai/knowledge/retrievalPrompt'
 import type { KnowledgeRetrievalResult } from './ContextBuilder'
-import { RECORD_KNOWLEDGE_USAGE_COMMAND_V1 } from '@/contracts/ai-knowledge/v1'
-import { recordKnowledgeUsageV1 } from '@/modules/ai-knowledge/public/v1'
+import { RECORD_AI_DECISION_COMMAND_V1, RECORD_KNOWLEDGE_USAGE_COMMAND_V1 } from '@/contracts/ai-knowledge/v1'
+import { recordAiDecisionV1, recordKnowledgeUsageV1 } from '@/modules/ai-knowledge/public/v1'
 
 /**
  * PipelineWorker — обрабатывает входящие сообщения через очередь MessageEventLog.
@@ -158,36 +158,27 @@ export class PipelineWorker {
       ? JSON.stringify([classification.matchedKbEntryId])
       : '[]'
 
-    await prisma.$executeRaw`
-      INSERT INTO "AiDecisionLog" (
-        id, "messageId", "chatId", channel,
-        "detectedIntent", confidence, decision, "selectedModel",
-        "usedKnowledgeEntries", "generatedReply", "replySent", escalated, error,
-        "retrievalMode", "retrievalDecision", "escalationReason",
-        "knowledgeRuntimeVersion", "shadowRetrievalSummary",
-        "createdAt"
-      ) VALUES (
-        ${logId},
-        ${message.id},
-        ${ctx.chat.id},
-        ${ctx.chat.channel},
-        ${classification.intent},
-        ${classification.confidence},
-        ${decision.decision},
-        ${decision.decision === 'auto_reply' ? ctx.config.responseModel : ctx.config.classificationModel},
-        ${usedKb}::jsonb,
-        ${generatedReply},
-        ${replySent},
-        ${decision.decision === 'escalate'},
-        ${error},
-        ${retrievalMode},
-        ${retrievalDecision},
-        ${escalationReason},
-        ${runtimeVersion},
-        ${shadowSummary}::jsonb,
-        NOW()
-      )
-    `.catch(e => console.error('[Pipeline] AiDecisionLog write error:', e.message))
+    await recordAiDecisionV1({
+      contract: RECORD_AI_DECISION_COMMAND_V1,
+      id: logId,
+      messageId: message.id,
+      chatId: ctx.chat.id,
+      channel: ctx.chat.channel,
+      detectedIntent: classification.intent,
+      confidence: classification.confidence,
+      decision: decision.decision,
+      selectedModel: decision.decision === 'auto_reply' ? ctx.config.responseModel : ctx.config.classificationModel,
+      usedKnowledgeEntriesJson: usedKb,
+      generatedReply,
+      replySent,
+      escalated: decision.decision === 'escalate',
+      error,
+      retrievalMode,
+      retrievalDecision,
+      escalationReason,
+      knowledgeRuntimeVersion: runtimeVersion,
+      shadowRetrievalSummaryJson: shadowSummary,
+    }).catch(e => console.error('[Pipeline] AiDecisionLog write error:', e.message))
 
     // ─── PR3: AiKnowledgeUsageLog — 1 запись на item ──────────
     // Tolerant: ошибки записи не валят pipeline.

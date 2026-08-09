@@ -1,0 +1,8 @@
+{
+  "schema": "yoko.crm.mutation-ledger.v1",
+  "milestone": "CRM-ARCH-007-AI-DECISION-LOG",
+  "source": ["RecordAiDecision v1 contract", "AI Knowledge owner handler and legacy raw-SQL adapter", "one Platform Shell pipeline migration", "one command amendment", "one exact exception retirement, controls and evidence"],
+  "production": [], "database": [], "services": [], "deployment": [],
+  "pipeline_executed": false,
+  "secret_values_read_or_emitted": false
+}

@@ -1,0 +1,12 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "CRM-ARCH-007-AI-DECISION-LOG",
+  "amendments": [
+    {
+      "context": "ai_knowledge",
+      "add_commands": ["RecordAiDecisionCommand.v1"],
+      "reason": "Expose pipeline decision-audit persistence through the AI Knowledge owner boundary."
+    }
+  ]
+}
