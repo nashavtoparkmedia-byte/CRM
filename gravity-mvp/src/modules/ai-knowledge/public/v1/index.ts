@@ -8,6 +8,8 @@ import { createUpdateRetrievalPolicyHandlerV1 } from './update-retrieval-policy-
 import { legacyPrismaUpdateRetrievalPolicyPortV1 } from './legacy-prisma-update-retrieval-policy-adapter'
 import { createQueueKnowledgeExtractionHandlerV1 } from './queue-knowledge-extraction-handler'
 import { legacyPrismaQueueKnowledgeExtractionPortV1 } from './legacy-prisma-queue-knowledge-extraction-adapter'
+import { createAttachManualKnowledgeSourceHandlerV1,createDisableKnowledgeSourcesHandlerV1 } from './knowledge-source-handler'
+import { legacyPrismaKnowledgeSourcePortV1 } from './legacy-prisma-knowledge-source-adapter'
 
 export { createRecordKnowledgeUsageHandlerV1 } from './record-knowledge-usage-handler'
 export type { RecordKnowledgeUsagePersistencePortV1 } from './record-knowledge-usage-handler'
@@ -24,3 +26,7 @@ export const updateRetrievalPolicyV1 = createUpdateRetrievalPolicyHandlerV1(lega
 export { createQueueKnowledgeExtractionHandlerV1 } from './queue-knowledge-extraction-handler'
 export type { QueueKnowledgeExtractionPersistencePortV1 } from './queue-knowledge-extraction-handler'
 export const queueKnowledgeExtractionV1=createQueueKnowledgeExtractionHandlerV1(legacyPrismaQueueKnowledgeExtractionPortV1)
+export { createAttachManualKnowledgeSourceHandlerV1,createDisableKnowledgeSourcesHandlerV1 } from './knowledge-source-handler'
+export type { KnowledgeSourcePersistencePortV1 } from './knowledge-source-handler'
+export const attachManualKnowledgeSourceV1=createAttachManualKnowledgeSourceHandlerV1(legacyPrismaKnowledgeSourcePortV1)
+export const disableKnowledgeSourcesV1=createDisableKnowledgeSourcesHandlerV1(legacyPrismaKnowledgeSourcePortV1)

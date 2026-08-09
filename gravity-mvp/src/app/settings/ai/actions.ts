@@ -8,8 +8,8 @@ import { revalidatePath } from 'next/cache'
 import { importTelegramHistory } from '@/app/tg-actions'
 import { importWhatsAppHistory } from '@/lib/whatsapp/WhatsAppService'
 import { getUsers } from '@/lib/users/user-service'
-import { QUEUE_KNOWLEDGE_EXTRACTION_COMMAND_V1, REVIEW_AI_DECISION_COMMAND_V1, UPDATE_RETRIEVAL_POLICY_COMMAND_V1 } from '@/contracts/ai-knowledge/v1'
-import { queueKnowledgeExtractionV1, reviewAiDecisionV1, updateRetrievalPolicyV1 } from '@/modules/ai-knowledge/public/v1'
+import { ATTACH_MANUAL_KNOWLEDGE_SOURCE_COMMAND_V1, DISABLE_KNOWLEDGE_SOURCES_COMMAND_V1, QUEUE_KNOWLEDGE_EXTRACTION_COMMAND_V1, REVIEW_AI_DECISION_COMMAND_V1, UPDATE_RETRIEVAL_POLICY_COMMAND_V1 } from '@/contracts/ai-knowledge/v1'
+import { attachManualKnowledgeSourceV1, disableKnowledgeSourcesV1, queueKnowledgeExtractionV1, reviewAiDecisionV1, updateRetrievalPolicyV1 } from '@/modules/ai-knowledge/public/v1'
 
 // ─── Role guard ───────────────────────────────────────────────────
 //
@@ -1149,18 +1149,7 @@ export async function createManualKnowledgeItem(input: {
         )
     `
     const sourceId = 'kbs_m_' + Math.random().toString(36).slice(2, 12)
-    const excerptHash = 'manual:' + itemId
-    await prisma.$executeRaw`
-        INSERT INTO "AiKnowledgeSource" (
-            id, "itemId", "originType",
-            "messageId", "chatId", channel, "managerUserId",
-            excerpt, "excerptHash", confidence, "occurredAt", "createdAt"
-        ) VALUES (
-            ${sourceId}, ${itemId}, 'manual_entry',
-            NULL, NULL, NULL, ${actor},
-            '[создано вручную администратором]', ${excerptHash}, 1.0, NOW(), NOW()
-        )
-    `
+    await attachManualKnowledgeSourceV1({ contract: ATTACH_MANUAL_KNOWLEDGE_SOURCE_COMMAND_V1, sourceId, itemId, actorId: actor })
 
     const after = await loadItemForEdit(itemId)
     await writeAuditEntry({
@@ -2379,16 +2368,10 @@ export async function disableKnowledgeSource(input: {
     `
     const affectedItemIds = affectedItemRows.map(r => r.itemId)
 
-    const disabledCount = await prisma.$executeRaw`
-        UPDATE "AiKnowledgeSource"
-        SET "isActive" = false
-        WHERE channel::text = ${input.channel}
-          AND "connectionId" = ${input.connectionId}
-          AND "isActive" = true
-    `
+    const disabled = await disableKnowledgeSourcesV1({ contract: DISABLE_KNOWLEDGE_SOURCES_COMMAND_V1, channel: input.channel, connectionId: input.connectionId })
 
     const result: DisableSourceResult = {
-        sourcesDisabled:      Number(disabledCount),
+        sourcesDisabled:      disabled.disabledCount,
         itemsAutoArchived:    0,
         itemsKeptWithWarning: 0,
         itemsUnaffected:      0,
