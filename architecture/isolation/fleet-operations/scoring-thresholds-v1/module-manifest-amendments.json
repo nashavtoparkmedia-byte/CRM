@@ -1,0 +1,24 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "CRM-ARCH-007-FLEET-SCORING",
+  "amendments": [
+    {
+      "context": "fleet_operations",
+      "add_commands": [
+        "UpdateScoringThresholdsCommand.v1"
+      ],
+      "reason": "Expose the Fleet-owned scoring-threshold persistence operation as a versioned command."
+    },
+    {
+      "context": "configuration",
+      "add_allowed_dependencies": [
+        {
+          "context": "fleet_operations",
+          "surface": "fleet_operations.public"
+        }
+      ],
+      "reason": "Route the single planned ScoringThreshold mutation through its owner public command."
+    }
+  ]
+}

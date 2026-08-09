@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007-FLEET-ATTENTION",
-  "base_commit": "06fd246ba4d732f0b7c4f8d72a8404a958404483",
+  "milestone": "CRM-ARCH-007-FLEET-SCORING",
+  "base_commit": "fc43a3170f43b0166c0733c4c22de6d7bd1061b3",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "e5b0b907ab48cb8422fca0558498ed88275247d643405e3c91c715f80717695e",
+  "finding_digest": "2e6f7ad67c903b485fa5d4ae4280fa1db85ed87cbaadcddc32db32d697c8d41f",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,7 +13,7 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 181,
+    "direct_foreign_prisma_write": 180,
     "direct_provider_transport_access": 38,
     "internal_module_import": 381,
     "non_public_cross_context_import": 538,
@@ -16742,22 +16742,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:configuration/settings>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_b22ccea6b28c2b6937faf463",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/settings/scoring/actions.ts",
-      "line_at_baseline": 24,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "fleet_operations",
-      "subject": "ScoringThreshold.upsert",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_56494330426e3744"
       ]
     },
     {

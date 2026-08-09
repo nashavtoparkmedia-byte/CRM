@@ -113,6 +113,9 @@ assertCheck('foreign Contact update removed from Telegram consumer', !/prisma\.c
 const attentionConsumer=source('gravity-mvp/src/app/api/monitoring/attention/[id]/route.ts')
 assertCheck('Operations consumer uses UpdateDriverStateCommand.v1',attentionConsumer.includes('UPDATE_DRIVER_STATE_COMMAND_V1')&&attentionConsumer.includes('updateDriverStateV1({'),'fleet owner command absent')
 assertCheck('foreign DriverAttention update removed',!/prisma\.driverAttention\.update/.test(attentionConsumer),'direct DriverAttention update remains')
+const scoringConsumer=source('gravity-mvp/src/app/settings/scoring/actions.ts')
+assertCheck('Configuration consumer uses UpdateScoringThresholdsCommand.v1',scoringConsumer.includes('UPDATE_SCORING_THRESHOLDS_COMMAND_V1')&&scoringConsumer.includes('updateScoringThresholdsV1({'),'Fleet scoring command absent')
+assertCheck('foreign ScoringThreshold upsert removed',!/prisma\.scoringThreshold\.upsert/.test(scoringConsumer),'direct ScoringThreshold upsert remains')
 
 const handler = source('gravity-mvp/src/modules/work-management/public/v1/create-task-handler.ts')
 assertCheck(
