@@ -1,0 +1,1 @@
+{"schema":"yoko.crm.module-manifest-amendments.v1","version":1,"milestone":"CRM-ARCH-007-CONTACTS-FLEET-CONTACT","amendments":[{"context":"contacts","add_commands":["PatchFleetContactCommand.v1","CreateFleetContactCommand.v1"],"reason":"Route Fleet monitoring's complete six-site Contact write plan through Contacts ownership."}]}

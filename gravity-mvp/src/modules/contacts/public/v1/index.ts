@@ -6,6 +6,8 @@ import { createSetContactDisplayNameHandlerV1 } from './set-contact-display-name
 import { legacyPrismaSetContactDisplayNamePortV1 } from './legacy-prisma-contact-display-name-adapter'
 import { createCreateContactPhoneHandlerV1,createDeactivateContactPhoneHandlerV1 } from './contact-phone-handler'
 import { legacyPrismaContactPhonePortV1 } from './legacy-prisma-contact-phone-adapter'
+import { createCreateFleetContactHandlerV1, createPatchFleetContactHandlerV1 } from './fleet-contact-handler'
+import { legacyPrismaFleetContactPortV1 } from './legacy-prisma-fleet-contact-adapter'
 
 export { createResolveContactHandlerV1 } from './resolve-contact-handler'
 export type { ResolveContactPersistencePortV1 } from './resolve-contact-handler'
@@ -22,3 +24,7 @@ export { createCreateContactPhoneHandlerV1,createDeactivateContactPhoneHandlerV1
 export type { ContactPhonePersistencePortV1 } from './contact-phone-handler'
 export const deactivateContactPhoneV1=createDeactivateContactPhoneHandlerV1(legacyPrismaContactPhonePortV1)
 export const createContactPhoneV1=createCreateContactPhoneHandlerV1(legacyPrismaContactPhonePortV1)
+export { createCreateFleetContactHandlerV1, createPatchFleetContactHandlerV1 } from './fleet-contact-handler'
+export type { FleetContactPersistencePortV1 } from './fleet-contact-handler'
+export const patchFleetContactV1 = createPatchFleetContactHandlerV1(legacyPrismaFleetContactPortV1)
+export const createFleetContactV1 = createCreateFleetContactHandlerV1(legacyPrismaFleetContactPortV1)

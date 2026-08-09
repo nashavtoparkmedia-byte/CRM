@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { normalizePhoneE164 } from '@/lib/phoneUtils';
 import { CREATE_CONTACT_PHONE_COMMAND_V1, DEACTIVATE_CONTACT_PHONE_COMMAND_V1 } from '@/contracts/contacts/v1';
 import { createContactPhoneV1, deactivateContactPhoneV1 } from '@/modules/contacts/public/v1';
+import { CREATE_FLEET_CONTACT_COMMAND_V1, PATCH_FLEET_CONTACT_COMMAND_V1 } from '@/contracts/contacts/v1';
+import { createFleetContactV1, patchFleetContactV1 } from '@/modules/contacts/public/v1';
 
 // In-memory mutex to prevent parallel sync runs
 let syncRunning = false;
@@ -238,7 +240,7 @@ export async function syncContactForDriver(
         }
 
         if (Object.keys(updates).length > 0) {
-            await prisma.contact.update({ where: { id: existing.id }, data: updates });
+            await patchFleetContactV1({ contract: PATCH_FLEET_CONTACT_COMMAND_V1, contactId: existing.id, patch: updates });
         }
 
         return { action: (Object.keys(updates).length > 0 || deactivated > 0 || created > 0) ? 'updated' : 'noop', phonesDeactivated: deactivated, phonesCreated: created };
@@ -281,9 +283,10 @@ export async function syncContactForDriver(
                 ? { displayName: fullName, displayNameSource: 'yandex' as const }
                 : {};
 
-            await prisma.contact.update({
-                where: { id: phoneRecord.contactId },
-                data: {
+            await patchFleetContactV1({
+                contract: PATCH_FLEET_CONTACT_COMMAND_V1,
+                contactId: phoneRecord.contactId,
+                patch: {
                     yandexDriverId,
                     masterSource: 'yandex',
                     ...nameUpdate,
@@ -298,14 +301,13 @@ export async function syncContactForDriver(
     // ── Scenario 3: No match → create new Contact ─────────────────────
     let contact
     try {
-        contact = await prisma.contact.create({
-            data: {
+        contact = (await createFleetContactV1({
+            contract: CREATE_FLEET_CONTACT_COMMAND_V1,
                 displayName: fullName,
                 displayNameSource: 'yandex',
                 masterSource: 'yandex',
                 yandexDriverId,
-            },
-        });
+        })).contact;
     } catch (err: any) {
         // Concurrent sync can race on Contact.yandexDriverId. The unique
         // constraint is the final guard; reuse the row created by the winner.
@@ -338,9 +340,10 @@ export async function syncContactForDriver(
             );
         } else if (sameContactOwner) {
             if (!contact.primaryPhoneId) {
-                await prisma.contact.update({
-                    where: { id: contact.id },
-                    data: { primaryPhoneId: sameContactOwner.id },
+                await patchFleetContactV1({
+                    contract: PATCH_FLEET_CONTACT_COMMAND_V1,
+                    contactId: contact.id,
+                    patch: { primaryPhoneId: sameContactOwner.id },
                 });
             }
         } else {
@@ -354,9 +357,10 @@ export async function syncContactForDriver(
                 });
                 newPhoneId = contactPhoneId;
 
-                await prisma.contact.update({
-                    where: { id: contact.id },
-                    data: { primaryPhoneId: contactPhoneId },
+                await patchFleetContactV1({
+                    contract: PATCH_FLEET_CONTACT_COMMAND_V1,
+                    contactId: contact.id,
+                    patch: { primaryPhoneId: contactPhoneId },
                 });
             } catch (err: any) {
                 if (!isUniqueConstraintError(err)) throw err;
@@ -372,9 +376,10 @@ export async function syncContactForDriver(
                         otherOwnersAfterRace,
                     );
                 } else if (!contact.primaryPhoneId) {
-                    await prisma.contact.update({
-                        where: { id: contact.id },
-                        data: { primaryPhoneId: sameOwnerAfterRace.id },
+                    await patchFleetContactV1({
+                        contract: PATCH_FLEET_CONTACT_COMMAND_V1,
+                        contactId: contact.id,
+                        patch: { primaryPhoneId: sameOwnerAfterRace.id },
                     });
                 }
             }

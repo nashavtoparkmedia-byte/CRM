@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007-CONTACTS-FLEET-CONTACT-PHONE",
-  "base_commit": "45c1bdd8872ec0920e8a7e8f74a1feb76c7aa214",
+  "milestone": "CRM-ARCH-007-CONTACTS-FLEET-CONTACT",
+  "base_commit": "af5d04cff67ac91b4195bc00a64d9a0e25fab20a",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "9cdc987f7edc6c11d4eba6ef8e563b54b3a9c09d07763b9b08377dbeb8adc5c1",
+  "finding_digest": "1fa84cb848284afd424f95f092a1153956de0beea64b0995ad5c0fea45d7ac89",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,7 +13,7 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 109,
+    "direct_foreign_prisma_write": 103,
     "direct_provider_transport_access": 38,
     "internal_module_import": 379,
     "non_public_cross_context_import": 536,
@@ -3295,102 +3295,6 @@
         "dependency:fleet_operations/drivers>platform_shell/gravity_core",
         "dependency:fleet_operations/drivers>platform_shell/gravity_ui",
         "dependency:fleet_operations/yandex_fleet>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_9c69ee4814f0ccc5187ca90a",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/monitoring/sync/route.ts",
-      "line_at_baseline": 241,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "contacts",
-      "subject": "Contact.update",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_1920130eec2c7506"
-      ]
-    },
-    {
-      "fingerprint": "arch_e45dde638ac80dfe2671a1b1",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/monitoring/sync/route.ts",
-      "line_at_baseline": 284,
-      "ordinal": 2,
-      "owner_context": "fleet_operations",
-      "target_context": "contacts",
-      "subject": "Contact.update",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_1920130eec2c7506"
-      ]
-    },
-    {
-      "fingerprint": "arch_857c16fb8ab15a3465ab0e91",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/monitoring/sync/route.ts",
-      "line_at_baseline": 301,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "contacts",
-      "subject": "Contact.create",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_1920130eec2c7506"
-      ]
-    },
-    {
-      "fingerprint": "arch_337c7bada05f3700177a764b",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/monitoring/sync/route.ts",
-      "line_at_baseline": 341,
-      "ordinal": 3,
-      "owner_context": "fleet_operations",
-      "target_context": "contacts",
-      "subject": "Contact.update",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_1920130eec2c7506"
-      ]
-    },
-    {
-      "fingerprint": "arch_727839c199138f11ecdc06f9",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/monitoring/sync/route.ts",
-      "line_at_baseline": 357,
-      "ordinal": 4,
-      "owner_context": "fleet_operations",
-      "target_context": "contacts",
-      "subject": "Contact.update",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_1920130eec2c7506"
-      ]
-    },
-    {
-      "fingerprint": "arch_710e2b05a6239c07f95b060a",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/monitoring/sync/route.ts",
-      "line_at_baseline": 375,
-      "ordinal": 5,
-      "owner_context": "fleet_operations",
-      "target_context": "contacts",
-      "subject": "Contact.update",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_1920130eec2c7506"
       ]
     },
     {

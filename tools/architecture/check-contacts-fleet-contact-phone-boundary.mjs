@@ -11,7 +11,7 @@ check('first create mapping retained',consumer.includes('contactId: existing.id'
 check('conditional primary retained',consumer.includes('isPrimary: !existing.primaryPhoneId'),'conditional primary drift')
 check('returned ids retained',consumer.includes('contactPhoneId: newPhoneId')&&consumer.includes('updates.primaryPhoneId = newPhoneId'),'returned id drift')
 check('unique race catches retained',(consumer.match(/isUniqueConstraintError\(err\)/g)||[]).length===3,'race handling drift')
-check('new contact phone mapping retained',consumer.includes('contactId: contact.id')&&consumer.includes('newPhoneId = contactPhoneId')&&consumer.includes('data: { primaryPhoneId: contactPhoneId }'),'new contact drift')
+check('new contact phone mapping retains accepted Contact owner route',consumer.includes('contactId: contact.id')&&consumer.includes('newPhoneId = contactPhoneId')&&consumer.includes('patch: { primaryPhoneId: contactPhoneId }')&&consumer.includes('PATCH_FLEET_CONTACT_COMMAND_V1'),'new contact owner route drift')
 check('adapter exact',adapter.includes('data:{isActive:false}')&&adapter.includes('prisma.contactPhone.create({data:input})'),'adapter drift')
 check('commands amendment exact',JSON.stringify(amendment.amendments[0]?.add_commands)===JSON.stringify(['DeactivateContactPhoneCommand.v1','CreateContactPhoneCommand.v1']),'amendment drift')
 check('Fleet Contacts dependency pre-approved',fleet.allowed_dependencies.some(item=>item.context==='contacts'&&item.surface==='contacts.public'),'dependency absent')

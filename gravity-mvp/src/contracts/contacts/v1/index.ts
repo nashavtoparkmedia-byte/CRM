@@ -39,3 +39,4 @@ export type {
 } from './set-contact-display-name-command'
 
 export * from './contact-phone-commands'
+export * from './fleet-contact-commands'
