@@ -46,13 +46,14 @@
     "architecture/isolation/identity-access/v1/module-manifest-amendments.json",
     "architecture/isolation/contacts/telegram-channel-name-v2/module-manifest-amendments.json",
     "architecture/isolation/fleet-operations/driver-attention-v1/module-manifest-amendments.json",
-    "architecture/isolation/fleet-operations/scoring-thresholds-v1/module-manifest-amendments.json"
+    "architecture/isolation/fleet-operations/scoring-thresholds-v1/module-manifest-amendments.json",
+    "architecture/isolation/contacts/manual-link-display-name-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007-FLEET-SCORING",
-  "registry_base_commit": "fc43a3170f43b0166c0733c4c22de6d7bd1061b3",
+  "registry_milestone": "CRM-ARCH-007-CONTACTS-MANUAL-LINK-NAME",
+  "registry_base_commit": "bb4fbc79ab659be81af6822f03f0af7c99e7f865",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",

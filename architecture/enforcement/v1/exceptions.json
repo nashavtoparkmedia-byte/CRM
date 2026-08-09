@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007-FLEET-SCORING",
-  "base_commit": "fc43a3170f43b0166c0733c4c22de6d7bd1061b3",
+  "milestone": "CRM-ARCH-007-CONTACTS-MANUAL-LINK-NAME",
+  "base_commit": "bb4fbc79ab659be81af6822f03f0af7c99e7f865",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "2e6f7ad67c903b485fa5d4ae4280fa1db85ed87cbaadcddc32db32d697c8d41f",
+  "finding_digest": "0fb7071be98035e0cce6d6fe978623b23b2b4a310544c3b538f1bd2f97c2b277",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,7 +13,7 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 180,
+    "direct_foreign_prisma_write": 179,
     "direct_provider_transport_access": 38,
     "internal_module_import": 381,
     "non_public_cross_context_import": 538,
@@ -10371,22 +10371,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:messaging/messages>contacts/contacts"
-      ]
-    },
-    {
-      "fingerprint": "arch_39c65d1347adfdf464297efc",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/messages/link-chat-actions.ts",
-      "line_at_baseline": 94,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "contacts",
-      "subject": "Contact.update",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_30341c5551662f55"
       ]
     },
     {

@@ -3,6 +3,8 @@
 import { prisma } from "@/lib/prisma"
 import { ContactService } from "@/lib/ContactService"
 import { revalidatePath } from "next/cache"
+import { SET_CONTACT_DISPLAY_NAME_COMMAND_V1 } from "@/contracts/contacts/v1"
+import { setContactDisplayNameV1 } from "@/modules/contacts/public/v1"
 
 /**
  * PR-О: Server actions для UI «Привязать контакт» в чатах.
@@ -85,17 +87,11 @@ export async function linkChatToDriverManually(chatId: string, driverId: string)
                 console.warn(`[linkChatToDriverManually] ContactService failed (non-blocking): ${err.message}`)
             }
         } else if (chat.contactId) {
-            // Просто обновим displayName у existing Contact, если он placeholder
-            const contact = await prisma.contact.findUnique({
-                where: { id: chat.contactId },
-                select: { id: true, displayName: true },
+            await setContactDisplayNameV1({
+                contract: SET_CONTACT_DISPLAY_NAME_COMMAND_V1,
+                contactId: chat.contactId,
+                displayName: driver.fullName,
             })
-            if (contact) {
-                await prisma.contact.update({
-                    where: { id: contact.id },
-                    data: { displayName: driver.fullName },
-                })
-            }
         }
 
         revalidatePath('/messages')

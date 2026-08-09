@@ -24,3 +24,16 @@ export type {
     AttachContactIdentityCommandV1,
     AttachContactIdentityResultV1,
 } from './attach-contact-identity-command'
+
+export {
+    SET_CONTACT_DISPLAY_NAME_COMMAND_V1,
+    SET_CONTACT_DISPLAY_NAME_RESULT_V1,
+    SetContactDisplayNameValidationError,
+    parseSetContactDisplayNameCommandV1,
+} from './set-contact-display-name-command'
+
+export type {
+    SetContactDisplayNameCommandV1,
+    SetContactDisplayNameResultV1,
+    SetContactDisplayNameStatusV1,
+} from './set-contact-display-name-command'

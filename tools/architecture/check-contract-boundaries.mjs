@@ -116,6 +116,9 @@ assertCheck('foreign DriverAttention update removed',!/prisma\.driverAttention\.
 const scoringConsumer=source('gravity-mvp/src/app/settings/scoring/actions.ts')
 assertCheck('Configuration consumer uses UpdateScoringThresholdsCommand.v1',scoringConsumer.includes('UPDATE_SCORING_THRESHOLDS_COMMAND_V1')&&scoringConsumer.includes('updateScoringThresholdsV1({'),'Fleet scoring command absent')
 assertCheck('foreign ScoringThreshold upsert removed',!/prisma\.scoringThreshold\.upsert/.test(scoringConsumer),'direct ScoringThreshold upsert remains')
+const manualLinkConsumer=source('gravity-mvp/src/app/messages/link-chat-actions.ts')
+assertCheck('Messaging manual-link consumer uses SetContactDisplayNameCommand.v1',manualLinkConsumer.includes('SET_CONTACT_DISPLAY_NAME_COMMAND_V1')&&manualLinkConsumer.includes('setContactDisplayNameV1({'),'Contacts display-name command absent')
+assertCheck('foreign manual-link Contact update removed',!/prisma\.contact\.update/.test(manualLinkConsumer),'direct manual-link Contact update remains')
 
 const handler = source('gravity-mvp/src/modules/work-management/public/v1/create-task-handler.ts')
 assertCheck(
