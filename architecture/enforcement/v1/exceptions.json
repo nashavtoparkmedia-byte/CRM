@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007-CONTACTS-MANUAL-LINK-NAME",
-  "base_commit": "bb4fbc79ab659be81af6822f03f0af7c99e7f865",
+  "milestone": "CRM-ARCH-007-FLEET-DAILY-ACTIVITY",
+  "base_commit": "58cfd054e6b55840d0c5d26a1edcad61a6e0e301",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "0fb7071be98035e0cce6d6fe978623b23b2b4a310544c3b538f1bd2f97c2b277",
+  "finding_digest": "90a68c4c924437a26f354cdb58d1cf03e35a3c898dd8e3bd48b1461530fd1892",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,11 +13,11 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 179,
+    "direct_foreign_prisma_write": 178,
     "direct_provider_transport_access": 38,
     "internal_module_import": 381,
     "non_public_cross_context_import": 538,
-    "undeclared_dependency": 383
+    "undeclared_dependency": 381
   },
   "exceptions": [
     {
@@ -8510,22 +8510,6 @@
       ]
     },
     {
-      "fingerprint": "arch_f370116627758105c33680b0",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/inbox/InboxClient.tsx",
-      "line_at_baseline": 18,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "fleet_operations",
-      "subject": "messages>drivers:gravity-mvp/src/app/drivers/actions.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>fleet_operations/drivers"
-      ]
-    },
-    {
       "fingerprint": "arch_92d56df426dec1c7e2ebcf39",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/inbox/InboxClient.tsx",
@@ -8552,22 +8536,6 @@
       "subject": "messages>drivers:gravity-mvp/src/app/drivers/components/SegmentBadge.tsx",
       "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
       "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>fleet_operations/drivers"
-      ]
-    },
-    {
-      "fingerprint": "arch_99b65b6a830de08d52d24dbd",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/inbox/InboxClient.tsx",
-      "line_at_baseline": 19,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "fleet_operations",
-      "subject": "messages>drivers:gravity-mvp/src/app/drivers/components/SegmentBadge.tsx",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:messaging/messages>fleet_operations/drivers"
@@ -21466,22 +21434,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:ai_knowledge/ai_knowledge>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_4eabcd90fd5c1c74aa4b51f1",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/communications.ts",
-      "line_at_baseline": 51,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "fleet_operations",
-      "subject": "DriverDaySummary.upsert",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_0f4314be5092e299"
       ]
     },
     {

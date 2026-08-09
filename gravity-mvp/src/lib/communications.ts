@@ -1,6 +1,11 @@
 // Communications — unified event logging helpers
 
 import { prisma } from '@/lib/prisma'
+import {
+    RECORD_DRIVER_DAILY_ACTIVITY_COMMAND_V1,
+    type DriverDailyActivityV1,
+} from '@/contracts/fleet-operations/v1'
+import { recordDriverDailyActivityV1 } from '@/modules/fleet-operations/public/v1'
 
 /**
  * Log a communication event and update DriverDaySummary flags
@@ -31,31 +36,28 @@ export async function logCommunicationEvent(
     })
 
     // Update DriverDaySummary flags based on event type
-    const summaryUpdate: Record<string, boolean> = {}
+    let dailyActivity: DriverDailyActivityV1 | null = null
 
     if (eventType === 'message' && direction === 'outbound') {
         if (channel === 'auto') {
-            summaryUpdate.hadAutoMessage = true
+            dailyActivity = 'auto_message'
         } else {
-            summaryUpdate.hadManagerMessage = true
+            dailyActivity = 'manager_message'
         }
     } else if (eventType === 'call') {
-        summaryUpdate.hadManagerCall = true
+        dailyActivity = 'manager_call'
     } else if (eventType === 'auto_message') {
-        summaryUpdate.hadAutoMessage = true
+        dailyActivity = 'auto_message'
     } else if (eventType === 'goal_achieved') {
-        summaryUpdate.hadGoalAchieved = true
+        dailyActivity = 'goal_achieved'
     }
 
-    if (Object.keys(summaryUpdate).length > 0) {
-        await prisma.driverDaySummary.upsert({
-            where: { driverId_date: { driverId, date: today } },
-            update: summaryUpdate,
-            create: {
-                driverId,
-                date: today,
-                ...summaryUpdate,
-            },
+    if (dailyActivity) {
+        await recordDriverDailyActivityV1({
+            contract: RECORD_DRIVER_DAILY_ACTIVITY_COMMAND_V1,
+            driverId,
+            dayStart: today.toISOString(),
+            activity: dailyActivity,
         })
     }
 

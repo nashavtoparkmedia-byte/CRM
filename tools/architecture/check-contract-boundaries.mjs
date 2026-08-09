@@ -119,6 +119,9 @@ assertCheck('foreign ScoringThreshold upsert removed',!/prisma\.scoringThreshold
 const manualLinkConsumer=source('gravity-mvp/src/app/messages/link-chat-actions.ts')
 assertCheck('Messaging manual-link consumer uses SetContactDisplayNameCommand.v1',manualLinkConsumer.includes('SET_CONTACT_DISPLAY_NAME_COMMAND_V1')&&manualLinkConsumer.includes('setContactDisplayNameV1({'),'Contacts display-name command absent')
 assertCheck('foreign manual-link Contact update removed',!/prisma\.contact\.update/.test(manualLinkConsumer),'direct manual-link Contact update remains')
+const communicationConsumer=source('gravity-mvp/src/lib/communications.ts')
+assertCheck('Messaging communication consumer uses RecordDriverDailyActivityCommand.v1',communicationConsumer.includes('RECORD_DRIVER_DAILY_ACTIVITY_COMMAND_V1')&&communicationConsumer.includes('recordDriverDailyActivityV1({'),'Fleet daily-activity command absent')
+assertCheck('foreign DriverDaySummary upsert removed',!/prisma\.driverDaySummary\.upsert/.test(communicationConsumer),'direct DriverDaySummary upsert remains')
 
 const handler = source('gravity-mvp/src/modules/work-management/public/v1/create-task-handler.ts')
 assertCheck(
