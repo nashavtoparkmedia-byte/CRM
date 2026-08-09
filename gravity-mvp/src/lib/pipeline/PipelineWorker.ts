@@ -1,6 +1,5 @@
 import { Message } from '@prisma/client'
 import { setAiStatus } from '@/lib/messageEvents'
-import { prisma } from '@/lib/prisma'
 import { contextBuilder } from './ContextBuilder'
 import { intentClassifier } from './IntentClassifier'
 import { decisionEngine, DecisionResult } from './DecisionEngine'
@@ -9,6 +8,8 @@ import { RETRIEVAL_PROMPT_VERSION } from '@/lib/ai/knowledge/retrievalPrompt'
 import type { KnowledgeRetrievalResult } from './ContextBuilder'
 import { RECORD_AI_DECISION_COMMAND_V1, RECORD_KNOWLEDGE_USAGE_COMMAND_V1 } from '@/contracts/ai-knowledge/v1'
 import { recordAiDecisionV1, recordKnowledgeUsageV1 } from '@/modules/ai-knowledge/public/v1'
+import { CLAIM_MESSAGE_EVENT_COMMAND_V1, COMPLETE_MESSAGE_EVENT_COMMAND_V1, FAIL_MESSAGE_EVENT_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { claimMessageEventV1, completeMessageEventV1, failMessageEventV1 } from '@/modules/messaging/public/v1'
 
 /**
  * PipelineWorker — обрабатывает входящие сообщения через очередь MessageEventLog.
@@ -30,15 +31,12 @@ export class PipelineWorker {
     }
 
     // Атомарный захват: UPDATE WHERE status='pending' → 'processing'
-    const result = await prisma.$executeRaw`
-      UPDATE "MessageEventLog"
-      SET status = 'processing', "updatedAt" = NOW()
-      WHERE "messageId" = ${message.id}
-        AND "eventType" = 'MessageReceived'
-        AND status = 'pending'
-    `
+    const result = await claimMessageEventV1({
+      contract: CLAIM_MESSAGE_EVENT_COMMAND_V1,
+      messageId: message.id,
+    })
 
-    if (result === 0) {
+    if (!result.claimed) {
       console.log(`[Pipeline] Already claimed or missing event: msg=${message.id}`)
       return
     }
@@ -49,24 +47,18 @@ export class PipelineWorker {
 
       await this._runSteps(message)
 
-      await prisma.$executeRaw`
-        UPDATE "MessageEventLog"
-        SET status = 'processed', "updatedAt" = NOW()
-        WHERE "messageId" = ${message.id}
-          AND "eventType" = 'MessageReceived'
-          AND status = 'processing'
-      `
+      await completeMessageEventV1({
+        contract: COMPLETE_MESSAGE_EVENT_COMMAND_V1,
+        messageId: message.id,
+      })
       await setAiStatus(message.id, 'done')
       console.log(`[Pipeline] Done msg=${message.id}`)
     } catch (e: any) {
       console.error(`[Pipeline] Failed msg=${message.id}:`, e.message)
-      await prisma.$executeRaw`
-        UPDATE "MessageEventLog"
-        SET status = 'failed', "updatedAt" = NOW()
-        WHERE "messageId" = ${message.id}
-          AND "eventType" = 'MessageReceived'
-          AND status = 'processing'
-      `.catch(() => {})
+      await failMessageEventV1({
+        contract: FAIL_MESSAGE_EVENT_COMMAND_V1,
+        messageId: message.id,
+      }).catch(() => {})
       await setAiStatus(message.id, 'failed').catch(() => {})
     }
   }

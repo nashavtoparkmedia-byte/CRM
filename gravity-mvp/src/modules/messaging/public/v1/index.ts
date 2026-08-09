@@ -16,6 +16,8 @@ import { createCreateCommunicationTriggerHandlerV1,createDeleteCommunicationTrig
 import { legacyPrismaCommunicationTriggerPortV1 } from './legacy-prisma-communication-trigger-adapter'
 import { createEnsureLeadConversationHandlerV1,createResolveConversationHandlerV1 } from './lead-conversation-handler'
 import { legacyPrismaLeadConversationPortV1 } from './legacy-prisma-lead-conversation-adapter'
+import { createClaimMessageEventHandlerV1,createCompleteMessageEventHandlerV1,createFailMessageEventHandlerV1 } from './message-event-log-handler'
+import { legacyPrismaMessageEventLogPortV1 } from './legacy-prisma-message-event-log-adapter'
 
 export { createAttachMessageMediaHandlerV1 } from './attach-message-media-handler'
 export type { AttachMessageMediaPersistencePortV1 } from './attach-message-media-handler'
@@ -56,3 +58,8 @@ export { createEnsureLeadConversationHandlerV1,createResolveConversationHandlerV
 export type { LeadConversationPersistencePortV1 } from './lead-conversation-handler'
 export const ensureLeadConversationV1=createEnsureLeadConversationHandlerV1(legacyPrismaLeadConversationPortV1)
 export const resolveConversationV1=createResolveConversationHandlerV1(legacyPrismaLeadConversationPortV1)
+export { createClaimMessageEventHandlerV1,createCompleteMessageEventHandlerV1,createFailMessageEventHandlerV1 } from './message-event-log-handler'
+export type { MessageEventLogPersistencePortV1 } from './message-event-log-handler'
+export const claimMessageEventV1=createClaimMessageEventHandlerV1(legacyPrismaMessageEventLogPortV1)
+export const completeMessageEventV1=createCompleteMessageEventHandlerV1(legacyPrismaMessageEventLogPortV1)
+export const failMessageEventV1=createFailMessageEventHandlerV1(legacyPrismaMessageEventLogPortV1)

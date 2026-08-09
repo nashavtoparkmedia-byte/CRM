@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007-MESSAGING-AVITO-CHAT",
-  "base_commit": "24c366de7ae221ecf0aabadb4eb3ec49848086bd",
+  "milestone": "CRM-ARCH-007-MESSAGING-PIPELINE-EVENT-LOG",
+  "base_commit": "8e26309870bafb82b4a7493181084f1f091e5a72",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "7d34645e486d7e9229f0b53f82d2b23412e9c4ed99521b9bb6e5ce09d2046807",
+  "finding_digest": "35ae27f5338ff2862c1dc1a04a996f674995baeded9ee4a34b13f1735adc46d0",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,7 +13,7 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 128,
+    "direct_foreign_prisma_write": 125,
     "direct_provider_transport_access": 38,
     "internal_module_import": 379,
     "non_public_cross_context_import": 536,
@@ -22988,7 +22988,7 @@
       "fingerprint": "arch_6b708b01085f6bc95fd91f87",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/lib/pipeline/PipelineWorker.ts",
-      "line_at_baseline": 8,
+      "line_at_baseline": 7,
       "ordinal": 1,
       "owner_context": "platform_shell",
       "target_context": "ai_knowledge",
@@ -23004,7 +23004,7 @@
       "fingerprint": "arch_4d9ed3cc6c706175714ee9dd",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/lib/pipeline/PipelineWorker.ts",
-      "line_at_baseline": 8,
+      "line_at_baseline": 7,
       "ordinal": 1,
       "owner_context": "platform_shell",
       "target_context": "ai_knowledge",
@@ -23014,60 +23014,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:platform_shell/gravity_core>ai_knowledge/ai_knowledge"
-      ]
-    },
-    {
-      "fingerprint": "arch_52b6ab41ff8b6d624b662ec8",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/pipeline/PipelineWorker.ts",
-      "line_at_baseline": 33,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "messaging",
-      "subject": "raw:$executeRaw:MessageEventLog",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_3edf8273887f2fd4",
-        "migration_b13277983c0d719d",
-        "migration_ca65203b883c6533"
-      ]
-    },
-    {
-      "fingerprint": "arch_f22ee77b3845c8b06d5036d0",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/pipeline/PipelineWorker.ts",
-      "line_at_baseline": 52,
-      "ordinal": 2,
-      "owner_context": "platform_shell",
-      "target_context": "messaging",
-      "subject": "raw:$executeRaw:MessageEventLog",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_3edf8273887f2fd4",
-        "migration_b13277983c0d719d",
-        "migration_ca65203b883c6533"
-      ]
-    },
-    {
-      "fingerprint": "arch_df0943a88fa8f58ce3369a90",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/pipeline/PipelineWorker.ts",
-      "line_at_baseline": 63,
-      "ordinal": 3,
-      "owner_context": "platform_shell",
-      "target_context": "messaging",
-      "subject": "raw:$executeRaw:MessageEventLog",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_3edf8273887f2fd4",
-        "migration_b13277983c0d719d",
-        "migration_ca65203b883c6533"
       ]
     },
     {
