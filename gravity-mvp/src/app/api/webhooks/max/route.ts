@@ -1,7 +1,7 @@
 'use server'
 
 import { NextResponse } from 'next/server'
-import type { Message, MessageType } from '@prisma/client'
+import type { Chat, Message, MessageType } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { emitMessageReceived } from '@/lib/messageEvents'
 import { broadcastChatMessage } from '@/lib/messageStreamBus'
@@ -12,9 +12,9 @@ import { startMaxContactResolutionShadow } from '@/lib/contacts/max-contact-reso
 import type { LegacyContactResolutionOutcome } from '@/lib/contacts/contact-resolution-shadow.types'
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
 import { opsLog } from '@/lib/opsLog'
-import { DELETE_MESSAGE_COMMAND_V1, DELETE_MESSAGE_MEDIA_COMMAND_V1, REPLACE_EXTERNAL_MESSAGE_COMMAND_V1, UPSERT_EXTERNAL_MESSAGE_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { CREATE_EXTERNAL_CONVERSATION_COMMAND_V1, DELETE_MESSAGE_COMMAND_V1, DELETE_MESSAGE_MEDIA_COMMAND_V1, PATCH_EXTERNAL_CONVERSATION_COMMAND_V1, REPLACE_EXTERNAL_MESSAGE_COMMAND_V1, UPSERT_EXTERNAL_MESSAGE_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { ATTACH_MESSAGE_MEDIA_COMMAND_V2 } from '@/contracts/messaging/v2'
-import { deleteMessageMediaV1, deleteMessageV1, replaceExternalMessageV1, upsertExternalMessageV1 } from '@/modules/messaging/public/v1'
+import { createExternalConversationV1, deleteMessageMediaV1, deleteMessageV1, patchExternalConversationV1, replaceExternalMessageV1, upsertExternalMessageV1 } from '@/modules/messaging/public/v1'
 import { attachMessageMediaV2 } from '@/modules/messaging/public/v2'
 
 function metadataRecord(metadata: unknown): Record<string, unknown> {
@@ -285,9 +285,10 @@ export async function POST(request: Request) {
 
       if (existingBySender) {
         const existingMetadata = metadataRecord(existingBySender.metadata)
-        chat = await prisma.chat.update({
-          where: { id: existingBySender.id },
-          data: {
+        chat = (await patchExternalConversationV1({
+          contract: PATCH_EXTERNAL_CONVERSATION_COMMAND_V1,
+          chatId: existingBySender.id,
+          patch: {
             externalChatId,
             ...(isHistoryReplay ? {} : { lastMessageAt: sentAt }),
             ...(senderName && existingBySender.name?.startsWith('MAX:') ? { name: senderName } : {}),
@@ -300,7 +301,7 @@ export async function POST(request: Request) {
               connectionId: existingMetadata.connectionId || 'max_scraper',
             },
           },
-        })
+        })).conversation as Chat
       }
     }
 
@@ -319,9 +320,10 @@ export async function POST(request: Request) {
 
       if (existingByPhone) {
         const existingMetadata = metadataRecord(existingByPhone.metadata)
-        chat = await prisma.chat.update({
-          where: { id: existingByPhone.id },
-          data: {
+        chat = (await patchExternalConversationV1({
+          contract: PATCH_EXTERNAL_CONVERSATION_COMMAND_V1,
+          chatId: existingByPhone.id,
+          patch: {
             externalChatId,
             ...(isHistoryReplay ? {} : { lastMessageAt: sentAt }),
             ...(senderName && existingByPhone.name?.startsWith('MAX:') ? { name: senderName } : {}),
@@ -334,13 +336,13 @@ export async function POST(request: Request) {
               connectionId: existingMetadata.connectionId || 'max_scraper',
             },
           },
-        })
+        })).conversation as Chat
       }
     }
 
     if (!chat) {
-      chat = await prisma.chat.create({
-        data: {
+      chat = (await createExternalConversationV1({
+        contract: CREATE_EXTERNAL_CONVERSATION_COMMAND_V1,
           channel:       'max',
           externalChatId,
           name:          senderName || (senderId ? `MAX:${senderId}` : `MAX:${externalChatId}`),
@@ -352,13 +354,13 @@ export async function POST(request: Request) {
             rawExternalChatId,
             connectionId: 'max_scraper',
           },
-        },
-      })
+      })).conversation as Chat
     } else {
       const existingMetadata = metadataRecord(chat.metadata)
-      await prisma.chat.update({
-        where: { id: chat.id },
-        data: {
+      await patchExternalConversationV1({
+        contract: PATCH_EXTERNAL_CONVERSATION_COMMAND_V1,
+        chatId: chat.id,
+        patch: {
           ...(isHistoryReplay ? {} : { lastMessageAt: sentAt }),
           // Обновляем имя если раньше было только MAX:ID
           ...(senderName && chat.name?.startsWith('MAX:') ? { name: senderName } : {}),

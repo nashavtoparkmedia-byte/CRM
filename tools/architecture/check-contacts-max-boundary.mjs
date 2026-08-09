@@ -71,9 +71,11 @@ assertCheck(
     'placeholder policy drifted',
 )
 assertCheck(
-    'non-target Chat mutation remains in the MAX flow',
-    consumer.includes('prisma.chat.update'),
-    'slice broadened into Messaging ownership',
+    'adjacent Chat mutation uses the accepted Messaging owner route',
+    !consumer.includes('prisma.chat.update')
+        && consumer.includes('PATCH_EXTERNAL_CONVERSATION_COMMAND_V1')
+        && consumer.includes('patchExternalConversationV1({'),
+    'MAX Chat mutation bypasses the accepted Messaging owner route',
 )
 assertCheck(
     'Contacts manifest declares ResolveContactCommand.v1',

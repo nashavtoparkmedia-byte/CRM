@@ -30,7 +30,7 @@ check('existing URL dedup retained', consumer.includes('prisma.messageAttachment
 check('missing URLs remain skipped', consumer.includes('if (!att.url) continue'), 'URL guard drifted')
 check('command amendment exact', amendment.amendments.length === 1 && amendment.amendments[0].context === 'messaging' && JSON.stringify(amendment.amendments[0].add_commands) === JSON.stringify(['AttachMessageMediaCommand.v2', 'DeleteMessageMediaCommand.v1']), 'command amendment drifted')
 check('MAX Messaging dependency pre-approved', max.allowed_dependencies.some((item) => item.context === 'messaging' && item.surface === 'messaging.public'), 'approved dependency absent')
-check('neighboring Message owner route and Chat debt remain explicit', !/prisma\.message\.(?:update|upsert|delete)/.test(consumer) && consumer.includes('DELETE_MESSAGE_COMMAND_V1') && consumer.includes('REPLACE_EXTERNAL_MESSAGE_COMMAND_V1') && consumer.includes('UPSERT_EXTERNAL_MESSAGE_COMMAND_V1') && /prisma\.chat\.(?:create|update)/.test(consumer), 'neighboring Message route or Chat debt drifted')
+check('neighboring Message and Chat owner routes remain explicit', !/prisma\.message\.(?:update|upsert|delete)/.test(consumer) && consumer.includes('DELETE_MESSAGE_COMMAND_V1') && consumer.includes('REPLACE_EXTERNAL_MESSAGE_COMMAND_V1') && consumer.includes('UPSERT_EXTERNAL_MESSAGE_COMMAND_V1') && !/prisma\.chat\.(?:create|update)/.test(consumer) && consumer.includes('PATCH_EXTERNAL_CONVERSATION_COMMAND_V1') && consumer.includes('CREATE_EXTERNAL_CONVERSATION_COMMAND_V1'), 'neighboring Message or Chat owner route drifted')
 
 process.stdout.write(`${JSON.stringify({ status: failures.length ? 'FAIL' : 'PASS', checks, failures }, null, 2)}\n`)
 if (failures.length) process.exitCode = 1

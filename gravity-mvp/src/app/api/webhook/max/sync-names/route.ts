@@ -17,6 +17,8 @@ import {
     RESOLVE_CONTACT_COMMAND_V1,
 } from '@/contracts/contacts/v1'
 import { resolveContactV1 } from '@/modules/contacts/public/v1'
+import { PATCH_EXTERNAL_CONVERSATION_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { patchExternalConversationV1 } from '@/modules/messaging/public/v1'
 
 function isPlaceholderName(name?: string | null): boolean {
     if (!name) return true
@@ -88,9 +90,10 @@ export async function POST(req: NextRequest) {
                 continue
             }
 
-            await prisma.chat.update({
-                where: { id: chat.id },
-                data: { name: newName },
+            await patchExternalConversationV1({
+                contract: PATCH_EXTERNAL_CONVERSATION_COMMAND_V1,
+                chatId: chat.id,
+                patch: { name: newName },
             })
 
             // Contact update — только если он тоже placeholder

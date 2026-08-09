@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007-MESSAGING-MAX-MESSAGE",
-  "base_commit": "6134ee8a337dd69577b91165dd3e8afae09d614d",
+  "milestone": "CRM-ARCH-007-MESSAGING-MAX-CHAT",
+  "base_commit": "28cc9ed9769118f2e39a5045eeae971a3ac09776",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "5a3cd86f7ee5d44e4d484f5a99ba10df8fa3ad4243daf697fcdfe991efdeead9",
+  "finding_digest": "fa957c9a450b971cbdfd073d0e729f8c2692a8c4f8b4f23cb6cbaf6a96a32738",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,7 +13,7 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 122,
+    "direct_foreign_prisma_write": 117,
     "direct_provider_transport_access": 38,
     "internal_module_import": 379,
     "non_public_cross_context_import": 536,
@@ -4307,22 +4307,6 @@
       ]
     },
     {
-      "fingerprint": "arch_4720f4faaa55fa35fe35c827",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/webhook/max/sync-names/route.ts",
-      "line_at_baseline": 91,
-      "ordinal": 1,
-      "owner_context": "max_channel",
-      "target_context": "messaging",
-      "subject": "Chat.update",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_891ed67c317c43a7"
-      ]
-    },
-    {
       "fingerprint": "arch_0b694090a47a238c2c7eebe7",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/api/webhook/telegram/route.ts",
@@ -4836,70 +4820,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:max_channel/max_provider>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_c07f30e1f5db504e4d81ea69",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
-      "line_at_baseline": 288,
-      "ordinal": 1,
-      "owner_context": "max_channel",
-      "target_context": "messaging",
-      "subject": "Chat.update",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_891ed67c317c43a7"
-      ]
-    },
-    {
-      "fingerprint": "arch_b1ad951a77aef590ef1fa47f",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
-      "line_at_baseline": 322,
-      "ordinal": 2,
-      "owner_context": "max_channel",
-      "target_context": "messaging",
-      "subject": "Chat.update",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_891ed67c317c43a7"
-      ]
-    },
-    {
-      "fingerprint": "arch_5c10998f1ca35a467e5a8978",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
-      "line_at_baseline": 342,
-      "ordinal": 1,
-      "owner_context": "max_channel",
-      "target_context": "messaging",
-      "subject": "Chat.create",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_891ed67c317c43a7"
-      ]
-    },
-    {
-      "fingerprint": "arch_e8f52d2769c6e403b397b622",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
-      "line_at_baseline": 359,
-      "ordinal": 3,
-      "owner_context": "max_channel",
-      "target_context": "messaging",
-      "subject": "Chat.update",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_891ed67c317c43a7"
       ]
     },
     {
