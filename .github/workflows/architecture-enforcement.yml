@@ -1,0 +1,42 @@
+name: Architecture enforcement
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: architecture-enforcement-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  architecture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Verify runner Node.js
+        run: |
+          node --version
+          node -e "const major=Number(process.versions.node.split('.')[0]); if (major < 20) process.exit(1)"
+
+      - name: Validate context manifests and checksums
+        run: node tools/architecture/validate-context-manifests.mjs
+
+      - name: Enforce architecture policy
+        run: node tools/architecture/enforce-architecture.mjs
+
+      - name: Prove enforcement failure boundaries
+        run: node tools/architecture/test-architecture-enforcement.mjs
+
+      - name: Preserve versioned contract controls
+        run: node tools/architecture/check-contract-boundaries.mjs
+
+      - name: Preserve outbox controls
+        run: node tools/architecture/check-outbox-architecture.mjs

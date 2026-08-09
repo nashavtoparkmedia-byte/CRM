@@ -1,0 +1,56 @@
+{
+  "schema": "yoko.crm.architecture-policy.v1",
+  "version": 1,
+  "source_roots": [
+    "gravity-mvp/src",
+    "tg-bot/src",
+    "tg-bot/tg-bot-frontend",
+    "max-web-scraper",
+    "yandex-fleet-scraper/src",
+    "avito-worker/src",
+    "tools/audio-bridge-day1"
+  ],
+  "exclude_segments": ["node_modules", ".next", "dist", "build", "coverage", ".artifacts"],
+  "test_path_patterns": ["/__tests__/", "/test/", "/tests/", ".test.", ".spec."],
+  "shared_infrastructure_targets": [
+    "gravity-mvp/src/infrastructure/",
+    "gravity-mvp/src/lib/prisma.ts"
+  ],
+  "sensitive_environment_pattern": "(TOKEN|KEY|SECRET|PASSWORD|PASSWD|CREDENTIAL|SESSION|COOKIE|DATABASE_URL|DSN|AUTH|SIP_)",
+  "provider_transport_packages": {
+    "telegram": ["^telegram(?:/|$)"],
+    "whatsapp": ["^whatsapp-web\\.js$", "^@whiskeysockets/baileys(?:/|$)"],
+    "max": ["^@maxhub/", "^max-bot-api"],
+    "freeswitch": ["^modesl$"],
+    "openai": ["^openai$"],
+    "anthropic": ["^@anthropic-ai/sdk$"],
+    "aws_s3": ["^@aws-sdk/"],
+    "bullmq": ["^bullmq$", "^ioredis$"]
+  },
+  "provider_aliases": {
+    "whatsapp-web.js": "whatsapp",
+    "aws_s3": "aws_s3"
+  },
+  "provider_allowed_context_overrides": {
+    "bullmq": ["calling"]
+  },
+  "approved_infrastructure_writers": [
+    {
+      "model": "DomainOutboxEvent",
+      "file": "gravity-mvp/src/modules/calling/internal/recording-ready-prisma-adapter.ts",
+      "reason": "same transaction as Calling aggregate write; declared by CRM-ARCH-005 outbox manifest"
+    }
+  ],
+  "manifest_amendments": ["architecture/events/v1/module-manifest-amendments.json"],
+  "exception_registry": "architecture/enforcement/v1/exceptions.json",
+  "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
+  "strict_exception_registry": true,
+  "exception_review_deadline": "2026-12-31",
+  "unexceptionable_rules": [
+    "manifest_inconsistency",
+    "dependency_graph_cycle",
+    "contract_version_violation",
+    "unresolved_internal_import",
+    "unclassified_production_source"
+  ]
+}

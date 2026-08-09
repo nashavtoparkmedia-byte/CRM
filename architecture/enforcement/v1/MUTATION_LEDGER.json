@@ -1,0 +1,23 @@
+{
+  "schema": "yoko.crm.architecture-mutation-ledger.v1",
+  "milestone": "CRM-ARCH-006",
+  "generated_at": "2026-08-09T14:47:31Z",
+  "production_mutations": [],
+  "runtime_mutations": [],
+  "database_mutations": [],
+  "protected_worktree_mutations": [],
+  "architecture_worktree_changes": [
+    "machine-readable fail-closed architecture policy",
+    "production-source scanner and exact-fingerprint exception evaluator",
+    "reproducible owned and expiring legacy exception registry",
+    "five-site legacy write supplement for stricter scanner coverage",
+    "16 negative and integration enforcement tests",
+    "pinned read-only GitHub pull-request/main-push workflow",
+    "two root contract namespace exports corrected to explicit v1 targets",
+    "verification, reviews, gate and checksum evidence"
+  ],
+  "local_non_source_setup": [
+    "ignored gravity-mvp/node_modules symlink to the existing workspace dependency cache for local verification"
+  ],
+  "result": "NO_PRODUCTION_RUNTIME_DATABASE_OR_PROTECTED_WORKTREE_MUTATION"
+}

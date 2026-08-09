@@ -1,2 +1,2 @@
-export * as WorkManagementContracts from './work-management'
-export * as CallingContracts from './calling'
+export * as WorkManagementContracts from './work-management/v1'
+export * as CallingContracts from './calling/v1'
