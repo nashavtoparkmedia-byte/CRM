@@ -1,0 +1,35 @@
+{
+  "schema": "yoko.crm.contract-registry.v1",
+  "version": 1,
+  "versioning_policy": {
+    "identifier": "<owner_context>.<ContractName>.v<major>",
+    "major_change": "add the new version beside the old version and migrate explicitly",
+    "unsupported_version": "fail_closed",
+    "provider_implementation_types": "forbidden"
+  },
+  "contracts": [
+    {
+      "id": "work_management.CreateTaskCommand.v1",
+      "kind": "command",
+      "owner_context": "work_management",
+      "source": "gravity-mvp/src/contracts/work-management/v1/create-task-command.ts",
+      "runtime_validator": "parseCreateTaskCommandV1",
+      "public_entry_point": "gravity-mvp/src/modules/work-management/public/v1/index.ts",
+      "legacy_adapter": "gravity-mvp/src/modules/work-management/public/v1/legacy-prisma-adapter.ts",
+      "producer_contexts": ["calling"],
+      "consumer_sites": [
+        "gravity-mvp/src/app/api/ai-calls/mock/route.ts",
+        "gravity-mvp/src/app/api/ai-calls/sessions/[id]/finalize/route.ts"
+      ],
+      "migration_plan": "migration_e380f7963fd3d784",
+      "status": "representative_flow_migrated"
+    },
+    {
+      "id": "work_management.CreateTaskResult.v1",
+      "kind": "result",
+      "owner_context": "work_management",
+      "source": "gravity-mvp/src/contracts/work-management/v1/create-task-command.ts",
+      "status": "active"
+    }
+  ]
+}

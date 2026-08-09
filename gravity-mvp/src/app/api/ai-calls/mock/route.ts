@@ -7,6 +7,8 @@ import { getCurrentUser } from '@/lib/users/user-service'
 import { opsLog } from '@/lib/opsLog'
 import { getMockPayload, pickRandomVariant, type MockVariant } from '@/lib/ai-call/mock-payload'
 import { isMockModeEnabled } from '@/lib/ai-call/provider-settings'
+import { CREATE_TASK_COMMAND_V1 } from '@/contracts/work-management/v1'
+import { createTaskV1 } from '@/modules/work-management/public/v1'
 
 export const dynamic = 'force-dynamic'
 
@@ -124,7 +126,8 @@ export async function POST(req: NextRequest) {
     // Create a Task for the manager when the mock variant flagged it.
     let createdTask: { id: string; title: string } | null = null
     if (mock.qualificationResult.manager_task.should_create) {
-        const task = await prisma.task.create({
+        const taskResult = await createTaskV1({
+            contract: CREATE_TASK_COMMAND_V1,
             data: {
                 driverId,
                 contactId,
@@ -136,15 +139,16 @@ export async function POST(req: NextRequest) {
                     ? 'high'
                     : mock.qualificationResult.manager_task.priority === 'normal'
                     ? 'medium'
-                    : 'low') as any,
+                    : 'low'),
                 status: 'todo',
                 createdBy: user.id,
                 metadata: {
                     aiCallId: call.id,
                     qualification: mock.qualificationResult.qualification_status,
-                } as any,
+                },
             },
         })
+        const task = taskResult.task
         createdTask = { id: task.id, title: task.title }
 
         // Link task back into call.aiAnalysis for easy lookup in the UI.

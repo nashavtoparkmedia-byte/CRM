@@ -1,0 +1,42 @@
+{
+  "schema": "yoko.crm.contract-verification.v1",
+  "milestone": "CRM-ARCH-004",
+  "verified_at": "2026-08-09T13:53:32Z",
+  "result": "PASS_CONTINUE",
+  "contract_tests": {
+    "passed": 11,
+    "failed": 0,
+    "command": "node tools/architecture/test-contracts.mjs"
+  },
+  "boundary_checks": {
+    "passed": 11,
+    "failed": 0,
+    "command": "node tools/architecture/check-contract-boundaries.mjs"
+  },
+  "protected_ai_call_tests": {
+    "passed": 76,
+    "failed": 0,
+    "files": 4
+  },
+  "targeted_eslint": {
+    "errors": 0,
+    "warnings": 0
+  },
+  "typescript_project_check": {
+    "candidate_existing_errors": 28,
+    "baseline_existing_errors": 28,
+    "normalized_diagnostic_parity": "PASS",
+    "new_diagnostics": 0,
+    "interpretation": "The inherited project-wide TypeScript baseline is not green; CRM-ARCH-004 introduces no new diagnostic."
+  },
+  "migration_plan": {
+    "id": "migration_e380f7963fd3d784",
+    "planned_sites": 2,
+    "migrated_sites": 2,
+    "remaining_direct_foreign_task_creates": 0
+  },
+  "production_mutated": false,
+  "runtime_mutated": false,
+  "database_mutated": false,
+  "deployed": false
+}

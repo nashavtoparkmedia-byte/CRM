@@ -1,0 +1,18 @@
+{
+  "schema": "yoko.crm.architecture-mutation-ledger.v1",
+  "milestone": "CRM-ARCH-004",
+  "generated_at": "2026-08-09T13:53:32Z",
+  "production_mutations": [],
+  "runtime_mutations": [],
+  "database_mutations": [],
+  "protected_worktree_mutations": [],
+  "architecture_worktree_changes": [
+    "versioned Work Management CreateTask v1 command/result and runtime validator",
+    "provider-neutral owner handler and legacy Prisma compatibility adapter",
+    "Calling producer migration for both sites in migration_e380f7963fd3d784",
+    "contract registry, versioning convention and boundary policy",
+    "deterministic contract and boundary test tools",
+    "compatibility evidence, two internal reviews and delegated technical gate"
+  ],
+  "result": "NO_PRODUCTION_RUNTIME_DATABASE_OR_PROTECTED_WORKTREE_MUTATION"
+}

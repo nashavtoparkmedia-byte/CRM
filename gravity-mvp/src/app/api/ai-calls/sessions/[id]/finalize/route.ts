@@ -16,6 +16,8 @@ import { validateLeadData } from '@/lib/ai-call/scenario-schema'
 // helper NEVER throws to the caller; insert failures are logged and
 // the finalize response still returns success.
 import { _createPersistEvents } from '@/lib/ai-call/event-emitter'
+import { CREATE_TASK_COMMAND_V1 } from '@/contracts/work-management/v1'
+import { createTaskV1 } from '@/modules/work-management/public/v1'
 
 // Bind once at module init. Same DI pattern as other AI-call helpers.
 const persistEvents = _createPersistEvents(prisma as any)
@@ -142,7 +144,8 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         aiAnalysisPayload.manager_task?.should_create &&
         call.driverId
     ) {
-        const task = await prisma.task.create({
+        const taskResult = await createTaskV1({
+            contract: CREATE_TASK_COMMAND_V1,
             data: {
                 driverId: call.driverId,
                 contactId: call.contactId,
@@ -154,15 +157,16 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
                     aiAnalysisPayload.manager_task.priority === 'high' ? 'high' :
                     aiAnalysisPayload.manager_task.priority === 'low' ? 'low' :
                     'medium'
-                ) as any,
+                ),
                 status: 'todo',
                 createdBy: call.managerId ?? null,
                 metadata: {
                     aiCallId: call.id,
                     qualification: aiAnalysisPayload.qualification_status,
-                } as any,
+                },
             },
         })
+        const task = taskResult.task
         createdTask = { id: task.id, title: task.title }
         ;(aiAnalysisPayload as any).created_task_id = task.id
     }

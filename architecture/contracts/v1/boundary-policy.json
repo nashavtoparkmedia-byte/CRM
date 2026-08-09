@@ -1,0 +1,25 @@
+{
+  "schema": "yoko.crm.contract-boundary-policy.v1",
+  "version": 1,
+  "rules": [
+    {
+      "id": "contracts-provider-neutral",
+      "scope": "gravity-mvp/src/contracts/**",
+      "forbid_imports": ["@/lib/**", "@prisma/**", "**/app/**", "**/provider/**", "**/providers/**"]
+    },
+    {
+      "id": "public-only-cross-context-imports",
+      "scope": "gravity-mvp/src/**",
+      "forbid_imports": ["@/modules/*/internal/**"]
+    },
+    {
+      "id": "calling-task-write-owner-boundary",
+      "scope": [
+        "gravity-mvp/src/app/api/ai-calls/mock/route.ts",
+        "gravity-mvp/src/app/api/ai-calls/sessions/[id]/finalize/route.ts"
+      ],
+      "forbid_patterns": ["prisma.task.create("],
+      "require_contract": "work_management.CreateTaskCommand.v1"
+    }
+  ]
+}
