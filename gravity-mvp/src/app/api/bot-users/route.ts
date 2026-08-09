@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { DISMISS_BOT_LINK_REQUEST_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
+import { dismissBotLinkRequestV1 } from '@/modules/telegram-channel/public/v1'
 
 // GET /api/bot-users — linked drivers + pending link requests
 export async function GET() {
@@ -98,7 +100,7 @@ export async function DELETE(req: NextRequest) {
   }
 
   if (requestId) {
-    await prisma.botChatMessage.deleteMany({ where: { id: requestId } })
+    await dismissBotLinkRequestV1({ contract: DISMISS_BOT_LINK_REQUEST_COMMAND_V1, requestId })
     return NextResponse.json({ success: true })
   }
 

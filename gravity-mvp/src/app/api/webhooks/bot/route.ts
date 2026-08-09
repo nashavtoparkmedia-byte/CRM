@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { RECORD_PENDING_BOT_LINK_REQUEST_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
+import { recordPendingBotLinkRequestV1 } from '@/modules/telegram-channel/public/v1'
 import {
     APPEND_SYSTEM_NOTIFICATION_V1,
     MARK_REQUIRES_RESPONSE_V1,
@@ -322,13 +324,10 @@ async function handleSyncUser(payload: any) {
     }
 
     // 2. Fallback: save as an unlinked message for manual manager review
-    await prisma.botChatMessage.create({
-        data: {
-            telegramId: BigInt(telegramId),
-            text: `[Запрос привязки] Телефон: ${phone}, @${username || 'нет'}`,
-            direction: 'INCOMING',
-            driverId: null
-        }
+    await recordPendingBotLinkRequestV1({
+        contract: RECORD_PENDING_BOT_LINK_REQUEST_COMMAND_V1,
+        telegramId: String(telegramId),
+        text: `[Запрос привязки] Телефон: ${phone}, @${username || 'нет'}`,
     })
 
     // Notify manager: drop a system message into the driver's existing TG chat

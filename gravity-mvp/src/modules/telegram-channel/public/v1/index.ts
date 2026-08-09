@@ -1,0 +1,3 @@
+import{createDismissBotLinkRequestHandlerV1,createRecordPendingBotLinkRequestHandlerV1}from'./bot-chat-message-handler';import{legacyPrismaBotChatMessagePortV1}from'./legacy-prisma-bot-chat-message-adapter'
+export{createDismissBotLinkRequestHandlerV1,createRecordPendingBotLinkRequestHandlerV1}from'./bot-chat-message-handler';export type{BotChatMessagePersistencePortV1}from'./bot-chat-message-handler'
+export const dismissBotLinkRequestV1=createDismissBotLinkRequestHandlerV1(legacyPrismaBotChatMessagePortV1);export const recordPendingBotLinkRequestV1=createRecordPendingBotLinkRequestHandlerV1(legacyPrismaBotChatMessagePortV1)

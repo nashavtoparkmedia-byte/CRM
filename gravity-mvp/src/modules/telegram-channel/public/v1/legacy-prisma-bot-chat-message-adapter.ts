@@ -1,0 +1,2 @@
+import{prisma}from'@/lib/prisma';import type{BotChatMessagePersistencePortV1}from'./bot-chat-message-handler'
+export const legacyPrismaBotChatMessagePortV1:BotChatMessagePersistencePortV1={async dismiss(requestId){await prisma.botChatMessage.deleteMany({where:{id:requestId}})},async recordPending(input){await prisma.botChatMessage.create({data:{telegramId:BigInt(input.telegramId),text:input.text,direction:'INCOMING',driverId:null}})}}

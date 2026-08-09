@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007-CALLING-AI-AGENT-PROFILES",
-  "base_commit": "41bf3c49f2948cecc4a528c339a7a5a4157a63cb",
+  "milestone": "CRM-ARCH-007-TELEGRAM-BOT-CHAT-MESSAGE",
+  "base_commit": "556605dde43cb72404e208bdcc5a69b512226fbf",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "c0434602c32f07d4dc8c205ab8640b48d4c044f30f157a6036fb22b44608daea",
+  "finding_digest": "522d5344a3ea2beb767de850ac6442cf1f579f789fd22aed4ae270e5792779d3",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,11 +13,11 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 148,
+    "direct_foreign_prisma_write": 146,
     "direct_provider_transport_access": 38,
     "internal_module_import": 379,
     "non_public_cross_context_import": 536,
-    "undeclared_dependency": 381
+    "undeclared_dependency": 378
   },
   "exceptions": [
     {
@@ -1112,7 +1112,7 @@
       "fingerprint": "arch_9b5f4c31a08a54bd60068a86",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/api/bot-users/route.ts",
-      "line_at_baseline": 96,
+      "line_at_baseline": 98,
       "ordinal": 1,
       "owner_context": "platform_shell",
       "target_context": "telegram_channel",
@@ -1122,22 +1122,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "migration_152c887cb9c50943"
-      ]
-    },
-    {
-      "fingerprint": "arch_c0f6196631ecd84c21de3755",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/bot-users/route.ts",
-      "line_at_baseline": 101,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "telegram_channel",
-      "subject": "BotChatMessage.deleteMany",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_26a0af43f7c4670a"
       ]
     },
     {
@@ -4552,7 +4536,7 @@
       "fingerprint": "arch_7386bbc72c6f4b056899a1d8",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
-      "line_at_baseline": 145,
+      "line_at_baseline": 147,
       "ordinal": 1,
       "owner_context": "platform_shell",
       "target_context": "telegram_channel",
@@ -4568,7 +4552,7 @@
       "fingerprint": "arch_1734f8336c539b3a8b64b5d6",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
-      "line_at_baseline": 191,
+      "line_at_baseline": 193,
       "ordinal": 2,
       "owner_context": "platform_shell",
       "target_context": "telegram_channel",
@@ -4584,7 +4568,7 @@
       "fingerprint": "arch_a102592208d2e445ca742d72",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
-      "line_at_baseline": 309,
+      "line_at_baseline": 311,
       "ordinal": 1,
       "owner_context": "platform_shell",
       "target_context": "telegram_channel",
@@ -4597,26 +4581,10 @@
       ]
     },
     {
-      "fingerprint": "arch_b9aa20973ea41d26e31f053b",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
-      "line_at_baseline": 325,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "telegram_channel",
-      "subject": "BotChatMessage.create",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_26a0af43f7c4670a"
-      ]
-    },
-    {
       "fingerprint": "arch_38092301012756bc6aba9494",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
-      "line_at_baseline": 676,
+      "line_at_baseline": 675,
       "ordinal": 1,
       "owner_context": "platform_shell",
       "target_context": "fleet_operations",
@@ -4632,7 +4600,7 @@
       "fingerprint": "arch_58ae56ba2e66e65df7686cc3",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
-      "line_at_baseline": 747,
+      "line_at_baseline": 746,
       "ordinal": 2,
       "owner_context": "platform_shell",
       "target_context": "fleet_operations",
@@ -4648,7 +4616,7 @@
       "fingerprint": "arch_e3673a48993f7f21ae03e781",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
-      "line_at_baseline": 764,
+      "line_at_baseline": 763,
       "ordinal": 3,
       "owner_context": "platform_shell",
       "target_context": "fleet_operations",
@@ -4664,7 +4632,7 @@
       "fingerprint": "arch_6dce62f673ee8ed8e2caa57e",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
-      "line_at_baseline": 844,
+      "line_at_baseline": 843,
       "ordinal": 3,
       "owner_context": "platform_shell",
       "target_context": "telegram_channel",
@@ -4680,7 +4648,7 @@
       "fingerprint": "arch_1a3f48ff829ddcfbcf3f0f04",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
-      "line_at_baseline": 878,
+      "line_at_baseline": 877,
       "ordinal": 1,
       "owner_context": "platform_shell",
       "target_context": "fleet_operations",
@@ -20105,22 +20073,6 @@
       ]
     },
     {
-      "fingerprint": "arch_b2afb486f4e2fc2366625a4f",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 72,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "telegram_channel",
-      "subject": "gravity_core>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>telegram_channel/telegram_provider"
-      ]
-    },
-    {
       "fingerprint": "arch_842c10c8f944fc3ff72bfc18",
       "rule": "direct_provider_transport_access",
       "file": "gravity-mvp/src/instrumentation.ts",
@@ -20789,22 +20741,6 @@
       "subject": "gravity_core>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
       "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
       "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_447ba0db79bbc82c932c9f53",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 350,
-      "ordinal": 2,
-      "owner_context": "platform_shell",
-      "target_context": "telegram_channel",
-      "subject": "gravity_core>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:platform_shell/gravity_core>telegram_channel/telegram_provider"
@@ -23204,22 +23140,6 @@
       "subject": "gravity_core>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
       "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
       "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_e8e2012b0c61493f25557ec8",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/pipeline/ChannelAdapterRegistry.ts",
-      "line_at_baseline": 28,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "telegram_channel",
-      "subject": "gravity_core>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:platform_shell/gravity_core>telegram_channel/telegram_provider"
