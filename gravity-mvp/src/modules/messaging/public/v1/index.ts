@@ -12,6 +12,8 @@ import { createCancelHistoryImportJobHandlerV1,createDeleteHistoryImportJobsForC
 import { legacyPrismaHistoryImportJobPortV1 } from './legacy-prisma-history-import-job-adapter'
 import { createSyncCallTimelineHandlerV1 } from './sync-call-timeline-handler'
 import { legacyPrismaSyncCallTimelinePortV1 } from './legacy-prisma-sync-call-timeline-adapter'
+import { createCreateCommunicationTriggerHandlerV1,createDeleteCommunicationTriggerHandlerV1,createUpdateCommunicationTriggerHandlerV1 } from './communication-trigger-handler'
+import { legacyPrismaCommunicationTriggerPortV1 } from './legacy-prisma-communication-trigger-adapter'
 
 export { createAttachMessageMediaHandlerV1 } from './attach-message-media-handler'
 export type { AttachMessageMediaPersistencePortV1 } from './attach-message-media-handler'
@@ -43,3 +45,8 @@ export const cancelHistoryImportJobV1=createCancelHistoryImportJobHandlerV1(lega
 export { createSyncCallTimelineHandlerV1 } from './sync-call-timeline-handler'
 export type { SyncCallTimelinePersistencePortV1,SyncCallTimelinePersistenceResultV1 } from './sync-call-timeline-handler'
 export const syncCallTimelineV1=createSyncCallTimelineHandlerV1(legacyPrismaSyncCallTimelinePortV1)
+export { createCreateCommunicationTriggerHandlerV1,createDeleteCommunicationTriggerHandlerV1,createUpdateCommunicationTriggerHandlerV1 } from './communication-trigger-handler'
+export type { CommunicationTriggerPersistencePortV1 } from './communication-trigger-handler'
+export const createCommunicationTriggerV1=createCreateCommunicationTriggerHandlerV1(legacyPrismaCommunicationTriggerPortV1)
+export const updateCommunicationTriggerV1=createUpdateCommunicationTriggerHandlerV1(legacyPrismaCommunicationTriggerPortV1)
+export const deleteCommunicationTriggerV1=createDeleteCommunicationTriggerHandlerV1(legacyPrismaCommunicationTriggerPortV1)

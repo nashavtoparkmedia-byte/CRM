@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007-MESSAGING-CALL-TIMELINE",
-  "base_commit": "5037cf4d37b415b9df97a856b5e79a0e3d94d60c",
+  "milestone": "CRM-ARCH-007-MESSAGING-COMMUNICATION-TRIGGERS",
+  "base_commit": "39c9ec7245972d5f327d4bbe29dd76f8d2e62282",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "770e266f45c4832a05de6f76fc770eac2ccf034a7e5515bfe0c7802c99cf0bbb",
+  "finding_digest": "7c9990f6929590a8c41048e61ea44273f8213870afbbecddf05817bb1fe8348c",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,7 +13,7 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 135,
+    "direct_foreign_prisma_write": 131,
     "direct_provider_transport_access": 38,
     "internal_module_import": 379,
     "non_public_cross_context_import": 536,
@@ -16255,70 +16255,6 @@
       "migration_references": [
         "dependency:configuration/settings>platform_shell/gravity_core",
         "dependency:configuration/settings>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_ac1db19d7851e14ba990118a",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/settings/triggers/actions.ts",
-      "line_at_baseline": 36,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "messaging",
-      "subject": "CommunicationTrigger.create",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_32c0e2377e609527"
-      ]
-    },
-    {
-      "fingerprint": "arch_46ba4bdbd73ec6929186cf11",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/settings/triggers/actions.ts",
-      "line_at_baseline": 49,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "messaging",
-      "subject": "CommunicationTrigger.update",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_32c0e2377e609527"
-      ]
-    },
-    {
-      "fingerprint": "arch_de50d0fe749b0946e0f191ba",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/settings/triggers/actions.ts",
-      "line_at_baseline": 57,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "messaging",
-      "subject": "CommunicationTrigger.delete",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_32c0e2377e609527"
-      ]
-    },
-    {
-      "fingerprint": "arch_62e57962f3784e5c96420fd6",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/settings/triggers/actions.ts",
-      "line_at_baseline": 62,
-      "ordinal": 2,
-      "owner_context": "configuration",
-      "target_context": "messaging",
-      "subject": "CommunicationTrigger.update",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_32c0e2377e609527"
       ]
     },
     {

@@ -1,0 +1,2 @@
+import{prisma}from'@/lib/prisma';import type{CommunicationTriggerPersistencePortV1}from'./communication-trigger-handler'
+export const legacyPrismaCommunicationTriggerPortV1:CommunicationTriggerPersistencePortV1={async create(data){await prisma.communicationTrigger.create({data})},async update(triggerId,patch){await prisma.communicationTrigger.update({where:{id:triggerId},data:patch})},async delete(triggerId){await prisma.communicationTrigger.delete({where:{id:triggerId}})}}
