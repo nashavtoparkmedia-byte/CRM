@@ -49,13 +49,14 @@
     "architecture/isolation/fleet-operations/scoring-thresholds-v1/module-manifest-amendments.json",
     "architecture/isolation/contacts/manual-link-display-name-v1/module-manifest-amendments.json",
     "architecture/isolation/fleet-operations/daily-activity-v1/module-manifest-amendments.json",
-    "architecture/isolation/fleet-operations/inbox-public-v1/module-manifest-amendments.json"
+    "architecture/isolation/fleet-operations/inbox-public-v1/module-manifest-amendments.json",
+    "architecture/isolation/messaging/bot-chat-state-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007-MESSAGING-BOT-SYSTEM-SEND",
-  "registry_base_commit": "6701fd23b42ef2e49a76807ebcf0220d300e1c4c",
+  "registry_milestone": "CRM-ARCH-007-MESSAGING-BOT-CHAT-STATE",
+  "registry_base_commit": "712a2f6efcb1923346622f43d58b4f1c77d0f750",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",

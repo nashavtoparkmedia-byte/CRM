@@ -1,0 +1,28 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1",
+  "milestone": "CRM-ARCH-007-MESSAGING-BOT-CHAT-STATE",
+  "base_commit": "712a2f6efcb1923346622f43d58b4f1c77d0f750",
+  "captured_at": "2026-08-09T17:11:05Z",
+  "consumer": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+  "consumer_sha256": "68b95da3a82a5bbb2acf5aee29755dbaaa67cdc4cfec1a4f4679fe2408f949c9",
+  "behavior": [
+    "the existing system notification persists before conversation state changes",
+    "the same chat id selected by the Telegram lookup is updated",
+    "status is set to open",
+    "requiresResponse is set to true",
+    "unreadCount is incremented by one",
+    "lastMessageAt receives a fresh current instant",
+    "missing-row and persistence failures retain Prisma update failure visibility inside the existing outer nonblocking catch",
+    "the outer catch and error-message logging remain unchanged"
+  ],
+  "inventory_adjudication": {
+    "production_site": "write_c9b528fc95e874db36fe migrated",
+    "test_site": "write_1d6b56ed3c5ab85a86e4 preserved as a non-executable source assertion against src/app/api/webhooks/max/route.ts"
+  },
+  "out_of_scope": [
+    "other Chat plans and Chat persistence semantics",
+    "DriverTelegram, BotChatMessage and DriverAction writes in the same route",
+    "provider transport behavior",
+    "database schema or production activation"
+  ]
+}

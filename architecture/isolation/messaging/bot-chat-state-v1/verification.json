@@ -1,0 +1,30 @@
+{
+  "schema": "yoko.crm.context-isolation-verification.v1",
+  "milestone": "CRM-ARCH-007-MESSAGING-BOT-CHAT-STATE",
+  "verified_at": "2026-08-09T17:15:56Z",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "architecture": {
+    "files": 833,
+    "contexts": 16,
+    "findings": 1509,
+    "exceptions": 1509,
+    "finding_digest": "f1dbd9b7bd27b667cba6037b70eb990b2f08c83f1e8637441bf5b8bce1384afc",
+    "registry_sha256": "e155e9c04d00a83bb21c309579af4eb3c4e1fe2372f47804cbe260d270c7fa10",
+    "dependency_cycles": 0
+  },
+  "tests": {
+    "messaging_bot_chat_state_behavior": "11/11 PASS",
+    "messaging_bot_chat_state_controls": "13/13 PASS",
+    "contract_controls": "65/65 PASS",
+    "enforcement": "16/16 PASS",
+    "auth": "33/33 PASS",
+    "calling": "93/93 PASS",
+    "current_baseline_context_contract_outbox_identity_work_management_contacts_fleet_and_messaging_controls": "PASS"
+  },
+  "typescript": "28 baseline / 28 candidate / 0 normalized differences",
+  "eslint": "36 inherited bot-route diagnostics / 36 candidate diagnostics; new owner and contract files 0",
+  "inventory_adjudication": "The plan's second test-role entry is a static assertion over a different MAX route, remains unchanged, creates no enforcement finding and performs no persistence.",
+  "historical_evidence_note": "CRM-ARCH-002 evidence remains checksum-authoritative for its frozen input identity; its byte-count validator is not reinterpreted as a current-tree validator.",
+  "secret_values_read_or_emitted": false,
+  "production_mutated": false
+}

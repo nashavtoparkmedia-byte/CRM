@@ -1,7 +1,12 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { APPEND_SYSTEM_NOTIFICATION_V1, SEND_MESSAGE_COMMAND_V1 } from '@/contracts/messaging/v1'
-import { sendMessageV1 } from '@/modules/messaging/public/v1'
+import {
+    APPEND_SYSTEM_NOTIFICATION_V1,
+    MARK_REQUIRES_RESPONSE_V1,
+    SEND_MESSAGE_COMMAND_V1,
+    UPDATE_CONVERSATION_COMMAND_V1,
+} from '@/contracts/messaging/v1'
+import { sendMessageV1, updateConversationV1 } from '@/modules/messaging/public/v1'
 
 const BOT_API_URL = process.env.BOT_API_URL || 'http://localhost:4000/api/bot'
 
@@ -358,14 +363,11 @@ async function notifyManagerPendingLink({ telegramId, username, phone }: {
             sentAt: new Date().toISOString(),
         })
 
-        await prisma.chat.update({
-            where: { id: chat.id },
-            data: {
-                status: 'open',
-                requiresResponse: true,
-                unreadCount: { increment: 1 },
-                lastMessageAt: new Date(),
-            },
+        await updateConversationV1({
+            contract: UPDATE_CONVERSATION_COMMAND_V1,
+            operation: MARK_REQUIRES_RESPONSE_V1,
+            chatId: chat.id,
+            lastMessageAt: new Date().toISOString(),
         })
     } catch (err: any) {
         console.error('[notifyManagerPendingLink] Error:', err.message)
