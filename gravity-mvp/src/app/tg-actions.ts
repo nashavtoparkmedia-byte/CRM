@@ -8,6 +8,8 @@ import QRCode from 'qrcode'
 import { revalidatePath } from 'next/cache'
 import { NewMessage, Raw } from 'telegram/events'
 import * as registry from '@/lib/TransportRegistry'
+import { deleteHistoryImportJobsForChannelV1, deleteHistoryImportJobsForConnectionV1, patchHistoryImportJobV1 } from '@/modules/messaging/public/v1'
+import { DELETE_HISTORY_IMPORT_JOBS_FOR_CHANNEL_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CONNECTION_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1 } from '@/contracts/messaging/v1'
 
 // Global map to keep track of active login clients for QR
 // Note: In a production serverless environment, this would need a different approach (like a separate service or Redis)
@@ -1552,27 +1554,7 @@ async function updateTgImportJob(jobId: string, data: {
     detailsJson?: any
 }) {
     try {
-        const sets: string[] = []
-        const vals: any[] = []
-        let idx = 1
-
-        if (data.status !== undefined)           { sets.push(`status = $${idx}::"AiImportStatus"`); vals.push(data.status); idx++ }
-        if (data.resultType !== undefined)        { sets.push(`"resultType" = $${idx}`); vals.push(data.resultType); idx++ }
-        if (data.messagesImported !== undefined)  { sets.push(`"messagesImported" = $${idx}`); vals.push(data.messagesImported); idx++ }
-        if (data.chatsScanned !== undefined)      { sets.push(`"chatsScanned" = $${idx}`); vals.push(data.chatsScanned); idx++ }
-        if (data.contactsFound !== undefined)     { sets.push(`"contactsFound" = $${idx}`); vals.push(data.contactsFound); idx++ }
-        if (data.startedAt !== undefined)         { sets.push(`"startedAt" = $${idx}`); vals.push(data.startedAt); idx++ }
-        if (data.finishedAt !== undefined)        { sets.push(`"finishedAt" = $${idx}`); vals.push(data.finishedAt); idx++ }
-        if (data.coveredPeriodFrom !== undefined) { sets.push(`"coveredPeriodFrom" = $${idx}`); vals.push(data.coveredPeriodFrom); idx++ }
-        if (data.coveredPeriodTo !== undefined)   { sets.push(`"coveredPeriodTo" = $${idx}`); vals.push(data.coveredPeriodTo); idx++ }
-        if (data.detailsJson !== undefined)       { sets.push(`"detailsJson" = $${idx}::jsonb`); vals.push(JSON.stringify(data.detailsJson)); idx++ }
-
-        if (sets.length === 0) return
-        vals.push(jobId)
-        await prisma.$executeRawUnsafe(
-            `UPDATE "HistoryImportJob" SET ${sets.join(', ')} WHERE id = $${idx}`,
-            ...vals
-        )
+        await patchHistoryImportJobV1({ contract: PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, jobId, patch: data })
     } catch (err: any) {
         console.error(`[TG-IMPORT] updateTgImportJob error: ${err.message}`)
     }
@@ -1671,15 +1653,9 @@ export async function deleteConnectionMessages(connectionId: string) {
 async function cleanupImportJobs(channel: string, connectionId?: string) {
     try {
         if (connectionId) {
-            await prisma.$executeRaw`
-                DELETE FROM "HistoryImportJob"
-                WHERE ${channel} = ANY(channels) AND "connectionId" = ${connectionId}
-            `
+            await deleteHistoryImportJobsForConnectionV1({ contract: DELETE_HISTORY_IMPORT_JOBS_FOR_CONNECTION_COMMAND_V1, channel: 'telegram', connectionId })
         } else {
-            await prisma.$executeRaw`
-                DELETE FROM "HistoryImportJob"
-                WHERE ${channel} = ANY(channels)
-            `
+            await deleteHistoryImportJobsForChannelV1({ contract: DELETE_HISTORY_IMPORT_JOBS_FOR_CHANNEL_COMMAND_V1, channel: 'telegram' })
         }
         console.log(`[TG] Cleaned up import jobs for channel=${channel} conn=${connectionId}`)
     } catch (err: any) {
