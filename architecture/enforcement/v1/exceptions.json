@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007-AI-KNOWLEDGE-ITEM-REVIEW",
-  "base_commit": "0691fda4e2c2930e756420971255be211b716899",
+  "milestone": "CRM-ARCH-007-MESSAGING-HISTORY-IMPORT-JOB-ROUTE",
+  "base_commit": "4e198e940c7b3344bb78da7921f340a117940d2c",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "83dbd3117fec37d165d205a517a5d1f26d7220f70d697b99eab8daccdd54149a",
+  "finding_digest": "d8309edc2a640aa04ede7364ca16ecbd0d7af83b96690e2bd8a95a04f730be68",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,7 +13,7 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 158,
+    "direct_foreign_prisma_write": 156,
     "direct_provider_transport_access": 38,
     "internal_module_import": 379,
     "non_public_cross_context_import": 536,
@@ -2619,38 +2619,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:operations_observability/monitoring>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_1babb518362c612ad1de643b",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/import-jobs/[id]/route.ts",
-      "line_at_baseline": 10,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "messaging",
-      "subject": "raw:$executeRaw:HistoryImportJob",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_af31e260c06c121e"
-      ]
-    },
-    {
-      "fingerprint": "arch_8de777dbe86b2081bacd7d1f",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/import-jobs/[id]/route.ts",
-      "line_at_baseline": 55,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "messaging",
-      "subject": "raw:$executeRawUnsafe:HistoryImportJob",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_af31e260c06c121e"
       ]
     },
     {

@@ -60,13 +60,14 @@
     "architecture/isolation/fleet-operations/api-log-v1/module-manifest-amendments.json",
     "architecture/isolation/ai-knowledge/knowledge-source-v1/module-manifest-amendments.json",
     "architecture/isolation/fleet-operations/driver-import-v1/module-manifest-amendments.json",
-    "architecture/isolation/ai-knowledge/item-review-v1/module-manifest-amendments.json"
+    "architecture/isolation/ai-knowledge/item-review-v1/module-manifest-amendments.json",
+    "architecture/isolation/messaging/history-import-job-route-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007-AI-KNOWLEDGE-ITEM-REVIEW",
-  "registry_base_commit": "0691fda4e2c2930e756420971255be211b716899",
+  "registry_milestone": "CRM-ARCH-007-MESSAGING-HISTORY-IMPORT-JOB-ROUTE",
+  "registry_base_commit": "4e198e940c7b3344bb78da7921f340a117940d2c",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",
