@@ -61,13 +61,14 @@
     "architecture/isolation/ai-knowledge/knowledge-source-v1/module-manifest-amendments.json",
     "architecture/isolation/fleet-operations/driver-import-v1/module-manifest-amendments.json",
     "architecture/isolation/ai-knowledge/item-review-v1/module-manifest-amendments.json",
-    "architecture/isolation/messaging/history-import-job-route-v1/module-manifest-amendments.json"
+    "architecture/isolation/messaging/history-import-job-route-v1/module-manifest-amendments.json",
+    "architecture/isolation/messaging/whatsapp-history-import-jobs-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007-MESSAGING-HISTORY-IMPORT-JOB-ROUTE",
-  "registry_base_commit": "4e198e940c7b3344bb78da7921f340a117940d2c",
+  "registry_milestone": "CRM-ARCH-007-MESSAGING-WHATSAPP-HISTORY-IMPORT-JOBS",
+  "registry_base_commit": "3366b0192f56160cd27e6049901d7da07c45549e",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",

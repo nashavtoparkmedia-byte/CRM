@@ -11,8 +11,8 @@ import { broadcastChatMessage } from '@/lib/messageStreamBus'
 import * as registry from '@/lib/TransportRegistry'
 import { opsLog } from '@/lib/opsLog'
 import { WWEBJS_AUTH_DIR } from '@/lib/whatsapp/WhatsAppCleanup'
-import { ATTACH_MESSAGE_MEDIA_COMMAND_V1 } from '@/contracts/messaging/v1'
-import { attachMessageMediaV1 } from '@/modules/messaging/public/v1'
+import { ATTACH_MESSAGE_MEDIA_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, type HistoryImportJobPatchV1 } from '@/contracts/messaging/v1'
+import { attachMessageMediaV1, patchHistoryImportJobV1 } from '@/modules/messaging/public/v1'
 
 // 25MB per file. Was 10MB but modern iPhone photos (12MP JPEG) and
 // short videos easily exceed that — skipped media left the UI with
@@ -2228,40 +2228,9 @@ export async function importWhatsAppHistory(
 }
 
 /** Update HistoryImportJob fields directly via Prisma */
-async function updateImportJob(jobId: string, data: {
-    status?: string
-    resultType?: string
-    messagesImported?: number
-    chatsScanned?: number
-    contactsFound?: number
-    startedAt?: Date | null
-    finishedAt?: Date | null
-    coveredPeriodFrom?: Date | null
-    coveredPeriodTo?: Date | null
-    detailsJson?: any
-}) {
+async function updateImportJob(jobId: string, data: HistoryImportJobPatchV1) {
     try {
-        const sets: string[] = []
-        const vals: any[] = []
-        let idx = 1
-
-        if (data.status !== undefined)           { sets.push(`status = $${idx}::"AiImportStatus"`); vals.push(data.status); idx++ }
-        if (data.resultType !== undefined)        { sets.push(`"resultType" = $${idx}`); vals.push(data.resultType); idx++ }
-        if (data.messagesImported !== undefined)  { sets.push(`"messagesImported" = $${idx}`); vals.push(data.messagesImported); idx++ }
-        if (data.chatsScanned !== undefined)      { sets.push(`"chatsScanned" = $${idx}`); vals.push(data.chatsScanned); idx++ }
-        if (data.contactsFound !== undefined)     { sets.push(`"contactsFound" = $${idx}`); vals.push(data.contactsFound); idx++ }
-        if (data.startedAt !== undefined)         { sets.push(`"startedAt" = $${idx}`); vals.push(data.startedAt); idx++ }
-        if (data.finishedAt !== undefined)        { sets.push(`"finishedAt" = $${idx}`); vals.push(data.finishedAt); idx++ }
-        if (data.coveredPeriodFrom !== undefined) { sets.push(`"coveredPeriodFrom" = $${idx}`); vals.push(data.coveredPeriodFrom); idx++ }
-        if (data.coveredPeriodTo !== undefined)   { sets.push(`"coveredPeriodTo" = $${idx}`); vals.push(data.coveredPeriodTo); idx++ }
-        if (data.detailsJson !== undefined)       { sets.push(`"detailsJson" = $${idx}::jsonb`); vals.push(JSON.stringify(data.detailsJson)); idx++ }
-
-        if (sets.length === 0) return
-        vals.push(jobId)
-        await prisma.$executeRawUnsafe(
-            `UPDATE "HistoryImportJob" SET ${sets.join(', ')} WHERE id = $${idx}`,
-            ...vals
-        )
+        await patchHistoryImportJobV1({ contract: PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, jobId, patch: data })
     } catch (err: any) {
         console.error(`[WA-IMPORT] updateImportJob error: ${err.message}`)
     }

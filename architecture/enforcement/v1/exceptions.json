@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007-MESSAGING-HISTORY-IMPORT-JOB-ROUTE",
-  "base_commit": "4e198e940c7b3344bb78da7921f340a117940d2c",
+  "milestone": "CRM-ARCH-007-MESSAGING-WHATSAPP-HISTORY-IMPORT-JOBS",
+  "base_commit": "3366b0192f56160cd27e6049901d7da07c45549e",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "d8309edc2a640aa04ede7364ca16ecbd0d7af83b96690e2bd8a95a04f730be68",
+  "finding_digest": "d81962bef579918ff5916b735e5b87069f25bca087f9a642f7672842e4493d6c",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,7 +13,7 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 156,
+    "direct_foreign_prisma_write": 154,
     "direct_provider_transport_access": 38,
     "internal_module_import": 379,
     "non_public_cross_context_import": 536,
@@ -15826,7 +15826,7 @@
       "fingerprint": "arch_7d152f03170c16e14da51190",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/settings/integrations/whatsapp/whatsapp-actions.ts",
-      "line_at_baseline": 245,
+      "line_at_baseline": 247,
       "ordinal": 1,
       "owner_context": "whatsapp_channel",
       "target_context": "contacts",
@@ -15842,7 +15842,7 @@
       "fingerprint": "arch_67c8fd7b13b7057d8fe8ad33",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/settings/integrations/whatsapp/whatsapp-actions.ts",
-      "line_at_baseline": 245,
+      "line_at_baseline": 247,
       "ordinal": 1,
       "owner_context": "whatsapp_channel",
       "target_context": "contacts",
@@ -15852,22 +15852,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:whatsapp_channel/whatsapp_provider>contacts/contacts"
-      ]
-    },
-    {
-      "fingerprint": "arch_cf78bf78a3747b79eedc71eb",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/settings/integrations/whatsapp/whatsapp-actions.ts",
-      "line_at_baseline": 253,
-      "ordinal": 1,
-      "owner_context": "whatsapp_channel",
-      "target_context": "messaging",
-      "subject": "raw:$executeRaw:HistoryImportJob",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_8d3a1b917de0c590"
       ]
     },
     {
@@ -24794,22 +24778,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "migration_038d96774ba66c22"
-      ]
-    },
-    {
-      "fingerprint": "arch_74342d6b24fd656121527e42",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 2261,
-      "ordinal": 1,
-      "owner_context": "whatsapp_channel",
-      "target_context": "messaging",
-      "subject": "raw:$executeRawUnsafe:HistoryImportJob",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_8d3a1b917de0c590"
       ]
     },
     {

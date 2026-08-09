@@ -3,6 +3,8 @@
 import { prisma } from '@/lib/prisma'
 import { initializeClient, destroyClient, sendMessage as waSendMessage, resetSyncGuard } from '@/lib/whatsapp/WhatsAppService'
 import { revalidatePath } from 'next/cache'
+import { DELETE_HISTORY_IMPORT_JOBS_FOR_CONNECTION_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { deleteHistoryImportJobsForConnectionV1 } from '@/modules/messaging/public/v1'
 
 export async function createWhatsAppConnection(name?: string) {
     console.log(`[WA-ACTIONS] createWhatsAppConnection called with name: ${name}`)
@@ -250,7 +252,7 @@ export async function deleteWhatsAppMessages(connectionId: string) {
     }
     // Clean up HistoryImportJob records only for THIS connection so ChannelSyncBlock resets
     try {
-        await prisma.$executeRaw`DELETE FROM "HistoryImportJob" WHERE 'whatsapp' = ANY(channels) AND "connectionId" = ${connectionId}`
+        await deleteHistoryImportJobsForConnectionV1({ contract: DELETE_HISTORY_IMPORT_JOBS_FOR_CONNECTION_COMMAND_V1, channel: 'whatsapp', connectionId })
         console.log(`[WA-DELETE] Cleaned up import jobs for connection ${connectionId}`)
     } catch (e: any) { console.error(`[WA-DELETE] ImportJob cleanup error: ${e.message}`) }
 

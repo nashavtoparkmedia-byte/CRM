@@ -8,7 +8,7 @@ import { createSendMessageHandlerV1 } from './send-message-handler'
 import { legacyPrismaSendMessagePortV1 } from './legacy-prisma-send-message-adapter'
 import { createUpdateConversationHandlerV1 } from './update-conversation-handler'
 import { legacyPrismaUpdateConversationPortV1 } from './legacy-prisma-update-conversation-adapter'
-import { createDeleteHistoryImportJobHandlerV1,createUpdateHistoryImportJobHandlerV1 } from './history-import-job-handler'
+import { createDeleteHistoryImportJobsForConnectionHandlerV1,createDeleteHistoryImportJobHandlerV1,createPatchHistoryImportJobHandlerV1,createUpdateHistoryImportJobHandlerV1 } from './history-import-job-handler'
 import { legacyPrismaHistoryImportJobPortV1 } from './legacy-prisma-history-import-job-adapter'
 
 export { createAttachMessageMediaHandlerV1 } from './attach-message-media-handler'
@@ -30,3 +30,6 @@ export { createDeleteHistoryImportJobHandlerV1,createUpdateHistoryImportJobHandl
 export type { HistoryImportJobPersistencePortV1 } from './history-import-job-handler'
 export const deleteHistoryImportJobV1=createDeleteHistoryImportJobHandlerV1(legacyPrismaHistoryImportJobPortV1)
 export const updateHistoryImportJobV1=createUpdateHistoryImportJobHandlerV1(legacyPrismaHistoryImportJobPortV1)
+export { createDeleteHistoryImportJobsForConnectionHandlerV1,createPatchHistoryImportJobHandlerV1 } from './history-import-job-handler'
+export const deleteHistoryImportJobsForConnectionV1=createDeleteHistoryImportJobsForConnectionHandlerV1(legacyPrismaHistoryImportJobPortV1)
+export const patchHistoryImportJobV1=createPatchHistoryImportJobHandlerV1(legacyPrismaHistoryImportJobPortV1)
