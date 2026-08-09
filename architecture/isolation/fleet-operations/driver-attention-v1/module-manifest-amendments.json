@@ -1,0 +1,1 @@
+{"schema":"yoko.crm.module-manifest-amendments.v1","version":1,"milestone":"CRM-ARCH-007-FLEET-ATTENTION","amendments":[{"context":"operations_observability","add_allowed_dependencies":[{"context":"fleet_operations","surface":"fleet_operations.public"}],"reason":"Route the single planned DriverAttention mutation through its owner public command."}]}

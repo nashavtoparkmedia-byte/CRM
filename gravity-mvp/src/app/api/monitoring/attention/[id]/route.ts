@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { RESOLVE_DRIVER_ATTENTION_V1, UPDATE_DRIVER_STATE_COMMAND_V1 } from '@/contracts/fleet-operations/v1';
+import { updateDriverStateV1 } from '@/modules/fleet-operations/public/v1';
 
 export async function PATCH(
     req: NextRequest,
@@ -12,26 +13,16 @@ export async function PATCH(
         return NextResponse.json({ error: 'Only status "resolved" is supported' }, { status: 400 });
     }
 
-    const attention = await prisma.driverAttention.findUnique({ where: { id } });
-    if (!attention) {
+    const result = await updateDriverStateV1({ contract: UPDATE_DRIVER_STATE_COMMAND_V1, operation: RESOLVE_DRIVER_ATTENTION_V1, attentionId: id, resolvedBy: body.resolvedBy || null });
+    if (result.status === 'not_found') {
         return NextResponse.json({ error: 'Attention item not found' }, { status: 404 });
     }
-    if (attention.status === 'resolved') {
+    if (result.status === 'already_resolved') {
         return NextResponse.json({ error: 'Already resolved' }, { status: 409 });
     }
-
-    const updated = await prisma.driverAttention.update({
-        where: { id },
-        data: {
-            status: 'resolved',
-            resolvedAt: new Date(),
-            resolvedBy: body.resolvedBy || null,
-        },
-    });
-
     return NextResponse.json({
-        id: updated.id,
-        status: updated.status,
-        resolvedAt: updated.resolvedAt?.toISOString(),
+        id: result.attention!.id,
+        status: result.attention!.status,
+        resolvedAt: result.attention!.resolvedAt ?? undefined,
     });
 }

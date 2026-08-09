@@ -211,6 +211,9 @@ function applyManifestAmendments(manifests, amendments) {
             manifest.owned_infrastructure_state = [
                 ...new Set([...(manifest.owned_infrastructure_state ?? []), ...(amendment.add_owned_infrastructure_state ?? [])]),
             ]
+            for (const dependency of amendment.add_allowed_dependencies ?? []) {
+                if (!manifest.allowed_dependencies.some((item) => item.context === dependency.context && item.surface === dependency.surface)) manifest.allowed_dependencies.push(dependency)
+            }
         }
     }
     return [...byContext.values()]

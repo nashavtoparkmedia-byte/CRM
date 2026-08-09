@@ -44,13 +44,14 @@
   "manifest_amendments": [
     "architecture/events/v1/module-manifest-amendments.json",
     "architecture/isolation/identity-access/v1/module-manifest-amendments.json",
-    "architecture/isolation/contacts/telegram-channel-name-v2/module-manifest-amendments.json"
+    "architecture/isolation/contacts/telegram-channel-name-v2/module-manifest-amendments.json",
+    "architecture/isolation/fleet-operations/driver-attention-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007-CONTACTS-TELEGRAM-NAME",
-  "registry_base_commit": "cc1259ce201257bb78c1069c136723ca630c13f8",
+  "registry_milestone": "CRM-ARCH-007-FLEET-ATTENTION",
+  "registry_base_commit": "06fd246ba4d732f0b7c4f8d72a8404a958404483",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",

@@ -60,6 +60,8 @@ jobs:
         run: node tools/architecture/check-contacts-telegram-boundary.mjs
       - name: Enforce Contacts Telegram channel-name v2 boundary
         run: node tools/architecture/check-contacts-telegram-name-boundary.mjs
+      - name: Enforce Fleet DriverAttention boundary
+        run: node tools/architecture/check-fleet-attention-boundary.mjs
 
       - name: Verify versioned contract behavior
         run: |
@@ -71,6 +73,7 @@ jobs:
           node tools/architecture/test-contacts-resolution.mjs
           node tools/architecture/test-contacts-identity.mjs
           node tools/architecture/test-contacts-resolution-v2.mjs
+          node tools/architecture/test-fleet-attention.mjs
 
       - name: Preserve Identity security behavior
         run: |
