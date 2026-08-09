@@ -6,6 +6,8 @@ import { createRecordDriverDailyActivityHandlerV1 } from './record-driver-daily-
 import { legacyPrismaRecordDriverDailyActivityPortV1 } from './legacy-prisma-driver-daily-activity-adapter'
 import { createClearFleetCheckStatusHandlerV1 } from './clear-fleet-check-status-handler'
 import { legacyPrismaClearFleetCheckStatusPortV1 } from './legacy-prisma-clear-fleet-check-status-adapter'
+import { createDeleteApiLogsHandlerV1, createRecordApiLogHandlerV1 } from './api-log-handler'
+import { legacyPrismaApiLogPortV1 } from './legacy-prisma-api-log-adapter'
 export { createUpdateDriverStateHandlerV1 } from './update-driver-state-handler'
 export type { UpdateDriverStatePersistencePortV1 } from './update-driver-state-handler'
 export const updateDriverStateV1=createUpdateDriverStateHandlerV1(legacyPrismaUpdateDriverStatePortV1)
@@ -18,3 +20,7 @@ export const recordDriverDailyActivityV1 = createRecordDriverDailyActivityHandle
 export { createClearFleetCheckStatusHandlerV1 } from './clear-fleet-check-status-handler'
 export type { ClearFleetCheckStatusPersistencePortV1 } from './clear-fleet-check-status-handler'
 export const clearFleetCheckStatusV1 = createClearFleetCheckStatusHandlerV1(legacyPrismaClearFleetCheckStatusPortV1)
+export { createDeleteApiLogsHandlerV1, createRecordApiLogHandlerV1 } from './api-log-handler'
+export type { ApiLogPersistencePortV1 } from './api-log-handler'
+export const deleteApiLogsV1=createDeleteApiLogsHandlerV1(legacyPrismaApiLogPortV1)
+export const recordApiLogV1=createRecordApiLogHandlerV1(legacyPrismaApiLogPortV1)

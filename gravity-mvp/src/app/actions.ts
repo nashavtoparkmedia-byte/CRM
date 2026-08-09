@@ -2,6 +2,8 @@
 
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+import { DELETE_API_LOGS_COMMAND_V1, RECORD_API_LOG_COMMAND_V1 } from '@/contracts/fleet-operations/v1'
+import { deleteApiLogsV1, recordApiLogV1 } from '@/modules/fleet-operations/public/v1'
 
 export async function getApiConnections() {
     return await prisma.apiConnection.findMany({
@@ -35,7 +37,7 @@ export async function updateApiConnectionName(id: string, name: string) {
 }
 
 export async function deleteApiConnection(id: string) {
-    await prisma.apiLog.deleteMany({ where: { connectionId: id } })
+    await deleteApiLogsV1({ contract: DELETE_API_LOGS_COMMAND_V1, connectionId: id })
     await prisma.apiConnection.delete({ where: { id } })
     revalidatePath('/')
 }
@@ -103,7 +105,8 @@ export async function testApiRequest(connectionId: string, testPayload?: string)
     const durationMs = Date.now() - startTime
 
     // Save log
-    const log = await prisma.apiLog.create({
+    const result = await recordApiLogV1({
+        contract: RECORD_API_LOG_COMMAND_V1,
         data: {
             connectionId,
             method: testPayload ? 'POST' : 'GET',
@@ -113,13 +116,13 @@ export async function testApiRequest(connectionId: string, testPayload?: string)
             statusCode,
             error: errorMsg,
             durationMs
-        }
+        },
     })
 
     revalidatePath('/')
     revalidatePath('/logs')
 
-    return log
+    return result.log
 }
 
 export type DriverStatus = 'working' | 'ready' | 'offline' | 'busy'

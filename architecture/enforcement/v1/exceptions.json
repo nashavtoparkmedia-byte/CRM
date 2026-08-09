@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007-AI-EXTRACTION-QUEUE",
-  "base_commit": "c3ccc57107bb967ebbcf9eaa3083242c17d11580",
+  "milestone": "CRM-ARCH-007-FLEET-API-LOG",
+  "base_commit": "a3774072cf8ded7ee88b8ded555175f112c84f68",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "a5decd20c5075a8e1c26fd3e52a2650a03082c5bab21baa4a8550668b60055fb",
+  "finding_digest": "baa146dc2f94bad0e2d57d4cf5687ff9f8414e81c55d254c4b6a70d4e8633c98",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,7 +13,7 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 166,
+    "direct_foreign_prisma_write": 164,
     "direct_provider_transport_access": 38,
     "internal_module_import": 379,
     "non_public_cross_context_import": 536,
@@ -24,7 +24,7 @@
       "fingerprint": "arch_303420f66a521fb4446ee95b",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/actions.ts",
-      "line_at_baseline": 22,
+      "line_at_baseline": 24,
       "ordinal": 1,
       "owner_context": "platform_shell",
       "target_context": "fleet_operations",
@@ -40,7 +40,7 @@
       "fingerprint": "arch_ba13d5e82b388bcafd24abca",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/actions.ts",
-      "line_at_baseline": 30,
+      "line_at_baseline": 32,
       "ordinal": 1,
       "owner_context": "platform_shell",
       "target_context": "fleet_operations",
@@ -53,26 +53,10 @@
       ]
     },
     {
-      "fingerprint": "arch_09bde3098d412fcce6a03ca2",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/actions.ts",
-      "line_at_baseline": 38,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "fleet_operations",
-      "subject": "ApiLog.deleteMany",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_df999fc22f6019db"
-      ]
-    },
-    {
       "fingerprint": "arch_9705767d1b60b20931cfc82a",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/actions.ts",
-      "line_at_baseline": 39,
+      "line_at_baseline": 41,
       "ordinal": 1,
       "owner_context": "platform_shell",
       "target_context": "fleet_operations",
@@ -82,22 +66,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "migration_64d66948aba8a911"
-      ]
-    },
-    {
-      "fingerprint": "arch_2dd6cdcf106a1f2c84579bff",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/actions.ts",
-      "line_at_baseline": 106,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "fleet_operations",
-      "subject": "ApiLog.create",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_df999fc22f6019db"
       ]
     },
     {
