@@ -1,7 +1,8 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
-import { logTaskEvent } from '@/lib/tasks/task-event-service'
+import { ASSIGN_TASK_COMMAND_V1 } from '@/contracts/work-management/v1'
+import { assignTaskV1 } from '@/modules/work-management/public/v1'
 import { isManagerOverloaded } from '@/lib/tasks/workload-config'
 import { CONTACT_EVENT_TYPES, isLateResponse } from '@/lib/tasks/response-config'
 import { isFastClose } from '@/lib/tasks/completion-config'
@@ -650,27 +651,13 @@ export async function reassignTasks(
     let reassigned = 0
 
     for (const taskId of taskIds) {
-        const task = await prisma.task.findUnique({
-            where: { id: taskId },
-            select: { id: true, assigneeId: true },
+        const result = await assignTaskV1({
+            contract: ASSIGN_TASK_COMMAND_V1,
+            taskId,
+            assigneeId: newAssigneeId,
+            assigneeName: targetUser.name,
         })
-        if (!task) continue
-        if (task.assigneeId === newAssigneeId) continue // already assigned
-
-        const oldAssigneeId = task.assigneeId
-
-        await prisma.task.update({
-            where: { id: taskId },
-            data: { assigneeId: newAssigneeId },
-        })
-
-        await logTaskEvent(taskId, 'reassigned', {
-            from: oldAssigneeId,
-            to: newAssigneeId,
-            toName: targetUser.name,
-        })
-
-        reassigned++
+        if (result.status === 'reassigned') reassigned++
     }
 
     return { reassigned }

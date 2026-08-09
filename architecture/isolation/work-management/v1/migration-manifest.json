@@ -1,0 +1,55 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1",
+  "milestone": "CRM-ARCH-007-WORK-MANAGEMENT",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "f77a797b459986ea1b84a8fd9db8261e3b25a814",
+  "context": "work_management",
+  "caller_context": "analytics_reporting",
+  "plan": {
+    "id": "migration_7f387b2b1d46c88f",
+    "site_id": "write_e6a7b9a36a42988e6b20",
+    "file": "gravity-mvp/src/app/team-overview/actions.ts",
+    "baseline_line": 662,
+    "model": "Task",
+    "method": "update"
+  },
+  "public_contract": {
+    "command": "work_management.AssignTaskCommand.v1",
+    "result": "work_management.AssignTaskResult.v1",
+    "statuses": [
+      "reassigned",
+      "not_found",
+      "unchanged"
+    ],
+    "manifest_declaration": "AssignTaskCommand.v1"
+  },
+  "owner_boundary": {
+    "handler": "gravity-mvp/src/modules/work-management/public/v1/assign-task-handler.ts",
+    "compatibility_adapter": "gravity-mvp/src/modules/work-management/public/v1/legacy-prisma-assignment-adapter.ts",
+    "legacy_event_service": "gravity-mvp/src/lib/tasks/task-event-service.ts"
+  },
+  "consumer_migration": {
+    "file": "gravity-mvp/src/app/team-overview/actions.ts",
+    "before_sha256": "4f3a79097ea7a7b03e75647d57d5b833f635e9cd941b3525fbfb2c8768f750ac",
+    "after_sha256": "b01c8ab8e92ae6f0a0ff1d215f21d22bca6a4b9a676756681ca7b421c747d89f",
+    "direct_task_mutation_removed": true,
+    "direct_task_event_import_removed": true
+  },
+  "enforcement": {
+    "before_findings": 1529,
+    "after_findings": 1526,
+    "retired_fingerprints": [
+      "arch_150d391ea81e7a1b459dc337",
+      "arch_b44ba32860c153da12736d6c",
+      "arch_60e49e752eea85365de675cb"
+    ],
+    "new_exception_capacity": 0
+  },
+  "rollback": {
+    "type": "source-only",
+    "target": "f77a797b459986ea1b84a8fd9db8261e3b25a814",
+    "compatibility_implementation_preserved": true,
+    "database_rollback_required": false,
+    "runtime_rollback_required": false
+  }
+}

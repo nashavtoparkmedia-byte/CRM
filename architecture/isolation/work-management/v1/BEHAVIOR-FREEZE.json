@@ -1,0 +1,30 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1",
+  "milestone": "CRM-ARCH-007-WORK-MANAGEMENT",
+  "base_commit": "f77a797b459986ea1b84a8fd9db8261e3b25a814",
+  "captured_at": "2026-08-09T15:18:37Z",
+  "consumer": {
+    "file": "gravity-mvp/src/app/team-overview/actions.ts",
+    "sha256": "4f3a79097ea7a7b03e75647d57d5b833f635e9cd941b3525fbfb2c8768f750ac",
+    "operation": "reassignTasks",
+    "behavior": [
+      "return zero when the requested task list is empty",
+      "verify the target user before task processing",
+      "skip a task that does not exist",
+      "skip a task already assigned to the target",
+      "update assigneeId before appending the reassigned event",
+      "append from, to, and toName to the reassigned event",
+      "increment the returned count only after update and event append succeed",
+      "surface target lookup, update, and event failures"
+    ]
+  },
+  "protected_owner_implementation": {
+    "file": "gravity-mvp/src/lib/tasks/task-event-service.ts",
+    "sha256": "938dbdd85c2259b32d0999bc952fa9da36c2a4aec54693a2d1b1ff7ec83e6738",
+    "expected_post_migration_sha256": "938dbdd85c2259b32d0999bc952fa9da36c2a4aec54693a2d1b1ff7ec83e6738"
+  },
+  "known_semantics": {
+    "atomicity": "update and event append are sequential and not atomic",
+    "decision": "preserve this ordering and failure visibility; do not redesign transaction semantics in this boundary slice"
+  }
+}

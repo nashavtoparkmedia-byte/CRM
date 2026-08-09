@@ -47,11 +47,15 @@ jobs:
       - name: Enforce Identity public boundary
         run: node tools/architecture/check-identity-boundary.mjs
 
+      - name: Enforce Work Management assignment boundary
+        run: node tools/architecture/check-work-management-boundary.mjs
+
       - name: Verify versioned contract behavior
         run: |
           node tools/architecture/test-contracts.mjs
           node tools/architecture/test-outbox.mjs
           node tools/architecture/test-identity-access.mjs
+          node tools/architecture/test-work-management-assignment.mjs
 
       - name: Preserve Identity security behavior
         run: |

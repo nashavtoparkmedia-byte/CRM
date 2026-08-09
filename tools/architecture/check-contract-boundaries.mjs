@@ -61,6 +61,24 @@ for (const file of consumerFiles) {
     )
 }
 
+const reassignmentConsumer = source('gravity-mvp/src/app/team-overview/actions.ts')
+assertCheck(
+    'representative Analytics consumer uses AssignTaskCommand.v1',
+    reassignmentConsumer.includes('ASSIGN_TASK_COMMAND_V1')
+        && reassignmentConsumer.includes('assignTaskV1({'),
+    'versioned assignment command invocation is absent',
+)
+assertCheck(
+    'foreign Task update removed from Analytics consumer',
+    !/prisma\.task\.update\s*\(/.test(reassignmentConsumer),
+    'direct foreign Prisma Task update remains',
+)
+assertCheck(
+    'Analytics consumer no longer imports owner-internal task event service',
+    !reassignmentConsumer.includes("from '@/lib/tasks/task-event-service'"),
+    'owner-internal task event import remains',
+)
+
 const handler = source('gravity-mvp/src/modules/work-management/public/v1/create-task-handler.ts')
 assertCheck(
     'owner handler depends on a persistence port',
