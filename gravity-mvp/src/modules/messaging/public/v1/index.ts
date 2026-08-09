@@ -26,6 +26,8 @@ import { createCreateChannelMessageHandlerV1,createPatchMessageDeliveryHandlerV1
 import { legacyPrismaChannelMessagePortV1 } from './legacy-prisma-channel-message-adapter'
 import { createPatchChannelConversationHandlerV1,createUpsertChannelConversationHandlerV1 } from './channel-conversation-handler'
 import { legacyPrismaChannelConversationPortV1 } from './legacy-prisma-channel-conversation-adapter'
+import { createDeleteRetainedMessagesHandlerV1,createPurgeMessageRetryMetadataHandlerV1 } from './message-retention-handler'
+import { legacyPrismaMessageRetentionPortV1 } from './legacy-prisma-message-retention-adapter'
 
 export { createAttachMessageMediaHandlerV1 } from './attach-message-media-handler'
 export type { AttachMessageMediaPersistencePortV1 } from './attach-message-media-handler'
@@ -88,3 +90,7 @@ export { createPatchChannelConversationHandlerV1,createUpsertChannelConversation
 export type { ChannelConversationPersistencePortV1 } from './channel-conversation-handler'
 export const upsertChannelConversationV1=createUpsertChannelConversationHandlerV1(legacyPrismaChannelConversationPortV1)
 export const patchChannelConversationV1=createPatchChannelConversationHandlerV1(legacyPrismaChannelConversationPortV1)
+export { createDeleteRetainedMessagesHandlerV1,createPurgeMessageRetryMetadataHandlerV1 } from './message-retention-handler'
+export type { MessageRetentionPersistencePortV1 } from './message-retention-handler'
+export const deleteRetainedMessagesV1=createDeleteRetainedMessagesHandlerV1(legacyPrismaMessageRetentionPortV1)
+export const purgeMessageRetryMetadataV1=createPurgeMessageRetryMetadataHandlerV1(legacyPrismaMessageRetentionPortV1)

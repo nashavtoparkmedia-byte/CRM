@@ -1,0 +1,2 @@
+import{prisma}from'@/lib/prisma';import type{MessageRetentionPersistencePortV1}from'./message-retention-handler'
+export const legacyPrismaMessageRetentionPortV1:MessageRetentionPersistencePortV1={async deleteMessages(messageIds){await prisma.$executeRaw`DELETE FROM "Message" WHERE id = ANY(${messageIds}::text[])`},async purgeRetryMetadata(messageIds){await prisma.$executeRaw`UPDATE "Message" SET metadata = jsonb_build_object('error', metadata->>'error', 'cleaned', true) WHERE id = ANY(${messageIds}::text[])`}}

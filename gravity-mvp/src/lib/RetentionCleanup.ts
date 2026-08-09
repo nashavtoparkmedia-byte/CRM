@@ -1,5 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { opsLog } from '@/lib/opsLog'
+import { DELETE_RETAINED_MESSAGES_COMMAND_V1, PURGE_MESSAGE_RETRY_METADATA_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { deleteRetainedMessagesV1, purgeMessageRetryMetadataV1 } from '@/modules/messaging/public/v1'
 
 /**
  * RetentionCleanup — bounded, idempotent data lifecycle cleanup.
@@ -148,7 +150,7 @@ export class RetentionCleanup {
 
     const ids = rows.map(r => r.id)
     // Cascade: MessageAttachment + MessageEventLog deleted automatically
-    await prisma.$executeRaw`DELETE FROM "Message" WHERE id = ANY(${ids}::text[])`
+    await deleteRetainedMessagesV1({ contract: DELETE_RETAINED_MESSAGES_COMMAND_V1, messageIds: ids })
     return ids.length
   }
 
@@ -165,7 +167,7 @@ export class RetentionCleanup {
     if (dryRun || rows.length === 0) return rows.length
 
     const ids = rows.map(r => r.id)
-    await prisma.$executeRaw`DELETE FROM "Message" WHERE id = ANY(${ids}::text[])`
+    await deleteRetainedMessagesV1({ contract: DELETE_RETAINED_MESSAGES_COMMAND_V1, messageIds: ids })
     return ids.length
   }
 
@@ -185,11 +187,7 @@ export class RetentionCleanup {
 
     const ids = rows.map(r => r.id)
     // Strip retry fields, keep error for audit
-    await prisma.$executeRaw`
-      UPDATE "Message"
-      SET metadata = jsonb_build_object('error', metadata->>'error', 'cleaned', true)
-      WHERE id = ANY(${ids}::text[])
-    `
+    await purgeMessageRetryMetadataV1({ contract: PURGE_MESSAGE_RETRY_METADATA_COMMAND_V1, messageIds: ids })
     return ids.length
   }
 
