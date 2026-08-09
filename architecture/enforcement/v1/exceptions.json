@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007-TELEGRAM-BOT-CHAT-MESSAGE",
-  "base_commit": "556605dde43cb72404e208bdcc5a69b512226fbf",
+  "milestone": "CRM-ARCH-007-FLEET-API-CONNECTIONS",
+  "base_commit": "80e190fdcedf1bcf46649155a4ed71805f36d350",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "522d5344a3ea2beb767de850ac6442cf1f579f789fd22aed4ae270e5792779d3",
+  "finding_digest": "4c3f2259d580b842e6d06b044e527b0d1555267147ca7577d29f2d4fdc0f90c7",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,61 +13,13 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 146,
+    "direct_foreign_prisma_write": 143,
     "direct_provider_transport_access": 38,
     "internal_module_import": 379,
     "non_public_cross_context_import": 536,
     "undeclared_dependency": 378
   },
   "exceptions": [
-    {
-      "fingerprint": "arch_303420f66a521fb4446ee95b",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/actions.ts",
-      "line_at_baseline": 24,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "fleet_operations",
-      "subject": "ApiConnection.create",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_64d66948aba8a911"
-      ]
-    },
-    {
-      "fingerprint": "arch_ba13d5e82b388bcafd24abca",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/actions.ts",
-      "line_at_baseline": 32,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "fleet_operations",
-      "subject": "ApiConnection.update",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_64d66948aba8a911"
-      ]
-    },
-    {
-      "fingerprint": "arch_9705767d1b60b20931cfc82a",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/actions.ts",
-      "line_at_baseline": 41,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "fleet_operations",
-      "subject": "ApiConnection.delete",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_64d66948aba8a911"
-      ]
-    },
     {
       "fingerprint": "arch_c7cac34fe8a7858b4048c1af",
       "rule": "internal_module_import",

@@ -10,6 +10,8 @@ import { createDeleteApiLogsHandlerV1, createRecordApiLogHandlerV1 } from './api
 import { legacyPrismaApiLogPortV1 } from './legacy-prisma-api-log-adapter'
 import { createResolveImportedDriverHandlerV1 } from './resolve-imported-driver-handler'
 import { legacyPrismaResolveImportedDriverPortV1 } from './legacy-prisma-resolve-imported-driver-adapter'
+import { createCreateApiConnectionHandlerV1,createDeleteApiConnectionHandlerV1,createUpdateApiConnectionNameHandlerV1 } from './api-connection-handler'
+import { legacyPrismaApiConnectionPortV1 } from './legacy-prisma-api-connection-adapter'
 export { createUpdateDriverStateHandlerV1 } from './update-driver-state-handler'
 export type { UpdateDriverStatePersistencePortV1 } from './update-driver-state-handler'
 export const updateDriverStateV1=createUpdateDriverStateHandlerV1(legacyPrismaUpdateDriverStatePortV1)
@@ -29,3 +31,8 @@ export const recordApiLogV1=createRecordApiLogHandlerV1(legacyPrismaApiLogPortV1
 export { createResolveImportedDriverHandlerV1,makeImportedDriverIdV1 } from './resolve-imported-driver-handler'
 export type { ResolveImportedDriverPersistencePortV1,ImportedDriverIdFactoryV1 } from './resolve-imported-driver-handler'
 export const resolveImportedDriverV1=createResolveImportedDriverHandlerV1(legacyPrismaResolveImportedDriverPortV1)
+export { createCreateApiConnectionHandlerV1,createDeleteApiConnectionHandlerV1,createUpdateApiConnectionNameHandlerV1 } from './api-connection-handler'
+export type { ApiConnectionPersistencePortV1 } from './api-connection-handler'
+export const createApiConnectionV1=createCreateApiConnectionHandlerV1(legacyPrismaApiConnectionPortV1)
+export const updateApiConnectionNameV1=createUpdateApiConnectionNameHandlerV1(legacyPrismaApiConnectionPortV1)
+export const deleteApiConnectionV1=createDeleteApiConnectionHandlerV1(legacyPrismaApiConnectionPortV1)

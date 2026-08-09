@@ -2,8 +2,8 @@
 
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
-import { DELETE_API_LOGS_COMMAND_V1, RECORD_API_LOG_COMMAND_V1 } from '@/contracts/fleet-operations/v1'
-import { deleteApiLogsV1, recordApiLogV1 } from '@/modules/fleet-operations/public/v1'
+import { CREATE_API_CONNECTION_COMMAND_V1, DELETE_API_CONNECTION_COMMAND_V1, DELETE_API_LOGS_COMMAND_V1, RECORD_API_LOG_COMMAND_V1, UPDATE_API_CONNECTION_NAME_COMMAND_V1 } from '@/contracts/fleet-operations/v1'
+import { createApiConnectionV1, deleteApiConnectionV1, deleteApiLogsV1, recordApiLogV1, updateApiConnectionNameV1 } from '@/modules/fleet-operations/public/v1'
 
 export async function getApiConnections() {
     return await prisma.apiConnection.findMany({
@@ -21,24 +21,19 @@ export async function addApiConnection(formData: FormData) {
         throw new Error('Missing required fields')
     }
 
-    await prisma.apiConnection.create({
-        data: { clid, apiKey, parkId, name: name || null },
-    })
+    await createApiConnectionV1({ contract: CREATE_API_CONNECTION_COMMAND_V1, clid, apiKey, parkId, name: name || null })
 
     revalidatePath('/')
 }
 
 export async function updateApiConnectionName(id: string, name: string) {
-    await prisma.apiConnection.update({
-        where: { id },
-        data: { name: name || null },
-    })
+    await updateApiConnectionNameV1({ contract: UPDATE_API_CONNECTION_NAME_COMMAND_V1, connectionId: id, name: name || null })
     revalidatePath('/')
 }
 
 export async function deleteApiConnection(id: string) {
     await deleteApiLogsV1({ contract: DELETE_API_LOGS_COMMAND_V1, connectionId: id })
-    await prisma.apiConnection.delete({ where: { id } })
+    await deleteApiConnectionV1({ contract: DELETE_API_CONNECTION_COMMAND_V1, connectionId: id })
     revalidatePath('/')
 }
 

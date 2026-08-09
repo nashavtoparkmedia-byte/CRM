@@ -65,13 +65,14 @@
     "architecture/isolation/messaging/whatsapp-history-import-jobs-v1/module-manifest-amendments.json",
     "architecture/isolation/messaging/telegram-history-import-jobs-v1/module-manifest-amendments.json",
     "architecture/isolation/calling/ai-agent-profiles-v1/module-manifest-amendments.json",
-    "architecture/isolation/telegram-channel/bot-chat-message-v1/module-manifest-amendments.json"
+    "architecture/isolation/telegram-channel/bot-chat-message-v1/module-manifest-amendments.json",
+    "architecture/isolation/fleet-operations/api-connections-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007-TELEGRAM-BOT-CHAT-MESSAGE",
-  "registry_base_commit": "556605dde43cb72404e208bdcc5a69b512226fbf",
+  "registry_milestone": "CRM-ARCH-007-FLEET-API-CONNECTIONS",
+  "registry_base_commit": "80e190fdcedf1bcf46649155a4ed71805f36d350",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",
