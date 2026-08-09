@@ -48,8 +48,8 @@
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007-CONTACTS-MAX",
-  "registry_base_commit": "21b047ec8ffb3a73ec82aa35912bd5016c2faf8c",
+  "registry_milestone": "CRM-ARCH-007-CONTACTS-TELEGRAM",
+  "registry_base_commit": "b0ef1c270d5b12328308bd1c548c47108a1517ec",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",

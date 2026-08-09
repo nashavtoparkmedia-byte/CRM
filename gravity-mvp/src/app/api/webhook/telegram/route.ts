@@ -6,6 +6,11 @@ import { DriverMatchService } from '@/lib/DriverMatchService'
 import { ContactService } from '@/lib/ContactService'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import { opsLog } from '@/lib/opsLog'
+import {
+    ATTACH_CONTACT_IDENTITY_COMMAND_V1,
+    REPLACE_IDENTITY_PROFILE_V1,
+} from '@/contracts/contacts/v1'
+import { attachContactIdentityV1 } from '@/modules/contacts/public/v1'
 
 export async function POST(req: NextRequest) {
     try {
@@ -175,14 +180,14 @@ export async function POST(req: NextRequest) {
                     contactResult.identity.id,
                 )
                 // Store username + name in identity metadata so the profile can show "Name (@username)"
-                await prisma.contactIdentity.update({
-                    where: { id: contactResult.identity.id },
-                    data: {
-                        metadata: {
-                            username:   username   || null,
-                            firstName:  firstName  || null,
-                            lastName:   lastName   || null,
-                        }
+                await attachContactIdentityV1({
+                    contract: ATTACH_CONTACT_IDENTITY_COMMAND_V1,
+                    operation: REPLACE_IDENTITY_PROFILE_V1,
+                    identityId: contactResult.identity.id,
+                    profile: {
+                        handle: username || null,
+                        givenName: firstName || null,
+                        familyName: lastName || null,
                     },
                 })
             } catch (contactErr: any) {

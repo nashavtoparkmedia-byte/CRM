@@ -11,3 +11,16 @@ export type {
     ResolveContactResultV1,
     ResolveContactStatusV1,
 } from './resolve-contact-command'
+
+export {
+    ATTACH_CONTACT_IDENTITY_COMMAND_V1,
+    ATTACH_CONTACT_IDENTITY_RESULT_V1,
+    REPLACE_IDENTITY_PROFILE_V1,
+    AttachContactIdentityContractValidationError,
+    parseAttachContactIdentityCommandV1,
+} from './attach-contact-identity-command'
+
+export type {
+    AttachContactIdentityCommandV1,
+    AttachContactIdentityResultV1,
+} from './attach-contact-identity-command'

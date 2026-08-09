@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007-CONTACTS-MAX",
-  "base_commit": "21b047ec8ffb3a73ec82aa35912bd5016c2faf8c",
+  "milestone": "CRM-ARCH-007-CONTACTS-TELEGRAM",
+  "base_commit": "b0ef1c270d5b12328308bd1c548c47108a1517ec",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "b02131eca46f6a0c69595f13dd61eeae3411d5d26bd20dd57f4c63bfbb1dcd7a",
+  "finding_digest": "db095498bfdaab72c78f0c374b8c1b6a1be4513e5b3a54d2c2491d9d7fd65dcc",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,7 +13,7 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 184,
+    "direct_foreign_prisma_write": 183,
     "direct_provider_transport_access": 38,
     "internal_module_import": 381,
     "non_public_cross_context_import": 538,
@@ -4616,7 +4616,7 @@
       "fingerprint": "arch_29a01b459680256a3538b29f",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/app/api/webhook/telegram/route.ts",
-      "line_at_baseline": 166,
+      "line_at_baseline": 171,
       "ordinal": 1,
       "owner_context": "telegram_channel",
       "target_context": "contacts",
@@ -4626,22 +4626,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "migration_df330f5e98d139d5"
-      ]
-    },
-    {
-      "fingerprint": "arch_75dc4e94ad9e24e6ca7bb93a",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/webhook/telegram/route.ts",
-      "line_at_baseline": 178,
-      "ordinal": 1,
-      "owner_context": "telegram_channel",
-      "target_context": "contacts",
-      "subject": "ContactIdentity.update",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_2fa76a81f50975bf"
       ]
     },
     {
