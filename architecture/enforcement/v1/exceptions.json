@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007-FLEET-INBOX-PUBLIC",
-  "base_commit": "2fed07d99da8e11b078b5f77738faaf8640f1558",
+  "milestone": "CRM-ARCH-007-MESSAGING-LEAD-RECEIVE",
+  "base_commit": "61aad510960717943c75448863c8677de20fcff7",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "c7a5b7ec98f1c210a1afd38ff09c406b77ba1204ba9f7de41dc7e64beb89e4e3",
+  "finding_digest": "b68ec9f1ea4459afde5012840b104c878973cfb13a40503a2e62e1f89fe8dd10",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,7 +13,7 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 178,
+    "direct_foreign_prisma_write": 177,
     "direct_provider_transport_access": 38,
     "internal_module_import": 379,
     "non_public_cross_context_import": 536,
@@ -22820,22 +22820,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "migration_08ae2450b82ef247"
-      ]
-    },
-    {
-      "fingerprint": "arch_4b11008947689ff0d27fb8e4",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/leads/intake.ts",
-      "line_at_baseline": 180,
-      "ordinal": 1,
-      "owner_context": "avito_acquisition",
-      "target_context": "messaging",
-      "subject": "Message.create",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_ddfe2f0b09f6ba87"
       ]
     },
     {

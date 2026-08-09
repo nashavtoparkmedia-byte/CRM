@@ -1,0 +1,29 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1",
+  "milestone": "CRM-ARCH-007-MESSAGING-LEAD-RECEIVE",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "61aad510960717943c75448863c8677de20fcff7",
+  "context": "messaging",
+  "caller_context": "avito_acquisition",
+  "plan": {
+    "id": "migration_ddfe2f0b09f6ba87",
+    "site_id": "write_f19513420b0b38a16f79",
+    "file": "gravity-mvp/src/lib/leads/intake.ts",
+    "model": "Message",
+    "method": "create"
+  },
+  "contract": "messaging.ReceiveMessageCommand.v1",
+  "dependency": "avito_acquisition -> messaging.public pre-approved",
+  "consumer_before_sha256": "96dfa5304f4c8c7c45647bd9f3675426dd570de006ba8ff4b43c20533373e217",
+  "consumer_after_sha256": "bdf23b3c7051a201014e0c7c98bc327da80f50bfe2bbebfb3f9c9475747233ff",
+  "enforcement": {
+    "before": 1512,
+    "after": 1511,
+    "retired": [
+      "arch_4b11008947689ff0d27fb8e4"
+    ],
+    "new_capacity": 0
+  },
+  "neighboring_chat_plan": "migration_08ae2450b82ef247 remains open",
+  "rollback": "61aad510960717943c75448863c8677de20fcff7"
+}

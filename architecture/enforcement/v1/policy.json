@@ -54,8 +54,8 @@
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007-FLEET-INBOX-PUBLIC",
-  "registry_base_commit": "2fed07d99da8e11b078b5f77738faaf8640f1558",
+  "registry_milestone": "CRM-ARCH-007-MESSAGING-LEAD-RECEIVE",
+  "registry_base_commit": "61aad510960717943c75448863c8677de20fcff7",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",

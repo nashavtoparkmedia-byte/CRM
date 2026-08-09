@@ -23,6 +23,8 @@ import { ContactService } from '@/lib/ContactService'
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
 import type { ChatChannel } from '@prisma/client'
 import type { LeadSource } from './types'
+import { RECEIVE_MESSAGE_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { receiveMessageV1 } from '@/modules/messaging/public/v1'
 
 // LeadSource → ChatChannel. У нас сейчас полное совпадение (avito,
 // whatsapp, telegram, phone), но 'site' не имеет канала в чатах.
@@ -172,29 +174,19 @@ export async function ingestLead(input: IngestLeadInput): Promise<IngestLeadResu
         ? `Новый отклик от ${input.candidateName}`
         : 'Новый отклик'
 
-  let message = await prisma.message.findUnique({
-    where: { externalId: messageExternalId },
+  const receivedMessage = await receiveMessageV1({
+    contract: RECEIVE_MESSAGE_COMMAND_V1,
+    chatId: chat.id,
+    content: messageContent,
+    sentAt: input.receivedAt.toISOString(),
+    externalId: messageExternalId,
+    channel,
+    metadata: {
+      source: input.source,
+      sourceExternalId: input.sourceExternalId,
+      ...input.sourceMeta,
+    },
   })
-
-  if (!message) {
-    message = await prisma.message.create({
-      data: {
-        chatId: chat.id,
-        direction: 'inbound',
-        type: 'text',
-        content: messageContent,
-        status: 'delivered',
-        sentAt: input.receivedAt,
-        externalId: messageExternalId,
-        channel,
-        metadata: {
-          source: input.source,
-          sourceExternalId: input.sourceExternalId,
-          ...input.sourceMeta,
-        },
-      },
-    })
-  }
 
   // ─── Step 4: Task — пропущено в MVP ────────────────────────────────
   // Task требует ручной адаптации UI под driverId=null. Создание задач
@@ -204,7 +196,7 @@ export async function ingestLead(input: IngestLeadInput): Promise<IngestLeadResu
   return {
     contactId: resolved.contact.id,
     chatId: chat.id,
-    messageId: message.id,
+    messageId: receivedMessage.messageId,
     taskId,
     contactCreated: resolved.isNew,
   }

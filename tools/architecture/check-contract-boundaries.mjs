@@ -126,6 +126,9 @@ const inboxFleetConsumer=source('gravity-mvp/src/app/inbox/InboxClient.tsx')
 assertCheck('Inbox uses LogManagerCallCommand.v1',inboxFleetConsumer.includes('LOG_MANAGER_CALL_COMMAND_V1')&&inboxFleetConsumer.includes('logManagerCallV1({'),'Fleet manager-call command absent')
 assertCheck('Inbox uses versioned public SegmentBadge',inboxFleetConsumer.includes('@/modules/fleet-operations/public/v1/segment-badge'),'public Fleet badge absent')
 assertCheck('Inbox has no owner-internal Fleet import',!inboxFleetConsumer.includes('../drivers/'),'owner-internal Fleet import remains')
+const leadMessageConsumer=source('gravity-mvp/src/lib/leads/intake.ts')
+assertCheck('Avito lead intake uses ReceiveMessageCommand.v1',leadMessageConsumer.includes('RECEIVE_MESSAGE_COMMAND_V1')&&leadMessageConsumer.includes('receiveMessageV1({'),'Messaging receive command absent')
+assertCheck('foreign lead Message create removed',!/prisma\.message\.create/.test(leadMessageConsumer),'direct lead Message create remains')
 
 const handler = source('gravity-mvp/src/modules/work-management/public/v1/create-task-handler.ts')
 assertCheck(
