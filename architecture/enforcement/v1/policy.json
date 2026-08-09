@@ -77,13 +77,14 @@
     "architecture/isolation/fleet-operations/driver-action-v1/module-manifest-amendments.json",
     "architecture/isolation/contacts/fleet-contact-phone-v1/module-manifest-amendments.json",
     "architecture/isolation/contacts/fleet-contact-v1/module-manifest-amendments.json",
-    "architecture/isolation/ai-knowledge/proposed-reply-v1/module-manifest-amendments.json"
+    "architecture/isolation/ai-knowledge/proposed-reply-v1/module-manifest-amendments.json",
+    "architecture/isolation/telegram-channel/driver-link-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007-AI-KNOWLEDGE-PROPOSED-REPLY",
-  "registry_base_commit": "391305976703999c3fe2256432c9badb5ec36214",
+  "registry_milestone": "CRM-ARCH-007-TELEGRAM-DRIVER-LINK",
+  "registry_base_commit": "9a26670b21b67ebd4530b8ee9a18ded173fa9cd3",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",

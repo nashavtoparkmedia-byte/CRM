@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { REPLACE_DRIVER_TELEGRAM_LINK_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
+import { replaceDriverTelegramLinkV1 } from '@/modules/telegram-channel/public/v1'
 
 // GET /api/bot-link?telegramId=316425068
 export async function GET(req: NextRequest) {
@@ -66,11 +68,7 @@ export async function POST(req: NextRequest) {
     })
     if (!driver) return NextResponse.json({ error: 'Driver not found' }, { status: 404 })
 
-    await prisma.$transaction(async (tx) => {
-      await tx.driverTelegram.deleteMany({ where: { driverId } })
-      await tx.driverTelegram.deleteMany({ where: { telegramId: BigInt(telegramId) } })
-      await tx.driverTelegram.create({ data: { telegramId: BigInt(telegramId), driverId } })
-    })
+    await replaceDriverTelegramLinkV1({ contract: REPLACE_DRIVER_TELEGRAM_LINK_COMMAND_V1, driverId, telegramId: BigInt(telegramId) })
 
     return NextResponse.json({ success: true, driverName: driver.fullName })
   }

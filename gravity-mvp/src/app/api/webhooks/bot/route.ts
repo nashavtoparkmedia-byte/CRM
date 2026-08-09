@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { RECORD_PENDING_BOT_LINK_REQUEST_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
-import { recordPendingBotLinkRequestV1 } from '@/modules/telegram-channel/public/v1'
+import { PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, RECORD_PENDING_BOT_LINK_REQUEST_COMMAND_V1, UPSERT_DRIVER_TELEGRAM_LINK_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
+import { patchDriverTelegramLinkV1, recordPendingBotLinkRequestV1, upsertDriverTelegramLinkV1 } from '@/modules/telegram-channel/public/v1'
 import {
     APPEND_SYSTEM_NOTIFICATION_V1,
     MARK_REQUIRES_RESPONSE_V1,
@@ -146,10 +146,7 @@ async function handleCheckLink(payload: any) {
                         carInfo = `${car.brand || ''} ${car.model || ''} ${car.plate || ''}`.trim()
                         console.log('[check_link] found car:', carInfo)
                         // Cache to DriverTelegram so future check_link calls skip Yandex pagination
-                        await prisma.driverTelegram.update({
-                            where: { id: mapping.id },
-                            data: { carLabel: carInfo }
-                        }).catch(() => {})
+                        await patchDriverTelegramLinkV1({ contract: PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, mappingId: mapping.id, patch: { carLabel: carInfo } }).catch(() => {})
                     }
                 }
             } else {
@@ -192,10 +189,7 @@ async function handleCheckLink(payload: any) {
                                         if (car) {
                                             carInfo = `${car.brand || ''} ${car.model || ''} ${car.plate || ''}`.trim()
                                             console.log('[check_link] phone-search fallback car:', carInfo)
-                                            await prisma.driverTelegram.update({
-                                                where: { id: mapping.id },
-                                                data: { carLabel: carInfo }
-                                            }).catch(() => {})
+                                            await patchDriverTelegramLinkV1({ contract: PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, mappingId: mapping.id, patch: { carLabel: carInfo } }).catch(() => {})
                                         }
                                     }
                                 }
@@ -310,11 +304,7 @@ async function handleSyncUser(payload: any) {
                     if (crmDriver) driverId = crmDriver.id
                 } catch { /* keep yandexId as fallback */ }
 
-                await prisma.driverTelegram.upsert({
-                    where: { driverId },
-                    update: { telegramId: BigInt(telegramId), username: username || null, activeParkId: connection.parkId },
-                    create: { driverId, telegramId: BigInt(telegramId), username: username || null, activeParkId: connection.parkId }
-                })
+                await upsertDriverTelegramLinkV1({ contract: UPSERT_DRIVER_TELEGRAM_LINK_COMMAND_V1, driverId, telegramId: BigInt(telegramId), username: username || null, activeParkId: connection.parkId })
 
                 console.log(`[Webhook] Auto-linked TG ${telegramId} → driver ${driverId} (${driverName}) park=${connection.name || connection.parkId}`)
                 await notifyDriverLinked(telegramId.toString(), driverName)
@@ -845,7 +835,7 @@ async function handleSetActivePark(payload: any) {
         // Don't block if Yandex check fails — allow the switch
     }
 
-    await prisma.driverTelegram.update({ where: { id: mapping.id }, data: { activeParkId: parkId, carLabel: null, carId: null } })
+    await patchDriverTelegramLinkV1({ contract: PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, mappingId: mapping.id, patch: { activeParkId: parkId, carLabel: null, carId: null } })
     return NextResponse.json({ success: true, parkName: park.name || parkId })
 }
 

@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007-AI-KNOWLEDGE-PROPOSED-REPLY",
-  "base_commit": "391305976703999c3fe2256432c9badb5ec36214",
+  "milestone": "CRM-ARCH-007-TELEGRAM-DRIVER-LINK",
+  "base_commit": "9a26670b21b67ebd4530b8ee9a18ded173fa9cd3",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "4429c446adcbe02b1cb2d970c08c2c36c144598dc71deff225ccb4091657b8fe",
+  "finding_digest": "b51f9fef003cfd72cf30530c806d4e9ef38e4bbf2891c2a4be3653211a0011df",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,7 +13,7 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 97,
+    "direct_foreign_prisma_write": 89,
     "direct_provider_transport_access": 38,
     "internal_module_import": 379,
     "non_public_cross_context_import": 536,
@@ -1010,70 +1010,6 @@
       "migration_references": [
         "dependency:calling/ai_calls>operations_observability/monitoring",
         "dependency:calling/calls>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_1f7aaf0389afa65153cb193b",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/bot-link/route.ts",
-      "line_at_baseline": 70,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "telegram_channel",
-      "subject": "DriverTelegram.deleteMany",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_152c887cb9c50943"
-      ]
-    },
-    {
-      "fingerprint": "arch_c0d1d4a8adb9ebf0bd9b89a3",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/bot-link/route.ts",
-      "line_at_baseline": 71,
-      "ordinal": 2,
-      "owner_context": "platform_shell",
-      "target_context": "telegram_channel",
-      "subject": "DriverTelegram.deleteMany",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_152c887cb9c50943"
-      ]
-    },
-    {
-      "fingerprint": "arch_d95776d3189e083d9f3dd53e",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/bot-link/route.ts",
-      "line_at_baseline": 72,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "telegram_channel",
-      "subject": "DriverTelegram.create",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_152c887cb9c50943"
-      ]
-    },
-    {
-      "fingerprint": "arch_9b5f4c31a08a54bd60068a86",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/bot-users/route.ts",
-      "line_at_baseline": 98,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "telegram_channel",
-      "subject": "DriverTelegram.deleteMany",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_152c887cb9c50943"
       ]
     },
     {
@@ -4290,70 +4226,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:telegram_channel/telegram_provider>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_7386bbc72c6f4b056899a1d8",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
-      "line_at_baseline": 149,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "telegram_channel",
-      "subject": "DriverTelegram.update",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_152c887cb9c50943"
-      ]
-    },
-    {
-      "fingerprint": "arch_1734f8336c539b3a8b64b5d6",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
-      "line_at_baseline": 195,
-      "ordinal": 2,
-      "owner_context": "platform_shell",
-      "target_context": "telegram_channel",
-      "subject": "DriverTelegram.update",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_152c887cb9c50943"
-      ]
-    },
-    {
-      "fingerprint": "arch_a102592208d2e445ca742d72",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
-      "line_at_baseline": 313,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "telegram_channel",
-      "subject": "DriverTelegram.upsert",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_152c887cb9c50943"
-      ]
-    },
-    {
-      "fingerprint": "arch_6dce62f673ee8ed8e2caa57e",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
-      "line_at_baseline": 848,
-      "ordinal": 3,
-      "owner_context": "platform_shell",
-      "target_context": "telegram_channel",
-      "subject": "DriverTelegram.update",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_152c887cb9c50943"
       ]
     },
     {
