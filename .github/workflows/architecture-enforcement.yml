@@ -53,6 +53,9 @@ jobs:
       - name: Enforce Work Management inbox boundary
         run: node tools/architecture/check-work-management-inbox-boundary.mjs
 
+      - name: Enforce Contacts boundary for MAX
+        run: node tools/architecture/check-contacts-max-boundary.mjs
+
       - name: Verify versioned contract behavior
         run: |
           node tools/architecture/test-contracts.mjs
@@ -60,6 +63,7 @@ jobs:
           node tools/architecture/test-identity-access.mjs
           node tools/architecture/test-work-management-assignment.mjs
           node tools/architecture/test-work-management-completion.mjs
+          node tools/architecture/test-contacts-resolution.mjs
 
       - name: Preserve Identity security behavior
         run: |

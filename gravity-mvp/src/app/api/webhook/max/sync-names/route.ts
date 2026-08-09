@@ -12,6 +12,11 @@
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import {
+    PROMOTE_PLACEHOLDER_DISPLAY_NAME_V1,
+    RESOLVE_CONTACT_COMMAND_V1,
+} from '@/contracts/contacts/v1'
+import { resolveContactV1 } from '@/modules/contacts/public/v1'
 
 function isPlaceholderName(name?: string | null): boolean {
     if (!name) return true
@@ -90,16 +95,12 @@ export async function POST(req: NextRequest) {
 
             // Contact update — только если он тоже placeholder
             if (chat.contactId) {
-                const contact = await prisma.contact.findUnique({
-                    where: { id: chat.contactId },
-                    select: { id: true, displayName: true },
+                await resolveContactV1({
+                    contract: RESOLVE_CONTACT_COMMAND_V1,
+                    operation: PROMOTE_PLACEHOLDER_DISPLAY_NAME_V1,
+                    contactId: chat.contactId,
+                    candidateDisplayName: newName,
                 })
-                if (contact && isPlaceholderName(contact.displayName)) {
-                    await prisma.contact.update({
-                        where: { id: contact.id },
-                        data: { displayName: newName },
-                    })
-                }
             }
 
             updated++

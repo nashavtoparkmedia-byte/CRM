@@ -15,6 +15,7 @@ node tools/architecture/check-outbox-architecture.mjs
 node tools/architecture/check-identity-boundary.mjs
 node tools/architecture/check-work-management-boundary.mjs
 node tools/architecture/check-work-management-inbox-boundary.mjs
+node tools/architecture/check-contacts-max-boundary.mjs
 ```
 
 The enforcement command scans the configured production roots and fails when it finds:
@@ -44,7 +45,7 @@ node tools/architecture/generate-architecture-exceptions.mjs \
   --output architecture/enforcement/v1/exceptions.json
 ```
 
-Generation refuses any unexceptionable finding or finding type without a reviewed exception policy. CRM-ARCH-006 initially baselined 1,535 findings. After the Identity Access and two Work Management consumer migrations, the current registry contains 1,525: 185 foreign writes, 38 provider transports, 381 internal imports, 538 non-public imports, and 383 undeclared dependencies. The exact scanned source tree is bound by `finding_digest`, while the policy records the milestone and base commit. Five stricter-scanner write findings absent from the earlier migration-plan extractor are preserved separately in `legacy-write-supplement.json`.
+Generation refuses any unexceptionable finding or finding type without a reviewed exception policy. CRM-ARCH-006 initially baselined 1,535 findings. After the Identity Access, two Work Management and first Contacts consumer migrations, the current registry contains 1,524: 184 foreign writes, 38 provider transports, 381 internal imports, 538 non-public imports, and 383 undeclared dependencies. The exact scanned source tree is bound by `finding_digest`, while the policy records the milestone and base commit. Five stricter-scanner write findings absent from the earlier migration-plan extractor are preserved separately in `legacy-write-supplement.json`.
 
 ## False-positive controls
 

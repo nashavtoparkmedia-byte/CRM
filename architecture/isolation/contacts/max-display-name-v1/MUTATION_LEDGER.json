@@ -1,0 +1,28 @@
+{
+  "schema": "yoko.crm.mutation-ledger.v1",
+  "milestone": "CRM-ARCH-007-CONTACTS-MAX",
+  "source_worktree": "/opt/codex-work/crm-arch-007-contacts-max",
+  "source_mutations": [
+    {
+      "class": "versioned_contract",
+      "scope": "Contacts ResolveContact command/result v1"
+    },
+    {
+      "class": "owner_boundary",
+      "scope": "neutral handler, exact placeholder policy and legacy Contact adapter"
+    },
+    {
+      "class": "consumer_migration",
+      "scope": "MAX sync-names single planned Contact.update site"
+    },
+    {
+      "class": "enforcement",
+      "scope": "one exact exception retired; CI and controls extended"
+    }
+  ],
+  "production_mutations": [],
+  "database_mutations": [],
+  "service_mutations": [],
+  "deployment_mutations": [],
+  "secret_values_read_or_emitted": false
+}

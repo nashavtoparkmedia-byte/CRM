@@ -92,6 +92,19 @@ assertCheck(
     'direct foreign Prisma ManagerTask update remains',
 )
 
+const maxContactConsumer = source('gravity-mvp/src/app/api/webhook/max/sync-names/route.ts')
+assertCheck(
+    'representative MAX consumer uses ResolveContactCommand.v1',
+    maxContactConsumer.includes('RESOLVE_CONTACT_COMMAND_V1')
+        && maxContactConsumer.includes('resolveContactV1({'),
+    'versioned contact-resolution command invocation is absent',
+)
+assertCheck(
+    'foreign Contact update removed from MAX consumer',
+    !/prisma\.contact\.update\s*\(/.test(maxContactConsumer),
+    'direct foreign Prisma Contact update remains',
+)
+
 const handler = source('gravity-mvp/src/modules/work-management/public/v1/create-task-handler.ts')
 assertCheck(
     'owner handler depends on a persistence port',

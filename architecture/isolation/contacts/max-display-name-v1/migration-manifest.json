@@ -1,0 +1,51 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1",
+  "milestone": "CRM-ARCH-007-CONTACTS-MAX",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "21b047ec8ffb3a73ec82aa35912bd5016c2faf8c",
+  "context": "contacts",
+  "caller_context": "max_channel",
+  "plan": {
+    "id": "migration_22eff9f42e71a832",
+    "site_id": "write_f3df390bb40095ccc932",
+    "file": "gravity-mvp/src/app/api/webhook/max/sync-names/route.ts",
+    "baseline_line": 98,
+    "model": "Contact",
+    "method": "update"
+  },
+  "public_contract": {
+    "command": "contacts.ResolveContactCommand.v1",
+    "operation": "promote_placeholder_display_name",
+    "result": "contacts.ResolveContactResult.v1",
+    "statuses": [
+      "updated",
+      "not_found",
+      "preserved"
+    ]
+  },
+  "owner_boundary": {
+    "handler": "gravity-mvp/src/modules/contacts/public/v1/resolve-contact-handler.ts",
+    "policy": "gravity-mvp/src/modules/contacts/public/v1/legacy-contact-name-policy.ts",
+    "compatibility_adapter": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-adapter.ts"
+  },
+  "consumer": {
+    "before_sha256": "ece9cacb4fc2af7e63c674f6fd7b07cbafa14d260f3460b1d68c7bf1382a3558",
+    "after_sha256": "8d4d446ec278af1ef5d8b677002bc661b1f4336f5edcb777ebf26d795699309b",
+    "direct_contact_mutation_removed": true,
+    "neighboring_chat_mutation_preserved": true
+  },
+  "enforcement": {
+    "before_findings": 1525,
+    "after_findings": 1524,
+    "retired_fingerprints": [
+      "arch_6260013b1ef42107277fa121"
+    ],
+    "new_exception_capacity": 0
+  },
+  "rollback": {
+    "type": "source-only",
+    "target": "21b047ec8ffb3a73ec82aa35912bd5016c2faf8c",
+    "database_rollback_required": false,
+    "runtime_rollback_required": false
+  }
+}
