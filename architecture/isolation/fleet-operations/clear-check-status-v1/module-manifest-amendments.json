@@ -1,0 +1,14 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "CRM-ARCH-007-FLEET-CLEAR-CHECK-STATUS",
+  "amendments": [
+    {
+      "context": "fleet_operations",
+      "add_commands": [
+        "ClearFleetCheckStatusCommand.v1"
+      ],
+      "reason": "Expose the all-driver fleet-check-status maintenance operation through the Fleet owner boundary."
+    }
+  ]
+}

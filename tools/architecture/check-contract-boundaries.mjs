@@ -142,6 +142,9 @@ assertCheck('MAX media uses AttachMessageMediaCommand.v2',maxAttachmentConsumer.
 assertCheck('MAX deletion uses DeleteMessageMediaCommand.v1',maxAttachmentConsumer.includes('DELETE_MESSAGE_MEDIA_COMMAND_V1')&&maxAttachmentConsumer.includes('deleteMessageMediaV1({'),'Messaging media delete command absent')
 assertCheck('foreign MAX MessageAttachment create removed',!/prisma\.messageAttachment\.create/.test(maxAttachmentConsumer),'direct MAX MessageAttachment create remains')
 assertCheck('foreign MAX MessageAttachment delete removed',!/prisma\.messageAttachment\.deleteMany/.test(maxAttachmentConsumer),'direct MAX MessageAttachment delete remains')
+const fleetClearStatusConsumer=source('gravity-mvp/src/scripts/force-clear-locks.ts')
+assertCheck('Fleet maintenance uses ClearFleetCheckStatusCommand.v1',fleetClearStatusConsumer.includes('CLEAR_FLEET_CHECK_STATUS_COMMAND_V1')&&fleetClearStatusConsumer.includes('clearFleetCheckStatusV1({'),'Fleet clear-status command absent')
+assertCheck('foreign maintenance Driver update removed',!/prisma\.driver\.updateMany/.test(fleetClearStatusConsumer),'direct Driver update remains')
 
 const handler = source('gravity-mvp/src/modules/work-management/public/v1/create-task-handler.ts')
 assertCheck(

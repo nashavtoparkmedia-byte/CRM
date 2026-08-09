@@ -51,13 +51,14 @@
     "architecture/isolation/fleet-operations/daily-activity-v1/module-manifest-amendments.json",
     "architecture/isolation/fleet-operations/inbox-public-v1/module-manifest-amendments.json",
     "architecture/isolation/messaging/bot-chat-state-v1/module-manifest-amendments.json",
-    "architecture/isolation/messaging/max-attachments-v2/module-manifest-amendments.json"
+    "architecture/isolation/messaging/max-attachments-v2/module-manifest-amendments.json",
+    "architecture/isolation/fleet-operations/clear-check-status-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007-MESSAGING-MAX-ATTACHMENTS",
-  "registry_base_commit": "4b57c2f26aba0ef4f12cb5a1a73a50e7ec3e0cd9",
+  "registry_milestone": "CRM-ARCH-007-FLEET-CLEAR-CHECK-STATUS",
+  "registry_base_commit": "05d1377ec808f611a0115b7d42dfe256ad4c010e",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",

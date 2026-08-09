@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007-MESSAGING-MAX-ATTACHMENTS",
-  "base_commit": "4b57c2f26aba0ef4f12cb5a1a73a50e7ec3e0cd9",
+  "milestone": "CRM-ARCH-007-FLEET-CLEAR-CHECK-STATUS",
+  "base_commit": "05d1377ec808f611a0115b7d42dfe256ad4c010e",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "b835d93c385b77e6308156adf401214e9bdb2fa67ada1a1887b3157c9eeb5613",
+  "finding_digest": "725a72c7126ec4467c9cb5334230bbb86ab00ad3d75a07d487cee68ad853b986",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,7 +13,7 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 172,
+    "direct_foreign_prisma_write": 171,
     "direct_provider_transport_access": 38,
     "internal_module_import": 379,
     "non_public_cross_context_import": 536,
@@ -25097,22 +25097,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:platform_shell/gravity_core>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_50af9958fd51a9581132014a",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/scripts/force-clear-locks.ts",
-      "line_at_baseline": 7,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "fleet_operations",
-      "subject": "Driver.updateMany",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_1e5e17cb2e9c36b5"
       ]
     },
     {

@@ -1,0 +1,21 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1",
+  "milestone": "CRM-ARCH-007-FLEET-CLEAR-CHECK-STATUS",
+  "base_commit": "05d1377ec808f611a0115b7d42dfe256ad4c010e",
+  "captured_at": "2026-08-09T17:44:37Z",
+  "consumer": "gravity-mvp/src/scripts/force-clear-locks.ts",
+  "consumer_sha256": "83f0a4d520d7c0b6259317495b3840458cd3378b4fc8787a553a38ada8b6ff61",
+  "behavior": [
+    "CLI logs Force clearing all CRM driver lock statuses before persistence",
+    "all Driver rows are targeted without a where filter",
+    "lastFleetCheckStatus is set to null",
+    "success logs the exact affected-row count as Successfully cleared <count> locks!",
+    "the standalone Prisma client disconnects in finally after success logging",
+    "update and disconnect failures remain visible through console.error"
+  ],
+  "out_of_scope": [
+    "executing the maintenance operation",
+    "other Driver fields or Fleet synchronization behavior",
+    "database schema or production activation"
+  ]
+}

@@ -1,15 +1,16 @@
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import {
+    CLEAR_ALL_DRIVER_FLEET_CHECK_STATUSES_V1,
+    CLEAR_FLEET_CHECK_STATUS_COMMAND_V1,
+} from '@/contracts/fleet-operations/v1';
+import { clearFleetCheckStatusV1 } from '@/modules/fleet-operations/public/v1';
 
 async function main() {
     console.log('Force clearing all CRM driver lock statuses...');
-    const result = await prisma.driver.updateMany({
-        data: { lastFleetCheckStatus: null }
+    await clearFleetCheckStatusV1({
+        contract: CLEAR_FLEET_CHECK_STATUS_COMMAND_V1,
+        operation: CLEAR_ALL_DRIVER_FLEET_CHECK_STATUSES_V1,
     });
-    console.log(`Successfully cleared ${result.count} locks!`);
 }
 
 main()
-    .catch(console.error)
-    .finally(() => prisma.$disconnect());
+    .catch(console.error);
