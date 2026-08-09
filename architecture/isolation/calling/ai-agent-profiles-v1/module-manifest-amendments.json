@@ -1,0 +1,1 @@
+{"schema":"yoko.crm.module-manifest-amendments.v1","version":1,"milestone":"CRM-ARCH-007-CALLING-AI-AGENT-PROFILES","amendments":[{"context":"calling","add_commands":["CreateAiAgentProfileCommand.v1","UpdateAiAgentProfileCommand.v1","DeleteAiAgentProfileCommand.v1"],"reason":"Expose Configuration's complete AI agent profile mutation lifecycle through Calling ownership."}]}

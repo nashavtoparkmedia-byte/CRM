@@ -5,3 +5,4 @@ export {
     parseRecordingReadyEventV1,
 } from './recording-ready-event'
 export type { RecordingReadyEventV1 } from './recording-ready-event'
+export * from './ai-agent-profile-commands'

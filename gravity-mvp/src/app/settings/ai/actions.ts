@@ -10,6 +10,8 @@ import { importWhatsAppHistory } from '@/lib/whatsapp/WhatsAppService'
 import { getUsers } from '@/lib/users/user-service'
 import { ATTACH_MANUAL_KNOWLEDGE_SOURCE_COMMAND_V1, DISABLE_KNOWLEDGE_SOURCES_COMMAND_V1, QUEUE_KNOWLEDGE_EXTRACTION_COMMAND_V1, REVIEW_AI_DECISION_COMMAND_V1, UPDATE_RETRIEVAL_POLICY_COMMAND_V1 } from '@/contracts/ai-knowledge/v1'
 import { attachManualKnowledgeSourceV1, disableKnowledgeSourcesV1, queueKnowledgeExtractionV1, reviewAiDecisionV1, updateRetrievalPolicyV1 } from '@/modules/ai-knowledge/public/v1'
+import { CREATE_AI_AGENT_PROFILE_COMMAND_V1, DELETE_AI_AGENT_PROFILE_COMMAND_V1, UPDATE_AI_AGENT_PROFILE_COMMAND_V1 } from '@/contracts/calling/v1'
+import { createAiAgentProfileV1, deleteAiAgentProfileV1, updateAiAgentProfileV1 } from '@/modules/calling/public/v1'
 
 // ─── Role guard ───────────────────────────────────────────────────
 //
@@ -547,25 +549,19 @@ export async function createAiProfile(data: {
 }) {
     await assertCanEditAi()
     if (!data.name?.trim()) throw new Error('Имя профиля обязательно')
-    // sortOrder = max+1 — новые профили идут в конец
-    const maxRow = await prisma.$queryRaw<any[]>`
-        SELECT COALESCE(MAX("sortOrder"), -1) AS max FROM "AiAgentProfile"
-    `
-    const sortOrder = Number(maxRow[0]?.max ?? -1) + 1
-    const row = await prisma.aiAgentProfile.create({
-        data: {
+    const result = await createAiAgentProfileV1({
+        contract: CREATE_AI_AGENT_PROFILE_COMMAND_V1,
+        profile: {
             name: data.name.trim(),
             description: data.description?.trim() || null,
             promptRole: data.promptRole?.trim() || null,
             promptTone: data.promptTone?.trim() || null,
             promptAllowed: data.promptAllowed?.trim() || null,
             promptForbidden: data.promptForbidden?.trim() || null,
-            isDefault: false,
-            sortOrder,
         },
     })
     revalidatePath('/settings/ai')
-    return row
+    return result.profile
 }
 
 export async function updateAiProfile(id: string, data: Partial<{
@@ -587,23 +583,18 @@ export async function updateAiProfile(id: string, data: Partial<{
     if (data.promptTone !== undefined)      patch.promptTone = data.promptTone?.trim() || null
     if (data.promptAllowed !== undefined)   patch.promptAllowed = data.promptAllowed?.trim() || null
     if (data.promptForbidden !== undefined) patch.promptForbidden = data.promptForbidden?.trim() || null
-    const row = await prisma.aiAgentProfile.update({ where: { id }, data: patch })
+    const result = await updateAiAgentProfileV1({ contract: UPDATE_AI_AGENT_PROFILE_COMMAND_V1, profileId: id, patch })
     revalidatePath('/settings/ai')
-    return row
+    return result.profile
 }
 
 export async function deleteAiProfile(id: string) {
     await assertCanEditAi()
     // Защита: дефолтные профили (seed) удалять нельзя — иначе админ
     // может случайно остаться без активного при пустой таблице.
-    const profile = await prisma.aiAgentProfile.findUnique({ where: { id } })
-    if (!profile) throw new Error('Профиль не найден')
-    if (profile.isDefault) {
-        throw new Error('Системный профиль удалить нельзя. Создайте свой или измените существующий.')
-    }
     // ON DELETE SET NULL в schema снимет activeProfileId, runtime
     // вернётся на legacy-поля config'а.
-    await prisma.aiAgentProfile.delete({ where: { id } })
+    await deleteAiAgentProfileV1({ contract: DELETE_AI_AGENT_PROFILE_COMMAND_V1, profileId: id })
     revalidatePath('/settings/ai')
 }
 
