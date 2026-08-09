@@ -11,6 +11,8 @@ import { broadcastChatMessage } from '@/lib/messageStreamBus'
 import * as registry from '@/lib/TransportRegistry'
 import { opsLog } from '@/lib/opsLog'
 import { WWEBJS_AUTH_DIR } from '@/lib/whatsapp/WhatsAppCleanup'
+import { ATTACH_MESSAGE_MEDIA_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { attachMessageMediaV1 } from '@/modules/messaging/public/v1'
 
 // 25MB per file. Was 10MB but modern iPhone photos (12MP JPEG) and
 // short videos easily exceed that — skipped media left the UI with
@@ -319,15 +321,14 @@ async function downloadAndSaveMedia(
             return false
         }
         const dataUrl = `data:${media.mimetype};base64,${media.data}`
-        await prisma.messageAttachment.create({
-            data: {
-                messageId: unifiedMessageId,
-                type: msgType,
-                url: dataUrl,
-                fileName: media.filename || null,
-                fileSize: base64Bytes,
-                mimeType: media.mimetype || null,
-            },
+        await attachMessageMediaV1({
+            contract: ATTACH_MESSAGE_MEDIA_COMMAND_V1,
+            messageId: unifiedMessageId,
+            mediaType: msgType,
+            url: dataUrl,
+            fileName: media.filename || null,
+            fileSize: base64Bytes,
+            mimeType: media.mimetype || null,
         })
         console.log(`[WA-MEDIA] ${logCtx} saved: ${msgType} ${media.mimetype} (${base64Bytes}B)`)
         return true

@@ -1,0 +1,24 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1",
+  "milestone": "CRM-ARCH-007-MESSAGING-WHATSAPP-ATTACHMENT",
+  "base_commit": "20b10682f72c4539aa66f86e691bf06016039aa8",
+  "captured_at": "2026-08-09T17:20:03Z",
+  "consumer": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
+  "consumer_sha256": "a8a41d9a9c225fb9e8317408599a21dad64ce29e7f792bece24dffedf22448be",
+  "behavior": [
+    "provider media is downloaded before persistence",
+    "missing media or data returns false without persistence",
+    "decoded payloads over MAX_MEDIA_SIZE_BYTES are warned and skipped",
+    "the data URL remains data:<mimetype>;base64,<data>",
+    "MessageAttachment maps unified message id, message type, data URL, nullable filename, decoded byte size and nullable MIME type",
+    "successful persistence logs the same summary and returns true",
+    "download, validation and persistence failures remain inside the same nonfatal catch, warn and return false",
+    "the helper remains shared by live ingestion and both history-import paths"
+  ],
+  "out_of_scope": [
+    "WhatsApp provider transport and session lifecycle",
+    "other Chat, Message, MessageAttachment and HistoryImportJob plans",
+    "media size policy changes",
+    "database schema or production activation"
+  ]
+}

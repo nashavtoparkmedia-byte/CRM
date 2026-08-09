@@ -134,6 +134,9 @@ assertCheck('Bot system notification uses SendMessageCommand.v1',botSystemMessag
 assertCheck('foreign bot Message create removed',!/prisma\.message\.create/.test(botSystemMessageConsumer),'direct bot Message create remains')
 assertCheck('Bot pending-link state uses UpdateConversationCommand.v1',botSystemMessageConsumer.includes('UPDATE_CONVERSATION_COMMAND_V1')&&botSystemMessageConsumer.includes('updateConversationV1({'),'Messaging conversation command absent')
 assertCheck('foreign bot Chat update removed',!/prisma\.chat\.update/.test(botSystemMessageConsumer),'direct bot Chat update remains')
+const whatsappAttachmentConsumer=source('gravity-mvp/src/lib/whatsapp/WhatsAppService.ts')
+assertCheck('WhatsApp media uses AttachMessageMediaCommand.v1',whatsappAttachmentConsumer.includes('ATTACH_MESSAGE_MEDIA_COMMAND_V1')&&whatsappAttachmentConsumer.includes('attachMessageMediaV1({'),'Messaging media command absent')
+assertCheck('foreign WhatsApp MessageAttachment create removed',!/prisma\.messageAttachment\.create/.test(whatsappAttachmentConsumer),'direct MessageAttachment create remains')
 
 const handler = source('gravity-mvp/src/modules/work-management/public/v1/create-task-handler.ts')
 assertCheck(

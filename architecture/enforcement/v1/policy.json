@@ -55,8 +55,8 @@
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007-MESSAGING-BOT-CHAT-STATE",
-  "registry_base_commit": "712a2f6efcb1923346622f43d58b4f1c77d0f750",
+  "registry_milestone": "CRM-ARCH-007-MESSAGING-WHATSAPP-ATTACHMENT",
+  "registry_base_commit": "20b10682f72c4539aa66f86e691bf06016039aa8",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",
