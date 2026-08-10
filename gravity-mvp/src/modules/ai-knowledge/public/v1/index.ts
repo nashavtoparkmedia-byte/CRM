@@ -16,6 +16,22 @@ import { createPatchProposedReplyHandlerV1,createUpsertProposedReplyHandlerV1 } 
 import { legacyPrismaProposedReplyPortV1 } from './legacy-prisma-proposed-reply-adapter'
 import { createCreateLegacyKnowledgeEntryHandlerV1, createDeleteLegacyKnowledgeEntryHandlerV1, createUpdateLegacyKnowledgeEntryHandlerV1 } from './legacy-knowledge-entry-handler'
 import { legacyPrismaLegacyKnowledgeEntryPortV1 } from './legacy-prisma-legacy-knowledge-entry-adapter'
+import {
+  createArchiveGovernanceKnowledgeItemHandlerV1,
+  createArchiveKnowledgeConflictMemberHandlerV1,
+  createArchiveKnowledgeItemAfterSourceDisableHandlerV1,
+  createArchiveKnowledgeItemForCoreResetHandlerV1,
+  createClearKnowledgeConflictGroupHandlerV1,
+  createClearKnowledgeConflictWinnerHandlerV1,
+  createCreateManualGovernanceKnowledgeItemHandlerV1,
+  createEditGovernanceKnowledgeItemHandlerV1,
+  createMarkKnowledgeItemSourcesDisabledHandlerV1,
+  createRestoreGovernanceKnowledgeItemHandlerV1,
+  createSupersedeGovernanceKnowledgeItemHandlerV1,
+  createUnverifyGovernanceKnowledgeItemHandlerV1,
+  createVerifyGovernanceKnowledgeItemHandlerV1,
+} from './knowledge-governance-handler'
+import { legacyPrismaKnowledgeGovernancePortV1 } from './legacy-prisma-knowledge-governance-adapter'
 
 export { createRecordKnowledgeUsageHandlerV1 } from './record-knowledge-usage-handler'
 export type { RecordKnowledgeUsagePersistencePortV1 } from './record-knowledge-usage-handler'
@@ -49,3 +65,45 @@ export type { LegacyKnowledgeEntryPersistencePortV1 } from './legacy-knowledge-e
 export const createLegacyKnowledgeEntryV1=createCreateLegacyKnowledgeEntryHandlerV1(legacyPrismaLegacyKnowledgeEntryPortV1)
 export const updateLegacyKnowledgeEntryV1=createUpdateLegacyKnowledgeEntryHandlerV1(legacyPrismaLegacyKnowledgeEntryPortV1)
 export const deleteLegacyKnowledgeEntryV1=createDeleteLegacyKnowledgeEntryHandlerV1(legacyPrismaLegacyKnowledgeEntryPortV1)
+export {
+  createArchiveGovernanceKnowledgeItemHandlerV1,
+  createArchiveKnowledgeConflictMemberHandlerV1,
+  createArchiveKnowledgeItemAfterSourceDisableHandlerV1,
+  createArchiveKnowledgeItemForCoreResetHandlerV1,
+  createClearKnowledgeConflictGroupHandlerV1,
+  createClearKnowledgeConflictWinnerHandlerV1,
+  createCreateManualGovernanceKnowledgeItemHandlerV1,
+  createEditGovernanceKnowledgeItemHandlerV1,
+  createMarkKnowledgeItemSourcesDisabledHandlerV1,
+  createRestoreGovernanceKnowledgeItemHandlerV1,
+  createSupersedeGovernanceKnowledgeItemHandlerV1,
+  createUnverifyGovernanceKnowledgeItemHandlerV1,
+  createVerifyGovernanceKnowledgeItemHandlerV1,
+} from './knowledge-governance-handler'
+export type { KnowledgeGovernancePersistencePortV1 } from './knowledge-governance-handler'
+export const editGovernanceKnowledgeItemV1 =
+  createEditGovernanceKnowledgeItemHandlerV1(legacyPrismaKnowledgeGovernancePortV1)
+export const archiveGovernanceKnowledgeItemV1 =
+  createArchiveGovernanceKnowledgeItemHandlerV1(legacyPrismaKnowledgeGovernancePortV1)
+export const restoreGovernanceKnowledgeItemV1 =
+  createRestoreGovernanceKnowledgeItemHandlerV1(legacyPrismaKnowledgeGovernancePortV1)
+export const verifyGovernanceKnowledgeItemV1 =
+  createVerifyGovernanceKnowledgeItemHandlerV1(legacyPrismaKnowledgeGovernancePortV1)
+export const unverifyGovernanceKnowledgeItemV1 =
+  createUnverifyGovernanceKnowledgeItemHandlerV1(legacyPrismaKnowledgeGovernancePortV1)
+export const supersedeGovernanceKnowledgeItemV1 =
+  createSupersedeGovernanceKnowledgeItemHandlerV1(legacyPrismaKnowledgeGovernancePortV1)
+export const archiveKnowledgeConflictMemberV1 =
+  createArchiveKnowledgeConflictMemberHandlerV1(legacyPrismaKnowledgeGovernancePortV1)
+export const clearKnowledgeConflictWinnerV1 =
+  createClearKnowledgeConflictWinnerHandlerV1(legacyPrismaKnowledgeGovernancePortV1)
+export const clearKnowledgeConflictGroupV1 =
+  createClearKnowledgeConflictGroupHandlerV1(legacyPrismaKnowledgeGovernancePortV1)
+export const createManualGovernanceKnowledgeItemV1 =
+  createCreateManualGovernanceKnowledgeItemHandlerV1(legacyPrismaKnowledgeGovernancePortV1)
+export const markKnowledgeItemSourcesDisabledV1 =
+  createMarkKnowledgeItemSourcesDisabledHandlerV1(legacyPrismaKnowledgeGovernancePortV1)
+export const archiveKnowledgeItemAfterSourceDisableV1 =
+  createArchiveKnowledgeItemAfterSourceDisableHandlerV1(legacyPrismaKnowledgeGovernancePortV1)
+export const archiveKnowledgeItemForCoreResetV1 =
+  createArchiveKnowledgeItemForCoreResetHandlerV1(legacyPrismaKnowledgeGovernancePortV1)

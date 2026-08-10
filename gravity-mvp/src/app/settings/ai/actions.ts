@@ -8,8 +8,53 @@ import { revalidatePath } from 'next/cache'
 import { importTelegramHistory } from '@/app/tg-actions'
 import { importWhatsAppHistory } from '@/lib/whatsapp/WhatsAppService'
 import { getUsers } from '@/lib/users/user-service'
-import { ATTACH_MANUAL_KNOWLEDGE_SOURCE_COMMAND_V1, CREATE_LEGACY_KNOWLEDGE_ENTRY_COMMAND_V1, DELETE_LEGACY_KNOWLEDGE_ENTRY_COMMAND_V1, DISABLE_KNOWLEDGE_SOURCES_COMMAND_V1, QUEUE_KNOWLEDGE_EXTRACTION_COMMAND_V1, REVIEW_AI_DECISION_COMMAND_V1, UPDATE_LEGACY_KNOWLEDGE_ENTRY_COMMAND_V1, UPDATE_RETRIEVAL_POLICY_COMMAND_V1 } from '@/contracts/ai-knowledge/v1'
-import { attachManualKnowledgeSourceV1, createLegacyKnowledgeEntryV1, deleteLegacyKnowledgeEntryV1, disableKnowledgeSourcesV1, queueKnowledgeExtractionV1, reviewAiDecisionV1, updateLegacyKnowledgeEntryV1, updateRetrievalPolicyV1 } from '@/modules/ai-knowledge/public/v1'
+import {
+    ARCHIVE_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+    ARCHIVE_KNOWLEDGE_CONFLICT_MEMBER_COMMAND_V1,
+    ARCHIVE_KNOWLEDGE_ITEM_AFTER_SOURCE_DISABLE_COMMAND_V1,
+    ARCHIVE_KNOWLEDGE_ITEM_FOR_CORE_RESET_COMMAND_V1,
+    ATTACH_MANUAL_KNOWLEDGE_SOURCE_COMMAND_V1,
+    CLEAR_KNOWLEDGE_CONFLICT_GROUP_COMMAND_V1,
+    CLEAR_KNOWLEDGE_CONFLICT_WINNER_COMMAND_V1,
+    CREATE_LEGACY_KNOWLEDGE_ENTRY_COMMAND_V1,
+    CREATE_MANUAL_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+    DELETE_LEGACY_KNOWLEDGE_ENTRY_COMMAND_V1,
+    DISABLE_KNOWLEDGE_SOURCES_COMMAND_V1,
+    EDIT_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+    MARK_KNOWLEDGE_ITEM_SOURCES_DISABLED_COMMAND_V1,
+    QUEUE_KNOWLEDGE_EXTRACTION_COMMAND_V1,
+    RESTORE_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+    REVIEW_AI_DECISION_COMMAND_V1,
+    SUPERSEDE_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+    UNVERIFY_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+    UPDATE_LEGACY_KNOWLEDGE_ENTRY_COMMAND_V1,
+    UPDATE_RETRIEVAL_POLICY_COMMAND_V1,
+    VERIFY_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+    type KnowledgeGovernanceEditPatchV1,
+} from '@/contracts/ai-knowledge/v1'
+import {
+    archiveGovernanceKnowledgeItemV1,
+    archiveKnowledgeConflictMemberV1,
+    archiveKnowledgeItemAfterSourceDisableV1,
+    archiveKnowledgeItemForCoreResetV1,
+    attachManualKnowledgeSourceV1,
+    clearKnowledgeConflictGroupV1,
+    clearKnowledgeConflictWinnerV1,
+    createLegacyKnowledgeEntryV1,
+    createManualGovernanceKnowledgeItemV1,
+    deleteLegacyKnowledgeEntryV1,
+    disableKnowledgeSourcesV1,
+    editGovernanceKnowledgeItemV1,
+    markKnowledgeItemSourcesDisabledV1,
+    queueKnowledgeExtractionV1,
+    restoreGovernanceKnowledgeItemV1,
+    reviewAiDecisionV1,
+    supersedeGovernanceKnowledgeItemV1,
+    unverifyGovernanceKnowledgeItemV1,
+    updateLegacyKnowledgeEntryV1,
+    updateRetrievalPolicyV1,
+    verifyGovernanceKnowledgeItemV1,
+} from '@/modules/ai-knowledge/public/v1'
 import { CREATE_AI_AGENT_PROFILE_COMMAND_V1, DELETE_AI_AGENT_PROFILE_COMMAND_V1, UPDATE_AI_AGENT_PROFILE_COMMAND_V1 } from '@/contracts/calling/v1'
 import { createAiAgentProfileV1, deleteAiAgentProfileV1, updateAiAgentProfileV1 } from '@/modules/calling/public/v1'
 import { CANCEL_HISTORY_IMPORT_JOB_COMMAND_V1, DELETE_HISTORY_IMPORT_JOB_COMMAND_V1, QUEUE_HISTORY_IMPORT_JOB_COMMAND_V1 } from '@/contracts/messaging/v1'
@@ -815,37 +860,31 @@ export async function editKnowledgeItem(id: string, patch: EditItemPatch): Promi
     const before = await loadItemForEdit(id)
     if (!before) throw new Error('Знание не найдено')
 
-    const sets: string[] = []
-    const vals: any[] = []
+    const normalizedPatch: KnowledgeGovernanceEditPatchV1 = {}
     if (patch.title !== undefined) {
         if (!patch.title.trim()) throw new Error('Заголовок не может быть пустым')
-        sets.push(`"title" = $${sets.length + 1}`)
-        vals.push(patch.title.trim())
+        normalizedPatch.title = patch.title.trim()
     }
     if (patch.canonicalStatement !== undefined) {
         if (!patch.canonicalStatement.trim()) throw new Error('Формулировка не может быть пустой')
-        sets.push(`"canonicalStatement" = $${sets.length + 1}`)
-        vals.push(patch.canonicalStatement.trim())
+        normalizedPatch.canonicalStatement = patch.canonicalStatement.trim()
     }
     if (patch.tags !== undefined) {
-        sets.push(`"tags" = $${sets.length + 1}::text[]`)
-        vals.push(patch.tags)
+        normalizedPatch.tags = patch.tags
     }
     if (patch.safetyLevel !== undefined) {
         if (!['normal', 'sensitive', 'requires_human'].includes(patch.safetyLevel)) {
             throw new Error('Недопустимый safetyLevel')
         }
-        sets.push(`"safetyLevel" = $${sets.length + 1}::"AiKnowledgeSafety"`)
-        vals.push(patch.safetyLevel)
+        normalizedPatch.safetyLevel = patch.safetyLevel
     }
-    if (sets.length === 0) return
+    if (Object.keys(normalizedPatch).length === 0) return
 
-    sets.push(`"updatedAt" = NOW()`)
-    vals.push(id)
-    await prisma.$executeRawUnsafe(
-        `UPDATE "AiKnowledgeItem" SET ${sets.join(', ')} WHERE id = $${vals.length}`,
-        ...vals,
-    )
+    await editGovernanceKnowledgeItemV1({
+        contract: EDIT_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+        itemId: id,
+        patch: normalizedPatch,
+    })
 
     const after = await loadItemForEdit(id)
     const changedFields = Object.keys(patch).filter(k => (patch as any)[k] !== undefined)
@@ -864,13 +903,10 @@ export async function archiveKnowledgeItem(id: string): Promise<void> {
     if (!before) throw new Error('Знание не найдено')
     if (before.status === 'archived') return
 
-    await prisma.$executeRaw`
-        UPDATE "AiKnowledgeItem"
-        SET status     = 'archived'::"AiKnowledgeStatus",
-            "isActive" = false,
-            "updatedAt" = NOW()
-        WHERE id = ${id}
-    `
+    await archiveGovernanceKnowledgeItemV1({
+        contract: ARCHIVE_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+        itemId: id,
+    })
     const after = await loadItemForEdit(id)
     await writeAuditEntry({
         itemId: id, actor, action: 'archived',
@@ -889,13 +925,10 @@ export async function restoreKnowledgeItem(id: string): Promise<void> {
         throw new Error('Знание заменено новым. Сначала уберите ссылку supersededByItemId.')
     }
 
-    await prisma.$executeRaw`
-        UPDATE "AiKnowledgeItem"
-        SET status     = 'active'::"AiKnowledgeStatus",
-            "isActive" = true,
-            "updatedAt" = NOW()
-        WHERE id = ${id}
-    `
+    await restoreGovernanceKnowledgeItemV1({
+        contract: RESTORE_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+        itemId: id,
+    })
     const after = await loadItemForEdit(id)
     await writeAuditEntry({
         itemId: id, actor, action: 'restored',
@@ -912,19 +945,16 @@ export async function verifyKnowledgeItem(id: string, verified: boolean): Promis
     if (before.isVerified === verified) return
 
     if (verified) {
-        await prisma.$executeRaw`
-            UPDATE "AiKnowledgeItem"
-            SET "isVerified" = true, "verifiedBy" = ${actor},
-                "verifiedAt" = NOW(), "updatedAt" = NOW()
-            WHERE id = ${id}
-        `
+        await verifyGovernanceKnowledgeItemV1({
+            contract: VERIFY_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+            itemId: id,
+            actorId: actor,
+        })
     } else {
-        await prisma.$executeRaw`
-            UPDATE "AiKnowledgeItem"
-            SET "isVerified" = false, "verifiedBy" = NULL,
-                "verifiedAt" = NULL, "updatedAt" = NOW()
-            WHERE id = ${id}
-        `
+        await unverifyGovernanceKnowledgeItemV1({
+            contract: UNVERIFY_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+            itemId: id,
+        })
     }
 
     const after = await loadItemForEdit(id)
@@ -965,14 +995,11 @@ export async function supersedeKnowledgeItem(
         throw new Error('Цикл замены: эти знания уже ссылаются друг на друга')
     }
 
-    await prisma.$executeRaw`
-        UPDATE "AiKnowledgeItem"
-        SET status               = 'superseded'::"AiKnowledgeStatus",
-            "isActive"           = false,
-            "supersededByItemId" = ${newItemId},
-            "updatedAt"          = NOW()
-        WHERE id = ${oldItemId}
-    `
+    await supersedeGovernanceKnowledgeItemV1({
+        contract: SUPERSEDE_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+        oldItemId,
+        newItemId,
+    })
 
     const oldAfter = await loadItemForEdit(oldItemId)
     await writeAuditEntry({
@@ -1018,14 +1045,10 @@ export async function resolveConflict(
             if (m.id === itemId) continue
             if (m.status === 'archived') continue
             const memberBefore = m
-            await prisma.$executeRaw`
-                UPDATE "AiKnowledgeItem"
-                SET status            = 'archived'::"AiKnowledgeStatus",
-                    "isActive"        = false,
-                    "conflictGroupId" = NULL,
-                    "updatedAt"       = NOW()
-                WHERE id = ${m.id}
-            `
+            await archiveKnowledgeConflictMemberV1({
+                contract: ARCHIVE_KNOWLEDGE_CONFLICT_MEMBER_COMMAND_V1,
+                itemId: m.id,
+            })
             const memberAfter = await loadItemForEdit(m.id)
             await writeAuditEntry({
                 itemId: m.id, actor, action: 'archived',
@@ -1033,11 +1056,10 @@ export async function resolveConflict(
                 metadata: { reason: 'conflict_resolved_keep_other', winnerItemId: itemId },
             })
         }
-        await prisma.$executeRaw`
-            UPDATE "AiKnowledgeItem"
-            SET "conflictGroupId" = NULL, "updatedAt" = NOW()
-            WHERE id = ${itemId}
-        `
+        await clearKnowledgeConflictWinnerV1({
+            contract: CLEAR_KNOWLEDGE_CONFLICT_WINNER_COMMAND_V1,
+            itemId,
+        })
         const winnerAfter = await loadItemForEdit(itemId)
         await writeAuditEntry({
             itemId, actor, action: 'conflict_resolved',
@@ -1046,11 +1068,10 @@ export async function resolveConflict(
         })
     } else {
         // unmark_all
-        await prisma.$executeRaw`
-            UPDATE "AiKnowledgeItem"
-            SET "conflictGroupId" = NULL, "updatedAt" = NOW()
-            WHERE "conflictGroupId" = ${groupId}
-        `
+        await clearKnowledgeConflictGroupV1({
+            contract: CLEAR_KNOWLEDGE_CONFLICT_GROUP_COMMAND_V1,
+            conflictGroupId: groupId,
+        })
         for (const m of members) {
             const after = await loadItemForEdit(m.id)
             await writeAuditEntry({
@@ -1093,23 +1114,16 @@ export async function createManualKnowledgeItem(input: {
     tagSet.add('type:manual')
     const tags = [...tagSet].filter(t => t.trim())
 
-    await prisma.$executeRaw`
-        INSERT INTO "AiKnowledgeItem" (
-            id, "sectionId", title, "canonicalStatement", tags,
-            confidence, "sourceCount", "uniqueManagerCount",
-            status, "isActive", "safetyLevel",
-            "isVerified", "verifiedBy", "verifiedAt",
-            "createdBy", "createdAt", "updatedAt"
-        ) VALUES (
-            ${itemId}, ${input.sectionId},
-            ${input.title.trim()}, ${input.canonicalStatement.trim()},
-            ${tags}::text[],
-            0.95, 0, 0,
-            'active'::"AiKnowledgeStatus", true, ${safety}::"AiKnowledgeSafety",
-            true, ${actor}, NOW(),
-            ${actor}, NOW(), NOW()
-        )
-    `
+    await createManualGovernanceKnowledgeItemV1({
+        contract: CREATE_MANUAL_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+        itemId,
+        sectionId: input.sectionId,
+        title: input.title.trim(),
+        canonicalStatement: input.canonicalStatement.trim(),
+        tags,
+        safetyLevel: safety,
+        actorId: actor,
+    })
     const sourceId = 'kbs_m_' + Math.random().toString(36).slice(2, 12)
     await attachManualKnowledgeSourceV1({ contract: ATTACH_MANUAL_KNOWLEDGE_SOURCE_COMMAND_V1, sourceId, itemId, actorId: actor })
 
@@ -2379,12 +2393,10 @@ export async function disableKnowledgeSource(input: {
         if (shouldKeepActive) {
             const hasMarker = Array.isArray(item.tags) && item.tags.includes('sources_all_disabled')
             if (!hasMarker) {
-                await prisma.$executeRaw`
-                    UPDATE "AiKnowledgeItem"
-                    SET tags = array_append(tags, 'sources_all_disabled'),
-                        "updatedAt" = NOW()
-                    WHERE id = ${itemId}
-                `
+                await markKnowledgeItemSourcesDisabledV1({
+                    contract: MARK_KNOWLEDGE_ITEM_SOURCES_DISABLED_COMMAND_V1,
+                    itemId,
+                })
             }
             await writeAuditEntry({
                 itemId, actor,
@@ -2403,13 +2415,10 @@ export async function disableKnowledgeSource(input: {
             })
             result.itemsKeptWithWarning++
         } else {
-            await prisma.$executeRaw`
-                UPDATE "AiKnowledgeItem"
-                SET status = 'archived'::"AiKnowledgeStatus",
-                    "isActive" = false,
-                    "updatedAt" = NOW()
-                WHERE id = ${itemId}
-            `
+            await archiveKnowledgeItemAfterSourceDisableV1({
+                contract: ARCHIVE_KNOWLEDGE_ITEM_AFTER_SOURCE_DISABLE_COMMAND_V1,
+                itemId,
+            })
             await writeAuditEntry({
                 itemId, actor,
                 action: 'source_disabled',
@@ -2549,13 +2558,10 @@ export async function resetKnowledgeCore(
     // 3. Apply archive. Один statement per-id, чтобы writeAuditEntry
     //    видел per-item before/after — для UI explainability rollback.
     for (const item of rowsToArchive) {
-        await prisma.$executeRaw`
-            UPDATE "AiKnowledgeItem"
-            SET status = 'archived'::"AiKnowledgeStatus",
-                "isActive" = false,
-                "updatedAt" = NOW()
-            WHERE id = ${item.id}
-        `
+        await archiveKnowledgeItemForCoreResetV1({
+            contract: ARCHIVE_KNOWLEDGE_ITEM_FOR_CORE_RESET_COMMAND_V1,
+            itemId: item.id,
+        })
         await writeAuditEntry({
             itemId: item.id, actor,
             action: 'core_reset',

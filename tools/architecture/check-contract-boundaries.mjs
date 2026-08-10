@@ -2,6 +2,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
+import { extractPrismaWrites } from './enforce-architecture.mjs'
+
 const root = process.cwd()
 const failures = []
 const checks = []
@@ -155,6 +157,25 @@ assertCheck('foreign MAX MessageAttachment delete removed',!/prisma\.messageAtta
 const fleetClearStatusConsumer=source('gravity-mvp/src/scripts/force-clear-locks.ts')
 assertCheck('Fleet maintenance uses ClearFleetCheckStatusCommand.v1',fleetClearStatusConsumer.includes('CLEAR_FLEET_CHECK_STATUS_COMMAND_V1')&&fleetClearStatusConsumer.includes('clearFleetCheckStatusV1({'),'Fleet clear-status command absent')
 assertCheck('foreign maintenance Driver update removed',!/prisma\.driver\.updateMany/.test(fleetClearStatusConsumer),'direct Driver update remains')
+const aiKnowledgeGovernanceConsumer=source('gravity-mvp/src/app/settings/ai/actions.ts')
+const aiKnowledgeGovernanceCommands=[
+    ['EDIT_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1','editGovernanceKnowledgeItemV1'],
+    ['ARCHIVE_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1','archiveGovernanceKnowledgeItemV1'],
+    ['RESTORE_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1','restoreGovernanceKnowledgeItemV1'],
+    ['VERIFY_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1','verifyGovernanceKnowledgeItemV1'],
+    ['UNVERIFY_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1','unverifyGovernanceKnowledgeItemV1'],
+    ['SUPERSEDE_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1','supersedeGovernanceKnowledgeItemV1'],
+    ['ARCHIVE_KNOWLEDGE_CONFLICT_MEMBER_COMMAND_V1','archiveKnowledgeConflictMemberV1'],
+    ['CLEAR_KNOWLEDGE_CONFLICT_WINNER_COMMAND_V1','clearKnowledgeConflictWinnerV1'],
+    ['CLEAR_KNOWLEDGE_CONFLICT_GROUP_COMMAND_V1','clearKnowledgeConflictGroupV1'],
+    ['CREATE_MANUAL_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1','createManualGovernanceKnowledgeItemV1'],
+    ['MARK_KNOWLEDGE_ITEM_SOURCES_DISABLED_COMMAND_V1','markKnowledgeItemSourcesDisabledV1'],
+    ['ARCHIVE_KNOWLEDGE_ITEM_AFTER_SOURCE_DISABLE_COMMAND_V1','archiveKnowledgeItemAfterSourceDisableV1'],
+    ['ARCHIVE_KNOWLEDGE_ITEM_FOR_CORE_RESET_COMMAND_V1','archiveKnowledgeItemForCoreResetV1'],
+]
+assertCheck('Configuration AI governance uses all 13 owner commands',aiKnowledgeGovernanceCommands.every(([contract,runtime])=>aiKnowledgeGovernanceConsumer.includes(contract)&&aiKnowledgeGovernanceConsumer.includes(`${runtime}({`)),'AI Knowledge governance owner command absent')
+const aiKnowledgeGovernanceWrites=extractPrismaWrites(aiKnowledgeGovernanceConsumer).filter((write)=>write.model==='aiKnowledgeItem'||write.tables?.includes('AiKnowledgeItem'))
+assertCheck('13 foreign AiKnowledgeItem writes removed from Configuration governance caller',aiKnowledgeGovernanceWrites.length===0,JSON.stringify(aiKnowledgeGovernanceWrites))
 
 const handler = source('gravity-mvp/src/modules/work-management/public/v1/create-task-handler.ts')
 assertCheck(

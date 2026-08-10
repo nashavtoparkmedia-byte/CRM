@@ -103,7 +103,8 @@
     "architecture/isolation/work-management/scenario-field-settings-v1/module-manifest-amendments.json",
     "architecture/isolation/platform-shell/contact-conversation-api-v1/module-manifest-amendments.json",
     "architecture/isolation/platform-shell/manual-driver-telegram-delivery-v1/module-manifest-amendments.json",
-    "architecture/isolation/platform-shell/manager-driver-communication-v1/module-manifest-amendments.json"
+    "architecture/isolation/platform-shell/manager-driver-communication-v1/module-manifest-amendments.json",
+    "architecture/isolation/ai-knowledge/governance-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",

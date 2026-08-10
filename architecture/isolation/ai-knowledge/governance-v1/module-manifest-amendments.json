@@ -1,0 +1,26 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "CRM-ARCH-007R-AI-KNOWLEDGE-GOVERNANCE",
+  "amendments": [
+    {
+      "context": "ai_knowledge",
+      "add_commands": [
+        "EditGovernanceKnowledgeItemCommand.v1",
+        "ArchiveGovernanceKnowledgeItemCommand.v1",
+        "RestoreGovernanceKnowledgeItemCommand.v1",
+        "VerifyGovernanceKnowledgeItemCommand.v1",
+        "UnverifyGovernanceKnowledgeItemCommand.v1",
+        "SupersedeGovernanceKnowledgeItemCommand.v1",
+        "ArchiveKnowledgeConflictMemberCommand.v1",
+        "ClearKnowledgeConflictWinnerCommand.v1",
+        "ClearKnowledgeConflictGroupCommand.v1",
+        "CreateManualGovernanceKnowledgeItemCommand.v1",
+        "MarkKnowledgeItemSourcesDisabledCommand.v1",
+        "ArchiveKnowledgeItemAfterSourceDisableCommand.v1",
+        "ArchiveKnowledgeItemForCoreResetCommand.v1"
+      ],
+      "reason": "Expose Configuration's exact 13-site AI knowledge governance lifecycle through AI Knowledge ownership without a generic update or transaction capability."
+    }
+  ]
+}
