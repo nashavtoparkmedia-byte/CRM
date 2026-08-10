@@ -10,7 +10,7 @@ import { evaluateTaskRisk } from '@/lib/tasks/risk-config'
 import { RESPONSE_THRESHOLDS } from '@/lib/tasks/response-config'
 import { getRootCauseLabel } from '@/lib/tasks/root-cause-config'
 import { PATTERN_THRESHOLDS } from '@/lib/tasks/pattern-config'
-import { calculateManagerHealthScore, calculateHealthTrend, getPreviousHealthScores, saveHealthScores, updateDeclineStreak, isSustainedDecline, getHealthHistory, computeTeamStability, computeRiskPersistence, computeTeamRiskProfile, type HealthLevel, type HealthScoreBreakdown, type HealthTrend, type HealthHistoryPoint, type TeamStabilityResult, type RiskPersistenceResult, type TeamRiskProfileResult } from '@/lib/tasks/manager-health-config'
+import { HEALTH_HISTORY_CONFIG, calculateManagerHealthScore, calculateHealthTrend, updateDeclineStreak, isSustainedDecline, computeTeamStability, computeRiskPersistence, computeTeamRiskProfile, type HealthLevel, type HealthScoreBreakdown, type HealthTrend, type HealthHistoryPoint, type HealthSnapshot, type PreviousHealthData, type TeamStabilityResult, type RiskPersistenceResult, type TeamRiskProfileResult } from '@/lib/tasks/manager-health-config'
 import { buildInterventionReasons, type InterventionReason } from '@/lib/tasks/intervention-config'
 import { INTERVENTION_ACTION_LABELS, type InterventionAction } from '@/lib/tasks/intervention-action-config'
 import { evaluateOutcome, INTERVENTION_OUTCOME_CONFIG, type InterventionOutcome } from '@/lib/tasks/intervention-outcome-config'
@@ -22,20 +22,28 @@ import { OUTCOME_TIMING_CONFIG, type OutcomeTimingResult } from '@/lib/tasks/out
 import { computeOperationalVolatility, type OperationalVolatilityResult } from '@/lib/tasks/volatility-config'
 import {
     CREATE_INTERVENTION_ACTION_COMMAND_V1,
+    ENSURE_MANAGER_HEALTH_REPOSITORY_COMMAND_V1,
     ENSURE_INTERVENTION_ACTIONS_REPOSITORY_COMMAND_V1,
     LIST_COMPLETED_INTERVENTION_TIMES_QUERY_V1,
+    LIST_MANAGER_HEALTH_HISTORY_QUERY_V1,
+    LIST_MANAGER_HEALTH_SNAPSHOTS_QUERY_V1,
     LIST_INTERVENTION_OUTCOME_COUNTS_QUERY_V1,
     LIST_LATEST_INTERVENTION_ACTIONS_QUERY_V1,
     LIST_PENDING_INTERVENTION_ACTIONS_QUERY_V1,
+    SAVE_MANAGER_HEALTH_SCORES_COMMAND_V1,
     SET_INTERVENTION_OUTCOME_COMMAND_V1,
 } from '@/contracts/operations-observability/v1'
 import {
     createInterventionActionV1,
+    ensureManagerHealthRepositoryV1,
     ensureInterventionActionsRepositoryV1,
     listCompletedInterventionTimesV1,
+    listManagerHealthHistoryV1,
+    listManagerHealthSnapshotsV1,
     listInterventionOutcomeCountsV1,
     listLatestInterventionActionsV1,
     listPendingInterventionActionsV1,
+    saveManagerHealthScoresV1,
     setInterventionOutcomeV1,
 } from '@/modules/operations-observability/public/v1'
 
@@ -163,6 +171,66 @@ export interface TeamOverview {
     teamRiskProfile: TeamRiskProfileResult | null
     operationalVolatility: OperationalVolatilityResult
     managers: ManagerStats[]
+}
+
+async function getPreviousHealthScores(): Promise<Map<string, PreviousHealthData>> {
+    await ensureManagerHealthRepositoryV1({
+        contract: ENSURE_MANAGER_HEALTH_REPOSITORY_COMMAND_V1,
+    })
+    const { items } = await listManagerHealthSnapshotsV1({
+        contract: LIST_MANAGER_HEALTH_SNAPSHOTS_QUERY_V1,
+    })
+    const result = new Map<string, PreviousHealthData>()
+    for (const item of items) {
+        result.set(item.managerId, { score: item.score, declineStreak: item.declineStreak })
+    }
+    return result
+}
+
+async function saveHealthScores(snapshots: HealthSnapshot[]): Promise<void> {
+    if (snapshots.length === 0) return
+    await ensureManagerHealthRepositoryV1({
+        contract: ENSURE_MANAGER_HEALTH_REPOSITORY_COMMAND_V1,
+    })
+    await saveManagerHealthScoresV1({
+        contract: SAVE_MANAGER_HEALTH_SCORES_COMMAND_V1,
+        items: snapshots,
+    })
+}
+
+async function getHealthHistory(
+    managerIds: string[],
+    periodDays?: number
+): Promise<Map<string, HealthHistoryPoint[]>> {
+    const result = new Map<string, HealthHistoryPoint[]>()
+    if (managerIds.length === 0) return result
+
+    try {
+        await ensureManagerHealthRepositoryV1({
+            contract: ENSURE_MANAGER_HEALTH_REPOSITORY_COMMAND_V1,
+        })
+        const days = Math.min(
+            periodDays ?? HEALTH_HISTORY_CONFIG.defaultPeriodDays,
+            HEALTH_HISTORY_CONFIG.maxPeriodDays
+        )
+        const { items } = await listManagerHealthHistoryV1({
+            contract: LIST_MANAGER_HEALTH_HISTORY_QUERY_V1,
+            managerIds,
+            periodDays: days,
+        })
+        for (const item of items) {
+            if (!result.has(item.managerId)) result.set(item.managerId, [])
+            result.get(item.managerId)!.push({
+                score: item.score,
+                healthLevel: item.healthLevel as HealthLevel,
+                recordedAt: item.recordedAt,
+            })
+        }
+    } catch (e) {
+        console.error('[health-history] Failed to read history, returning empty:', e)
+    }
+
+    return result
 }
 
 export async function getTeamOverview(): Promise<TeamOverview> {
