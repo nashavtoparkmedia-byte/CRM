@@ -773,9 +773,16 @@ export function standaloneSqlSites(surface, text, mixedLanguage = false, options
 
 export function javascriptDatabaseCommandSites(surface, text) {
   // Most JS-family files cannot launch a database CLI and should not pay the
-  // mixed-shell quote-walker cost. Keep direct `exec`/`spawn` fixtures
-  // detectable, but enter the route only when a supported CLI is present.
+  // mixed-shell quote-walker cost. A CLI name inside a fixture, comment, SQL
+  // parser or regular expression is not an executable child-process call.
+  // Check for a real direct exec/spawn syntax outside quoted/comment text
+  // before entering the mixed-language parser; the parser remains responsible
+  // for conservative command detection once a sink is possible.
   if (!/\b(?:pg_restore|pg_dump|mysqldump|psql|mysql|sqlite3|sqlcmd)\b|\bprisma\s+(?:migrate|db)\b/iu.test(text)) {
+    return []
+  }
+  const code = maskQuotedAndCommentText(text)
+  if (!/\b(?:exec|execFile|spawn)\s*\(|\b[A-Za-z_$][\w$]*\s*\.\s*(?:exec|execFile|spawn)\s*\(/u.test(code)) {
     return []
   }
   return standaloneSqlSites(surface, text, true, { assumeNodeChildProcess: true }).filter((site) => (
@@ -805,7 +812,6 @@ async function analyzeSurface(surface, taskId, repositoryRoot, architecture, exe
       })
       workerPid = analysis.pid
       discovered = analysis.sites
-      discovered.push(...javascriptDatabaseCommandSites(surface, decoded.text))
       for (const diagnostic of analysis.diagnostics) {
         parseFindings.push({
           file: surface.path,

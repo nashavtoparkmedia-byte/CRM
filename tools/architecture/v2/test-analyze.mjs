@@ -382,15 +382,25 @@ const directIsolatedResult = analyzePrismaWriteSites(isolatedSource, {
   knownModels: ['User'],
   relationFields: ['user.profile'],
 })
+const directIsolatedSites = [
+  ...directIsolatedResult.sites,
+  ...javascriptDatabaseCommandSites({ path: 'fixtures/isolated-cast.ts' }, isolatedSource),
+]
 const isolatedResult = await analyzeJavaScriptSurfaceIsolated(
   { path: 'fixtures/isolated-cast.ts', extension: '.ts' },
   isolatedSource,
   { knownModels: ['User'], relationFields: ['user.profile'], workerTimeoutMs: 5_000 },
 )
-assert.deepEqual(isolatedResult.sites, directIsolatedResult.sites)
+assert.deepEqual(isolatedResult.sites, directIsolatedSites)
 assert.deepEqual(isolatedResult.diagnostics, directIsolatedResult.diagnostics)
 assert.equal(isolatedResult.source_sha256, directIsolatedResult.source_sha256)
 assert.throws(() => isolatedExecutionOptions({ workers: 5 }), /1\.\.4/)
 assert.throws(() => isolatedExecutionOptions({ workerTimeoutMs: 999 }), /1000\.\.600000/)
+
+const analyzerImplementationSource = await readFile(new URL('./write-analyzer.mjs', import.meta.url), 'utf8')
+assert.deepEqual(
+  javascriptDatabaseCommandSites({ path: 'tools/architecture/v2/write-analyzer.mjs' }, analyzerImplementationSource),
+  [],
+)
 
 process.stdout.write('repository analyzer mixed-language tests: PASS\n')

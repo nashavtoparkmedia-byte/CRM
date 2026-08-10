@@ -1,4 +1,5 @@
 import { analyzePrismaWriteSites } from './write-analyzer.mjs'
+import { javascriptDatabaseCommandSites } from './analyze.mjs'
 
 function send(message) {
   if (typeof process.send === 'function') process.send(message)
@@ -15,7 +16,10 @@ process.once('message', (task) => {
       ok: true,
       task_id: task.task_id,
       file: task.file_name,
-      sites: analysis.sites,
+      sites: [
+        ...analysis.sites,
+        ...javascriptDatabaseCommandSites({ path: task.file_name }, task.source_text),
+      ],
       diagnostics: analysis.diagnostics,
       source_sha256: analysis.source_sha256,
     })
