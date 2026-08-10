@@ -1,0 +1,42 @@
+{
+  "schema": "yoko.crm.crm-arch-007r-authoritative-source-map.v1",
+  "milestone": "CRM-ARCH-007R-FINAL-SOURCE-GATE",
+  "generated_at": "2026-08-10T09:46:02Z",
+  "production_authority": {
+    "classification": "UNCHANGED_FROZEN_OBSERVATIONAL_AUTHORITY",
+    "crm_arch_000r_status": "CRM-ARCH-000R PASS_CONTINUE",
+    "production_head": "e6a0a833fbb756216b058bfe326f9f9c77c4cc6d",
+    "production_branch": "feature/ai-knowledge-core",
+    "fd_bound_git_index_sha256": "ead575c066aeec49f9f10cacb3b7b0fc73566035b587a5a4faa68beff9a3e167",
+    "tree_manifest_sha256": "ecfb0a8b6dc24121fb5c9efb58af28eb1f1626711ef1a6d977b0db29d05bdda3",
+    "source_map": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260809T125221Z-yfs-scoped-final/AUTHORITATIVE_SOURCE_MAP.json",
+    "source_map_sha256": "70cb8e89ea5ddb4e9461b326e5e2a7cf1c850b85290296e3afcd6269ee7dbec3",
+    "runtime_observation_refreshed_by_crm_arch_007r": false
+  },
+  "architecture_candidate": {
+    "classification": "SOURCE_ONLY_UNDEPLOYED_ARCHITECTURE_CANDIDATE",
+    "branch": "codex/crm-arch-007r-final-hardening",
+    "worktree": "/opt/codex-work/crm-arch-007r-final-hardening",
+    "production_head_is_ancestor": true,
+    "prior_architecture_lead_gate_commit": "1703de389e7f2c39900a387dad6cd8ff52024c5c",
+    "resumption_decision_commit": "653a802149a3526bd3ec99d24f71f00a88be81ef",
+    "final_source_commit": "024680591c188a34ae79594d92d47854648c73c8",
+    "final_corrected_evidence_commit": "86f51301f6c073ddc886d75af3d9629b8ceb3df0",
+    "deployed": false,
+    "production_mutated": false
+  },
+  "protected_authorities": {
+    "messages": {
+      "classification": "AUTHORITATIVE_MODULE_SPECIFIC_PER_FILE_COMPOSITE",
+      "remediation_head": "50ae48a5761ced6acb1639497fa80094b108f305",
+      "provider_paths_executed_by_source_gate": false
+    },
+    "ai_calls_dev": {
+      "classification": "SEPARATE_DEV_ONLY_AUTHORITY",
+      "head": "b38b22d3e00b3fb43d05417131709b3d2c535b2b",
+      "merged_or_promoted": false
+    }
+  },
+  "authority_change": "NONE_TO_PRODUCTION_OR_PROTECTED_DEV_AUTHORITIES",
+  "final_gate_status": "CRM-ARCH-007R READY FOR ARCHITECTURE LEAD REVIEW"
+}

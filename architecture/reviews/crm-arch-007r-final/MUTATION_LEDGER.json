@@ -1,0 +1,31 @@
+{
+  "schema": "yoko.crm.mutation-ledger.v1",
+  "milestone": "CRM-ARCH-007R-FINAL-SOURCE-GATE",
+  "source_commit": "024680591c188a34ae79594d92d47854648c73c8",
+  "evidence_commit": "86f51301f6c073ddc886d75af3d9629b8ceb3df0",
+  "source_control": {
+    "application_runtime_source_changed": true,
+    "final_hardening_application_files_changed": 19,
+    "final_hardening_server_action_source_files_changed": 2,
+    "architecture_control_source_changed": true,
+    "strict_registry_changed": true,
+    "evidence_changed": true
+  },
+  "runtime_execution": {
+    "database_accessed": false,
+    "provider_transport_executed": false,
+    "server_action_executed": false,
+    "deployed_runtime_accessed_or_mutated": false,
+    "deployed_service_accessed_or_mutated": false,
+    "deployment_performed": false,
+    "production_mutated": false,
+    "real_secret_values_read_or_emitted": false
+  },
+  "production": [],
+  "database": [],
+  "providers": [],
+  "deployed_services": [],
+  "deployments": [],
+  "rollbacks": [],
+  "source_only": true
+}

@@ -1,0 +1,76 @@
+{
+  "schema": "yoko.crm.crm-arch-007r-final-verification.v1",
+  "milestone": "CRM-ARCH-007R-FINAL-SOURCE-GATE",
+  "verified_at": "2026-08-10T09:46:02Z",
+  "status": "READY_FOR_ARCHITECTURE_LEAD_REVIEW",
+  "source_commit": "024680591c188a34ae79594d92d47854648c73c8",
+  "corrected_evidence_commit": "86f51301f6c073ddc886d75af3d9629b8ceb3df0",
+  "architecture": {
+    "files": 1015,
+    "contexts": 16,
+    "dependency_relationships": 106,
+    "dependency_cycles": 0,
+    "findings": 1295,
+    "exceptions": 1295,
+    "direct_foreign_prisma_write": 0,
+    "direct_provider_transport_access": 38,
+    "internal_module_import": 374,
+    "non_public_cross_context_import": 530,
+    "undeclared_dependency": 353,
+    "finding_digest": "f3d919d6ba652c8d97ae6ff0ca44f0044003154b6a6f0c923a93cae772f7ba84",
+    "registry_sha256": "96dbbbf4b3b7249d5d5bdcd7e0e013a3f5ae547f904ce1cd2215df686eee13c7",
+    "policy_sha256": "86a53c2a2ce800188088f0ada46d2f23e6f0dbaad9e08e9557e535930392c667",
+    "strict_registry_pass": true
+  },
+  "decision_closure": {
+    "genuine_sites": 103,
+    "cross_owner_topology_or_transaction": "22/22",
+    "bounded_repository_relocation": "12/12",
+    "security_sensitive_ai_settings": "21/21",
+    "static_sql_fragment_hardening": "48/48",
+    "remaining": 0
+  },
+  "tests": {
+    "cumulative_architecture_scripts": "137/137 PASS",
+    "contract_boundaries": "143/143 PASS",
+    "parser": "29/29 PASS",
+    "owner_adapter_hardening": "6/6 PASS",
+    "fragment_hardening": "6/6 PASS",
+    "ai_knowledge_governance": "15/15 PASS",
+    "calling_ai_agent_config": "10/10 PASS",
+    "affected_successor_boundaries": "22/22 PASS"
+  },
+  "typescript": {
+    "diagnostics": 28,
+    "classification": "inherited exact signature",
+    "normalized_sha256": "2d3847300874a4cc5b419e22e9b1d4b53dc9d3d56a9576f49f2ec37b32db5245"
+  },
+  "evidence": {
+    "isolation_bundles": 64,
+    "historical_checksum_entries": 1614,
+    "historical_gate_tree_verification": "64/64 bundles; 1614/1614 entries PASS",
+    "self_contained_payloads_current_head": "565/565 PASS",
+    "final_hardening": "54/54 PASS",
+    "final_hardening_sha256sums_sha256": "7a66d173c691bdb1304623e771fac6898241b9103b2732d9da77254d2aa87e82",
+    "crm_arch_000r_external_chains": "8/8, 167/167, 234/234 and 11/11 PASS",
+    "snapshot_aware": true
+  },
+  "security": {
+    "secret_safety": "PASS",
+    "generic_sql_capabilities_added": 0,
+    "generic_transaction_capabilities_added": 0,
+    "real_secret_values_read_or_emitted": false,
+    "provider_transports_executed": false
+  },
+  "execution": {
+    "application_runtime_source_changed": true,
+    "server_action_source_files_changed": 2,
+    "runtime_execution_performed": false,
+    "deployed_runtime_mutated": false,
+    "deployed_service_mutated": false,
+    "production_mutated": false
+  },
+  "independent_critic": "UNCONDITIONAL PASS",
+  "review_manifest_entries": 80,
+  "whole_project_owner_acceptance": false
+}

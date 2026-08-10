@@ -1,0 +1,78 @@
+{
+  "schema": "yoko.crm.crm-arch-007r-final-evidence-index.v1",
+  "milestone": "CRM-ARCH-007R-FINAL-SOURCE-GATE",
+  "generated_at": "2026-08-10T09:46:02Z",
+  "repository": {
+    "path": "/opt/codex-work/crm-arch-007r-final-hardening",
+    "branch": "codex/crm-arch-007r-final-hardening",
+    "source_commit": "024680591c188a34ae79594d92d47854648c73c8",
+    "corrected_evidence_commit": "86f51301f6c073ddc886d75af3d9629b8ceb3df0"
+  },
+  "decision_input": {
+    "directory": "architecture/reviews/crm-arch-007r-resumed",
+    "decision_commit": "653a802149a3526bd3ec99d24f71f00a88be81ef",
+    "prior_direct_writes": 67,
+    "surfaced": 48,
+    "false_ambiguities": 12,
+    "genuine_sites": 103
+  },
+  "isolation_bundles": {
+    "root": "architecture/isolation",
+    "index": "architecture/reviews/crm-arch-007r-final/BUNDLE_SEAL_INDEX.json",
+    "prior_bundles": 49,
+    "resumed_bundles": 15,
+    "total_bundles": 64,
+    "total_checksum_entries": 1614,
+    "self_contained_payload_entries_matching_current_head": 565,
+    "verification_rule": "Each historical checksum manifest is verified against the Git tree where its complete source snapshot sealed; mutable external source entries are not compared to current HEAD."
+  },
+  "key_resumed_evidence": [
+    "architecture/isolation/architecture-enforcement/static-sql-ownership-v1",
+    "architecture/isolation/ai-knowledge/legacy-knowledge-entry-v1",
+    "architecture/isolation/operations-observability/event-retention-v1",
+    "architecture/isolation/operations-observability/archived-contact-purge-v1",
+    "architecture/isolation/operations-observability/intervention-actions-v1",
+    "architecture/isolation/operations-observability/manager-health-v1",
+    "architecture/isolation/messaging/conversation-contact-link-v1",
+    "architecture/isolation/work-management/scenario-field-settings-v1",
+    "architecture/isolation/platform-shell/contact-conversation-api-v1",
+    "architecture/isolation/platform-shell/manual-driver-telegram-delivery-v1",
+    "architecture/isolation/platform-shell/manager-driver-communication-v1",
+    "architecture/isolation/contacts/contact-merge-transaction-v1",
+    "architecture/isolation/ai-knowledge/governance-v1",
+    "architecture/isolation/calling/ai-agent-config-v1",
+    "architecture/isolation/architecture-enforcement/static-sql-fragment-hardening-v1"
+  ],
+  "external_runtime_evidence": [
+    {
+      "path": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260809T125221Z-yfs-scoped-final",
+      "status": "CRM-ARCH-000R PASS_CONTINUE",
+      "entries": 8,
+      "sha256sums_sha256": "dcbe25c13b89ef7854caa12d2da2345c1ffbf3bd50a6a026b70f94c1f49c91ad"
+    },
+    {
+      "path": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260809T042942Z-operator-003",
+      "status": "HISTORICAL_INCOMPLETE_INPUT",
+      "entries": 167,
+      "sha256sums_sha256": "ccac93f470316c61d241fec660fb2f0400c230b910cbc90057ea31eafde10ec9"
+    },
+    {
+      "path": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260809T040605Z-recovery-final",
+      "status": "HISTORICAL_INCOMPLETE_INPUT",
+      "entries": 234,
+      "sha256sums_sha256": "efe7e3e9cea36f4570bc48052bb7ad6701ad68edab3459edc4c88d1ccdaf6717"
+    },
+    {
+      "path": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260809T123041Z-v2-live-reconciliation",
+      "status": "HISTORICAL_SCOPED_RECONCILIATION_INPUT",
+      "entries": 11,
+      "sha256sums_sha256": "c948b9988696c7463c8c855198b8313f963259a446863b6df56ea66b1c92cb3a"
+    }
+  ],
+  "final_hardening": {
+    "directory": "architecture/isolation/architecture-enforcement/static-sql-fragment-hardening-v1",
+    "checksum_entries": 54,
+    "sha256sums_sha256": "7a66d173c691bdb1304623e771fac6898241b9103b2732d9da77254d2aa87e82",
+    "independent_critic": "UNCONDITIONAL PASS"
+  }
+}
