@@ -126,6 +126,13 @@ async function loadJson(repositoryRoot, relative) {
   return JSON.parse(await readFile(path.join(repositoryRoot, relative), 'utf8'))
 }
 
+async function loadOptionalJson(repositoryRoot, relative, fallback) {
+  try { return await loadJson(repositoryRoot, relative) } catch (error) {
+    if (error?.code === 'ENOENT') return fallback
+    throw error
+  }
+}
+
 async function repositoryGitIdentity(repositoryRoot) {
   const run = async (args) => {
     try {
@@ -178,7 +185,7 @@ function decodeSource(bytes) {
   return { text: bytes.toString('utf8'), encoding: 'utf8', ambiguous: false }
 }
 
-function compileArchitecture(moduleRules, manifests, ownershipRules) {
+export function compileArchitecture(moduleRules, manifests, ownershipRules, scopedOwnership = { rules: [] }) {
   const modules = moduleRules.modules.map((item) => ({ ...item, regex: new RegExp(item.match) }))
   const technicalToContext = new Map()
   for (const manifest of manifests) {
@@ -204,7 +211,11 @@ function compileArchitecture(moduleRules, manifests, ownershipRules) {
       if (owned.mapped_table) modelOwners.set(owned.mapped_table.toLowerCase(), modelOwners.get(owned.model.toLowerCase()))
     }
   }
-  return { contextIds: new Set(manifests.map((manifest) => manifest.context.id)), modelOwners, modules, technicalToContext }
+  const scopedModelOwners = new Map()
+  for (const rule of scopedOwnership.rules ?? []) {
+    scopedModelOwners.set(`${rule.source}\0${rule.table.toLowerCase()}`, { model: rule.table, context: rule.owner_context, technical_owner: null, scoped_rule_id: rule.id, allowed_operations: new Set(rule.allowed_operations ?? []) })
+  }
+  return { contextIds: new Set(manifests.map((manifest) => manifest.context.id)), modelOwners, scopedModelOwners, modules, technicalToContext }
 }
 
 function sourceIdentity(surface, architecture) {
@@ -225,9 +236,11 @@ function sourceIdentity(surface, architecture) {
   }
 }
 
-function targetIdentity(modelOrTable, architecture) {
+function targetIdentity(modelOrTable, architecture, sourcePath) {
   if (!modelOrTable) return null
   const normalized = modelOrTable.toLowerCase()
+  const scoped = architecture.scopedModelOwners?.get(`${sourcePath}\0${normalized}`)
+  if (scoped) return scoped
   const mapped = architecture.tableSymbols?.get(normalized) ?? normalized
   return architecture.modelOwners.get(mapped) ?? null
 }
@@ -239,22 +252,27 @@ function lifecycleClassification(surface) {
   return null
 }
 
-function classifySite(site, surface, source, architecture) {
+export function classifySite(site, surface, source, architecture) {
   const lifecycle = lifecycleClassification(surface)
   if (lifecycle) return { classification: lifecycle, owner_contexts: [], unresolved_targets: [] }
   const targets = site.kind === 'model' || site.kind === 'ambiguous_model' || site.kind === 'drizzle'
     ? [site.model, ...(site.candidate_models ?? [])].filter(Boolean)
     : (site.tables ?? [])
-  const identities = targets.map((target) => targetIdentity(target, architecture))
+  const identities = targets.map((target) => targetIdentity(target, architecture, surface.path))
   const unresolvedTargets = targets.filter((target, index) => !identities[index])
   const ownerContexts = [...new Set(identities.filter(Boolean).map((item) => item.context))].sort()
+  const siteOperations = new Set((site.operations ?? []).map((item) => item.operation).filter(Boolean))
+  const disallowedScopedOperation = identities.some((identity) => identity?.scoped_rule_id
+    && identity.context === source.context
+    && [...siteOperations].some((operation) => !identity.allowed_operations.has(operation)))
   if (
     site.ambiguous
+    || disallowedScopedOperation
     || !source.context
     || targets.length === 0
     || unresolvedTargets.length > 0
     || ownerContexts.length !== 1
-  ) return { classification: 'AMBIGUOUS', owner_contexts: ownerContexts, unresolved_targets: unresolvedTargets }
+  ) return { classification: 'AMBIGUOUS', owner_contexts: ownerContexts, unresolved_targets: [...unresolvedTargets, ...(disallowedScopedOperation ? ['scoped_operation_not_allowed'] : [])] }
   return {
     classification: ownerContexts[0] === source.context ? 'OWNER' : 'FOREIGN',
     owner_contexts: ownerContexts,
@@ -1001,7 +1019,8 @@ export async function analyzeRepository(repositoryRoot, options = {}) {
   const ownershipRules = await loadJson(repositoryRoot, 'architecture/evidence/v1/ownership-rules.json')
   const contextIndex = await loadJson(repositoryRoot, 'architecture/contexts/v1/context-index.json')
   const manifests = await Promise.all(contextIndex.contexts.map((entry) => loadJson(repositoryRoot, entry.path)))
-  const architecture = compileArchitecture(moduleRules, manifests, ownershipRules)
+  const scopedOwnership = await loadOptionalJson(repositoryRoot, 'architecture/contexts/v1/scoped-data-ownership.json', { rules: [] })
+  const architecture = compileArchitecture(moduleRules, manifests, ownershipRules, scopedOwnership)
   architecture.tableSymbols = new Map()
   architecture.prismaModels = new Set()
   architecture.prismaRelationFields = new Set()
