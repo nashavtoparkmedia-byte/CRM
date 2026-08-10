@@ -116,13 +116,9 @@ check(
   scan.findings.length === 1295
     && scan.scanned_files === 1015
     && scan.contexts === 16
-    && byRule.direct_foreign_prisma_write <= expectedCounts.direct_foreign_prisma_write
-    && byRule.direct_provider_transport_access === expectedCounts.direct_provider_transport_access
-    && byRule.internal_module_import === expectedCounts.internal_module_import
-    && byRule.non_public_cross_context_import === expectedCounts.non_public_cross_context_import
-    && byRule.undeclared_dependency === expectedCounts.undeclared_dependency
+    && JSON.stringify(byRule) === JSON.stringify(expectedCounts)
     && scan.findings.length === Object.values(byRule).reduce((sum, count) => sum + count, 0)
-    && (scan.findings.length < 1348 || findingDigest === expectedDigest),
+    && findingDigest === expectedDigest,
   { findings: scan.findings.length, scanned_files: scan.scanned_files, contexts: scan.contexts, by_rule: byRule, finding_digest: findingDigest },
 )
 check(

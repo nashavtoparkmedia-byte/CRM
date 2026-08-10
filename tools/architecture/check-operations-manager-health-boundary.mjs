@@ -255,7 +255,7 @@ check(
 check(
     'six accepted manager-health write retirements remain closed in later strict registries',
     registry.exceptions.length <= 1408 &&
-        registry.summary?.direct_foreign_prisma_write <= 85 &&
+        (registry.summary?.direct_foreign_prisma_write ?? 0) <= 85 &&
         registry.summary?.direct_provider_transport_access <= 38 &&
         registry.summary?.internal_module_import <= 379 &&
         registry.summary?.non_public_cross_context_import <= 536 &&

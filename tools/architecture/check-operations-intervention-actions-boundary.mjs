@@ -271,7 +271,7 @@ check(
 check(
     'five accepted write retirements remain closed in later strict registries',
     registry.exceptions.length <= 1414 &&
-        registry.summary?.direct_foreign_prisma_write <= 91 &&
+        (registry.summary?.direct_foreign_prisma_write ?? 0) <= 91 &&
         registry.summary?.undeclared_dependency <= 370 &&
         [
             'arch_88826812df7607334fe418c0',

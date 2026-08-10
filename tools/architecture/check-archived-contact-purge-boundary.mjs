@@ -207,7 +207,7 @@ check(
 )
 check(
   'exact three writes and seven redundant dependency findings retire with no new capacity',
-  registry.summary?.direct_foreign_prisma_write <= 96 &&
+  (registry.summary?.direct_foreign_prisma_write ?? 0) <= 96 &&
     registry.summary?.undeclared_dependency <= 370 &&
     registry.exceptions.length <= 1419 &&
     [

@@ -203,7 +203,7 @@ check(
 check(
   'accepted conversation-link retirement remains closed in later strict registries',
   registry.exceptions.length <= 1407 &&
-    registry.summary?.direct_foreign_prisma_write <= 84 &&
+    (registry.summary?.direct_foreign_prisma_write ?? 0) <= 84 &&
     registry.summary?.direct_provider_transport_access <= 38 &&
     registry.summary?.internal_module_import <= 379 &&
     registry.summary?.non_public_cross_context_import <= 536 &&

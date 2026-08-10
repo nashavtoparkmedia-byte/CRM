@@ -143,7 +143,7 @@ check(
 )
 check(
     'exact three findings remain retired with no replacement capacity',
-    registry.summary?.direct_foreign_prisma_write <= 100
+    (registry.summary?.direct_foreign_prisma_write ?? 0) <= 100
         && registry.exceptions.length <= 1430
         && [
             'arch_4e0297ee9451d50de1fed034',

@@ -257,7 +257,7 @@ check(
 )
 check(
   'exact generic dynamic write remains retired with no replacement capacity',
-  registry.summary?.direct_foreign_prisma_write <= 99 &&
+  (registry.summary?.direct_foreign_prisma_write ?? 0) <= 99 &&
     registry.exceptions.length <= 1429 &&
     !registry.exceptions.some((entry) => entry.fingerprint === 'arch_d6b0723094e2555809f66a51') &&
     !registry.exceptions.some((entry) => [
