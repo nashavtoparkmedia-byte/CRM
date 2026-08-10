@@ -1,14 +1,14 @@
 {
-  "analysis_sha256": "04a0c0b37e512a365a4b6e94b1fd9acd3b001287d57c09e6c7745974d0c3ad73",
+  "analysis_sha256": "b814698475b4e5c55236f345bbc34c367bcc7c939027601791c548c073074f21",
   "execution": {
-    "ambiguous_candidates": 547,
+    "ambiguous_candidates": 533,
     "complete": true,
-    "elapsed_ms": 300521.404145,
+    "elapsed_ms": 272837.881077,
     "failures": [],
     "files_completed": 1693,
     "files_discovered": 1693,
     "mode": "fresh_process_per_javascript_surface",
-    "progress_every": 75,
+    "progress_every": 100,
     "worker_failures": 0,
     "worker_limit": 4,
     "worker_timeout_ms": 120000,
@@ -18702,22 +18702,22 @@
   "parse_findings": [],
   "schema": "yoko.crm.whole-repository-write-analysis.v2",
   "source": {
-    "git_commit": "4ff813853a400b6000e26f73fb5a16d9e06543de",
+    "git_commit": "d30cacd16c7c1e8505d176a4905912ef6fc30276",
     "git_tracked_only": true,
-    "git_tree": "11f7d3936753caa1503e5c6d5c2eb111d8cd4184",
+    "git_tree": "57f7e24dbce430bc5f789214c6d87ea6e2c73a46",
     "inventory_schema": "yoko.crm.tracked-executable-surface-inventory.v2",
     "repository_root": ".",
     "tracked_worktree_clean": false,
-    "tracked_worktree_status_sha256": "196239a6d67e6e39ae90f293e158cc16746ada9d4e2ff4252abb7c8749d70851"
+    "tracked_worktree_status_sha256": "2674efae9c1c4079feaed1c87a6e5a4775f9357c1c98c3cfa5bff8c818d143dc"
   },
   "summary": {
-    "ambiguous_writes": 547,
+    "ambiguous_writes": 533,
     "discovered_write_sites": 1480,
     "foreign_writes": 0,
     "historical_dead_writes": 0,
     "migration_only_writes": 468,
     "operational_script_writes": 463,
-    "owner_writes": 462,
+    "owner_writes": 476,
     "parse_findings": 0,
     "raw_sql_writes": 871,
     "test_writes": 3,
@@ -89010,10 +89010,7 @@
     },
     {
       "ambiguity_reasons": [
-        "ambiguous_prisma_delegate",
-        "nested_relation_write_requires_schema_resolution",
-        "unproven_prisma_client",
-        "unproven_prisma_member"
+        "nested_relation_write_requires_schema_resolution"
       ],
       "ambiguous": true,
       "candidate_models": [
@@ -89021,14 +89018,14 @@
       ],
       "classification": "AMBIGUOUS",
       "column": 27,
-      "confidence": "CONSERVATIVE",
+      "confidence": "MEDIUM",
       "end": 1761,
       "file": "tg-bot/src/routes/admin/bots.js",
       "index": 1446,
       "kind": "ambiguous_model",
       "line": 55,
       "method": "create",
-      "model": null,
+      "model": "bot",
       "nested_operations": [
         {
           "method": "create",
@@ -89041,7 +89038,7 @@
       "owner_contexts": [
         "telegram_channel"
       ],
-      "receiver_origin": "member:identifier:req.prisma",
+      "receiver_origin": "runtime-request-prisma:identifier:req.prisma",
       "return_projection": {
         "dynamic": false,
         "mode": "SELECT",
@@ -89166,30 +89163,26 @@
       ]
     },
     {
-      "ambiguity_reasons": [
-        "ambiguous_prisma_delegate",
-        "unproven_prisma_client",
-        "unproven_prisma_member"
-      ],
-      "ambiguous": true,
+      "ambiguity_reasons": [],
+      "ambiguous": false,
       "candidate_models": [
         "bot"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "OWNER",
       "column": 27,
-      "confidence": "CONSERVATIVE",
+      "confidence": "MEDIUM",
       "end": 2478,
       "file": "tg-bot/src/routes/admin/bots.js",
       "index": 2343,
-      "kind": "ambiguous_model",
+      "kind": "model",
       "line": 84,
       "method": "update",
-      "model": null,
+      "model": "bot",
       "nested_operations": [],
       "owner_contexts": [
         "telegram_channel"
       ],
-      "receiver_origin": "member:identifier:req.prisma",
+      "receiver_origin": "runtime-request-prisma:identifier:req.prisma",
       "return_projection": {
         "dynamic": false,
         "mode": "SELECT",
@@ -89312,30 +89305,26 @@
       ]
     },
     {
-      "ambiguity_reasons": [
-        "ambiguous_prisma_delegate",
-        "unproven_prisma_client",
-        "unproven_prisma_member"
-      ],
-      "ambiguous": true,
+      "ambiguity_reasons": [],
+      "ambiguous": false,
       "candidate_models": [
         "survey"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "OWNER",
       "column": 33,
-      "confidence": "CONSERVATIVE",
+      "confidence": "MEDIUM",
       "end": 3514,
       "file": "tg-bot/src/routes/admin/surveys.js",
       "index": 3205,
-      "kind": "ambiguous_model",
+      "kind": "model",
       "line": 89,
       "method": "create",
-      "model": null,
+      "model": "survey",
       "nested_operations": [],
       "owner_contexts": [
         "telegram_channel"
       ],
-      "receiver_origin": "member:identifier:req.prisma",
+      "receiver_origin": "runtime-request-prisma:identifier:req.prisma",
       "return_projection": {
         "dynamic": false,
         "mode": "FULL_ROW",
@@ -89370,30 +89359,27 @@
     },
     {
       "ambiguity_reasons": [
-        "ambiguous_prisma_delegate",
-        "dynamic_payload_may_contain_nested_write",
-        "unproven_prisma_client",
-        "unproven_prisma_member"
+        "dynamic_payload_may_contain_nested_write"
       ],
-      "ambiguous": true,
+      "ambiguous": false,
       "candidate_models": [
         "survey"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "OWNER",
       "column": 30,
-      "confidence": "CONSERVATIVE",
+      "confidence": "MEDIUM",
       "end": 4192,
       "file": "tg-bot/src/routes/admin/surveys.js",
       "index": 4089,
-      "kind": "ambiguous_model",
+      "kind": "model",
       "line": 116,
       "method": "update",
-      "model": null,
+      "model": "survey",
       "nested_operations": [],
       "owner_contexts": [
         "telegram_channel"
       ],
-      "receiver_origin": "member:identifier:req.prisma",
+      "receiver_origin": "runtime-request-prisma:identifier:req.prisma",
       "return_projection": {
         "dynamic": false,
         "mode": "FULL_ROW",
@@ -89428,30 +89414,26 @@
       ]
     },
     {
-      "ambiguity_reasons": [
-        "ambiguous_prisma_delegate",
-        "unproven_prisma_client",
-        "unproven_prisma_member"
-      ],
-      "ambiguous": true,
+      "ambiguity_reasons": [],
+      "ambiguous": false,
       "candidate_models": [
         "survey"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "OWNER",
       "column": 15,
-      "confidence": "CONSERVATIVE",
+      "confidence": "MEDIUM",
       "end": 4950,
       "file": "tg-bot/src/routes/admin/surveys.js",
       "index": 4814,
-      "kind": "ambiguous_model",
+      "kind": "model",
       "line": 141,
       "method": "update",
-      "model": null,
+      "model": "survey",
       "nested_operations": [],
       "owner_contexts": [
         "telegram_channel"
       ],
-      "receiver_origin": "member:identifier:req.prisma",
+      "receiver_origin": "runtime-request-prisma:identifier:req.prisma",
       "return_projection": {
         "dynamic": false,
         "mode": "FULL_ROW",
@@ -89482,30 +89464,26 @@
       ]
     },
     {
-      "ambiguity_reasons": [
-        "ambiguous_prisma_delegate",
-        "unproven_prisma_client",
-        "unproven_prisma_member"
-      ],
-      "ambiguous": true,
+      "ambiguity_reasons": [],
+      "ambiguous": false,
       "candidate_models": [
         "survey"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "OWNER",
       "column": 33,
-      "confidence": "CONSERVATIVE",
+      "confidence": "MEDIUM",
       "end": 5439,
       "file": "tg-bot/src/routes/admin/surveys.js",
       "index": 5014,
-      "kind": "ambiguous_model",
+      "kind": "model",
       "line": 147,
       "method": "create",
-      "model": null,
+      "model": "survey",
       "nested_operations": [],
       "owner_contexts": [
         "telegram_channel"
       ],
-      "receiver_origin": "member:identifier:req.prisma",
+      "receiver_origin": "runtime-request-prisma:identifier:req.prisma",
       "return_projection": {
         "dynamic": false,
         "mode": "FULL_ROW",
@@ -89542,30 +89520,27 @@
     },
     {
       "ambiguity_reasons": [
-        "ambiguous_prisma_delegate",
-        "dynamic_payload_may_contain_nested_write",
-        "unproven_prisma_client",
-        "unproven_prisma_member"
+        "dynamic_payload_may_contain_nested_write"
       ],
-      "ambiguous": true,
+      "ambiguous": false,
       "candidate_models": [
         "question"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "OWNER",
       "column": 19,
-      "confidence": "CONSERVATIVE",
+      "confidence": "MEDIUM",
       "end": 6585,
       "file": "tg-bot/src/routes/admin/surveys.js",
       "index": 6531,
-      "kind": "ambiguous_model",
+      "kind": "model",
       "line": 188,
       "method": "createMany",
-      "model": null,
+      "model": "question",
       "nested_operations": [],
       "owner_contexts": [
         "telegram_channel"
       ],
-      "receiver_origin": "member:identifier:req.prisma",
+      "receiver_origin": "runtime-request-prisma:identifier:req.prisma",
       "return_projection": null,
       "scope": "<module>",
       "site_signature": "91742aaa43943751884876815c777fdafff5e4054031f33a7cb9b02e5976448e",
@@ -89587,30 +89562,26 @@
       "written_fields": []
     },
     {
-      "ambiguity_reasons": [
-        "ambiguous_prisma_delegate",
-        "unproven_prisma_client",
-        "unproven_prisma_member"
-      ],
-      "ambiguous": true,
+      "ambiguity_reasons": [],
+      "ambiguous": false,
       "candidate_models": [
         "question"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "OWNER",
       "column": 32,
-      "confidence": "CONSERVATIVE",
+      "confidence": "MEDIUM",
       "end": 7485,
       "file": "tg-bot/src/routes/admin/surveys.js",
       "index": 7327,
-      "kind": "ambiguous_model",
+      "kind": "model",
       "line": 213,
       "method": "create",
-      "model": null,
+      "model": "question",
       "nested_operations": [],
       "owner_contexts": [
         "telegram_channel"
       ],
-      "receiver_origin": "member:identifier:req.prisma",
+      "receiver_origin": "runtime-request-prisma:identifier:req.prisma",
       "return_projection": {
         "dynamic": false,
         "mode": "FULL_ROW",
@@ -89647,30 +89618,26 @@
       ]
     },
     {
-      "ambiguity_reasons": [
-        "ambiguous_prisma_delegate",
-        "unproven_prisma_client",
-        "unproven_prisma_member"
-      ],
-      "ambiguous": true,
+      "ambiguity_reasons": [],
+      "ambiguous": false,
       "candidate_models": [
         "question"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "OWNER",
       "column": 20,
-      "confidence": "CONSERVATIVE",
+      "confidence": "MEDIUM",
       "end": 8024,
       "file": "tg-bot/src/routes/admin/surveys.js",
       "index": 7911,
-      "kind": "ambiguous_model",
+      "kind": "model",
       "line": 229,
       "method": "update",
-      "model": null,
+      "model": "question",
       "nested_operations": [],
       "owner_contexts": [
         "telegram_channel"
       ],
-      "receiver_origin": "member:identifier:req.prisma",
+      "receiver_origin": "runtime-request-prisma:identifier:req.prisma",
       "return_projection": {
         "dynamic": false,
         "mode": "FULL_ROW",
@@ -89700,30 +89667,26 @@
       ]
     },
     {
-      "ambiguity_reasons": [
-        "ambiguous_prisma_delegate",
-        "unproven_prisma_client",
-        "unproven_prisma_member"
-      ],
-      "ambiguous": true,
+      "ambiguity_reasons": [],
+      "ambiguous": false,
       "candidate_models": [
         "question"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "OWNER",
       "column": 32,
-      "confidence": "CONSERVATIVE",
+      "confidence": "MEDIUM",
       "end": 8768,
       "file": "tg-bot/src/routes/admin/surveys.js",
       "index": 8600,
-      "kind": "ambiguous_model",
+      "kind": "model",
       "line": 251,
       "method": "update",
-      "model": null,
+      "model": "question",
       "nested_operations": [],
       "owner_contexts": [
         "telegram_channel"
       ],
-      "receiver_origin": "member:identifier:req.prisma",
+      "receiver_origin": "runtime-request-prisma:identifier:req.prisma",
       "return_projection": {
         "dynamic": false,
         "mode": "FULL_ROW",
@@ -89758,30 +89721,26 @@
       ]
     },
     {
-      "ambiguity_reasons": [
-        "ambiguous_prisma_delegate",
-        "unproven_prisma_client",
-        "unproven_prisma_member"
-      ],
-      "ambiguous": true,
+      "ambiguity_reasons": [],
+      "ambiguous": false,
       "candidate_models": [
         "user"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "OWNER",
       "column": 26,
-      "confidence": "CONSERVATIVE",
+      "confidence": "MEDIUM",
       "end": 3394,
       "file": "tg-bot/src/routes/webhooks.js",
       "index": 3111,
-      "kind": "ambiguous_model",
+      "kind": "model",
       "line": 82,
       "method": "create",
-      "model": null,
+      "model": "user",
       "nested_operations": [],
       "owner_contexts": [
         "telegram_channel"
       ],
-      "receiver_origin": "member:identifier:req.prisma",
+      "receiver_origin": "runtime-request-prisma:identifier:req.prisma",
       "return_projection": {
         "dynamic": false,
         "mode": "FULL_ROW",
@@ -89815,30 +89774,26 @@
       ]
     },
     {
-      "ambiguity_reasons": [
-        "ambiguous_prisma_delegate",
-        "unproven_prisma_client",
-        "unproven_prisma_member"
-      ],
-      "ambiguous": true,
+      "ambiguity_reasons": [],
+      "ambiguous": false,
       "candidate_models": [
         "user"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "OWNER",
       "column": 19,
-      "confidence": "CONSERVATIVE",
+      "confidence": "MEDIUM",
       "end": 3997,
       "file": "tg-bot/src/routes/webhooks.js",
       "index": 3842,
-      "kind": "ambiguous_model",
+      "kind": "model",
       "line": 105,
       "method": "update",
-      "model": null,
+      "model": "user",
       "nested_operations": [],
       "owner_contexts": [
         "telegram_channel"
       ],
-      "receiver_origin": "member:identifier:req.prisma",
+      "receiver_origin": "runtime-request-prisma:identifier:req.prisma",
       "return_projection": {
         "dynamic": false,
         "mode": "FULL_ROW",
@@ -89869,30 +89824,26 @@
       ]
     },
     {
-      "ambiguity_reasons": [
-        "ambiguous_prisma_delegate",
-        "unproven_prisma_client",
-        "unproven_prisma_member"
-      ],
-      "ambiguous": true,
+      "ambiguity_reasons": [],
+      "ambiguous": false,
       "candidate_models": [
         "answer"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "OWNER",
       "column": 15,
-      "confidence": "CONSERVATIVE",
+      "confidence": "MEDIUM",
       "end": 5264,
       "file": "tg-bot/src/routes/webhooks.js",
       "index": 5088,
-      "kind": "ambiguous_model",
+      "kind": "model",
       "line": 138,
       "method": "create",
-      "model": null,
+      "model": "answer",
       "nested_operations": [],
       "owner_contexts": [
         "telegram_channel"
       ],
-      "receiver_origin": "member:identifier:req.prisma",
+      "receiver_origin": "runtime-request-prisma:identifier:req.prisma",
       "return_projection": {
         "dynamic": false,
         "mode": "FULL_ROW",
@@ -89924,30 +89875,26 @@
       ]
     },
     {
-      "ambiguity_reasons": [
-        "ambiguous_prisma_delegate",
-        "unproven_prisma_client",
-        "unproven_prisma_member"
-      ],
-      "ambiguous": true,
+      "ambiguity_reasons": [],
+      "ambiguous": false,
       "candidate_models": [
         "user"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "OWNER",
       "column": 19,
-      "confidence": "CONSERVATIVE",
+      "confidence": "MEDIUM",
       "end": 6693,
       "file": "tg-bot/src/routes/webhooks.js",
       "index": 6558,
-      "kind": "ambiguous_model",
+      "kind": "model",
       "line": 179,
       "method": "update",
-      "model": null,
+      "model": "user",
       "nested_operations": [],
       "owner_contexts": [
         "telegram_channel"
       ],
-      "receiver_origin": "member:identifier:req.prisma",
+      "receiver_origin": "runtime-request-prisma:identifier:req.prisma",
       "return_projection": {
         "dynamic": false,
         "mode": "FULL_ROW",
@@ -89977,30 +89924,26 @@
       ]
     },
     {
-      "ambiguity_reasons": [
-        "ambiguous_prisma_delegate",
-        "unproven_prisma_client",
-        "unproven_prisma_member"
-      ],
-      "ambiguous": true,
+      "ambiguity_reasons": [],
+      "ambiguous": false,
       "candidate_models": [
         "user"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "OWNER",
       "column": 19,
-      "confidence": "CONSERVATIVE",
+      "confidence": "MEDIUM",
       "end": 6976,
       "file": "tg-bot/src/routes/webhooks.js",
       "index": 6830,
-      "kind": "ambiguous_model",
+      "kind": "model",
       "line": 187,
       "method": "update",
-      "model": null,
+      "model": "user",
       "nested_operations": [],
       "owner_contexts": [
         "telegram_channel"
       ],
-      "receiver_origin": "member:identifier:req.prisma",
+      "receiver_origin": "runtime-request-prisma:identifier:req.prisma",
       "return_projection": {
         "dynamic": false,
         "mode": "FULL_ROW",

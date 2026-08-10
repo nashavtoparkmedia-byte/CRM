@@ -1557,6 +1557,14 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
             // `prisma` is a conservative client seed; an arbitrary `db`
             // member is not sufficient evidence.
             if (property === 'prisma' && receiver.kind === 'UNKNOWN') {
+                // tg-bot attaches its singleton PrismaClient to every request
+                // in src/app.js before mounting routers. This is a source-
+                // family fact, not a manifest ownership assumption.
+                if (fileName.startsWith('tg-bot/src/')) {
+                    return client(`runtime-request-prisma:${structuralExpressionOrigin(candidate)}`, {
+                        confidence: 'MEDIUM',
+                    })
+                }
                 return ambiguous('AMBIGUOUS_VALUE', ['unproven_prisma_member'], [
                     client(`member:${structuralExpressionOrigin(candidate)}`, { confidence: 'CONSERVATIVE' }),
                 ])

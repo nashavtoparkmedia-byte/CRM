@@ -1012,6 +1012,17 @@ test('schema facts from auxiliary prisma directories resolve relation identity',
     assert.equal(result.sites[0].nested_operations[0].method, 'create')
 })
 
+test('tg-bot request Prisma injection is a source-proven client boundary', () => {
+    const result = analyzePrismaWriteSites(
+        'req.prisma.bot.update({ where: { id }, data: { isActive } })',
+        { fileName: 'tg-bot/src/routes/admin/bots.js', knownModels: ['Bot'] },
+    )
+    assert.equal(result.sites.length, 1)
+    assert.equal(result.sites[0].kind, 'model')
+    assert.equal(result.sites[0].model, 'bot')
+    assert.equal(result.sites[0].ambiguous, false)
+})
+
 test('flat dynamic payload does not hide a statically resolved model write', () => {
     const result = analyzePrismaWriteSites([
         'const data = getPayload()',

@@ -1,0 +1,46 @@
+{
+  "schema": "yoko.crm.authoritative-write-scan-record.v1",
+  "generated_at": "2026-08-10T23:02:34.833Z",
+  "authority": "Bounded authoritative whole-repository scan after tg-bot request Prisma source-family analyzer improvement; current ledger materialization, not READY.",
+  "inputs": {
+    "previous_baseline_sha256": "00d17d054b3793596bc5264a693ee6c7a7b990cfb67df0e62046168be4f63e5c",
+    "analyzer": "tools/architecture/v2/analyze.mjs",
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_TGBOT_PRISMA.json"
+  },
+  "output": {
+    "baseline": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json",
+    "baseline_sha256": "d15a0b9836ea652f3f92d34d162e3309baf13a9515bcc2f05a4c32982a5f0a61",
+    "analysis_sha256": "b814698475b4e5c55236f345bbc34c367bcc7c939027601791c548c073074f21",
+    "triage_sha256": "2c4ea0f377786b9c368bd568003545d15f1be7b5b74b290cd7284ae34fa1675d"
+  },
+  "execution": {
+    "ambiguous_candidates": 533,
+    "complete": true,
+    "elapsed_ms": 272837.881077,
+    "failures": [],
+    "files_completed": 1693,
+    "files_discovered": 1693,
+    "mode": "fresh_process_per_javascript_surface",
+    "progress_every": 100,
+    "worker_failures": 0,
+    "worker_limit": 4,
+    "worker_timeout_ms": 120000,
+    "worker_timeouts": 0,
+    "writes_discovered": 1480
+  },
+  "summary": {
+    "ambiguous_writes": 533,
+    "discovered_write_sites": 1480,
+    "foreign_writes": 0,
+    "historical_dead_writes": 0,
+    "migration_only_writes": 468,
+    "operational_script_writes": 463,
+    "owner_writes": 476,
+    "parse_findings": 0,
+    "raw_sql_writes": 871,
+    "test_writes": 3,
+    "tracked_executable_surfaces": 1693,
+    "unreviewed_operational_surfaces": 443
+  },
+  "verdict": "NOT_READY_REQUIRES_AMBIGUITY_AND_OPERATIONAL_CLOSURE"
+}

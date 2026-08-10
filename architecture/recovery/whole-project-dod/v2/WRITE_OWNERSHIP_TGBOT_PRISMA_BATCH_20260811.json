@@ -1,0 +1,21 @@
+{
+  "schema": "yoko.crm.write-ownership-analyzer-batch.v1",
+  "generated_at": "2026-08-10T23:02:34.839Z",
+  "authority": "Analyzer-improvement batch: tg-bot request Prisma injection is proven by src/app.js middleware for tg-bot/src/** only; arbitrary request/database members remain fail-closed.",
+  "inputs": {
+    "previous_baseline_sha256": "00d17d054b3793596bc5264a693ee6c7a7b990cfb67df0e62046168be4f63e5c",
+    "regression_fixture": "tools/architecture/v2/test-write-analyzer.mjs"
+  },
+  "results": {
+    "fixtures": "83/83",
+    "authoritative_scan": "1693/1693 surfaces, 272838ms, zero failures/timeouts",
+    "previous_ambiguous": 547,
+    "current_ambiguous": 533,
+    "previous_dynamic_delegate_unresolved": 34,
+    "current_dynamic_delegate_unresolved": 20,
+    "foreign_writes": 0,
+    "operational_surfaces_unclassified": 443
+  },
+  "classification_effect": "14 dynamic delegate records resolved to concrete model writes from source-family evidence; ownership remains unresolved where appropriate; no foreign write claim is suppressed.",
+  "next_action": "Continue fail-closed source-family closure for 311 ownership-unresolved, 20 dynamic delegates, 165 dynamic SQL and 26 queryRaw side-effect records."
+}
