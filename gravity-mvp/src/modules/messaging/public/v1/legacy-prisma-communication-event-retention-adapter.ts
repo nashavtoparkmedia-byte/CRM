@@ -12,7 +12,7 @@ export const legacyPrismaCommunicationEventRetentionPortV1: CommunicationEventRe
     if (dryRun || rows.length === 0) return { selectedCount: rows.length }
 
     const ids = rows.map(row => row.id)
-    await prisma.$executeRaw`DELETE FROM "CommunicationEvent" WHERE id = ANY(${ids}::text[])`
+    await prisma.communicationEvent.deleteMany({ where: { id: { in: ids } } })
     return { selectedCount: ids.length }
   },
 }

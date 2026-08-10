@@ -125,31 +125,32 @@ check(
   'owner path catches a failure or exposes a generic policy helper',
 )
 check(
-  'only tagged Prisma raw methods',
+  'read-only raw selection and typed owner deletion only',
   !/\$(?:query|execute)RawUnsafe/.test(adapters + consumer) &&
     (adapters.match(/prisma\.\$queryRaw</g) || []).length === 3 &&
-    (adapters.match(/prisma\.\$executeRaw`/g) || []).length === 3,
-  'unsafe/generic raw path remains or tagged call count drifted',
+    !/prisma\.\$executeRaw/.test(adapters) &&
+    (adapters.match(/\.deleteMany\(/g) || []).length === 3,
+  'unsafe/raw deletion remains or read/delete call count drifted',
 )
 check(
   'DriverEvent policy exact',
   fleetAdapter.includes('SELECT id FROM "DriverEvent"') &&
     fleetAdapter.includes("INTERVAL '180 days'") &&
-    fleetAdapter.includes('DELETE FROM "DriverEvent" WHERE id = ANY(${ids}::text[])'),
+    fleetAdapter.includes('prisma.driverEvent.deleteMany({ where: { id: { in: ids } } })'),
   'DriverEvent policy drift',
 )
 check(
   'ApiLog policy exact',
   fleetAdapter.includes('SELECT id FROM "ApiLog"') &&
     fleetAdapter.includes("INTERVAL '30 days'") &&
-    fleetAdapter.includes('DELETE FROM "ApiLog" WHERE id = ANY(${ids}::text[])'),
+    fleetAdapter.includes('prisma.apiLog.deleteMany({ where: { id: { in: ids } } })'),
   'ApiLog policy drift',
 )
 check(
   'CommunicationEvent policy exact',
   messagingAdapter.includes('SELECT id FROM "CommunicationEvent"') &&
     messagingAdapter.includes("INTERVAL '180 days'") &&
-    messagingAdapter.includes('DELETE FROM "CommunicationEvent" WHERE id = ANY(${ids}::text[])'),
+    messagingAdapter.includes('prisma.communicationEvent.deleteMany({ where: { id: { in: ids } } })'),
   'CommunicationEvent policy drift',
 )
 check(

@@ -2,9 +2,10 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import vm from 'node:vm'
 
 const root = process.cwd()
 const out = mkdtempSync(path.join(tmpdir(), 'yoko-fleet-event-retention-'))
@@ -173,6 +174,58 @@ try {
       createRunApiLogRetentionHandlerV1(failingPort)(apiLog),
       /api-log retention down/,
     )
+  })
+  await checkAsync('typed fleet adapter preserves DB-clock selection and exact selected-id deletion', async () => {
+    const queryCalls = []
+    const deleteCalls = []
+    const selected = {
+      DriverEvent: [[{ id: 'driver-2' }, { id: 'driver-1' }]],
+      ApiLog: [[{ id: 'api-dry' }], []],
+    }
+    const prisma = {
+      async $queryRaw(strings) {
+        const sql = strings.join('')
+        const model = sql.includes('"DriverEvent"') ? 'DriverEvent' : 'ApiLog'
+        queryCalls.push([model, sql])
+        return selected[model].shift()
+      },
+      driverEvent: {
+        async deleteMany(input) { deleteCalls.push(['DriverEvent', input]); return { count: 0 } },
+      },
+      apiLog: {
+        async deleteMany(input) { deleteCalls.push(['ApiLog', input]); return { count: 0 } },
+      },
+    }
+    const typescript = require(path.join(root, 'gravity-mvp/node_modules/typescript/lib/typescript.js'))
+    const adapterSource = readFileSync(
+      path.join(root, 'gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-event-retention-adapter.ts'),
+      'utf8',
+    )
+    const output = typescript.transpileModule(adapterSource, {
+      compilerOptions: { module: typescript.ModuleKind.CommonJS, target: typescript.ScriptTarget.ES2022 },
+    }).outputText
+    const module = { exports: {} }
+    vm.runInNewContext(output, {
+      module,
+      exports: module.exports,
+      require(specifier) {
+        if (specifier === '@/lib/prisma') return { prisma }
+        throw new Error(`unexpected adapter import: ${specifier}`)
+      },
+    })
+    const adapter = module.exports.legacyPrismaFleetEventRetentionPortV1
+    const driverResult = await adapter.runDriverEventRetention({ dryRun: false })
+    const dryApiResult = await adapter.runApiLogRetention({ dryRun: true })
+    const emptyApiResult = await adapter.runApiLogRetention({ dryRun: false })
+
+    assert.deepEqual(queryCalls.map(([model]) => model), ['DriverEvent', 'ApiLog', 'ApiLog'])
+    assert.match(queryCalls[0][1], /NOW\(\) AT TIME ZONE 'UTC'.*INTERVAL '180 days'/s)
+    assert.match(queryCalls[1][1], /NOW\(\) AT TIME ZONE 'UTC'.*INTERVAL '30 days'/s)
+    assert.deepEqual(deleteCalls.map(([model]) => model), ['DriverEvent'])
+    assert.deepEqual(Array.from(deleteCalls[0][1].where.id.in), ['driver-2', 'driver-1'])
+    assert.equal(driverResult.selectedCount, 2)
+    assert.equal(dryApiResult.selectedCount, 1)
+    assert.equal(emptyApiResult.selectedCount, 0)
   })
 } finally {
   rmSync(out, { recursive: true, force: true })

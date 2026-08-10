@@ -2,9 +2,10 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import vm from 'node:vm'
 
 const root = process.cwd()
 const out = mkdtempSync(path.join(tmpdir(), 'yoko-communication-event-retention-'))
@@ -133,6 +134,48 @@ try {
       createRunCommunicationEventRetentionHandlerV1(failingPort)(command),
       /communication retention down/,
     )
+  })
+  await checkAsync('typed messaging adapter preserves DB-clock selection and exact selected-id deletion', async () => {
+    const queryCalls = []
+    const deleteCalls = []
+    const selections = [[{ id: 'communication-2' }, { id: 'communication-1' }], []]
+    const prisma = {
+      async $queryRaw(strings) {
+        const sql = strings.join('')
+        queryCalls.push(sql)
+        return selections.shift()
+      },
+      communicationEvent: {
+        async deleteMany(input) { deleteCalls.push(input); return { count: 0 } },
+      },
+    }
+    const typescript = require(path.join(root, 'gravity-mvp/node_modules/typescript/lib/typescript.js'))
+    const adapterSource = readFileSync(
+      path.join(root, 'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-communication-event-retention-adapter.ts'),
+      'utf8',
+    )
+    const output = typescript.transpileModule(adapterSource, {
+      compilerOptions: { module: typescript.ModuleKind.CommonJS, target: typescript.ScriptTarget.ES2022 },
+    }).outputText
+    const module = { exports: {} }
+    vm.runInNewContext(output, {
+      module,
+      exports: module.exports,
+      require(specifier) {
+        if (specifier === '@/lib/prisma') return { prisma }
+        throw new Error(`unexpected adapter import: ${specifier}`)
+      },
+    })
+    const adapter = module.exports.legacyPrismaCommunicationEventRetentionPortV1
+    const result = await adapter.runCommunicationEventRetention({ dryRun: false })
+    const emptyResult = await adapter.runCommunicationEventRetention({ dryRun: false })
+
+    assert.equal(queryCalls.length, 2)
+    assert.match(queryCalls[0], /NOW\(\) AT TIME ZONE 'UTC'.*INTERVAL '180 days'/s)
+    assert.equal(deleteCalls.length, 1)
+    assert.deepEqual(Array.from(deleteCalls[0].where.id.in), ['communication-2', 'communication-1'])
+    assert.equal(result.selectedCount, 2)
+    assert.equal(emptyResult.selectedCount, 0)
   })
 } finally {
   rmSync(out, { recursive: true, force: true })

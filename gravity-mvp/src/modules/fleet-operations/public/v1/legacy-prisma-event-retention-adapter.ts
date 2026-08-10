@@ -12,7 +12,7 @@ export const legacyPrismaFleetEventRetentionPortV1: FleetEventRetentionPersisten
     if (dryRun || rows.length === 0) return { selectedCount: rows.length }
 
     const ids = rows.map(row => row.id)
-    await prisma.$executeRaw`DELETE FROM "DriverEvent" WHERE id = ANY(${ids}::text[])`
+    await prisma.driverEvent.deleteMany({ where: { id: { in: ids } } })
     return { selectedCount: ids.length }
   },
 
@@ -26,7 +26,7 @@ export const legacyPrismaFleetEventRetentionPortV1: FleetEventRetentionPersisten
     if (dryRun || rows.length === 0) return { selectedCount: rows.length }
 
     const ids = rows.map(row => row.id)
-    await prisma.$executeRaw`DELETE FROM "ApiLog" WHERE id = ANY(${ids}::text[])`
+    await prisma.apiLog.deleteMany({ where: { id: { in: ids } } })
     return { selectedCount: ids.length }
   },
 }
