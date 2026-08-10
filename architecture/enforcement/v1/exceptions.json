@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007R-MANAGER-DRIVER-COMMUNICATION",
-  "base_commit": "6abb89a99984fa01d97aa335df11525a6c022a81",
+  "milestone": "CRM-ARCH-007R-CONTACT-MERGE-TRANSACTION",
+  "base_commit": "51e4734d781d7d998f3beba393e397c125c72ef2",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "918f44b1818f1c4b379c257a744e8dfd02bab3eeb4fd1bdd25d372a7ca83a75b",
+  "finding_digest": "fd306ea9812b7c9285bbdb7e0eaf2eae2b21abc538fb45354ce235d3c3bdeeac",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,7 +13,7 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 74,
+    "direct_foreign_prisma_write": 66,
     "direct_provider_transport_access": 38,
     "internal_module_import": 374,
     "non_public_cross_context_import": 530,
@@ -20090,134 +20090,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:configuration/settings>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_685d58bf6135c0a58831dfcc",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/ContactMergeService.ts",
-      "line_at_baseline": 303,
-      "ordinal": 1,
-      "owner_context": "contacts",
-      "target_context": "messaging",
-      "subject": "Chat.updateMany",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_8591eeb00f3ae958"
-      ]
-    },
-    {
-      "fingerprint": "arch_a7ee5f0785619cfd3f0e6dfc",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/ContactMergeService.ts",
-      "line_at_baseline": 325,
-      "ordinal": 2,
-      "owner_context": "contacts",
-      "target_context": "messaging",
-      "subject": "Chat.updateMany",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_8591eeb00f3ae958"
-      ]
-    },
-    {
-      "fingerprint": "arch_d7413aea9d72985c278fe418",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/ContactMergeService.ts",
-      "line_at_baseline": 328,
-      "ordinal": 1,
-      "owner_context": "contacts",
-      "target_context": "work_management",
-      "subject": "Task.updateMany",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_fd97166bff08d508"
-      ]
-    },
-    {
-      "fingerprint": "arch_d0c62264533a26a4f0fa20f9",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/ContactMergeService.ts",
-      "line_at_baseline": 385,
-      "ordinal": 3,
-      "owner_context": "contacts",
-      "target_context": "messaging",
-      "subject": "Chat.updateMany",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_8591eeb00f3ae958"
-      ]
-    },
-    {
-      "fingerprint": "arch_b2b6ea914aeeb21bc4d05e1e",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/ContactMergeService.ts",
-      "line_at_baseline": 488,
-      "ordinal": 4,
-      "owner_context": "contacts",
-      "target_context": "messaging",
-      "subject": "Chat.updateMany",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_8591eeb00f3ae958"
-      ]
-    },
-    {
-      "fingerprint": "arch_6caa1cd481f67b76d5822f4e",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/ContactMergeService.ts",
-      "line_at_baseline": 527,
-      "ordinal": 5,
-      "owner_context": "contacts",
-      "target_context": "messaging",
-      "subject": "Chat.updateMany",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_8591eeb00f3ae958"
-      ]
-    },
-    {
-      "fingerprint": "arch_f6549f8d0460c4466a8e7e90",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/ContactMergeService.ts",
-      "line_at_baseline": 536,
-      "ordinal": 6,
-      "owner_context": "contacts",
-      "target_context": "messaging",
-      "subject": "Chat.updateMany",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_8591eeb00f3ae958"
-      ]
-    },
-    {
-      "fingerprint": "arch_a58c1499e09adb9ac966d09a",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/ContactMergeService.ts",
-      "line_at_baseline": 545,
-      "ordinal": 2,
-      "owner_context": "contacts",
-      "target_context": "work_management",
-      "subject": "Task.updateMany",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_fd97166bff08d508"
       ]
     },
     {

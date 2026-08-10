@@ -1,0 +1,100 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1",
+  "milestone": "CRM-ARCH-007R-CONTACT-MERGE-TRANSACTION",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "78097c58e99de2abd2983557c61bb72c2e6381b6",
+  "source_commit": "51e4734d781d7d998f3beba393e397c125c72ef2",
+  "captured_at": "2026-08-10T07:59:31Z",
+  "verified_at": "2026-08-10T07:59:31Z",
+  "legacy_sources": [
+    {
+      "file": "gravity-mvp/src/lib/ContactMergeService.ts",
+      "before": "2703c58b12e4c30907f338b05bf48678dce2c98889c66336494780e1c0d7cbba",
+      "after": "9883262b1ab18073953f58cf8c3f75b972f19c33d83063ea20612b7260ff6090",
+      "state": "compatibility_facade"
+    },
+    {
+      "file": "gravity-mvp/src/contracts/contacts/v1/index.ts",
+      "before": "522a7754fb928c227aa4104f28395b4d513d70b02cf72bbe52c5d98fcfcb584b",
+      "after": "f79d0287eb5ca8b07123da12f76d6b5c0480b22f518a6e7259450900176ed205"
+    },
+    {
+      "file": "gravity-mvp/src/modules/contacts/public/v1/index.ts",
+      "before": "e16454e83fa86cb51b564b7ebdddf0066772fef0dca3712b690172725a8b85ed",
+      "after": "992822c841a77216f666fde5a01c322f2e3adac078e3026d9f67c747a15f11c5"
+    }
+  ],
+  "unchanged_protected_surfaces": [
+    {
+      "file": "gravity-mvp/src/app/api/contacts/[id]/merge/route.ts",
+      "before": "aef997b91d69ac326015b834471e9beb436c2a23276d766f9be6b42b7275943d",
+      "after": "aef997b91d69ac326015b834471e9beb436c2a23276d766f9be6b42b7275943d"
+    },
+    {
+      "file": "gravity-mvp/src/app/api/contacts/[id]/merge-to/[targetId]/route.ts",
+      "before": "ceab4210dfb589719b1558e54ab1bfd408f7598881ae7e7d3a0f6027cb84c40a",
+      "after": "ceab4210dfb589719b1558e54ab1bfd408f7598881ae7e7d3a0f6027cb84c40a"
+    },
+    {
+      "file": "gravity-mvp/src/app/messages/components/ContactProfileDrawer.tsx",
+      "before": "b5a96ee22dbc645dad8adb4bb50c4473f317ccba2d8e8e8c2ec52812cf598076",
+      "after": "b5a96ee22dbc645dad8adb4bb50c4473f317ccba2d8e8c2ec52812cf598076"
+    },
+    {
+      "file": "gravity-mvp/src/lib/MessageService.ts",
+      "before": "71c75bce80de35943ca2753196281f7a0ae98765c619b3a9816fe64e20316e46",
+      "after": "71c75bce80de35943ca2753196281f7a0ae98765c619b3a9816fe64e20316e46"
+    }
+  ],
+  "source_hashes_after": {
+    "gravity-mvp/src/contracts/contacts/v1/merge-contacts-command.ts": "1bdde2c3132697908a66d593d757e9ea98331c9cd3e4c6ee793463e43739e364",
+    "gravity-mvp/src/lib/ContactMergeService.test.ts": "4c7221582421f4b7a6e1ec7852ce559cec709e02be4686e5d6ab304f774943ee",
+    "gravity-mvp/src/modules/contacts/public/v1/contact-merge-handler.ts": "993c97a537c57e80d548e18489ba1daec4dcca5e8cb37c33a71e1d80e7d181c7",
+    "gravity-mvp/src/modules/contacts/public/v1/contact-merge-handler.test.ts": "f92d760b6bb3d72b73c9c99d647e61ac4175153a4332f60b2ffc152faab3bf2f",
+    "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts": "ea4b7de6cb9d65aaffb17405a8fa7d5c24c4305a6a2fc93058ee6c545f38661c",
+    "tools/architecture/check-contract-boundaries.mjs": "1a1ec98de5c757b6f5ef4f33d694fe6f44a7867027d39a20f6980ea287c0b996",
+    "tools/architecture/test-contact-merge-transaction-coordinator.mjs": "3c289f9b89b577a1879e6a0610e3cc049085ad00fcb445757e46db3ea4e29719"
+  },
+  "behavior": [
+    "both existing API routes keep their exact paths, request bodies, status mapping, logs and unversioned response bodies through the ContactMergeService compatibility facade",
+    "omitted mergedBy still defaults to system while an explicit empty string remains distinct and is preserved for legacy compatibility",
+    "contact-to-driver preserves contact lookup, driver lookup, archived/idempotent/conflict checks, survivor lookup, archived-survivor guard and defensive same-contact no-op ordering outside mutation transactions",
+    "contact-to-contact preserves the self-merge guard before reads, archived-source completed-merge lookup, source-driver guard, target lookup and archived-target guard outside mutation transactions",
+    "simple link retains a default Prisma transaction, Contact link/master-source and conditional display-name update followed by null-driver Chat attachment only when the source snapshot contains chats",
+    "full driver and manual merges retain a 15000 millisecond transaction, ordered Contact row lock first, source snapshot, identity remap-delete-move, phone delete-move, Chat move, Task move, merge record, archive and post-commit log ordering",
+    "manual merge retains its in-transaction target-driver lookup at the legacy position and selects contact-plus-driver or contact-only Chat movement from that exact result",
+    "the merge record retains its generated CUID-like id, action merge, confidence 1.0, manual or yandex_link reason, driverYandexId, complete source snapshot and returned id",
+    "duplicate identities remap existing Chats before duplicate identity deletion; remaining identities and phones retain ids while moving to the survivor",
+    "Chat ids remain unchanged, so Messages and attachments remain transitively attached; no Message or attachment mutation is introduced",
+    "Calls remain associated with the archived source exactly as before because no Call mutation is introduced",
+    "the protected Messages drawer retains cookie-derived mergedBy, all-2xx success treatment, non-awaited refresh calls and final success state",
+    "owner, adapter and facade exceptions propagate with the legacy MergeError runtime name/code shape; success logs occur only after unit-of-work completion"
+  ],
+  "bounded_drift": [
+    "the runtime implementation moves from one monolithic service to a strict Contacts handler plus named repository unit of work and one compatibility facade",
+    "the public v1 result carries a contract envelope internally; the facade strips only that envelope before returning to unchanged routes",
+    "the old six Chat and two Task source sites consolidate into four exact Chat and one exact Task adapter methods while preserving invocation multiplicity, predicates, data and order",
+    "additional handler, adapter and facade frames can change stack traces without changing error codes, persisted values or response mapping",
+    "policy grants exact file/model infrastructure-writer approval for Chat and Task because cross-owner atomicity is intentionally preserved in one transaction coordinator"
+  ],
+  "rollback_proof": {
+    "mode": "source-only deterministic fake transaction staging",
+    "scenarios": [
+      "simple link",
+      "driver full merge",
+      "manual merge with target driver",
+      "manual merge with missing target driver"
+    ],
+    "failure_injection_tests": 35,
+    "result": "every characterized injected callback failure leaves zero fake committed mutations and emits no success result or success log",
+    "physical_postgresql_executed": false,
+    "physical_postgresql_status": "DEFERRED_CLOSED_DATABASE_AND_RUNTIME_PATH",
+    "deferred_scope": "real PostgreSQL rollback, ordered-row-lock contention, FK/constraint interaction and transaction timeout behavior require an authorized isolated disposable non-production database gate"
+  },
+  "out_of_scope": [
+    "authentication, same-origin enforcement, mergedBy authorization and the existing driver-search identifier mismatch",
+    "physical PostgreSQL rollback or concurrency execution",
+    "provider delivery, webhook invocation, deployed application runtime execution, service activation, deployment, production mutation and secrets",
+    "AI governance, Calling configuration and unsafe-fragment hardening"
+  ]
+}
