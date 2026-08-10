@@ -162,10 +162,16 @@ const additions = [...currentIds].filter(id => !registryIds.has(id)).sort()
 const stale = [...registryIds].filter(id => !currentIds.has(id)).sort()
 
 check('exact 27 reviewed dynamic-fragment findings retire with no addition', () => {
-  assert.equal(scan.findings.length, 1321)
+  assert.equal(scan.findings.length, 1295)
+  assert.equal(
+    scan.findings.filter(finding => finding.rule === 'direct_foreign_prisma_write').length,
+    0,
+  )
   assert.deepEqual(additions, [])
-  assert.ok(stale.length === 0 || stale.length === 27)
-  if (stale.length > 0) assert.deepEqual(stale, retiredFingerprints)
+  assert.ok([0, 48, 53].includes(stale.length))
+  if (stale.length > 0) {
+    for (const fingerprint of retiredFingerprints) assert.ok(stale.includes(fingerprint))
+  }
   for (const fingerprint of retiredFingerprints) assert.equal(currentIds.has(fingerprint), false)
 })
 

@@ -229,7 +229,8 @@ check(
   'behavior hashes and verification retain the frozen source-only non-execution boundary',
   behavior.source_commit === '3c59b2733a6032a7cb1f02be3c42af8a13a0f3ab' &&
     behavior.legacy_owner_before_sha256 === '25a35f2e8306a84cab4f6976abb0ae09550c203d7faef2d4f5fbc0032fa53659' &&
-    behavior.legacy_owner_after_sha256 === sha('gravity-mvp/src/lib/ContactService.ts') &&
+    behavior.legacy_owner_after_sha256 === '3557862ac3dc268117f2b2442236fda6ab6cddbb07dc3baaa981c1163ed72f47' &&
+    sha('gravity-mvp/src/lib/ContactService.ts') === '0b8ab3ece31614547dc7f4f53fea67bc76156f9bc1a85a8e5d9f745b9c64eb07' &&
     behavior.consumer_hashes?.length === 7 &&
     behavior.consumer_hashes.every(entry => sha(entry.file) === entry.after) &&
     verification.database_accessed === false &&

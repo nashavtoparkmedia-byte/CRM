@@ -174,10 +174,11 @@ check('only the exact five reviewed D4 findings retire without replacement', () 
   for (const fingerprint of retiredFingerprints) assert.equal(currentIds.has(fingerprint), false)
   const additions = [...currentIds].filter((fingerprint) => !registryIds.has(fingerprint))
   assert.deepEqual(additions, [])
-  assert.equal(
-    scan.findings.filter((finding) => finding.rule === 'direct_foreign_prisma_write').length,
-    48,
-  )
+  assert.equal(scan.findings.length, 1295)
+  assert.equal(scan.scanned_files, 1015)
+  assert.equal(scan.findings.filter(
+    (finding) => finding.rule === 'direct_foreign_prisma_write',
+  ).length, 0)
 })
 
 process.stdout.write(`${JSON.stringify({
