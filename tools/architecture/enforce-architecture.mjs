@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs'
 import { access, readFile, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import ts from '../../gravity-mvp/node_modules/typescript/lib/typescript.js'
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const CODE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'])
@@ -133,6 +134,494 @@ export function extractEnvironmentAccess(text) {
     return records
 }
 
+function isPrismaNamespace(expression, checker, seen = new Set()) {
+    const candidate = unwrapExpression(expression)
+    if (ts.isIdentifier(candidate) && candidate.text === 'Prisma') return true
+    if (!ts.isIdentifier(candidate)) return false
+    const symbol = checker.getSymbolAtLocation(candidate)
+    if (!symbol || seen.has(symbol)) return false
+    seen.add(symbol)
+    for (const declaration of symbol.declarations ?? []) {
+        if (
+            ts.isVariableDeclaration(declaration)
+            && declaration.initializer
+            && declaration.getStart() < candidate.getStart()
+            && isPrismaNamespace(declaration.initializer, checker, seen)
+        ) return true
+    }
+    return false
+}
+
+function prismaFragmentMemberKind(expression, checker, seen = new Set()) {
+    const candidate = unwrapExpression(expression)
+    if (ts.isPropertyAccessExpression(candidate)) {
+        const kind = candidate.name.text
+        return (kind === 'raw' || kind === 'sql') && isPrismaNamespace(candidate.expression, checker, seen)
+            ? kind
+            : null
+    }
+    if (
+        ts.isElementAccessExpression(candidate)
+        && (ts.isStringLiteral(candidate.argumentExpression) || ts.isNoSubstitutionTemplateLiteral(candidate.argumentExpression))
+    ) {
+        const kind = candidate.argumentExpression.text
+        return (kind === 'raw' || kind === 'sql') && isPrismaNamespace(candidate.expression, checker, seen)
+            ? kind
+            : null
+    }
+    if (!ts.isIdentifier(candidate)) return null
+    const symbol = checker.getSymbolAtLocation(candidate)
+    if (!symbol || seen.has(symbol)) return null
+    seen.add(symbol)
+    for (const declaration of symbol.declarations ?? []) {
+        if (
+            ts.isVariableDeclaration(declaration)
+            && declaration.initializer
+            && declaration.getStart() < candidate.getStart()
+        ) {
+            const kind = prismaFragmentMemberKind(declaration.initializer, checker, seen)
+            if (kind) return kind
+        }
+        if (ts.isBindingElement(declaration)) {
+            const kind = ts.isIdentifier(declaration.propertyName ?? declaration.name)
+                ? (declaration.propertyName ?? declaration.name).text
+                : null
+            const variable = declaration.parent.parent
+            if (
+                (kind === 'raw' || kind === 'sql')
+                && ts.isVariableDeclaration(variable)
+                && variable.initializer
+                && isPrismaNamespace(variable.initializer, checker, seen)
+            ) return kind
+        }
+        if (ts.isImportSpecifier(declaration)) {
+            const kind = declaration.propertyName?.text ?? declaration.name.text
+            if (kind === 'raw' || kind === 'sql') return kind
+        }
+    }
+    return null
+}
+
+function initializerCouldCarrySql(expression, checker, seen = new Set()) {
+    const candidate = unwrapExpression(expression)
+    if (ts.isAwaitExpression(candidate)) return initializerCouldCarrySql(candidate.expression, checker, seen)
+    if (ts.isTaggedTemplateExpression(candidate)) return true
+    if (ts.isCallExpression(candidate)) {
+        if (prismaFragmentMemberKind(candidate.expression, checker, new Set(seen))) return true
+        const callee = unwrapExpression(candidate.expression)
+        const symbol = checker.getSymbolAtLocation(callee)
+            ?? (ts.isPropertyAccessExpression(callee) ? checker.getSymbolAtLocation(callee.name) : null)
+        if (!symbol || seen.has(symbol)) return false
+        seen.add(symbol)
+        for (const declaration of symbol.declarations ?? []) {
+            let body = null
+            if (
+                ts.isFunctionDeclaration(declaration)
+                || ts.isMethodDeclaration(declaration)
+                || ts.isFunctionExpression(declaration)
+                || ts.isArrowFunction(declaration)
+            ) body = declaration.body ?? null
+            if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
+                const initializer = unwrapExpression(declaration.initializer)
+                if (ts.isFunctionExpression(initializer) || ts.isArrowFunction(initializer)) body = initializer.body
+            }
+            if (!body) continue
+            if (!ts.isBlock(body)) {
+                if (initializerCouldCarrySql(body, checker, seen)) return true
+                continue
+            }
+            let carries = false
+            function inspect(node) {
+                if (ts.isReturnStatement(node)) {
+                    if (node.expression && initializerCouldCarrySql(node.expression, checker, seen)) carries = true
+                    return
+                }
+                if (
+                    ts.isFunctionDeclaration(node)
+                    || ts.isFunctionExpression(node)
+                    || ts.isArrowFunction(node)
+                    || ts.isMethodDeclaration(node)
+                ) return
+                if (!carries) ts.forEachChild(node, inspect)
+            }
+            inspect(body)
+            if (carries) return true
+        }
+        return false
+    }
+    if (ts.isIdentifier(candidate)) {
+        if (prismaFragmentMemberKind(candidate, checker, new Set(seen))) return true
+        const symbol = checker.getSymbolAtLocation(candidate)
+        if (!symbol || seen.has(symbol)) return false
+        seen.add(symbol)
+        for (const declaration of symbol.declarations ?? []) {
+            if (
+                ts.isVariableDeclaration(declaration)
+                && declaration.initializer
+                && initializerCouldCarrySql(declaration.initializer, checker, seen)
+            ) return true
+        }
+        return false
+    }
+    if (ts.isConditionalExpression(candidate)) {
+        return initializerCouldCarrySql(candidate.whenTrue, checker, seen)
+            || initializerCouldCarrySql(candidate.whenFalse, checker, seen)
+    }
+    if (ts.isBinaryExpression(candidate)) {
+        return initializerCouldCarrySql(candidate.left, checker, seen)
+            || initializerCouldCarrySql(candidate.right, checker, seen)
+    }
+    return false
+}
+
+function hasSqlFragment(expression, checker, seen = new Set()) {
+    let found = false
+    function visitCallableReturns(call, unknownCallIsDynamic) {
+        const memberKind = prismaFragmentMemberKind(call.expression, checker, new Set(seen))
+        if (memberKind) {
+            found = true
+            return
+        }
+        const callee = unwrapExpression(call.expression)
+        const symbol = checker.getSymbolAtLocation(callee)
+            ?? (ts.isPropertyAccessExpression(callee) ? checker.getSymbolAtLocation(callee.name) : null)
+        if (!symbol || seen.has(symbol)) return
+        seen.add(symbol)
+        for (const declaration of symbol.declarations ?? []) {
+            if (
+                ts.isImportSpecifier(declaration)
+                || ts.isImportClause(declaration)
+                || ts.isNamespaceImport(declaration)
+            ) {
+                if (unknownCallIsDynamic) found = true
+                return
+            }
+            if (
+                ts.isFunctionDeclaration(declaration)
+                || ts.isMethodDeclaration(declaration)
+                || ts.isFunctionExpression(declaration)
+                || ts.isArrowFunction(declaration)
+            ) {
+                if (declaration.body) visitReturnExpressions(declaration.body)
+            } else if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
+                const initializer = unwrapExpression(declaration.initializer)
+                if (ts.isFunctionExpression(initializer) || ts.isArrowFunction(initializer)) visitReturnExpressions(initializer.body)
+            }
+            if (found) return
+        }
+    }
+    function visitReturnExpressions(body) {
+        if (!ts.isBlock(body)) {
+            visit(body, true)
+            return
+        }
+        function inspect(node) {
+            if (ts.isReturnStatement(node)) {
+                if (node.expression) visit(node.expression, true)
+                return
+            }
+            if (
+                ts.isFunctionDeclaration(node)
+                || ts.isFunctionExpression(node)
+                || ts.isArrowFunction(node)
+                || ts.isMethodDeclaration(node)
+            ) return
+            if (!found) ts.forEachChild(node, inspect)
+        }
+        inspect(body)
+    }
+    function visit(node, unknownCallIsDynamic = true) {
+        if (ts.isTaggedTemplateExpression(node)) {
+            const memberKind = prismaFragmentMemberKind(node.tag, checker, new Set(seen))
+            if (memberKind === 'sql') {
+                const chunks = ts.isNoSubstitutionTemplateLiteral(node.template)
+                    ? node.template.text
+                    : node.template.head.text + node.template.templateSpans.map((span) => '${}' + span.literal.text).join('')
+                const analysis = sqlTables(chunks, '$executeRaw')
+                if (analysis.dynamic || analysis.tables.length > 0) found = true
+                if (!found && ts.isTemplateExpression(node.template)) {
+                    for (const span of node.template.templateSpans) visit(span.expression)
+                }
+                return
+            }
+            if (memberKind === 'raw' || memberKind === null) found = true
+            return
+        }
+        if (ts.isCallExpression(node)) {
+            visitCallableReturns(node, unknownCallIsDynamic)
+            if (found) return
+        }
+        const memberKind = prismaFragmentMemberKind(node, checker, new Set(seen))
+        if (memberKind) {
+            found = true
+            return
+        }
+        if (ts.isIdentifier(node) && !found) {
+            const symbol = checker.getSymbolAtLocation(node)
+            if (symbol && !seen.has(symbol)) {
+                seen.add(symbol)
+                for (const declaration of symbol.declarations ?? []) {
+                    if (
+                        ts.isVariableDeclaration(declaration)
+                        && declaration.initializer
+                        && initializerCouldCarrySql(declaration.initializer, checker)
+                    ) visit(declaration.initializer, false)
+                }
+            }
+        }
+        if (!found) ts.forEachChild(node, (child) => visit(child, unknownCallIsDynamic))
+    }
+    visit(expression)
+    return found
+}
+
+function templateSql(template, checker, forceAllInterpolation = false) {
+    if (ts.isNoSubstitutionTemplateLiteral(template)) return { sql: template.text, dynamic: false }
+    if (!ts.isTemplateExpression(template)) return null
+    let sql = template.head.text
+    let dynamic = false
+    for (const span of template.templateSpans) {
+        sql += '${}'
+        dynamic ||= forceAllInterpolation || hasSqlFragment(span.expression, checker)
+        sql += span.literal.text
+    }
+    return { sql, dynamic }
+}
+
+function unwrapExpression(expression) {
+    let current = expression
+    while (
+        ts.isParenthesizedExpression(current)
+        || ts.isAsExpression(current)
+        || ts.isTypeAssertionExpression(current)
+        || ts.isNonNullExpression(current)
+        || ts.isSatisfiesExpression(current)
+    ) current = current.expression
+    return current
+}
+
+function prismaRawMethod(expression) {
+    const candidate = unwrapExpression(expression)
+    if (!ts.isPropertyAccessExpression(candidate)) return null
+    if (candidate.name.text !== '$executeRaw' && candidate.name.text !== '$executeRawUnsafe') return null
+    const receiver = unwrapExpression(candidate.expression)
+    return ts.isIdentifier(receiver) && ['prisma', 'prismaClient', 'tx', 'transaction', 'db'].includes(receiver.text)
+        ? candidate.name.text
+        : null
+}
+
+function staticSqlExpression(expression, checker, forceAllInterpolation = false) {
+    const candidate = unwrapExpression(expression)
+    if (ts.isStringLiteral(candidate) || ts.isNoSubstitutionTemplateLiteral(candidate)) {
+        return { sql: candidate.text, dynamic: false }
+    }
+    if (ts.isTemplateExpression(candidate)) return templateSql(candidate, checker, forceAllInterpolation)
+    if (!ts.isIdentifier(candidate)) return null
+    const symbol = checker.getSymbolAtLocation(candidate)
+    if (!symbol || symbol.declarations?.length !== 1) return null
+    const declaration = symbol.declarations[0]
+    if (!ts.isVariableDeclaration(declaration) || !declaration.initializer || declaration.getStart() >= candidate.getStart()) return null
+    const declarationList = declaration.parent
+    if (!ts.isVariableDeclarationList(declarationList) || !(declarationList.flags & ts.NodeFlags.Const)) return null
+    const initializer = unwrapExpression(declaration.initializer)
+    if (!ts.isStringLiteral(initializer) && !ts.isNoSubstitutionTemplateLiteral(initializer)) return null
+    return { sql: initializer.text, dynamic: false }
+}
+
+function rawSiteScope(node, sourceFile) {
+    const scope = []
+    for (let current = node.parent; current; current = current.parent) {
+        if (ts.isClassDeclaration(current) || ts.isFunctionDeclaration(current)) {
+            scope.push(`${ts.SyntaxKind[current.kind]}:${current.name?.getText(sourceFile) ?? '<anonymous>'}`)
+        } else if (
+            ts.isMethodDeclaration(current)
+            || ts.isGetAccessorDeclaration(current)
+            || ts.isSetAccessorDeclaration(current)
+        ) {
+            scope.push(`${ts.SyntaxKind[current.kind]}:${current.name.getText(sourceFile)}`)
+        } else if (
+            ts.isVariableDeclaration(current)
+            && current.initializer
+            && (ts.isArrowFunction(current.initializer) || ts.isFunctionExpression(current.initializer))
+        ) {
+            scope.push(`Variable:${current.name.getText(sourceFile)}`)
+        } else if (
+            ts.isPropertyAssignment(current)
+            && (ts.isArrowFunction(current.initializer) || ts.isFunctionExpression(current.initializer))
+        ) {
+            scope.push(`Property:${current.name.getText(sourceFile)}`)
+        }
+    }
+    return scope.reverse().join('/') || '<module>'
+}
+
+function rawSiteSignature(node, sourceFile) {
+    return digest(`${rawSiteScope(node, sourceFile)}\n${node.getText(sourceFile)}`)
+}
+
+function extractRawPrismaWrites(text) {
+    if (!text.includes('$executeRaw')) return []
+    const fileName = 'architecture-scan.tsx'
+    const sourceFile = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+    const options = { target: ts.ScriptTarget.Latest, jsx: ts.JsxEmit.Preserve, noResolve: true, noLib: true }
+    const host = ts.createCompilerHost(options)
+    host.getSourceFile = (requested) => requested === fileName ? sourceFile : undefined
+    host.fileExists = (requested) => requested === fileName
+    host.readFile = (requested) => requested === fileName ? text : undefined
+    host.writeFile = () => {}
+    host.getDefaultLibFileName = () => 'lib.d.ts'
+    const checker = ts.createProgram({ rootNames: [fileName], options, host }).getTypeChecker()
+    const records = []
+    function visit(node) {
+        if (ts.isCallExpression(node)) {
+            const method = prismaRawMethod(node.expression)
+            if (method) {
+                const resolved = node.arguments.length === 0
+                    ? null
+                    : staticSqlExpression(node.arguments[0], checker, method === '$executeRawUnsafe')
+                const analysis = sqlTables(resolved?.sql ?? null, method, resolved?.dynamic ?? true)
+                records.push({
+                    index: node.expression.getStart(sourceFile),
+                    kind: 'raw',
+                    method,
+                    siteSignature: rawSiteSignature(node, sourceFile),
+                    ...analysis,
+                })
+            }
+        } else if (ts.isTaggedTemplateExpression(node)) {
+            const method = prismaRawMethod(node.tag)
+            if (method) {
+                // Prisma template values can themselves be Sql objects. No
+                // bounded local dataflow analysis can prove that aliases,
+                // object/array members or callable wrappers are plain values,
+                // so every interpolated execute template remains fail-closed.
+                const resolved = templateSql(node.template, checker, true)
+                const analysis = sqlTables(resolved?.sql ?? null, method, resolved?.dynamic ?? true)
+                records.push({
+                    index: node.tag.getStart(sourceFile),
+                    kind: 'raw',
+                    method,
+                    siteSignature: rawSiteSignature(node, sourceFile),
+                    ...analysis,
+                })
+            }
+        }
+        ts.forEachChild(node, visit)
+    }
+    visit(sourceFile)
+    const signatureCounts = new Map()
+    for (const record of records) {
+        signatureCounts.set(record.siteSignature, (signatureCounts.get(record.siteSignature) ?? 0) + 1)
+    }
+    const fileSignature = digest(text)
+    for (const record of records) {
+        if ((signatureCounts.get(record.siteSignature) ?? 0) > 1) {
+            record.siteSignature = digest(`${record.siteSignature}\nduplicate-set:${fileSignature}`)
+        }
+    }
+    return records
+}
+
+function normalizeSqlIdentifier(raw) {
+    const parts = [...raw.matchAll(/"((?:[^"]|"")*)"|([A-Za-z_][A-Za-z0-9_$]*)/g)]
+        .map((match) => match[1] !== undefined ? match[1].replaceAll('""', '"') : match[2])
+    if (parts.length === 1) return parts[0]
+    if (parts.length === 2 && parts[0].toLowerCase() === 'public') return parts[1]
+    return parts.join('.')
+}
+
+function sqlTables(sql, method, forceDynamic = false) {
+    if (sql === null) return { tables: [], dynamic: true }
+    let state = 'code'
+    let masked = ''
+    for (let index = 0; index < sql.length; index += 1) {
+        const current = sql[index]
+        const next = sql[index + 1]
+        if (state === 'line-comment') {
+            if (current === '\n') {
+                state = 'code'
+                masked += '\n'
+            } else masked += ' '
+            continue
+        }
+        if (state === 'block-comment') {
+            if (current === '*' && next === '/') {
+                masked += '  '
+                index += 1
+                state = 'code'
+            } else masked += current === '\n' ? '\n' : ' '
+            continue
+        }
+        if (state === 'single-quote') {
+            if (current === "'" && next === "'") {
+                masked += '  '
+                index += 1
+            } else if (current === "'") {
+                masked += ' '
+                state = 'code'
+            } else masked += current === '\n' ? '\n' : ' '
+            continue
+        }
+        if (current === '-' && next === '-') {
+            masked += '  '
+            index += 1
+            state = 'line-comment'
+        } else if (current === '/' && next === '*') {
+            masked += '  '
+            index += 1
+            state = 'block-comment'
+        } else if (current === "'") {
+            masked += ' '
+            state = 'single-quote'
+        } else masked += current
+    }
+    const dynamicMarker = '__YOKO_DYNAMIC_SQL__'
+    masked = masked.replace(/\$\{[^}]*\}/g, dynamicMarker)
+    const token = '(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*)'
+    const identifier = `${token}(?:\\s*\\.\\s*${token})?`
+    const boundary = '(?![\\p{L}\\p{N}_$".])'
+    const simpleMutation = '(?:INSERT\\s+INTO|UPDATE\\s+(?!SET\\b)|DELETE\\s+FROM|MERGE\\s+INTO|CREATE\\s+TABLE(?:\\s+IF\\s+NOT\\s+EXISTS)?|ALTER\\s+TABLE(?:\\s+IF\\s+EXISTS)?)'
+    const simplePattern = new RegExp(`\\b${simpleMutation}\\s*(${identifier})${boundary}`, 'giu')
+    const indexPattern = new RegExp(`\\bCREATE\\s+(?:UNIQUE\\s+)?INDEX(?:\\s+IF\\s+NOT\\s+EXISTS)?\\s+${identifier}${boundary}\\s+ON\\s+(${identifier})${boundary}`, 'giu')
+    const patterns = [simplePattern, indexPattern]
+    const tables = []
+    let dynamic = forceDynamic
+    for (const pattern of patterns) {
+        for (const match of masked.matchAll(pattern)) {
+            const table = normalizeSqlIdentifier(match[1])
+            if (table.includes(dynamicMarker)) {
+                dynamic = true
+                continue
+            }
+            tables.push(table)
+        }
+    }
+    const simpleIntentCount = [...masked.matchAll(new RegExp(`\\b${simpleMutation}`, 'giu'))].length
+    const simpleTargetCount = [...masked.matchAll(new RegExp(simplePattern.source, simplePattern.flags))].length
+    const indexIntentCount = [...masked.matchAll(/\bCREATE\s+(?:UNIQUE\s+)?INDEX(?:\s+IF\s+NOT\s+EXISTS)?\s+/giu)].length
+    const indexTargetCount = [...masked.matchAll(new RegExp(indexPattern.source, indexPattern.flags))].length
+    if (simpleIntentCount !== simpleTargetCount || indexIntentCount !== indexTargetCount) dynamic = true
+
+    const listPattern = new RegExp(`\\b(?:DROP\\s+TABLE(?:\\s+IF\\s+EXISTS)?|TRUNCATE(?:\\s+TABLE)?)\\s+([^;]+)`, 'giu')
+    const listIntentCount = [...masked.matchAll(/\b(?:DROP\s+TABLE(?:\s+IF\s+EXISTS)?|TRUNCATE(?:\s+TABLE)?)\s+/giu)].length
+    let listTargetCount = 0
+    for (const match of masked.matchAll(listPattern)) {
+        listTargetCount += 1
+        for (const target of match[1].split(',')) {
+            const candidate = new RegExp(`^\\s*(${identifier})${boundary}`, 'u').exec(target)?.[1]
+            if (!candidate) {
+                dynamic = true
+                continue
+            }
+            const table = normalizeSqlIdentifier(candidate)
+            if (table.includes(dynamicMarker)) dynamic = true
+            else tables.push(table)
+        }
+    }
+    if (listIntentCount !== listTargetCount) dynamic = true
+    return { tables: [...new Set(tables)].sort(), dynamic }
+}
+
 export function extractPrismaWrites(text) {
     const executable = executablePositions(text)
     const records = []
@@ -142,19 +631,7 @@ export function extractPrismaWrites(text) {
         if (!WRITE_METHODS.has(match[3])) continue
         records.push({ index: match.index, kind: 'model', model: match[2], method: match[3] })
     }
-    const rawPattern = /\b(prisma|prismaClient|tx|transaction|db)\b(?:\s+as\s+any)?\s*\)?\s*\.\s*(\$executeRaw|\$executeRawUnsafe)\b/g
-    for (const match of text.matchAll(rawPattern)) {
-        if (!executable[match.index]) continue
-        const tail = text.slice(match.index + match[0].length, match.index + match[0].length + 2400)
-        const firstTick = tail.indexOf('`')
-        const closingTick = firstTick >= 0 ? tail.indexOf('`', firstTick + 1) : -1
-        const snippet = firstTick >= 0 && closingTick > firstTick
-            ? tail.slice(firstTick + 1, closingTick)
-            : tail.slice(0, 900)
-        const tables = [...snippet.matchAll(/(?:UPDATE|INTO|DELETE\s+FROM|TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?)\s+["`]?([A-Za-z_][A-Za-z0-9_]*)["`]?/gi)]
-            .map((item) => item[1])
-        records.push({ index: match.index, kind: 'raw', method: match[2], tables: [...new Set(tables)].sort() })
-    }
+    records.push(...extractRawPrismaWrites(text))
     return records.sort((left, right) => left.index - right.index)
 }
 
@@ -397,6 +874,7 @@ function makeFinding(input) {
         source_context: input.sourceContext ?? null,
         target_context: input.targetContext ?? null,
         subject: input.subject,
+        site_signature: input.siteSignature ?? null,
         details: input.details ?? {},
     }
 }
@@ -406,7 +884,7 @@ function finalizeFindings(findings) {
     return findings
         .sort((left, right) => left.file.localeCompare(right.file) || (left.line ?? 0) - (right.line ?? 0) || left.rule.localeCompare(right.rule) || left.subject.localeCompare(right.subject))
         .map((finding) => {
-            const ordinalKey = `${finding.rule}|${finding.file}|${finding.subject}`
+            const ordinalKey = `${finding.rule}|${finding.file}|${finding.subject}|${finding.site_signature ?? ''}`
             const ordinal = (ordinals.get(ordinalKey) ?? 0) + 1
             ordinals.set(ordinalKey, ordinal)
             const identity = {
@@ -415,6 +893,7 @@ function finalizeFindings(findings) {
                 source_context: finding.source_context,
                 target_context: finding.target_context,
                 subject: finding.subject,
+                site_signature: finding.site_signature,
                 ordinal,
             }
             return { ...finding, ordinal, fingerprint: `arch_${digest(identity).slice(0, 24)}` }
@@ -585,6 +1064,7 @@ export async function scanArchitecture(root = repositoryRoot) {
                     findings.push(makeFinding({
                         rule: 'direct_foreign_prisma_write', file, line: lineAt(body, write.index),
                         sourceContext: source.context, subject: `UNOWNED:${write.model}.${write.method}`,
+                        siteSignature: write.siteSignature,
                         details: { model: write.model, method: write.method, owner: null },
                     }))
                 } else if (
@@ -595,17 +1075,21 @@ export async function scanArchitecture(root = repositoryRoot) {
                         rule: 'direct_foreign_prisma_write', file, line: lineAt(body, write.index),
                         sourceContext: source.context, targetContext: owner.context,
                         subject: `${owner.model}.${write.method}`,
+                        siteSignature: write.siteSignature,
                         details: { model: owner.model, method: write.method, owner: owner.context },
                     }))
                 }
             } else {
-                const owners = [...new Set(write.tables.map((table) => state.tableOwners.get(table.toLowerCase())).filter(Boolean))]
-                if (owners.length !== 1 || owners[0] !== source.context) {
+                const resolvedOwners = write.tables.map((table) => state.tableOwners.get(table.toLowerCase()) ?? null)
+                const owners = [...new Set(resolvedOwners.filter(Boolean))]
+                const unresolved = write.tables.filter((_, index) => resolvedOwners[index] === null)
+                if (write.dynamic || unresolved.length > 0 || owners.length !== 1 || owners[0] !== source.context) {
                     findings.push(makeFinding({
                         rule: 'direct_foreign_prisma_write', file, line: lineAt(body, write.index),
-                        sourceContext: source.context, targetContext: owners.length === 1 ? owners[0] : null,
-                        subject: `raw:${write.method}:${write.tables.join(',') || 'dynamic'}`,
-                        details: { method: write.method, tables: write.tables, owners },
+                        sourceContext: source.context, targetContext: !write.dynamic && unresolved.length === 0 && owners.length === 1 ? owners[0] : null,
+                        subject: `raw:${write.method}:${write.dynamic ? 'dynamic' : write.tables.join(',') || 'dynamic'}`,
+                        siteSignature: write.siteSignature,
+                        details: { method: write.method, tables: write.tables, owners, unresolved, dynamic: write.dynamic },
                     }))
                 }
             }
@@ -710,6 +1194,7 @@ export function evaluateFindings(findings, registry, policy, now = new Date()) {
                 || (exception.target_context ?? null) !== finding.target_context
                 || exception.subject !== finding.subject
                 || exception.ordinal !== finding.ordinal
+                || (exception.site_signature ?? null) !== (finding.site_signature ?? null)
             ) {
                 errors.push({ type: 'EXCEPTION_IDENTITY_MISMATCH', finding, exception })
             }

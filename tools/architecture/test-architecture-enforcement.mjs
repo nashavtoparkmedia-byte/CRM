@@ -126,6 +126,163 @@ test('extracts Prisma model and raw writes', () => {
     assert.deepEqual(writes[1].tables, ['Message'])
 })
 
+test('extracts constant DDL table ownership without scanning unrelated later SQL', () => {
+    const source = [
+        'const TABLE_SQL = `CREATE TABLE IF NOT EXISTS execution_lock (id TEXT)`',
+        'const INDEX_SQL = `CREATE UNIQUE INDEX IF NOT EXISTS idx_lock ON execution_lock (id)`',
+        'const ALTER_SQL = `DO $$ BEGIN ALTER TABLE execution_lock ADD COLUMN owner TEXT; END $$`',
+        'await prisma.$executeRawUnsafe(TABLE_SQL)',
+        'await prisma.$executeRawUnsafe(INDEX_SQL)',
+        'await prisma.$executeRawUnsafe(ALTER_SQL)',
+        'await prisma.$executeRawUnsafe(runtimeSelectedSql)',
+        'const unrelated = `UPDATE "OtherTable" SET x = 1`',
+    ].join('\n')
+    const writes = extractPrismaWrites(source)
+    assert.deepEqual(writes.map((write) => write.tables), [
+        ['execution_lock'],
+        ['execution_lock'],
+        ['execution_lock'],
+        [],
+    ])
+})
+
+test('keeps mutable or ambiguous raw SQL expressions fail-closed', () => {
+    const source = [
+        'const CONCATENATED = `DELETE FROM beta_records` + suffix',
+        'const INTERPOLATED = `DELETE FROM ${tableName}`',
+        'const DUPLICATE = `DELETE FROM first_table`',
+        '{ const DUPLICATE = `DELETE FROM second_table`; void DUPLICATE }',
+        'await prisma.$executeRawUnsafe(CONCATENATED)',
+        'await prisma.$executeRawUnsafe(INTERPOLATED)',
+        'await prisma.$executeRawUnsafe(DUPLICATE)',
+        'await prisma.$executeRawUnsafe(`DELETE FROM literal_table` + suffix)',
+        'const LOCAL = `UPDATE local_table SET x = 1`',
+        'await prisma.$executeRawUnsafe(LOCAL + attacker)',
+        'function run(LOCAL) { return prisma.$executeRawUnsafe(LOCAL) }',
+    ].join('\n')
+    const writes = extractPrismaWrites(source)
+    assert.deepEqual(writes.map((write) => write.tables), [[], [], ['first_table'], [], [], []])
+    assert.deepEqual(writes.map((write) => write.dynamic), [true, true, false, true, true, true])
+})
+
+test('resolves static SQL constants by lexical symbol instead of name', () => {
+    const writes = extractPrismaWrites([
+        "import { SQL as importedSql } from './runtime-sql'",
+        'const SQL = `UPDATE outer_table SET x = 1`',
+        'await prisma.$executeRawUnsafe(SQL)',
+        'function shadowed(x = fn(), SQL = importedSql) { return prisma.$executeRawUnsafe(SQL) }',
+        'function nested() { const importedSql = `UPDATE nested_table SET x = 1`; return prisma.$executeRawUnsafe(importedSql) }',
+    ].join('\n'))
+    assert.deepEqual(writes.map((write) => write.tables), [['outer_table'], [], ['nested_table']])
+    assert.deepEqual(writes.map((write) => write.dynamic), [false, true, false])
+})
+
+test('ignores SQL mutation words in comments and string values', () => {
+    const writes = extractPrismaWrites([
+        'await prisma.$executeRawUnsafe(`-- DELETE FROM comment_table',
+        "INSERT INTO real_table (note) VALUES ('UPDATE string_table SET x = 1')`)",
+        'await prisma.$executeRawUnsafe(`/* ALTER TABLE block_table */ CREATE INDEX idx_real ON real_table (id)`)',
+        'await prisma.$executeRawUnsafe(`INSERT INTO health_snapshots (id) VALUES (1) ON CONFLICT (id) DO UPDATE SET id = 1`)',
+    ].join('\n'))
+    assert.deepEqual(writes.map((write) => write.tables), [['real_table'], ['real_table'], ['health_snapshots']])
+})
+
+test('extracts literal DDL and keeps interpolated table names dynamic', () => {
+    const writes = extractPrismaWrites([
+        'await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS cron_health_log (id SERIAL)`)',
+        'await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS idx_cron ON cron_health_log (id)`)',
+        'await prisma.$executeRawUnsafe(`DELETE FROM "${tableName}" WHERE id = $1`, id)',
+    ].join('\n'))
+    assert.deepEqual(writes.map((write) => write.tables), [
+        ['cron_health_log'],
+        ['cron_health_log'],
+        [],
+    ])
+    assert.equal(writes[2].dynamic, true)
+})
+
+test('preserves schemas, all list targets, and mixed dynamic statements', () => {
+    const writes = extractPrismaWrites([
+        'await prisma.$executeRawUnsafe(`DROP TABLE local_one, foreign_two`)',
+        'await prisma.$executeRawUnsafe(`TRUNCATE TABLE public.local_three, other.foreign_four`)',
+        'await prisma.$executeRawUnsafe(`UPDATE local_five SET x = 1; DELETE FROM "${tableName}"`)',
+        'await prisma.$executeRawUnsafe(`UPDATE "other.local_six" SET x = 1`)',
+    ].join('\n'))
+    assert.deepEqual(writes.map((write) => write.tables), [
+        ['foreign_two', 'local_one'],
+        ['local_three', 'other.foreign_four'],
+        ['local_five'],
+        ['other.local_six'],
+    ])
+    assert.equal(writes[2].dynamic, true)
+})
+
+test('does not truncate PostgreSQL identifiers or Prisma.raw template injection', () => {
+    const writes = extractPrismaWrites([
+        'await prisma.$executeRawUnsafe(`UPDATE local_table$suffix SET x = 1`)',
+        'await prisma.$executeRawUnsafe(`UPDATE "local_table""suffix" SET x = 1`)',
+        'await prisma.$executeRaw`UPDATE local_table SET x = ${value}; ${Prisma.raw(ok ? `DELETE FROM foreign_table` : ``)}`',
+    ].join('\n'))
+    assert.deepEqual(writes.map((write) => write.tables), [
+        ['local_table$suffix'],
+        ['local_table"suffix'],
+        ['local_table'],
+    ])
+    assert.equal(writes[2].dynamic, true)
+})
+
+test('marks Prisma.sql aliases and every unsafe interpolation dynamic', () => {
+    const writes = extractPrismaWrites([
+        'const fragment = Prisma.raw',
+        'const P = Prisma',
+        'const { sql: destructured } = Prisma',
+        'function wrapped() { return Prisma.sql`DELETE FROM wrapped_foreign RETURNING 1` }',
+        'await prisma.$executeRaw`WITH x AS (${Prisma.sql`DELETE FROM foreign_one RETURNING 1`}) UPDATE local_one SET x = 1`',
+        'await prisma.$executeRaw`UPDATE local_two SET x = 1; ${fragment(`DELETE FROM foreign_two`)}`',
+        'await prisma.$executeRaw`UPDATE local_four SET x = 1; ${wrapped()}`',
+        'await prisma.$executeRaw`UPDATE local_five SET x = 1; ${destructured`DELETE FROM foreign_five`}`',
+        'await prisma.$executeRaw`UPDATE local_six SET x = 1; ${P.sql`DELETE FROM foreign_six`}`',
+        'await prisma.$executeRaw`UPDATE local_seven SET x = 1; ${Prisma["raw"](`DELETE FROM foreign_seven`)}`',
+        'await prisma.$executeRawUnsafe(`UPDATE local_three SET x = ${value}`)',
+    ].join('\n'))
+    assert.deepEqual(writes.map((write) => write.tables), [
+        ['local_one'],
+        ['local_two'],
+        ['local_four'],
+        ['local_five'],
+        ['local_six'],
+        ['local_seven'],
+        ['local_three'],
+    ])
+    assert(writes.every((write) => write.dynamic))
+})
+
+test('keeps every tagged execute interpolation fail-closed, including plain-looking values', () => {
+    const writes = extractPrismaWrites([
+        'await prisma.$executeRaw`UPDATE local_one SET x = ${plainValue}`',
+        'await prisma.$executeRaw`UPDATE local_two SET x = ${input.value}`',
+        'await prisma.$executeRaw`UPDATE local_three SET x = ${box[0]}`',
+    ].join('\n'))
+    assert.deepEqual(writes.map((write) => write.tables), [['local_one'], ['local_two'], ['local_three']])
+    assert(writes.every((write) => write.dynamic))
+})
+
+test('rejects truncated Unicode targets and preserves spaced qualification', () => {
+    const writes = extractPrismaWrites([
+        'await prisma.$executeRawUnsafe(`UPDATE local_tableé SET x = 1`)',
+        'await prisma.$executeRawUnsafe(`UPDATE local_schema . foreign_one SET x = 1`)',
+        'await prisma.$executeRawUnsafe(`UPDATE local_schema/**/.foreign_two SET x = 1`)',
+    ].join('\n'))
+    assert.deepEqual(writes.map((write) => write.tables), [
+        [],
+        ['local_schema.foreign_one'],
+        ['local_schema.foreign_two'],
+    ])
+    assert.equal(writes[0].dynamic, true)
+    assert.equal(writes[1].dynamic, false)
+    assert.equal(writes[2].dynamic, false)
+})
+
 test('integration fixture detects every enforced mutation class', async () => {
     const fixture = await makeFixture()
     try {
@@ -140,6 +297,60 @@ test('integration fixture detects every enforced mutation class', async () => {
             'disallowed_credential_access',
             'direct_foreign_prisma_write',
         ]) assert(rules.has(rule), `missing fixture finding ${rule}`)
+    } finally {
+        await rm(fixture.root, { recursive: true, force: true })
+    }
+})
+
+test('raw write fingerprints remain bound to the AST site when a sibling retires', async () => {
+    const fixture = await makeFixture()
+    try {
+        const absolute = path.join(fixture.root, 'gravity-mvp/src/modules/alpha/main.ts')
+        const original = await readFile(absolute, 'utf8')
+        const first = 'await prisma.$executeRaw`UPDATE beta_records SET value = ${firstValue} WHERE id = 1`'
+        const second = 'await prisma.$executeRaw`UPDATE beta_records SET value = ${secondValue} WHERE id = 2`'
+        await writeFile(absolute, `${original}${first}\n${second}\n`)
+        const before = (await scanArchitecture(fixture.root)).findings.filter((finding) => (
+            finding.rule === 'direct_foreign_prisma_write'
+            && finding.file === 'gravity-mvp/src/modules/alpha/main.ts'
+            && finding.site_signature
+        ))
+        assert.equal(before.length, 2)
+        await writeFile(absolute, `${original}${second}\n`)
+        const after = (await scanArchitecture(fixture.root)).findings.filter((finding) => (
+            finding.rule === 'direct_foreign_prisma_write'
+            && finding.file === 'gravity-mvp/src/modules/alpha/main.ts'
+            && finding.site_signature
+        ))
+        assert.equal(after.length, 1)
+        assert.equal(after[0].fingerprint, before[1].fingerprint)
+        assert(!after.some((finding) => finding.fingerprint === before[0].fingerprint))
+    } finally {
+        await rm(fixture.root, { recursive: true, force: true })
+    }
+})
+
+test('byte-identical sibling retirement cannot transfer the retired fingerprint', async () => {
+    const fixture = await makeFixture()
+    try {
+        const absolute = path.join(fixture.root, 'gravity-mvp/src/modules/alpha/main.ts')
+        const original = await readFile(absolute, 'utf8')
+        const duplicate = 'await prisma.$executeRaw`UPDATE beta_records SET value = ${sameValue} WHERE id = 1`'
+        await writeFile(absolute, `${original}${duplicate}\n${duplicate}\n`)
+        const before = (await scanArchitecture(fixture.root)).findings.filter((finding) => (
+            finding.rule === 'direct_foreign_prisma_write'
+            && finding.file === 'gravity-mvp/src/modules/alpha/main.ts'
+            && finding.site_signature
+        ))
+        assert.equal(before.length, 2)
+        await writeFile(absolute, `${original}${duplicate}\n`)
+        const after = (await scanArchitecture(fixture.root)).findings.filter((finding) => (
+            finding.rule === 'direct_foreign_prisma_write'
+            && finding.file === 'gravity-mvp/src/modules/alpha/main.ts'
+            && finding.site_signature
+        ))
+        assert.equal(after.length, 1)
+        assert(!before.some((finding) => finding.fingerprint === after[0].fingerprint))
     } finally {
         await rm(fixture.root, { recursive: true, force: true })
     }
@@ -228,6 +439,12 @@ test('incomplete exception fails', () => {
 
 test('exception identity mismatch fails', () => {
     const result = evaluateFindings([finding], { exceptions: [{ ...validException, subject: 'different' }] }, policy, new Date('2026-08-09T00:00:00Z'))
+    assert(result.errors.some((error) => error.type === 'EXCEPTION_IDENTITY_MISMATCH'))
+})
+
+test('signed raw finding requires the exact site signature in its exception', () => {
+    const signedFinding = { ...finding, site_signature: 'sha256:site' }
+    const result = evaluateFindings([signedFinding], { exceptions: [validException] }, policy, new Date('2026-08-09T00:00:00Z'))
     assert(result.errors.some((error) => error.type === 'EXCEPTION_IDENTITY_MISMATCH'))
 })
 

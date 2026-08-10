@@ -105,6 +105,7 @@ async function main() {
         }
         return {
             fingerprint: finding.fingerprint,
+            ...(finding.site_signature ? { site_signature: finding.site_signature } : {}),
             rule: finding.rule,
             file: finding.file,
             line_at_baseline: finding.line,

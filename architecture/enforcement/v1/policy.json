@@ -88,8 +88,8 @@
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007-MESSAGING-MAX-MAINTENANCE",
-  "registry_base_commit": "033fc7d52bb67ffb56dec98ca0c6da173c3a11a3",
+  "registry_milestone": "CRM-ARCH-007R-STATIC-SQL-OWNERSHIP",
+  "registry_base_commit": "1703de389e7f2c39900a387dad6cd8ff52024c5c",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",
