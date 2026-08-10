@@ -109,6 +109,39 @@ test('SQL client control surfaces and malformed dialect strings fail closed', ()
     assert.equal(mysqlDoubleQuoted.is_mutation, null)
     assert(mysqlDoubleQuoted.reasons.includes('dialect_dependent_double_quote_string'))
     assert.equal(JSON.stringify(mysqlDoubleQuoted).includes('still literal'), false)
+
+    for (const numeric of ['10', '1.0', '1e2']) {
+        const dashComment = analyzeSqlMutation(
+            `SELECT ${numeric}-- DELETE FROM ApiConnection;\nSELECT token FROM bots;`,
+        )
+        assert.equal(dashComment.operations.some((operation) => operation.table === 'ApiConnection'), false)
+        assert.equal(dashComment.is_mutation, false)
+        assert.equal(dashComment.ambiguous, false)
+        assert.deepEqual(dashComment.read_tables, ['bots'])
+        assert.deepEqual(dashComment.selected_columns, ['token'])
+    }
+
+    const dialectDash = analyzeSqlMutation('SELECT x--2; DELETE FROM ApiConnection;')
+    assert(dialectDash.operations.some((operation) => (
+        operation.operation === 'DELETE' && operation.table === 'ApiConnection'
+    )))
+    assert.equal(dialectDash.is_mutation, true)
+    assert.equal(dialectDash.ambiguous, true)
+    assert(dialectDash.reasons.includes('dialect_dependent_dash_comment'))
+
+    for (const command of ['echo', 'qecho', 'warn']) {
+        const displayOnly = analyzeSqlMutation(
+            `\\${command} DELETE FROM ApiConnection;\nSELECT token FROM bots;`,
+        )
+        assert.equal(displayOnly.operations.length, 0)
+        assert.equal(displayOnly.is_mutation, false)
+        assert.deepEqual(displayOnly.read_tables, ['bots'])
+    }
+
+    const jsonbDeletePath = analyzeSqlMutation("SELECT payload #- '{a}', token FROM bots;")
+    assert.equal(jsonbDeletePath.ambiguous, false)
+    assert.deepEqual(jsonbDeletePath.read_tables, ['bots'])
+    assert.deepEqual(jsonbDeletePath.selected_columns, ['payload', 'token'])
 })
 
 test('SQL analyzer extracts DML, schema qualification and table lists', () => {
@@ -856,6 +889,61 @@ test('Object property and prototype holders cannot hide Prisma or raw-driver ope
         ['raw', null, 'sql-driver:query', ['ApiConnection']],
         ['raw', null, 'sql-driver:query', ['ApiConnection']],
     ])
+})
+
+test('standard Map, Reflect and sealed holders retain ORM and driver operations', () => {
+    const prismaCases = [
+        "const m = new Map([['p', prisma]]); m.get('p').bot.create({ data: {} })",
+        "const holder = {}; Reflect.set(holder, 'p', prisma); holder.p.bot.create({ data: {} })",
+        "Object.fromEntries([['p', prisma]]).p.bot.create({ data: {} })",
+        "Object.seal({ p: prisma }).p.bot.create({ data: {} })",
+    ]
+    for (const [index, source] of prismaCases.entries()) {
+        const { sites } = analyzePrismaWriteSites(source, { fileName: `prisma-standard-holder-${index}.ts` })
+        assert.deepEqual(compact(sites), [{
+            kind: 'model',
+            model: 'bot',
+            method: 'create',
+            ambiguous: false,
+            candidate_models: ['bot'],
+        }])
+    }
+
+    const rawCases = [
+        "const pool = new Pool(); const m = new Map([['p', pool]]); m.get('p').query('DELETE FROM bots')",
+        "const pool = new Pool(); const holder = {}; Reflect.set(holder, 'p', pool); holder.p.query('DELETE FROM bots')",
+        "const pool = new Pool(); Object.fromEntries([['p', pool]]).p.query('DELETE FROM bots')",
+        "const pool = new Pool(); Object.seal({ p: pool }).p.query('DELETE FROM bots')",
+    ]
+    for (const [index, source] of rawCases.entries()) {
+        const { sites } = analyzePrismaWriteSites(source, { fileName: `raw-standard-holder-${index}.ts` })
+        assert.equal(sites.length, 1)
+        assert.equal(sites[0].kind, 'raw')
+        assert.equal(sites[0].method, 'sql-driver:query')
+        assert.deepEqual(sites[0].tables, ['bots'])
+        assert.equal(sites[0].ambiguous, false)
+    }
+
+    const drizzlePrefix = "import { accounts } from './schema'; declare const db: NodePgDatabase; "
+    const drizzleCases = [
+        "const m = new Map([['p', db]]); m.get('p').update(accounts).set({})",
+        "const holder = {}; Reflect.set(holder, 'p', db); holder.p.update(accounts).set({})",
+        "Object.fromEntries([['p', db]]).p.update(accounts).set({})",
+        "Object.seal({ p: db }).p.update(accounts).set({})",
+        "function run(update) { update(accounts).set({}) } run(db.update.bind(db))",
+    ]
+    for (const [index, source] of drizzleCases.entries()) {
+        const { sites } = analyzePrismaWriteSites(drizzlePrefix + source, {
+            fileName: `drizzle-standard-holder-${index}.ts`,
+        })
+        assert.deepEqual(compact(sites), [{
+            kind: 'drizzle',
+            model: 'accounts',
+            method: 'update',
+            ambiguous: false,
+            candidate_models: ['accounts'],
+        }])
+    }
 })
 
 test('ordinary run methods are not misclassified as database writes', () => {

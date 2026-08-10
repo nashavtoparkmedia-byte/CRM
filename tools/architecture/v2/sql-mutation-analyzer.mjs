@@ -69,6 +69,11 @@ export function tokenizeSql(sql) {
                 index += delimiterDirective[0].length
                 continue
             }
+            const psqlDisplayCommand = /^\\(?:echo|qecho|warn)\b[^\r\n]*(?:\r?\n|$)/iu.exec(sql.slice(index))
+            if (psqlDisplayCommand) {
+                index += psqlDisplayCommand[0].length
+                continue
+            }
         }
 
         if (mysqlDelimiter !== ';' && sql.startsWith(mysqlDelimiter, index)) {
@@ -83,6 +88,17 @@ export function tokenizeSql(sql) {
         }
 
         if (current === '-' && next === '-') {
+            if (!/\s/u.test(sql[index + 2] ?? '')) {
+                // PostgreSQL accepts `--` without following whitespace;
+                // MySQL does not and can execute the remainder as arithmetic
+                // followed by another statement. Preserve that code and mark
+                // the dialect split rather than hiding a possible mutation.
+                index += 2
+                push('ambiguity', '<dialect-dash-comment>', start, index, {
+                    dialect_ambiguity_reason: 'dialect_dependent_dash_comment',
+                })
+                continue
+            }
             index += 2
             while (index < sql.length && sql[index] !== '\n') index += 1
             continue
@@ -120,7 +136,7 @@ export function tokenizeSql(sql) {
             continue
         }
 
-        if (current === '#' && next !== '>') {
+        if (current === '#' && next !== '>' && next !== '-') {
             // MySQL treats `#` as a line comment. PostgreSQL also has `#`
             // operators, so retain an ambiguity marker when the token could
             // instead be an inline operator; words in the MySQL comment must
@@ -236,8 +252,8 @@ export function tokenizeSql(sql) {
         }
 
         if (/[0-9]/u.test(current)) {
-            index += 1
-            while (index < sql.length && /[0-9.eE+-]/u.test(sql[index])) index += 1
+            const numeric = /^\d+(?:\.\d*)?(?:[eE][+-]?\d+)?/u.exec(sql.slice(index))?.[0] ?? current
+            index += numeric.length
             push('value', '<number>', start)
             continue
         }
@@ -609,8 +625,31 @@ export function analyzeSqlMutation(sql, options = {}) {
     let statementDepth = 0
     let statementStart = null
     let statementEnd = null
+    let topLevelSelectSeen = false
+    let previousToken = null
     for (const token of tokens) {
+        const repeatedTopLevelSelect = (
+            statementDepth === 0
+            && token.kind === 'word'
+            && token.value.toUpperCase() === 'SELECT'
+            && topLevelSelectSeen
+            && !new Set(['EXCEPT', 'INTERSECT', 'UNION']).has(upper(previousToken))
+            && /\r?\n/u.test(sql.slice(previousToken?.end ?? token.start, token.start))
+        )
+        if (repeatedTopLevelSelect && statementStart !== null && statementEnd !== null) {
+            // A line comment can hide the preceding semicolon. A fresh
+            // top-level SELECT on a later line is still an independently
+            // relevant read surface for script inventory; do not let the
+            // earlier projection absorb its fields or source position.
+            statementSpans.push({ start: statementStart, end: statementEnd })
+            statementStart = null
+            statementEnd = null
+            topLevelSelectSeen = false
+        }
         if (statementStart === null && token.value !== ';' && token.kind !== 'ambiguity') statementStart = token.start
+        if (statementDepth === 0 && token.kind === 'word' && token.value.toUpperCase() === 'SELECT') {
+            topLevelSelectSeen = true
+        }
         if (token.value === '(') statementDepth += 1
         if (token.value === ')') statementDepth = Math.max(0, statementDepth - 1)
         if (token.value === ';' && statementDepth === 0) {
@@ -619,7 +658,9 @@ export function analyzeSqlMutation(sql, options = {}) {
             }
             statementStart = null
             statementEnd = null
+            topLevelSelectSeen = false
         } else if (statementStart !== null && token.kind !== 'ambiguity') statementEnd = token.end
+        previousToken = token
     }
     if (statementStart !== null && statementEnd !== null) {
         statementSpans.push({ start: statementStart, end: statementEnd })

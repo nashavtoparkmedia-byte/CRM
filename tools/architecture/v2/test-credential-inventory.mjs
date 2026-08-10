@@ -193,10 +193,12 @@ const mixed = mixedCredentialSqlFragments([
   'echo "SELECT token from bots"',
   'psql "$DATABASE_URL" -c "SELECT token FROM bots"',
   'cursor.execute("SELECT apiKey FROM ApiConnection")',
+  'connection.cursor("SELECT token FROM bots")',
 ].join('\n'))
 assert.deepEqual(mixed.map((fragment) => fragment.sql), [
   'SELECT token FROM bots',
   'SELECT apiKey FROM ApiConnection',
+  'SELECT token FROM bots',
 ])
 
 process.stdout.write('whole-repository credential inventory tests: PASS\n')

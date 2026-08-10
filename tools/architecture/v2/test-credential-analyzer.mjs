@@ -358,6 +358,57 @@ assert(mysqlDoubleQuotedSafety.accesses.some((entry) => (
 )))
 assert.equal(JSON.stringify(mysqlDoubleQuotedSafety).includes('still literal'), false)
 
+for (const numeric of ['10', '1.0', '1e2']) {
+  const dashCommentSafety = analyzeCredentialSqlAccess(
+    `SELECT ${numeric}-- DELETE FROM ApiConnection;\nSELECT token FROM bots;`,
+    { fileName: 'dash-comment.sql' },
+  )
+  assert.equal(dashCommentSafety.accesses.some((entry) => (
+    entry.access === 'WRITE' && entry.policy_id === 'fleet.api-connection.v1'
+  )), false)
+  assert(dashCommentSafety.accesses.some((entry) => (
+    entry.access === 'READ'
+    && entry.policy_id === 'telegram.bot-token.v1'
+    && entry.line === 2
+    && entry.column === 1
+  )))
+}
+
+const dialectDashSafety = analyzeCredentialSqlAccess(
+  'SELECT x--2; DELETE FROM ApiConnection;',
+  { fileName: 'dialect-dash.sql' },
+)
+assert(dialectDashSafety.accesses.some((entry) => (
+  entry.access === 'WRITE' && entry.policy_id === 'fleet.api-connection.v1'
+)))
+assert(dialectDashSafety.accesses.some((entry) => (
+  entry.access === 'UNKNOWN'
+  && entry.ambiguity_reasons.includes('dialect_dependent_dash_comment')
+)))
+
+for (const command of ['echo', 'qecho', 'warn']) {
+  const psqlDisplaySafety = analyzeCredentialSqlAccess(
+    `\\${command} DELETE FROM ApiConnection;\nSELECT token FROM bots;`,
+    { fileName: 'psql-display.sql' },
+  )
+  assert.deepEqual(psqlDisplaySafety.accesses.map((entry) => [entry.access, entry.policy_id]), [
+    ['READ', 'telegram.bot-token.v1'],
+  ])
+}
+
+const jsonbDeletePathSafety = analyzeCredentialSqlAccess(
+  "SELECT payload #- '{a}', token FROM bots;",
+  { fileName: 'jsonb-delete-path.sql' },
+)
+assert.deepEqual(jsonbDeletePathSafety.accesses.map((entry) => [
+  entry.access,
+  entry.policy_id,
+  entry.credential_exposure,
+  entry.ambiguous,
+]), [
+  ['READ', 'telegram.bot-token.v1', 'SECRET_READ', false],
+])
+
 const routineAndExportSql = analyzeCredentialSqlAccess([
   'CREATE FUNCTION credential_read() RETURNS text AS $$ SELECT "apiKey" FROM "ApiConnection" $$ LANGUAGE SQL;',
   'COPY "Bot" (token) TO STDOUT;',

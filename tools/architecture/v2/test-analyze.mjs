@@ -2,7 +2,12 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
-import { mixedDatabaseCommandSinks, mixedSqlFragments, standaloneSqlSites } from './analyze.mjs'
+import {
+  javascriptDatabaseCommandSites,
+  mixedDatabaseCommandSinks,
+  mixedSqlFragments,
+  standaloneSqlSites,
+} from './analyze.mjs'
 
 const shellSurface = { path: 'scripts/reconcile.sh' }
 const shell = String.raw`#!/usr/bin/env bash
@@ -168,6 +173,19 @@ const languageExecutionCommands = [
   "Start-Process 'pg_restore' -ArgumentList '-d crm backup.dump'",
   "& 'pg_restore' -d crm backup.dump",
   'cmd /c "pg_restore -d crm backup.dump"',
+  `await asyncio.create_subprocess_exec(
+    'pg_restore', '-d', 'crm', 'backup.dump'
+  )`,
+  `await asyncio.create_subprocess_shell(
+    'pg_restore -d crm backup.dump'
+  )`,
+  `os.spawnvp(
+    os.P_WAIT, 'pg_restore',
+    ['pg_restore', '-d', 'crm', 'backup.dump']
+  )`,
+  "eval 'pg_restore -d crm backup.dump'",
+  "Invoke-Expression 'pg_restore -d crm backup.dump'",
+  "iex 'pg_restore -d crm backup.dump'",
 ]
 for (const command of languageExecutionCommands) {
   assert.deepEqual(
@@ -176,6 +194,27 @@ for (const command of languageExecutionCommands) {
     command,
   )
 }
+for (const source of [
+  "import { exec } from 'node:child_process'; exec('pg_restore -d crm backup.dump')",
+  "const { spawn } = require('child_process'); spawn('pg_restore', ['-d', 'crm', 'backup.dump'])",
+  "const cp = require('node:child_process'); cp.execFile('pg_restore', ['-d', 'crm', 'backup.dump'])",
+]) {
+  assert.deepEqual(
+    javascriptDatabaseCommandSites({ path: 'runner.js' }, source).map(({ method, database_command_intent }) => ({
+      method,
+      database_command_intent,
+    })),
+    [{ method: 'mixed-script-command:pg_restore', database_command_intent: 'WRITE' }],
+    source,
+  )
+}
+for (const source of [
+  'pg_restore --help',
+  'pg_restore --version',
+  'pg_restore --list backup.dump',
+  'pg_restore -l backup.dump',
+  'psql --version',
+]) assert.deepEqual(mixedDatabaseCommandSinks(source), [], source)
 assert.deepEqual(mixedDatabaseCommandSinks([
   'PG_TOOL=pg_restore',
   'command -v pg_restore',
@@ -192,6 +231,17 @@ assert.deepEqual(mixedDatabaseCommandSinks(asyncpgStatic, {
 assert.deepEqual(
   mixedDatabaseCommandSinks('await connection.fetch(runtime_sql)').map(({ command, intent }) => ({ command, intent })),
   [{ command: 'fetch', intent: 'UNKNOWN' }],
+)
+const asyncpgCursor = "await connection.cursor('SELECT token FROM bots')"
+assert.deepEqual(mixedSqlFragments(asyncpgCursor).map((fragment) => fragment.sql), [
+  'SELECT token FROM bots',
+])
+assert.deepEqual(mixedDatabaseCommandSinks(asyncpgCursor, {
+  staticFragments: mixedSqlFragments(asyncpgCursor),
+}), [])
+assert.deepEqual(
+  mixedDatabaseCommandSinks('await connection.cursor(runtime_sql)').map(({ command, intent }) => ({ command, intent })),
+  [{ command: 'cursor', intent: 'UNKNOWN' }],
 )
 
 assert.deepEqual(mixedDatabaseCommandSinks([

@@ -584,6 +584,7 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
     const transactionCallbackOrigins = new Map()
     const transactionOperationNodes = new Set()
     const invocationParameterValues = new Map()
+    const drizzleInvocationParameterOperations = new Map()
 
     function symbolAt(identifier) {
         if (ts.isShorthandPropertyAssignment(identifier.parent) && identifier.parent.name === identifier) {
@@ -658,6 +659,20 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
                 && propertyName(callee) === 'create'
                 && candidate.arguments[0]
             ) return heldPropertyExpression(candidate.arguments[0], property, new Set(seen))
+            if (
+                (ts.isPropertyAccessExpression(callee) || ts.isElementAccessExpression(callee))
+                && ts.isIdentifier(unwrapExpression(callee.expression))
+                && unwrapExpression(callee.expression).text === 'Object'
+                && new Set(['freeze', 'preventExtensions', 'seal']).has(propertyName(callee))
+                && candidate.arguments[0]
+            ) return heldPropertyExpression(candidate.arguments[0], property, new Set(seen))
+            if (
+                (ts.isPropertyAccessExpression(callee) || ts.isElementAccessExpression(callee))
+                && ts.isIdentifier(unwrapExpression(callee.expression))
+                && unwrapExpression(callee.expression).text === 'Object'
+                && propertyName(callee) === 'fromEntries'
+                && candidate.arguments[0]
+            ) return heldEntryExpression(candidate.arguments[0], property, new Set(seen))
         }
         if (ts.isIdentifier(candidate)) {
             const symbol = symbolAt(candidate)
@@ -666,6 +681,56 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
             for (const declaration of symbol.declarations ?? []) {
                 if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
                     const held = heldPropertyExpression(declaration.initializer, property, nextSeen)
+                    if (held) return held
+                }
+            }
+        }
+        return null
+    }
+
+    function heldEntryExpression(expression, property, seen = new Set()) {
+        const candidate = unwrapExpression(expression)
+        if (!candidate || property === null || seen.has(candidate)) return null
+        seen = new Set(seen).add(candidate)
+        if (ts.isArrayLiteralExpression(candidate)) {
+            for (const entryNode of [...candidate.elements].reverse()) {
+                const entry = unwrapExpression(entryNode)
+                if (!ts.isArrayLiteralExpression(entry) || entry.elements.length < 2) continue
+                if (reflectivePropertyName(entry.elements[0]) === property) return entry.elements[1]
+            }
+            return null
+        }
+        if (ts.isIdentifier(candidate)) {
+            const symbol = symbolAt(candidate)
+            if (!symbol || seen.has(symbol)) return null
+            const nextSeen = new Set(seen).add(symbol)
+            for (const declaration of symbol.declarations ?? []) {
+                if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
+                    const held = heldEntryExpression(declaration.initializer, property, nextSeen)
+                    if (held) return held
+                }
+            }
+        }
+        return null
+    }
+
+    function heldMapEntryExpression(expression, property, seen = new Set()) {
+        const candidate = unwrapExpression(expression)
+        if (!candidate || property === null || seen.has(candidate)) return null
+        seen = new Set(seen).add(candidate)
+        if (ts.isNewExpression(candidate)) {
+            const constructor = unwrapExpression(candidate.expression)
+            if (ts.isIdentifier(constructor) && constructor.text === 'Map' && candidate.arguments?.[0]) {
+                return heldEntryExpression(candidate.arguments[0], property, new Set(seen))
+            }
+        }
+        if (ts.isIdentifier(candidate)) {
+            const symbol = symbolAt(candidate)
+            if (!symbol || seen.has(symbol)) return null
+            const nextSeen = new Set(seen).add(symbol)
+            for (const declaration of symbol.declarations ?? []) {
+                if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
+                    const held = heldMapEntryExpression(declaration.initializer, property, nextSeen)
                     if (held) return held
                 }
             }
@@ -783,6 +848,25 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
                         conditional: false,
                     })
                 }
+            }
+            if (
+                ts.isPropertyAccessExpression(callee)
+                && ts.isIdentifier(callee.expression)
+                && callee.expression.text === 'Reflect'
+                && callee.name.text === 'set'
+                && node.arguments[0]
+                && node.arguments[1]
+                && node.arguments[2]
+            ) {
+                const target = memberDescriptor(node.arguments[0])
+                const property = reflectivePropertyName(node.arguments[1])
+                if (target && property !== null) memberAssignments.push({
+                    ...target,
+                    path: [...target.path, property],
+                    node,
+                    expression: node.arguments[2],
+                    conditional: false,
+                })
             }
         }
         ts.forEachChild(node, collectAssignments)
@@ -1105,6 +1189,43 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
 
         if (ts.isCallExpression(candidate)) {
             const directCallee = unwrapExpression(candidate.expression)
+            if (
+                (ts.isPropertyAccessExpression(directCallee) || ts.isElementAccessExpression(directCallee))
+                && propertyName(directCallee) === 'get'
+                && candidate.arguments[0]
+            ) {
+                const property = reflectivePropertyName(candidate.arguments[0])
+                const held = heldMapEntryExpression(directCallee.expression, property, new Set(seen))
+                if (held) return resolveExpression(held, use, new Set(seen))
+            }
+            if (
+                (ts.isPropertyAccessExpression(directCallee) || ts.isElementAccessExpression(directCallee))
+                && ts.isIdentifier(unwrapExpression(directCallee.expression))
+                && unwrapExpression(directCallee.expression).text === 'Object'
+                && new Set(['freeze', 'preventExtensions', 'seal']).has(propertyName(directCallee))
+                && candidate.arguments[0]
+            ) return resolveExpression(candidate.arguments[0], use, new Set(seen))
+            if (
+                (ts.isPropertyAccessExpression(directCallee) || ts.isElementAccessExpression(directCallee))
+                && ts.isIdentifier(unwrapExpression(directCallee.expression))
+                && unwrapExpression(directCallee.expression).text === 'Object'
+                && propertyName(directCallee) === 'fromEntries'
+                && candidate.arguments[0]
+            ) {
+                const properties = new Map()
+                const entries = unwrapExpression(candidate.arguments[0])
+                if (ts.isArrayLiteralExpression(entries)) for (const entryNode of entries.elements) {
+                    const entry = unwrapExpression(entryNode)
+                    if (!ts.isArrayLiteralExpression(entry) || entry.elements.length < 2) continue
+                    const property = reflectivePropertyName(entry.elements[0])
+                    if (property !== null) properties.set(
+                        property,
+                        resolveExpression(entry.elements[1], use, new Set(seen)),
+                    )
+                }
+                if (properties.size > 0) return objectValue(properties, `object-from-entries:${candidate.getStart(sourceFile)}`)
+                return ambiguous('AMBIGUOUS_VALUE', ['object_from_entries_unresolved'])
+            }
             if (
                 (ts.isPropertyAccessExpression(directCallee) || ts.isElementAccessExpression(directCallee))
                 && ts.isIdentifier(unwrapExpression(directCallee.expression))
@@ -2053,6 +2174,18 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
             const callee = unwrapExpression(candidate.expression)
             const name = ts.isIdentifier(callee) ? callee.text : propertyName(callee)
             if (
+                name === 'get'
+                && (ts.isPropertyAccessExpression(callee) || ts.isElementAccessExpression(callee))
+                && candidate.arguments[0]
+            ) {
+                const held = heldMapEntryExpression(
+                    callee.expression,
+                    reflectivePropertyName(candidate.arguments[0]),
+                    new Set(seen),
+                )
+                if (held && sqlDriverReceiverProven(held, use, new Set(seen))) return true
+            }
+            if (
                 name === 'assign'
                 && (ts.isPropertyAccessExpression(callee) || ts.isElementAccessExpression(callee))
                 && ts.isIdentifier(unwrapExpression(callee.expression))
@@ -2160,6 +2293,19 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
         if (ts.isCallExpression(candidate)) {
             const calleeName = propertyName(candidate.expression)
                 ?? (ts.isIdentifier(candidate.expression) ? candidate.expression.text : null)
+            const callee = unwrapExpression(candidate.expression)
+            if (
+                calleeName === 'get'
+                && (ts.isPropertyAccessExpression(callee) || ts.isElementAccessExpression(callee))
+                && candidate.arguments[0]
+            ) {
+                const held = heldMapEntryExpression(
+                    callee.expression,
+                    reflectivePropertyName(candidate.arguments[0]),
+                    new Set(seen),
+                )
+                if (held) return drizzleReceiver(held, use, new Set(seen))
+            }
             if (calleeName === 'drizzle' || calleeName === 'getDb') {
                 return { proven: true, transaction: false, origin: `drizzle-factory:${calleeName}`, confidence: 'HIGH' }
             }
@@ -2326,6 +2472,8 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
             const symbol = symbolAt(candidate)
             if (!symbol || seen.has(symbol)) return null
             const nextSeen = new Set(seen).add(symbol)
+            const invokedOperations = drizzleInvocationParameterOperations.get(symbol) ?? []
+            if (invokedOperations.length === 1) return invokedOperations[0]
             for (const declaration of symbol.declarations ?? []) {
                 if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
                     const resolved = drizzleOperationReference(declaration.initializer, use, nextSeen)
@@ -2815,11 +2963,23 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
                     const parameterSymbol = symbolAt(parameter.name)
                     if (!parameterSymbol) return
                     const value = resolveExpression(node.arguments[index], node)
-                    if (value.kind === 'UNKNOWN') return
-                    const values = invocationParameterValues.get(parameterSymbol) ?? []
-                    if (!values.some((candidate) => valueIdentity(candidate) === valueIdentity(value))) {
-                        values.push(value)
-                        invocationParameterValues.set(parameterSymbol, values)
+                    if (value.kind !== 'UNKNOWN') {
+                        const values = invocationParameterValues.get(parameterSymbol) ?? []
+                        if (!values.some((candidate) => valueIdentity(candidate) === valueIdentity(value))) {
+                            values.push(value)
+                            invocationParameterValues.set(parameterSymbol, values)
+                        }
+                    }
+                    const drizzleOperation = drizzleOperationReference(node.arguments[index], node)
+                    if (drizzleOperation) {
+                        const operations = drizzleInvocationParameterOperations.get(parameterSymbol) ?? []
+                        const identity = `${drizzleOperation.method ?? '<dynamic>'}:${drizzleOperation.receiver?.origin ?? '<unknown>'}`
+                        if (!operations.some((candidate) => (
+                            `${candidate.method ?? '<dynamic>'}:${candidate.receiver?.origin ?? '<unknown>'}` === identity
+                        ))) {
+                            operations.push(drizzleOperation)
+                            drizzleInvocationParameterOperations.set(parameterSymbol, operations)
+                        }
                     }
                 })
             }

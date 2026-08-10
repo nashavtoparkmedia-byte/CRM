@@ -195,12 +195,13 @@ function prismaRelationFieldKeys(schemaSource) {
 // `animation.execute()`. Keep the vocabulary bounded to conventional database
 // handles while allowing common descriptive snake_case handle names.
 const DATABASE_METHOD_RECEIVER = String.raw`(?:cursor|cur|connection|conn|client|db|database|pool|engine|session|sequelize|query_?runner|entity_?manager|pg|postgres|postgresql|mysql|sqlite|(?:sql|db|database|postgres|postgresql|mysql|sqlite)_[A-Za-z_]\w*|[A-Za-z_]\w*_(?:cursor|connection|conn|db|database|pool|engine|session))`
+const DATABASE_CALL_RECEIVER = String.raw`${DATABASE_METHOD_RECEIVER}(?:\s*\(\s*\))?(?:\s*\.\s*cursor\s*\(\s*\))?`
 const DATABASE_STRING_METHOD_SINK = new RegExp(
-  String.raw`\b${DATABASE_METHOD_RECEIVER}(?:\s*\(\s*\))?\s*\.\s*(?:execute|executemany|executescript|fetch|fetchrow|fetchval|query)\s*\(\s*$`,
+  String.raw`\b${DATABASE_CALL_RECEIVER}\s*\.\s*(?:cursor|execute|executemany|executescript|fetch|fetchrow|fetchval|query)\s*\(\s*$`,
   'iu',
 )
 const DATABASE_DYNAMIC_METHOD_SINK = new RegExp(
-  String.raw`\b${DATABASE_METHOD_RECEIVER}(?:\s*\(\s*\))?\s*\.\s*(query|execute(?:many|script)?|fetch(?:row|val)?)\s*\(`,
+  String.raw`\b${DATABASE_CALL_RECEIVER}\s*\.\s*(cursor|query|execute(?:many|script)?|fetch(?:row|val)?)\s*\(`,
   'giu',
 )
 
@@ -432,6 +433,7 @@ function executableQuotedCommandText(text) {
   const masked = maskQuotedAndCommentText(text)
   const commentMasked = maskCommentText(text)
   const searchable = [...masked]
+  const importsChildProcess = /(?:from\s*|require\s*\(\s*)['"](?:node:)?child_process['"]/u.test(text)
   // Parse exec-form Docker/YAML arrays independently. A generic quote walker
   // can be desynchronized by unrelated shell quoting earlier in the file,
   // while the array itself is a bounded one-line grammar.
@@ -455,9 +457,17 @@ function executableQuotedCommandText(text) {
     const rawPrefix = text.slice(lineStart, opening)
     const execArrayShell = /(?:^|\b)(?:command\s*:|entrypoint\s*:|CMD|ENTRYPOINT)\s*\[\s*["'][^"']*(?:ba|da|k|z)?sh["']\s*,\s*["'][^"']*c[^"']*["']\s*,\s*$/iu.test(rawPrefix)
     const jsonScriptValue = /^\s*"[^"]+"\s*:\s*$/u.test(rawPrefix)
-    const pythonExecutionPayload = /\b(?:subprocess\s*\.\s*(?:Popen|call|check_call|check_output|run)|os\s*\.\s*(?:execlp?|execvp?|popen|spawnlp?|spawnvp?|system))\s*\(\s*(?:\[\s*)?$/iu.test(rawPrefix)
+    const executionPrefix = text.slice(Math.max(0, opening - 512), opening)
+    const pythonExecutionPayload = (
+      /\b(?:subprocess\s*\.\s*(?:Popen|call|check_call|check_output|run)|asyncio\s*\.\s*create_subprocess_(?:exec|shell)|os\s*\.\s*(?:execlp?|execvp?|popen|system))\s*\(\s*(?:\[\s*)?$/iu.test(executionPrefix)
+      || /\bos\s*\.\s*spawn(?:l|lp|v|vp)?\s*\(\s*[A-Za-z_]\w*(?:\s*\.\s*[A-Za-z_]\w*)*\s*,\s*$/iu.test(executionPrefix)
+    )
     const interpreterPayload = /(?:^|\s)(?:powershell(?:\.exe)?\s+(?:-[A-Za-z]+\s+)*-(?:Command|EncodedCommand)|cmd(?:\.exe)?\s+\/(?:c|k))\s*$/iu.test(rawPrefix)
-    const powershellProcessPayload = /(?:^|[;|]\s*|\s)(?:Start-Process(?:\s+-FilePath)?|&)\s*$/iu.test(rawPrefix)
+    const powershellProcessPayload = /(?:^|[;|]\s*|\s)(?:Start-Process(?:\s+-FilePath)?|&|Invoke-Expression|iex)\s*$/iu.test(rawPrefix)
+    const shellEvalPayload = /(?:^|[;&|]\s*|\s)eval\s*$/iu.test(rawPrefix)
+    const javascriptChildProcessPayload = importsChildProcess && (
+      /(?:\b(?:exec|execFile|spawn)\s*\(|\b[A-Za-z_$][\w$]*\s*\.\s*(?:exec|execFile|spawn)\s*\()\s*$/u.test(executionPrefix)
+    )
     if (
       !shellPayload
       && !sshPayload
@@ -466,6 +476,8 @@ function executableQuotedCommandText(text) {
       && !pythonExecutionPayload
       && !interpreterPayload
       && !powershellProcessPayload
+      && !shellEvalPayload
+      && !javascriptChildProcessPayload
     ) continue
     const bodyOffset = match[0].indexOf(match[2])
     const bodyStart = opening + bodyOffset
@@ -528,8 +540,20 @@ export function mixedDatabaseCommandSinks(text, options = {}) {
         ? `prisma ${match[2].toLowerCase().replace(/\s+/gu, ' ')}`
         : null)
       ?? match.at(-1).toLowerCase()
+    const commandTail = masked.slice(index + match[0].length, logicalEnd).split(/(?:&&|\|\||[;|])/u)[0]
+    const informationalCommand = (
+      command === 'pg_restore'
+      && (
+        /(?:^|\s)(?:--help|--version|-\?|-[V])(?:\s|$)/u.test(commandTail)
+        || /(?:^|\s)(?:--list|-l)(?:\s|$)/u.test(commandTail)
+      )
+    ) || (
+      command === 'psql'
+      && /(?:^|\s)(?:--help|--version|-\?|-V)(?:\s|$)/u.test(commandTail)
+    )
+    if (informationalCommand) continue
     const commandLineHasExtractedSql = (
-      new Set(['psql', 'mysql', 'sqlite3', 'sqlcmd', 'query', 'execute', 'executemany', 'executescript', 'fetch', 'fetchrow', 'fetchval']).has(command)
+      new Set(['psql', 'mysql', 'sqlite3', 'sqlcmd', 'cursor', 'query', 'execute', 'executemany', 'executescript', 'fetch', 'fetchrow', 'fetchval']).has(command)
       && staticFragments.some((fragment) => (
         (fragment.index >= logicalStart && fragment.index <= logicalEnd)
         || (fragment.source === 'database_heredoc' && fragment.index === lineEnd + 1)
@@ -647,6 +671,12 @@ export function standaloneSqlSites(surface, text, mixedLanguage = false) {
   ))
 }
 
+export function javascriptDatabaseCommandSites(surface, text) {
+  return standaloneSqlSites(surface, text, true).filter((site) => (
+    site.method.startsWith('mixed-script-command:')
+  ))
+}
+
 function summarize(sites, parseFindings, inventory) {
   const count = (predicate) => sites.filter(predicate).length
   return {
@@ -708,6 +738,10 @@ export async function analyzeRepository(repositoryRoot, options = {}) {
         relationFields: [...architecture.prismaRelationFields],
       })
       discovered = analysis.sites
+      // JavaScript/TypeScript can launch database CLIs through
+      // node:child_process. The AST analyzer owns ORM/raw-driver calls; add
+      // only executable CLI command sites here to avoid duplicating those.
+      discovered.push(...javascriptDatabaseCommandSites(surface, decoded.text))
       for (const diagnostic of analysis.diagnostics) {
         parseFindings.push({
           file: surface.path,

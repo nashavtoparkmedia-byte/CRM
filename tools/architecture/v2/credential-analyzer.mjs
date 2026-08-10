@@ -698,15 +698,34 @@ export function analyzeCredentialSqlAccess(sql, options = {}) {
     let depth = 0
     let first = null
     let last = null
+    let topLevelSelectSeen = false
+    let previousToken = null
     for (const token of tokens) {
+      const repeatedTopLevelSelect = (
+        depth === 0
+        && token.kind === 'word'
+        && token.value.toUpperCase() === 'SELECT'
+        && topLevelSelectSeen
+        && !new Set(['EXCEPT', 'INTERSECT', 'UNION']).has(previousToken?.kind === 'word' ? previousToken.value.toUpperCase() : null)
+        && /\r?\n/u.test(sql.slice(previousToken?.end ?? token.start, token.start))
+      )
+      if (repeatedTopLevelSelect && first !== null && last !== null) {
+        spans.push({ start: first, end: last })
+        first = null
+        last = null
+        topLevelSelectSeen = false
+      }
       if (first === null && token.value !== ';') first = token.start
+      if (depth === 0 && token.kind === 'word' && token.value.toUpperCase() === 'SELECT') topLevelSelectSeen = true
       if (token.value === '(') depth += 1
       if (token.value === ')') depth = Math.max(0, depth - 1)
       if (token.value === ';' && depth === 0) {
         if (first !== null && last !== null) spans.push({ start: first, end: last })
         first = null
         last = null
+        topLevelSelectSeen = false
       } else if (first !== null) last = token.end
+      previousToken = token
     }
     if (first !== null && last !== null) spans.push({ start: first, end: last })
 
