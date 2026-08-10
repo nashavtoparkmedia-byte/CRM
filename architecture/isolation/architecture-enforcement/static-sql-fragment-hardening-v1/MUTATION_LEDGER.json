@@ -17,7 +17,7 @@
     "checksummed source-gate evidence package"
   ],
   "application_source_files_changed": 19,
-  "server_action_source_files_changed": 1,
+  "server_action_source_files_changed": 2,
   "architecture_control_source_files_changed": 25,
   "evidence_files_added_including_checksums": 9,
   "production": [],
@@ -25,7 +25,7 @@
   "providers": [],
   "server_actions_executed": [],
   "webhooks": [],
-  "services": [],
+  "deployed_service_mutations": [],
   "deployment": [],
   "policy_source_mutated": true,
   "registry_source_mutated": true,

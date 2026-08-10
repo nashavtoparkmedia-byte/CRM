@@ -57,7 +57,7 @@
   "out_of_scope": [
     "database execution, triggers, permissions, locks, constraints and concurrency",
     "provider transport, server-action execution, deployed runtime and production behavior",
-    "schema, manifest, dependency, service or deployment mutation",
+    "schema, module-manifest, dependency-graph, deployed-service state or deployment mutation",
     "real credential or secret-bearing execution paths"
   ],
   "application_runtime_source_changed": true,

@@ -30,7 +30,7 @@ Diff-aware ESLint has zero errors and warnings on changed lines in all 19
 application files.
 
 This is a source-only technical gate. Application runtime source changed, but
-no database, provider or server action was executed; no deployed runtime,
-service, deployment or production state was accessed or mutated, and no real
-secret value was read or emitted. Final integrated root adversarial review
-follows the evidence commit.
+no database, provider or server action was executed; no deployed-runtime or
+deployed-service state, deployment, or production state was accessed or
+mutated, and no real secret value was read or emitted. Final integrated root
+adversarial review follows the evidence commit.

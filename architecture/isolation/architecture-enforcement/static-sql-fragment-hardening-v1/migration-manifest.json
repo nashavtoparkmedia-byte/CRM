@@ -136,7 +136,7 @@
     "module_manifests": false,
     "source_only": true
   },
-  "execution_performed": false,
+  "runtime_execution_performed": false,
   "execution_scope": "offline source analysis, deterministic adapter probes, parser tests and static/unit harnesses only; no database, provider, server action, deployed runtime or production execution",
   "provider_tests_executed": false,
   "rollback": "1b949555b92c1202e01b1e55aa10089e7a7e73e7"
