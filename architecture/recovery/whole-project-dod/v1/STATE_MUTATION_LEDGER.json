@@ -1,7 +1,7 @@
 {
   "schema": "yoko.crm.whole-project-dod-state-mutation-ledger.v1",
   "phase": "RECOVERY_TRUTH_AND_STATE_CORRECTION",
-  "updated_at": "2026-08-10T11:06:09Z",
+  "updated_at": "2026-08-10T11:17:39Z",
   "files": [
     {"path": "/opt/codex-work/crm-architecture-state/PROJECT_STATE.json", "before_sha256": "7ef60762d1f6d209859c2261f1d126e538f36fa6dcc060f3ad5a827bf40cbdba", "after_sha256": "364147cf3f1be622e62b5479cecff8821c3680f9e8bbfb717262f1c89e9ea65f"},
     {"path": "/opt/codex-work/crm-architecture-state/PROJECT_STATE.md", "before_sha256": "0b42e6ef6e1482d14bea1ce6323c0daffa3399feb69ffb963e1bf74591802161", "after_sha256": "d438eb76d5aee13e6cc0e87668b2d1d1171613102433bc7ee1185c62f1fda5b5"},
@@ -11,8 +11,8 @@
     {"path": "/opt/codex-work/crm-architecture-state/KNOWN_EXCEPTIONS.json", "before_sha256": "190f9d5e952e7fe5f9337bd0fe60f6e6ba0a1baf22db620a23238c3be9159fb1", "after_sha256": "763904fd2d63714036d975c9689b5f14669cefb171f12b014accb74ed2e0bb84"},
     {"path": "/opt/codex-work/crm-architecture-state/PRODUCTION_CHANGE_LEDGER.json", "before_sha256": "8c507afa5a05f064729b5b9a3cfe368bbb926c1890236ce97fb1ab9c06238eed", "after_sha256": "7df268ef0309f2cd3e5f9d01520a2a3ff4e92818b95b30627c5b5c231ca94956"},
     {"path": "/opt/codex-work/crm-architecture-state/EVIDENCE_INDEX.json", "before_sha256": "6b5dc1ef68ca7a3a4c9af709d2fc817682de717528c3c53308317ac031ca18ca", "after_sha256": "c45f3e5c13a9c75dbb452a6129e7ebf546623e97fa7c667f16629258c96e2ebf"},
-    {"path": "/opt/codex-work/crm-architecture-state/FINAL_DOD_GAP_LEDGER.json", "before_sha256": null, "after_sha256": "7592e014da014d265259cccae0249c2187aeb5c15ac9326a2be3278d51ff72a5"},
-    {"path": "/opt/codex-work/crm-architecture-state/WHOLE_PROJECT_EVIDENCE_INDEX.json", "before_sha256": null, "after_sha256": "2accc27346e5e6b5c5eef86eac444ea9994c836e166aa4fb1b9f40f5cbbd40c1"}
+    {"path": "/opt/codex-work/crm-architecture-state/FINAL_DOD_GAP_LEDGER.json", "before_sha256": null, "after_sha256": "3c0f9190824a14e8601b5d354939666543d0974a77289b1a1cbce2fb53752ba2"},
+    {"path": "/opt/codex-work/crm-architecture-state/WHOLE_PROJECT_EVIDENCE_INDEX.json", "before_sha256": null, "after_sha256": "2a4181bad2ebdac9339ad6e1d7862e63992b5b1f1d9b355093874cfe6e203dd9"}
   ],
   "production_mutation": {
     "source_mutations": 0,
