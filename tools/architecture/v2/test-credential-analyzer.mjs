@@ -300,6 +300,64 @@ assert.deepEqual(mysqlHashComment.accesses.map((entry) => [entry.access, entry.p
   ['READ', 'telegram.bot-token.v1', 2],
 ])
 
+const operationCardinality = analyzeCredentialSqlAccess(
+  'WITH x AS (DELETE FROM bots RETURNING *) DELETE FROM bots WHERE id IN (SELECT id FROM x);',
+  { fileName: 'credential-cardinality.sql' },
+).accesses.filter((entry) => entry.access === 'WRITE')
+assert.equal(operationCardinality.length, 2)
+assert.deepEqual(operationCardinality.map((entry) => [entry.policy_id, entry.line, entry.column]), [
+  ['telegram.bot-token.v1', 1, 12],
+  ['telegram.bot-token.v1', 1, 42],
+])
+assert.equal(new Set(operationCardinality.map((entry) => entry.site_signature)).size, 2)
+
+const mysqlExecutableSurfaces = analyzeCredentialSqlAccess([
+  '/*!50000 DELETE FROM ApiConnection */;',
+  'DELIMITER $$',
+  'CREATE PROCEDURE p() BEGIN',
+  '  DELETE FROM bots;',
+  'END$$',
+  'DELIMITER ;',
+].join('\n'), { fileName: 'mysql-executable.sql' })
+assert(mysqlExecutableSurfaces.accesses.some((entry) => (
+  entry.policy_id === 'fleet.api-connection.v1' && entry.access === 'WRITE'
+)))
+assert(mysqlExecutableSurfaces.accesses.some((entry) => (
+  entry.policy_id === 'telegram.bot-token.v1' && entry.access === 'WRITE'
+)))
+
+const copyDataSafety = analyzeCredentialSqlAccess([
+  'COPY notes(value) FROM STDIN;',
+  'DELETE FROM ApiConnection; this is data',
+  '\\.',
+  'SELECT token FROM bots;',
+].join('\n'), { fileName: 'copy-data.sql' })
+assert.deepEqual(copyDataSafety.accesses.map((entry) => [entry.policy_id, entry.access, entry.line, entry.column]), [
+  ['telegram.bot-token.v1', 'READ', 4, 1],
+])
+
+const malformedSql = analyzeCredentialSqlAccess(
+  "SELECT 'x; DELETE FROM ApiConnection;",
+  { fileName: 'malformed.sql' },
+)
+assert.equal(malformedSql.accesses.length, 1)
+assert.equal(malformedSql.accesses[0].access, 'UNKNOWN')
+assert(malformedSql.accesses[0].ambiguity_reasons.includes('invalid_sql_token'))
+
+const slash = String.fromCharCode(92)
+const mysqlDoubleQuotedSafety = analyzeCredentialSqlAccess(
+  'SELECT "harmless ' + slash + '"; DELETE FROM ApiConnection; still literal" AS x; SELECT token FROM bots;',
+  { fileName: 'mysql-double-quoted.sql' },
+)
+assert.equal(mysqlDoubleQuotedSafety.accesses.some((entry) => (
+  entry.access === 'WRITE' && entry.policy_id === 'fleet.api-connection.v1'
+)), false)
+assert(mysqlDoubleQuotedSafety.accesses.some((entry) => (
+  entry.access === 'UNKNOWN'
+  && entry.ambiguity_reasons.includes('dialect_dependent_double_quote_string')
+)))
+assert.equal(JSON.stringify(mysqlDoubleQuotedSafety).includes('still literal'), false)
+
 const routineAndExportSql = analyzeCredentialSqlAccess([
   'CREATE FUNCTION credential_read() RETURNS text AS $$ SELECT "apiKey" FROM "ApiConnection" $$ LANGUAGE SQL;',
   'COPY "Bot" (token) TO STDOUT;',

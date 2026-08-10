@@ -805,6 +805,26 @@ export function analyzeCredentialSqlAccess(sql, options = {}) {
     ambiguous: analysis.ambiguous,
     ambiguity_reasons: analysis.reasons ?? [],
   }
+  const operationPositions = analysis.operations.map((operation, operationIndex) => {
+    const operationLocation = typeof sql === 'string'
+      ? locationAtOffset(sql, operation.index, options.line ?? 1, options.column ?? 1)
+      : { line: options.line ?? 1, column: options.column ?? 1 }
+    return {
+      ...position,
+      ...operationLocation,
+      site_signature: sha256([
+        fileName,
+        analysis.sql_sha256 ?? '<dynamic-sql>',
+        options.ordinal ?? 0,
+        operationIndex,
+        operation.index,
+        operation.operation,
+        operation.table ?? operation.object ?? '<dynamic-target>',
+      ].join('\n')),
+      operations: [operation],
+      tables: operation.table ? [operation.table] : [],
+    }
+  })
   const boundary = {
     route: false,
     server_action: false,
@@ -843,16 +863,15 @@ export function analyzeCredentialSqlAccess(sql, options = {}) {
     }
     accesses.push(baseRecord(tablePosition, policy, 'READ', exposedFieldsForRaw(policy, tablePosition), boundary))
   }
-  for (const policy of uniquePolicies(position.tables, index)) {
-    if (analysis.operations.length === 0) continue
-    accesses.push(baseRecord(position, policy, 'WRITE', {
-      exposed: policy.sensitive_fields,
-      ambiguous: analysis.ambiguous,
-      reason: analysis.ambiguous ? 'dynamic_credential_record_write' : null,
-    }, boundary))
-  }
-  if (analysis.operations.length > 0) {
-    for (const table of position.tables.filter((candidate) => uniquePolicies([candidate], index).length === 0)) {
+  for (const operationPosition of operationPositions) {
+    for (const policy of uniquePolicies(operationPosition.tables, index)) {
+      accesses.push(baseRecord(operationPosition, policy, 'WRITE', {
+        exposed: policy.sensitive_fields,
+        ambiguous: analysis.ambiguous,
+        reason: analysis.ambiguous ? 'dynamic_credential_record_write' : null,
+      }, boundary))
+    }
+    for (const table of operationPosition.tables.filter((candidate) => uniquePolicies([candidate], index).length === 0)) {
       const derivedWriteFields = credentialWriteFieldsForTable(position, table)
       if (derivedWriteFields.length === 0 && !credentialLikeEntity(table)) continue
       const policy = {
@@ -861,7 +880,7 @@ export function analyzeCredentialSqlAccess(sql, options = {}) {
         owner_context: null,
         sensitive_fields: [...new Set(derivedWriteFields)].sort(),
       }
-      accesses.push(baseRecord(position, policy, 'WRITE', {
+      accesses.push(baseRecord(operationPosition, policy, 'WRITE', {
         exposed: derivedWriteFields,
         ambiguous: analysis.ambiguous,
         reason: analysis.ambiguous ? 'dynamic_credential_record_write' : null,

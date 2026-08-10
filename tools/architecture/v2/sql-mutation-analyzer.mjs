@@ -25,15 +25,57 @@ function isIdentifierPart(character) {
 export function tokenizeSql(sql) {
     const tokens = []
     let index = 0
+    let mysqlDelimiter = ';'
 
     function push(kind, value, start, end = index, extra = {}) {
         tokens.push({ kind, value, start, end, ...extra })
+    }
+
+    function relocateToken(token, offset, extra = {}) {
+        return {
+            ...token,
+            start: token.start + offset,
+            end: token.end + offset,
+            ...(typeof token.body_start === 'number' ? { body_start: token.body_start + offset } : {}),
+            ...extra,
+        }
+    }
+
+    function statementIsCopyFromStdin() {
+        // The just-emitted terminator is the final token; inspect back to the
+        // preceding top-level statement boundary.
+        let start = tokens.length - 2
+        while (start >= 0 && tokens[start]?.value !== ';') start -= 1
+        const statement = tokens.slice(start + 1, -1)
+        const copy = statement.findIndex((token) => token.kind === 'word' && token.value.toUpperCase() === 'COPY')
+        const from = statement.findIndex((token, position) => (
+            position > copy && token.kind === 'word' && token.value.toUpperCase() === 'FROM'
+        ))
+        return copy !== -1 && from !== -1 && statement.slice(from + 1).some((token) => (
+            token.kind === 'word' && token.value.toUpperCase() === 'STDIN'
+        ))
     }
 
     while (index < sql.length) {
         const start = index
         const current = sql[index]
         const next = sql[index + 1]
+
+        const lineStart = sql.lastIndexOf('\n', index - 1) + 1
+        if (/^\s*$/u.test(sql.slice(lineStart, index))) {
+            const delimiterDirective = /^DELIMITER[ \t]+(\S+)[^\r\n]*(?:\r?\n|$)/iu.exec(sql.slice(index))
+            if (delimiterDirective) {
+                mysqlDelimiter = delimiterDirective[1]
+                index += delimiterDirective[0].length
+                continue
+            }
+        }
+
+        if (mysqlDelimiter !== ';' && sql.startsWith(mysqlDelimiter, index)) {
+            index += mysqlDelimiter.length
+            push('symbol', ';', start)
+            continue
+        }
 
         if (/\s/u.test(current)) {
             index += 1
@@ -43,6 +85,23 @@ export function tokenizeSql(sql) {
         if (current === '-' && next === '-') {
             index += 2
             while (index < sql.length && sql[index] !== '\n') index += 1
+            continue
+        }
+
+        if (current === '/' && next === '*' && sql[index + 2] === '!') {
+            index += 3
+            const bodyStartCandidate = index
+            while (/[0-9]/u.test(sql[index] ?? '')) index += 1
+            if (index > bodyStartCandidate) while (/[ \t]/u.test(sql[index] ?? '')) index += 1
+            const bodyStart = index
+            const close = sql.indexOf('*/', index)
+            const bodyEnd = close === -1 ? sql.length : close
+            const nested = tokenizeSql(sql.slice(bodyStart, bodyEnd))
+            tokens.push(...nested.map((token) => relocateToken(token, bodyStart, {
+                dialect_ambiguity_reason: 'mysql_executable_comment',
+            })))
+            index = close === -1 ? sql.length : close + 2
+            if (close === -1) push('invalid', '<unterminated-mysql-executable-comment>', start, index)
             continue
         }
 
@@ -88,6 +147,7 @@ export function tokenizeSql(sql) {
                 && tokens.at(-1)?.end === start
             ) tokens.pop()
             let dialectDependentEscape = false
+            let closed = false
             index += 1
             while (index < sql.length) {
                 if (sql[index] === "'" && sql[index + 1] === "'") index += 2
@@ -101,10 +161,11 @@ export function tokenizeSql(sql) {
                 }
                 else if (sql[index] === "'") {
                     index += 1
+                    closed = true
                     break
                 } else index += 1
             }
-            push('value', '<string>', start, index, dialectDependentEscape ? {
+            push(closed ? 'value' : 'invalid', closed ? '<string>' : '<unterminated-string>', start, index, dialectDependentEscape ? {
                 dialect_ambiguity_reason: 'dialect_dependent_string_escape',
             } : {})
             continue
@@ -139,9 +200,18 @@ export function tokenizeSql(sql) {
             index += 1
             let value = ''
             let closed = false
+            let dialectDependentEscape = false
             while (index < sql.length) {
                 if (sql[index] === close && sql[index + 1] === close) {
                     value += close
+                    index += 2
+                } else if (current === '"' && sql[index] === '\\' && index + 1 < sql.length) {
+                    // PostgreSQL treats double quotes as identifiers, whereas
+                    // default-mode MySQL treats them as strings and accepts
+                    // backslash escapes. Consume the MySQL-safe extent and
+                    // retain the dialect split instead of exposing its body as
+                    // confident SQL.
+                    dialectDependentEscape = true
                     index += 2
                 } else if (sql[index] === close) {
                     index += 1
@@ -152,7 +222,9 @@ export function tokenizeSql(sql) {
                     index += 1
                 }
             }
-            push(closed ? 'identifier' : 'invalid', value, start)
+            push(closed ? 'identifier' : 'invalid', dialectDependentEscape ? '<dialect-double-quoted>' : value, start, index, dialectDependentEscape ? {
+                dialect_ambiguity_reason: 'dialect_dependent_double_quote_string',
+            } : {})
             continue
         }
 
@@ -172,6 +244,16 @@ export function tokenizeSql(sql) {
 
         index += 1
         push('symbol', current, start)
+        if (current === ';' && statementIsCopyFromStdin()) {
+            const terminator = /(?:^|\n)[ \t]*\\\.[ \t]*(?:\r?\n|$)/gu
+            terminator.lastIndex = index
+            const match = terminator.exec(sql)
+            if (match) index = match.index + match[0].length
+            else {
+                push('invalid', '<unterminated-copy-stdin>', index, sql.length)
+                index = sql.length
+            }
+        }
     }
 
     return tokens
@@ -599,6 +681,7 @@ export function analyzeSqlMutation(sql, options = {}) {
     }
     if (tokens.some((token) => token.kind === 'invalid')) {
         dynamic = true
+        indeterminateMutation = true
         reasons.add('invalid_sql_token')
     }
 

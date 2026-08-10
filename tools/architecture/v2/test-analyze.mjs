@@ -158,6 +158,42 @@ assert.deepEqual(mixedDatabaseCommandSinks([
   String.raw`bash -lc 'true; # pg_dump crm > backup.dump'`,
   String.raw`bash -o pipefail -c 'echo ok # psql "$DATABASE_URL"'`,
 ].join('\n')), [])
+
+const languageExecutionCommands = [
+  "subprocess.run(['pg_restore', '-d', 'crm', 'backup.dump'])",
+  "subprocess.run('pg_restore -d crm backup.dump', shell=True)",
+  "os.system('pg_restore -d crm backup.dump')",
+  "os.execvp('pg_restore', ['pg_restore', '-d', 'crm', 'backup.dump'])",
+  'powershell -Command "pg_restore -d crm backup.dump"',
+  "Start-Process 'pg_restore' -ArgumentList '-d crm backup.dump'",
+  "& 'pg_restore' -d crm backup.dump",
+  'cmd /c "pg_restore -d crm backup.dump"',
+]
+for (const command of languageExecutionCommands) {
+  assert.deepEqual(
+    mixedDatabaseCommandSinks(command).map(({ command: name, intent }) => ({ name, intent })),
+    [{ name: 'pg_restore', intent: 'WRITE' }],
+    command,
+  )
+}
+assert.deepEqual(mixedDatabaseCommandSinks([
+  'PG_TOOL=pg_restore',
+  'command -v pg_restore',
+  'tools=(pg_restore pg_dump)',
+].join('\n')), [])
+
+const asyncpgStatic = "await connection.fetch('SELECT token FROM bots')"
+assert.deepEqual(mixedSqlFragments(asyncpgStatic).map((fragment) => fragment.sql), [
+  'SELECT token FROM bots',
+])
+assert.deepEqual(mixedDatabaseCommandSinks(asyncpgStatic, {
+  staticFragments: mixedSqlFragments(asyncpgStatic),
+}), [])
+assert.deepEqual(
+  mixedDatabaseCommandSinks('await connection.fetch(runtime_sql)').map(({ command, intent }) => ({ command, intent })),
+  [{ command: 'fetch', intent: 'UNKNOWN' }],
+)
+
 assert.deepEqual(mixedDatabaseCommandSinks([
   'search.query(runtime)',
   'animation.execute(runtime)',

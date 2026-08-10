@@ -65,6 +65,52 @@ test('SQL tokenizer honors escape strings and dialect identifier quoting', () =>
     }
 })
 
+test('SQL client control surfaces and malformed dialect strings fail closed', () => {
+    const executableComment = analyzeSqlMutation('/*!50000 DELETE FROM ApiConnection */;')
+    assert.deepEqual(executableComment.operations.map((operation) => [operation.operation, operation.table]), [
+        ['DELETE', 'ApiConnection'],
+    ])
+    assert.equal(executableComment.ambiguous, true)
+    assert(executableComment.reasons.includes('mysql_executable_comment'))
+
+    const mysqlRoutine = analyzeSqlMutation([
+        'DELIMITER $$',
+        'CREATE PROCEDURE p() BEGIN',
+        '  DELETE FROM ApiConnection;',
+        'END$$',
+        'DELIMITER ;',
+    ].join('\n'))
+    assert(mysqlRoutine.operations.some((operation) => (
+        operation.operation === 'DELETE' && operation.table === 'ApiConnection'
+    )))
+
+    const copy = analyzeSqlMutation([
+        'COPY notes(value) FROM STDIN;',
+        'DELETE FROM ApiConnection; this is data',
+        '\\.',
+        'SELECT token FROM bots;',
+    ].join('\n'))
+    assert.deepEqual(copy.operations.map((operation) => [operation.operation, operation.table]), [
+        ['COPY_FROM', 'notes'],
+    ])
+    assert.deepEqual(copy.read_tables, ['bots'])
+    assert.deepEqual(copy.selected_columns, ['token'])
+
+    const unterminated = analyzeSqlMutation("SELECT 'x; DELETE FROM ApiConnection;")
+    assert.equal(unterminated.is_mutation, null)
+    assert.equal(unterminated.ambiguous, true)
+    assert(unterminated.reasons.includes('invalid_sql_token'))
+
+    const slash = String.fromCharCode(92)
+    const mysqlDoubleQuoted = analyzeSqlMutation(
+        'SELECT "harmless ' + slash + '"; DELETE FROM ApiConnection; still literal" AS x; SELECT token FROM bots;',
+    )
+    assert.equal(mysqlDoubleQuoted.operations.some((operation) => operation.table === 'ApiConnection'), false)
+    assert.equal(mysqlDoubleQuoted.is_mutation, null)
+    assert(mysqlDoubleQuoted.reasons.includes('dialect_dependent_double_quote_string'))
+    assert.equal(JSON.stringify(mysqlDoubleQuoted).includes('still literal'), false)
+})
+
 test('SQL analyzer extracts DML, schema qualification and table lists', () => {
     const result = analyzeSqlScript([
         'INSERT INTO public.alpha_table (id) VALUES (1);',
@@ -762,19 +808,54 @@ test('typed Drizzle method aliases, descriptors and assigned holders stay visibl
         '  const bound = db.update.bind(db)',
         '  const { update } = db',
         '  const arrayHeld = [db.update][0]',
+        '  const array = [db.update]',
+        '  const [arrayDestructured] = array',
         "  const described = Object.getOwnPropertyDescriptor(db, 'update').value",
         '  const holder = Object.assign({}, { update: db.update })',
+        '  const reflectedHolder = {}',
+        "  Object.defineProperty(reflectedHolder, 'update', { value: db.update })",
+        '  const inheritedHolder = Object.create({ update: db.update })',
+        '  const getUpdate = () => db.update',
         '  direct(accounts).set({})',
         '  bound(accounts).set({})',
         '  update(accounts).set({})',
         '  arrayHeld(accounts).set({})',
+        '  array[0](accounts).set({})',
+        '  arrayDestructured(accounts).set({})',
         '  described(accounts).set({})',
+        "  Object.getOwnPropertyDescriptor(db, 'update').value.call(db, accounts).set({})",
         '  holder.update(accounts).set({})',
+        '  reflectedHolder.update(accounts).set({})',
+        '  inheritedHolder.update(accounts).set({})',
+        '  getUpdate()(accounts).set({})',
         '}',
     ].join('\n'))
-    assert.equal(sites.length, 6)
+    assert.equal(sites.length, 12)
     assert(sites.every((site) => site.kind === 'drizzle'))
     assert(sites.every((site) => site.model === 'accounts' && site.method === 'update'))
+})
+
+test('Object property and prototype holders cannot hide Prisma or raw-driver operations', () => {
+    const sites = extractPrismaWrites([
+        "import { PrismaClient } from '@prisma/client'",
+        "import { Pool } from 'pg'",
+        'const prisma = new PrismaClient()',
+        'const pool = new Pool()',
+        'const prismaHolder = {}',
+        'const poolHolder = {}',
+        "Object.defineProperty(prismaHolder, 'client', { value: prisma })",
+        "Object.defineProperty(poolHolder, 'client', { value: pool })",
+        'prismaHolder.client.bot.create({ data: {} })',
+        'Object.create({ client: prisma }).client.bot.update({ data: {} })',
+        "poolHolder.client.query('DELETE FROM ApiConnection')",
+        "Object.create({ client: pool }).client.query('UPDATE ApiConnection SET apiKey = NULL')",
+    ].join('\n'), { knownModels: ['Bot'] })
+    assert.deepEqual(sites.map((site) => [site.kind, site.model, site.method, site.tables ?? []]), [
+        ['model', 'bot', 'create', []],
+        ['model', 'bot', 'update', []],
+        ['raw', null, 'sql-driver:query', ['ApiConnection']],
+        ['raw', null, 'sql-driver:query', ['ApiConnection']],
+    ])
 })
 
 test('ordinary run methods are not misclassified as database writes', () => {

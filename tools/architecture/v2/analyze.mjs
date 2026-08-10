@@ -196,11 +196,11 @@ function prismaRelationFieldKeys(schemaSource) {
 // handles while allowing common descriptive snake_case handle names.
 const DATABASE_METHOD_RECEIVER = String.raw`(?:cursor|cur|connection|conn|client|db|database|pool|engine|session|sequelize|query_?runner|entity_?manager|pg|postgres|postgresql|mysql|sqlite|(?:sql|db|database|postgres|postgresql|mysql|sqlite)_[A-Za-z_]\w*|[A-Za-z_]\w*_(?:cursor|connection|conn|db|database|pool|engine|session))`
 const DATABASE_STRING_METHOD_SINK = new RegExp(
-  String.raw`\b${DATABASE_METHOD_RECEIVER}(?:\s*\(\s*\))?\s*\.\s*(?:execute|executemany|executescript|query)\s*\(\s*$`,
+  String.raw`\b${DATABASE_METHOD_RECEIVER}(?:\s*\(\s*\))?\s*\.\s*(?:execute|executemany|executescript|fetch|fetchrow|fetchval|query)\s*\(\s*$`,
   'iu',
 )
 const DATABASE_DYNAMIC_METHOD_SINK = new RegExp(
-  String.raw`\b${DATABASE_METHOD_RECEIVER}(?:\s*\(\s*\))?\s*\.\s*(query|execute(?:many|script)?)\s*\(`,
+  String.raw`\b${DATABASE_METHOD_RECEIVER}(?:\s*\(\s*\))?\s*\.\s*(query|execute(?:many|script)?|fetch(?:row|val)?)\s*\(`,
   'giu',
 )
 
@@ -455,7 +455,18 @@ function executableQuotedCommandText(text) {
     const rawPrefix = text.slice(lineStart, opening)
     const execArrayShell = /(?:^|\b)(?:command\s*:|entrypoint\s*:|CMD|ENTRYPOINT)\s*\[\s*["'][^"']*(?:ba|da|k|z)?sh["']\s*,\s*["'][^"']*c[^"']*["']\s*,\s*$/iu.test(rawPrefix)
     const jsonScriptValue = /^\s*"[^"]+"\s*:\s*$/u.test(rawPrefix)
-    if (!shellPayload && !sshPayload && !execArrayShell && !jsonScriptValue) continue
+    const pythonExecutionPayload = /\b(?:subprocess\s*\.\s*(?:Popen|call|check_call|check_output|run)|os\s*\.\s*(?:execlp?|execvp?|popen|spawnlp?|spawnvp?|system))\s*\(\s*(?:\[\s*)?$/iu.test(rawPrefix)
+    const interpreterPayload = /(?:^|\s)(?:powershell(?:\.exe)?\s+(?:-[A-Za-z]+\s+)*-(?:Command|EncodedCommand)|cmd(?:\.exe)?\s+\/(?:c|k))\s*$/iu.test(rawPrefix)
+    const powershellProcessPayload = /(?:^|[;|]\s*|\s)(?:Start-Process(?:\s+-FilePath)?|&)\s*$/iu.test(rawPrefix)
+    if (
+      !shellPayload
+      && !sshPayload
+      && !execArrayShell
+      && !jsonScriptValue
+      && !pythonExecutionPayload
+      && !interpreterPayload
+      && !powershellProcessPayload
+    ) continue
     const bodyOffset = match[0].indexOf(match[2])
     const bodyStart = opening + bodyOffset
     const bodyEnd = bodyStart + match[2].length
@@ -493,6 +504,9 @@ export function mixedDatabaseCommandSinks(text, options = {}) {
     if (
       /^(?:echo|printf|log|logger|write-host|grep|sed|awk)\b/iu.test(prefixAfterOperator)
       || /\b(?:echo|printf|log|logger|write-host)\b[^;&|]*$/iu.test(prefixAfterOperator)
+      || /^(?:export\s+)?\$?[A-Za-z_]\w*\s*=\s*(?:@?\(\s*)?$/u.test(prefixAfterOperator)
+      || /^\s*(?:export\s+)?\$?[A-Za-z_]\w*\s*=\s*@?\([^)]*$/u.test(prefix)
+      || /(?:^|\s)(?:command\s+-v|type\s+-[A-Za-z]*[aptP][A-Za-z]*|which|where(?:\.exe)?|Get-Command)\s*$/iu.test(prefixAfterOperator)
     ) continue
 
     let logicalStart = lineStart
@@ -515,7 +529,7 @@ export function mixedDatabaseCommandSinks(text, options = {}) {
         : null)
       ?? match.at(-1).toLowerCase()
     const commandLineHasExtractedSql = (
-      new Set(['psql', 'mysql', 'sqlite3', 'sqlcmd', 'query', 'execute', 'executemany', 'executescript']).has(command)
+      new Set(['psql', 'mysql', 'sqlite3', 'sqlcmd', 'query', 'execute', 'executemany', 'executescript', 'fetch', 'fetchrow', 'fetchval']).has(command)
       && staticFragments.some((fragment) => (
         (fragment.index >= logicalStart && fragment.index <= logicalEnd)
         || (fragment.source === 'database_heredoc' && fragment.index === lineEnd + 1)

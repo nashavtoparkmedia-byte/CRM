@@ -37,6 +37,8 @@ await writeFile(path.join(root, 'scripts/export-db.py'), [
   'cursor.query("COPY ApiConnection(apiKey) TO STDOUT")',
   'cursor.query("TABLE ApiConnection")',
   'cursor.query(runtime_sql)',
+  'await connection.fetch("SELECT token FROM bots")',
+  'await connection.fetch(runtime_sql)',
   'search.query(runtime_sql)',
   'animation.execute(runtime_sql)',
 ].join('\n'))
@@ -79,14 +81,16 @@ assert.equal(new Set(result.accesses.map((entry) => (
 assert(result.accesses.filter((entry) => entry.policy_id === null).every((entry) => (
   Array.isArray(entry.candidate_entities) && typeof entry.intended_access === 'string'
 )))
-assert.equal(result.summary.credential_database_accesses, 14)
+assert.equal(result.summary.credential_database_accesses, 16)
 assert.equal(result.summary.owner_direct_accesses, 1)
 assert.equal(result.summary.foreign_direct_accesses, 1)
-assert.equal(result.summary.secret_reads, 4)
-assert.equal(result.summary.unresolved_database_accesses, 10)
+assert.equal(result.summary.secret_reads, 5)
+assert.equal(result.summary.unresolved_database_accesses, 11)
 assert.deepEqual(result.accesses.map((entry) => entry.context_classification).sort(), [
   'FOREIGN_DIRECT_DB_ACCESS',
   'OWNER_DIRECT_DB_ACCESS',
+  'UNCLASSIFIED',
+  'UNCLASSIFIED',
   'UNCLASSIFIED',
   'UNCLASSIFIED',
   'UNCLASSIFIED',
@@ -113,6 +117,12 @@ assert.deepEqual(commandAccesses.map((entry) => ({
     file: 'scripts/export-db.py',
     intent: 'UNKNOWN',
     method: 'dynamic-mixed-database-unknown:query',
+    access: 'UNKNOWN',
+  },
+  {
+    file: 'scripts/export-db.py',
+    intent: 'UNKNOWN',
+    method: 'dynamic-mixed-database-unknown:fetch',
     access: 'UNKNOWN',
   },
   {
@@ -174,6 +184,8 @@ assert.deepEqual(
     { line: 1, access: 'READ', entity: 'ApiConnection', exposure: 'SECRET_READ', intent: null },
     { line: 2, access: 'READ', entity: 'ApiConnection', exposure: 'SECRET_READ', intent: null },
     { line: 3, access: 'UNKNOWN', entity: null, exposure: 'AMBIGUOUS', intent: 'UNKNOWN' },
+    { line: 4, access: 'READ', entity: 'Bot', exposure: 'SECRET_READ', intent: null },
+    { line: 5, access: 'UNKNOWN', entity: null, exposure: 'AMBIGUOUS', intent: 'UNKNOWN' },
   ],
 )
 
