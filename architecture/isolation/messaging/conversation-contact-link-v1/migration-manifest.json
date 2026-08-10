@@ -1,0 +1,50 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1",
+  "milestone": "CRM-ARCH-007R-CONVERSATION-CONTACT-LINK",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "9765eb7202bfe07aa54e137d5e96c8d728c0372f",
+  "source_commit": "3c59b2733a6032a7cb1f02be3c42af8a13a0f3ab",
+  "context": "messaging",
+  "caller_contexts": ["messaging", "whatsapp_channel", "telegram_channel", "max_channel", "platform_shell"],
+  "plan": {
+    "id": "conversation-contact-link-v1",
+    "file": "gravity-mvp/src/lib/ContactService.ts",
+    "model": "Chat",
+    "method": "update",
+    "role": "production_source_inactive",
+    "sites": [
+      { "fingerprint": "arch_3a32113e59d6d5250460be8d", "baseline_line": 360, "operation": "link-chat-contact-and-optional-driver" }
+    ],
+    "consumer_calls": 12,
+    "consumer_files": 7
+  },
+  "contracts": ["messaging.EnsureConversationContactLinkCommand.v1"],
+  "dependency": {
+    "effective_added_dependencies": 0,
+    "cycle_verification": 0,
+    "disposition": "all accepted consumers already have an effective Messaging dependency; Contacts does not import Messaging"
+  },
+  "enforcement": {
+    "baseline_registry_commit": "9765eb7202bfe07aa54e137d5e96c8d728c0372f",
+    "baseline_findings": 1408,
+    "baseline_direct_foreign_prisma_write": 85,
+    "retired": ["arch_3a32113e59d6d5250460be8d"],
+    "actual_findings": 1407,
+    "actual_exceptions": 1407,
+    "actual_direct_foreign_prisma_write": 84,
+    "actual_direct_provider_transport_access": 38,
+    "actual_internal_module_import": 379,
+    "actual_non_public_cross_context_import": 536,
+    "actual_undeclared_dependency": 370,
+    "actual_removed": 1,
+    "actual_added": 0,
+    "actual_changed_shared_entries": 0,
+    "finding_digest": "5b21c2b965d736b5451a92a56fb6dfb4dff17c179919b25a795c7ed584349e73",
+    "registry_sha256": "26d55bc9013a72c23670aefa99ae1202ead65b36182159d31e4707ac8e645cd0",
+    "registry_deterministic": true
+  },
+  "verified_at": "2026-08-10T04:27:47Z",
+  "source_control_mutation": { "module_policy": true, "strict_registry": true, "source_only": true },
+  "execution_performed": false,
+  "rollback": "9765eb7202bfe07aa54e137d5e96c8d728c0372f"
+}

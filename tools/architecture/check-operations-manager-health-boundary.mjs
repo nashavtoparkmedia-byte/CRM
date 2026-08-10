@@ -246,21 +246,20 @@ check(
     'manifest amendment widened or added a dependency',
 )
 check(
-    'strict policy and migration bind the slice to the intervention parent',
+    'strict policy retains the amendment and migration binds the slice to the intervention parent',
     policy.manifest_amendments.includes(amendmentPath) &&
-        policy.registry_milestone === 'CRM-ARCH-007R-MANAGER-HEALTH' &&
-        policy.registry_base_commit === '61f0afc9c22590d3344dfbcea6c5f4a580459a7d' &&
         migration.base_commit === '61f0afc9c22590d3344dfbcea6c5f4a580459a7d' &&
         migration.source_commit === '8aeccb755b3fad942a69a23799f76f7a480f4d4f',
     'policy or evidence identity drift',
 )
 check(
-    'exact six manager-health write findings retire with no replacement capacity',
-    registry.milestone === 'CRM-ARCH-007R-MANAGER-HEALTH' &&
-        registry.base_commit === '61f0afc9c22590d3344dfbcea6c5f4a580459a7d' &&
-        registry.exceptions.length === 1408 &&
-        registry.summary?.direct_foreign_prisma_write === 85 &&
-        registry.summary?.undeclared_dependency === 370 &&
+    'six accepted manager-health write retirements remain closed in later strict registries',
+    registry.exceptions.length <= 1408 &&
+        registry.summary?.direct_foreign_prisma_write <= 85 &&
+        registry.summary?.direct_provider_transport_access <= 38 &&
+        registry.summary?.internal_module_import <= 379 &&
+        registry.summary?.non_public_cross_context_import <= 536 &&
+        registry.summary?.undeclared_dependency <= 370 &&
         [
             'arch_880b7dfae43971c822502b90',
             'arch_3251166f174bce021d52ecef',
@@ -275,14 +274,14 @@ check(
     'strict registry delta or owner-local classification drift',
 )
 check(
-    'verified registry identity and zero-change set comparison are exact',
-    registry.finding_digest === 'f1508b169b806c8a8b2b6cdf2ff5feb0b3235296d9fb24fa93e3c955242f10e8' &&
-        migration.enforcement?.actual_findings === 1408 &&
+    'archived accepted registry identity and zero-change set comparison remain exact',
+    migration.enforcement?.actual_findings === 1408 &&
         migration.enforcement?.actual_direct_foreign_prisma_write === 85 &&
+        migration.enforcement?.actual_undeclared_dependency === 370 &&
         migration.enforcement?.actual_removed === 6 &&
         migration.enforcement?.actual_added === 0 &&
         migration.enforcement?.actual_changed_shared_entries === 0 &&
-        migration.enforcement?.finding_digest === registry.finding_digest &&
+        migration.enforcement?.finding_digest === 'f1508b169b806c8a8b2b6cdf2ff5feb0b3235296d9fb24fa93e3c955242f10e8' &&
         migration.enforcement?.registry_sha256 === 'fc04f70cb1a6898275a6ad70668f67245d994802a4e55f10e996b47b49881f1d',
     'verified registry evidence drift',
 )

@@ -1,0 +1,30 @@
+{
+  "schema": "yoko.crm.mutation-ledger.v1",
+  "milestone": "CRM-ARCH-007R-CONVERSATION-CONTACT-LINK",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "9765eb7202bfe07aa54e137d5e96c8d728c0372f",
+  "source_commit": "3c59b2733a6032a7cb1f02be3c42af8a13a0f3ab",
+  "verified_at": "2026-08-10T04:27:47Z",
+  "source": [
+    "strict versioned Messaging conversation-contact-link command and result",
+    "one closed persistence port and parse-before-port handler",
+    "Messaging owner adapter preserving exact ordered legacy reads and final Chat update",
+    "twelve consumer calls migrated across exactly seven accepted files",
+    "Contacts compatibility method removed without a reverse dependency",
+    "repository, consumer and boundary controls",
+    "Messaging-only module-policy amendment with no dependency amendment",
+    "deterministically regenerated strict registry with one exact retirement",
+    "future-compatible manager-health cumulative boundary",
+    "checksummed source-gate evidence package"
+  ],
+  "production": [],
+  "database": [],
+  "services": [],
+  "deployment": [],
+  "policy_source_mutated": true,
+  "registry_source_mutated": true,
+  "source_control_only": true,
+  "conversation_link_executed_against_database": false,
+  "production_mutated": false,
+  "secret_values_read_or_emitted": false
+}

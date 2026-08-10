@@ -19,7 +19,16 @@ check('owner existence no-op retained', adapter.includes('prisma.contact.findUni
 check('Messaging invokes public v1', consumer.includes('SET_CONTACT_DISPLAY_NAME_COMMAND_V1') && consumer.includes('setContactDisplayNameV1({'), 'public command absent')
 check('manual-link guard retained', consumer.includes('else if (chat.contactId) {'), 'contact guard drifted')
 check('driver name forwarded unchanged', consumer.includes('displayName: driver.fullName'), 'display name drifted')
-check('neighboring ContactService flow retained', consumer.includes('ContactService.resolveContact(') && consumer.includes('ContactService.ensureChatLinked('), 'neighboring flow changed')
+const resolveContactIndex = consumer.indexOf('ContactService.resolveContact(')
+const conversationLinkIndex = Math.max(
+  consumer.indexOf('ContactService.ensureChatLinked('),
+  consumer.indexOf('ensureConversationContactLinkV1({'),
+)
+check(
+  'neighboring contact resolution and conversation-link flow retained',
+  resolveContactIndex >= 0 && conversationLinkIndex > resolveContactIndex,
+  'neighboring flow changed',
+)
 check('command amendment exact', amendment.amendments[0].context === 'contacts' && amendment.amendments[0].add_commands?.length === 1 && amendment.amendments[0].add_commands[0] === 'SetContactDisplayNameCommand.v1', 'command amendment drifted')
 check('Messaging Contacts dependency was pre-approved', messaging.allowed_dependencies.some((item) => item.context === 'contacts' && item.surface === 'contacts.public'), 'approved dependency absent')
 

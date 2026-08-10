@@ -1,0 +1,45 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1",
+  "milestone": "CRM-ARCH-007R-CONVERSATION-CONTACT-LINK",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "9765eb7202bfe07aa54e137d5e96c8d728c0372f",
+  "source_commit": "3c59b2733a6032a7cb1f02be3c42af8a13a0f3ab",
+  "captured_at": "2026-08-10T04:27:47Z",
+  "verified_at": "2026-08-10T04:27:47Z",
+  "legacy_owner": "gravity-mvp/src/lib/ContactService.ts",
+  "new_owner": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-conversation-contact-link-adapter.ts",
+  "consumer_hashes": [
+    { "file": "gravity-mvp/src/app/messages/link-chat-actions.ts", "before": "bef87e3fcc87831ddc46987a8430217cc960c7b7d5a1a370d25b72b3aa31d0d4", "after": "5b2a05a018a23da0d13e11ab1b1d46b183f6a2b304e2511619e8acd45526ec76" },
+    { "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts", "before": "ce90014bbc3a3c581e774cdd2bf95944c7e79ff3bf582b6bb668fd71c03f636b", "after": "5ec82ee4b637a82e5358e74ad024fb1557f1a806186cdae8a1e3b3700698e553" },
+    { "file": "gravity-mvp/src/app/api/messages/start-chat/route.ts", "before": "26c3e78980e9b3b070fb174fb9e4536e347d19d6488eb77a650c3f2d3ddfd537", "after": "fe2ff11b01af726628568edc0d19f0e331b25aff177b488f358c130c00062476" },
+    { "file": "gravity-mvp/src/app/api/webhook/telegram/route.ts", "before": "0752ff84e17062319c54fe09c155008cb5c10585b900e2d3b9f88fe1aa00c249", "after": "1f6a8225202b6bb3864370c6d5aacab503f37d31276066f493cf4f22de0d8fb4" },
+    { "file": "gravity-mvp/src/app/tg-actions.ts", "before": "305e5f8d402a21eb3fe8937f58db350d9108cab323e119a8650dfcd6c855c8c5", "after": "d61934af5f315c8e1ac41ef619b029b00bc33b44fd0c8896cfbcb6b1f13f72d0" },
+    { "file": "gravity-mvp/src/app/api/webhook/max/route.ts", "before": "284c3d0f463d01eacc945ddb677b88fa14d6f6b815bb055b4405b9cc323b17f8", "after": "cefcf1367a80702112571436dd09b18eb452297326fbd1e719ffc1218052ea56" },
+    { "file": "gravity-mvp/src/app/api/webhooks/max/route.ts", "before": "fa9b366d71c7b7b0bab37114116b4d3808f34b7add78fda407e242657ce7b345", "after": "4bbc8ee20c5744efbbbd9bd07efbdffa7be566443981fdc59ce63c48d826e5fc" }
+  ],
+  "legacy_owner_before_sha256": "25a35f2e8306a84cab4f6976abb0ae09550c203d7faef2d4f5fbc0032fa53659",
+  "legacy_owner_after_sha256": "3557862ac3dc268117f2b2442236fda6ab6cddbb07dc3baaa981c1163ed72f47",
+  "behavior": [
+    "all twelve accepted callers still resolve the contact before awaiting the conversation-link operation and retain their existing catch, propagation or swallow boundary",
+    "the owner first reads Chat by chatId selecting only driverId",
+    "an existing non-null Chat driverId is preserved and skips Contact and Driver enrichment reads",
+    "when Chat exists without driverId, Contact is read by contactId selecting only yandexDriverId; only a truthy yandexDriverId triggers Driver lookup by yandexDriverId selecting only id",
+    "a found Driver id is added to the final update; a missing Contact, missing yandexDriverId or missing Driver leaves driverId absent from update data",
+    "the final Chat update always maps chatId, contactId and contactIdentityId, including when the initial Chat read returned null, so the inherited missing-record failure remains visible",
+    "reads and the final write remain sequential; every Prisma failure propagates without retry, logging, recovery or partial-success conversion",
+    "the exact per-consumer call distribution remains 1, 5, 1, 1, 1, 2 and 1 across the seven accepted consumers",
+    "the Contacts compatibility method is removed rather than retained as a reverse Contacts-to-Messaging wrapper",
+    "the existing consumer-to-Messaging public dependencies are reused and no dependency edge or cycle is added"
+  ],
+  "bounded_drift": [
+    "strict versioned parsing rejects malformed, extra-field, empty-identifier and unsupported-version requests before persistence",
+    "the public handler and adapter add negligible in-process frames and can change stack traces without changing successful values",
+    "the owner update data is explicitly typed so driverId remains optional without retaining an inherited any annotation"
+  ],
+  "out_of_scope": [
+    "contact resolution, merge, identity or display-name policy",
+    "provider webhook retry, acknowledgement, logging or error-policy changes",
+    "scenario field settings, remaining low-risk topology, AI governance, Calling configuration and unsafe-fragment hardening",
+    "database access, runtime execution, service activation, deployment, production mutation and secrets"
+  ]
+}

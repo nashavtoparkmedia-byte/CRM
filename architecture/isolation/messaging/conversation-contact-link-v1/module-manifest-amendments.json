@@ -1,0 +1,14 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "CRM-ARCH-007R-CONVERSATION-CONTACT-LINK",
+  "amendments": [
+    {
+      "context": "messaging",
+      "add_commands": [
+        "EnsureConversationContactLinkCommand.v1"
+      ],
+      "reason": "Expose the exact conversation-to-contact linking write through Messaging without generic Chat mutation, Contact mutation, lookup or transaction capability."
+    }
+  ]
+}

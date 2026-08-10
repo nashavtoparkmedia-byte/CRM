@@ -1,0 +1,68 @@
+{
+  "schema": "yoko.crm.context-isolation-verification.v1",
+  "milestone": "CRM-ARCH-007R-CONVERSATION-CONTACT-LINK",
+  "base_commit": "9765eb7202bfe07aa54e137d5e96c8d728c0372f",
+  "source_commit": "3c59b2733a6032a7cb1f02be3c42af8a13a0f3ab",
+  "verified_at": "2026-08-10T04:27:47Z",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "source": {
+    "legacy_owner": "gravity-mvp/src/lib/ContactService.ts",
+    "owner_adapter": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-conversation-contact-link-adapter.ts",
+    "consumer_calls": 12,
+    "consumer_files": 7,
+    "retired_fingerprints": ["arch_3a32113e59d6d5250460be8d"]
+  },
+  "architecture": {
+    "files": 973,
+    "contexts": 16,
+    "dependency_relationships": 106,
+    "effective_added_dependencies": 0,
+    "dependency_cycles": 0,
+    "findings": 1407,
+    "exceptions": 1407,
+    "direct_foreign_prisma_write": 84,
+    "direct_provider_transport_access": 38,
+    "internal_module_import": 379,
+    "non_public_cross_context_import": 536,
+    "undeclared_dependency": 370,
+    "registry_removed": 1,
+    "registry_added": 0,
+    "changed_shared_entries": 0,
+    "finding_digest": "5b21c2b965d736b5451a92a56fb6dfb4dff17c179919b25a795c7ed584349e73",
+    "registry_sha256": "26d55bc9013a72c23670aefa99ae1202ead65b36182159d31e4707ac8e645cd0",
+    "registry_deterministic": true
+  },
+  "tests": {
+    "messaging_conversation_contact_link_repository": "11/11 PASS",
+    "messaging_conversation_contact_link_consumers": "9/9 PASS",
+    "messaging_conversation_contact_link_boundary": "22/22 PASS",
+    "architecture_enforcement_parser": "29/29 PASS",
+    "contract_boundary_controls": "121/121 PASS",
+    "current_cumulative_architecture_test_and_check_scripts": "121/121 PASS"
+  },
+  "typescript": {
+    "diagnostics": 28,
+    "classification": "inherited",
+    "modified_or_new_slice_diagnostics": 0,
+    "normalized_base_sha256": "4bc87f13a0d8807e2e1ca0c79d5719cdfa743c69c6e8443e63626951b9457a17",
+    "normalized_current_sha256": "4bc87f13a0d8807e2e1ca0c79d5719cdfa743c69c6e8443e63626951b9457a17",
+    "normalized_diagnostics_identical": true
+  },
+  "eslint": {
+    "new_contract_handler_adapter_errors": 0,
+    "modified_set_baseline_errors": 226,
+    "modified_set_current_errors": 225,
+    "modified_set_baseline_warnings": 8,
+    "modified_set_current_warnings": 8,
+    "new_errors": 0
+  },
+  "checksums": "29/29 PASS",
+  "policy_source_mutated": true,
+  "registry_source_mutated": true,
+  "source_control_only": true,
+  "database_accessed": false,
+  "conversation_link_executed_against_database": false,
+  "webhooks_or_providers_invoked": false,
+  "secret_values_read_or_emitted": false,
+  "production_mutated": false
+}
