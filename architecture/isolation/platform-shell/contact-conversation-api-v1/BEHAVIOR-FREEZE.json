@@ -1,0 +1,66 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1",
+  "milestone": "CRM-ARCH-007R-CONTACT-CONVERSATION-API",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "23ad1aac6569ec329c75b3f8ae3b892c20160123",
+  "source_commit": "8c9f995d91d41810a1420f79bd21caf71ff50a46",
+  "captured_at": "2026-08-10T05:45:15Z",
+  "verified_at": "2026-08-10T05:45:15Z",
+  "legacy_routes": [
+    {
+      "file": "gravity-mvp/src/app/api/contacts/[id]/chats/route.ts",
+      "before": "7e912c1ce717d2dde41d968f6e36ffd96d38951a6a7a45df81c206154e4bea9f",
+      "after": "971a02e7106ae891661b8c75e2f240bd00247d78f06ff1c43fab253db1d83cc3"
+    },
+    {
+      "file": "gravity-mvp/src/app/api/contacts/start-conversation/route.ts",
+      "before": "66272650ce03502cbd1230700a3bd574b145e94b9c86745059e766d120a6a556",
+      "after": "d9b375ef82b4bf12056d9b9f8203b1d9176bbbaa49198adfbc5cf339421fbcf5"
+    }
+  ],
+  "unchanged_consumers": [
+    {
+      "file": "gravity-mvp/src/app/messages/hooks/useStartConversation.ts",
+      "before": "a5530175de78a23009232b83684f00aa911698911e96ae7b0b28d15b0c6b248f",
+      "after": "a5530175de78a23009232b83684f00aa911698911e96ae7b0b28d15b0c6b248f"
+    },
+    {
+      "file": "gravity-mvp/src/app/messages/components/ContactProfileDrawer.tsx",
+      "before": "b5a96ee22dbc645dad8adb4bb50c4473f317ccba2d8e8e8c2ec52812cf598076",
+      "after": "b5a96ee22dbc645dad8adb4bb50c4473f317ccba2d8e8e8c2ec52812cf598076"
+    }
+  ],
+  "source_hashes_after": {
+    "gravity-mvp/src/app/api/contacts/[id]/chats/route.ts": "971a02e7106ae891661b8c75e2f240bd00247d78f06ff1c43fab253db1d83cc3",
+    "gravity-mvp/src/app/api/contacts/start-conversation/route.ts": "d9b375ef82b4bf12056d9b9f8203b1d9176bbbaa49198adfbc5cf339421fbcf5",
+    "gravity-mvp/src/modules/platform-shell/internal/contact-conversation-orchestrator.ts": "2d53aa865a810043fcbcffa78323a24e28987817d33b6a86f9aaf588af871042",
+    "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-conversation-adapter.ts": "85378990d5b2814d26dc1149dd34a6af2ccdf9f64a75762fedfd800b1db6dd12",
+    "gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-find-driver-by-exact-phone-adapter.ts": "51335fa23ac975b0d17465cc4e7eec1acf5e629f3bba30f99770eab8615c0e2b",
+    "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-contact-conversation-adapter.ts": "3637d857330214ba2498e273017cf17990a29e7c133e4b5b1e089bd8375e4c17"
+  },
+  "behavior": [
+    "both existing POST URLs and their request-field names remain unchanged; profileId remains accepted and inert",
+    "missing phone/channel, invalid channel and invalid normalized phone retain their exact 400 bodies; all other owner failures retain the exact route log prefix and 500 body",
+    "start-by-phone strips the leading plus only for external identity/chat identifiers and delegates the same ContactService resolution semantics through Contacts",
+    "contact-specific opening retains truthy identityId selection; nonempty whitespace is passed verbatim and therefore retains the inherited scoped lookup and 404 behavior",
+    "missing or archived contacts return contact_not_found before identity or phone work",
+    "an explicit identity remains contact/channel/active scoped and never falls back; implicit resolution selects the earliest active identity",
+    "when no active identity exists, the primary-first active phone lookup and exact manual identity write remain ordered and unchanged",
+    "Messaging first finds the newest contact/channel conversation by lastMessageAt then createdAt and backfills only null contact links",
+    "fallback remains exact-phone legacy Driver lookup, then driver/channel latest Chat, then unique externalChatId, then one new linked Chat",
+    "existing non-null Chat links are never overwritten and a missing fallback Chat is created with status new",
+    "Platform sequencing and the new owner wrappers introduce no transaction, retry, recovery, parallelism or swallowed failure; the delegated ContactService resolution retains its inherited bounded P2002 conflict recovery unchanged",
+    "both success responses preserve their existing projections and isNew meanings, while stored Chat channel values are returned exactly"
+  ],
+  "bounded_drift": [
+    "strict v1 envelope parsing rejects malformed, extra-field, empty and unsupported-version owner requests before persistence",
+    "the two routes are now exactly classified as Platform Shell gravity_core rather than Contacts because they coordinate three owner contexts",
+    "the Messaging result DTO closes over all five stored Chat channel values while command inputs remain telegram, whatsapp or max",
+    "public handlers and Platform orchestration add in-process frames and may change stack traces without changing successful values"
+  ],
+  "out_of_scope": [
+    "Telegram link/unlink writes, manager communication logging and contact merge",
+    "AI governance, Calling configuration and unsafe-fragment hardening",
+    "database access, provider or webhook invocation, deployed application runtime execution, service activation, deployment, production mutation and secrets"
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "schema": "yoko.crm.mutation-ledger.v1",
+  "milestone": "CRM-ARCH-007R-CONTACT-CONVERSATION-API",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "23ad1aac6569ec329c75b3f8ae3b892c20160123",
+  "source_commit": "8c9f995d91d41810a1420f79bd21caf71ff50a46",
+  "verified_at": "2026-08-10T05:45:15Z",
+  "source": [
+    "exact two-route Platform Shell module classification",
+    "six strict versioned Contacts, Fleet Operations and Messaging owner requests with closed results",
+    "owner handlers and narrow legacy Prisma or ContactService adapters",
+    "one internal Platform Shell orchestrator preserving exact sequential behavior",
+    "two existing HTTP routes migrated away from direct owner persistence",
+    "repository, orchestration and boundary controls",
+    "three-context public-surface amendment with no dependency amendment",
+    "deterministically regenerated strict registry with six exact retirements",
+    "self-validating future-compatible scenario-field-settings cumulative control",
+    "checksummed source-gate evidence package"
+  ],
+  "production": [],
+  "database": [],
+  "providers": [],
+  "webhooks": [],
+  "services": [],
+  "deployment": [],
+  "policy_source_mutated": true,
+  "registry_source_mutated": true,
+  "module_rule_source_mutated": true,
+  "source_control_only": true,
+  "contact_conversation_executed_against_database": false,
+  "production_mutated": false,
+  "secret_values_read_or_emitted": false
+}

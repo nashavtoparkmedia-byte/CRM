@@ -4,6 +4,8 @@ import { createHash } from 'node:crypto'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 
+import { evaluateFindings, scanArchitecture } from './enforce-architecture.mjs'
+
 const root = process.cwd()
 const read = (relative) => readFileSync(path.join(root, relative), 'utf8')
 const sha = relative => createHash('sha256').update(readFileSync(path.join(root, relative))).digest('hex')
@@ -26,6 +28,12 @@ const verification = JSON.parse(read(`${evidenceRoot}/verification.json`))
 const behavior = JSON.parse(read(`${evidenceRoot}/BEHAVIOR-FREEZE.json`))
 const policy = JSON.parse(read('architecture/enforcement/v1/policy.json'))
 const registry = JSON.parse(read('architecture/enforcement/v1/exceptions.json'))
+const currentArchitectureScan = await scanArchitecture(root)
+const currentEnforcement = evaluateFindings(
+  currentArchitectureScan.findings,
+  registry,
+  currentArchitectureScan.policy,
+)
 const configurationManifest = JSON.parse(read('architecture/contexts/v1/manifests/configuration.json'))
 const workManifest = JSON.parse(read('architecture/contexts/v1/manifests/work_management.json'))
 const contextIndex = JSON.parse(read('architecture/contexts/v1/context-index.json'))
@@ -247,8 +255,6 @@ check(
 check(
   'strict policy and migration bind D2 to the conversation-link parent',
   policy.manifest_amendments.includes(amendmentPath) &&
-    policy.registry_milestone === 'CRM-ARCH-007R-SCENARIO-FIELD-SETTINGS' &&
-    policy.registry_base_commit === '297bc2700eec77e2a06fbdfee4b57867650ba719' &&
     migration.base_commit === '297bc2700eec77e2a06fbdfee4b57867650ba719' &&
     migration.source_commit === 'b1f911b7b17273363df764d6e312a40c9f0fa8fc',
   'policy or evidence lineage drifted',
@@ -285,20 +291,47 @@ const structuralEdgeRetirements = [
   'arch_76820e608c8736956049675d',
 ]
 const exactRetirements = [...directSliceRetirements, ...structuralEdgeRetirements]
+const registryRules = [
+  'direct_foreign_prisma_write',
+  'direct_provider_transport_access',
+  'internal_module_import',
+  'non_public_cross_context_import',
+  'undeclared_dependency',
+]
+const registryFingerprints = registry.exceptions.map(entry => entry.fingerprint)
+const registrySummaryIsExact =
+  registry.schema === 'yoko.crm.architecture-exception-registry.v1' &&
+  registry.version === 1 &&
+  registry.milestone === policy.registry_milestone &&
+  registry.base_commit === policy.registry_base_commit &&
+  registry.policy?.exact_fingerprint_only === true &&
+  registry.policy?.stale_exceptions_fail === true &&
+  registry.policy?.expired_exceptions_fail === true &&
+  registry.policy?.uncovered_violations_fail === true &&
+  registry.policy?.deadline === policy.exception_review_deadline &&
+  JSON.stringify(Object.keys(registry.summary ?? {}).sort()) === JSON.stringify(registryRules) &&
+  registryRules.every(rule =>
+    Number.isInteger(registry.summary[rule]) &&
+    registry.summary[rule] >= 0 &&
+    registry.summary[rule] === registry.exceptions.filter(entry => entry.rule === rule).length
+  ) &&
+  registryRules.reduce((total, rule) => total + registry.summary[rule], 0) === registry.exceptions.length &&
+  registryFingerprints.every(fingerprint => typeof fingerprint === 'string' && /^arch_[a-f0-9]{24}$/.test(fingerprint)) &&
+  new Set(registryFingerprints).size === registryFingerprints.length
 check(
-  'exact strict registry closes the D2 slice and accepted edge consequences',
-  registry.milestone === 'CRM-ARCH-007R-SCENARIO-FIELD-SETTINGS' &&
-    registry.base_commit === '297bc2700eec77e2a06fbdfee4b57867650ba719' &&
-    registry.finding_digest === '679a367687a98ca41a9ca2a2bfff3b5af0a16e0cfe67dc663b01a13719875743' &&
-    registry.exceptions.length === 1381 &&
-    registry.summary?.direct_foreign_prisma_write === 82 &&
-    registry.summary?.direct_provider_transport_access === 38 &&
-    registry.summary?.internal_module_import === 375 &&
-    registry.summary?.non_public_cross_context_import === 532 &&
-    registry.summary?.undeclared_dependency === 354 &&
+  'accepted D2 retirements remain closed in later strict registries',
+  registrySummaryIsExact &&
+    currentEnforcement.ok &&
+    currentEnforcement.findings === registry.exceptions.length &&
+    registry.exceptions.length <= 1381 &&
+    registry.summary?.direct_foreign_prisma_write <= 82 &&
+    registry.summary?.direct_provider_transport_access <= 38 &&
+    registry.summary?.internal_module_import <= 375 &&
+    registry.summary?.non_public_cross_context_import <= 532 &&
+    registry.summary?.undeclared_dependency <= 354 &&
     exactRetirements.every(fingerprint => !registry.exceptions.some(entry => entry.fingerprint === fingerprint)) &&
     !registry.exceptions.some(entry => entry.file.includes('legacy-prisma-scenario-field-settings-adapter.ts')),
-  'registry identity, counts, retirements or owner-local classification drifted',
+  'registry monotonicity, retirements or owner-local classification drifted',
 )
 check(
   'non-public protections survive the context-edge undeclared retirement',

@@ -90,13 +90,14 @@
     "architecture/isolation/operations-observability/intervention-actions-v1/module-manifest-amendments.json",
     "architecture/isolation/operations-observability/manager-health-v1/module-manifest-amendments.json",
     "architecture/isolation/messaging/conversation-contact-link-v1/module-manifest-amendments.json",
-    "architecture/isolation/work-management/scenario-field-settings-v1/module-manifest-amendments.json"
+    "architecture/isolation/work-management/scenario-field-settings-v1/module-manifest-amendments.json",
+    "architecture/isolation/platform-shell/contact-conversation-api-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007R-SCENARIO-FIELD-SETTINGS",
-  "registry_base_commit": "297bc2700eec77e2a06fbdfee4b57867650ba719",
+  "registry_milestone": "CRM-ARCH-007R-CONTACT-CONVERSATION-API",
+  "registry_base_commit": "23ad1aac6569ec329c75b3f8ae3b892c20160123",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",

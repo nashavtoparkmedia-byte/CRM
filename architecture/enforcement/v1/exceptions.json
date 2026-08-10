@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007R-SCENARIO-FIELD-SETTINGS",
-  "base_commit": "297bc2700eec77e2a06fbdfee4b57867650ba719",
+  "milestone": "CRM-ARCH-007R-CONTACT-CONVERSATION-API",
+  "base_commit": "23ad1aac6569ec329c75b3f8ae3b892c20160123",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "679a367687a98ca41a9ca2a2bfff3b5af0a16e0cfe67dc663b01a13719875743",
+  "finding_digest": "068403004ae5c412c14a01c27b54317dbaa6ea9bac13250d41163f92b241cd46",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,11 +13,11 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 82,
+    "direct_foreign_prisma_write": 78,
     "direct_provider_transport_access": 38,
     "internal_module_import": 375,
-    "non_public_cross_context_import": 532,
-    "undeclared_dependency": 354
+    "non_public_cross_context_import": 531,
+    "undeclared_dependency": 353
   },
   "exceptions": [
     {
@@ -1622,38 +1622,6 @@
       ]
     },
     {
-      "fingerprint": "arch_792bf6884bdfd4b64fab00b8",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/contacts/[id]/chats/route.ts",
-      "line_at_baseline": 128,
-      "ordinal": 1,
-      "owner_context": "contacts",
-      "target_context": "messaging",
-      "subject": "Chat.create",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_8591eeb00f3ae958"
-      ]
-    },
-    {
-      "fingerprint": "arch_7e289e7c45020c8c4827f879",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/contacts/[id]/chats/route.ts",
-      "line_at_baseline": 145,
-      "ordinal": 1,
-      "owner_context": "contacts",
-      "target_context": "messaging",
-      "subject": "Chat.update",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_8591eeb00f3ae958"
-      ]
-    },
-    {
       "fingerprint": "arch_1c7d0db214a168e871d6102d",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/api/contacts/[id]/phones/route.ts",
@@ -1779,70 +1747,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:contacts/contacts>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_4f5f55c9dab5b9b24106fabb",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/contacts/start-conversation/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "contacts",
-      "target_context": "platform_shell",
-      "subject": "contacts>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:contacts/contacts>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_68e929bf5b5b0f6098e70bcd",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/contacts/start-conversation/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "contacts",
-      "target_context": "platform_shell",
-      "subject": "contacts>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:contacts/contacts>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_c8d4116d8fa1293246f8c267",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/contacts/start-conversation/route.ts",
-      "line_at_baseline": 87,
-      "ordinal": 1,
-      "owner_context": "contacts",
-      "target_context": "messaging",
-      "subject": "Chat.create",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_8591eeb00f3ae958"
-      ]
-    },
-    {
-      "fingerprint": "arch_a1990cc9aa572236795a09fe",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/app/api/contacts/start-conversation/route.ts",
-      "line_at_baseline": 105,
-      "ordinal": 1,
-      "owner_context": "contacts",
-      "target_context": "messaging",
-      "subject": "Chat.update",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_8591eeb00f3ae958"
       ]
     },
     {
