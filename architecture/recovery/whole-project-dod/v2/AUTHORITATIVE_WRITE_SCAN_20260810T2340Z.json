@@ -1,0 +1,46 @@
+{
+  "schema": "yoko.crm.authoritative-write-scan-record.v1",
+  "generated_at": "2026-08-10T22:48:59.255Z",
+  "authority": "Bounded authoritative whole-repository scan after scalar property SQL-template analyzer improvement; current ledger materialization, not READY.",
+  "inputs": {
+    "previous_baseline_sha256": "2d3d1ae23ba1339a76d93fdea8ee291813522f283fd884f5bb48827b56ba4662",
+    "analyzer": "tools/architecture/v2/analyze.mjs",
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_SCALAR_TEMPLATE.json"
+  },
+  "output": {
+    "baseline": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json",
+    "baseline_sha256": "00d17d054b3793596bc5264a693ee6c7a7b990cfb67df0e62046168be4f63e5c",
+    "analysis_sha256": "04a0c0b37e512a365a4b6e94b1fd9acd3b001287d57c09e6c7745974d0c3ad73",
+    "triage_sha256": "d6db3caf60a588bccbc6d3cd107c0977352b3328653831b40c0d0efe0d0aab21"
+  },
+  "execution": {
+    "ambiguous_candidates": 547,
+    "complete": true,
+    "elapsed_ms": 300521.404145,
+    "failures": [],
+    "files_completed": 1693,
+    "files_discovered": 1693,
+    "mode": "fresh_process_per_javascript_surface",
+    "progress_every": 75,
+    "worker_failures": 0,
+    "worker_limit": 4,
+    "worker_timeout_ms": 120000,
+    "worker_timeouts": 0,
+    "writes_discovered": 1480
+  },
+  "summary": {
+    "ambiguous_writes": 547,
+    "discovered_write_sites": 1480,
+    "foreign_writes": 0,
+    "historical_dead_writes": 0,
+    "migration_only_writes": 468,
+    "operational_script_writes": 463,
+    "owner_writes": 462,
+    "parse_findings": 0,
+    "raw_sql_writes": 871,
+    "test_writes": 3,
+    "tracked_executable_surfaces": 1693,
+    "unreviewed_operational_surfaces": 443
+  },
+  "verdict": "NOT_READY_REQUIRES_AMBIGUITY_AND_OPERATIONAL_CLOSURE"
+}

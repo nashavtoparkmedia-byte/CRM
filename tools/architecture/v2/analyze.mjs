@@ -1025,6 +1025,11 @@ export async function analyzeRepository(repositoryRoot, options = {}) {
   architecture.prismaModels = new Set()
   architecture.prismaRelationFields = new Set()
   for (const surface of inventory.surfaces) {
+    // Prisma schemas are conventionally stored under `prisma/` as well as
+    // `schema/`. Parse every tracked `.prisma` file so relation/model facts
+    // are available to JavaScript surfaces in auxiliary applications (for
+    // example tg-bot), while keeping JS schema discovery scoped to schema
+    // modules.
     if (surface.extension !== '.prisma' && (!JS_FAMILY.has(surface.extension) || !surface.path.includes('/schema/'))) continue
     const schemaSource = decodeSource(await readFile(path.join(repositoryRoot, surface.path))).text
     if (surface.extension === '.prisma') {

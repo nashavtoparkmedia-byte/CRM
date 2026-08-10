@@ -1,0 +1,23 @@
+{
+  "schema": "yoko.crm.write-ownership-analyzer-batch.v1",
+  "generated_at": "2026-08-10T22:48:59.264Z",
+  "authority": "Analyzer-improvement batch: property reads in Prisma SQL templates are treated as bound scalar parameters; explicit SQL-fragment properties remain dynamic.",
+  "inputs": {
+    "previous_baseline_sha256": "2d3d1ae23ba1339a76d93fdea8ee291813522f283fd884f5bb48827b56ba4662",
+    "regression_fixture": "tools/architecture/v2/test-write-analyzer.mjs"
+  },
+  "results": {
+    "fixtures": "82/82",
+    "authoritative_scan": "1693/1693 surfaces, 300521ms, zero failures/timeouts",
+    "previous_discovered_write_sites": 1513,
+    "current_discovered_write_sites": 1480,
+    "previous_ambiguous": 580,
+    "current_ambiguous": 547,
+    "previous_dynamic_sql_unresolved": 238,
+    "current_dynamic_sql_unresolved": 165,
+    "foreign_writes": 0,
+    "operational_surfaces_unclassified": 0
+  },
+  "classification_effect": "33 ambiguity records resolved by static scalar-parameter evidence; 73 dynamic-SQL records became confirmed ownership-unresolved writes; all remaining ambiguity remains fail-closed.",
+  "next_action": "Continue source-family closure for 311 confirmed ownership-unresolved, 34 dynamic delegates, 165 dynamic SQL and 26 queryRaw side-effect records."
+}

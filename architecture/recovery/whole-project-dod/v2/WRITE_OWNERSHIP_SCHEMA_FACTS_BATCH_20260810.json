@@ -1,0 +1,23 @@
+{
+  "schema": "yoko.crm.write-ownership-analyzer-batch.v1",
+  "generated_at": "2026-08-10T22:41:59.355Z",
+  "authority": "Analyzer-improvement batch: load all tracked Prisma schemas, including auxiliary prisma/ directories, for model/relation facts. No ambiguity is converted to PASS without evidence.",
+  "inputs": {
+    "previous_baseline_sha256": "0f1ddfcbb95ffaf87cf381b28087edce5e113d5180a69deecf9b8c1782b71fa0",
+    "regression_fixture": "tools/architecture/v2/test-write-analyzer.mjs"
+  },
+  "results": {
+    "fixtures": "81/81",
+    "authoritative_scan": "1693/1693 surfaces, 317558ms, zero failures/timeouts",
+    "previous_discovered_write_sites": 1507,
+    "current_discovered_write_sites": 1513,
+    "previous_owner_writes": 456,
+    "current_owner_writes": 462,
+    "previous_ambiguous": 580,
+    "current_ambiguous": 580,
+    "foreign_writes": 0,
+    "operational_surfaces_unclassified": 0
+  },
+  "classification_effect": "No ambiguity reduction in this batch; six additional owner writes became attributable while all 580 ambiguous records remain fail-closed.",
+  "next_action": "Batch remaining dynamic delegate, dynamic SQL and queryRaw classes with source evidence."
+}

@@ -485,6 +485,14 @@ function definitelyScalarExpression(expression, checker, seen = new Set()) {
             }
         }
     }
+    // Prisma tagged-template interpolations are bound parameters. A simple
+    // property read (for example `row.id` or `request.params.id`) contributes
+    // a scalar value, while explicit SQL-fragment helpers remain excluded and
+    // therefore fail closed as dynamic syntax.
+    if (ts.isPropertyAccessExpression(candidate)) {
+        const property = candidate.name.text
+        if (!new Set(['sql', 'raw', 'fragment', 'unsafe']).has(property.toLowerCase())) return true
+    }
     if (!ts.isIdentifier(candidate)) return false
     const symbol = checker.getSymbolAtLocation(candidate)
     if (!symbol || seen.has(symbol)) return false

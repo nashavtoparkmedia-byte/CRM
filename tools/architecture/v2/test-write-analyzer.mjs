@@ -1001,6 +1001,17 @@ test('opaque known-relation payloads remain fail-closed nested writes', () => {
     ))))
 })
 
+test('schema facts from auxiliary prisma directories resolve relation identity', () => {
+    const result = analyzePrismaWriteSites(
+        'prisma.bot.create({ data: { token, surveys: { create: [{ title }] } } })',
+        { fileName: 'tg-bot/src/routes/admin/bots.js', knownModels: ['Bot', 'Survey'], relationFields: ['bot.surveys'] },
+    )
+    assert.equal(result.sites.length, 1)
+    assert.equal(result.sites[0].model, 'bot')
+    assert.equal(result.sites[0].nested_operations[0].relation_field, 'surveys')
+    assert.equal(result.sites[0].nested_operations[0].method, 'create')
+})
+
 test('flat dynamic payload does not hide a statically resolved model write', () => {
     const result = analyzePrismaWriteSites([
         'const data = getPayload()',
@@ -1019,6 +1030,16 @@ test('known scalar constructors and serializers in SQL parameters are not SQL fr
         'const payload = JSON.stringify({ ok: true })',
         'prisma.$executeRaw`INSERT INTO audit (createdAt, payload) VALUES (${created}, ${payload})`',
     ].join('\n'), { fileName: 'scalar-template-values.ts' })
+    assert.equal(result.sites.length, 1)
+    assert.equal(result.sites[0].ambiguous, false)
+    assert.deepEqual(result.sites[0].ambiguity_reasons, [])
+})
+
+test('ordinary property reads in SQL templates are bound scalar parameters', () => {
+    const result = analyzePrismaWriteSites([
+        'const row = getRow()',
+        'prisma.$queryRaw`SELECT id FROM "Chat" WHERE id = ${row.id}`',
+    ].join('\n'), { fileName: 'property-scalar-template.ts', includeRawReads: true })
     assert.equal(result.sites.length, 1)
     assert.equal(result.sites[0].ambiguous, false)
     assert.deepEqual(result.sites[0].ambiguity_reasons, [])
