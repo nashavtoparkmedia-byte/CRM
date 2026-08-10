@@ -123,7 +123,14 @@ const communicationConsumer=source('gravity-mvp/src/lib/communications.ts')
 assertCheck('Messaging communication consumer uses RecordDriverDailyActivityCommand.v1',communicationConsumer.includes('RECORD_DRIVER_DAILY_ACTIVITY_COMMAND_V1')&&communicationConsumer.includes('recordDriverDailyActivityV1({'),'Fleet daily-activity command absent')
 assertCheck('foreign DriverDaySummary upsert removed',!/prisma\.driverDaySummary\.upsert/.test(communicationConsumer),'direct DriverDaySummary upsert remains')
 const inboxFleetConsumer=source('gravity-mvp/src/app/inbox/InboxClient.tsx')
-assertCheck('Inbox uses LogManagerCallCommand.v1',inboxFleetConsumer.includes('LOG_MANAGER_CALL_COMMAND_V1')&&inboxFleetConsumer.includes('logManagerCallV1({'),'Fleet manager-call command absent')
+const managerCommunicationRoutePath='gravity-mvp/src/app/api/platform/drivers/[id]/manager-communication/route.ts'
+if(fs.existsSync(path.join(root,managerCommunicationRoutePath))){
+    const managerCommunicationRoute=source(managerCommunicationRoutePath)
+    assertCheck('Inbox uses Platform manager-communication successor',inboxFleetConsumer.includes('/manager-communication`')&&inboxFleetConsumer.includes('recordManagerCommunication(task.driverId, "call")'),'Platform manager-call delivery absent')
+    assertCheck('Platform successor invokes manager communication orchestration',managerCommunicationRoute.includes('recordManagerDriverCommunication(id, activity)'),'Platform manager-communication orchestration absent')
+}else{
+    assertCheck('Inbox uses LogManagerCallCommand.v1',inboxFleetConsumer.includes('LOG_MANAGER_CALL_COMMAND_V1')&&inboxFleetConsumer.includes('logManagerCallV1({'),'Fleet manager-call command absent')
+}
 assertCheck('Inbox uses versioned public SegmentBadge',inboxFleetConsumer.includes('@/modules/fleet-operations/public/v1/segment-badge'),'public Fleet badge absent')
 assertCheck('Inbox has no owner-internal Fleet import',!inboxFleetConsumer.includes('../drivers/'),'owner-internal Fleet import remains')
 const leadMessageConsumer=source('gravity-mvp/src/lib/leads/intake.ts')

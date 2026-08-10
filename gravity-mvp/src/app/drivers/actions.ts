@@ -370,61 +370,7 @@ export async function getDriversWithCells(
     }
 }
 
-// ─── Manager action logging ────────────────────────────────────────────────
-
-export async function logManagerCall(driverId: string): Promise<void> {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-
-    await prisma.driverDaySummary.upsert({
-        where: { driverId_date: { driverId, date: today } },
-        update: { hadManagerCall: true },
-        create: {
-            driverId,
-            date: today,
-            hadManagerCall: true,
-        },
-    })
-
-    // Also log to CommunicationEvent
-    await prisma.communicationEvent.create({
-        data: {
-            driverId,
-            channel: 'phone',
-            direction: 'outbound',
-            eventType: 'call',
-            content: 'Звонок менеджера',
-            createdBy: 'manager',
-        },
-    })
-}
-
-export async function logManagerMessage(driverId: string): Promise<void> {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-
-    await prisma.driverDaySummary.upsert({
-        where: { driverId_date: { driverId, date: today } },
-        update: { hadManagerMessage: true },
-        create: {
-            driverId,
-            date: today,
-            hadManagerMessage: true,
-        },
-    })
-
-    // Also log to CommunicationEvent
-    await prisma.communicationEvent.create({
-        data: {
-            driverId,
-            channel: 'telegram',
-            direction: 'outbound',
-            eventType: 'message',
-            content: 'Сообщение менеджера',
-            createdBy: 'manager',
-        },
-    })
-}
+// ─── Activity logging ─────────────────────────────────────────────────────
 
 export async function logAutoMessage(driverId: string): Promise<void> {
     const today = new Date()

@@ -15,12 +15,22 @@ import {
 } from "lucide-react"
 import type { InboxTask } from "./actions"
 import { resolveTask } from "./actions"
-import { LOG_MANAGER_CALL_COMMAND_V1 } from "@/contracts/fleet-operations/v1"
-import { logManagerCallV1 } from "@/modules/fleet-operations/public/v1/log-manager-call-action"
 import { SegmentBadge } from "@/modules/fleet-operations/public/v1/segment-badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import Link from "next/link"
+
+async function recordManagerCommunication(driverId: string, activity: "call" | "message") {
+    const response = await fetch(
+        `/api/platform/drivers/${encodeURIComponent(driverId)}/manager-communication`,
+        {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ activity }),
+        },
+    )
+    if (!response.ok) throw new Error(`Failed to record manager communication (${response.status})`)
+}
 
 // ─── Priority badge ────────────────────────────────────────────────────────
 
@@ -55,10 +65,7 @@ function TaskCard({
     const [callLogged, setCallLogged] = useState(false)
 
     const handleCall = async () => {
-        await logManagerCallV1({
-            contract: LOG_MANAGER_CALL_COMMAND_V1,
-            driverId: task.driverId,
-        })
+        await recordManagerCommunication(task.driverId, "call")
         setCallLogged(true)
         setTimeout(() => setCallLogged(false), 2000)
     }

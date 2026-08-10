@@ -40,6 +40,8 @@ import { createEnsureConversationContactLinkHandlerV1 } from './conversation-con
 import { legacyPrismaConversationContactLinkPortV1 } from './legacy-prisma-conversation-contact-link-adapter'
 import { createFindAndBackfillContactConversationHandlerV1, createOpenFallbackContactConversationHandlerV1 } from './contact-conversation-handler'
 import { legacyPrismaContactConversationPortV1 } from './legacy-prisma-contact-conversation-adapter'
+import { createRecordManagerDriverCommunicationHandlerV1 } from './record-manager-driver-communication-handler'
+import { legacyPrismaRecordManagerDriverCommunicationPortV1 } from './legacy-prisma-record-manager-driver-communication-adapter'
 
 export { createAttachMessageMediaHandlerV1 } from './attach-message-media-handler'
 export type { AttachMessageMediaPersistencePortV1 } from './attach-message-media-handler'
@@ -128,3 +130,8 @@ export { createFindAndBackfillContactConversationHandlerV1, createOpenFallbackCo
 export type { ContactConversationPersistencePortV1 } from './contact-conversation-handler'
 export const findAndBackfillContactConversationV1=createFindAndBackfillContactConversationHandlerV1(legacyPrismaContactConversationPortV1)
 export const openFallbackContactConversationV1=createOpenFallbackContactConversationHandlerV1(legacyPrismaContactConversationPortV1)
+export { createRecordManagerDriverCommunicationHandlerV1 } from './record-manager-driver-communication-handler'
+export type { RecordManagerDriverCommunicationPersistencePortV1 } from './record-manager-driver-communication-handler'
+export const recordManagerDriverCommunicationV1 = createRecordManagerDriverCommunicationHandlerV1(
+    legacyPrismaRecordManagerDriverCommunicationPortV1,
+)

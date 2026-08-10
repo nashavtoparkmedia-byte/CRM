@@ -4,9 +4,20 @@ import { useState } from "react"
 import { Phone, MessageSquare } from "lucide-react"
 import type { RiskDriver } from "../actions"
 import { SegmentBadge } from "@/app/drivers/components/SegmentBadge"
-import { logManagerCall, logManagerMessage } from "@/app/drivers/actions"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
+
+async function recordManagerCommunication(driverId: string, activity: "call" | "message") {
+    const response = await fetch(
+        `/api/platform/drivers/${encodeURIComponent(driverId)}/manager-communication`,
+        {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ activity }),
+        },
+    )
+    if (!response.ok) throw new Error(`Failed to record manager communication (${response.status})`)
+}
 
 export function RiskDriversTable({ drivers }: { drivers: RiskDriver[] }) {
     return (
@@ -49,12 +60,12 @@ function RiskDriverRow({ driver }: { driver: RiskDriver }) {
     const [actionDone, setActionDone] = useState<string | null>(null)
 
     const handleCall = async () => {
-        await logManagerCall(driver.id)
+        await recordManagerCommunication(driver.id, "call")
         setActionDone("call")
     }
 
     const handleMessage = async () => {
-        await logManagerMessage(driver.id)
+        await recordManagerCommunication(driver.id, "message")
         setActionDone("message")
     }
 
