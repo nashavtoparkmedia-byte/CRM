@@ -1,6 +1,6 @@
 {
   "schema": "yoko.crm.current-recovery-handoff.v1",
-  "generated_at": "2026-08-10T20:17:43Z",
+  "generated_at": "2026-08-10T21:03:48Z",
   "authority": "Continuation checkpoint; this file supersedes conversational status claims but does not supersede the durable gap ledger or external NOT READY verdict.",
   "program_state": {
     "whole_project_state": "EXTERNAL_FINAL_ACCEPTANCE_FAILED",
@@ -528,7 +528,7 @@
       "Credential reads/writes/public-route risk, dynamic targets fail closed, literal secret markers are not serialized."
     ],
     "targeted_test_state": "Current 4ec suite exited 0 in both clean mirrors. test-write-analyzer contains 77 fixtures; stdout was suppressed in the final mirrored command, while the latest visible 8aa run showed 77/77. Companion analyze/surface/credential suites printed PASS.",
-    "performance_state": "Not bounded. Both current 4ec mirrors exceeded 3h20 wall / 3h18 CPU at about 99% CPU and 414-417 MiB RSS. Output is written only after full completion and no progress events exist.",
+    "performance_state": "CLOSED FOR EXECUTION: fresh-process isolated JavaScript workers are capped at 4, each has a 120000ms deadline, structured progress is emitted, and final output is atomic. The one final authoritative scan completed 1639/1639 in 320082ms with no failures or timeouts.",
     "root_cause": {
       "status": "NOT PROVEN",
       "proven": [
@@ -596,7 +596,17 @@
     }
   ],
   "artifacts": {
-    "current_4ec_outputs": "ABSENT; no partial JSON or scan log was created; queued credential inventories never started",
+    "current_4ec_outputs": "Historical 4ec outputs remain absent. They are superseded by the bounded current 3ab9ad96 baseline below.",
+    "current_authoritative_write_baseline": {
+      "record": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260810T2102Z.json",
+      "baseline": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json",
+      "baseline_sha256": "73259b98675789afb00258c1f1fac33c8799202f962b9944001a9bf05cfdf003",
+      "progress": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_PROGRESS.jsonl",
+      "progress_sha256": "bb77f0b8a5e1f5ebb310f1ec7c61a19cef53b699f8a40abe2b662b7911181ee5",
+      "analysis_sha256": "3a9a5005e6897d1eb91b9ec5f504acf5916ffc258becae5b04d364bb6a0d59ae",
+      "result": "1639/1639 surfaces; 0 failures/timeouts; 47 FOREIGN; 640 AMBIGUOUS; 438 unreviewed operational surfaces",
+      "classification": "CURRENT_BASELINE_NOT_ACCEPTANCE"
+    },
     "durably_preserved": [
       "architecture/recovery/whole-project-dod/v2/CURRENT_RECOVERY_HANDOFF.md",
       "architecture/recovery/whole-project-dod/v2/CURRENT_RECOVERY_HANDOFF.json",
@@ -694,5 +704,5 @@
     "Production source/artifact and protected Messages production authority were not reconciled in this task.",
     "No upstream/remote ref protects the local recovery lineage."
   ],
-  "exact_next_action": "Instrument and restructure write-analyzer execution into bounded isolated workers sized for the 4-CPU host while preserving existing AST semantics; run the 77 write-analyzer fixtures and the four companion suites, then execute exactly one instrumented authoritative whole-repository scan and materialize the current baseline."
+  "exact_next_action": "Begin bounded remediation of non-protected FOREIGN write sites, first grouping the 47 sites by ownership/contract route. Do not touch protected Messages or AI Calls surfaces; retain them for their authoritative reconciliation gates. Then address operational ownership breadth and ambiguity using the current baseline."
 }

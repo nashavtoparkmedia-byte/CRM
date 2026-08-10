@@ -1,10 +1,18 @@
 # Current recovery handoff
 
-Captured: `2026-08-10T20:17:43Z`
+Captured: `2026-08-10T21:03:48Z`
 
 This is the authoritative continuation checkpoint for the current task. It is a handoff, not an acceptance artifact. The whole-project state remains `EXTERNAL_FINAL_ACCEPTANCE_FAILED`; the current program remains `WHOLE-PROJECT DOD RECOVERY`; the project is **not READY**.
 
 The machine-readable companion, `CURRENT_RECOVERY_HANDOFF.json`, contains the exhaustive every-path status/purpose inventory, exact commands/results, identities, worktree records, and next action. Read both files before changing code.
+
+## Bounded analyzer and current baseline update
+
+The analyzer execution recovery is complete, but it is not an acceptance. Commits `a1c0d20e` and `3ab9ad96` add fresh-process JavaScript workers capped at four, a 120-second per-surface deadline, structured progress, and atomic output; all 77 write fixtures and four companion suites passed before the scan.
+
+Exactly one authoritative whole-repository scan was run after the final fix. It completed `1,639/1,639` tracked executable surfaces in `320082ms`, with zero worker failures and zero timeouts. Its current evidence is `AUTHORITATIVE_WRITE_SCAN_20260810T2102Z.json`, `CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json` (SHA-256 `73259b98675789afb00258c1f1fac33c8799202f962b9944001a9bf05cfdf003`), and `CURRENT_WHOLE_REPOSITORY_WRITE_PROGRESS.jsonl` (SHA-256 `bb77f0b8a5e1f5ebb310f1ec7c61a19cef53b699f8a40abe2b662b7911181ee5`). The previous interrupted attempt is retained as non-authoritative evidence in `WRITE_EXECUTION_ATTEMPT_1_INTERRUPTED.jsonl`.
+
+The result is still not READY: `1,578` write sites include `47 FOREIGN`, `640 AMBIGUOUS`, and `438` unreviewed operational surfaces. The old `WHOLE_REPOSITORY_WRITE_BASELINE.json` remains historical, from `3339325f`, and must not be used as the current baseline. The next bounded remediation cluster is non-protected foreign writes; protected Messages and AI Calls surfaces remain out of scope until their authoritative reconciliation gates.
 
 ## Source and Git state
 
