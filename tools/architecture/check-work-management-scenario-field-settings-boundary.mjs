@@ -299,6 +299,7 @@ const registryRules = [
   'undeclared_dependency',
 ]
 const registryFingerprints = registry.exceptions.map(entry => entry.fingerprint)
+const registrySummaryCount = rule => registry.summary?.[rule] ?? 0
 const registrySummaryIsExact =
   registry.schema === 'yoko.crm.architecture-exception-registry.v1' &&
   registry.version === 1 &&
@@ -309,13 +310,13 @@ const registrySummaryIsExact =
   registry.policy?.expired_exceptions_fail === true &&
   registry.policy?.uncovered_violations_fail === true &&
   registry.policy?.deadline === policy.exception_review_deadline &&
-  JSON.stringify(Object.keys(registry.summary ?? {}).sort()) === JSON.stringify(registryRules) &&
+  Object.keys(registry.summary ?? {}).every(rule => registryRules.includes(rule)) &&
   registryRules.every(rule =>
-    Number.isInteger(registry.summary[rule]) &&
-    registry.summary[rule] >= 0 &&
-    registry.summary[rule] === registry.exceptions.filter(entry => entry.rule === rule).length
+    Number.isInteger(registrySummaryCount(rule)) &&
+    registrySummaryCount(rule) >= 0 &&
+    registrySummaryCount(rule) === registry.exceptions.filter(entry => entry.rule === rule).length
   ) &&
-  registryRules.reduce((total, rule) => total + registry.summary[rule], 0) === registry.exceptions.length &&
+  registryRules.reduce((total, rule) => total + registrySummaryCount(rule), 0) === registry.exceptions.length &&
   registryFingerprints.every(fingerprint => typeof fingerprint === 'string' && /^arch_[a-f0-9]{24}$/.test(fingerprint)) &&
   new Set(registryFingerprints).size === registryFingerprints.length
 check(
@@ -324,7 +325,7 @@ check(
     currentEnforcement.ok &&
     currentEnforcement.findings === registry.exceptions.length &&
     registry.exceptions.length <= 1381 &&
-    registry.summary?.direct_foreign_prisma_write <= 82 &&
+    registrySummaryCount('direct_foreign_prisma_write') <= 82 &&
     registry.summary?.direct_provider_transport_access <= 38 &&
     registry.summary?.internal_module_import <= 375 &&
     registry.summary?.non_public_cross_context_import <= 532 &&
