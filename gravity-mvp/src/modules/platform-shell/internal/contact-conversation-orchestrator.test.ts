@@ -37,7 +37,7 @@ function ownerApis(
     } = {},
 ) {
     const owners = {
-        resolveChannelContactV1: vi.fn(async (_command: unknown) => {
+        resolveChannelContactV1: vi.fn(async () => {
             calls.push('resolve-contact')
             return {
                 contract: RESOLVE_CHANNEL_CONTACT_RESULT_V1,
@@ -46,7 +46,7 @@ function ownerApis(
                 isNew: true,
             }
         }),
-        prepareContactConversationIdentityV1: vi.fn(async (_command: unknown) => {
+        prepareContactConversationIdentityV1: vi.fn(async () => {
             calls.push('prepare-identity')
             const status = options.prepareStatus ?? 'ready'
             if (status !== 'ready') {
@@ -59,28 +59,28 @@ function ownerApis(
                 identity,
             }
         }),
-        getPreferredActiveContactPhoneV1: vi.fn(async (_query: unknown) => {
+        getPreferredActiveContactPhoneV1: vi.fn(async () => {
             calls.push('get-phone')
             return {
                 contract: GET_PREFERRED_ACTIVE_CONTACT_PHONE_RESULT_V1,
                 phone: options.phone === undefined ? '+79990000000' : options.phone,
             }
         }),
-        findDriverByExactPhoneV1: vi.fn(async (_query: unknown) => {
+        findDriverByExactPhoneV1: vi.fn(async () => {
             calls.push('find-driver')
             return {
                 contract: FIND_DRIVER_BY_EXACT_PHONE_RESULT_V1,
                 driverId: options.driverId === undefined ? 'driver-1' : options.driverId,
             }
         }),
-        findAndBackfillContactConversationV1: vi.fn(async (_command: unknown) => {
+        findAndBackfillContactConversationV1: vi.fn(async () => {
             calls.push('find-contact-conversation')
             return {
                 contract: FIND_AND_BACKFILL_CONTACT_CONVERSATION_RESULT_V1,
                 conversation: options.linked ?? null,
             }
         }),
-        openFallbackContactConversationV1: vi.fn(async (_command: unknown) => {
+        openFallbackContactConversationV1: vi.fn(async () => {
             calls.push('open-fallback')
             return {
                 contract: OPEN_FALLBACK_CONTACT_CONVERSATION_RESULT_V1,
