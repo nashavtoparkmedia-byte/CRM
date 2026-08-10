@@ -40,9 +40,9 @@ const adapterPath =
   'gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-knowledge-governance-adapter.ts'
 const amendmentPath =
   'architecture/isolation/ai-knowledge/governance-v1/module-manifest-amendments.json'
-const expectedDigest = '75ecd722872a5613d31c1f7ab831db364d6954a585b12ccf565e5366c22052d4'
+const expectedDigest = 'cb4760c01df29298b1a2d24180396a3f252c08acfe1415b8660625d86aeef678'
 const expectedCounts = {
-  direct_foreign_prisma_write: 53,
+  direct_foreign_prisma_write: 32,
   direct_provider_transport_access: 38,
   internal_module_import: 374,
   non_public_cross_context_import: 530,
@@ -63,6 +63,30 @@ const retiredFingerprints = [
   'arch_75fa299364aff057fff8879d',
   'arch_6e29944bcf94cdb964274720',
 ]
+const hardenedFingerprintFiles = {
+  arch_623fa13456ebbcb1b24aeeaf: 'gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-knowledge-item-review-adapter.ts',
+  arch_ce1089694c26fcbc0206451c: 'gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-knowledge-item-review-adapter.ts',
+  arch_31cd9257f752c0ae6f198301: 'gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-knowledge-source-adapter.ts',
+  arch_0cda72397a466557a013a539: 'gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-knowledge-source-adapter.ts',
+  arch_a8e2325c01218cfe370bee0b: 'gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-queue-knowledge-extraction-adapter.ts',
+  arch_6ceeba8382338fe0ce8f5e38: 'gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-record-ai-decision-adapter.ts',
+  arch_058c7fc6b239593370147ae7: 'gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-record-knowledge-usage-adapter.ts',
+  arch_8d9e27cf96ecce735b51acfc: 'gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-review-ai-decision-adapter.ts',
+  arch_f95a0fe1957d2aa5ac868914: 'gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-update-retrieval-policy-adapter.ts',
+  arch_0e93f47c9d377583670adc07: 'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-history-import-job-adapter.ts',
+  arch_745953573064c895f83eb16d: 'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-history-import-job-adapter.ts',
+  arch_cf23fda91354eaeb5c71cba7: 'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-history-import-job-adapter.ts',
+  arch_6128180ce0597af4b59f7322: 'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-history-import-job-adapter.ts',
+  arch_ce7b23c5f40c5062420c9bbc: 'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-history-import-job-adapter.ts',
+  arch_e850fd73d347748191b325da: 'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-history-import-job-adapter.ts',
+  arch_2231d0f7411fa3ed6e3df239: 'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-history-import-job-adapter.ts',
+  arch_f7b9cac1d93e1dbc3cee7318: 'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-message-event-log-adapter.ts',
+  arch_15323cf732e4ed3479eed845: 'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-message-event-log-adapter.ts',
+  arch_3d2a312250e80a691fea3002: 'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-message-event-log-adapter.ts',
+  arch_c3c802c4df1b6eabf865ac50: 'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-message-retention-adapter.ts',
+  arch_af5035b03cb89b93d26b0948: 'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-message-retention-adapter.ts',
+}
+const hardenedFingerprints = Object.keys(hardenedFingerprintFiles)
 const governanceCommands = [
   ['EDIT_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1', 'editGovernanceKnowledgeItemV1'],
   ['ARCHIVE_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1', 'archiveGovernanceKnowledgeItemV1'],
@@ -89,9 +113,9 @@ const byRule = Object.fromEntries(
 )
 
 check(
-  'candidate architecture scan retains the reviewed successor or a monotonic downstream write retirement',
-  scan.findings.length <= 1348
-    && scan.scanned_files >= 1011
+  'candidate architecture scan is the exact reviewed successor state',
+  scan.findings.length === 1327
+    && scan.scanned_files === 1011
     && scan.contexts === 16
     && byRule.direct_foreign_prisma_write <= expectedCounts.direct_foreign_prisma_write
     && byRule.direct_provider_transport_access === expectedCounts.direct_provider_transport_access
@@ -114,7 +138,12 @@ const registryIds = new Set(registry.exceptions.map((exception) => exception.fin
 const additions = [...currentIds].filter((fingerprint) => !registryIds.has(fingerprint)).sort()
 const stale = [...registryIds].filter((fingerprint) => !currentIds.has(fingerprint)).sort()
 const normalized = stale.length === 0
-const acceptedStaleState = normalized || equalMembers(stale, retiredFingerprints)
+const governanceNormalized = equalMembers(stale, hardenedFingerprints)
+const frozenPreNormalization = equalMembers(stale, [
+  ...retiredFingerprints,
+  ...hardenedFingerprints,
+])
+const acceptedStaleState = normalized || governanceNormalized || frozenPreNormalization
 
 check(
   'exception registry identity remains bound to the enforcement policy',
@@ -131,7 +160,7 @@ check(
 )
 check('candidate introduces no architecture exception', additions.length === 0, additions)
 check(
-  'registry is either the exact frozen 13-retirement predecessor or its normalized successor',
+  'registry is an exact frozen, governance-normalized, or fully normalized successor state',
   acceptedStaleState
     && registry.exceptions.length === scan.findings.length + stale.length
     && (!normalized || registry.finding_digest === findingDigest),
@@ -142,9 +171,9 @@ const retiredRecords = registry.exceptions.filter((exception) => (
   retiredFingerprints.includes(exception.fingerprint)
 ))
 check(
-  'only the exact 13 reviewed Configuration writes are retirement candidates',
+  'the exact 13 reviewed Configuration retirement records are absent or frozen intact',
   retiredFingerprints.every((fingerprint) => !currentIds.has(fingerprint))
-    && (normalized || retiredRecords.length === 13)
+    && (frozenPreNormalization ? retiredRecords.length === 13 : retiredRecords.length === 0)
     && retiredRecords.every((exception) => (
       exception.rule === 'direct_foreign_prisma_write'
       && exception.file === actionsPath
@@ -154,11 +183,26 @@ check(
   { stale, retired_records: retiredRecords },
 )
 
-const expectedRegistrySummary = { ...byRule }
-for (const fingerprint of stale) {
-  const record = registry.exceptions.find((exception) => exception.fingerprint === fingerprint)
-  if (record) expectedRegistrySummary[record.rule] = (expectedRegistrySummary[record.rule] ?? 0) + 1
-}
+const hardenedRecords = registry.exceptions.filter((exception) => (
+  hardenedFingerprints.includes(exception.fingerprint)
+))
+check(
+  'the exact 21 owner-adapter retirement records are absent or frozen intact',
+  hardenedFingerprints.every((fingerprint) => !currentIds.has(fingerprint))
+    && (normalized || hardenedRecords.length === 21)
+    && hardenedRecords.every((exception) => (
+      exception.rule === 'direct_foreign_prisma_write'
+      && exception.file === hardenedFingerprintFiles[exception.fingerprint]
+      && exception.owner_context === (
+        exception.file.includes('/ai-knowledge/') ? 'ai_knowledge' : 'messaging'
+      )
+      && exception.target_context == null
+    )),
+  { stale, hardened_records: hardenedRecords },
+)
+
+const expectedRegistrySummary = { ...expectedCounts }
+expectedRegistrySummary.direct_foreign_prisma_write += stale.length
 check(
   'registry summary differs from the current monotonic successor only by frozen retirements',
   Object.entries(expectedRegistrySummary).every(([rule, count]) => registry.summary?.[rule] === count)
@@ -259,7 +303,7 @@ check(
     && sha256('gravity-mvp/src/modules/ai-knowledge/public/v1/knowledge-item-review-handler.ts')
       === 'd0fbb7c68365664d9744c5ec5c848461657b458cf613b15118d782546ea08bc6'
     && sha256('gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-knowledge-item-review-adapter.ts')
-      === '9e2a948d58df057a500f5bdf085fbd15bc090cc1ee153a238ad755b29a6c7d06'
+      === 'b50ef3b871e721682a17152955eccc3f595865225f4f579fbe8b54ff10038938'
     && trainer.includes('verifyKnowledgeItemV1({ contract: VERIFY_KNOWLEDGE_ITEM_COMMAND_V1')
     && !/VerifyGovernanceKnowledgeItem|verifyGovernanceKnowledgeItemV1/.test(trainer),
   'protected hash or trainer command drifted',

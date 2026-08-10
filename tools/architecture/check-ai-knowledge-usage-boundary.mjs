@@ -14,8 +14,8 @@ const amendment = JSON.parse(read('architecture/isolation/ai-knowledge/usage-log
 
 check('contract is implementation neutral', !/(prisma|next\/|@\/lib|@\/app)/i.test(contract), 'implementation leaked into contract')
 check('handler is implementation neutral', !/(prisma|next\/|@\/lib|@\/app)/i.test(handler), 'implementation leaked into handler')
-check('usage write is isolated in AI Knowledge adapter', adapter.includes('INSERT INTO "AiKnowledgeUsageLog"') && !consumer.includes('INSERT INTO "AiKnowledgeUsageLog"'), 'foreign write remains')
-check('runtime context remains chat_reply', adapter.includes(`'chat_reply'::"AiKnowledgeRuntime"`), 'runtime context drifted')
+check('usage write is static and isolated in AI Knowledge adapter', (adapter.match(/prisma\.\$executeRawUnsafe\(/g) || []).length === 1 && !/prisma\.\$executeRaw\s*`/.test(adapter) && adapter.includes('INSERT INTO "AiKnowledgeUsageLog"') && !consumer.includes('INSERT INTO "AiKnowledgeUsageLog"'), 'foreign or dynamic write remains')
+check('runtime context remains chat_reply', adapter.includes(`\\'chat_reply\\'::"AiKnowledgeRuntime"`), 'runtime context drifted')
 check('database timestamp semantics retained', adapter.includes('NOW()'), 'usedAt timestamp drifted')
 check('all legacy persistence columns retained', [
     'id', '"itemId"', '"runtimeContext"', '"decisionLogId"', '"messageId"',

@@ -463,7 +463,7 @@ check('protected UI and trainer verification surfaces retain pinned identities',
     trainer: '7a1acd91faf8140364321c8b0480fae7deec686abab3570646861ced9720ae59',
     trainerContract: '9d3b40f4f5d625330fd3ecb7aadfa64314c193a9e0c03b814e8df5845a1d581b',
     trainerHandler: 'd0fbb7c68365664d9744c5ec5c848461657b458cf613b15118d782546ea08bc6',
-    trainerAdapter: '9e2a948d58df057a500f5bdf085fbd15bc090cc1ee153a238ad755b29a6c7d06',
+    trainerAdapter: 'b50ef3b871e721682a17152955eccc3f595865225f4f579fbe8b54ff10038938',
   })
   const trainer = read(paths.trainer)
   assert.match(trainer, /verifyKnowledgeItemV1\(\{ contract: VERIFY_KNOWLEDGE_ITEM_COMMAND_V1/)
