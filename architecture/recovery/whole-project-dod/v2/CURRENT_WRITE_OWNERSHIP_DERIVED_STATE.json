@@ -1,6 +1,6 @@
 {
   "schema": "yoko.crm.write-ownership-derived-state.v1",
-  "generated_at": "2026-08-10T22:48:59.264Z",
+  "generated_at": "2026-08-10T22:56:25.149Z",
   "program": "WHOLE-PROJECT DOD RECOVERY",
   "phase": "WRITE_OWNERSHIP_CLOSURE_SCALAR_TEMPLATE_RESCAN",
   "verdict": "EXTERNAL_FINAL_ACCEPTANCE_FAILED",
@@ -29,7 +29,7 @@
     "operational_surfaces_classified_active": 400,
     "operational_surfaces_classified_historical_dead": 38,
     "operational_surfaces_newly_classified": 5,
-    "operational_surfaces_unclassified": 0,
+    "operational_surfaces_unclassified": 443,
     "temporary_exceptions": "CURRENT_RECOMPUTE_PENDING",
     "intentional_exceptions": "CURRENT_RECOMPUTE_PENDING",
     "confirmed_write_owner_unresolved": 311,
@@ -67,7 +67,7 @@
       "state": "REMEDIATED_PENDING_AUTHORITATIVE_RESCAN"
     }
   ],
-  "next_action": "Continue fail-closed source-family closure (311 ownership-unresolved, 34 dynamic delegates, 165 dynamic SQL, 26 queryRaw side-effect records); then rerun bounded scan after meaningful batch.",
+  "next_action": "Continue fail-closed source-family closure; lifecycle review evidence covers 443 operational surfaces but analyzer inventory remains registry-free and ownership cannot be inferred from lifecycle labels.",
   "targeted_batch": {
     "artifact": "architecture/recovery/whole-project-dod/v2/WRITE_OWNERSHIP_CLOSURE_BATCH_20260810.json",
     "triage_artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_OWNERSHIP_RESCAN.json",

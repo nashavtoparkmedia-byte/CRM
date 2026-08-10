@@ -1,9 +1,8 @@
 {
   "schema": "yoko.crm.authoritative-write-scan-record.v1",
-  "generated_at": "2026-08-10T22:48:59.255Z",
-  "authority": "Bounded authoritative whole-repository scan after scalar property SQL-template analyzer improvement; current ledger materialization, not READY.",
+  "generated_at": "2026-08-10T22:56:25.160Z",
+  "authority": "Registry-free bounded authoritative scan retained as truthful ownership ledger after rejecting manifest-owner shortcut; lifecycle classification is tracked separately.",
   "inputs": {
-    "previous_baseline_sha256": "2d3d1ae23ba1339a76d93fdea8ee291813522f283fd884f5bb48827b56ba4662",
     "analyzer": "tools/architecture/v2/analyze.mjs",
     "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_SCALAR_TEMPLATE.json"
   },
