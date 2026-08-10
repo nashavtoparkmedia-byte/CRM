@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007R-INTERVENTION-ACTIONS",
-  "base_commit": "e8811394458d2ee7e731aa51f5ff00c65d958901",
+  "milestone": "CRM-ARCH-007R-MANAGER-HEALTH",
+  "base_commit": "61f0afc9c22590d3344dfbcea6c5f4a580459a7d",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "2d262852d9b5e78314a109ea830bc1afbd34b69811fed95fc09f7caf0f0e9f43",
+  "finding_digest": "f1508b169b806c8a8b2b6cdf2ff5feb0b3235296d9fb24fa93e3c955242f10e8",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,7 +13,7 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 91,
+    "direct_foreign_prisma_write": 85,
     "direct_provider_transport_access": 38,
     "internal_module_import": 379,
     "non_public_cross_context_import": 536,
@@ -22725,126 +22725,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "provider-boundary:aws_s3"
-      ]
-    },
-    {
-      "fingerprint": "arch_880b7dfae43971c822502b90",
-      "site_signature": "254e4f582546820eede8a3ec3d2bac9a545ab9d3049fe26bad895eb4df6fe364",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/tasks/manager-health-config.ts",
-      "line_at_baseline": 348,
-      "ordinal": 1,
-      "owner_context": "work_management",
-      "target_context": "operations_observability",
-      "subject": "raw:$executeRawUnsafe:health_snapshots",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_188449b58f2615c8",
-        "migration_54bbbf68952db919",
-        "migration_55ddc71f7450c415",
-        "migration_58c9e0e2295698d0"
-      ]
-    },
-    {
-      "fingerprint": "arch_3251166f174bce021d52ecef",
-      "site_signature": "34d0520bcaf6f0c17a4105c4aaa5612ae268cd9d6d84b8d7a441463fcd2ea0d8",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/tasks/manager-health-config.ts",
-      "line_at_baseline": 349,
-      "ordinal": 1,
-      "owner_context": "work_management",
-      "target_context": "operations_observability",
-      "subject": "raw:$executeRawUnsafe:health_snapshots",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_188449b58f2615c8",
-        "migration_54bbbf68952db919",
-        "migration_55ddc71f7450c415",
-        "migration_58c9e0e2295698d0"
-      ]
-    },
-    {
-      "fingerprint": "arch_10ee9720cfdccbead6e5ce70",
-      "site_signature": "15a6d16fca052ec52acad1d6f5d6a20eb8d15c00b1a864fdfdd3a1140214ca51",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/tasks/manager-health-config.ts",
-      "line_at_baseline": 350,
-      "ordinal": 1,
-      "owner_context": "work_management",
-      "target_context": "operations_observability",
-      "subject": "raw:$executeRawUnsafe:health_score_history",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_188449b58f2615c8",
-        "migration_54bbbf68952db919",
-        "migration_55ddc71f7450c415",
-        "migration_58c9e0e2295698d0"
-      ]
-    },
-    {
-      "fingerprint": "arch_c03fd6c4c21c0595bbc73678",
-      "site_signature": "2d7a84e3815571e932ac96a148f443265db213a91435d85697f3f6233bd67618",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/tasks/manager-health-config.ts",
-      "line_at_baseline": 351,
-      "ordinal": 1,
-      "owner_context": "work_management",
-      "target_context": "operations_observability",
-      "subject": "raw:$executeRawUnsafe:health_score_history",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_188449b58f2615c8",
-        "migration_54bbbf68952db919",
-        "migration_55ddc71f7450c415",
-        "migration_58c9e0e2295698d0"
-      ]
-    },
-    {
-      "fingerprint": "arch_4115f2efad420d474a99e256",
-      "site_signature": "7ae84fc0715776ea3f4bf40994922db232be16219ff94959d671fe63d73a6498",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/tasks/manager-health-config.ts",
-      "line_at_baseline": 392,
-      "ordinal": 1,
-      "owner_context": "work_management",
-      "target_context": null,
-      "subject": "raw:$executeRawUnsafe:dynamic",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_188449b58f2615c8",
-        "migration_54bbbf68952db919",
-        "migration_55ddc71f7450c415",
-        "migration_58c9e0e2295698d0"
-      ]
-    },
-    {
-      "fingerprint": "arch_9379c33dd717fc04b6f50ea3",
-      "site_signature": "38a386361885ce4c8dbc3d3ab61ce2204e37a5a4a526a87c909215001e9c5af5",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/tasks/manager-health-config.ts",
-      "line_at_baseline": 406,
-      "ordinal": 1,
-      "owner_context": "work_management",
-      "target_context": null,
-      "subject": "raw:$executeRawUnsafe:dynamic",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_188449b58f2615c8",
-        "migration_54bbbf68952db919",
-        "migration_55ddc71f7450c415",
-        "migration_58c9e0e2295698d0"
       ]
     },
     {

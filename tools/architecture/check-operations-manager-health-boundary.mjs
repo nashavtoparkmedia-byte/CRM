@@ -24,6 +24,13 @@ const adapter = read('gravity-mvp/src/modules/operations-observability/public/v1
 const publicIndex = read('gravity-mvp/src/modules/operations-observability/public/v1/index.ts')
 const consumer = read('gravity-mvp/src/app/team-overview/actions.ts')
 const config = read('gravity-mvp/src/lib/tasks/manager-health-config.ts')
+const amendmentPath = 'architecture/isolation/operations-observability/manager-health-v1/module-manifest-amendments.json'
+const amendment = JSON.parse(read(amendmentPath))
+const migration = JSON.parse(read('architecture/isolation/operations-observability/manager-health-v1/migration-manifest.json'))
+const verification = JSON.parse(read('architecture/isolation/operations-observability/manager-health-v1/verification.json'))
+const behavior = JSON.parse(read('architecture/isolation/operations-observability/manager-health-v1/BEHAVIOR-FREEZE.json'))
+const policy = JSON.parse(read('architecture/enforcement/v1/policy.json'))
+const registry = JSON.parse(read('architecture/enforcement/v1/exceptions.json'))
 const ensureFunction = sliceBetween(adapter, 'async function ensureTable', 'export const legacyPrismaManagerHealthRepositoryPortV1')
 const previousWrapper = sliceBetween(consumer, 'async function getPreviousHealthScores', 'async function saveHealthScores')
 const saveWrapper = sliceBetween(consumer, 'async function saveHealthScores', 'async function getHealthHistory')
@@ -222,6 +229,75 @@ check(
     'consumer contains no manager-health repository SQL or direct persistence',
     !/CREATE TABLE IF NOT EXISTS health_|INSERT INTO health_|FROM health_|prisma\.health/i.test(consumer),
     'manager-health persistence remains in Analytics',
+)
+check(
+    'manifest amendment exposes only the exact owner repository surface',
+    amendment.amendments?.length === 1 &&
+        amendment.amendments[0].context === 'operations_observability' &&
+        JSON.stringify(amendment.amendments[0].add_commands) === JSON.stringify([
+            'EnsureManagerHealthRepositoryCommand.v1',
+            'SaveManagerHealthScoresCommand.v1',
+        ]) &&
+        JSON.stringify(amendment.amendments[0].add_public_surface) === JSON.stringify([
+            'ListManagerHealthSnapshotsQuery.v1',
+            'ListManagerHealthHistoryQuery.v1',
+        ]) &&
+        amendment.amendments[0].add_allowed_dependencies === undefined,
+    'manifest amendment widened or added a dependency',
+)
+check(
+    'strict policy and migration bind the slice to the intervention parent',
+    policy.manifest_amendments.includes(amendmentPath) &&
+        policy.registry_milestone === 'CRM-ARCH-007R-MANAGER-HEALTH' &&
+        policy.registry_base_commit === '61f0afc9c22590d3344dfbcea6c5f4a580459a7d' &&
+        migration.base_commit === '61f0afc9c22590d3344dfbcea6c5f4a580459a7d' &&
+        migration.source_commit === '8aeccb755b3fad942a69a23799f76f7a480f4d4f',
+    'policy or evidence identity drift',
+)
+check(
+    'exact six manager-health write findings retire with no replacement capacity',
+    registry.milestone === 'CRM-ARCH-007R-MANAGER-HEALTH' &&
+        registry.base_commit === '61f0afc9c22590d3344dfbcea6c5f4a580459a7d' &&
+        registry.exceptions.length === 1408 &&
+        registry.summary?.direct_foreign_prisma_write === 85 &&
+        registry.summary?.undeclared_dependency === 370 &&
+        [
+            'arch_880b7dfae43971c822502b90',
+            'arch_3251166f174bce021d52ecef',
+            'arch_10ee9720cfdccbead6e5ce70',
+            'arch_c03fd6c4c21c0595bbc73678',
+            'arch_4115f2efad420d474a99e256',
+            'arch_9379c33dd717fc04b6f50ea3',
+        ].every(fingerprint => !registry.exceptions.some(entry => entry.fingerprint === fingerprint)) &&
+        !registry.exceptions.some(entry =>
+            entry.file.includes('legacy-prisma-manager-health-repository.ts')
+        ),
+    'strict registry delta or owner-local classification drift',
+)
+check(
+    'verified registry identity and zero-change set comparison are exact',
+    registry.finding_digest === 'f1508b169b806c8a8b2b6cdf2ff5feb0b3235296d9fb24fa93e3c955242f10e8' &&
+        migration.enforcement?.actual_findings === 1408 &&
+        migration.enforcement?.actual_direct_foreign_prisma_write === 85 &&
+        migration.enforcement?.actual_removed === 6 &&
+        migration.enforcement?.actual_added === 0 &&
+        migration.enforcement?.actual_changed_shared_entries === 0 &&
+        migration.enforcement?.finding_digest === registry.finding_digest &&
+        migration.enforcement?.registry_sha256 === 'fc04f70cb1a6898275a6ad70668f67245d994802a4e55f10e996b47b49881f1d',
+    'verified registry evidence drift',
+)
+check(
+    'behavior and verification evidence bind the frozen source and non-execution boundary',
+    behavior.source_commit === '8aeccb755b3fad942a69a23799f76f7a480f4d4f' &&
+        behavior.consumer_before_sha256 === 'f9529a3d36604c938035c2ed4b4064c15ff3c5e17634668b88e512190c2cf2db' &&
+        behavior.consumer_after_sha256 === '2fea6763e1eba0247589c4b0f9ea0a88e4571f67ffe102c57660d34140cc21bc' &&
+        behavior.pure_module_before_sha256 === 'b911692a7f5e735af482c0a202e5c86b5900ed7d89fbd16fcd1339c9ffef7b47' &&
+        behavior.pure_module_after_sha256 === '58931ef529031ca72e104b315cf8a296547a9196963f5f05490f77b72771ef5f' &&
+        verification.database_accessed === false &&
+        verification.manager_health_repository_executed_against_database === false &&
+        verification.production_mutated === false &&
+        verification.secret_values_read_or_emitted === false,
+    'source hash or non-execution evidence drift',
 )
 
 process.stdout.write(`${JSON.stringify({

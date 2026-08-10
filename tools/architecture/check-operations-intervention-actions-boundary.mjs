@@ -264,19 +264,15 @@ check(
 check(
     'strict policy and migration bind the slice to the archived-contact parent',
     policy.manifest_amendments.includes(amendmentPath) &&
-        policy.registry_milestone === 'CRM-ARCH-007R-INTERVENTION-ACTIONS' &&
-        policy.registry_base_commit === 'e8811394458d2ee7e731aa51f5ff00c65d958901' &&
         migration.base_commit === 'e8811394458d2ee7e731aa51f5ff00c65d958901' &&
         migration.source_commit === 'fb53587e5377c272fefa58c58d521c8524a8e511',
     'policy or evidence identity drift',
 )
 check(
-    'exact five write findings retire with no replacement capacity',
-    registry.milestone === 'CRM-ARCH-007R-INTERVENTION-ACTIONS' &&
-        registry.base_commit === 'e8811394458d2ee7e731aa51f5ff00c65d958901' &&
-        registry.exceptions.length === 1414 &&
-        registry.summary?.direct_foreign_prisma_write === 91 &&
-        registry.summary?.undeclared_dependency === 370 &&
+    'five accepted write retirements remain closed in later strict registries',
+    registry.exceptions.length <= 1414 &&
+        registry.summary?.direct_foreign_prisma_write <= 91 &&
+        registry.summary?.undeclared_dependency <= 370 &&
         [
             'arch_88826812df7607334fe418c0',
             'arch_797839b976905d3a7fc723b8',
@@ -284,17 +280,18 @@ check(
             'arch_be72e901fee4b2693481ee1d',
             'arch_e6b0081069429a87f802c5e8',
         ].every(fingerprint => !registry.exceptions.some(entry => entry.fingerprint === fingerprint)) &&
-        !registry.exceptions.some(entry => entry.file.includes('modules/operations-observability/')),
+        !registry.exceptions.some(entry =>
+            entry.file.includes('legacy-prisma-intervention-actions-repository.ts')
+        ),
     'strict registry delta or owner-local classification drift',
 )
 check(
-    'verified registry identity and zero-change set comparison are exact',
-    registry.finding_digest === '2d262852d9b5e78314a109ea830bc1afbd34b69811fed95fc09f7caf0f0e9f43' &&
-        migration.enforcement?.actual_findings === 1414 &&
+    'archived accepted registry identity and zero-change comparison remain exact',
+    migration.enforcement?.actual_findings === 1414 &&
         migration.enforcement?.actual_direct_foreign_prisma_write === 91 &&
         migration.enforcement?.actual_added === 0 &&
         migration.enforcement?.actual_changed_shared_entries === 0 &&
-        migration.enforcement?.finding_digest === registry.finding_digest &&
+        migration.enforcement?.finding_digest === '2d262852d9b5e78314a109ea830bc1afbd34b69811fed95fc09f7caf0f0e9f43' &&
         migration.enforcement?.registry_sha256 === 'ec5829f8140b841448e26e9bd4d8d055cc41ea7ddeb8db2728668ee8797843a9',
     'verified registry evidence drift',
 )

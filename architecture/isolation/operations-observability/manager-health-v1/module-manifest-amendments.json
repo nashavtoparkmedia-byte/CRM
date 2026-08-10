@@ -1,0 +1,19 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "CRM-ARCH-007R-MANAGER-HEALTH",
+  "amendments": [
+    {
+      "context": "operations_observability",
+      "add_commands": [
+        "EnsureManagerHealthRepositoryCommand.v1",
+        "SaveManagerHealthScoresCommand.v1"
+      ],
+      "add_public_surface": [
+        "ListManagerHealthSnapshotsQuery.v1",
+        "ListManagerHealthHistoryQuery.v1"
+      ],
+      "reason": "Expose the exact health_snapshots and health_score_history compatibility repository through Operations Observability without generic SQL, table, predicate, ordering, pagination or transaction capability."
+    }
+  ]
+}

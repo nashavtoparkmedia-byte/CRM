@@ -1,0 +1,33 @@
+{
+  "schema": "yoko.crm.mutation-ledger.v1",
+  "milestone": "CRM-ARCH-007R-MANAGER-HEALTH",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "61f0afc9c22590d3344dfbcea6c5f4a580459a7d",
+  "source_commit": "8aeccb755b3fad942a69a23799f76f7a480f4d4f",
+  "verified_at": "2026-08-10T03:59:45Z",
+  "source": [
+    "versioned Operations Observability manager-health request, result and row contracts",
+    "strict parsers for two commands and two queries with a closed health-level vocabulary and bounded history window",
+    "one named owner repository port with parse-before-port handlers",
+    "owner adapter containing the exact four-statement compatibility DDL state machine and two fixed reads",
+    "fixed bound ordered snapshot and history batch statements with no value interpolation",
+    "Analytics consumer wrappers preserving caller-owned maps, caps, failure behavior and orchestration order",
+    "Work-owned manager-health configuration reduced to pure configuration, calculations and data shapes",
+    "source and boundary controls for DDL, reads, writes, duplicate order, clocks, failure and capability scope",
+    "activated Operations-only module-policy amendment with no new dependency edge",
+    "deterministically regenerated strict architecture registry with the exact six-finding retirement",
+    "completed and checksummed source-gate evidence package"
+  ],
+  "production": [],
+  "database": [],
+  "services": [],
+  "deployment": [],
+  "policy_source_mutated": true,
+  "registry_source_mutated": true,
+  "source_control_only": true,
+  "raw_write_owner_override_mutated": false,
+  "raw_write_owner_override_disposition": "intentionally frozen CRM-ARCH-003 ownership evidence; out of scope",
+  "manager_health_repository_executed_against_database": false,
+  "production_mutated": false,
+  "secret_values_read_or_emitted": false
+}
