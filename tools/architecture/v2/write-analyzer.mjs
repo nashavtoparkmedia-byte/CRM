@@ -2954,6 +2954,41 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
         }
         ts.forEachChild(node, collectExternalTransactionCallbacks)
     }
+    function potentialDrizzleOperationArgument(expression, seen = new Set()) {
+        const candidate = unwrapExpression(expression)
+        if (!candidate || seen.has(candidate)) return false
+        const nextSeen = new Set(seen).add(candidate)
+        if (ts.isPropertyAccessExpression(candidate) || ts.isElementAccessExpression(candidate)) {
+            return DRIZZLE_WRITE_METHODS.has(propertyName(candidate))
+        }
+        if (ts.isCallExpression(candidate)) {
+            const callee = unwrapExpression(candidate.expression)
+            if (
+                (ts.isPropertyAccessExpression(callee) || ts.isElementAccessExpression(callee))
+                && propertyName(callee) === 'bind'
+            ) return potentialDrizzleOperationArgument(callee.expression, nextSeen)
+            if (
+                ts.isPropertyAccessExpression(callee)
+                && ts.isIdentifier(callee.expression)
+                && callee.expression.text === 'Reflect'
+                && callee.name.text === 'get'
+            ) return candidate.arguments[1]
+                ? DRIZZLE_WRITE_METHODS.has(reflectivePropertyName(candidate.arguments[1]))
+                : true
+            return false
+        }
+        if (ts.isIdentifier(candidate)) {
+            const symbol = symbolAt(candidate)
+            if (!symbol || seen.has(symbol)) return false
+            nextSeen.add(symbol)
+            return (symbol.declarations ?? []).some((declaration) => (
+                ts.isVariableDeclaration(declaration)
+                && declaration.initializer
+                && potentialDrizzleOperationArgument(declaration.initializer, nextSeen)
+            ))
+        }
+        return false
+    }
     function collectStaticInvocationParameters(node) {
         if (ts.isCallExpression(node)) {
             const callee = resolveExpression(node.expression, node)
@@ -2970,7 +3005,9 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
                             invocationParameterValues.set(parameterSymbol, values)
                         }
                     }
-                    const drizzleOperation = drizzleOperationReference(node.arguments[index], node)
+                    const drizzleOperation = potentialDrizzleOperationArgument(node.arguments[index])
+                        ? drizzleOperationReference(node.arguments[index], node)
+                        : null
                     if (drizzleOperation) {
                         const operations = drizzleInvocationParameterOperations.get(parameterSymbol) ?? []
                         const identity = `${drizzleOperation.method ?? '<dynamic>'}:${drizzleOperation.receiver?.origin ?? '<unknown>'}`
