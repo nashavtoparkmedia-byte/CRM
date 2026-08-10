@@ -205,7 +205,9 @@ export async function inventoryTrackedSurfaces(repositoryRoot, options = {}) {
   const staleRegistryEntries = [...registered.keys()].filter((file) => !trackedSet.has(file)).sort()
   return {
     schema: 'yoko.crm.tracked-executable-surface-inventory.v2',
-    repository_root: slash(path.resolve(repositoryRoot)),
+    // Evidence must be byte-reproducible from any immutable checkout path.
+    // The actual root is an execution input, not source identity.
+    repository_root: '.',
     controls: {
       extensions: [...TRACKED_EXECUTABLE_EXTENSIONS].sort(),
       exact_registry_only: true,

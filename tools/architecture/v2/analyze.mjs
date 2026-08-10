@@ -170,13 +170,34 @@ function lineForIndex(text, index) {
   return line
 }
 
+function locationForIndex(text, index) {
+  const lineStart = text.lastIndexOf('\n', Math.max(0, index - 1)) + 1
+  return { line: lineForIndex(text, index), column: index - lineStart + 1 }
+}
+
+// Mixed-language database calls need a receiver strong enough to distinguish
+// an actual database API from unrelated APIs such as `search.query()` or
+// `animation.execute()`. Keep the vocabulary bounded to conventional database
+// handles while allowing common descriptive snake_case handle names.
+const DATABASE_METHOD_RECEIVER = String.raw`(?:cursor|cur|connection|conn|client|db|database|pool|engine|session|sequelize|query_?runner|entity_?manager|pg|postgres|postgresql|mysql|sqlite|(?:sql|db|database|postgres|postgresql|mysql|sqlite)_[A-Za-z_]\w*|[A-Za-z_]\w*_(?:cursor|connection|conn|db|database|pool|engine|session))`
+const DATABASE_STRING_METHOD_SINK = new RegExp(
+  String.raw`\b${DATABASE_METHOD_RECEIVER}(?:\s*\(\s*\))?\s*\.\s*(?:execute|executemany|executescript|query)\s*\(\s*$`,
+  'iu',
+)
+const DATABASE_DYNAMIC_METHOD_SINK = new RegExp(
+  String.raw`\b${DATABASE_METHOD_RECEIVER}(?:\s*\(\s*\))?\s*\.\s*(query|execute(?:many|script)?)\s*\(`,
+  'giu',
+)
+
 export function mixedSqlFragments(text) {
   const fragments = []
   const add = (sql, index, source) => {
     if (typeof sql !== 'string' || sql.trim().length === 0) return
     fragments.push({ sql, index, source })
   }
-  const strongSql = /\b(?:INSERT\s+(?:OR\s+\w+\s+)?INTO|UPDATE\s+(?:ONLY\s+)?["`A-Za-z_][\w."`]*\s+SET|DELETE\s+FROM|MERGE\s+INTO|CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW|MATERIALIZED\s+VIEW|TYPE|DATABASE|SCHEMA|FUNCTION|PROCEDURE|INDEX|ROLE)|ALTER\s+(?:TABLE|TYPE|DATABASE|SCHEMA|ROLE)|DROP\s+(?:TABLE|VIEW|MATERIALIZED\s+VIEW|TYPE|DATABASE|SCHEMA|FUNCTION|PROCEDURE|INDEX|ROLE)|TRUNCATE\s+(?:TABLE\s+)?["`A-Za-z_]|COPY\s+["`A-Za-z_][\w."`]*\s+FROM|GRANT\b|REVOKE\b|CALL\s+["`A-Za-z_])/iu
+  const strongSql = /\b(?:SELECT\b[\s\S]*?\bFROM\b|TABLE\s+(?:ONLY\s+)?["`A-Za-z_][\w."`]*|INSERT\s+(?:OR\s+\w+\s+)?INTO|UPDATE\s+(?:ONLY\s+)?["`A-Za-z_][\w."`]*\s+SET|DELETE\s+FROM|MERGE\s+INTO|CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW|MATERIALIZED\s+VIEW|TYPE|DATABASE|SCHEMA|FUNCTION|PROCEDURE|INDEX|ROLE)|ALTER\s+(?:TABLE|TYPE|DATABASE|SCHEMA|ROLE)|DROP\s+(?:TABLE|VIEW|MATERIALIZED\s+VIEW|TYPE|DATABASE|SCHEMA|FUNCTION|PROCEDURE|INDEX|ROLE)|TRUNCATE\s+(?:TABLE\s+)?["`A-Za-z_]|COPY\s+(?:\([\s\S]*?\)|(?:ONLY\s+)?["`A-Za-z_][\w."`]*(?:\s*\([^)]*\))?)\s+(?:FROM|TO)\b|GRANT\b|REVOKE\b|CALL\s+["`A-Za-z_])/iu
+  const commentMasked = maskCommentText(text)
+  const structuralMasked = maskQuotedAndCommentText(text)
 
   // Shell/PowerShell/Python string literals are considered only when their
   // contents have a strong SQL grammar prefix. Ordinary words such as
@@ -189,8 +210,11 @@ export function mixedSqlFragments(text) {
   for (const pattern of stringPatterns) {
     for (const match of text.matchAll(pattern)) {
       const body = match[2]
-      const prefix = text.slice(Math.max(0, (match.index ?? 0) - 240), match.index ?? 0)
-      const databaseSink = /(?:\b(?:execute|executemany|executescript|query)\s*\(\s*|\b(?:psql|mysql|sqlite3|sqlcmd)\b[^\n]*\s-c\s*(?:\\\r?\n\s*)?|(?:^|\s)(?:SQL|QUERY|STATEMENT)\s*=\s*)$/iu.test(prefix)
+      const opening = match.index ?? 0
+      if (commentMasked[opening] === ' ' && !/\s/u.test(text[opening])) continue
+      const prefix = structuralMasked.slice(Math.max(0, opening - 240), opening)
+      const databaseSink = DATABASE_STRING_METHOD_SINK.test(prefix)
+        || /(?:\b(?:psql|mysql|sqlite3|sqlcmd)\b[^\n]*\s-c\s*(?:\\\r?\n\s*)?|(?:^|\s)(?:SQL|QUERY|STATEMENT)\s*=\s*)$/iu.test(prefix)
       if (databaseSink && strongSql.test(body)) add(body, (match.index ?? 0) + match[0].indexOf(body), 'embedded_database_string')
     }
   }
@@ -202,7 +226,10 @@ export function mixedSqlFragments(text) {
   for (const match of text.matchAll(heredoc)) {
     const introduction = match[1]
     const body = match[3]
-    if (/(?:psql|mysql|sqlite3|sqlcmd)/iu.test(introduction) || strongSql.test(body)) {
+    const opening = match.index ?? 0
+    if (commentMasked[opening] === ' ' && !/\s/u.test(text[opening])) continue
+    const commentHeredoc = /^\s*:\s*<<-?/u.test(introduction)
+    if (!commentHeredoc && (/(?:psql|mysql|sqlite3|sqlcmd)/iu.test(introduction) || strongSql.test(body))) {
       add(body, (match.index ?? 0) + introduction.length, 'database_heredoc')
     }
   }
@@ -218,6 +245,265 @@ export function mixedSqlFragments(text) {
     .sort((left, right) => left.index - right.index || left.sql.localeCompare(right.sql))
 }
 
+function maskCommentText(text) {
+  const masked = [...text]
+  let quote = null
+  let escaped = false
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index]
+    if (character === '\n') {
+      quote = null
+      escaped = false
+      continue
+    }
+    if (quote) {
+      if (escaped) {
+        escaped = false
+      } else if (character === '\\' && quote !== "'") {
+        escaped = true
+      } else if (character === quote) {
+        quote = null
+      }
+      continue
+    }
+    const lineStart = text.lastIndexOf('\n', index - 1) + 1
+    const beforeOnLine = text.slice(lineStart, index)
+    if (/^\s*$/u.test(beforeOnLine) && (/^REM(?:\s|$)/iu.test(text.slice(index)) || text.startsWith('::', index))) {
+      while (index < text.length && text[index] !== '\n') masked[index++] = ' '
+      index -= 1
+      continue
+    }
+    if (text.startsWith('<#', index) || text.startsWith('/*', index)) {
+      const close = text.startsWith('<#', index) ? '#>' : '*/'
+      masked[index++] = ' '
+      while (index < text.length) {
+        masked[index] = text[index] === '\n' ? '\n' : ' '
+        if (text.startsWith(close, index)) {
+          if (index + 1 < text.length) masked[index + 1] = ' '
+          index += 1
+          break
+        }
+        index += 1
+      }
+      continue
+    }
+    if (text.startsWith('//', index)) {
+      while (index < text.length && text[index] !== '\n') masked[index++] = ' '
+      index -= 1
+      continue
+    }
+    if (character === '#' && (index === 0 || /[\s;&|()]/u.test(text[index - 1]))) {
+      while (index < text.length && text[index] !== '\n') masked[index++] = ' '
+      index -= 1
+      continue
+    }
+    if (character === "'" || character === '"' || character === '`') {
+      quote = character
+    }
+  }
+  const intermediate = masked.join('')
+  const commentHeredoc = /^\s*:\s*<<-?\s*['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?[^\n]*\n[\s\S]*?^\s*\1\s*$/gmu
+  for (const match of intermediate.matchAll(commentHeredoc)) {
+    const start = match.index ?? 0
+    const end = start + match[0].length
+    for (let index = start; index < end; index += 1) masked[index] = text[index] === '\n' ? '\n' : ' '
+  }
+  return masked.join('')
+}
+
+function maskQuotedAndCommentText(text) {
+  const commentsMasked = maskCommentText(text)
+  const masked = [...commentsMasked]
+  let quote = null
+  let escaped = false
+  for (let index = 0; index < commentsMasked.length; index += 1) {
+    const character = commentsMasked[index]
+    if (character === '\n') {
+      escaped = false
+      continue
+    }
+    if (quote) {
+      masked[index] = ' '
+      if (escaped) escaped = false
+      else if (character === '\\' && quote !== "'") escaped = true
+      else if (character === quote) quote = null
+      continue
+    }
+    if (character === "'" || character === '"' || character === '`') {
+      quote = character
+      masked[index] = ' '
+    }
+  }
+  return masked.join('')
+}
+
+function shellCommandPayloadPrefix(segment) {
+  const shell = /(?:^|\s)(?:[\w./-]*\/)?(?:ba|da|k|z)?sh\b/giu
+  for (const match of segment.matchAll(shell)) {
+    const tail = segment.slice((match.index ?? 0) + match[0].length).trim()
+    if (!tail) continue
+    const arguments_ = tail.split(/\s+/u)
+    let commandOption = false
+    let valid = true
+    for (let index = 0; index < arguments_.length; index += 1) {
+      const argument = arguments_[index]
+      if (/^[+-][A-Za-z]+$/u.test(argument)) {
+        if (argument.startsWith('-') && argument.slice(1).includes('c')) commandOption = true
+        if (new Set(['-o', '+o', '-O']).has(argument)) {
+          index += 1
+          if (index >= arguments_.length) valid = false
+        }
+        continue
+      }
+      if (/^--[A-Za-z][\w-]*(?:=.*)?$/u.test(argument)) {
+        if (!argument.includes('=') && new Set(['--init-file', '--rcfile']).has(argument)) {
+          index += 1
+          if (index >= arguments_.length) valid = false
+        }
+        continue
+      }
+      valid = false
+      break
+    }
+    if (valid && commandOption) return true
+  }
+  return false
+}
+
+function revealShellPayload(searchable, text, bodyStart, bodyEnd) {
+  let quote = null
+  let escaped = false
+  let comment = false
+  for (let index = bodyStart; index < bodyEnd; index += 1) {
+    const character = text[index]
+    if (comment) {
+      searchable[index] = character === '\n' ? '\n' : ' '
+      if (character === '\n') comment = false
+      continue
+    }
+    searchable[index] = character
+    if (escaped) {
+      escaped = false
+      continue
+    }
+    if (quote) {
+      if (character === '\\' && quote !== "'") escaped = true
+      else if (character === quote) quote = null
+      continue
+    }
+    if (character === '\\') {
+      escaped = true
+      continue
+    }
+    if (character === "'" || character === '"' || character === '`') {
+      quote = character
+      continue
+    }
+    if (
+      character === '#'
+      && (index === bodyStart || /[\s;&|()]/u.test(text[index - 1]))
+    ) {
+      searchable[index] = ' '
+      comment = true
+    }
+  }
+}
+
+function executableQuotedCommandText(text) {
+  const masked = maskQuotedAndCommentText(text)
+  const searchable = [...masked]
+  const strings = /(["'])((?:\\[\s\S]|(?!\1)[\s\S])*?)\1/gu
+  for (const match of text.matchAll(strings)) {
+    const opening = match.index ?? 0
+    const lineStart = masked.lastIndexOf('\n', opening - 1) + 1
+    const prefix = masked.slice(lineStart, opening).trimEnd()
+    const segment = prefix.split(/(?:&&|\|\||[;|])/u).at(-1).trim()
+    const shellPayload = shellCommandPayloadPrefix(segment)
+    const sshPayload = /(?:^|\s)(?:[\w./-]*\/)?ssh\b[^\n]*\S\s*$/iu.test(segment)
+    if (!shellPayload && !sshPayload) continue
+    const bodyOffset = match[0].indexOf(match[2])
+    const bodyStart = opening + bodyOffset
+    const bodyEnd = bodyStart + match[2].length
+    revealShellPayload(searchable, text, bodyStart, bodyEnd)
+  }
+  return searchable.join('')
+}
+
+/**
+ * Find executable database-command sinks in a mixed-language script. Quoted
+ * log messages and comments are masked, while offsets are preserved. A SQL
+ * client whose inline `-c`/heredoc payload was extracted is not emitted again;
+ * independent dump/restore/dynamic commands in the same file remain visible.
+ */
+export function mixedDatabaseCommandSinks(text, options = {}) {
+  const staticFragments = options.staticFragments ?? mixedSqlFragments(text)
+  const masked = executableQuotedCommandText(text)
+  const commandPatterns = [
+    /\b(pg_restore|pg_dump|mysqldump|psql|mysql|sqlite3|sqlcmd)\b|\bprisma\s+(migrate\s+(?:deploy|dev|reset|resolve)|db\s+(?:push|execute))\b/giu,
+    DATABASE_DYNAMIC_METHOD_SINK,
+  ]
+  const sinks = []
+  for (const pattern of commandPatterns) for (const match of masked.matchAll(pattern)) {
+    const index = match.index ?? 0
+    const lineStart = masked.lastIndexOf('\n', index - 1) + 1
+    const lineEndCandidate = masked.indexOf('\n', index)
+    const lineEnd = lineEndCandidate === -1 ? masked.length : lineEndCandidate
+    const lineText = masked.slice(lineStart, lineEnd)
+    const prefix = masked.slice(lineStart, index)
+    const prefixAfterOperator = prefix.split(/(?:&&|\|\||[;|])/u).at(-1).trim()
+    if (
+      /^(?:echo|printf|log|logger|write-host|grep|sed|awk)\b/iu.test(prefixAfterOperator)
+      || /\b(?:echo|printf|log|logger|write-host)\b[^;&|]*$/iu.test(prefixAfterOperator)
+    ) continue
+
+    let logicalStart = lineStart
+    while (logicalStart > 0) {
+      const previousEnd = logicalStart - 1
+      const previousStart = masked.lastIndexOf('\n', previousEnd - 1) + 1
+      if (!/\\\s*$/u.test(masked.slice(previousStart, previousEnd))) break
+      logicalStart = previousStart
+    }
+    let logicalEnd = lineEnd
+    while (/\\\s*$/u.test(masked.slice(masked.lastIndexOf('\n', logicalEnd - 1) + 1, logicalEnd))) {
+      const nextEnd = masked.indexOf('\n', logicalEnd + 1)
+      logicalEnd = nextEnd === -1 ? masked.length : nextEnd
+      if (logicalEnd === masked.length) break
+    }
+    const logicalText = masked.slice(logicalStart, logicalEnd)
+    const command = match[1]?.toLowerCase()
+      ?? (match[2]
+        ? `prisma ${match[2].toLowerCase().replace(/\s+/gu, ' ')}`
+        : null)
+      ?? match.at(-1).toLowerCase()
+    const commandLineHasExtractedSql = (
+      new Set(['psql', 'mysql', 'sqlite3', 'sqlcmd', 'query', 'execute', 'executemany', 'executescript']).has(command)
+      && staticFragments.some((fragment) => (
+        (fragment.index >= logicalStart && fragment.index <= logicalEnd)
+        || (fragment.source === 'database_heredoc' && fragment.index === lineEnd + 1)
+      ))
+    )
+    if (commandLineHasExtractedSql) continue
+
+    const intent = command === 'pg_dump' || command === 'mysqldump'
+      ? 'READ'
+      : command === 'pg_restore' || command.startsWith('prisma ')
+        ? 'WRITE'
+        : 'UNKNOWN'
+    sinks.push({
+      command,
+      intent,
+      index,
+      line: lineForIndex(text, index),
+      column: index - lineStart + 1,
+    })
+  }
+  const unique = new Map()
+  for (const sink of sinks) unique.set(`${sink.index}:${sink.command}:${sink.intent}`, sink)
+  return [...unique.values()].sort((left, right) => (
+    left.index - right.index || left.command.localeCompare(right.command) || left.intent.localeCompare(right.intent)
+  ))
+}
+
 export function standaloneSqlSites(surface, text, mixedLanguage = false) {
   const fragments = mixedLanguage
     ? mixedSqlFragments(text)
@@ -226,29 +512,17 @@ export function standaloneSqlSites(surface, text, mixedLanguage = false) {
     fragment,
     analysis: analyzeSqlScript(fragment.sql, { forceDynamic: mixedLanguage }),
   }))
+  const commandSinks = mixedLanguage ? mixedDatabaseCommandSinks(text, {
+    staticFragments: analyses
+      .filter(({ analysis }) => analysis.operations.length > 0 || (analysis.read_tables ?? []).length > 0)
+      .map(({ fragment }) => fragment),
+  }) : []
   const operations = analyses.flatMap(({ fragment, analysis }) => analysis.operations.map((operation) => ({
     ...operation,
     index: fragment.index + operation.index,
     fragment_source: fragment.source,
     analysis,
   })))
-  if (operations.length === 0) {
-    const dynamicDatabaseCommand = mixedLanguage && /(?:\bpsql\b|\bpg_restore\b|\bmysql\b|\bsqlite3\b|\bsqlcmd\b|\.execute(?:many|script)?\s*\(|\bprisma\s+(?:migrate\s+(?:deploy|dev|reset|resolve)|db\s+(?:push|execute))\b)/iu.test(text)
-    if (!dynamicDatabaseCommand) return []
-    return [{
-      file: surface.path,
-      line: 1,
-      column: 1,
-      scope: mixedLanguage ? '<mixed-operational-script>' : '<sql-script>',
-      kind: 'raw',
-      method: mixedLanguage ? 'mixed-script-sql' : 'sql-script',
-      tables: [],
-      operations: [],
-      ambiguous: true,
-      ambiguity_reasons: ['dynamic_database_command_requires_review'],
-      site_signature: sha256(`${surface.path}\n${sha256(text)}\ndynamic-database-command`),
-    }]
-  }
   const uniqueOperations = []
   const seenOperations = new Set()
   for (const operation of operations) {
@@ -257,12 +531,13 @@ export function standaloneSqlSites(surface, text, mixedLanguage = false) {
     seenOperations.add(key)
     uniqueOperations.push(operation)
   }
-  return uniqueOperations.map((operation, ordinal) => {
+  const sqlSites = uniqueOperations.map((operation, ordinal) => {
     const { analysis: operationAnalysis, ...publicOperation } = operation
+    const location = locationForIndex(text, operation.index)
     return {
     file: surface.path,
-    line: lineForIndex(text, operation.index),
-    column: 1,
+    line: location.line,
+    column: location.column,
     scope: mixedLanguage ? '<mixed-operational-script>' : '<sql-script>',
     kind: 'raw',
     method: mixedLanguage ? 'mixed-script-sql' : 'sql-script',
@@ -277,6 +552,28 @@ export function standaloneSqlSites(surface, text, mixedLanguage = false) {
     site_signature: sha256(`${surface.path}\n${operationAnalysis.sql_sha256}\n${ordinal}\n${operation.operation}\n${operation.table ?? ''}`),
   }
   })
+  const commandSites = commandSinks
+    .filter((sink) => sink.intent !== 'READ')
+    .map((sink) => ({
+      file: surface.path,
+      line: sink.line,
+      column: sink.column,
+      scope: '<mixed-operational-script>',
+      kind: 'raw',
+      method: `mixed-script-command:${sink.command}`,
+      database_command_intent: sink.intent,
+      tables: [],
+      operations: [],
+      ambiguous: true,
+      ambiguity_reasons: [...new Set([
+        'dynamic_database_command_requires_review',
+        ...(sink.intent === 'WRITE' ? ['dynamic_database_write_command_requires_review'] : []),
+      ])].sort(),
+      site_signature: sha256(`${surface.path}\n${sha256(text)}\n${sink.index}\n${sink.command}\n${sink.intent}`),
+    }))
+  return [...sqlSites, ...commandSites].sort((left, right) => (
+    left.line - right.line || left.column - right.column || left.site_signature.localeCompare(right.site_signature)
+  ))
 }
 
 function summarize(sites, parseFindings, inventory) {
@@ -309,9 +606,16 @@ export async function analyzeRepository(repositoryRoot, options = {}) {
   const manifests = await Promise.all(contextIndex.contexts.map((entry) => loadJson(repositoryRoot, entry.path)))
   const architecture = compileArchitecture(moduleRules, manifests, ownershipRules)
   architecture.tableSymbols = new Map()
+  architecture.prismaModels = new Set()
   for (const surface of inventory.surfaces) {
-    if (!JS_FAMILY.has(surface.extension) || !surface.path.includes('/schema/')) continue
+    if (surface.extension !== '.prisma' && (!JS_FAMILY.has(surface.extension) || !surface.path.includes('/schema/'))) continue
     const schemaSource = decodeSource(await readFile(path.join(repositoryRoot, surface.path))).text
+    if (surface.extension === '.prisma') {
+      for (const match of schemaSource.matchAll(/^model\s+([A-Za-z_][\w]*)\s*\{/gmu)) {
+        architecture.prismaModels.add(match[1])
+      }
+    }
+    if (!JS_FAMILY.has(surface.extension) || !surface.path.includes('/schema/')) continue
     for (const match of schemaSource.matchAll(/\bexport\s+const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:pgTable|sqliteTable|mysqlTable)\s*\(\s*['"]([^'"]+)['"]/gu)) {
       architecture.tableSymbols.set(match[1].toLowerCase(), match[2].toLowerCase())
     }
@@ -325,7 +629,10 @@ export async function analyzeRepository(repositoryRoot, options = {}) {
     const source = sourceIdentity(surface, architecture)
     let discovered = []
     if (JS_FAMILY.has(surface.extension)) {
-      const analysis = analyzePrismaWriteSites(decoded.text, { fileName: surface.path })
+      const analysis = analyzePrismaWriteSites(decoded.text, {
+        fileName: surface.path,
+        knownModels: [...architecture.prismaModels],
+      })
       discovered = analysis.sites
       for (const diagnostic of analysis.diagnostics) {
         parseFindings.push({
@@ -374,7 +681,7 @@ export async function analyzeRepository(repositoryRoot, options = {}) {
   const result = {
     schema: 'yoko.crm.whole-repository-write-analysis.v2',
     source: {
-      repository_root: path.resolve(repositoryRoot),
+      repository_root: '.',
       git_tracked_only: true,
       inventory_schema: inventory.schema,
       ...gitIdentity,

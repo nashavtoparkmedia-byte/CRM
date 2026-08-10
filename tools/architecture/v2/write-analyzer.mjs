@@ -25,10 +25,18 @@ export const PRISMA_RAW_METHODS = new Set([
 ])
 
 export const SQL_DRIVER_METHODS = new Set([
-    'exec', 'execute', 'executeSql', 'query', 'run',
+    'all', 'each', 'exec', 'execute', 'executeSql', 'get', 'query', 'run',
 ])
 
 export const DRIZZLE_WRITE_METHODS = new Set(['insert', 'update', 'delete'])
+
+const NON_RELATION_RESULT_MEMBERS = new Set([
+    '_count', 'at', 'catch', 'concat', 'entries', 'every', 'filter', 'finally',
+    'find', 'findIndex', 'findLast', 'findLastIndex', 'flat', 'flatMap', 'forEach',
+    'includes', 'indexOf', 'join', 'keys', 'lastIndexOf', 'length', 'map', 'pop',
+    'push', 'reduce', 'reduceRight', 'reverse', 'shift', 'slice', 'some', 'sort',
+    'splice', 'then', 'toJSON', 'toString', 'unshift', 'values',
+])
 
 export const PRISMA_READ_METHODS = new Set([
     'findUnique', 'findUniqueOrThrow', 'findFirst', 'findFirstOrThrow', 'findMany',
@@ -54,6 +62,7 @@ function scriptKind(fileName) {
 }
 
 export function unwrapExpression(expression) {
+    if (!expression) return expression
     let current = expression
     while (
         ts.isParenthesizedExpression(current)
@@ -69,8 +78,30 @@ export function unwrapExpression(expression) {
 
 function nodeName(node, sourceFile) {
     if (!node) return '<anonymous>'
-    if (ts.isIdentifier(node) || ts.isPrivateIdentifier(node) || ts.isStringLiteral(node) || ts.isNumericLiteral(node)) return node.text
-    return node.getText(sourceFile)
+    if (ts.isComputedPropertyName(node)) return '<dynamic>'
+    if (ts.isIdentifier(node) || ts.isPrivateIdentifier(node)) return node.text
+    if (ts.isStringLiteral(node) || ts.isNumericLiteral(node)) {
+        return /^[A-Za-z_$][A-Za-z0-9_$]{0,127}$/u.test(node.text)
+            ? node.text
+            : `<literal:${digest(node.text).slice(0, 16)}>`
+    }
+    return `<${ts.SyntaxKind[node.kind] ?? 'syntax'}>`
+}
+
+function structuralExpressionOrigin(expression) {
+    const candidate = unwrapExpression(expression)
+    if (ts.isIdentifier(candidate) || ts.isPrivateIdentifier(candidate)) return `identifier:${candidate.text}`
+    if (candidate.kind === ts.SyntaxKind.ThisKeyword) return 'this'
+    if (ts.isPropertyAccessExpression(candidate)) {
+        return `${structuralExpressionOrigin(candidate.expression)}.${candidate.name.text}`
+    }
+    if (ts.isElementAccessExpression(candidate)) {
+        const property = propertyName(candidate)
+        return `${structuralExpressionOrigin(candidate.expression)}.[${property === null ? 'dynamic' : `key:${digest(property).slice(0, 16)}`}]`
+    }
+    if (ts.isCallExpression(candidate)) return `call:${structuralExpressionOrigin(candidate.expression)}`
+    if (ts.isNewExpression(candidate)) return `new:${structuralExpressionOrigin(candidate.expression)}`
+    return `syntax:${ts.SyntaxKind[candidate.kind] ?? 'unknown'}`
 }
 
 export function writeSiteScope(node, sourceFile) {
@@ -211,6 +242,40 @@ function rawOperation(method, source) {
         origin: source.origin,
         transaction: Boolean(source.transaction),
         confidence: source.confidence ?? 'HIGH',
+        prepared_sql: source.prepared_sql ?? null,
+    }
+}
+
+function sqlStatement(sql, source) {
+    return {
+        kind: 'SQL_STATEMENT',
+        sql,
+        origin: source.origin,
+        transaction: Boolean(source.transaction),
+        confidence: source.confidence ?? 'MEDIUM',
+    }
+}
+
+function sqlPrepareMethod(source) {
+    return {
+        kind: 'SQL_PREPARE_METHOD',
+        origin: source.origin,
+        transaction: Boolean(source.transaction),
+        confidence: source.confidence ?? 'MEDIUM',
+    }
+}
+
+function invocation(source, style) {
+    return { kind: 'INVOCATION', source, style }
+}
+
+function modelResult(source) {
+    return {
+        kind: 'MODEL_RESULT',
+        model: source.model,
+        origin: source.origin,
+        transaction: source.transaction,
+        confidence: source.confidence,
     }
 }
 
@@ -252,6 +317,10 @@ function valueIdentity(value) {
     if (value.kind === 'OPERATION') return `OPERATION:${value.model}:${value.method}:${value.origin}:${value.transaction}`
     if (value.kind === 'READ_OPERATION') return `READ:${value.model}:${value.method}:${value.origin}:${value.transaction}`
     if (value.kind === 'RAW_OPERATION') return `RAW:${value.method}:${value.origin}:${value.transaction}`
+    if (value.kind === 'SQL_STATEMENT') return `SQL_STATEMENT:${value.origin}:${JSON.stringify(value.sql)}`
+    if (value.kind === 'SQL_PREPARE_METHOD') return `SQL_PREPARE:${value.origin}`
+    if (value.kind === 'INVOCATION') return `INVOCATION:${value.style}:${valueIdentity(value.source)}`
+    if (value.kind === 'MODEL_RESULT') return `MODEL_RESULT:${value.model}:${value.origin}`
     if (value.kind === 'FUNCTION') return `FUNCTION:${value.node.getStart()}`
     return `${value.kind}:${JSON.stringify(stable(value.reasons ?? []))}`
 }
@@ -264,11 +333,21 @@ function mergeValues(values, reason) {
     return ambiguous('AMBIGUOUS_VALUE', [reason], material)
 }
 
+function literalPropertyValue(expression) {
+    const candidate = unwrapExpression(expression)
+    if (ts.isStringLiteral(candidate) || ts.isNoSubstitutionTemplateLiteral(candidate) || ts.isNumericLiteral(candidate)) return candidate.text
+    if (ts.isBinaryExpression(candidate) && candidate.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+        const left = literalPropertyValue(candidate.left)
+        const right = literalPropertyValue(candidate.right)
+        return left !== null && right !== null ? left + right : null
+    }
+    return null
+}
+
 function propertyName(expression) {
     if (ts.isPropertyAccessExpression(expression)) return expression.name.text
     if (ts.isElementAccessExpression(expression)) {
-        const argument = unwrapExpression(expression.argumentExpression)
-        if (ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument) || ts.isNumericLiteral(argument)) return argument.text
+        return literalPropertyValue(expression.argumentExpression)
     }
     return null
 }
@@ -479,9 +558,13 @@ function diagnostics(sourceFile) {
 
 export function analyzePrismaWriteSites(sourceText, options = {}) {
     const fileName = options.fileName ?? 'architecture-write-scan.tsx'
+    const knownPrismaModels = new Set(options.knownModels ?? [])
     const { checker, resolutionDiagnostics, sourceFile } = sourceContext(sourceText, fileName)
     const assignments = new Map()
+    const memberAssignments = []
     const transactionCallbackOrigins = new Map()
+    const transactionOperationNodes = new Set()
+    const invocationParameterValues = new Map()
 
     function symbolAt(identifier) {
         if (ts.isShorthandPropertyAssignment(identifier.parent) && identifier.parent.name === identifier) {
@@ -496,6 +579,36 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
         if (!symbol) return
         if (!assignments.has(symbol)) assignments.set(symbol, [])
         assignments.get(symbol).push({ node, expression, propertyPath, conditional })
+    }
+
+    function classIdentity(node) {
+        for (let current = node; current; current = current.parent) {
+            if (ts.isClassLike(current)) return current.getStart(sourceFile)
+        }
+        return null
+    }
+
+    function memberDescriptor(expression) {
+        const pathParts = []
+        let current = unwrapExpression(expression)
+        while (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)) {
+            const name = propertyName(current)
+            if (name === null) return null
+            pathParts.unshift(name)
+            current = unwrapExpression(current.expression)
+        }
+        if (ts.isIdentifier(current)) {
+            const symbol = symbolAt(current)
+            return symbol ? { root: symbol, class_id: null, path: pathParts } : null
+        }
+        if (current?.kind === ts.SyntaxKind.ThisKeyword) {
+            return { root: null, class_id: classIdentity(current), path: pathParts }
+        }
+        return null
+    }
+
+    function sameMemberRoot(left, right) {
+        return left.root ? left.root === right.root : left.class_id !== null && left.class_id === right.class_id
     }
 
     function collectAssignmentPattern(pattern, node, expression, propertyPath = [], conditional = false) {
@@ -537,11 +650,30 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
             ].includes(node.operatorToken.kind)
         ) {
             collectAssignmentPattern(node.left, node, node.right, [], node.operatorToken.kind !== ts.SyntaxKind.EqualsToken)
+            const descriptor = memberDescriptor(node.left)
+            if (descriptor?.path.length > 0) memberAssignments.push({
+                ...descriptor,
+                node,
+                expression: node.right,
+                conditional: node.operatorToken.kind !== ts.SyntaxKind.EqualsToken,
+            })
+        }
+        if (ts.isPropertyDeclaration(node) && node.initializer && !ts.isComputedPropertyName(node.name)) {
+            const owner = classIdentity(node)
+            if (owner !== null) memberAssignments.push({
+                root: null,
+                class_id: owner,
+                path: [nodeName(node.name, sourceFile)],
+                node,
+                expression: node.initializer,
+                conditional: false,
+            })
         }
         ts.forEachChild(node, collectAssignments)
     }
     collectAssignments(sourceFile)
     for (const values of assignments.values()) values.sort((left, right) => left.node.getStart() - right.node.getStart())
+    memberAssignments.sort((left, right) => left.node.getStart() - right.node.getStart())
 
     function transactionParameter(declaration, seen) {
         if (!ts.isParameter(declaration)) return null
@@ -596,6 +728,16 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
         let initializer = unknown()
         let propertyPath = binding.propertyPath
         if (ts.isVariableDeclaration(binding.root) && binding.root.initializer) {
+            if (
+                SQL_DRIVER_METHODS.has(binding.propertyPath.at(-1))
+                && sqlDriverReceiverProven(binding.root.initializer, use)
+            ) {
+                return rawOperation(`sql-driver:${binding.propertyPath.at(-1)}`, {
+                    origin: 'sql-driver:destructured-proven-receiver',
+                    transaction: false,
+                    confidence: 'MEDIUM',
+                })
+            }
             initializer = resolveExpression(binding.root.initializer, use, new Set(seen))
         } else if (ts.isParameter(binding.root)) {
             initializer = transactionParameter(binding.root, new Set(seen)) ?? unknown()
@@ -605,7 +747,7 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
             ) {
                 const injectedAt = binding.propertyPath.findIndex((property) => /^(?:prisma|prismaClient)$/u.test(property))
                 initializer = ambiguous('AMBIGUOUS_VALUE', ['unproven_prisma_dependency_injection'], [
-                    client(`dependency-injected-parameter:${binding.root.getText(sourceFile)}`, { confidence: 'CONSERVATIVE' }),
+                    client(`dependency-injected-parameter:${digest(`${fileName}:${binding.root.getStart(sourceFile)}`).slice(0, 16)}`, { confidence: 'CONSERVATIVE' }),
                 ])
                 propertyPath = binding.propertyPath.slice(injectedAt + 1)
             }
@@ -663,6 +805,8 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
             } else if (ts.isFunctionDeclaration(declaration)) {
                 initializers.push(functionValue(declaration, `function:${identifier.text}`))
             } else if (ts.isParameter(declaration)) {
+                const invokedValues = invocationParameterValues.get(symbol) ?? []
+                if (invokedValues.length > 0) initializers.push(mergeValues(invokedValues, 'multiple_static_parameter_bindings'))
                 const typeText = declaration.type?.getText(sourceFile) ?? ''
                 if (/\b(?:TransactionClient|PrismaClient)\b/u.test(typeText)) {
                     initializers.push(client(`typed-parameter:${identifier.text}`, {
@@ -716,8 +860,39 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
         }
         if (receiver.kind === 'OBJECT') return receiver.properties.get(property) ?? unknown()
         if (receiver.kind === 'ARRAY') return receiver.elements[Number(property)] ?? unknown()
-        if (receiver.kind === 'OPERATION' && property === 'bind') {
+        if ((receiver.kind === 'OPERATION' || receiver.kind === 'READ_OPERATION') && property === 'bind') {
             return { kind: 'BOUND_OPERATION', source: receiver }
+        }
+        if ((receiver.kind === 'OPERATION' || receiver.kind === 'READ_OPERATION' || receiver.kind === 'RAW_OPERATION') && new Set(['apply', 'call']).has(property)) {
+            return invocation(receiver, property)
+        }
+        if (receiver.kind === 'RAW_OPERATION' && property === 'bind') {
+            return { kind: 'BOUND_OPERATION', source: receiver }
+        }
+        if (receiver.kind === 'SQL_STATEMENT' && new Set(['all', 'get', 'iterate', 'run']).has(property)) {
+            return rawOperation(`sql-driver:prepared:${property}`, {
+                origin: receiver.origin,
+                transaction: receiver.transaction,
+                confidence: receiver.confidence,
+                prepared_sql: receiver.sql,
+            })
+        }
+        if (receiver.kind === 'SQL_STATEMENT' && new Set(['bind', 'expand', 'pluck', 'raw', 'safeIntegers']).has(property)) {
+            return { kind: 'BOUND_OPERATION', source: receiver }
+        }
+        if (receiver.kind === 'SQL_PREPARE_METHOD' && property === 'bind') {
+            return { kind: 'BOUND_OPERATION', source: receiver }
+        }
+        if (receiver.kind === 'TRANSACTION_METHOD' && property === 'bind') {
+            return { kind: 'BOUND_OPERATION', source: receiver }
+        }
+        if (receiver.kind === 'MODEL_RESULT' && property && !dynamicProperty) {
+            if (NON_RELATION_RESULT_MEMBERS.has(property)) return unknown()
+            return {
+                ...readOperation(property, 'relation', receiver),
+                relation_parent_model: receiver.model,
+                relation_name: property,
+            }
         }
         if (receiver.kind === 'CLIENT') {
             if (dynamicProperty) {
@@ -777,10 +952,31 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
 
     function resolveExpression(expression, use = expression, seen = new Set()) {
         const candidate = unwrapExpression(expression)
+        if (!candidate) return unknown()
+        // Member assignments, helper returns, and fluent call chains can form
+        // real cycles (for example `this.transport = this.transport || ...`).
+        // Track expression nodes as well as symbols/callables so repository
+        // analysis fails closed instead of overflowing the process stack.
+        if (seen.has(candidate)) {
+            return ambiguous('AMBIGUOUS_VALUE', ['recursive_expression_resolution'])
+        }
+        seen = new Set(seen).add(candidate)
         if (ts.isIdentifier(candidate)) return resolveIdentifier(candidate, use, seen)
+        if (ts.isArrowFunction(candidate) || ts.isFunctionExpression(candidate)) {
+            return functionValue(candidate, `inline-function:${candidate.getStart(sourceFile)}`)
+        }
 
         if (ts.isNewExpression(candidate)) {
             const callee = unwrapExpression(candidate.expression)
+            if (ts.isIdentifier(callee) && callee.text === 'Proxy' && candidate.arguments[0]) {
+                const target = resolveExpression(candidate.arguments[0], use, seen)
+                if (target.kind === 'DELEGATE') {
+                    return ambiguous('AMBIGUOUS_DELEGATE', ['proxy_delegate_requires_review'], [target])
+                }
+                if (target.kind === 'CLIENT') {
+                    return ambiguous('AMBIGUOUS_VALUE', ['proxy_client_requires_review'], [target])
+                }
+            }
             const constructor = resolveExpression(callee, use, seen)
             if (constructor.kind === 'PRISMA_CONSTRUCTOR') return client(`new:${constructor.origin}`, { confidence: 'HIGH' })
             return unknown()
@@ -792,12 +988,61 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
         }
 
         if (ts.isCallExpression(candidate)) {
+            const directCallee = unwrapExpression(candidate.expression)
+            if (
+                ts.isPropertyAccessExpression(directCallee)
+                && ts.isIdentifier(directCallee.expression)
+                && directCallee.expression.text === 'Reflect'
+                && directCallee.name.text === 'get'
+                && candidate.arguments[0]
+            ) {
+                const receiver = resolveExpression(candidate.arguments[0], use, seen)
+                const key = candidate.arguments[1]
+                    ? staticSqlExpression(candidate.arguments[1], checker, sourceFile)
+                    : null
+                const property = key && !key.dynamic ? key.sql : null
+                if (
+                    property
+                    && SQL_DRIVER_METHODS.has(property)
+                    && sqlDriverReceiverProven(candidate.arguments[0], use)
+                ) {
+                    return rawOperation(`sql-driver:${property}`, {
+                        origin: `sql-driver:reflect-get:${structuralExpressionOrigin(candidate.arguments[0])}`,
+                        transaction: false,
+                        confidence: 'MEDIUM',
+                    })
+                }
+                const dynamicClientBoundary = property === null
+                    || (receiver.kind === 'CLIENT' && !knownPrismaModels.has(property))
+                return applyProperty(receiver, property, dynamicClientBoundary)
+            }
+            if (
+                (ts.isPropertyAccessExpression(directCallee) || ts.isElementAccessExpression(directCallee))
+                && propertyName(directCallee) === 'prepare'
+                && sqlDriverReceiverLooksIntentional(directCallee.expression)
+            ) {
+                const sql = candidate.arguments[0]
+                    ? staticSqlExpression(candidate.arguments[0], checker, sourceFile)
+                    : null
+                return sqlStatement(sql, {
+                    origin: `sql-driver:${structuralExpressionOrigin(directCallee.expression)}.prepare`,
+                    transaction: false,
+                    confidence: sql ? 'HIGH' : 'CONSERVATIVE',
+                })
+            }
             const callee = resolveExpression(candidate.expression, use, seen)
             if (callee.kind === 'CLIENT_EXTENSION') return client(`${callee.source.origin}:$extends`, {
                 transaction: callee.source.transaction,
                 confidence: callee.source.confidence,
             })
             if (callee.kind === 'BOUND_OPERATION') return callee.source
+            if (callee.kind === 'READ_OPERATION') return modelResult(callee)
+            if (callee.kind === 'SQL_PREPARE_METHOD') {
+                const sql = candidate.arguments[0]
+                    ? staticSqlExpression(candidate.arguments[0], checker, sourceFile)
+                    : null
+                return sqlStatement(sql, callee)
+            }
             if (callee.kind === 'FUNCTION') {
                 const callable = callee.node
                 if (seen.has(callable)) return ambiguous('AMBIGUOUS_VALUE', ['recursive_helper_call'])
@@ -860,6 +1105,13 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
                     properties.set(nodeName(property.name, sourceFile), resolveExpression(property.initializer, use, new Set(seen)))
                 } else if (ts.isShorthandPropertyAssignment(property)) {
                     properties.set(property.name.text, resolveIdentifier(property.name, use, new Set(seen)))
+                } else if (ts.isMethodDeclaration(property)) {
+                    properties.set(nodeName(property.name, sourceFile), functionValue(property, `object-method:${property.getStart(sourceFile)}`))
+                } else if (ts.isSpreadAssignment(property)) {
+                    const spread = resolveExpression(property.expression, use, new Set(seen))
+                    if (spread.kind === 'OBJECT') {
+                        for (const [name, value] of spread.properties) properties.set(name, value)
+                    }
                 }
             }
             return objectValue(properties, `object:${candidate.getStart()}`)
@@ -874,10 +1126,30 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
         }
 
         if (ts.isPropertyAccessExpression(candidate) || ts.isElementAccessExpression(candidate)) {
+            const descriptor = memberDescriptor(candidate)
+            if (descriptor) {
+                const assigned = memberAssignments.filter((assignment) => (
+                    sameMemberRoot(assignment, descriptor)
+                    && assignment.path.length === descriptor.path.length
+                    && assignment.path.every((part, index) => part === descriptor.path[index])
+                ))
+                if (assigned.length > 0) {
+                    const values = assigned.map((assignment) => resolveExpression(assignment.expression, use, new Set(seen)))
+                    const merged = mergeValues(values, 'multiple_member_assignments')
+                    if (merged.kind !== 'UNKNOWN') {
+                        if (assigned.some((assignment) => assignment.conditional)) {
+                            return ambiguous('AMBIGUOUS_VALUE', ['conditional_member_assignment'], [merged])
+                        }
+                        return merged
+                    }
+                }
+            }
             let property = propertyName(candidate)
             if (property === null && ts.isElementAccessExpression(candidate)) {
                 const argument = unwrapExpression(candidate.argumentExpression)
-                if (ts.isIdentifier(argument)) {
+                const staticProperty = staticSqlExpression(argument, checker, sourceFile)
+                if (staticProperty && !staticProperty.dynamic) property = staticProperty.sql
+                else if (ts.isIdentifier(argument)) {
                     const symbol = symbolAt(argument)
                     const declarations = symbol?.declarations ?? []
                     if (declarations.length === 1 && ts.isVariableDeclaration(declarations[0]) && declarations[0].initializer) {
@@ -895,8 +1167,22 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
                 })
                 if (typedDeclaration) {
                     const typeText = typedDeclaration.type?.getText(sourceFile) ?? ''
-                    return client(`typed-member:${candidate.getText(sourceFile)}`, {
+                    return client(`typed-member:${structuralExpressionOrigin(candidate)}`, {
                         transaction: typeText.includes('TransactionClient'),
+                        confidence: 'MEDIUM',
+                    })
+                }
+                if (SQL_DRIVER_METHODS.has(property) && sqlDriverReceiverProven(candidate.expression, use)) {
+                    return rawOperation(`sql-driver:${property}`, {
+                        origin: `sql-driver:${structuralExpressionOrigin(candidate.expression)}`,
+                        transaction: false,
+                        confidence: 'MEDIUM',
+                    })
+                }
+                if (property === 'prepare' && sqlDriverReceiverLooksIntentional(candidate.expression)) {
+                    return sqlPrepareMethod({
+                        origin: `sql-driver:${structuralExpressionOrigin(candidate.expression)}.prepare`,
+                        transaction: false,
                         confidence: 'MEDIUM',
                     })
                 }
@@ -907,10 +1193,20 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
             // member is not sufficient evidence.
             if (property === 'prisma' && receiver.kind === 'UNKNOWN') {
                 return ambiguous('AMBIGUOUS_VALUE', ['unproven_prisma_member'], [
-                    client(`member:${candidate.getText(sourceFile)}`, { confidence: 'CONSERVATIVE' }),
+                    client(`member:${structuralExpressionOrigin(candidate)}`, { confidence: 'CONSERVATIVE' }),
                 ])
             }
-            return applyProperty(receiver, property, property === null)
+            const computedClientBoundary = ts.isElementAccessExpression(candidate)
+                && !knownPrismaModels.has(property)
+                && (
+                receiver.kind === 'CLIENT'
+                || receiver.kind === 'MODEL_RESULT'
+                || (
+                    (receiver.kind === 'AMBIGUOUS_VALUE' || receiver.kind === 'AMBIGUOUS_DELEGATE')
+                    && receiver.candidates.some((value) => value.kind === 'CLIENT')
+                )
+                )
+            return applyProperty(receiver, property, property === null || computedClientBoundary)
         }
 
         if (ts.isConditionalExpression(candidate)) {
@@ -934,11 +1230,18 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
             return resolveExpression(candidate.right, use, new Set(seen))
         }
 
+        if (ts.isBinaryExpression(candidate) && candidate.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
+            return resolveExpression(candidate.right, use, new Set(seen))
+        }
+
         if (candidate.kind === ts.SyntaxKind.ThisKeyword) return unknown()
         return unknown()
     }
 
     function transactionAnnotation(node, resolved) {
+        if (transactionOperationNodes.has(node)) {
+            return { contained: true, origin: 'transaction-array:static-alias' }
+        }
         if (resolved.transaction) {
             return { contained: true, origin: resolved.origin }
         }
@@ -980,34 +1283,63 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
     const sites = []
 
     function nestedWriteShapes(call) {
-        const root = unwrapExpression(call.arguments[0])
-        if (!root || !ts.isObjectLiteralExpression(root)) return []
+        if (!call.arguments[0]) return []
+        const root = immutableProjectionObject(call.arguments[0], call)
+        if (!root.object) return []
         const nestedMethods = new Set([
             'connect', 'connectOrCreate', 'create', 'createMany', 'delete', 'deleteMany',
             'disconnect', 'set', 'update', 'updateMany', 'upsert',
         ])
         const shapes = []
-        function walk(object, pathParts) {
+        function objectFieldNames(object) {
+            if (!object) return []
+            return [...new Set(object.properties.flatMap((property) => {
+                if (ts.isSpreadAssignment(property) || ts.isComputedPropertyName(property.name)) return ['<dynamic>']
+                if (!ts.isPropertyAssignment(property) && !ts.isShorthandPropertyAssignment(property)) return ['<dynamic>']
+                return [nodeName(property.name, sourceFile)]
+            }))].sort()
+        }
+        function walk(object, pathParts, relationField = null) {
             for (const property of object.properties) {
-                if (!ts.isPropertyAssignment(property)) continue
+                if (!ts.isPropertyAssignment(property) && !ts.isShorthandPropertyAssignment(property)) continue
                 const name = nodeName(property.name, sourceFile)
-                const value = unwrapExpression(property.initializer)
+                const value = unwrapExpression(ts.isPropertyAssignment(property) ? property.initializer : property.name)
                 const nextPath = [...pathParts, name]
                 if (
                     nestedMethods.has(name)
-                    && nextPath.length >= 3
-                    && nextPath[0] === 'data'
+                    && relationField
+                    && pathParts[0] === 'data'
                 ) {
+                    const payload = immutableProjectionObject(value, call)
+                    const staticScalarPayload = new Set([
+                        ts.SyntaxKind.FalseKeyword,
+                        ts.SyntaxKind.NullKeyword,
+                        ts.SyntaxKind.TrueKeyword,
+                    ]).has(value.kind)
                     shapes.push({
-                        relation_field: nextPath[nextPath.length - 2],
+                        relation_field: relationField,
                         method: name,
                         path: nextPath.join('.'),
+                        written_fields: objectFieldNames(payload.object),
+                        payload_dynamic: payload.dynamic && !staticScalarPayload,
                     })
                 }
-                if (ts.isObjectLiteralExpression(value)) walk(value, nextPath)
+                const nested = immutableProjectionObject(value, call)
+                if (!nested.object) continue
+                if (nestedMethods.has(name)) {
+                    // create/update branches inside upsert/connectOrCreate are
+                    // payload containers for the same relation, not a second
+                    // relation operation. Nested relation fields inside those
+                    // payloads establish their own relation context below.
+                    walk(nested.object, nextPath, null)
+                } else if (name === 'data' || name === 'where') {
+                    walk(nested.object, nextPath, relationField)
+                } else {
+                    walk(nested.object, nextPath, name)
+                }
             }
         }
-        walk(root, [])
+        walk(root.object, [], null)
         return shapes.sort((left, right) => left.path.localeCompare(right.path))
     }
 
@@ -1025,6 +1357,99 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
         return staticObjectExpression(declaration.initializer, seen)
     }
 
+    function immutableProjectionObject(expression, use, seen = new Set()) {
+        const candidate = unwrapExpression(expression)
+        if (ts.isObjectLiteralExpression(candidate)) return { object: candidate, dynamic: false }
+        if (!ts.isIdentifier(candidate)) return { object: null, dynamic: true }
+        const symbol = symbolAt(candidate)
+        if (!symbol || seen.has(symbol)) return { object: null, dynamic: true }
+        const nextSeen = new Set(seen)
+        nextSeen.add(symbol)
+        const declarations = symbol.declarations ?? []
+        if (declarations.length !== 1) return { object: null, dynamic: true }
+        const declaration = declarations[0]
+        if (!ts.isVariableDeclaration(declaration) || !declaration.initializer) {
+            return { object: null, dynamic: true }
+        }
+
+        // A projection alias is trusted only while it is demonstrably immutable.
+        // `const` protects the binding but not its properties, and passing the
+        // object to arbitrary code lets that code mutate it before the ORM call.
+        let dynamic = (declaration.parent.flags & ts.NodeFlags.Const) === 0
+        const candidateStart = candidate.getStart(sourceFile)
+        const candidateEnd = candidate.getEnd()
+        function visitReference(node) {
+            if (dynamic) return
+            if (ts.isIdentifier(node) && symbolAt(node) === symbol) {
+                if (node.getStart(sourceFile) === candidateStart && node.getEnd() === candidateEnd) return
+                if (declarations.some((item) => item.name === node)) return
+
+                let current = node
+                while (
+                    current.parent
+                    && (
+                        ts.isParenthesizedExpression(current.parent)
+                        || ts.isAsExpression(current.parent)
+                        || ts.isTypeAssertionExpression(current.parent)
+                        || ts.isNonNullExpression(current.parent)
+                    )
+                ) current = current.parent
+
+                let target = current
+                while (
+                    target.parent
+                    && (
+                        (ts.isPropertyAccessExpression(target.parent) && target.parent.expression === target)
+                        || (ts.isElementAccessExpression(target.parent) && target.parent.expression === target)
+                    )
+                ) target = target.parent
+                const targetParent = target.parent
+                if (
+                    targetParent
+                    && ts.isBinaryExpression(targetParent)
+                    && targetParent.left === target
+                    && targetParent.operatorToken.kind >= ts.SyntaxKind.FirstAssignment
+                    && targetParent.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+                ) {
+                    dynamic = true
+                    return
+                }
+                if (
+                    targetParent
+                    && (
+                        ts.isDeleteExpression(targetParent)
+                        || ((ts.isPrefixUnaryExpression(targetParent) || ts.isPostfixUnaryExpression(targetParent))
+                            && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(targetParent.operator))
+                    )
+                ) {
+                    dynamic = true
+                    return
+                }
+
+                const parent = current.parent
+                if (
+                    parent
+                    && ts.isPropertyAssignment(parent)
+                    && parent.initializer === current
+                    && new Set(['select', 'omit', 'columns', 'include', 'with']).has(nodeName(parent.name, sourceFile))
+                ) return
+                if (parent && ts.isPropertyAccessExpression(parent) && parent.expression === current) return
+                if (parent && ts.isElementAccessExpression(parent) && parent.expression === current) return
+
+                // Any other reference is an escape or a reassignment source.
+                // This deliberately includes function arguments, returns,
+                // spreads, and alias creation.
+                dynamic = true
+                return
+            }
+            ts.forEachChild(node, visitReference)
+        }
+        visitReference(sourceFile)
+
+        const nested = immutableProjectionObject(declaration.initializer, use, nextSeen)
+        return { object: nested.object, dynamic: dynamic || nested.dynamic }
+    }
+
     function projectionFields(object) {
         const fields = []
         let dynamic = false
@@ -1037,6 +1462,10 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
                 dynamic = true
                 continue
             }
+            if (ts.isComputedPropertyName(property.name)) {
+                dynamic = true
+                continue
+            }
             const name = nodeName(property.name, sourceFile)
             const value = ts.isPropertyAssignment(property) ? unwrapExpression(property.initializer) : null
             if (!value || value.kind === ts.SyntaxKind.TrueKeyword || ts.isObjectLiteralExpression(value)) fields.push(name)
@@ -1045,43 +1474,229 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
         return { fields: [...new Set(fields)].sort(), dynamic }
     }
 
-    function readProjection(call, method) {
-        if (new Set(['count', 'aggregate', 'groupBy']).has(method)) {
-            return { mode: 'AGGREGATE', selected_fields: [], omitted_fields: [], dynamic: false }
+    function nestedRelationProjection(expression, depth, use) {
+        const candidate = unwrapExpression(expression)
+        if (candidate.kind === ts.SyntaxKind.FalseKeyword || candidate.kind === ts.SyntaxKind.NullKeyword) return null
+        if (candidate.kind === ts.SyntaxKind.TrueKeyword) {
+            return { mode: 'FULL_ROW', selected_fields: [], omitted_fields: [], dynamic: false, nested_relations: [] }
         }
-        const args = call.arguments[0] && staticObjectExpression(call.arguments[0])
-        if (!args) return { mode: 'FULL_ROW', selected_fields: [], omitted_fields: [], dynamic: Boolean(call.arguments[0]) }
+        const resolved = immutableProjectionObject(candidate, use)
+        if (!resolved.object || depth >= 8) {
+            return { mode: 'FULL_ROW', selected_fields: [], omitted_fields: [], dynamic: true, nested_relations: [] }
+        }
+        const projection = readProjectionFromOptions(resolved.object, 'findMany', depth + 1, use)
+        return { ...projection, dynamic: projection.dynamic || resolved.dynamic }
+    }
+
+    function relationSelections(object, depth, use) {
+        const relations = []
+        for (const property of object.properties) {
+            if (!ts.isPropertyAssignment(property) && !ts.isShorthandPropertyAssignment(property)) continue
+            if (ts.isComputedPropertyName(property.name)) {
+                relations.push({
+                    relation: '<dynamic>',
+                    projection: { mode: 'FULL_ROW', selected_fields: [], omitted_fields: [], dynamic: true, nested_relations: [] },
+                })
+                continue
+            }
+            const relation = nodeName(property.name, sourceFile)
+            const expression = ts.isPropertyAssignment(property) ? property.initializer : property.name
+            const projection = nestedRelationProjection(expression, depth, use)
+            if (projection) relations.push({ relation, projection })
+        }
+        return relations.sort((left, right) => left.relation.localeCompare(right.relation))
+    }
+
+    function readProjectionFromOptions(args, method, depth = 0, use = args) {
+        const nestedRelations = []
+        let optionsDynamic = args.properties.some((property) => (
+            ts.isSpreadAssignment(property)
+            || (ts.isPropertyAssignment(property) && (
+                ts.isComputedPropertyName(property.name)
+                || nodeName(property.name, sourceFile) === 'extras'
+            ))
+        ))
         for (const property of args.properties) {
+            if (ts.isSpreadAssignment(property)) {
+                optionsDynamic = true
+                continue
+            }
             if (!ts.isPropertyAssignment(property)) continue
+            if (ts.isComputedPropertyName(property.name)) {
+                optionsDynamic = true
+                continue
+            }
             const name = nodeName(property.name, sourceFile)
+            if (name === 'extras') {
+                optionsDynamic = true
+                continue
+            }
+            if (name === 'include' || name === 'with') {
+                const relationObject = immutableProjectionObject(property.initializer, use)
+                optionsDynamic ||= relationObject.dynamic
+                if (relationObject.object) nestedRelations.push(...relationSelections(relationObject.object, depth, use))
+                else nestedRelations.push({
+                    relation: '<dynamic>',
+                    projection: { mode: 'FULL_ROW', selected_fields: [], omitted_fields: [], dynamic: true, nested_relations: [] },
+                })
+                continue
+            }
             if (name !== 'select' && name !== 'omit' && name !== 'columns') continue
-            const object = staticObjectExpression(property.initializer)
-            if (!object) return { mode: name.toUpperCase(), selected_fields: [], omitted_fields: [], dynamic: true }
-            const projected = projectionFields(object)
+            const resolved = immutableProjectionObject(property.initializer, use)
+            if (!resolved.object) return { mode: name.toUpperCase(), selected_fields: [], omitted_fields: [], dynamic: true, nested_relations: [] }
+            const projected = projectionFields(resolved.object)
+            if (name === 'select') nestedRelations.push(...relationSelections(resolved.object, depth, use))
+            if (name === 'columns') {
+                const falseFields = []
+                let trueFields = 0
+                for (const column of resolved.object.properties) {
+                    if (!ts.isPropertyAssignment(column) || ts.isComputedPropertyName(column.name)) continue
+                    const value = unwrapExpression(column.initializer)
+                    if (value.kind === ts.SyntaxKind.FalseKeyword) falseFields.push(nodeName(column.name, sourceFile))
+                    else if (value.kind === ts.SyntaxKind.TrueKeyword) trueFields += 1
+                }
+                if (falseFields.length > 0 && trueFields === 0) {
+                    return {
+                        mode: 'OMIT',
+                        selected_fields: [],
+                        omitted_fields: [...new Set(falseFields)].sort(),
+                        dynamic: projected.dynamic || resolved.dynamic || optionsDynamic,
+                        nested_relations: nestedRelations,
+                    }
+                }
+            }
             return {
                 mode: name === 'columns' ? 'SELECT' : name.toUpperCase(),
                 selected_fields: name === 'select' || name === 'columns' ? projected.fields : [],
                 omitted_fields: name === 'omit' ? projected.fields : [],
-                dynamic: projected.dynamic,
+                dynamic: projected.dynamic || resolved.dynamic || optionsDynamic,
+                nested_relations: nestedRelations,
             }
         }
-        return { mode: 'FULL_ROW', selected_fields: [], omitted_fields: [], dynamic: false }
+        return { mode: 'FULL_ROW', selected_fields: [], omitted_fields: [], dynamic: optionsDynamic, nested_relations: nestedRelations }
+    }
+
+    function readProjection(call, method) {
+        if (method === 'count') {
+            return { mode: 'AGGREGATE', selected_fields: [], omitted_fields: [], dynamic: false, nested_relations: [] }
+        }
+        if (method === 'aggregate' || method === 'groupBy') {
+            const args = call.arguments[0] && immutableProjectionObject(call.arguments[0], call)
+            if (!args?.object) return {
+                mode: 'AGGREGATE', selected_fields: [], omitted_fields: [], dynamic: Boolean(call.arguments[0]), nested_relations: [],
+            }
+            const fields = new Set()
+            let dynamic = args.dynamic
+            for (const property of args.object.properties) {
+                if (!ts.isPropertyAssignment(property) || ts.isComputedPropertyName(property.name)) {
+                    dynamic = true
+                    continue
+                }
+                const name = nodeName(property.name, sourceFile)
+                const value = unwrapExpression(property.initializer)
+                if (method === 'groupBy' && name === 'by') {
+                    if (!ts.isArrayLiteralExpression(value)) {
+                        dynamic = true
+                        continue
+                    }
+                    for (const element of value.elements) {
+                        const field = literalPropertyValue(element)
+                        if (field === null) dynamic = true
+                        else fields.add(field)
+                    }
+                } else if (method === 'aggregate' && name !== '_count') {
+                    const selection = immutableProjectionObject(value, call)
+                    dynamic ||= selection.dynamic
+                    if (!selection.object) continue
+                    const projected = projectionFields(selection.object)
+                    dynamic ||= projected.dynamic
+                    for (const field of projected.fields) fields.add(field)
+                }
+            }
+            return {
+                mode: 'AGGREGATE', selected_fields: [...fields].sort(), omitted_fields: [], dynamic, nested_relations: [],
+            }
+        }
+        const args = call.arguments[0] && immutableProjectionObject(call.arguments[0], call)
+        if (!args?.object) return {
+            mode: 'FULL_ROW',
+            selected_fields: [],
+            omitted_fields: [],
+            dynamic: Boolean(call.arguments[0]),
+            nested_relations: [],
+        }
+        const projection = readProjectionFromOptions(args.object, method, 0, call)
+        return { ...projection, dynamic: projection.dynamic || args.dynamic }
+    }
+
+    function writePayloadShape(call) {
+        const root = call.arguments[0] && immutableProjectionObject(call.arguments[0], call)
+        if (!root?.object) return {
+            written_fields: [],
+            write_projection_dynamic: Boolean(call.arguments[0]),
+        }
+        let dynamic = root.dynamic
+        const fields = new Set()
+        for (const property of root.object.properties) {
+            if (!ts.isPropertyAssignment(property) && !ts.isShorthandPropertyAssignment(property)) {
+                dynamic = true
+                continue
+            }
+            if (ts.isComputedPropertyName(property.name)) {
+                dynamic = true
+                continue
+            }
+            if (!new Set(['create', 'data', 'update']).has(nodeName(property.name, sourceFile))) continue
+            const data = unwrapExpression(ts.isPropertyAssignment(property) ? property.initializer : property.name)
+            const payloads = ts.isArrayLiteralExpression(data)
+                ? data.elements.filter((element) => !ts.isOmittedExpression(element) && !ts.isSpreadElement(element))
+                : [data]
+            if (ts.isArrayLiteralExpression(data) && data.elements.some((element) => ts.isSpreadElement(element))) dynamic = true
+            for (const payload of payloads) {
+                const resolved = immutableProjectionObject(payload, call)
+                dynamic ||= resolved.dynamic
+                if (!resolved.object) continue
+                for (const field of resolved.object.properties) {
+                    if (ts.isSpreadAssignment(field)) {
+                        dynamic = true
+                        continue
+                    }
+                    if (!ts.isPropertyAssignment(field) && !ts.isShorthandPropertyAssignment(field)) {
+                        dynamic = true
+                        continue
+                    }
+                    if (ts.isComputedPropertyName(field.name)) {
+                        dynamic = true
+                        continue
+                    }
+                    fields.add(nodeName(field.name, sourceFile))
+                }
+            }
+        }
+        return { written_fields: [...fields].sort(), write_projection_dynamic: dynamic }
     }
 
     function addModelSite(node, resolved) {
         const nestedOperations = nestedWriteShapes(node)
         const nestedAmbiguity = nestedOperations.length > 0
+        const payload = writePayloadShape(node)
+        const dynamicPayloadAmbiguity = payload.write_projection_dynamic
         sites.push({
             ...baseRecord(node, resolved),
-            kind: resolved.ambiguous || nestedAmbiguity ? 'ambiguous_model' : 'model',
+            kind: resolved.ambiguous || nestedAmbiguity || dynamicPayloadAmbiguity ? 'ambiguous_model' : 'model',
             model: resolved.model,
             candidate_models: [...new Set(resolved.candidate_models ?? [])].sort(),
             method: resolved.method,
+            ...payload,
+            return_projection: new Set([
+                'create', 'createManyAndReturn', 'delete', 'update', 'updateManyAndReturn', 'upsert',
+            ]).has(resolved.method) ? readProjection(node, 'findMany') : null,
             nested_operations: nestedOperations,
-            ambiguous: Boolean(resolved.ambiguous) || nestedAmbiguity,
+            ambiguous: Boolean(resolved.ambiguous) || nestedAmbiguity || dynamicPayloadAmbiguity,
             ambiguity_reasons: [...new Set([
                 ...(resolved.ambiguity_reasons ?? []),
                 ...(nestedAmbiguity ? ['nested_relation_write_requires_schema_resolution'] : []),
+                ...(dynamicPayloadAmbiguity ? ['dynamic_payload_may_contain_nested_write'] : []),
             ])].sort(),
         })
     }
@@ -1093,6 +1708,8 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
             model: resolved.model,
             candidate_models: [...new Set(resolved.candidate_models ?? [])].sort(),
             method: resolved.method,
+            relation_parent_model: resolved.relation_parent_model ?? null,
+            relation_name: resolved.relation_name ?? null,
             projection: readProjection(node, resolved.method),
             ambiguous: Boolean(resolved.ambiguous),
             ambiguity_reasons: resolved.ambiguity_reasons ?? [],
@@ -1111,12 +1728,43 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
         })
     }
 
+    function staticSqlContainer(expression) {
+        const candidate = unwrapExpression(expression)
+        const direct = staticSqlExpression(candidate, checker, sourceFile)
+        if (direct) return direct
+        if (!ts.isObjectLiteralExpression(candidate)) return null
+        for (const property of candidate.properties) {
+            if (!ts.isPropertyAssignment(property) || ts.isComputedPropertyName(property.name)) continue
+            if (!new Set(['query', 'sql', 'text']).has(nodeName(property.name, sourceFile))) continue
+            return staticSqlExpression(property.initializer, checker, sourceFile)
+        }
+        return null
+    }
+
+    function sqlForInvocation(node, resolved) {
+        if (resolved.source?.prepared_sql) return resolved.source.prepared_sql
+        if (resolved.style === 'call') return node.arguments[1] ? staticSqlContainer(node.arguments[1]) : null
+        if (resolved.style === 'apply') {
+            const args = node.arguments[1] && unwrapExpression(node.arguments[1])
+            return args && ts.isArrayLiteralExpression(args) && args.elements[0]
+                ? staticSqlContainer(args.elements[0])
+                : null
+        }
+        return null
+    }
+
     function addRawSite(node, resolved, sql) {
         const sqlAnalysis = analyzeSqlMutation(sql?.sql ?? null, { forceDynamic: sql?.dynamic ?? true })
         const queryMethod = resolved.method === '$queryRaw' || resolved.method === '$queryRawUnsafe'
-        if (queryMethod && sqlAnalysis.is_mutation === false && !sqlAnalysis.dynamic && !options.includeRawReads) return
+        const genericDriver = resolved.method?.startsWith('sql-driver:')
+        if (
+            (queryMethod || genericDriver)
+            && sqlAnalysis.is_mutation === false
+            && !sqlAnalysis.dynamic
+            && !options.includeRawReads
+        ) return
         const retainedRead = options.includeRawReads && sqlAnalysis.is_mutation === false
-        const executeWithoutMutation = !queryMethod && sqlAnalysis.is_mutation === false && !retainedRead
+        const executeWithoutMutation = !queryMethod && !genericDriver && sqlAnalysis.is_mutation === false && !retainedRead
         const reasons = new Set(sqlAnalysis.reasons)
         if (queryMethod && sqlAnalysis.is_mutation === null) reasons.add('query_raw_intent_unresolved')
         if (queryMethod && sqlAnalysis.is_mutation === false && sqlAnalysis.dynamic) reasons.add('query_raw_dynamic_intent_unresolved')
@@ -1130,6 +1778,8 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
             tables: sqlAnalysis.tables.length > 0 ? sqlAnalysis.tables : (options.includeRawReads ? sqlAnalysis.read_tables : []),
             read_tables: sqlAnalysis.read_tables,
             selected_columns: sqlAnalysis.selected_columns,
+            selected_column_sources: sqlAnalysis.selected_column_sources ?? [],
+            written_columns: sqlAnalysis.written_columns ?? [],
             select_all: sqlAnalysis.select_all,
             read_projection_dynamic: sqlAnalysis.read_projection_dynamic,
             operations: sqlAnalysis.operations,
@@ -1150,6 +1800,43 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
         }
         const text = candidate.getText(sourceFile)
         return /(?:^|\.)(?:db|database|pool|connection|client|queryRunner|sqlite)$/iu.test(text)
+    }
+
+    function sqlDriverReceiverProven(expression, use = expression, seen = new Set()) {
+        const candidate = unwrapExpression(expression)
+        if (!candidate) return false
+        if (sqlDriverReceiverLooksIntentional(candidate)) return true
+        if (ts.isNewExpression(candidate)) {
+            const callee = unwrapExpression(candidate.expression)
+            const name = ts.isIdentifier(callee) ? callee.text : propertyName(callee)
+            if (/^(?:Client|Database|Pool|Sqlite|SQLite|Sqlite3)$/u.test(name ?? '')) return true
+        }
+        if (ts.isCallExpression(candidate)) {
+            const callee = unwrapExpression(candidate.expression)
+            const name = ts.isIdentifier(callee) ? callee.text : propertyName(callee)
+            if (/^(?:connect|getDb|getDatabase|openDatabase)$/u.test(name ?? '')) {
+                if (ts.isPropertyAccessExpression(callee) || ts.isElementAccessExpression(callee)) {
+                    return sqlDriverReceiverProven(callee.expression, use, new Set(seen))
+                }
+                return true
+            }
+        }
+        if (ts.isIdentifier(candidate)) {
+            const symbol = symbolAt(candidate)
+            if (!symbol || seen.has(symbol)) return false
+            const nextSeen = new Set(seen).add(symbol)
+            for (const declaration of symbol.declarations ?? []) {
+                const typeText = declaration.type?.getText(sourceFile) ?? ''
+                if (/\b(?:Client|Database|Pool|PoolClient|Sqlite|SQLite)\b/u.test(typeText)) return true
+                if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
+                    if (sqlDriverReceiverProven(declaration.initializer, use, nextSeen)) return true
+                }
+            }
+        }
+        if (ts.isPropertyAccessExpression(candidate) || ts.isElementAccessExpression(candidate)) {
+            return sqlDriverReceiverProven(candidate.expression, use, seen)
+        }
+        return false
     }
 
     function importSourceForDeclaration(declaration) {
@@ -1260,7 +1947,7 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
                     return {
                         proven: true,
                         transaction: /Transaction/u.test(typeText),
-                        origin: `typed-drizzle-member:${candidate.getText(sourceFile)}`,
+                        origin: `typed-drizzle-member:${structuralExpressionOrigin(candidate)}`,
                         confidence: 'HIGH',
                     }
                 }
@@ -1271,8 +1958,19 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
 
     function maybeAddDrizzleSite(node) {
         const callee = unwrapExpression(node.expression)
-        if (!ts.isPropertyAccessExpression(callee) && !ts.isElementAccessExpression(callee)) return false
-        let method = propertyName(callee)
+        const reflected = ts.isCallExpression(callee)
+            && ts.isPropertyAccessExpression(unwrapExpression(callee.expression))
+            && ts.isIdentifier(unwrapExpression(callee.expression).expression)
+            && unwrapExpression(callee.expression).expression.text === 'Reflect'
+            && unwrapExpression(callee.expression).name.text === 'get'
+            ? callee
+            : null
+        if (!reflected && !ts.isPropertyAccessExpression(callee) && !ts.isElementAccessExpression(callee)) return false
+        let method = reflected
+            ? (reflected.arguments[1]
+                ? staticSqlExpression(reflected.arguments[1], checker, sourceFile)?.sql ?? null
+                : null)
+            : propertyName(callee)
         if (method === null && ts.isElementAccessExpression(callee)) {
             const argument = unwrapExpression(callee.argumentExpression)
             if (ts.isIdentifier(argument)) {
@@ -1285,7 +1983,8 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
         }
         if (node.arguments.length === 0) return false
         const target = drizzleTableTarget(node.arguments[0])
-        const receiver = drizzleReceiver(callee.expression, node)
+        const receiverExpression = reflected ? reflected.arguments[0] : callee.expression
+        const receiver = drizzleReceiver(receiverExpression, node)
         if (!receiver.proven && (!target || !DRIZZLE_WRITE_METHODS.has(method))) return false
         if (!DRIZZLE_WRITE_METHODS.has(method) && method !== null) return false
         const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
@@ -1303,7 +2002,7 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
             column: position.character + 1,
             scope,
             transaction: { contained: Boolean(receiver.transaction), origin: receiver.transaction ? receiver.origin : null },
-            receiver_origin: receiver.origin ?? `unproven-drizzle:${callee.expression.getText(sourceFile)}`,
+            receiver_origin: receiver.origin ?? `unproven-drizzle:${structuralExpressionOrigin(receiverExpression)}`,
             confidence: receiver.confidence ?? 'CONSERVATIVE',
             site_signature: digest(`${scope}\n${node.getText(sourceFile)}`),
             kind: ambiguousSite ? 'ambiguous_model' : 'drizzle',
@@ -1317,26 +2016,69 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
     }
 
     function drizzleSelectProjection(selectCall) {
-        if (selectCall.arguments.length === 0) {
-            return { mode: 'FULL_ROW', selected_fields: [], omitted_fields: [], dynamic: false }
+        const selectMethod = propertyName(unwrapExpression(selectCall.expression)) ?? 'select'
+        const projectionArgument = selectMethod === 'selectDistinctOn'
+            ? selectCall.arguments[1]
+            : selectCall.arguments[0]
+        if (!projectionArgument) {
+            return { mode: 'FULL_ROW', selected_fields: [], selected_field_sources: [], omitted_fields: [], dynamic: false }
         }
-        const selected = staticObjectExpression(selectCall.arguments[0])
-        if (!selected) return { mode: 'SELECT', selected_fields: [], omitted_fields: [], dynamic: true }
+        const selected = immutableProjectionObject(projectionArgument, selectCall)
+        if (!selected.object) return { mode: 'SELECT', selected_fields: [], selected_field_sources: [], omitted_fields: [], dynamic: true }
         const fields = []
-        let dynamic = false
-        for (const property of selected.properties) {
-            if (!ts.isPropertyAssignment(property)) {
+        const sources = []
+        let dynamic = selected.dynamic
+        for (const property of selected.object.properties) {
+            if (!ts.isPropertyAssignment(property) || ts.isComputedPropertyName(property.name)) {
                 dynamic = true
                 continue
             }
             const value = unwrapExpression(property.initializer)
-            if (ts.isPropertyAccessExpression(value)) fields.push(value.name.text)
+            if (ts.isPropertyAccessExpression(value)) {
+                fields.push(value.name.text)
+                const target = drizzleTableTarget(value.expression)
+                sources.push({ field: value.name.text, table: target?.table ?? null })
+                if (!target) dynamic = true
+            }
             else {
                 fields.push(nodeName(property.name, sourceFile))
+                sources.push({ field: nodeName(property.name, sourceFile), table: null })
                 dynamic = true
             }
         }
-        return { mode: 'SELECT', selected_fields: [...new Set(fields)].sort(), omitted_fields: [], dynamic }
+        return {
+            mode: 'SELECT',
+            selected_fields: [...new Set(fields)].sort(),
+            selected_field_sources: sources.sort((left, right) => left.field.localeCompare(right.field) || String(left.table).localeCompare(String(right.table))),
+            omitted_fields: [],
+            dynamic,
+        }
+    }
+
+    function drizzleProjectionForTarget(projection, target) {
+        if (projection.mode !== 'SELECT') return projection
+        const normalizedTarget = String(target).toLowerCase()
+        const sources = projection.selected_field_sources ?? []
+        const selected = sources
+            .filter((entry) => entry.table && String(entry.table).toLowerCase() === normalizedTarget)
+            .map((entry) => entry.field)
+        const unqualified = sources.filter((entry) => !entry.table).map((entry) => entry.field)
+        return {
+            ...projection,
+            selected_fields: [...new Set([...selected, ...unqualified])].sort(),
+            dynamic: projection.dynamic || unqualified.length > 0,
+        }
+    }
+
+    function drizzleSelectCallInChain(expression) {
+        let current = unwrapExpression(expression)
+        while (ts.isCallExpression(current)) {
+            const callee = unwrapExpression(current.expression)
+            if (!ts.isPropertyAccessExpression(callee) && !ts.isElementAccessExpression(callee)) return null
+            if (new Set(['select', 'selectDistinct', 'selectDistinctOn']).has(propertyName(callee))) return current
+            current = unwrapExpression(callee.expression)
+        }
+        return null
     }
 
     function maybeAddDrizzleReadSite(node) {
@@ -1352,7 +2094,7 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
                 !ts.isPropertyAccessExpression(selectCallee)
                 && !ts.isElementAccessExpression(selectCallee)
             ) return false
-            if (propertyName(selectCallee) !== 'select') return false
+            if (!new Set(['select', 'selectDistinct', 'selectDistinctOn']).has(propertyName(selectCallee))) return false
             const receiver = drizzleReceiver(selectCallee.expression, node)
             if (!receiver.proven) return false
             const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
@@ -1371,8 +2113,39 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
                 kind: 'model_read',
                 model: target.table,
                 candidate_models: [target.table],
-                method: 'drizzle:select',
-                projection: drizzleSelectProjection(selectCall),
+                method: `drizzle:${propertyName(selectCallee)}`,
+                projection: drizzleProjectionForTarget(drizzleSelectProjection(selectCall), target.table),
+                ambiguous: false,
+                ambiguity_reasons: [],
+            })
+            return true
+        }
+        if (new Set(['fullJoin', 'innerJoin', 'leftJoin', 'rightJoin']).has(propertyName(callee)) && node.arguments[0]) {
+            const target = drizzleTableTarget(node.arguments[0])
+            const selectCall = drizzleSelectCallInChain(callee.expression)
+            if (!target || !selectCall) return false
+            const selectCallee = unwrapExpression(selectCall.expression)
+            if (!ts.isPropertyAccessExpression(selectCallee) && !ts.isElementAccessExpression(selectCallee)) return false
+            const receiver = drizzleReceiver(selectCallee.expression, node)
+            if (!receiver.proven) return false
+            const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
+            const scope = writeSiteScope(node, sourceFile)
+            sites.push({
+                file: fileName,
+                index: node.getStart(sourceFile),
+                end: node.getEnd(),
+                line: position.line + 1,
+                column: position.character + 1,
+                scope,
+                transaction: { contained: Boolean(receiver.transaction), origin: receiver.transaction ? receiver.origin : null },
+                receiver_origin: receiver.origin,
+                confidence: receiver.confidence,
+                site_signature: digest(`${scope}\n${node.getText(sourceFile)}`),
+                kind: 'model_read',
+                model: target.table,
+                candidate_models: [target.table],
+                method: `drizzle:${propertyName(callee)}`,
+                projection: drizzleProjectionForTarget(drizzleSelectProjection(selectCall), target.table),
                 ambiguous: false,
                 ambiguity_reasons: [],
             })
@@ -1416,13 +2189,18 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
         const method = propertyName(callee)
         if (!SQL_DRIVER_METHODS.has(method)) return false
         const sql = node.arguments.length > 0
-            ? staticSqlExpression(node.arguments[0], checker, sourceFile)
+            ? staticSqlContainer(node.arguments[0])
             : null
         const sqlAnalysis = analyzeSqlMutation(sql?.sql ?? null, { forceDynamic: sql?.dynamic ?? true })
         if (sqlAnalysis.is_mutation === false && !sqlAnalysis.ambiguous && !options.includeRawReads) return false
-        if (!sqlDriverReceiverLooksIntentional(callee.expression)) return false
+        // A SQL-looking string is not sufficient proof that an arbitrary
+        // method named `run`, `get`, or `all` is a database call.  Require a
+        // receiver whose declaration/type/name can be traced to a supported
+        // SQL driver.  This still retains conventional/typed clients and
+        // their immutable aliases while excluding ordinary application APIs.
+        if (!sqlDriverReceiverProven(callee.expression, node)) return false
         addRawSite(node, rawOperation(`sql-driver:${method}`, {
-            origin: `sql-driver:${callee.expression.getText(sourceFile)}`,
+            origin: `sql-driver:${structuralExpressionOrigin(callee.expression)}`,
             transaction: false,
             confidence: sqlAnalysis.is_mutation ? 'MEDIUM' : 'CONSERVATIVE',
         }), sql)
@@ -1435,12 +2213,35 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
             if (resolved.kind === 'OPERATION') addModelSite(node, resolved)
             else if (resolved.kind === 'READ_OPERATION' && options.includeReads) addReadSite(node, resolved)
             else if (resolved.kind === 'AMBIGUOUS_OPERATION') addAmbiguousOperation(node, resolved)
+            else if (resolved.kind === 'INVOCATION') {
+                if (resolved.source.kind === 'OPERATION') addModelSite(node, resolved.source)
+                else if (resolved.source.kind === 'READ_OPERATION' && options.includeReads) addReadSite(node, resolved.source)
+                else if (resolved.source.kind === 'RAW_OPERATION') addRawSite(node, resolved.source, sqlForInvocation(node, resolved))
+            }
             else if (resolved.kind === 'RAW_OPERATION') {
-                const sql = node.arguments.length > 0
-                    ? staticSqlExpression(node.arguments[0], checker, sourceFile)
-                    : null
+                const sql = resolved.prepared_sql ?? (node.arguments.length > 0
+                    ? staticSqlContainer(node.arguments[0])
+                    : null)
                 addRawSite(node, resolved, sql)
-            } else if (!maybeAddDrizzleSite(node) && !maybeAddDrizzleReadSite(node)) maybeAddSqlDriverSite(node)
+            } else {
+                const callee = unwrapExpression(node.expression)
+                const reflectApply = (
+                    ts.isPropertyAccessExpression(callee)
+                    && ts.isIdentifier(callee.expression)
+                    && callee.expression.text === 'Reflect'
+                    && callee.name.text === 'apply'
+                    && node.arguments[0]
+                ) ? resolveExpression(node.arguments[0], node) : null
+                if (reflectApply?.kind === 'OPERATION') addModelSite(node, reflectApply)
+                else if (reflectApply?.kind === 'READ_OPERATION' && options.includeReads) addReadSite(node, reflectApply)
+                else if (reflectApply?.kind === 'RAW_OPERATION') {
+                    const args = node.arguments[2] && unwrapExpression(node.arguments[2])
+                    const sql = args && ts.isArrayLiteralExpression(args) && args.elements[0]
+                        ? staticSqlContainer(args.elements[0])
+                        : null
+                    addRawSite(node, reflectApply, sql)
+                } else if (!maybeAddDrizzleSite(node) && !maybeAddDrizzleReadSite(node)) maybeAddSqlDriverSite(node)
+            }
         } else if (ts.isTaggedTemplateExpression(node)) {
             const resolved = resolveExpression(node.tag, node)
             if (resolved.kind === 'RAW_OPERATION') addRawSite(node, resolved, taggedTemplateSql(node.template, checker, sourceFile))
@@ -1453,6 +2254,30 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
             const callee = resolveExpression(node.expression, node)
             if (callee.kind === 'TRANSACTION_METHOD' && node.arguments[0]) {
                 const argument = unwrapExpression(node.arguments[0])
+                const collectArrayOperations = (expression, seen = new Set()) => {
+                    const candidate = unwrapExpression(expression)
+                    if (ts.isArrayLiteralExpression(candidate)) {
+                        for (const element of candidate.elements) {
+                            if (ts.isSpreadElement(element)) collectArrayOperations(element.expression, new Set(seen))
+                            else if (!ts.isOmittedExpression(element)) {
+                                const item = unwrapExpression(element)
+                                if (ts.isCallExpression(item)) transactionOperationNodes.add(item)
+                                else collectArrayOperations(item, new Set(seen))
+                            }
+                        }
+                        return
+                    }
+                    if (!ts.isIdentifier(candidate)) return
+                    const symbol = symbolAt(candidate)
+                    if (!symbol || seen.has(symbol)) return
+                    const nextSeen = new Set(seen).add(symbol)
+                    for (const declaration of symbol.declarations ?? []) {
+                        if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
+                            collectArrayOperations(declaration.initializer, nextSeen)
+                        }
+                    }
+                }
+                collectArrayOperations(argument)
                 let callable = ts.isFunctionLike(argument) ? argument : null
                 if (!callable && ts.isIdentifier(argument)) {
                     const declarations = symbolAt(argument)?.declarations ?? []
@@ -1470,6 +2295,27 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
         }
         ts.forEachChild(node, collectExternalTransactionCallbacks)
     }
+    function collectStaticInvocationParameters(node) {
+        if (ts.isCallExpression(node)) {
+            const callee = resolveExpression(node.expression, node)
+            if (callee.kind === 'FUNCTION') {
+                callee.node.parameters.forEach((parameter, index) => {
+                    if (!ts.isIdentifier(parameter.name) || !node.arguments[index]) return
+                    const parameterSymbol = symbolAt(parameter.name)
+                    if (!parameterSymbol) return
+                    const value = resolveExpression(node.arguments[index], node)
+                    if (value.kind === 'UNKNOWN') return
+                    const values = invocationParameterValues.get(parameterSymbol) ?? []
+                    if (!values.some((candidate) => valueIdentity(candidate) === valueIdentity(value))) {
+                        values.push(value)
+                        invocationParameterValues.set(parameterSymbol, values)
+                    }
+                })
+            }
+        }
+        ts.forEachChild(node, collectStaticInvocationParameters)
+    }
+    for (let pass = 0; pass < 3; pass += 1) collectStaticInvocationParameters(sourceFile)
     collectExternalTransactionCallbacks(sourceFile)
     visit(sourceFile)
 
@@ -1477,9 +2323,13 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
     const signatureCounts = new Map()
     for (const site of sites) signatureCounts.set(site.site_signature, (signatureCounts.get(site.site_signature) ?? 0) + 1)
     const fileDigest = digest(sourceText)
+    const signatureOrdinals = new Map()
     for (const site of sites) {
         if ((signatureCounts.get(site.site_signature) ?? 0) > 1) {
-            site.site_signature = digest(`${site.site_signature}\nduplicate-set:${fileDigest}`)
+            const original = site.site_signature
+            const ordinal = signatureOrdinals.get(original) ?? 0
+            signatureOrdinals.set(original, ordinal + 1)
+            site.site_signature = digest(`${original}\nduplicate-set:${fileDigest}\nordinal:${ordinal}\nindex:${site.index}:${site.end}`)
         }
     }
 

@@ -10,7 +10,10 @@ import {
   analyzeCredentialAccess,
   analyzeCredentialSqlAccess,
   CREDENTIAL_ENTITY_POLICIES,
+  parsePrismaModelNames,
+  parsePrismaRelations,
 } from './credential-analyzer.mjs'
+import { mixedDatabaseCommandSinks, mixedSqlFragments } from './analyze.mjs'
 import { inventoryTrackedSurfaces } from './tracked-surface-inventory.mjs'
 
 const JS_FAMILY = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'])
@@ -81,6 +84,32 @@ async function repositoryGitIdentity(repositoryRoot) {
   }
 }
 
+async function credentialSchemaMetadata(repositoryRoot) {
+  const schemas = {
+    gravity: 'gravity-mvp/prisma/schema.prisma',
+    telegram: 'tg-bot/prisma/schema.prisma',
+    yfs: 'yandex-fleet-scraper/prisma/schema.prisma',
+  }
+  const maps = new Map()
+  const knownModels = new Set()
+  for (const [key, relative] of Object.entries(schemas)) {
+    try {
+      const schema = await readFile(path.join(repositoryRoot, relative), 'utf8')
+      maps.set(key, parsePrismaRelations(schema))
+      for (const model of parsePrismaModelNames(schema)) knownModels.add(model)
+    } catch {
+      maps.set(key, new Map())
+    }
+  }
+  return { knownModels: [...knownModels].sort(), maps }
+}
+
+function relationMapForSurface(surface, maps) {
+  if (surface.path.startsWith('tg-bot/')) return maps.get('telegram')
+  if (surface.path.startsWith('yandex-fleet-scraper/')) return maps.get('yfs')
+  return maps.get('gravity')
+}
+
 async function sourceContextResolver(repositoryRoot) {
   const moduleRules = await loadJson(repositoryRoot, 'architecture/evidence/v1/module-rules.json')
   const contextIndex = await loadJson(repositoryRoot, 'architecture/contexts/v1/context-index.json')
@@ -128,35 +157,13 @@ function lineForIndex(text, index) {
   return line
 }
 
+function locationForIndex(text, index) {
+  const lineStart = text.lastIndexOf('\n', Math.max(0, index - 1)) + 1
+  return { line: lineForIndex(text, index), column: index - lineStart + 1 }
+}
+
 export function mixedCredentialSqlFragments(text) {
-  const fragments = []
-  const sqlGrammar = /\b(?:SELECT\b[\s\S]*?\bFROM\b|INSERT\s+(?:OR\s+\w+\s+)?INTO|UPDATE\s+(?:ONLY\s+)?["`A-Za-z_][\w."`]*\s+SET|DELETE\s+FROM|MERGE\s+INTO|CREATE\s+(?:OR\s+REPLACE\s+)?(?:TABLE|VIEW|TYPE|DATABASE|SCHEMA|FUNCTION|PROCEDURE|INDEX|ROLE)|ALTER\s+(?:TABLE|TYPE|DATABASE|SCHEMA|ROLE)|DROP\s+(?:TABLE|VIEW|TYPE|DATABASE|SCHEMA|FUNCTION|PROCEDURE|INDEX|ROLE)|TRUNCATE\s+(?:TABLE\s+)?["`A-Za-z_]|COPY\s+["`A-Za-z_][\w."`]*\s+FROM|GRANT\b|REVOKE\b|CALL\s+["`A-Za-z_])/iu
-  const add = (sql, index, source) => {
-    if (typeof sql === 'string' && sqlGrammar.test(sql)) fragments.push({ sql, index, source })
-  }
-  const stringPatterns = [
-    /("""|''')([\s\S]*?)\1/gu,
-    /@(["'])([\s\S]*?)\1@/gu,
-    /(["'`])((?:\\[\s\S]|(?!\1)[\s\S])*?)\1/gu,
-  ]
-  for (const pattern of stringPatterns) {
-    for (const match of text.matchAll(pattern)) {
-      const body = match[2]
-      const prefix = text.slice(Math.max(0, (match.index ?? 0) - 240), match.index ?? 0)
-      if (/(?:\b(?:execute|executemany|executescript|query)\s*\(\s*|\b(?:psql|mysql|sqlite3|sqlcmd)\b[^\n]*\s-c\s*(?:\\\r?\n\s*)?|(?:^|\s)(?:SQL|QUERY|STATEMENT)\s*=\s*)$/iu.test(prefix)) {
-        add(body, (match.index ?? 0) + match[0].indexOf(body), 'embedded_database_string')
-      }
-    }
-  }
-  const heredoc = /(^[^\n]*<<-?\s*['"]?([A-Za-z_][A-Za-z0-9_]*)['"]?[^\n]*\n)([\s\S]*?)\n\2\s*$/gmu
-  for (const match of text.matchAll(heredoc)) {
-    if (/(?:psql|mysql|sqlite3|sqlcmd)/iu.test(match[1]) || sqlGrammar.test(match[3])) {
-      add(match[3], (match.index ?? 0) + match[1].length, 'database_heredoc')
-    }
-  }
-  const unique = new Map()
-  for (const fragment of fragments) unique.set(`${fragment.index}:${fragment.sql}`, fragment)
-  return [...unique.values()].sort((left, right) => left.index - right.index)
+  return mixedSqlFragments(text)
 }
 
 function summarize(accesses, inventory, parseFindings) {
@@ -183,9 +190,10 @@ function summarize(accesses, inventory, parseFindings) {
 
 export async function inventoryCredentialAccess(repositoryRoot, options = {}) {
   const registry = options.registry ?? null
-  const [inventory, gitIdentity] = await Promise.all([
+  const [inventory, gitIdentity, schemaMetadata] = await Promise.all([
     inventoryTrackedSurfaces(repositoryRoot, { registry }),
     repositoryGitIdentity(repositoryRoot),
+    credentialSchemaMetadata(repositoryRoot),
   ])
   const resolveSource = await sourceContextResolver(repositoryRoot)
   const accesses = []
@@ -197,32 +205,43 @@ export async function inventoryCredentialAccess(repositoryRoot, options = {}) {
     let discovered = []
     let diagnostics = []
     if (JS_FAMILY.has(surface.extension)) {
-      const document = analyzeCredentialAccess(sourceText, { fileName: surface.path })
+      const document = analyzeCredentialAccess(sourceText, {
+        fileName: surface.path,
+        knownModels: schemaMetadata.knownModels,
+        relationMap: relationMapForSurface(surface, schemaMetadata.maps),
+      })
       discovered = document.accesses
       diagnostics = document.diagnostics
     } else if (surface.extension === '.sql') {
       discovered = analyzeCredentialSqlAccess(sourceText, { fileName: surface.path }).accesses
     } else if (MIXED_SCRIPT.has(surface.extension)) {
       const fragments = mixedCredentialSqlFragments(sourceText)
-      discovered = fragments.flatMap((fragment, ordinal) => analyzeCredentialSqlAccess(fragment.sql, {
-        fileName: surface.path,
-        line: lineForIndex(sourceText, fragment.index),
-        scope: '<mixed-operational-script>',
-        method: `mixed-script-sql:${fragment.source}`,
-        forceDynamic: true,
-        ordinal,
-      }).accesses)
-      if (
-        fragments.length === 0
-        && /(?:\bpsql\b|\bpg_restore\b|\bmysql\b|\bsqlite3\b|\bsqlcmd\b|\.execute(?:many|script)?\s*\(|\bprisma\s+(?:migrate|db)\b)/iu.test(sourceText)
-      ) {
-        discovered = analyzeCredentialSqlAccess(null, {
+      discovered = fragments.flatMap((fragment, ordinal) => {
+        const location = locationForIndex(sourceText, fragment.index)
+        return analyzeCredentialSqlAccess(fragment.sql, {
           fileName: surface.path,
+          line: location.line,
+          column: location.column,
           scope: '<mixed-operational-script>',
-          method: 'dynamic-mixed-database-command',
+          method: `mixed-script-sql:${fragment.source}`,
           forceDynamic: true,
+          ordinal,
         }).accesses
-      }
+      })
+      const commandSinks = mixedDatabaseCommandSinks(sourceText, { staticFragments: fragments })
+      const commandAccesses = commandSinks.flatMap((sink, ordinal) => analyzeCredentialSqlAccess(null, {
+          fileName: surface.path,
+          line: sink.line,
+          column: sink.column,
+          scope: '<mixed-operational-script>',
+          method: `dynamic-mixed-database-${sink.intent.toLowerCase()}:${sink.command}`,
+          forceDynamic: true,
+          ordinal: fragments.length + ordinal,
+        }).accesses.map((access) => ({
+          ...access,
+          database_command_intent: sink.intent,
+        })))
+      discovered.push(...commandAccesses)
     }
     for (const access of discovered) {
       accesses.push({
@@ -255,7 +274,7 @@ export async function inventoryCredentialAccess(repositoryRoot, options = {}) {
   const result = {
     schema: 'yoko.crm.whole-repository-credential-database-access.v2',
     source: {
-      repository_root: path.resolve(repositoryRoot),
+      repository_root: '.',
       git_tracked_only: true,
       inventory_schema: inventory.schema,
       ...gitIdentity,

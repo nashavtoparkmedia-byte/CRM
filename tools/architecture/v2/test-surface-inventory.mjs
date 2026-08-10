@@ -73,6 +73,7 @@ const inventory = await inventoryTrackedSurfaces('/fixture', {
   ],
 })
 
+assert.equal(inventory.repository_root, '.')
 assert.equal(inventory.summary.tracked_executable_surfaces, 5)
 assert.equal(inventory.summary.by_lifecycle.APPLICATION_RUNTIME, 1)
 assert.equal(inventory.summary.by_lifecycle.OPERATIONAL_SCRIPT, 2)

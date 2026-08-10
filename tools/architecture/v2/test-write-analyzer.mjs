@@ -35,6 +35,24 @@ test('SQL tokenizer hides comments, values and dollar-quoted bodies', () => {
     assert(words.includes('VISIBLE_TABLE'))
 })
 
+test('SQL tokenizer honors escape strings and dialect identifier quoting', () => {
+    const escaped = String.raw`SELECT E'harmless \'; DELETE FROM ApiConnection; still literal' AS note; SELECT token FROM bots;`
+    const escapedAnalysis = analyzeSqlMutation(escaped)
+    assert.equal(escapedAnalysis.is_mutation, false)
+    assert.deepEqual(escapedAnalysis.read_tables, ['bots'])
+    assert.deepEqual(escapedAnalysis.selected_columns, ['token'])
+
+    for (const sql of [
+        'SELECT apiKey FROM `ApiConnection`',
+        'SELECT [apiKey] FROM [ApiConnection]',
+    ]) {
+        const quoted = analyzeSqlMutation(sql)
+        assert.deepEqual(quoted.read_tables, ['ApiConnection'])
+        assert.deepEqual(quoted.selected_columns, ['apiKey'])
+        assert.equal(quoted.read_projection_dynamic, false)
+    }
+})
+
 test('SQL analyzer extracts DML, schema qualification and table lists', () => {
     const result = analyzeSqlScript([
         'INSERT INTO public.alpha_table (id) VALUES (1);',
@@ -51,6 +69,50 @@ test('SQL analyzer extracts DML, schema qualification and table lists', () => {
     assert.deepEqual(result.tables, [
         'alpha_table', 'delta_table', 'epsilon_table', 'gamma_table', 'other.beta_table', 'zeta_table',
     ])
+    assert.deepEqual(result.written_columns, ['id', 'x'])
+})
+
+test('MySQL multi-target deletes retain every aliased write target', () => {
+    const result = analyzeSqlMutation('DELETE a,b FROM ApiConnection a JOIN bots b ON true')
+    assert.deepEqual(result.operations.map((entry) => [entry.operation, entry.table]), [
+        ['DELETE_MULTI', 'ApiConnection'],
+        ['DELETE_MULTI', 'bots'],
+    ])
+    assert.deepEqual(result.tables, ['ApiConnection', 'bots'])
+    assert.equal(result.ambiguous, true)
+})
+
+test('SQL analyzer retains advanced assignment and select-into credential targets', () => {
+    const result = analyzeSqlMutation([
+        'UPDATE custom_integrations SET (api_key, name) = (NULL, NULL);',
+        "UPDATE custom_integrations SET api_key ||= 'x';",
+        'INSERT INTO custom_integrations SET api_key = NULL;',
+        'REPLACE INTO custom_integrations(api_key) VALUES (NULL);',
+        'MERGE INTO custom_integrations c USING source s ON true WHEN MATCHED THEN UPDATE SET api_key = s.value;',
+        'INSERT INTO custom_integrations DEFAULT VALUES ON CONFLICT (id) DO UPDATE SET api_key = NULL;',
+        'SELECT apiKey INTO credential_backup FROM ApiConnection;',
+        'CREATE TABLE credential_archive AS SELECT apiKey FROM ApiConnection;',
+    ].join('\n'))
+    assert(result.written_columns.includes('api_key'))
+    assert(result.written_columns.includes('name'))
+    assert(result.written_columns.includes('apiKey'))
+    assert(result.operations.some((operation) => operation.operation === 'SELECT_INTO' && operation.table === 'credential_backup'))
+    assert(result.operations.some((operation) => operation.operation === 'CREATE_TABLE' && operation.table === 'credential_archive'))
+
+    const selectInto = analyzeSqlMutation('SELECT apiKey INTO credential_backup FROM ApiConnection')
+    assert.deepEqual(selectInto.selected_columns, ['apiKey'])
+    assert.deepEqual(selectInto.selected_column_sources, [{ field: 'apiKey', table: 'ApiConnection' }])
+    assert.deepEqual(selectInto.written_columns, ['apiKey'])
+})
+
+test('MySQL duplicate-key updates remain one credential-bearing INSERT', () => {
+    const result = analyzeSqlMutation(
+        'INSERT INTO custom_integrations(id) VALUES(1) ON DUPLICATE KEY UPDATE api_key=NULL',
+    )
+    assert.deepEqual(result.operations.map((entry) => [entry.operation, entry.table]), [
+        ['INSERT', 'custom_integrations'],
+    ])
+    assert.deepEqual(result.written_columns, ['api_key', 'id'])
 })
 
 test('SQL analyzer extracts bounded DDL targets', () => {
@@ -99,6 +161,107 @@ test('SQL analyzer opens executable DO blocks and retains CALL/COPY/function amb
     assert.equal(functionSelect.is_mutation, null)
     assert.equal(functionSelect.ambiguous, true)
     assert(functionSelect.reasons.includes('select_function_side_effect_unresolved'))
+})
+
+test('SQL analyzer opens stored routines and retains export-style reads', () => {
+    const routine = analyzeSqlMutation([
+        'CREATE FUNCTION credential_read() RETURNS text AS $$ SELECT "apiKey" FROM "ApiConnection" $$ LANGUAGE SQL;',
+        'CREATE PROCEDURE credential_write() AS $$ UPDATE "Bot" SET token = NULL; DELETE FROM "Account" $$ LANGUAGE SQL;',
+    ].join('\n'))
+    assert.deepEqual(routine.read_tables, ['ApiConnection'])
+    assert.deepEqual(routine.selected_columns, ['apiKey'])
+    assert(routine.tables.includes('Bot'))
+    assert(routine.tables.includes('Account'))
+    assert(routine.operations.some((operation) => operation.container === 'CREATE_PROCEDURE'))
+
+    const exports = analyzeSqlMutation([
+        'COPY "ApiConnection" TO STDOUT;',
+        'COPY "Bot" (token) TO STDOUT;',
+        'TABLE "Account";',
+    ].join('\n'))
+    assert.deepEqual(exports.read_tables, ['Account', 'ApiConnection', 'Bot'])
+    assert.deepEqual(exports.selected_columns, ['token'])
+    assert.equal(exports.select_all, true)
+
+    const copyIn = analyzeSqlMutation('COPY custom_integrations(api_key, name) FROM STDIN')
+    assert.deepEqual(copyIn.written_columns, ['api_key', 'name'])
+
+    const joinedMutations = analyzeSqlMutation([
+        'DELETE FROM logs USING "ApiConnection" a WHERE logs.id = a.id RETURNING a."apiKey";',
+        'MERGE INTO logs USING "Bot" b ON true WHEN MATCHED THEN UPDATE SET x = b.token;',
+    ].join('\n'))
+    assert.deepEqual(joinedMutations.read_tables, ['ApiConnection', 'Bot', 'logs'])
+    assert.deepEqual(joinedMutations.selected_columns, ['apiKey', 'id', 'token'])
+
+    const commaRelations = analyzeSqlMutation([
+        'SELECT c.apiKey FROM harmless h, ApiConnection c;',
+        'UPDATE harmless SET x = 1 FROM safe s, ApiConnection c WHERE c.id = harmless.id;',
+        'DELETE FROM harmless USING safe s, ApiConnection c WHERE c.id = harmless.id;',
+        'MERGE INTO harmless USING safe s, ApiConnection c ON true WHEN MATCHED THEN UPDATE SET x = c.apiKey;',
+    ].join('\n'))
+    assert(commaRelations.read_tables.includes('ApiConnection'))
+    assert(commaRelations.selected_column_sources.some((entry) => entry.field === 'apiKey' && entry.table === 'ApiConnection'))
+    assert.equal(commaRelations.read_tables.includes('STDIN'), false)
+
+    const reusedAliases = analyzeSqlMutation([
+        'SELECT x.apiKey FROM ApiConnection x;',
+        'SELECT x.id FROM harmless x;',
+    ].join('\n'))
+    assert(reusedAliases.selected_column_sources.some((entry) => entry.field === 'apiKey' && entry.table === 'ApiConnection'))
+    assert(reusedAliases.selected_column_sources.some((entry) => entry.field === 'id' && entry.table === 'harmless'))
+
+    const reusedMutationAliases = analyzeSqlMutation([
+        'DELETE FROM logs USING ApiConnection a WHERE logs.id=a.id RETURNING a.apiKey;',
+        'MERGE INTO logs USING Bot a ON true WHEN MATCHED THEN UPDATE SET x=a.token;',
+    ].join('\n'))
+    assert.deepEqual(reusedMutationAliases.selected_column_sources, [
+        { field: 'apiKey', table: 'ApiConnection' },
+        { field: 'id', table: 'ApiConnection' },
+        { field: 'token', table: 'Bot' },
+    ])
+
+    const shadowedAlias = analyzeSqlMutation(
+        'SELECT a.apiKey FROM ApiConnection a WHERE EXISTS (SELECT 1 FROM harmless a)',
+    )
+    assert.equal(shadowedAlias.read_projection_dynamic, true)
+    assert(shadowedAlias.selected_column_sources.some((entry) => entry.field === 'apiKey' && entry.table === null))
+
+    for (const statement of [
+        'UPDATE harmless SET x=apiKey FROM ApiConnection',
+        'DELETE FROM harmless USING ApiConnection WHERE apiKey IS NOT NULL',
+        'MERGE INTO harmless USING ApiConnection ON apiKey IS NOT NULL WHEN MATCHED THEN UPDATE SET x=apiKey',
+    ]) {
+        const dmlRead = analyzeSqlMutation(statement)
+        assert(dmlRead.selected_column_sources.some((entry) => entry.field === 'apiKey' && entry.table === 'ApiConnection'))
+    }
+})
+
+test('dollar-body operations retain exact body-relative source offsets', () => {
+    for (const sql of [
+        'CREATE FUNCTION f() RETURNS void AS $body$\nUPDATE ApiConnection SET apiKey=NULL;\n$body$ LANGUAGE SQL;',
+        'DO $$\nDELETE FROM bots;\n$$;',
+    ]) {
+        const analysis = analyzeSqlMutation(sql)
+        const nested = analysis.operations.find((entry) => entry.container)
+        const expectedWord = nested.operation === 'UPDATE' ? 'UPDATE' : 'DELETE'
+        assert.equal(nested.index, sql.indexOf(expectedWord))
+        assert.equal(sql.slice(0, nested.index).split('\n').length, 2)
+    }
+})
+
+test('unavailable stored-routine bodies remain fail-closed ambiguity', () => {
+    const routine = analyzeSqlMutation("CREATE FUNCTION opaque() RETURNS text AS 'external body' LANGUAGE plpython3u")
+    assert.equal(routine.is_mutation, true)
+    assert.equal(routine.ambiguous, true)
+    assert(routine.reasons.includes('stored_routine_body_unresolved'))
+
+    const dynamicExecute = analyzeSqlMutation([
+        'CREATE FUNCTION dynamic_reader(tbl text) RETURNS void AS $$',
+        "BEGIN EXECUTE 'SELECT apiKey FROM ' || quote_ident(tbl); END",
+        '$$ LANGUAGE plpgsql;',
+    ].join('\n'))
+    assert.equal(dynamicExecute.ambiguous, true)
+    assert(dynamicExecute.reasons.includes('stored_routine:dynamic_execute_effects_unresolved'))
 })
 
 test('SQL ONLY modifiers never become confident table identities', () => {
@@ -217,7 +380,7 @@ test('unwraps delegate/client casts, parentheses, non-null and optional chains',
         '(prisma as any).contact.delete({});',
         'prisma.task?.upsert({});',
         "prisma['driver']['deleteMany']({});",
-    ].join('\n'))
+    ].join('\n'), { knownModels: ['driver'] })
     assert.deepEqual(compact(sites), [
         { kind: 'model', model: 'chat', method: 'create', ambiguous: false, candidate_models: ['chat'] },
         { kind: 'model', model: 'message', method: 'updateMany', ambiguous: false, candidate_models: ['message'] },
@@ -592,6 +755,39 @@ test('nested relation-shaped mutations are fail-closed until schema resolution',
     assert(sites[0].ambiguity_reasons.includes('nested_relation_write_requires_schema_resolution'))
 })
 
+test('nested write shapes keep relation identity across compound payload branches', () => {
+    const [site] = extractPrismaWrites([
+        'prisma.user.update({ data: { apiConnection: {',
+        '  update: { apiKey: value },',
+        '  create: { apiKey: value },',
+        '  connectOrCreate: { where: { id }, create: { apiKey: value } },',
+        '  delete: true,',
+        '} } })',
+    ].join('\n'))
+    assert.deepEqual(site.nested_operations.map((entry) => [entry.relation_field, entry.method]), [
+        ['apiConnection', 'connectOrCreate'],
+        ['apiConnection', 'create'],
+        ['apiConnection', 'delete'],
+        ['apiConnection', 'update'],
+    ])
+    assert.equal(site.nested_operations.some((entry) => entry.relation_field === 'connectOrCreate'), false)
+})
+
+test('model writes retain structural payload field names without values', () => {
+    const sites = extractPrismaWrites([
+        "prisma.customIntegration.create({ data: { apiKey: 'not-emitted', name: 'x' } })",
+        "const data = { sessionToken: 'not-emitted' }",
+        'prisma.customIntegration.update({ where: { id }, data })',
+        "prisma.customIntegration.upsert({ where: { id }, create: { apiKey: 'not-emitted' }, update: { sessionToken: 'not-emitted' } })",
+    ].join('\n'))
+    assert.deepEqual(sites.map((site) => site.written_fields), [
+        ['apiKey', 'name'],
+        ['sessionToken'],
+        ['apiKey', 'sessionToken'],
+    ])
+    assert(!JSON.stringify(sites).includes('not-emitted'))
+})
+
 test('Prisma SQL fragments and aliases cannot hide foreign raw targets', () => {
     const sites = extractPrismaWrites([
         "const fragment = Prisma.raw",
@@ -639,6 +835,77 @@ test('optional read inventory records public projections and full-row credential
     assert.equal(rawReads[1].select_all, true)
 })
 
+test('optional read inventory retains nested relation projections', () => {
+    const result = analyzePrismaWriteSites([
+        'prisma.check.findUnique({ include: { account: true } })',
+        'prisma.user.findMany({ select: { id: true, bot: { select: { id: true, token: true } } } })',
+        'prisma.apiLog.findFirst({ include: { connection: { select: { id: true, name: true } } } })',
+    ].join('\n'), { includeReads: true })
+    const reads = result.sites.filter((site) => site.kind === 'model_read')
+    assert.equal(reads.length, 3)
+    assert.deepEqual(reads[0].projection.nested_relations, [{
+        relation: 'account',
+        projection: { mode: 'FULL_ROW', selected_fields: [], omitted_fields: [], dynamic: false, nested_relations: [] },
+    }])
+    assert.equal(reads[1].projection.nested_relations[0].relation, 'bot')
+    assert.deepEqual(reads[1].projection.nested_relations[0].projection.selected_fields, ['id', 'token'])
+    assert.equal(reads[2].projection.nested_relations[0].relation, 'connection')
+})
+
+test('ordinary promise and array result members never become Prisma relations', () => {
+    const result = analyzePrismaWriteSites([
+        'prisma.driver.findMany().then(rows => rows.filter(Boolean).map(String))',
+        'prisma.driver.findMany().catch(handle).finally(cleanup)',
+        'prisma.driver.findMany().forEach(visit)',
+    ].join('\n'), { includeReads: true })
+    assert.equal(result.sites.filter((site) => site.method === 'relation').length, 0)
+})
+
+test('Reflect.get and Proxy operations remain visible without literal leakage', () => {
+    const source = [
+        "import { accounts } from '@avito/db'",
+        "Reflect.get(prisma.apiConnection, 'update')({ data: { name: 'x' } })",
+        "Reflect.get(pool, 'query')('DELETE FROM ApiConnection')",
+        "Reflect.get(db, 'update')(accounts).set({ enabled: true })",
+        'Reflect.get(prisma.apiConnection, operation)({ data: {} })',
+        'new Proxy(prisma.apiConnection, {}).deleteMany({})',
+    ].join('\n')
+    const sites = extractPrismaWrites(source)
+    assert(sites.some((site) => site.model === 'apiConnection' && site.method === 'update'))
+    assert(sites.some((site) => site.kind === 'raw' && site.tables.includes('ApiConnection')))
+    assert(sites.some((site) => (
+        site.model === 'accounts'
+        && site.method === 'update'
+        && site.ambiguity_reasons.includes('unproven_drizzle_receiver')
+    )))
+    assert(sites.some((site) => site.ambiguity_reasons.includes('dynamic_prisma_operation')))
+    assert(sites.some((site) => site.method === 'deleteMany' && site.ambiguity_reasons.includes('proxy_delegate_requires_review')))
+})
+
+test('mutable projection aliases fail closed instead of freezing their initializer', () => {
+    const result = analyzePrismaWriteSites([
+        'const propertyMutation = { id: true }',
+        'propertyMutation.apiKey = true',
+        'prisma.apiConnection.findMany({ select: propertyMutation })',
+        'let reassigned = { id: true }',
+        'reassigned = { apiKey: true }',
+        'prisma.apiConnection.findMany({ select: reassigned })',
+        'const conditionalMutation = { id: true }',
+        'if (enabled) conditionalMutation.apiKey = true',
+        'prisma.apiConnection.findMany({ select: conditionalMutation })',
+        'const escaped = { id: true }',
+        'mutateProjection(escaped)',
+        'prisma.apiConnection.findMany({ select: escaped })',
+        'const hoistedMutation = { id: true }',
+        'mutateHoisted()',
+        'prisma.apiConnection.findMany({ select: hoistedMutation })',
+        'function mutateHoisted() { hoistedMutation.apiKey = true }',
+    ].join('\n'), { includeReads: true })
+    const reads = result.sites.filter((site) => site.kind === 'model_read')
+    assert.equal(reads.length, 5)
+    assert(reads.every((site) => site.projection.dynamic === true))
+})
+
 test('optional read inventory includes Drizzle full-row and explicit projections', () => {
     const result = analyzePrismaWriteSites([
         "import { appSettings, authUsers, type Database } from '@avito/db'",
@@ -672,12 +939,60 @@ test('optional raw read inventory includes generic SQL drivers without inventing
     const result = analyzePrismaWriteSites([
         'db.query(`SELECT token FROM bots`)',
         'database.execute("SELECT apiKey FROM ApiConnection")',
+        'db.get("SELECT storageStateEncrypted FROM Account")',
+        'db.all("SELECT encrypted_value FROM cookies")',
+    ].join('\n'), { includeRawReads: true })
+    assert.equal(result.sites.length, 4)
+    assert(result.sites.every((site) => site.kind === 'raw' && site.operations.length === 0))
+    assert.deepEqual(result.sites.map((site) => site.read_tables), [['bots'], ['ApiConnection'], ['Account'], ['cookies']])
+    assert.deepEqual(result.sites.map((site) => site.selected_columns), [
+        ['token'], ['apiKey'], ['storageStateEncrypted'], ['encrypted_value'],
+    ])
+    assert(result.sites.every((site) => !site.ambiguity_reasons.includes('execute_raw_mutation_not_recognized')))
+})
+
+test('generic SQL driver method aliases and bound aliases retain reads and writes', () => {
+    const result = analyzePrismaWriteSites([
+        'const query = pool.query',
+        'const bound = pool.query.bind(pool)',
+        'query("SELECT apiKey FROM ApiConnection")',
+        'bound("UPDATE ApiConnection SET apiKey = NULL")',
     ].join('\n'), { includeRawReads: true })
     assert.equal(result.sites.length, 2)
-    assert(result.sites.every((site) => site.kind === 'raw' && site.operations.length === 0))
-    assert.deepEqual(result.sites.map((site) => site.read_tables), [['bots'], ['ApiConnection']])
-    assert.deepEqual(result.sites.map((site) => site.selected_columns), [['token'], ['apiKey']])
-    assert(result.sites.every((site) => !site.ambiguity_reasons.includes('execute_raw_mutation_not_recognized')))
+    assert.deepEqual(result.sites.map((site) => site.method), ['sql-driver:query', 'sql-driver:query'])
+    assert.deepEqual(result.sites[0].read_tables, ['ApiConnection'])
+    assert.deepEqual(result.sites[1].tables, ['ApiConnection'])
+})
+
+test('better-sqlite prepared statements retain direct and aliased reads and writes', () => {
+    const result = analyzePrismaWriteSites([
+        "db.prepare('UPDATE bots SET token = NULL').run()",
+        "const insert = db.prepare('INSERT INTO bots (token) VALUES (?)')",
+        'insert.run(token)',
+        "db.prepare('SELECT token FROM bots').get()",
+        "const cookies = db.prepare('SELECT encrypted_value FROM cookies')",
+        'cookies.all()',
+        "db.prepare('SELECT encrypted_value FROM cookies').pluck().all()",
+        "db.prepare('SELECT token FROM bots').bind('active').get()",
+        "db.prepare('SELECT token FROM bots').raw().iterate()",
+        'const prepare = db.prepare.bind(db)',
+        "prepare('DELETE FROM bots').run()",
+    ].join('\n'), { includeRawReads: true })
+    assert.equal(result.sites.length, 8)
+    assert.deepEqual(result.sites.map((site) => site.method), [
+        'sql-driver:prepared:run',
+        'sql-driver:prepared:run',
+        'sql-driver:prepared:get',
+        'sql-driver:prepared:all',
+        'sql-driver:prepared:all',
+        'sql-driver:prepared:get',
+        'sql-driver:prepared:iterate',
+        'sql-driver:prepared:run',
+    ])
+    assert.deepEqual(result.sites.slice(0, 2).map((site) => site.tables), [['bots'], ['bots']])
+    assert.deepEqual(result.sites.slice(2, 7).map((site) => site.read_tables), [
+        ['bots'], ['cookies'], ['cookies'], ['bots'], ['bots'],
+    ])
 })
 
 test('model and raw sites receive deterministic scope-bound signatures', () => {
@@ -693,13 +1008,44 @@ test('model and raw sites receive deterministic scope-bound signatures', () => {
     assert(first.sites.every((site) => site.scope === 'Function:persist'))
 })
 
+test('serialized write evidence never retains source literals or computed secret markers', () => {
+    const markers = [
+        'YOKO_SECRET_MARKER_9d3ca8f7',
+        'YOKO_SECRET_MARKER_b27f',
+        'YOKO_SECRET_MARKER_receiver',
+    ]
+    const result = analyzePrismaWriteSites([
+        `function f({ prisma } = getDeps('${markers[0]}')) { prisma.apiConnection.update({ data: {} }) }`,
+        `getReq('${markers[2]}').prisma.apiConnection.update({ data: {} })`,
+        `connections['${markers[2]}'].db.query('UPDATE ApiConnection SET apiKey = NULL')`,
+        `prisma.unknown.create({ data: { [getKey('${markers[1]}')]: 1 } })`,
+    ].join('\n'), { fileName: 'secret-marker.ts' })
+    const serialized = JSON.stringify(result)
+    for (const marker of markers) assert.equal(serialized.includes(marker), false)
+    const computed = result.sites.find((site) => site.model === 'unknown')
+    assert.equal(computed.write_projection_dynamic, true)
+})
+
+test('computed Prisma delegate literals are hashed ambiguity, never evidence names', () => {
+    const marker = 'YOKO_SECRET_MARKER_computed_model'
+    const result = analyzePrismaWriteSites(
+        `prisma['${marker}'].update({ data: { safe: true } })`,
+        { fileName: 'computed-delegate.ts' },
+    )
+    assert.equal(result.sites.length, 1)
+    assert.equal(result.sites[0].ambiguous, true)
+    assert.equal(result.sites[0].model, null)
+    assert.equal(JSON.stringify(result).includes(marker), false)
+})
+
 test('byte-identical duplicate sites cannot inherit a retired sibling signature', () => {
     const duplicate = 'await prisma.chat.create({})'
     const before = extractPrismaWrites(`async function persist() { ${duplicate}; ${duplicate} }`)
     const after = extractPrismaWrites(`async function persist() { ${duplicate} }`)
     assert.equal(before.length, 2)
     assert.equal(after.length, 1)
-    assert.equal(before[0].site_signature, before[1].site_signature)
+    assert.notEqual(before[0].site_signature, before[1].site_signature)
+    assert.equal(new Set(before.map((site) => site.site_signature)).size, before.length)
     assert.notEqual(before[0].site_signature, after[0].site_signature)
 })
 
@@ -708,6 +1054,20 @@ test('syntax diagnostics are deterministic and do not suppress earlier sites', (
     assert.equal(result.sites.length, 1)
     assert(result.diagnostics.length > 0)
     assert.equal(result.diagnostics[0].line, 1)
+})
+
+test('cyclic member and helper expressions fail closed without overflowing', () => {
+    const analyzed = analyzePrismaWriteSites([
+        'class Store {',
+        '  constructor() { this.client = this.client || makeClient() }',
+        '  mutate() { return this.client.query(runtimeSql) }',
+        '}',
+        'let holder = {}',
+        'holder.db = holder.db || holder',
+        'holder.db.query(runtimeSql)',
+    ].join('\n'), { fileName: 'cyclic-store.ts', includeRawReads: true })
+    assert.equal(analyzed.diagnostics.some((entry) => /Maximum call stack/iu.test(entry.message)), false)
+    assert(analyzed.sites.some((site) => site.ambiguous))
 })
 
 test('the analyzer scans its own tracked implementation without recursion failure', () => {

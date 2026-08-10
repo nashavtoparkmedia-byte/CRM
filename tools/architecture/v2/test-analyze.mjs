@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 
-import { mixedSqlFragments, standaloneSqlSites } from './analyze.mjs'
+import { mixedDatabaseCommandSinks, mixedSqlFragments, standaloneSqlSites } from './analyze.mjs'
 
 const shellSurface = { path: 'scripts/reconcile.sh' }
 const shell = String.raw`#!/usr/bin/env bash
@@ -31,6 +32,29 @@ assert.deepEqual(restoreSites.map((site) => site.operations[0].operation), [
   'DROP_DATABASE', 'CREATE_DATABASE',
 ])
 
+const exactRestoreSource = await readFile(new URL('../../../scripts/restore-pg.sh', import.meta.url), 'utf8')
+const exactRestoreSites = standaloneSqlSites({ path: 'scripts/restore-pg.sh' }, exactRestoreSource, true)
+assert.deepEqual(
+  exactRestoreSites.flatMap((site) => site.operations.map((operation) => operation.operation)),
+  ['DROP_DATABASE', 'CREATE_DATABASE'],
+)
+const restoreCommandSites = exactRestoreSites.filter((site) => site.method === 'mixed-script-command:pg_restore')
+assert.equal(restoreCommandSites.length, 1)
+assert.equal(exactRestoreSites.length, 3)
+assert.equal(exactRestoreSites.some((site) => site.method === 'mixed-script-command:psql'), false)
+assert.equal(restoreCommandSites[0].database_command_intent, 'WRITE')
+assert(restoreCommandSites[0].ambiguity_reasons.includes('dynamic_database_command_requires_review'))
+assert(restoreCommandSites[0].ambiguity_reasons.includes('dynamic_database_write_command_requires_review'))
+assert.equal(restoreCommandSites[0].line, 87)
+assert.deepEqual(
+  standaloneSqlSites({ path: 'scripts/restore-pg.sh' }, exactRestoreSource, true),
+  exactRestoreSites,
+)
+assert.equal(
+  standaloneSqlSites({ path: 'scripts/dump.sh' }, 'pg_dump "$DATABASE_URL" > backup.dump', true).length,
+  0,
+)
+
 const ordinary = [
   "content = content.replace('location /', 'location /api')",
   'apt update',
@@ -50,6 +74,143 @@ const dynamicSites = standaloneSqlSites({ path: 'dynamic.sh' }, dynamic, true)
 assert.equal(dynamicSites.length, 1)
 assert(dynamicSites[0].ambiguity_reasons.includes('dynamic_database_command_requires_review'))
 
+const dynamicInline = 'psql "$DATABASE_URL" -c "$RUNTIME_SQL"'
+const dynamicInlineSites = standaloneSqlSites({ path: 'dynamic-inline.sh' }, dynamicInline, true)
+assert.equal(dynamicInlineSites.length, 1)
+assert.equal(dynamicInlineSites[0].method, 'mixed-script-command:psql')
+assert(dynamicInlineSites[0].ambiguity_reasons.includes('dynamic_database_command_requires_review'))
+
+const dynamicHeredoc = String.raw`psql "$DATABASE_URL" <<SQL
+$RUNTIME_SQL
+SQL`
+const dynamicHeredocSites = standaloneSqlSites({ path: 'dynamic-heredoc.sh' }, dynamicHeredoc, true)
+assert.equal(dynamicHeredocSites.length, 1)
+assert.equal(dynamicHeredocSites[0].method, 'mixed-script-command:psql')
+
+const staticExecute = 'cursor.execute("UPDATE bots SET token = NULL")'
+assert.equal(standaloneSqlSites({ path: 'static-execute.py' }, staticExecute, true).length, 1)
+const staticAndDynamicExecute = `${staticExecute}\ncursor.execute(runtime_sql)`
+const staticAndDynamicExecuteSites = standaloneSqlSites(
+  { path: 'static-dynamic-execute.py' },
+  staticAndDynamicExecute,
+  true,
+)
+assert.equal(staticAndDynamicExecuteSites.length, 2)
+assert.equal(
+  staticAndDynamicExecuteSites.filter((site) => site.method === 'mixed-script-command:execute').length,
+  1,
+)
+
+const staticAndDynamicQuery = [
+  'cursor.query("UPDATE bots SET token = NULL")',
+  'cursor.query(runtime_sql)',
+].join('\n')
+const staticAndDynamicQuerySites = standaloneSqlSites(
+  { path: 'static-dynamic-query.py' },
+  staticAndDynamicQuery,
+  true,
+)
+assert.equal(staticAndDynamicQuerySites.length, 2)
+assert.equal(
+  staticAndDynamicQuerySites.filter((site) => site.method === 'mixed-script-command:query').length,
+  1,
+)
+
+const nestedCommands = [
+  String.raw`docker exec crm-db sh -c 'pg_restore --dbname "$DATABASE_URL" "$BACKUP"'`,
+  String.raw`bash -c "psql \"$DATABASE_URL\" -f \"$SQL_FILE\""`,
+  String.raw`ssh deploy@db 'pg_dump "$DATABASE_URL" > backup.dump'`,
+].join('\n')
+assert.deepEqual(
+  mixedDatabaseCommandSinks(nestedCommands).map(({ command, intent, line }) => ({ command, intent, line })),
+  [
+    { command: 'pg_restore', intent: 'WRITE', line: 1 },
+    { command: 'psql', intent: 'UNKNOWN', line: 2 },
+    { command: 'pg_dump', intent: 'READ', line: 3 },
+  ],
+)
+assert.deepEqual(
+  standaloneSqlSites({ path: 'nested-commands.sh' }, nestedCommands, true).map((site) => ({
+    method: site.method,
+    intent: site.database_command_intent,
+  })),
+  [
+    { method: 'mixed-script-command:pg_restore', intent: 'WRITE' },
+    { method: 'mixed-script-command:psql', intent: 'UNKNOWN' },
+  ],
+)
+assert.deepEqual(mixedDatabaseCommandSinks('bash -c "echo pg_restore is unavailable"'), [])
+assert.deepEqual(mixedDatabaseCommandSinks([
+  String.raw`docker exec crm-db bash -lc 'pg_restore --dbname "$DATABASE_URL" "$BACKUP"'`,
+  String.raw`dash -ec 'pg_dump "$DATABASE_URL" > backup.dump'`,
+  String.raw`bash -o pipefail -c 'psql "$DATABASE_URL" -f "$SQL_FILE"'`,
+].join('\n')).map(({ command, intent, line }) => ({ command, intent, line })), [
+  { command: 'pg_restore', intent: 'WRITE', line: 1 },
+  { command: 'pg_dump', intent: 'READ', line: 2 },
+  { command: 'psql', intent: 'UNKNOWN', line: 3 },
+])
+assert.deepEqual(mixedDatabaseCommandSinks([
+  String.raw`bash -c '# pg_restore --dbname crm backup.dump'`,
+  String.raw`bash -lc 'true; # pg_dump crm > backup.dump'`,
+  String.raw`bash -o pipefail -c 'echo ok # psql "$DATABASE_URL"'`,
+].join('\n')), [])
+assert.deepEqual(mixedDatabaseCommandSinks([
+  'search.query(runtime)',
+  'animation.execute(runtime)',
+  'workflow.executeScript(runtime)',
+].join('\n')), [])
+assert.deepEqual(mixedSqlFragments([
+  'search.query("SELECT token FROM bots")',
+  'animation.execute("DELETE FROM ApiConnection")',
+].join('\n')), [])
+assert.deepEqual(mixedDatabaseCommandSinks([
+  'cursor.query(runtime_sql)',
+  'connection.execute(runtime_sql)',
+  'client.query(runtime_sql)',
+  'db.execute(runtime_sql)',
+  'pool.query(runtime_sql)',
+  'engine.execute(runtime_sql)',
+  'session.execute(runtime_sql)',
+  'database.cursor().execute(runtime_sql)',
+].join('\n')).map(({ command }) => command), [
+  'query', 'execute', 'query', 'execute', 'query', 'execute', 'execute', 'execute',
+])
+assert.deepEqual(mixedDatabaseCommandSinks([
+  'true;# pg_restore backup.dump',
+  'x=1;# cursor.execute(runtime_sql)',
+  'do_thing &&# pg_dump crm',
+  'REM pg_restore backup.dump',
+  ':: pg_restore backup.dump',
+  '<# pg_restore backup.dump',
+  'cursor.execute(runtime_sql)',
+  '#>',
+  ': <<\'COMMENT\'',
+  'pg_restore backup.dump',
+  'COMMENT',
+].join('\n')), [])
+assert.deepEqual(mixedSqlFragments([
+  '# cursor.execute(',
+  '"UPDATE ApiConnection SET apiKey = NULL"',
+  ')',
+  '// db.query("DELETE FROM bots")',
+  '/* cursor.query("SELECT token FROM bots") */',
+  ': <<\'COMMENT\'',
+  'DELETE FROM ApiConnection',
+  'COMMENT',
+].join('\n')), [])
+const secretMarker = 'YOKO_SECRET_MARKER_5b613e'
+assert.equal(JSON.stringify(mixedDatabaseCommandSinks(
+  `ssh deploy@db 'pg_dump "postgres://user:${secretMarker}@db/crm"'`,
+)).includes(secretMarker), false)
+
+assert.deepEqual(
+  mixedSqlFragments([
+    'cursor.query("COPY ApiConnection(apiKey) TO STDOUT")',
+    'cursor.query("TABLE ApiConnection")',
+  ].join('\n')).map((fragment) => fragment.sql),
+  ['COPY ApiConnection(apiKey) TO STDOUT', 'TABLE ApiConnection'],
+)
+
 for (const command of [
   'npx prisma migrate deploy',
   'npx prisma migrate resolve --applied 20260101_init',
@@ -59,5 +220,10 @@ for (const command of [
   assert.equal(sites.length, 1, command)
   assert(sites[0].ambiguity_reasons.includes('dynamic_database_command_requires_review'))
 }
+
+const sameLineSql = 'SELECT 1; UPDATE ApiConnection SET apiKey = NULL;'
+const [sameLineSite] = standaloneSqlSites({ path: 'same-line.sql' }, sameLineSql)
+assert.equal(sameLineSite.line, 1)
+assert.equal(sameLineSite.column, sameLineSql.indexOf('UPDATE') + 1)
 
 process.stdout.write('repository analyzer mixed-language tests: PASS\n')
