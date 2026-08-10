@@ -13,12 +13,18 @@ function firstForwardedValue(value: string | null): string | null {
 
 export function isSameOriginMutationRequest(req: NextRequest): boolean {
     const origin = req.headers.get('origin')
-    const host = firstForwardedValue(
-        req.headers.get('x-forwarded-host') || req.headers.get('host'),
-    )
+    const host = req.headers.get('host')?.trim() || null
+    const forwardedHost = firstForwardedValue(req.headers.get('x-forwarded-host'))
+    const forwardedProtocol = firstForwardedValue(req.headers.get('x-forwarded-proto'))
+        ?.toLowerCase()
+    const protocol = forwardedProtocol || req.nextUrl.protocol.slice(0, -1).toLowerCase()
     if (!origin || !host) return false
+    if (forwardedHost && forwardedHost.toLowerCase() !== host.toLowerCase()) return false
+    if (protocol !== 'http' && protocol !== 'https') return false
     try {
-        return new URL(origin).host === host
+        const parsedOrigin = new URL(origin)
+        return parsedOrigin.protocol === `${protocol}:`
+            && parsedOrigin.host.toLowerCase() === host.toLowerCase()
     } catch {
         return false
     }

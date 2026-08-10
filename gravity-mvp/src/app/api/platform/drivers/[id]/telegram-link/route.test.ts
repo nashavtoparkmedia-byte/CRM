@@ -21,6 +21,7 @@ function request(method: 'POST' | 'DELETE', options: {
     origin?: string
     host?: string
     forwardedHost?: string
+    forwardedProtocol?: string
     contentType?: string
     body?: string
 } = {}) {
@@ -28,6 +29,7 @@ function request(method: 'POST' | 'DELETE', options: {
     if (options.origin !== undefined) headers.set('origin', options.origin)
     if (options.host !== undefined) headers.set('host', options.host)
     if (options.forwardedHost !== undefined) headers.set('x-forwarded-host', options.forwardedHost)
+    if (options.forwardedProtocol !== undefined) headers.set('x-forwarded-proto', options.forwardedProtocol)
     if (options.contentType !== undefined) headers.set('content-type', options.contentType)
     return new NextRequest('https://crm.example/api/platform/drivers/driver%2F1/telegram-link', {
         method,
@@ -41,16 +43,32 @@ beforeEach(() => {
 })
 
 describe('driver Telegram link route security and mapping', () => {
-    it('accepts only an exact Origin/forwarded-host match', () => {
+    it('accepts only an exact Origin/Host/protocol match', () => {
         expect(isSameOriginMutationRequest(request('DELETE', {
             origin: 'https://crm.example',
-            host: 'internal:3000',
-            forwardedHost: 'crm.example, proxy.internal',
+            host: 'crm.example',
+            forwardedHost: 'CRM.EXAMPLE, proxy.internal',
+            forwardedProtocol: 'https, http',
         }))).toBe(true)
         for (const candidate of [
             request('DELETE', { host: 'crm.example' }),
             request('DELETE', { origin: 'not a URL', host: 'crm.example' }),
             request('DELETE', { origin: 'https://evil.example', host: 'crm.example' }),
+            request('DELETE', {
+                origin: 'https://crm.example',
+                host: 'crm.example',
+                forwardedHost: 'evil.example',
+            }),
+            request('DELETE', {
+                origin: 'http://crm.example',
+                host: 'crm.example',
+                forwardedProtocol: 'https',
+            }),
+            request('DELETE', {
+                origin: 'https://crm.example',
+                host: 'crm.example',
+                forwardedProtocol: 'javascript',
+            }),
         ]) expect(isSameOriginMutationRequest(candidate)).toBe(false)
     })
 
