@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto'
-import { execFile } from 'node:child_process'
-import { readFile, writeFile } from 'node:fs/promises'
+import { execFile, fork } from 'node:child_process'
+import { appendFile, readFile, rename, writeFile } from 'node:fs/promises'
+import { availableParallelism } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
@@ -13,9 +14,106 @@ import { analyzePrismaWriteSites } from './write-analyzer.mjs'
 const JS_FAMILY = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'])
 const MIXED_SCRIPT = new Set(['.sh', '.py', '.ps1', '.bat', '.yml', '.yaml', '.dockerfile', '.package-json'])
 const execFileAsync = promisify(execFile)
+const MAX_ISOLATED_WORKERS = 4
+const DEFAULT_WORKER_TIMEOUT_MS = 120_000
+const DEFAULT_PROGRESS_EVERY = 25
+const jsWorkerPath = fileURLToPath(new URL('./analyze-js-worker.mjs', import.meta.url))
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex')
+}
+
+function boundedInteger(value, fallback, minimum, maximum) {
+  if (value === undefined || value === null) return fallback
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {
+    throw new Error(`expected integer in ${minimum}..${maximum}, received ${value}`)
+  }
+  return parsed
+}
+
+export function isolatedExecutionOptions(options = {}) {
+  const available = Math.max(1, availableParallelism())
+  return {
+    workers: boundedInteger(options.workers, Math.min(MAX_ISOLATED_WORKERS, available), 1, MAX_ISOLATED_WORKERS),
+    workerTimeoutMs: boundedInteger(options.workerTimeoutMs, DEFAULT_WORKER_TIMEOUT_MS, 1_000, 600_000),
+    progressEvery: boundedInteger(options.progressEvery, DEFAULT_PROGRESS_EVERY, 1, 10_000),
+  }
+}
+
+function workerError(code, message, details = {}) {
+  const error = new Error(message)
+  error.code = code
+  Object.assign(error, details)
+  return error
+}
+
+export async function analyzeJavaScriptSurfaceIsolated(surface, sourceText, options = {}) {
+  const workerTimeoutMs = boundedInteger(options.workerTimeoutMs, DEFAULT_WORKER_TIMEOUT_MS, 1_000, 600_000)
+  return new Promise((resolve, reject) => {
+    const startedAt = process.hrtime.bigint()
+    const child = fork(jsWorkerPath, [], {
+      silent: true,
+      serialization: 'json',
+      execArgv: process.execArgv.filter((argument) => !argument.startsWith('--input-type')),
+    })
+    const stderr = []
+    child.stderr?.on('data', (chunk) => stderr.push(String(chunk)))
+    let settled = false
+    const elapsedMs = () => Number(process.hrtime.bigint() - startedAt) / 1_000_000
+    const finish = (callback, value) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      callback(value)
+    }
+    const timeout = setTimeout(() => {
+      const durationMs = elapsedMs()
+      child.kill('SIGKILL')
+      finish(reject, workerError(
+        'ANALYZER_WORKER_TIMEOUT',
+        `isolated analyzer worker timed out after ${workerTimeoutMs}ms for ${surface.path}`,
+        { file: surface.path, pid: child.pid, duration_ms: durationMs, timeout_ms: workerTimeoutMs },
+      ))
+    }, workerTimeoutMs)
+    child.once('error', (error) => {
+      finish(reject, workerError(
+        'ANALYZER_WORKER_SPAWN_FAILURE',
+        `isolated analyzer worker failed for ${surface.path}: ${error.message}`,
+        { file: surface.path, pid: child.pid, duration_ms: elapsedMs() },
+      ))
+    })
+    child.once('message', (message) => {
+      if (!message?.ok) {
+        finish(reject, workerError(
+          'ANALYZER_WORKER_FAILURE',
+          `isolated analyzer worker failed for ${surface.path}: ${message?.error ?? 'unknown error'}`,
+          { file: surface.path, pid: child.pid, duration_ms: elapsedMs() },
+        ))
+        return
+      }
+      finish(resolve, {
+        ...message,
+        pid: child.pid,
+        duration_ms: elapsedMs(),
+      })
+    })
+    child.once('exit', (code, signal) => {
+      if (!settled) finish(reject, workerError(
+        'ANALYZER_WORKER_EXIT',
+        `isolated analyzer worker exited before returning for ${surface.path} (code=${code}, signal=${signal}): ${stderr.join('').trim()}`,
+        { file: surface.path, pid: child.pid, duration_ms: elapsedMs(), exit_code: code, signal },
+      ))
+    })
+    options.onStarted?.(child.pid)
+    child.send({
+      task_id: options.taskId ?? null,
+      file_name: surface.path,
+      source_text: sourceText,
+      known_models: options.knownModels ?? [],
+      relation_fields: options.relationFields ?? [],
+    })
+  })
 }
 
 function stable(value) {
@@ -685,6 +783,190 @@ export function javascriptDatabaseCommandSites(surface, text) {
   ))
 }
 
+async function analyzeSurface(surface, taskId, repositoryRoot, architecture, execution, onWorkerStarted) {
+  const startedAt = process.hrtime.bigint()
+  try {
+    const bytes = await readFile(path.join(repositoryRoot, surface.path))
+    const decoded = decodeSource(bytes)
+    const source = sourceIdentity(surface, architecture)
+    let discovered = []
+    const parseFindings = []
+    let workerPid = null
+    if (JS_FAMILY.has(surface.extension)) {
+      const analysis = await analyzeJavaScriptSurfaceIsolated(surface, decoded.text, {
+        taskId,
+        knownModels: [...architecture.prismaModels],
+        relationFields: [...architecture.prismaRelationFields],
+        workerTimeoutMs: execution.workerTimeoutMs,
+        onStarted: (pid) => {
+          workerPid = pid
+          onWorkerStarted(pid)
+        },
+      })
+      workerPid = analysis.pid
+      discovered = analysis.sites
+      discovered.push(...javascriptDatabaseCommandSites(surface, decoded.text))
+      for (const diagnostic of analysis.diagnostics) {
+        parseFindings.push({
+          file: surface.path,
+          encoding: decoded.encoding,
+          source_sha256: sha256(bytes),
+          ...diagnostic,
+        })
+      }
+    } else if (surface.extension === '.sql') {
+      discovered = standaloneSqlSites(surface, decoded.text)
+    } else if (MIXED_SCRIPT.has(surface.extension)) {
+      discovered = standaloneSqlSites(surface, decoded.text, true)
+    }
+    const sites = discovered.map((site) => {
+      const result = classifySite(site, surface, source, architecture)
+      return {
+        ...site,
+        ...result,
+        source_context: source.context,
+        source_technical_module: source.technical_module,
+        source_identity: source.source,
+        surface: {
+          lifecycle: surface.lifecycle,
+          disposition: surface.disposition,
+          production_capability: surface.production_capability,
+          registry_classified: surface.registry_classified,
+        },
+      }
+    })
+    if (decoded.ambiguous) {
+      parseFindings.push({
+        file: surface.path,
+        encoding: decoded.encoding,
+        source_sha256: sha256(bytes),
+        code: 'ENCODING_INFERRED',
+        line: 1,
+        column: 1,
+        message: 'source encoding was inferred and requires explicit review',
+      })
+    }
+    return {
+      task_id: taskId,
+      surface,
+      sites,
+      parse_findings: parseFindings,
+      worker_pid: workerPid,
+      duration_ms: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
+      failure: null,
+    }
+  } catch (error) {
+    return {
+      task_id: taskId,
+      surface,
+      sites: [],
+      parse_findings: [],
+      worker_pid: error?.pid ?? null,
+      duration_ms: error?.duration_ms ?? Number(process.hrtime.bigint() - startedAt) / 1_000_000,
+      failure: {
+        code: error?.code ?? 'ANALYZER_SURFACE_FAILURE',
+        message: error?.message ?? String(error),
+        timeout_ms: error?.timeout_ms ?? null,
+        exit_code: error?.exit_code ?? null,
+        signal: error?.signal ?? null,
+      },
+    }
+  }
+}
+
+async function analyzeSurfacesBounded(surfaces, repositoryRoot, architecture, options = {}) {
+  const execution = isolatedExecutionOptions(options)
+  const startedAt = process.hrtime.bigint()
+  const active = new Map()
+  const results = new Array(surfaces.length)
+  let nextTask = 0
+  let completed = 0
+  let writesDiscovered = 0
+  let ambiguousCandidates = 0
+  let workerFailures = 0
+  let workerTimeouts = 0
+  const snapshot = (event, extra = {}) => {
+    const elapsedMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000
+    return {
+      schema: 'yoko.crm.write-analyzer-progress.v1',
+      event,
+      elapsed_ms: elapsedMs,
+      files_discovered: surfaces.length,
+      files_scheduled: nextTask,
+      files_completed: completed,
+      files_remaining: surfaces.length - completed,
+      writes_discovered: writesDiscovered,
+      ambiguous_candidates: ambiguousCandidates,
+      worker_failures: workerFailures,
+      worker_timeouts: workerTimeouts,
+      throughput_files_per_second: elapsedMs > 0 ? completed / (elapsedMs / 1_000) : 0,
+      active_workers: [...active.entries()].map(([slot, item]) => ({ slot, ...item })).sort((left, right) => left.slot - right.slot),
+      ...extra,
+    }
+  }
+  const emit = async (event, extra = {}) => {
+    if (typeof options.onProgress === 'function') await options.onProgress(snapshot(event, extra))
+  }
+  await emit('run_started', { workers: execution.workers, worker_timeout_ms: execution.workerTimeoutMs })
+  const runSlot = async (slot) => {
+    while (true) {
+      const taskId = nextTask
+      nextTask += 1
+      if (taskId >= surfaces.length) return
+      const surface = surfaces[taskId]
+      active.set(slot, { task_id: taskId, file: surface.path, pid: null })
+      const result = await analyzeSurface(surface, taskId, repositoryRoot, architecture, execution, (pid) => {
+        active.set(slot, { task_id: taskId, file: surface.path, pid })
+      })
+      results[taskId] = result
+      active.delete(slot)
+      completed += 1
+      writesDiscovered += result.sites.length
+      ambiguousCandidates += result.sites.filter((site) => site.classification === 'AMBIGUOUS').length
+      if (result.failure) {
+        workerFailures += 1
+        if (result.failure.code === 'ANALYZER_WORKER_TIMEOUT') workerTimeouts += 1
+      }
+      if (result.failure || completed % execution.progressEvery === 0 || completed === surfaces.length) {
+        await emit(result.failure ? 'surface_failed' : 'progress', {
+          task_id: taskId,
+          file: surface.path,
+          worker_pid: result.worker_pid,
+          surface_duration_ms: result.duration_ms,
+          failure: result.failure,
+        })
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: execution.workers }, (_, slot) => runSlot(slot)))
+  const complete = workerFailures === 0
+  await emit('run_finished', { complete })
+  return {
+    results,
+    execution: {
+      mode: 'fresh_process_per_javascript_surface',
+      worker_limit: execution.workers,
+      worker_timeout_ms: execution.workerTimeoutMs,
+      progress_every: execution.progressEvery,
+      files_discovered: surfaces.length,
+      files_completed: completed,
+      writes_discovered: writesDiscovered,
+      ambiguous_candidates: ambiguousCandidates,
+      worker_failures: workerFailures,
+      worker_timeouts: workerTimeouts,
+      complete,
+      elapsed_ms: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
+      failures: results.filter((result) => result.failure).map((result) => ({
+        task_id: result.task_id,
+        file: result.surface.path,
+        worker_pid: result.worker_pid,
+        duration_ms: result.duration_ms,
+        ...result.failure,
+      })),
+    },
+  }
+}
+
 function summarize(sites, parseFindings, inventory) {
   const count = (predicate) => sites.filter(predicate).length
   return {
@@ -731,66 +1013,9 @@ export async function analyzeRepository(repositoryRoot, options = {}) {
       architecture.tableSymbols.set(match[1].toLowerCase(), match[2].toLowerCase())
     }
   }
-  const sites = []
-  const parseFindings = []
-
-  for (const surface of inventory.surfaces) {
-    const bytes = await readFile(path.join(repositoryRoot, surface.path))
-    const decoded = decodeSource(bytes)
-    const source = sourceIdentity(surface, architecture)
-    let discovered = []
-    if (JS_FAMILY.has(surface.extension)) {
-      const analysis = analyzePrismaWriteSites(decoded.text, {
-        fileName: surface.path,
-        knownModels: [...architecture.prismaModels],
-        relationFields: [...architecture.prismaRelationFields],
-      })
-      discovered = analysis.sites
-      // JavaScript/TypeScript can launch database CLIs through
-      // node:child_process. The AST analyzer owns ORM/raw-driver calls; add
-      // only executable CLI command sites here to avoid duplicating those.
-      discovered.push(...javascriptDatabaseCommandSites(surface, decoded.text))
-      for (const diagnostic of analysis.diagnostics) {
-        parseFindings.push({
-          file: surface.path,
-          encoding: decoded.encoding,
-          source_sha256: sha256(bytes),
-          ...diagnostic,
-        })
-      }
-    } else if (surface.extension === '.sql') {
-      discovered = standaloneSqlSites(surface, decoded.text)
-    } else if (MIXED_SCRIPT.has(surface.extension)) {
-      discovered = standaloneSqlSites(surface, decoded.text, true)
-    }
-    for (const site of discovered) {
-      const result = classifySite(site, surface, source, architecture)
-      sites.push({
-        ...site,
-        ...result,
-        source_context: source.context,
-        source_technical_module: source.technical_module,
-        source_identity: source.source,
-        surface: {
-          lifecycle: surface.lifecycle,
-          disposition: surface.disposition,
-          production_capability: surface.production_capability,
-          registry_classified: surface.registry_classified,
-        },
-      })
-    }
-    if (decoded.ambiguous) {
-      parseFindings.push({
-        file: surface.path,
-        encoding: decoded.encoding,
-        source_sha256: sha256(bytes),
-        code: 'ENCODING_INFERRED',
-        line: 1,
-        column: 1,
-        message: 'source encoding was inferred and requires explicit review',
-      })
-    }
-  }
+  const bounded = await analyzeSurfacesBounded(inventory.surfaces, repositoryRoot, architecture, options)
+  const sites = bounded.results.flatMap((result) => result.sites)
+  const parseFindings = bounded.results.flatMap((result) => result.parse_findings)
 
   sites.sort((left, right) => left.file.localeCompare(right.file) || left.line - right.line || left.site_signature.localeCompare(right.site_signature))
   parseFindings.sort((left, right) => left.file.localeCompare(right.file) || left.line - right.line || String(left.code).localeCompare(String(right.code)))
@@ -808,6 +1033,7 @@ export async function analyzeRepository(repositoryRoot, options = {}) {
     write_sites: sites,
   }
   result.analysis_sha256 = sha256(`${JSON.stringify(stable(result))}\n`)
+  result.execution = bounded.execution
   return result
 }
 
@@ -819,17 +1045,48 @@ async function main() {
   let registry = null
   let output = null
   let strict = false
+  let workers = null
+  let workerTimeoutMs = null
+  let progressEvery = null
+  let progressJsonl = null
+  let progress = true
   for (let index = 0; index < args.length; index += 1) {
     if (args[index] === '--root') repositoryRoot = path.resolve(args[++index])
     else if (args[index] === '--surface-registry') registry = JSON.parse(await readFile(path.resolve(args[++index]), 'utf8'))
     else if (args[index] === '--output') output = path.resolve(args[++index])
     else if (args[index] === '--strict') strict = true
+    else if (args[index] === '--workers') workers = Number(args[++index])
+    else if (args[index] === '--worker-timeout-ms') workerTimeoutMs = Number(args[++index])
+    else if (args[index] === '--progress-every') progressEvery = Number(args[++index])
+    else if (args[index] === '--progress-jsonl') progressJsonl = path.resolve(args[++index])
+    else if (args[index] === '--no-progress') progress = false
     else throw new Error(`unknown argument: ${args[index]}`)
   }
-  const result = await analyzeRepository(repositoryRoot, { registry })
+  if (progressJsonl) await writeFile(progressJsonl, '')
+  const onProgress = async (event) => {
+    const line = `${JSON.stringify(event)}\n`
+    if (progress) process.stderr.write(`ANALYZER_PROGRESS ${line}`)
+    if (progressJsonl) await appendFile(progressJsonl, line)
+  }
+  const result = await analyzeRepository(repositoryRoot, {
+    registry,
+    workers,
+    workerTimeoutMs,
+    progressEvery,
+    onProgress,
+  })
   const serialized = `${JSON.stringify(stable(result), null, 2)}\n`
-  if (output) await writeFile(output, serialized)
-  else process.stdout.write(serialized)
+  if (output) {
+    if (result.execution.complete) {
+      const temporaryOutput = `${output}.tmp-${process.pid}`
+      await writeFile(temporaryOutput, serialized)
+      await rename(temporaryOutput, output)
+    }
+  } else process.stdout.write(serialized)
+  if (!result.execution.complete) {
+    process.stderr.write(`ANALYZER_EXECUTION_INCOMPLETE ${JSON.stringify(result.execution.failures)}\n`)
+    process.exitCode = 2
+  }
   if (
     strict
     && (result.summary.parse_findings > 0 || result.summary.unreviewed_operational_surfaces > 0)

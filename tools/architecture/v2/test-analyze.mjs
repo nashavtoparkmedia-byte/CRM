@@ -3,11 +3,14 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
 import {
+  analyzeJavaScriptSurfaceIsolated,
+  isolatedExecutionOptions,
   javascriptDatabaseCommandSites,
   mixedDatabaseCommandSinks,
   mixedSqlFragments,
   standaloneSqlSites,
 } from './analyze.mjs'
+import { analyzePrismaWriteSites } from './write-analyzer.mjs'
 
 const shellSurface = { path: 'scripts/reconcile.sh' }
 const shell = String.raw`#!/usr/bin/env bash
@@ -367,5 +370,27 @@ const sameLineSql = 'SELECT 1; UPDATE ApiConnection SET apiKey = NULL;'
 const [sameLineSite] = standaloneSqlSites({ path: 'same-line.sql' }, sameLineSql)
 assert.equal(sameLineSite.line, 1)
 assert.equal(sameLineSite.column, sameLineSql.indexOf('UPDATE') + 1)
+
+const isolatedSource = [
+  "import { PrismaClient } from '@prisma/client'",
+  'const prisma = new PrismaClient()',
+  'const delegate = (prisma.user as any)',
+  'await delegate.create({ data: { profile: { create: {} } } })',
+].join('\n')
+const directIsolatedResult = analyzePrismaWriteSites(isolatedSource, {
+  fileName: 'fixtures/isolated-cast.ts',
+  knownModels: ['User'],
+  relationFields: ['user.profile'],
+})
+const isolatedResult = await analyzeJavaScriptSurfaceIsolated(
+  { path: 'fixtures/isolated-cast.ts', extension: '.ts' },
+  isolatedSource,
+  { knownModels: ['User'], relationFields: ['user.profile'], workerTimeoutMs: 5_000 },
+)
+assert.deepEqual(isolatedResult.sites, directIsolatedResult.sites)
+assert.deepEqual(isolatedResult.diagnostics, directIsolatedResult.diagnostics)
+assert.equal(isolatedResult.source_sha256, directIsolatedResult.source_sha256)
+assert.throws(() => isolatedExecutionOptions({ workers: 5 }), /1\.\.4/)
+assert.throws(() => isolatedExecutionOptions({ workerTimeoutMs: 999 }), /1000\.\.600000/)
 
 process.stdout.write('repository analyzer mixed-language tests: PASS\n')
