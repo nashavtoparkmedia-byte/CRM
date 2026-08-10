@@ -29,7 +29,8 @@ pass 10/10 and 15/15; all 22 affected boundaries pass; parser 29/29, contracts
 Diff-aware ESLint has zero errors and warnings on changed lines in all 19
 application files.
 
-This is a source-only technical gate. No database, provider, server action,
-deployed runtime, service, deployment, production or real-secret path was
-accessed or mutated. Final integrated root adversarial review follows the
-evidence commit.
+This is a source-only technical gate. Application runtime source changed, but
+no database, provider or server action was executed; no deployed runtime,
+service, deployment or production state was accessed or mutated, and no real
+secret value was read or emitted. Final integrated root adversarial review
+follows the evidence commit.

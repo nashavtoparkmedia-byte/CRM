@@ -32,5 +32,6 @@ lint are outside changed line ranges.
 
 Strict comparison is 1,343 to 1,295 findings. Only the exact 48 reviewed
 fingerprints retire; additions, shared semantic changes, line rebases,
-dependency additions and cycles are zero. No database, provider, server
-action, deployed runtime, production or real-secret path was used.
+dependency additions and cycles are zero. Application runtime source changed,
+but no database, provider, server action, deployed runtime or production path
+was executed, and no real secret value was read or emitted.

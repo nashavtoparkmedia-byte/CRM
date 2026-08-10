@@ -17,12 +17,13 @@
     "checksummed source-gate evidence package"
   ],
   "application_source_files_changed": 19,
+  "server_action_source_files_changed": 1,
   "architecture_control_source_files_changed": 25,
   "evidence_files_added_including_checksums": 9,
   "production": [],
   "database": [],
   "providers": [],
-  "server_actions": [],
+  "server_actions_executed": [],
   "webhooks": [],
   "services": [],
   "deployment": [],
@@ -36,7 +37,7 @@
   "generic_persistence_capabilities_added": 0,
   "provider_tests_executed": false,
   "database_accessed": false,
-  "server_actions_executed": false,
+  "server_action_execution_performed": false,
   "deployed_runtime_executed": false,
   "production_mutated": false,
   "real_secret_values_read_or_emitted": false
