@@ -11,7 +11,7 @@ import { inventoryTrackedSurfaces } from './tracked-surface-inventory.mjs'
 import { analyzePrismaWriteSites } from './write-analyzer.mjs'
 
 const JS_FAMILY = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'])
-const MIXED_SCRIPT = new Set(['.sh', '.py', '.ps1', '.bat'])
+const MIXED_SCRIPT = new Set(['.sh', '.py', '.ps1', '.bat', '.yml', '.yaml', '.dockerfile', '.package-json'])
 const execFileAsync = promisify(execFile)
 
 function sha256(value) {
@@ -175,6 +175,21 @@ function locationForIndex(text, index) {
   return { line: lineForIndex(text, index), column: index - lineStart + 1 }
 }
 
+function prismaRelationFieldKeys(schemaSource) {
+  const models = new Map()
+  for (const match of schemaSource.matchAll(/^model\s+([A-Za-z_][\w]*)\s*\{([\s\S]*?)^\}/gmu)) {
+    models.set(match[1], match[2])
+  }
+  const modelNames = new Set(models.keys())
+  const keys = []
+  for (const [model, body] of models) for (const line of body.split('\n')) {
+    const field = /^\s*([A-Za-z_][\w]*)\s+([A-Za-z_][\w]*)(?:\[\]|\?)?/u.exec(line)
+    if (!field || !modelNames.has(field[2])) continue
+    keys.push(`${model.replace(/_/gu, '').toLowerCase()}.${field[1].replace(/_/gu, '').toLowerCase()}`)
+  }
+  return keys
+}
+
 // Mixed-language database calls need a receiver strong enough to distinguish
 // an actual database API from unrelated APIs such as `search.query()` or
 // `animation.execute()`. Keep the vocabulary bounded to conventional database
@@ -273,7 +288,9 @@ function maskCommentText(text) {
       index -= 1
       continue
     }
-    if (text.startsWith('<#', index) || text.startsWith('/*', index)) {
+    const cStyleBlockComment = text.startsWith('/*', index)
+      && (index === 0 || /[\s;({[]/u.test(text[index - 1]))
+    if (text.startsWith('<#', index) || cStyleBlockComment) {
       const close = text.startsWith('<#', index) ? '#>' : '*/'
       masked[index++] = ' '
       while (index < text.length) {
@@ -287,7 +304,9 @@ function maskCommentText(text) {
       }
       continue
     }
-    if (text.startsWith('//', index)) {
+    const cStyleLineComment = text.startsWith('//', index)
+      && (index === 0 || /[\s;({[]/u.test(text[index - 1]))
+    if (cStyleLineComment) {
       while (index < text.length && text[index] !== '\n') masked[index++] = ' '
       index -= 1
       continue
@@ -411,16 +430,32 @@ function revealShellPayload(searchable, text, bodyStart, bodyEnd) {
 
 function executableQuotedCommandText(text) {
   const masked = maskQuotedAndCommentText(text)
+  const commentMasked = maskCommentText(text)
   const searchable = [...masked]
+  // Parse exec-form Docker/YAML arrays independently. A generic quote walker
+  // can be desynchronized by unrelated shell quoting earlier in the file,
+  // while the array itself is a bounded one-line grammar.
+  const execArrays = /(?:command\s*:|entrypoint\s*:|CMD|ENTRYPOINT)\s*\[\s*["'][^"']*(?:ba|da|k|z)?sh["']\s*,\s*["'][^"']*c[^"']*["']\s*,\s*(?:"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)')\s*\]/gimu
+  for (const match of commentMasked.matchAll(execArrays)) {
+    const body = match[1] ?? match[2]
+    if (body === undefined) continue
+    const bodyStart = (match.index ?? 0) + match[0].indexOf(body)
+    revealShellPayload(searchable, text, bodyStart, bodyStart + body.length)
+  }
   const strings = /(["'])((?:\\[\s\S]|(?!\1)[\s\S])*?)\1/gu
-  for (const match of text.matchAll(strings)) {
+  for (const match of commentMasked.matchAll(strings)) {
     const opening = match.index ?? 0
     const lineStart = masked.lastIndexOf('\n', opening - 1) + 1
     const prefix = masked.slice(lineStart, opening).trimEnd()
-    const segment = prefix.split(/(?:&&|\|\||[;|])/u).at(-1).trim()
+    // Bash's ANSI-C and localized strings add a `$` immediately before the
+    // quote. It belongs to the string form, not to the shell option prefix.
+    const segment = prefix.split(/(?:&&|\|\||[;|])/u).at(-1).trim().replace(/\$$/u, '')
     const shellPayload = shellCommandPayloadPrefix(segment)
     const sshPayload = /(?:^|\s)(?:[\w./-]*\/)?ssh\b[^\n]*\S\s*$/iu.test(segment)
-    if (!shellPayload && !sshPayload) continue
+    const rawPrefix = text.slice(lineStart, opening)
+    const execArrayShell = /(?:^|\b)(?:command\s*:|entrypoint\s*:|CMD|ENTRYPOINT)\s*\[\s*["'][^"']*(?:ba|da|k|z)?sh["']\s*,\s*["'][^"']*c[^"']*["']\s*,\s*$/iu.test(rawPrefix)
+    const jsonScriptValue = /^\s*"[^"]+"\s*:\s*$/u.test(rawPrefix)
+    if (!shellPayload && !sshPayload && !execArrayShell && !jsonScriptValue) continue
     const bodyOffset = match[0].indexOf(match[2])
     const bodyStart = opening + bodyOffset
     const bodyEnd = bodyStart + match[2].length
@@ -450,6 +485,10 @@ export function mixedDatabaseCommandSinks(text, options = {}) {
     const lineEnd = lineEndCandidate === -1 ? masked.length : lineEndCandidate
     const lineText = masked.slice(lineStart, lineEnd)
     const prefix = masked.slice(lineStart, index)
+    if (
+      /(?:browser|page|playwright|puppeteer)\s*\.\s*$/iu.test(prefix)
+      && /^session\s*\.\s*(?:query|execute)/iu.test(match[0])
+    ) continue
     const prefixAfterOperator = prefix.split(/(?:&&|\|\||[;|])/u).at(-1).trim()
     if (
       /^(?:echo|printf|log|logger|write-host|grep|sed|awk)\b/iu.test(prefixAfterOperator)
@@ -552,6 +591,24 @@ export function standaloneSqlSites(surface, text, mixedLanguage = false) {
     site_signature: sha256(`${surface.path}\n${operationAnalysis.sql_sha256}\n${ordinal}\n${operation.operation}\n${operation.table ?? ''}`),
   }
   })
+  const unresolvedSqlSites = analyses
+    .filter(({ analysis }) => analysis.is_mutation === null && analysis.operations.length === 0)
+    .map(({ fragment, analysis }, ordinal) => {
+      const location = locationForIndex(text, fragment.index)
+      return {
+        file: surface.path,
+        line: location.line,
+        column: location.column,
+        scope: mixedLanguage ? '<mixed-operational-script>' : '<sql-script>',
+        kind: 'raw',
+        method: mixedLanguage ? 'mixed-script-sql' : 'sql-script',
+        tables: [],
+        operations: [],
+        ambiguous: true,
+        ambiguity_reasons: [...new Set(analysis.reasons ?? ['unresolved_sql_intent'])].sort(),
+        site_signature: sha256(`${surface.path}\n${analysis.sql_sha256}\nunresolved:${ordinal}`),
+      }
+    })
   const commandSites = commandSinks
     .filter((sink) => sink.intent !== 'READ')
     .map((sink) => ({
@@ -571,7 +628,7 @@ export function standaloneSqlSites(surface, text, mixedLanguage = false) {
       ])].sort(),
       site_signature: sha256(`${surface.path}\n${sha256(text)}\n${sink.index}\n${sink.command}\n${sink.intent}`),
     }))
-  return [...sqlSites, ...commandSites].sort((left, right) => (
+  return [...sqlSites, ...unresolvedSqlSites, ...commandSites].sort((left, right) => (
     left.line - right.line || left.column - right.column || left.site_signature.localeCompare(right.site_signature)
   ))
 }
@@ -607,6 +664,7 @@ export async function analyzeRepository(repositoryRoot, options = {}) {
   const architecture = compileArchitecture(moduleRules, manifests, ownershipRules)
   architecture.tableSymbols = new Map()
   architecture.prismaModels = new Set()
+  architecture.prismaRelationFields = new Set()
   for (const surface of inventory.surfaces) {
     if (surface.extension !== '.prisma' && (!JS_FAMILY.has(surface.extension) || !surface.path.includes('/schema/'))) continue
     const schemaSource = decodeSource(await readFile(path.join(repositoryRoot, surface.path))).text
@@ -614,6 +672,7 @@ export async function analyzeRepository(repositoryRoot, options = {}) {
       for (const match of schemaSource.matchAll(/^model\s+([A-Za-z_][\w]*)\s*\{/gmu)) {
         architecture.prismaModels.add(match[1])
       }
+      for (const key of prismaRelationFieldKeys(schemaSource)) architecture.prismaRelationFields.add(key)
     }
     if (!JS_FAMILY.has(surface.extension) || !surface.path.includes('/schema/')) continue
     for (const match of schemaSource.matchAll(/\bexport\s+const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:pgTable|sqliteTable|mysqlTable)\s*\(\s*['"]([^'"]+)['"]/gu)) {
@@ -632,6 +691,7 @@ export async function analyzeRepository(repositoryRoot, options = {}) {
       const analysis = analyzePrismaWriteSites(decoded.text, {
         fileName: surface.path,
         knownModels: [...architecture.prismaModels],
+        relationFields: [...architecture.prismaRelationFields],
       })
       discovered = analysis.sites
       for (const diagnostic of analysis.diagnostics) {

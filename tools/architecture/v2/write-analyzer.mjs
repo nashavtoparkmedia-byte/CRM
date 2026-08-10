@@ -352,6 +352,21 @@ function propertyName(expression) {
     return null
 }
 
+function reflectivePropertyName(expression) {
+    const literal = literalPropertyValue(expression)
+    if (literal !== null) return literal
+    const candidate = unwrapExpression(expression)
+    if (
+        ts.isCallExpression(candidate)
+        && (ts.isPropertyAccessExpression(candidate.expression) || ts.isElementAccessExpression(candidate.expression))
+        && ts.isIdentifier(unwrapExpression(candidate.expression.expression))
+        && unwrapExpression(candidate.expression.expression).text === 'Symbol'
+        && new Set(['for', 'keyFor']).has(propertyName(candidate.expression))
+        && candidate.arguments[0]
+    ) return literalPropertyValue(candidate.arguments[0])
+    return null
+}
+
 function moduleSpecifierFromCall(expression) {
     const candidate = unwrapExpression(expression)
     if (!ts.isCallExpression(candidate) || candidate.arguments.length !== 1) return null
@@ -559,6 +574,10 @@ function diagnostics(sourceFile) {
 export function analyzePrismaWriteSites(sourceText, options = {}) {
     const fileName = options.fileName ?? 'architecture-write-scan.tsx'
     const knownPrismaModels = new Set(options.knownModels ?? [])
+    const knownRelationFields = new Set([
+        ...(options.relationFields ?? []),
+        ...((options.relationMap instanceof Map) ? options.relationMap.keys() : []),
+    ].map((value) => String(value).replace(/_/gu, '').toLowerCase()))
     const { checker, resolutionDiagnostics, sourceFile } = sourceContext(sourceText, fileName)
     const assignments = new Map()
     const memberAssignments = []
@@ -992,6 +1011,61 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
             if (
                 ts.isPropertyAccessExpression(directCallee)
                 && ts.isIdentifier(directCallee.expression)
+                && directCallee.expression.text === 'Object'
+                && directCallee.name.text === 'getOwnPropertyDescriptor'
+                && candidate.arguments[0]
+            ) {
+                const property = candidate.arguments[1]
+                    ? reflectivePropertyName(candidate.arguments[1])
+                    : null
+                let value
+                if (
+                    property
+                    && SQL_DRIVER_METHODS.has(property)
+                    && sqlDriverReceiverProven(candidate.arguments[0], use)
+                ) {
+                    value = rawOperation(`sql-driver:${property}`, {
+                        origin: `sql-driver:descriptor:${structuralExpressionOrigin(candidate.arguments[0])}`,
+                        transaction: false,
+                        confidence: 'MEDIUM',
+                    })
+                } else {
+                    value = applyProperty(
+                        resolveExpression(candidate.arguments[0], use, new Set(seen)),
+                        property,
+                        property === null,
+                    )
+                }
+                return objectValue(new Map([['value', value]]), `descriptor:${candidate.getStart(sourceFile)}`)
+            }
+            if (
+                ts.isPropertyAccessExpression(directCallee)
+                && ts.isIdentifier(directCallee.expression)
+                && directCallee.expression.text === 'Object'
+                && directCallee.name.text === 'assign'
+            ) {
+                const properties = new Map()
+                const clients = []
+                for (const argument of candidate.arguments) {
+                    const value = resolveExpression(argument, use, new Set(seen))
+                    if (value.kind === 'OBJECT') {
+                        for (const [name, propertyValue] of value.properties) properties.set(name, propertyValue)
+                    } else if (value.kind === 'CLIENT') clients.push(value)
+                    else if (value.kind === 'AMBIGUOUS_VALUE') {
+                        clients.push(...value.candidates.filter((entry) => entry.kind === 'CLIENT'))
+                    }
+                }
+                if (properties.size > 0 && clients.length === 0) {
+                    return objectValue(properties, `object-assign:${candidate.getStart(sourceFile)}`)
+                }
+                if (clients.length > 0) {
+                    return ambiguous('AMBIGUOUS_VALUE', ['object_assign_client_boundary'], clients)
+                }
+                return objectValue(properties, `object-assign:${candidate.getStart(sourceFile)}`)
+            }
+            if (
+                ts.isPropertyAccessExpression(directCallee)
+                && ts.isIdentifier(directCallee.expression)
                 && directCallee.expression.text === 'Reflect'
                 && directCallee.name.text === 'get'
                 && candidate.arguments[0]
@@ -1147,8 +1221,10 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
             let property = propertyName(candidate)
             if (property === null && ts.isElementAccessExpression(candidate)) {
                 const argument = unwrapExpression(candidate.argumentExpression)
+                const reflectiveProperty = reflectivePropertyName(argument)
                 const staticProperty = staticSqlExpression(argument, checker, sourceFile)
-                if (staticProperty && !staticProperty.dynamic) property = staticProperty.sql
+                if (reflectiveProperty !== null) property = reflectiveProperty
+                else if (staticProperty && !staticProperty.dynamic) property = staticProperty.sql
                 else if (ts.isIdentifier(argument)) {
                     const symbol = symbolAt(argument)
                     const declarations = symbol?.declarations ?? []
@@ -1282,7 +1358,7 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
 
     const sites = []
 
-    function nestedWriteShapes(call) {
+    function nestedWriteShapes(call, resolvedOperation) {
         if (!call.arguments[0]) return []
         const root = immutableProjectionObject(call.arguments[0], call)
         if (!root.object) return []
@@ -1291,6 +1367,15 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
             'disconnect', 'set', 'update', 'updateMany', 'upsert',
         ])
         const shapes = []
+        const rootModels = [resolvedOperation.model, ...(resolvedOperation.candidate_models ?? [])].filter(Boolean)
+        const isKnownRootRelation = (field) => rootModels.some((model) => knownRelationFields.has(
+            `${String(model).replace(/_/gu, '').toLowerCase()}.${String(field).replace(/_/gu, '').toLowerCase()}`,
+        ))
+        const hasDynamicMembers = (object) => Boolean(object?.properties.some((property) => (
+            ts.isSpreadAssignment(property)
+            || !ts.isPropertyAssignment(property) && !ts.isShorthandPropertyAssignment(property)
+            || ts.isComputedPropertyName(property.name)
+        )))
         function objectFieldNames(object) {
             if (!object) return []
             return [...new Set(object.properties.flatMap((property) => {
@@ -1325,6 +1410,20 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
                     })
                 }
                 const nested = immutableProjectionObject(value, call)
+                if (
+                    pathParts.length === 1
+                    && pathParts[0] === 'data'
+                    && isKnownRootRelation(name)
+                    && (!nested.object || nested.dynamic || hasDynamicMembers(nested.object))
+                ) {
+                    shapes.push({
+                        relation_field: name,
+                        method: 'dynamic',
+                        path: nextPath.join('.'),
+                        written_fields: objectFieldNames(nested.object),
+                        payload_dynamic: true,
+                    })
+                }
                 if (!nested.object) continue
                 if (nestedMethods.has(name)) {
                     // create/update branches inside upsert/connectOrCreate are
@@ -1677,7 +1776,7 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
     }
 
     function addModelSite(node, resolved) {
-        const nestedOperations = nestedWriteShapes(node)
+        const nestedOperations = nestedWriteShapes(node, resolved)
         const nestedAmbiguity = nestedOperations.length > 0
         const payload = writePayloadShape(node)
         const dynamicPayloadAmbiguity = payload.write_projection_dynamic
@@ -1814,6 +1913,12 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
         if (ts.isCallExpression(candidate)) {
             const callee = unwrapExpression(candidate.expression)
             const name = ts.isIdentifier(callee) ? callee.text : propertyName(callee)
+            if (
+                name === 'assign'
+                && (ts.isPropertyAccessExpression(callee) || ts.isElementAccessExpression(callee))
+                && ts.isIdentifier(unwrapExpression(callee.expression))
+                && unwrapExpression(callee.expression).text === 'Object'
+            ) return candidate.arguments.some((argument) => sqlDriverReceiverProven(argument, use, new Set(seen)))
             if (/^(?:connect|getDb|getDatabase|openDatabase)$/u.test(name ?? '')) {
                 if (ts.isPropertyAccessExpression(callee) || ts.isElementAccessExpression(callee)) {
                     return sqlDriverReceiverProven(callee.expression, use, new Set(seen))
@@ -1956,8 +2061,175 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
         return { proven: false }
     }
 
+    function drizzleBindingReceiver(root, use, seen) {
+        if (ts.isVariableDeclaration(root) && root.initializer) {
+            return drizzleReceiver(root.initializer, use, new Set(seen))
+        }
+        if (ts.isParameter(root)) {
+            const typeText = root.type?.getText(sourceFile) ?? ''
+            if (/\b(?:Database|NodePgDatabase|PgDatabase|PostgresJsDatabase)\b/u.test(typeText)) {
+                return {
+                    proven: true,
+                    transaction: /Transaction/u.test(typeText),
+                    origin: `typed-drizzle-binding:${root.getStart(sourceFile)}`,
+                    confidence: 'HIGH',
+                }
+            }
+        }
+        return { proven: false }
+    }
+
+    function drizzleObjectProperty(expression, property, use, seen) {
+        const candidate = unwrapExpression(expression)
+        if (ts.isObjectLiteralExpression(candidate)) {
+            for (const member of [...candidate.properties].reverse()) {
+                if (
+                    (ts.isPropertyAssignment(member) || ts.isShorthandPropertyAssignment(member))
+                    && !ts.isComputedPropertyName(member.name)
+                    && nodeName(member.name, sourceFile) === property
+                ) {
+                    return drizzleOperationReference(
+                        ts.isPropertyAssignment(member) ? member.initializer : member.name,
+                        use,
+                        new Set(seen),
+                    )
+                }
+                if (ts.isSpreadAssignment(member)) {
+                    const spread = drizzleObjectProperty(member.expression, property, use, new Set(seen))
+                    if (spread) return spread
+                }
+            }
+            return null
+        }
+        if (ts.isCallExpression(candidate)) {
+            const callee = unwrapExpression(candidate.expression)
+            if (
+                (ts.isPropertyAccessExpression(callee) || ts.isElementAccessExpression(callee))
+                && ts.isIdentifier(unwrapExpression(callee.expression))
+                && unwrapExpression(callee.expression).text === 'Object'
+                && propertyName(callee) === 'assign'
+            ) {
+                for (const argument of [...candidate.arguments].reverse()) {
+                    const assigned = drizzleObjectProperty(argument, property, use, new Set(seen))
+                    if (assigned) return assigned
+                    const receiver = drizzleReceiver(argument, use, new Set(seen))
+                    if (receiver.proven && DRIZZLE_WRITE_METHODS.has(property)) {
+                        return { method: property, receiver, expression: argument }
+                    }
+                }
+            }
+            return null
+        }
+        if (ts.isIdentifier(candidate)) {
+            const symbol = symbolAt(candidate)
+            if (!symbol || seen.has(symbol)) return null
+            const nextSeen = new Set(seen).add(symbol)
+            for (const declaration of symbol.declarations ?? []) {
+                if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
+                    const result = drizzleObjectProperty(declaration.initializer, property, use, nextSeen)
+                    if (result) return result
+                }
+            }
+        }
+        return null
+    }
+
+    function drizzleOperationReference(expression, use, seen = new Set()) {
+        const candidate = unwrapExpression(expression)
+        if (!candidate || seen.has(candidate)) return null
+        seen = new Set(seen).add(candidate)
+        if (ts.isIdentifier(candidate)) {
+            const symbol = symbolAt(candidate)
+            if (!symbol || seen.has(symbol)) return null
+            const nextSeen = new Set(seen).add(symbol)
+            for (const declaration of symbol.declarations ?? []) {
+                if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
+                    const resolved = drizzleOperationReference(declaration.initializer, use, nextSeen)
+                    if (resolved) return resolved
+                }
+                if (ts.isBindingElement(declaration)) {
+                    const binding = bindingRootAndPath(declaration)
+                    const method = binding?.propertyPath.at(-1)
+                    if (!binding || !DRIZZLE_WRITE_METHODS.has(method)) continue
+                    const receiver = drizzleBindingReceiver(binding.root, use, nextSeen)
+                    if (receiver.proven) return { method, receiver, expression: binding.root }
+                }
+            }
+            return null
+        }
+        if (ts.isCallExpression(candidate)) {
+            const callee = unwrapExpression(candidate.expression)
+            if (
+                (ts.isPropertyAccessExpression(callee) || ts.isElementAccessExpression(callee))
+                && propertyName(callee) === 'bind'
+            ) return drizzleOperationReference(callee.expression, use, new Set(seen))
+            if (
+                ts.isPropertyAccessExpression(callee)
+                && ts.isIdentifier(callee.expression)
+                && callee.expression.text === 'Reflect'
+                && callee.name.text === 'get'
+                && candidate.arguments[0]
+            ) {
+                const method = candidate.arguments[1]
+                    ? reflectivePropertyName(candidate.arguments[1])
+                    : null
+                const receiver = drizzleReceiver(candidate.arguments[0], use, new Set(seen))
+                if (receiver.proven && (method === null || DRIZZLE_WRITE_METHODS.has(method))) {
+                    return { method, receiver, expression: candidate.arguments[0] }
+                }
+            }
+            return null
+        }
+        if (ts.isElementAccessExpression(candidate)) {
+            const receiver = unwrapExpression(candidate.expression)
+            const property = reflectivePropertyName(candidate.argumentExpression)
+            if (ts.isArrayLiteralExpression(receiver) && property !== null) {
+                const element = receiver.elements[Number(property)]
+                if (element && !ts.isOmittedExpression(element) && !ts.isSpreadElement(element)) {
+                    return drizzleOperationReference(element, use, new Set(seen))
+                }
+            }
+        }
+        if (ts.isPropertyAccessExpression(candidate) || ts.isElementAccessExpression(candidate)) {
+            const method = ts.isElementAccessExpression(candidate)
+                ? reflectivePropertyName(candidate.argumentExpression)
+                : propertyName(candidate)
+            if (method === 'value') {
+                const descriptor = unwrapExpression(candidate.expression)
+                if (ts.isCallExpression(descriptor)) {
+                    const callee = unwrapExpression(descriptor.expression)
+                    if (
+                        ts.isPropertyAccessExpression(callee)
+                        && ts.isIdentifier(callee.expression)
+                        && callee.expression.text === 'Object'
+                        && callee.name.text === 'getOwnPropertyDescriptor'
+                        && descriptor.arguments[0]
+                    ) {
+                        const describedMethod = descriptor.arguments[1]
+                            ? reflectivePropertyName(descriptor.arguments[1])
+                            : null
+                        const receiver = drizzleReceiver(descriptor.arguments[0], use, new Set(seen))
+                        if (receiver.proven && (describedMethod === null || DRIZZLE_WRITE_METHODS.has(describedMethod))) {
+                            return { method: describedMethod, receiver, expression: descriptor.arguments[0] }
+                        }
+                    }
+                }
+            }
+            const receiver = drizzleReceiver(candidate.expression, use, new Set(seen))
+            if (receiver.proven && (method === null || DRIZZLE_WRITE_METHODS.has(method))) {
+                return { method, receiver, expression: candidate.expression }
+            }
+            if (method !== null) {
+                const assigned = drizzleObjectProperty(candidate.expression, method, use, new Set(seen))
+                if (assigned) return assigned
+            }
+        }
+        return null
+    }
+
     function maybeAddDrizzleSite(node) {
         const callee = unwrapExpression(node.expression)
+        const alias = drizzleOperationReference(callee, node)
         const reflected = ts.isCallExpression(callee)
             && ts.isPropertyAccessExpression(unwrapExpression(callee.expression))
             && ts.isIdentifier(unwrapExpression(callee.expression).expression)
@@ -1965,12 +2237,12 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
             && unwrapExpression(callee.expression).name.text === 'get'
             ? callee
             : null
-        if (!reflected && !ts.isPropertyAccessExpression(callee) && !ts.isElementAccessExpression(callee)) return false
-        let method = reflected
+        if (!alias && !reflected && !ts.isPropertyAccessExpression(callee) && !ts.isElementAccessExpression(callee)) return false
+        let method = alias?.method ?? (reflected
             ? (reflected.arguments[1]
                 ? staticSqlExpression(reflected.arguments[1], checker, sourceFile)?.sql ?? null
                 : null)
-            : propertyName(callee)
+            : propertyName(callee))
         if (method === null && ts.isElementAccessExpression(callee)) {
             const argument = unwrapExpression(callee.argumentExpression)
             if (ts.isIdentifier(argument)) {
@@ -1983,8 +2255,8 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
         }
         if (node.arguments.length === 0) return false
         const target = drizzleTableTarget(node.arguments[0])
-        const receiverExpression = reflected ? reflected.arguments[0] : callee.expression
-        const receiver = drizzleReceiver(receiverExpression, node)
+        const receiverExpression = alias?.expression ?? (reflected ? reflected.arguments[0] : callee.expression)
+        const receiver = alias?.receiver ?? drizzleReceiver(receiverExpression, node)
         if (!receiver.proven && (!target || !DRIZZLE_WRITE_METHODS.has(method))) return false
         if (!DRIZZLE_WRITE_METHODS.has(method) && method !== null) return false
         const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
@@ -2186,11 +2458,16 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
     function maybeAddSqlDriverSite(node) {
         const callee = unwrapExpression(node.expression)
         if (!ts.isPropertyAccessExpression(callee) && !ts.isElementAccessExpression(callee)) return false
-        const method = propertyName(callee)
-        if (!SQL_DRIVER_METHODS.has(method)) return false
-        const sql = node.arguments.length > 0
+        let method = propertyName(callee)
+        if (method === null && ts.isElementAccessExpression(callee)) {
+            method = reflectivePropertyName(callee.argumentExpression)
+        }
+        if (method !== null && !SQL_DRIVER_METHODS.has(method)) return false
+        if (method === null && !ts.isElementAccessExpression(callee)) return false
+        let sql = node.arguments.length > 0
             ? staticSqlContainer(node.arguments[0])
             : null
+        if (method === null) sql = sql ? { ...sql, dynamic: true } : { sql: null, dynamic: true }
         const sqlAnalysis = analyzeSqlMutation(sql?.sql ?? null, { forceDynamic: sql?.dynamic ?? true })
         if (sqlAnalysis.is_mutation === false && !sqlAnalysis.ambiguous && !options.includeRawReads) return false
         // A SQL-looking string is not sufficient proof that an arbitrary
@@ -2199,7 +2476,7 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
         // SQL driver.  This still retains conventional/typed clients and
         // their immutable aliases while excluding ordinary application APIs.
         if (!sqlDriverReceiverProven(callee.expression, node)) return false
-        addRawSite(node, rawOperation(`sql-driver:${method}`, {
+        addRawSite(node, rawOperation(`sql-driver:${method ?? '<dynamic>'}`, {
             origin: `sql-driver:${structuralExpressionOrigin(callee.expression)}`,
             transaction: false,
             confidence: sqlAnalysis.is_mutation ? 'MEDIUM' : 'CONSERVATIVE',

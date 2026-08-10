@@ -409,6 +409,7 @@ export function analyzeCredentialAccess(sourceText, options = {}) {
     includeReads: true,
     includeRawReads: true,
     knownModels: options.knownModels ?? [],
+    relationMap: options.relationMap ?? new Map(),
   })
   const accesses = []
 
@@ -426,7 +427,7 @@ export function analyzeCredentialAccess(sourceText, options = {}) {
   })
   const nestedCredentialMutationMethods = new Set([
     'connectOrCreate', 'create', 'createMany', 'delete', 'deleteMany',
-    'update', 'updateMany', 'upsert',
+    'dynamic', 'update', 'updateMany', 'upsert',
   ])
   const appendNestedWriteAccesses = (site, parentModels) => {
     for (const nested of site.nested_operations ?? []) {
@@ -709,7 +710,7 @@ export function analyzeCredentialSqlAccess(sql, options = {}) {
     }
     if (first !== null && last !== null) spans.push({ start: first, end: last })
 
-    if (spans.length > 1) {
+    if (spans.length > 1 || (spans.length === 1 && spans[0].start > 0)) {
       const accesses = spans.flatMap((span, statementIndex) => {
         const { line, column } = locationAtOffset(
           sql,
@@ -870,8 +871,10 @@ export function analyzeCredentialSqlAccess(sql, options = {}) {
   if (
     options.failClosedUnknownRaw !== false
     && analysis.ambiguous
-    && position.tables.length === 0
-    && position.read_tables.length === 0
+    && (
+      (position.tables.length === 0 && position.read_tables.length === 0)
+      || (analysis.reasons ?? []).some((reason) => reason.startsWith('dialect_dependent_'))
+    )
   ) {
     accesses.push(unresolvedRecord(position, boundary, 'unresolved_raw_sql_may_access_credential_entity', {
       candidateEntities: [],

@@ -42,6 +42,18 @@ test('SQL tokenizer honors escape strings and dialect identifier quoting', () =>
     assert.deepEqual(escapedAnalysis.read_tables, ['bots'])
     assert.deepEqual(escapedAnalysis.selected_columns, ['token'])
 
+    const mysqlEscaped = "SELECT 'harmless \\\'; DELETE FROM ApiConnection; still literal' AS note; SELECT token FROM bots;"
+    const mysqlAnalysis = analyzeSqlMutation(mysqlEscaped)
+    assert.equal(mysqlAnalysis.operations.some((operation) => operation.table === 'ApiConnection'), false)
+    assert.equal(mysqlAnalysis.is_mutation, null)
+    assert.equal(mysqlAnalysis.ambiguous, true)
+    assert(mysqlAnalysis.reasons.includes('dialect_dependent_string_escape'))
+
+    const mysqlComment = analyzeSqlMutation('# DELETE FROM ApiConnection;\nSELECT token FROM bots;')
+    assert.equal(mysqlComment.is_mutation, false)
+    assert.deepEqual(mysqlComment.read_tables, ['bots'])
+    assert.equal(mysqlComment.operations.length, 0)
+
     for (const sql of [
         'SELECT apiKey FROM `ApiConnection`',
         'SELECT [apiKey] FROM [ApiConnection]',
@@ -742,6 +754,29 @@ test('Drizzle aliases resolve and dynamic targets or methods fail closed', () =>
     assert(sites[4].ambiguity_reasons.includes('dynamic_drizzle_operation'))
 })
 
+test('typed Drizzle method aliases, descriptors and assigned holders stay visible', () => {
+    const sites = extractPrismaWrites([
+        "import { accounts, type Database } from '@avito/db'",
+        'function persist(db: Database) {',
+        '  const direct = db.update',
+        '  const bound = db.update.bind(db)',
+        '  const { update } = db',
+        '  const arrayHeld = [db.update][0]',
+        "  const described = Object.getOwnPropertyDescriptor(db, 'update').value",
+        '  const holder = Object.assign({}, { update: db.update })',
+        '  direct(accounts).set({})',
+        '  bound(accounts).set({})',
+        '  update(accounts).set({})',
+        '  arrayHeld(accounts).set({})',
+        '  described(accounts).set({})',
+        '  holder.update(accounts).set({})',
+        '}',
+    ].join('\n'))
+    assert.equal(sites.length, 6)
+    assert(sites.every((site) => site.kind === 'drizzle'))
+    assert(sites.every((site) => site.model === 'accounts' && site.method === 'update'))
+})
+
 test('ordinary run methods are not misclassified as database writes', () => {
     const sites = extractPrismaWrites("const animation = { run() {} }; animation.run('DELETE FROM visual_cache')")
     assert.deepEqual(sites, [])
@@ -771,6 +806,25 @@ test('nested write shapes keep relation identity across compound payload branche
         ['apiConnection', 'update'],
     ])
     assert.equal(site.nested_operations.some((entry) => entry.relation_field === 'connectOrCreate'), false)
+})
+
+test('opaque known-relation payloads remain fail-closed nested writes', () => {
+    const result = analyzePrismaWriteSites([
+        'const payload = getPayload()',
+        'prisma.user.update({ data: { bot: payload } })',
+        'prisma.user.update({ data: { bot: { ...payload } } })',
+    ].join('\n'), {
+        fileName: 'opaque-relation.ts',
+        knownModels: ['User', 'Bot'],
+        relationFields: ['user.bot'],
+    })
+    assert.equal(result.sites.length, 2)
+    assert(result.sites.every((site) => site.ambiguous))
+    assert(result.sites.every((site) => site.nested_operations.some((operation) => (
+        operation.relation_field === 'bot'
+        && operation.method === 'dynamic'
+        && operation.payload_dynamic
+    ))))
 })
 
 test('model writes retain structural payload field names without values', () => {
@@ -962,6 +1016,27 @@ test('generic SQL driver method aliases and bound aliases retain reads and write
     assert.deepEqual(result.sites.map((site) => site.method), ['sql-driver:query', 'sql-driver:query'])
     assert.deepEqual(result.sites[0].read_tables, ['ApiConnection'])
     assert.deepEqual(result.sites[1].tables, ['ApiConnection'])
+})
+
+test('dynamic, symbolic, descriptor and assigned database operations stay visible', () => {
+    const result = analyzePrismaWriteSites([
+        'declare const pool: Pool',
+        'declare const operation: string',
+        "pool[operation]('DELETE FROM ApiConnection')",
+        "pool[Symbol.for('query')]('DELETE FROM ApiConnection')",
+        "Object.getOwnPropertyDescriptor(pool, 'query').value('DELETE FROM ApiConnection')",
+        'const holder = Object.assign({}, { q: pool.query })',
+        "holder.q('DELETE FROM ApiConnection')",
+        "Object.getOwnPropertyDescriptor(prisma.chat, 'create').value({ data: {} })",
+        'const assignedClient = Object.assign({}, prisma)',
+        'assignedClient.chat.create({ data: {} })',
+    ].join('\n'))
+    const raw = result.sites.filter((site) => site.kind === 'raw')
+    assert.equal(raw.length, 4)
+    assert(raw.every((site) => site.tables.includes('ApiConnection')))
+    assert(raw[0].ambiguous)
+    assert.equal(result.sites.filter((site) => site.method === 'create').length, 2)
+    assert(result.sites.some((site) => site.method === 'create' && site.ambiguous))
 })
 
 test('better-sqlite prepared statements retain direct and aliased reads and writes', () => {

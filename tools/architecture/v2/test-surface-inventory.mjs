@@ -31,6 +31,10 @@ const cases = [
   ['max-web-scraper/index.js', 'APPLICATION_RUNTIME'],
   ['eslint.config.mjs', 'OPERATIONAL_SCRIPT'],
   ['avito-worker/src/jobs/handlers/check-session.handler.ts', 'APPLICATION_RUNTIME'],
+  ['deploy/docker-compose.production.yml', 'OPERATIONAL_SCRIPT'],
+  ['gravity-mvp/Dockerfile', 'OPERATIONAL_SCRIPT'],
+  ['yandex-fleet-scraper/prisma/schema.prisma', 'MIGRATION'],
+  ['gravity-mvp/package.json', 'OPERATIONAL_SCRIPT'],
 ]
 
 for (const [file, expected] of cases) {
@@ -69,17 +73,21 @@ const inventory = await inventoryTrackedSurfaces('/fixture', {
     'gravity-mvp/scripts/legacy.ts',
     'gravity-mvp/scripts/unreviewed.js',
     'gravity-mvp/prisma/migrations/1/migration.sql',
+    'deploy/docker-compose.yml',
+    'gravity-mvp/Dockerfile',
+    'gravity-mvp/prisma/schema.prisma',
+    'gravity-mvp/package.json',
     'docs/ignore.md',
   ],
 })
 
 assert.equal(inventory.repository_root, '.')
-assert.equal(inventory.summary.tracked_executable_surfaces, 5)
+assert.equal(inventory.summary.tracked_executable_surfaces, 9)
 assert.equal(inventory.summary.by_lifecycle.APPLICATION_RUNTIME, 1)
-assert.equal(inventory.summary.by_lifecycle.OPERATIONAL_SCRIPT, 2)
+assert.equal(inventory.summary.by_lifecycle.OPERATIONAL_SCRIPT, 5)
 assert.equal(inventory.summary.by_lifecycle.DEAD_HISTORICAL, 1)
-assert.equal(inventory.summary.by_lifecycle.MIGRATION, 1)
-assert.equal(inventory.summary.unreviewed_operational_surfaces, 1)
+assert.equal(inventory.summary.by_lifecycle.MIGRATION, 2)
+assert.equal(inventory.summary.unreviewed_operational_surfaces, 4)
 assert.deepEqual(inventory.controls.stale_registry_entries, [])
 assert.equal(inventory.surfaces.find((surface) => surface.path.endsWith('active.ts')).disposition, 'ACTIVE')
 

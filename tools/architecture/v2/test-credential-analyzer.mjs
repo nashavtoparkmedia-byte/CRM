@@ -142,6 +142,20 @@ assert.deepEqual(nestedCredentialWrites.accesses.map((entry) => [entry.policy_id
 ])
 assert(nestedCredentialWrites.accesses.every((entry) => entry.ambiguous === false))
 
+const opaqueNestedCredentialWrites = analyzeCredentialAccess([
+  'const payload = getPayload()',
+  'prisma.user.update({ data: { bot: payload } })',
+  'prisma.user.update({ data: { bot: { ...payload } } })',
+].join('\n'), {
+  fileName: 'opaque-nested-credentials.ts',
+  knownModels: ['User', 'Bot'],
+  relationMap,
+})
+assert.equal(opaqueNestedCredentialWrites.accesses.filter((entry) => (
+  entry.policy_id === 'telegram.bot-token.v1' && entry.access === 'WRITE'
+)).length, 2)
+assert(opaqueNestedCredentialWrites.accesses.every((entry) => entry.ambiguous))
+
 const aliasedSql = analyzeCredentialAccess([
   'const query = pool.query',
   'const bound = pool.query.bind(pool)',
@@ -260,6 +274,32 @@ assert.deepEqual(repeatedSqlAccesses.map((entry) => entry.credential_exposure), 
 ])
 assert.equal(new Set(repeatedSqlAccesses.map((entry) => entry.site_signature)).size, 3)
 
+const leadingTriviaLocations = [
+  analyzeCredentialSqlAccess('\n\nSELECT token FROM bots;', { fileName: 'leading-lines.sql' }).accesses[0],
+  analyzeCredentialSqlAccess('-- lead\nSELECT token FROM bots;', { fileName: 'leading-comment.sql' }).accesses[0],
+]
+assert.deepEqual(leadingTriviaLocations.map((entry) => [entry.line, entry.column]), [[3, 1], [2, 1]])
+
+const mysqlLexicalSafety = analyzeCredentialSqlAccess(
+  "SELECT 'harmless \\\'; DELETE FROM ApiConnection; still literal' AS note; SELECT token FROM bots;",
+  { fileName: 'mysql-string.sql' },
+)
+assert.equal(mysqlLexicalSafety.accesses.some((entry) => (
+  entry.access === 'WRITE' && entry.policy_id === 'fleet.api-connection.v1'
+)), false)
+assert(mysqlLexicalSafety.accesses.some((entry) => (
+  entry.access === 'UNKNOWN'
+  && entry.ambiguity_reasons.includes('dialect_dependent_string_escape')
+)))
+
+const mysqlHashComment = analyzeCredentialSqlAccess(
+  '# DELETE FROM ApiConnection;\nSELECT token FROM bots;',
+  { fileName: 'mysql-comment.sql' },
+)
+assert.deepEqual(mysqlHashComment.accesses.map((entry) => [entry.access, entry.policy_id, entry.line]), [
+  ['READ', 'telegram.bot-token.v1', 2],
+])
+
 const routineAndExportSql = analyzeCredentialSqlAccess([
   'CREATE FUNCTION credential_read() RETURNS text AS $$ SELECT "apiKey" FROM "ApiConnection" $$ LANGUAGE SQL;',
   'COPY "Bot" (token) TO STDOUT;',
@@ -280,6 +320,16 @@ const repeatedRoutineReads = analyzeCredentialSqlAccess([
 assert.equal(repeatedRoutineReads.accesses.length, 2)
 assert.deepEqual(repeatedRoutineReads.accesses.map((entry) => entry.line), [11, 12])
 assert.equal(new Set(repeatedRoutineReads.accesses.map((entry) => entry.site_signature)).size, 2)
+
+const exactRoutineLocations = [
+  analyzeCredentialSqlAccess('DO $body$\nDELETE FROM bots;\n$body$;', { fileName: 'do-location.sql' }).accesses[0],
+  analyzeCredentialSqlAccess([
+    'CREATE FUNCTION f() RETURNS void AS $body$',
+    'UPDATE ApiConnection SET apiKey=NULL;',
+    '$body$ LANGUAGE SQL;',
+  ].join('\n'), { fileName: 'function-location.sql' }).accesses[0],
+]
+assert.deepEqual(exactRoutineLocations.map((entry) => [entry.line, entry.column]), [[2, 1], [2, 1]])
 
 const dynamicRoutine = analyzeCredentialSqlAccess([
   'CREATE FUNCTION dynamic_reader(tbl text) RETURNS void AS $$',

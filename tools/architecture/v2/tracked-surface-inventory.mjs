@@ -9,6 +9,8 @@ const execFileAsync = promisify(execFile)
 
 export const TRACKED_EXECUTABLE_EXTENSIONS = new Set([
   '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.sql', '.sh', '.py', '.ps1', '.bat',
+  '.yml', '.yaml', '.prisma', '.dockerfile',
+  '.package-json',
 ])
 
 export const SURFACE_LIFECYCLES = new Set([
@@ -52,6 +54,9 @@ function inferredLifecycle(file) {
   const basename = path.posix.basename(lower)
   const insideRuntimeTree = lower.includes('/src/') || lower.includes('/app/') || lower.includes('/pages/')
   const pathParts = file.toLowerCase().split('/')
+  const extension = path.posix.extname(lower)
+  const dockerfile = /(?:^|\/)dockerfile(?:\.[^/]*)?$/iu.test(file)
+  const packageJson = basename === 'package.json'
   const packageRootTool = pathParts.length === 2 && new Set([
     'gravity-mvp', 'tg-bot', 'yandex-fleet-scraper',
   ]).has(pathParts[0]) && !(pathParts[0] === 'tg-bot' && basename === 'start.js')
@@ -79,6 +84,7 @@ function inferredLifecycle(file) {
     || basename.endsWith('.generated.js')
   ) return 'GENERATED'
   if (lower.includes('/prisma/migrations/')) return 'MIGRATION'
+  if (extension === '.prisma') return 'MIGRATION'
   if (
     lower.includes('/scripts/')
     || lower.startsWith('/scripts/')
@@ -94,6 +100,10 @@ function inferredLifecycle(file) {
     || path.posix.extname(lower) === '.sh'
     || path.posix.extname(lower) === '.ps1'
     || path.posix.extname(lower) === '.bat'
+    || extension === '.yml'
+    || extension === '.yaml'
+    || dockerfile
+    || packageJson
   ) return 'OPERATIONAL_SCRIPT'
   if (
     lower.includes('/migrations/')
@@ -130,7 +140,11 @@ function validateOverride(file, override) {
 
 export function classifyTrackedSurface(file, registry = null) {
   const normalized = slash(file).replace(/^\.\//, '')
-  const extension = path.posix.extname(normalized).toLowerCase()
+  const extension = /(?:^|\/)dockerfile(?:\.[^/]*)?$/iu.test(normalized)
+    ? '.dockerfile'
+    : path.posix.basename(normalized).toLowerCase() === 'package.json'
+      ? '.package-json'
+      : path.posix.extname(normalized).toLowerCase()
   if (!TRACKED_EXECUTABLE_EXTENSIONS.has(extension)) return null
 
   const override = exactRegistryEntries(registry).get(normalized)

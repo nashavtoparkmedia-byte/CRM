@@ -144,10 +144,14 @@ assert.deepEqual(mixedDatabaseCommandSinks([
   String.raw`docker exec crm-db bash -lc 'pg_restore --dbname "$DATABASE_URL" "$BACKUP"'`,
   String.raw`dash -ec 'pg_dump "$DATABASE_URL" > backup.dump'`,
   String.raw`bash -o pipefail -c 'psql "$DATABASE_URL" -f "$SQL_FILE"'`,
+  String.raw`bash -c $'pg_restore -d crm backup.dump'`,
+  String.raw`bash -c $"pg_restore -d crm backup.dump"`,
 ].join('\n')).map(({ command, intent, line }) => ({ command, intent, line })), [
   { command: 'pg_restore', intent: 'WRITE', line: 1 },
   { command: 'pg_dump', intent: 'READ', line: 2 },
   { command: 'psql', intent: 'UNKNOWN', line: 3 },
+  { command: 'pg_restore', intent: 'WRITE', line: 4 },
+  { command: 'pg_restore', intent: 'WRITE', line: 5 },
 ])
 assert.deepEqual(mixedDatabaseCommandSinks([
   String.raw`bash -c '# pg_restore --dbname crm backup.dump'`,
@@ -158,11 +162,25 @@ assert.deepEqual(mixedDatabaseCommandSinks([
   'search.query(runtime)',
   'animation.execute(runtime)',
   'workflow.executeScript(runtime)',
+  'browser.session.execute(runtime)',
+  'page.session.query(runtime)',
 ].join('\n')), [])
 assert.deepEqual(mixedSqlFragments([
   'search.query("SELECT token FROM bots")',
   'animation.execute("DELETE FROM ApiConnection")',
 ].join('\n')), [])
+assert.equal(
+  mixedDatabaseCommandSinks('RUN rm -rf /var/lib/apt/lists/*\nCMD ["sh", "-c", "npx prisma migrate deploy"]').some((sink) => (
+    sink.command === 'prisma migrate deploy'
+  )),
+  true,
+)
+assert.equal(
+  mixedDatabaseCommandSinks('RUN curl https://example.invalid/file && npx prisma migrate deploy').some((sink) => (
+    sink.command === 'prisma migrate deploy'
+  )),
+  true,
+)
 assert.deepEqual(mixedDatabaseCommandSinks([
   'cursor.query(runtime_sql)',
   'connection.execute(runtime_sql)',
@@ -220,6 +238,41 @@ for (const command of [
   assert.equal(sites.length, 1, command)
   assert(sites[0].ambiguity_reasons.includes('dynamic_database_command_requires_review'))
 }
+
+const declarativeRuntimeCommands = [
+  'command: ["sh", "-c", "npx prisma db push --skip-generate && npm run start"]',
+  'CMD ["sh", "-c", "npx prisma migrate deploy && npm run start"]',
+  '{\n  "scripts": {\n    "deploy-db": "npx prisma migrate deploy"\n  }\n}',
+]
+assert.deepEqual(
+  declarativeRuntimeCommands.flatMap((source, index) => standaloneSqlSites({
+    path: index === 0 ? 'deploy/docker-compose.yml' : 'gravity-mvp/Dockerfile',
+  }, source, true)).map((site) => site.method),
+  ['mixed-script-command:prisma db push', 'mixed-script-command:prisma migrate deploy', 'mixed-script-command:prisma migrate deploy'],
+)
+
+const exactProductionCompose = await readFile(new URL('../../../deploy/docker-compose.production.yml', import.meta.url), 'utf8')
+const exactProductionComposeSites = standaloneSqlSites(
+  { path: 'deploy/docker-compose.production.yml' },
+  exactProductionCompose,
+  true,
+)
+assert(exactProductionComposeSites.some((site) => (
+  site.method === 'mixed-script-command:prisma db push' && site.line === 452
+)))
+const exactGravityDockerfile = await readFile(new URL('../../../gravity-mvp/Dockerfile', import.meta.url), 'utf8')
+const exactGravityDockerfileSites = standaloneSqlSites(
+  { path: 'gravity-mvp/Dockerfile' },
+  exactGravityDockerfile,
+  true,
+)
+const exactGravityDockerfileMigrationLine = exactGravityDockerfile
+  .slice(0, exactGravityDockerfile.lastIndexOf('npx prisma migrate deploy'))
+  .split('\n').length
+assert(exactGravityDockerfileSites.some((site) => (
+  site.method === 'mixed-script-command:prisma migrate deploy'
+  && site.line === exactGravityDockerfileMigrationLine
+)))
 
 const sameLineSql = 'SELECT 1; UPDATE ApiConnection SET apiKey = NULL;'
 const [sameLineSite] = standaloneSqlSites({ path: 'same-line.sql' }, sameLineSql)

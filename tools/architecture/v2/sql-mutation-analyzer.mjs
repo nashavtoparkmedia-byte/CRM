@@ -61,6 +61,23 @@ export function tokenizeSql(sql) {
             continue
         }
 
+        if (current === '#' && next !== '>') {
+            // MySQL treats `#` as a line comment. PostgreSQL also has `#`
+            // operators, so retain an ambiguity marker when the token could
+            // instead be an inline operator; words in the MySQL comment must
+            // never become confident SQL operations.
+            const lineStart = sql.lastIndexOf('\n', start - 1) + 1
+            const inline = /\S/u.test(sql.slice(lineStart, start))
+            index += 1
+            while (index < sql.length && sql[index] !== '\n') index += 1
+            if (inline) {
+                push('ambiguity', '<mysql-hash-comment>', start, index, {
+                    dialect_ambiguity_reason: 'dialect_dependent_hash_comment',
+                })
+            }
+            continue
+        }
+
         if (current === "'") {
             const escapeStringPrefix = /[Ee]/u.test(sql[start - 1] ?? '')
                 && (start < 2 || !isIdentifierPart(sql[start - 2]))
@@ -70,16 +87,26 @@ export function tokenizeSql(sql) {
                 && tokens.at(-1)?.value.toUpperCase() === 'E'
                 && tokens.at(-1)?.end === start
             ) tokens.pop()
+            let dialectDependentEscape = false
             index += 1
             while (index < sql.length) {
                 if (sql[index] === "'" && sql[index + 1] === "'") index += 2
-                else if (escapeStringPrefix && sql[index] === '\\' && index + 1 < sql.length) index += 2
+                else if (sql[index] === '\\' && index + 1 < sql.length) {
+                    // PostgreSQL requires E'' for backslash escapes while
+                    // default-mode MySQL accepts them in ordinary strings.
+                    // Parse the MySQL-safe extent and mark the dialect split
+                    // instead of emitting its contents as confident SQL.
+                    dialectDependentEscape ||= !escapeStringPrefix
+                    index += 2
+                }
                 else if (sql[index] === "'") {
                     index += 1
                     break
                 } else index += 1
             }
-            push('value', '<string>', start)
+            push('value', '<string>', start, index, dialectDependentEscape ? {
+                dialect_ambiguity_reason: 'dialect_dependent_string_escape',
+            } : {})
             continue
         }
 
@@ -493,12 +520,15 @@ export function analyzeSqlMutation(sql, options = {}) {
     }
 
     const tokens = tokenizeSql(sql)
+    const dialectReasons = [...new Set(tokens
+        .map((token) => token.dialect_ambiguity_reason)
+        .filter(Boolean))].sort()
     const statementSpans = []
     let statementDepth = 0
     let statementStart = null
     let statementEnd = null
     for (const token of tokens) {
-        if (statementStart === null && token.value !== ';') statementStart = token.start
+        if (statementStart === null && token.value !== ';' && token.kind !== 'ambiguity') statementStart = token.start
         if (token.value === '(') statementDepth += 1
         if (token.value === ')') statementDepth = Math.max(0, statementDepth - 1)
         if (token.value === ';' && statementDepth === 0) {
@@ -507,7 +537,7 @@ export function analyzeSqlMutation(sql, options = {}) {
             }
             statementStart = null
             statementEnd = null
-        } else if (statementStart !== null) statementEnd = token.end
+        } else if (statementStart !== null && token.kind !== 'ambiguity') statementEnd = token.end
     }
     if (statementStart !== null && statementEnd !== null) {
         statementSpans.push({ start: statementStart, end: statementEnd })
@@ -524,11 +554,11 @@ export function analyzeSqlMutation(sql, options = {}) {
             }
         }
         const anyMutation = parts.some(({ analysis }) => analysis.is_mutation === true)
-        const anyIndeterminate = parts.some(({ analysis }) => analysis.is_mutation === null)
+        const anyIndeterminate = dialectReasons.length > 0 || parts.some(({ analysis }) => analysis.is_mutation === null)
         return {
             is_mutation: anyMutation ? true : anyIndeterminate ? null : false,
-            ambiguous: parts.some(({ analysis }) => analysis.ambiguous),
-            dynamic: parts.some(({ analysis }) => analysis.dynamic),
+            ambiguous: dialectReasons.length > 0 || parts.some(({ analysis }) => analysis.ambiguous),
+            dynamic: dialectReasons.length > 0 || parts.some(({ analysis }) => analysis.dynamic),
             operations: parts.flatMap(({ span, analysis }) => analysis.operations.map((operation) => ({
                 ...operation,
                 index: span.start + operation.index,
@@ -542,7 +572,10 @@ export function analyzeSqlMutation(sql, options = {}) {
             )),
             select_all: parts.some(({ analysis }) => analysis.select_all),
             read_projection_dynamic: parts.some(({ analysis }) => analysis.read_projection_dynamic),
-            reasons: [...new Set(parts.flatMap(({ analysis }) => analysis.reasons ?? []))].sort(),
+            reasons: [...new Set([
+                ...dialectReasons,
+                ...parts.flatMap(({ analysis }) => analysis.reasons ?? []),
+            ])].sort(),
             sql_sha256: sha256(sql),
         }
     }
@@ -559,6 +592,11 @@ export function analyzeSqlMutation(sql, options = {}) {
     let dynamic = Boolean(options.forceDynamic) || tokens.some((token) => token.kind === 'dynamic')
     if (options.forceDynamic) reasons.add('dynamic_sql_fragment')
     if (tokens.some((token) => token.kind === 'dynamic')) reasons.add('dynamic_sql_marker')
+    if (dialectReasons.length > 0) {
+        dynamic = true
+        indeterminateMutation = true
+        for (const reason of dialectReasons) reasons.add(reason)
+    }
     if (tokens.some((token) => token.kind === 'invalid')) {
         dynamic = true
         reasons.add('invalid_sql_token')

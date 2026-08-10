@@ -17,7 +17,7 @@ import { mixedDatabaseCommandSinks, mixedSqlFragments } from './analyze.mjs'
 import { inventoryTrackedSurfaces } from './tracked-surface-inventory.mjs'
 
 const JS_FAMILY = new Set(['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'])
-const MIXED_SCRIPT = new Set(['.sh', '.py', '.ps1', '.bat'])
+const MIXED_SCRIPT = new Set(['.sh', '.py', '.ps1', '.bat', '.yml', '.yaml', '.dockerfile', '.package-json'])
 const execFileAsync = promisify(execFile)
 
 function sha256(value) {
