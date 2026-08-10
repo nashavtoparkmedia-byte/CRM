@@ -1,0 +1,100 @@
+{
+  "schema": "yoko.crm.whole-project-control-plane-reconciliation.v1",
+  "captured_at": "2026-08-10T11:06:09Z",
+  "host": "jvxthcorvm",
+  "caller": "codexbot",
+  "package": {
+    "name": "yoko-privileged-runtime",
+    "dpkg_state": "ii",
+    "version": "2.0.0-5"
+  },
+  "installed_identity": {
+    "runtime_path": "/usr/local/sbin/yoko-privileged-runtime",
+    "runtime_sha256": "0cdeeb4ba43abe50f80fed1580ad7b0729bf83358932ece2974b3faedafed57a",
+    "runtime_owner": "root:root",
+    "runtime_mode": "0755",
+    "policy_path": "/usr/local/share/yoko-privileged-runtime/policy.v2.json",
+    "policy_sha256": "e67159bf95b583a17073ccf34b95f17fb885321df10b742be970168331d64e38",
+    "policy_owner": "root:root",
+    "policy_mode": "0444",
+    "registry_sha256": "6e0ac1bdf7bbf95b5ae984dc266050a86425aac1bd884f3ab2f1b6f377291016",
+    "sudoers_path": "/etc/sudoers.d/92-yoko-privileged-runtime",
+    "sudoers_sha256": "6e6b7cb2a088cc92fa7aee747adca46c64b4b96d1224be21117be5adef488c06"
+  },
+  "self_check": {
+    "ok": true,
+    "runtime_version": "2.0.0",
+    "policy_schema": "yoko.privileged-runtime.policy.v2",
+    "docker_socket_delegated": false,
+    "generic_command_execution": false,
+    "arbitrary_paths": false
+  },
+  "effective_sudo_abi": {
+    "run_as": "root",
+    "setenv": false,
+    "password_required": false,
+    "entrypoint": "/usr/local/sbin/yoko-privileged-runtime",
+    "command_count": 24,
+    "commands": [
+      "version",
+      "self-check",
+      "capabilities",
+      "policy-status",
+      "registry-status",
+      "audit-status",
+      "storage-status",
+      "recovery-status",
+      "docker-provenance",
+      "fs-stat *",
+      "fs-read * *",
+      "fs-tree *",
+      "snapshot-manifest *",
+      "git-index *",
+      "docker-inspect *",
+      "service-status *",
+      "service-health *",
+      "service-restart *",
+      "release-preflight",
+      "release-activate",
+      "config-activate",
+      "database-status",
+      "database-migrate",
+      "rollback"
+    ]
+  },
+  "registry": {
+    "resource_count": 18,
+    "docker_resources": 15,
+    "filesystem_resources": 3
+  },
+  "audit": {
+    "state": "EMPTY",
+    "record_count": 0,
+    "last_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "storage": {
+    "admissible": true,
+    "state_root": "/var/lib/yoko-privileged-runtime",
+    "available_bytes": 18365542400,
+    "minimum_free_bytes": 8589934592
+  },
+  "negative_boundaries": {
+    "generic_command_execution": false,
+    "arbitrary_paths": false,
+    "arbitrary_package_install": false,
+    "docker_socket_delegated": false,
+    "runtime_self_update": false
+  },
+  "activation_profiles": {
+    "release-activation": "DISABLED_NO_ROOT_OWNED_RELEASE_PROFILE_REGISTRY",
+    "config-activation": "DISABLED_NO_ROOT_OWNED_CANDIDATE_CONFIG_TRANSACTION_PROFILE",
+    "database-migration": "DISABLED_NO_ROOT_OWNED_APPROVED_MIGRATION_ARTIFACT_PROFILE",
+    "rollback": "DISABLED_NO_IMMUTABLE_RELEASE_PROFILE_REGISTRY"
+  },
+  "production_mutated": false,
+  "secret_values_observed_or_emitted": false,
+  "finding_effect": {
+    "FINAL-DOD-016": "CLOSED",
+    "FINAL-DOD-009": "CONFIRMED"
+  }
+}

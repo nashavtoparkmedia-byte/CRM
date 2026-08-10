@@ -1,0 +1,34 @@
+{
+  "schema": "yoko.crm.whole-project-dod-recovery-identity.v1",
+  "project": "YOKO CRM MODULAR ARCHITECTURE TRANSFORMATION",
+  "phase": "WHOLE_PROJECT_DOD_RECOVERY",
+  "created_at": "2026-08-10T11:02:37Z",
+  "repository": "/opt/codex-work/crm",
+  "worktree": "/opt/codex-work/crm-architecture-dod-recovery",
+  "branch": "codex/crm-architecture-dod-recovery",
+  "base_commit": "0b61ba296ba2734738d4a21b9d00ce8b110d63cf",
+  "base_tree": "56c452391c68c3cd2bb2ad739240e30ab5ed76ca",
+  "external_review": {
+    "task_id": "019feb29-bac2-7a51-84ff-df013bed1a93",
+    "turn_id": "019feb29-e0e4-7d62-8116-b347afda47f5",
+    "message_id": "msg_071c129ba3b53e1d016a79a7a1141c8191b9f3cd49e1266a26",
+    "output_sha256": "4d0f743ca44d31f634924fa0e6c5fdfa46305310e5686c58bc44d1f78e89c2f6",
+    "prompt_sha256": "11e2100a5a80c9247d51d99d1ce92bae6aa590ac4cfadcf60775a70874a18b77",
+    "preserved_artifact_sha256": "23dff150817315ac3263fefa2d1dfc6bb24a9473488c6fd87ec5c78be32fe536"
+  },
+  "recovery_contract_sha256": "f2279bbaa7793b8625e98d64d6cca2953d2eff5b2f15aa28aeab5303d7c632cc",
+  "historical_007r": {
+    "classification": "NARROW_FOREIGN_WRITE_SOURCE_GATE_ARCHITECTURE_SUBSTRATE",
+    "outer_manifest_sha256": "91e0601288ceeca3c4f9b4357682a676accb60dc2d407bab7d048450fe65e8de",
+    "accepted_bundles": 64,
+    "historical_entries": 1614,
+    "preserved": true
+  },
+  "guardrails": {
+    "primary_dirty_worktree_preserved": true,
+    "production_mutated_during_truth_phase": false,
+    "forbidden_evidence_validator_executed": false,
+    "ai_calls_worktree_mutated": false,
+    "historical_evidence_rewritten": false
+  }
+}
