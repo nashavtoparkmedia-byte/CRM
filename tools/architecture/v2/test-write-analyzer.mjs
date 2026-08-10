@@ -951,6 +951,11 @@ test('ordinary run methods are not misclassified as database writes', () => {
     assert.deepEqual(sites, [])
 })
 
+test('Map-like members on Store classes are not SQL drivers', () => {
+    const sites = extractPrismaWrites("class ContactStore { constructor() { this._map = new Map() } get(id) { return this._map.get(id) } }")
+    assert.deepEqual(sites, [])
+})
+
 test('nested relation-shaped mutations are fail-closed until schema resolution', () => {
     const sites = extractPrismaWrites('prisma.contact.update({ data: { chats: { create: { id: 1 } } } })')
     assert.equal(sites.length, 1)

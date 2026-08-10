@@ -2151,6 +2151,10 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
 
     function sqlDriverReceiverLooksIntentional(expression) {
         const candidate = unwrapExpression(expression)
+        if (
+            (ts.isPropertyAccessExpression(candidate) || ts.isElementAccessExpression(candidate))
+            && /^_?(?:map|cache|set|list|items|entries)$/iu.test(propertyName(candidate) ?? '')
+        ) return false
         if (candidate.kind === ts.SyntaxKind.ThisKeyword) {
             for (let current = candidate.parent; current; current = current.parent) {
                 if (ts.isClassLike(current)) return /(?:database|repository|store|sqlite|postgres|mysql)/iu.test(nodeName(current.name, sourceFile))
@@ -2164,6 +2168,10 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
     function sqlDriverReceiverProven(expression, use = expression, seen = new Set()) {
         const candidate = unwrapExpression(expression)
         if (!candidate) return false
+        if (
+            (ts.isPropertyAccessExpression(candidate) || ts.isElementAccessExpression(candidate))
+            && /^_?(?:map|cache|set|list|items|entries)$/iu.test(propertyName(candidate) ?? '')
+        ) return false
         if (sqlDriverReceiverLooksIntentional(candidate)) return true
         if (ts.isNewExpression(candidate)) {
             const callee = unwrapExpression(candidate.expression)
