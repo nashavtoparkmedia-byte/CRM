@@ -104,13 +104,14 @@
     "architecture/isolation/platform-shell/contact-conversation-api-v1/module-manifest-amendments.json",
     "architecture/isolation/platform-shell/manual-driver-telegram-delivery-v1/module-manifest-amendments.json",
     "architecture/isolation/platform-shell/manager-driver-communication-v1/module-manifest-amendments.json",
-    "architecture/isolation/ai-knowledge/governance-v1/module-manifest-amendments.json"
+    "architecture/isolation/ai-knowledge/governance-v1/module-manifest-amendments.json",
+    "architecture/isolation/calling/ai-agent-config-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007R-AI-KNOWLEDGE-GOVERNANCE",
-  "registry_base_commit": "2dfa7ebe0683a21cb53ff8f5caf59f2562b60de0",
+  "registry_milestone": "CRM-ARCH-007R-CALLING-AI-AGENT-CONFIG",
+  "registry_base_commit": "f61d39832252994b96f4f5aba525c125561c19f2",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",

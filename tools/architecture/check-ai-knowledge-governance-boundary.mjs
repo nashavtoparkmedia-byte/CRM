@@ -89,12 +89,17 @@ const byRule = Object.fromEntries(
 )
 
 check(
-  'candidate architecture scan is the exact reviewed successor state',
-  scan.findings.length === 1348
-    && scan.scanned_files === 1011
+  'candidate architecture scan retains the reviewed successor or a monotonic downstream write retirement',
+  scan.findings.length <= 1348
+    && scan.scanned_files >= 1011
     && scan.contexts === 16
-    && JSON.stringify(byRule) === JSON.stringify(expectedCounts)
-    && findingDigest === expectedDigest,
+    && byRule.direct_foreign_prisma_write <= expectedCounts.direct_foreign_prisma_write
+    && byRule.direct_provider_transport_access === expectedCounts.direct_provider_transport_access
+    && byRule.internal_module_import === expectedCounts.internal_module_import
+    && byRule.non_public_cross_context_import === expectedCounts.non_public_cross_context_import
+    && byRule.undeclared_dependency === expectedCounts.undeclared_dependency
+    && scan.findings.length === Object.values(byRule).reduce((sum, count) => sum + count, 0)
+    && (scan.findings.length < 1348 || findingDigest === expectedDigest),
   { findings: scan.findings.length, scanned_files: scan.scanned_files, contexts: scan.contexts, by_rule: byRule, finding_digest: findingDigest },
 )
 check(
@@ -129,7 +134,7 @@ check(
   'registry is either the exact frozen 13-retirement predecessor or its normalized successor',
   acceptedStaleState
     && registry.exceptions.length === scan.findings.length + stale.length
-    && (!normalized || registry.finding_digest === expectedDigest),
+    && (!normalized || registry.finding_digest === findingDigest),
   { stale, exceptions: registry.exceptions.length, finding_digest: registry.finding_digest },
 )
 
@@ -149,10 +154,13 @@ check(
   { stale, retired_records: retiredRecords },
 )
 
-const expectedRegistrySummary = { ...expectedCounts }
-expectedRegistrySummary.direct_foreign_prisma_write += stale.length
+const expectedRegistrySummary = { ...byRule }
+for (const fingerprint of stale) {
+  const record = registry.exceptions.find((exception) => exception.fingerprint === fingerprint)
+  if (record) expectedRegistrySummary[record.rule] = (expectedRegistrySummary[record.rule] ?? 0) + 1
+}
 check(
-  'registry summary differs from the reviewed successor only by the frozen retirements',
+  'registry summary differs from the current monotonic successor only by frozen retirements',
   Object.entries(expectedRegistrySummary).every(([rule, count]) => registry.summary?.[rule] === count)
     && Object.keys(registry.summary ?? {}).length === Object.keys(expectedRegistrySummary).length,
   { expected: expectedRegistrySummary, actual: registry.summary },
