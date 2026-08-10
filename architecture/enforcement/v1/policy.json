@@ -90,7 +90,7 @@
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
   "registry_milestone": "CRM-ARCH-007R-AI-KNOWLEDGE-LEGACY-ENTRY",
-  "registry_base_commit": "4e77d30934665d69fb69f5156b235175dec3b67f",
+  "registry_base_commit": "653a802149a3526bd3ec99d24f71f00a88be81ef",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",

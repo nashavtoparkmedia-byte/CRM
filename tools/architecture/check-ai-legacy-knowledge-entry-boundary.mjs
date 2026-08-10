@@ -134,7 +134,7 @@ check(
     'strict policy binds this milestone to the accepted parser parent',
     policy.manifest_amendments.includes(amendmentPath)
         && policy.registry_milestone === 'CRM-ARCH-007R-AI-KNOWLEDGE-LEGACY-ENTRY'
-        && policy.registry_base_commit === '4e77d30934665d69fb69f5156b235175dec3b67f',
+        && policy.registry_base_commit === '653a802149a3526bd3ec99d24f71f00a88be81ef',
     'policy identity drift',
 )
 check(
@@ -142,9 +142,9 @@ check(
     registry.summary?.direct_foreign_prisma_write === 100
         && registry.exceptions.length === 1430
         && [
-            'arch_64afa85c372c669fd21c130a',
-            'arch_62f433aa20b6558ea65ba817',
-            'arch_cc4a675bb943a6e30726aa0d',
+            'arch_4e0297ee9451d50de1fed034',
+            'arch_1ad0c6177270bb0f0879e098',
+            'arch_557d64553906286e94fdd4cc',
         ].every((fingerprint) => !registry.exceptions.some((entry) => entry.fingerprint === fingerprint)),
     'strict exception retirement drift',
 )
