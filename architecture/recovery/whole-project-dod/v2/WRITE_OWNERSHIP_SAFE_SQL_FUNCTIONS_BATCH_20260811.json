@@ -1,0 +1,21 @@
+{
+  "schema": "yoko.crm.write-ownership-analyzer-batch.v1",
+  "generated_at": "2026-08-10T23:08:56.328Z",
+  "authority": "Analyzer-improvement batch: bounded allowlist of pure SQL scalar/aggregate functions; arbitrary SELECT functions remain side-effect-ambiguous.",
+  "inputs": {
+    "previous_baseline_sha256": "d15a0b9836ea652f3f92d34d162e3309baf13a9515bcc2f05a4c32982a5f0a61",
+    "regression_fixture": "tools/architecture/v2/test-write-analyzer.mjs"
+  },
+  "results": {
+    "fixtures": "84/84",
+    "authoritative_scan": "1693/1693 surfaces, 280815ms, zero failures/timeouts",
+    "previous_ambiguous": 533,
+    "current_ambiguous": 531,
+    "previous_query_raw_side_effect_unresolved": 26,
+    "current_query_raw_side_effect_unresolved": 24,
+    "foreign_writes": 0,
+    "operational_surfaces_unclassified": 443
+  },
+  "classification_effect": "Two queryRaw records resolved by pure-function evidence; no ownership record converted to PASS without proof.",
+  "next_action": "Continue fail-closed source-family closure for 311 ownership-unresolved, 20 dynamic delegates, 165 dynamic SQL and 24 queryRaw side-effect records."
+}

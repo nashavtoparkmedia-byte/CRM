@@ -1,29 +1,29 @@
 {
   "schema": "yoko.crm.write-ownership-derived-state.v1",
-  "generated_at": "2026-08-10T23:02:34.839Z",
+  "generated_at": "2026-08-10T23:08:56.328Z",
   "program": "WHOLE-PROJECT DOD RECOVERY",
-  "phase": "WRITE_OWNERSHIP_CLOSURE_TGBOT_PRISMA_RESCAN",
+  "phase": "WRITE_OWNERSHIP_CLOSURE_SAFE_SQL_FUNCTIONS_RESCAN",
   "verdict": "EXTERNAL_FINAL_ACCEPTANCE_FAILED",
   "ready": false,
   "frozen_baseline": {
     "path": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json",
-    "sha256": "d15a0b9836ea652f3f92d34d162e3309baf13a9515bcc2f05a4c32982a5f0a61",
-    "analysis_sha256": "b814698475b4e5c55236f345bbc34c367bcc7c939027601791c548c073074f21",
+    "sha256": "118c886e4276f51f0e85f66abe9aa5db87c049e032b174fb99e492c2b37dbebe",
+    "analysis_sha256": "561ba24deea38311797dd63ba1f0741b979dad900f4a1a567229cfb9e8a9f759",
     "new_scan_run": true,
-    "previous_frozen_sha256": "00d17d054b3793596bc5264a693ee6c7a7b990cfb67df0e62046168be4f63e5c"
+    "previous_frozen_sha256": "d15a0b9836ea652f3f92d34d162e3309baf13a9515bcc2f05a4c32982a5f0a61"
   },
   "metrics": {
-    "confirmed_writes_discovered": 1480,
+    "confirmed_writes_discovered": 1478,
     "confirmed_writes_total_derived": 947,
     "owner_valid": 476,
     "confirmed_foreign_raw": 0,
     "closed_foreign_in_worktree_pending_rescan": 0,
     "closed_foreign_total": 47,
-    "ambiguous_remaining": 533,
+    "ambiguous_remaining": 531,
     "maintenance_migration_confirmed_records": 271,
     "dynamic_delegate_unresolved": 20,
     "dynamic_sql_unresolved": 165,
-    "query_raw_side_effect_unresolved": 26,
+    "query_raw_side_effect_unresolved": 24,
     "confirmed_non_writes": 4,
     "operational_surfaces_total": 443,
     "operational_surfaces_classified_active": 400,
@@ -33,7 +33,7 @@
     "temporary_exceptions": "CURRENT_RECOMPUTE_PENDING",
     "intentional_exceptions": "CURRENT_RECOMPUTE_PENDING",
     "confirmed_write_owner_unresolved": 311,
-    "material_unresolved_remaining": 522
+    "material_unresolved_remaining": 520
   },
   "focused_ownership_review": {
     "reviewed": 10,
@@ -67,7 +67,7 @@
       "state": "REMEDIATED_PENDING_AUTHORITATIVE_RESCAN"
     }
   ],
-  "next_action": "Continue fail-closed source-family closure (311 ownership-unresolved, 20 dynamic delegates, 165 dynamic SQL, 26 queryRaw side-effect records); no ownership shortcut.",
+  "next_action": "Continue fail-closed source-family closure (311 ownership-unresolved, 20 dynamic delegates, 165 dynamic SQL, 24 queryRaw side-effect records); no READY claim.",
   "targeted_batch": {
     "artifact": "architecture/recovery/whole-project-dod/v2/WRITE_OWNERSHIP_CLOSURE_BATCH_20260810.json",
     "triage_artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_OWNERSHIP_RESCAN.json",
@@ -77,25 +77,25 @@
     "provider_write_sites_removed": 60
   },
   "authoritative_rescan": {
-    "artifact": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T0040Z.json",
-    "baseline_sha256": "d15a0b9836ea652f3f92d34d162e3309baf13a9515bcc2f05a4c32982a5f0a61",
-    "analysis_sha256": "b814698475b4e5c55236f345bbc34c367bcc7c939027601791c548c073074f21",
-    "triage_artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_TGBOT_PRISMA.json",
-    "triage_sha256": "2c4ea0f377786b9c368bd568003545d15f1be7b5b74b290cd7284ae34fa1675d",
+    "artifact": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T0140Z.json",
+    "baseline_sha256": "118c886e4276f51f0e85f66abe9aa5db87c049e032b174fb99e492c2b37dbebe",
+    "analysis_sha256": "561ba24deea38311797dd63ba1f0741b979dad900f4a1a567229cfb9e8a9f759",
+    "triage_artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_SAFE_FUNCTIONS.json",
+    "triage_sha256": "15f8749c880382aeca249fbdbef7536c255432d86fc456de243e21f2fe5a6d83",
     "execution": {
-      "ambiguous_candidates": 533,
+      "ambiguous_candidates": 531,
       "complete": true,
-      "elapsed_ms": 272837.881077,
+      "elapsed_ms": 280815.169826,
       "failures": [],
       "files_completed": 1693,
       "files_discovered": 1693,
       "mode": "fresh_process_per_javascript_surface",
-      "progress_every": 100,
+      "progress_every": 125,
       "worker_failures": 0,
       "worker_limit": 4,
       "worker_timeout_ms": 120000,
       "worker_timeouts": 0,
-      "writes_discovered": 1480
+      "writes_discovered": 1478
     }
   }
 }

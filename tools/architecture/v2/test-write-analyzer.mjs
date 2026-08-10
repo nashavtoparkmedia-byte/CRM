@@ -235,6 +235,15 @@ test('SQL analyzer retains non-table schema mutations used by migrations', () =>
     assert.equal(result.is_mutation, true)
 })
 
+test('SQL analyzer treats common pure scalar and aggregate functions as reads', () => {
+    const analysis = analyzeSqlMutation([
+        'SELECT DATE_TRUNC(\'day\', created_at), GREATEST(score, 0), STRING_AGG(name, \',\')',
+        'FROM users GROUP BY DATE_TRUNC(\'day\', created_at)',
+    ].join('\n'))
+    assert.equal(analysis.is_mutation, false)
+    assert.equal(analysis.reasons.includes('select_function_side_effect_unresolved'), false)
+})
+
 test('SQL analyzer opens executable DO blocks and retains CALL/COPY/function ambiguity', () => {
     const procedural = analyzeSqlMutation([
         'DO $$ BEGIN INSERT INTO "Chat" (id) VALUES (1); DELETE FROM "Message"; END $$;',

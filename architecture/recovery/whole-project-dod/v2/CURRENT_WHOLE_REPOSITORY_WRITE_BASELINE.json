@@ -1,19 +1,19 @@
 {
-  "analysis_sha256": "b814698475b4e5c55236f345bbc34c367bcc7c939027601791c548c073074f21",
+  "analysis_sha256": "561ba24deea38311797dd63ba1f0741b979dad900f4a1a567229cfb9e8a9f759",
   "execution": {
-    "ambiguous_candidates": 533,
+    "ambiguous_candidates": 531,
     "complete": true,
-    "elapsed_ms": 272837.881077,
+    "elapsed_ms": 280815.169826,
     "failures": [],
     "files_completed": 1693,
     "files_discovered": 1693,
     "mode": "fresh_process_per_javascript_surface",
-    "progress_every": 100,
+    "progress_every": 125,
     "worker_failures": 0,
     "worker_limit": 4,
     "worker_timeout_ms": 120000,
     "worker_timeouts": 0,
-    "writes_discovered": 1480
+    "writes_discovered": 1478
   },
   "inventory": {
     "controls": {
@@ -18702,24 +18702,24 @@
   "parse_findings": [],
   "schema": "yoko.crm.whole-repository-write-analysis.v2",
   "source": {
-    "git_commit": "d30cacd16c7c1e8505d176a4905912ef6fc30276",
+    "git_commit": "f64ea03ec7e340fb58244f2628ece8aeeb6dd11e",
     "git_tracked_only": true,
-    "git_tree": "57f7e24dbce430bc5f789214c6d87ea6e2c73a46",
+    "git_tree": "44142f3a203b08928e0dd11038985b97380f0268",
     "inventory_schema": "yoko.crm.tracked-executable-surface-inventory.v2",
     "repository_root": ".",
     "tracked_worktree_clean": false,
-    "tracked_worktree_status_sha256": "2674efae9c1c4079feaed1c87a6e5a4775f9357c1c98c3cfa5bff8c818d143dc"
+    "tracked_worktree_status_sha256": "e5925857cf01dd8f0b295e456f3686744b897e66e9693fc72027e1d64e0cf30d"
   },
   "summary": {
-    "ambiguous_writes": 533,
-    "discovered_write_sites": 1480,
+    "ambiguous_writes": 531,
+    "discovered_write_sites": 1478,
     "foreign_writes": 0,
     "historical_dead_writes": 0,
     "migration_only_writes": 468,
-    "operational_script_writes": 463,
+    "operational_script_writes": 461,
     "owner_writes": 476,
     "parse_findings": 0,
-    "raw_sql_writes": 871,
+    "raw_sql_writes": 869,
     "test_writes": 3,
     "tracked_executable_surfaces": 1693,
     "unreviewed_operational_surfaces": 443
@@ -36532,55 +36532,6 @@
       "written_columns": []
     },
     {
-      "ambiguity_reasons": [
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
-      ],
-      "ambiguous": true,
-      "candidate_models": [],
-      "classification": "AMBIGUOUS",
-      "column": 36,
-      "confidence": "HIGH",
-      "dynamic": false,
-      "end": 2577,
-      "file": "gravity-mvp/scripts/audit-wa-groups.js",
-      "index": 2324,
-      "kind": "raw",
-      "line": 56,
-      "method": "$queryRawUnsafe",
-      "model": null,
-      "operations": [],
-      "owner_contexts": [],
-      "read_projection_dynamic": true,
-      "read_tables": [
-        "STRPOS",
-        "WhatsAppChat"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "scope": "Function:main",
-      "select_all": false,
-      "selected_column_sources": [],
-      "selected_columns": [],
-      "site_signature": "d861cd245f25a0ec558ea568bd43f4ca00de4b55c56606e256332e5bbf6c9d37",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "sql_sha256": "8c2616381a4d4e40f326e4fb7b84f06369b8e957aaf1e871813c9f6001073cfa",
-      "surface": {
-        "disposition": "UNREVIEWED",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "UNKNOWN",
-        "registry_classified": false
-      },
-      "tables": [],
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "written_columns": []
-    },
-    {
       "ambiguity_reasons": [],
       "ambiguous": false,
       "candidate_models": [
@@ -40978,121 +40929,6 @@
         "sentAt",
         "status"
       ]
-    },
-    {
-      "ambiguity_reasons": [
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
-      ],
-      "ambiguous": true,
-      "candidate_models": [],
-      "classification": "AMBIGUOUS",
-      "column": 24,
-      "confidence": "HIGH",
-      "dynamic": false,
-      "end": 873,
-      "file": "gravity-mvp/scripts/debug_ai_config.js",
-      "index": 311,
-      "kind": "raw",
-      "line": 10,
-      "method": "$queryRaw",
-      "model": null,
-      "operations": [],
-      "owner_contexts": [],
-      "read_projection_dynamic": true,
-      "read_tables": [
-        "AiAgentConfig"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "scope": "Function:main",
-      "select_all": false,
-      "selected_column_sources": [
-        {
-          "field": "apiKeyEncrypted",
-          "table": "AiAgentConfig"
-        },
-        {
-          "field": "classificationModel",
-          "table": "AiAgentConfig"
-        },
-        {
-          "field": "connectionStatus",
-          "table": "AiAgentConfig"
-        },
-        {
-          "field": "enabled",
-          "table": "AiAgentConfig"
-        },
-        {
-          "field": "id",
-          "table": "AiAgentConfig"
-        },
-        {
-          "field": "IS",
-          "table": "AiAgentConfig"
-        },
-        {
-          "field": "lastConnectionCheckAt",
-          "table": "AiAgentConfig"
-        },
-        {
-          "field": "mode",
-          "table": "AiAgentConfig"
-        },
-        {
-          "field": "OR",
-          "table": "AiAgentConfig"
-        },
-        {
-          "field": "provider",
-          "table": "AiAgentConfig"
-        },
-        {
-          "field": "responseModel",
-          "table": "AiAgentConfig"
-        },
-        {
-          "field": "text",
-          "table": "AiAgentConfig"
-        },
-        {
-          "field": "updatedAt",
-          "table": "AiAgentConfig"
-        }
-      ],
-      "selected_columns": [
-        "IS",
-        "OR",
-        "apiKeyEncrypted",
-        "classificationModel",
-        "connectionStatus",
-        "enabled",
-        "id",
-        "lastConnectionCheckAt",
-        "mode",
-        "provider",
-        "responseModel",
-        "text",
-        "updatedAt"
-      ],
-      "site_signature": "f59ccc59f604500b7c8a4bed0fc9855da81e7cd4734e40b7a7dbeb5009773ad2",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "sql_sha256": "cd5a438ef059d56bc7d51b9dff12d472f1b883a55177bd1341053d90cbb0b109",
-      "surface": {
-        "disposition": "UNREVIEWED",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "UNKNOWN",
-        "registry_classified": false
-      },
-      "tables": [],
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "written_columns": []
     },
     {
       "ambiguity_reasons": [],
@@ -62019,8 +61855,7 @@
       "ambiguity_reasons": [
         "dynamic_sql_fragment",
         "dynamic_sql_marker",
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
+        "query_raw_dynamic_intent_unresolved"
       ],
       "ambiguous": true,
       "candidate_models": [],
