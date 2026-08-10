@@ -55,8 +55,25 @@ import {
     updateRetrievalPolicyV1,
     verifyGovernanceKnowledgeItemV1,
 } from '@/modules/ai-knowledge/public/v1'
-import { CREATE_AI_AGENT_PROFILE_COMMAND_V1, DELETE_AI_AGENT_PROFILE_COMMAND_V1, UPDATE_AI_AGENT_PROFILE_COMMAND_V1 } from '@/contracts/calling/v1'
-import { createAiAgentProfileV1, deleteAiAgentProfileV1, updateAiAgentProfileV1 } from '@/modules/calling/public/v1'
+import {
+    CREATE_AI_AGENT_PROFILE_COMMAND_V1,
+    DELETE_AI_AGENT_PROFILE_COMMAND_V1,
+    RECORD_SAVED_AI_CONNECTION_SUCCESS_COMMAND_V1,
+    SAVE_AI_AGENT_CONFIG_COMMAND_V1,
+    SAVE_EXTRACTION_QUALITY_TIER_COMMAND_V1,
+    SET_ACTIVE_AI_PROFILE_COMMAND_V1,
+    UPDATE_AI_AGENT_PROFILE_COMMAND_V1,
+} from '@/contracts/calling/v1'
+import {
+    captureAiAgentProviderCredentialV1,
+    createAiAgentProfileV1,
+    deleteAiAgentProfileV1,
+    recordSavedAiConnectionSuccessV1,
+    saveAiAgentConfigV1,
+    saveExtractionQualityTierV1,
+    setActiveAiProfileV1,
+    updateAiAgentProfileV1,
+} from '@/modules/calling/public/v1'
 import { CANCEL_HISTORY_IMPORT_JOB_COMMAND_V1, DELETE_HISTORY_IMPORT_JOB_COMMAND_V1, QUEUE_HISTORY_IMPORT_JOB_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { cancelHistoryImportJobV1, deleteHistoryImportJobV1, queueHistoryImportJobV1 } from '@/modules/messaging/public/v1'
 
@@ -114,60 +131,42 @@ export async function getAiConfig() {
     } catch { return null }
 }
 
-/** Поля AiAgentConfig с типом enum в Postgres. При raw UPDATE Prisma
- *  не может автокаст text → enum, и весь UPDATE падает с 42804.
- *  Решение: для этих полей подставляем `$N::"EnumType"` вместо просто
- *  `$N`. Остальные поля идут как обычно. */
-const ENUM_CASTS: Record<string, string> = {
-    provider: 'AiProviderType',
-    mode:     'AiAgentMode',
-}
-
 export async function saveAiConfig(data: Record<string, any>) {
     await assertCanEditAi()
     const fields = Object.keys(data)
     if (fields.length === 0) return null
+    const includesProviderCredential = fields.includes('apiKeyEncrypted')
     try {
-        // Upsert вручную через raw SQL
-        const existing = await prisma.$queryRaw<any[]>`SELECT id FROM "AiAgentConfig" WHERE id = 'singleton' LIMIT 1`
-        if (existing.length === 0) {
-            // updatedAt is NOT NULL with NO db default (Prisma @updatedAt, which
-            // raw queries don't auto-fill). On the very first insert — when the
-            // singleton row doesn't exist yet — omitting it triggers 23502
-            // (NOT NULL violation). createdAt is fine (CURRENT_TIMESTAMP default).
-            // Strip any client-sent updatedAt and always set it to NOW() here.
-            const { updatedAt: _ignored, ...rest } = data as Record<string, any>
-            const allData = { id: 'singleton', ...rest }
-            const cols  = Object.keys(allData).map(k => `"${k}"`).join(', ')
-            const vals  = Object.values(allData)
-            const marks = Object.keys(allData).map((k, i) => {
-                const cast = ENUM_CASTS[k]
-                return cast ? `$${i + 1}::"${cast}"` : `$${i + 1}`
-            }).join(', ')
-            await prisma.$executeRawUnsafe(
-                `INSERT INTO "AiAgentConfig" (${cols}, "updatedAt") VALUES (${marks}, NOW())`,
-                ...vals,
-            )
-        } else {
-            const sets  = fields.map((k, i) => {
-                const cast = ENUM_CASTS[k]
-                return cast ? `"${k}" = $${i + 1}::"${cast}"` : `"${k}" = $${i + 1}`
-            }).join(', ')
-            const vals  = Object.values(data)
-            await prisma.$executeRawUnsafe(
-                `UPDATE "AiAgentConfig" SET ${sets}, "updatedAt" = NOW() WHERE id = 'singleton'`,
-                ...vals
-            )
+        const entries: Array<{ field: string; value: unknown }> = []
+        const safeResult: Record<string, any> = {}
+        for (const field of fields) {
+            if (field === 'apiKeyEncrypted') {
+                entries.push({
+                    field: 'providerCredential',
+                    value: data[field] === null
+                        ? null
+                        : captureAiAgentProviderCredentialV1(data[field]),
+                })
+            } else if (field === 'providerCredential') {
+                // Owner field names are not accepted on the legacy physical API.
+                // Route the name (never its value) into strict contract rejection.
+                entries.push({ field: '__unsupported_provider_credential__', value: null })
+            } else {
+                entries.push({ field, value: data[field] })
+                safeResult[field] = data[field]
+            }
         }
+        await saveAiAgentConfigV1({ contract: SAVE_AI_AGENT_CONFIG_COMMAND_V1, entries })
         revalidatePath('/settings/ai')
-        return { id: 'singleton', ...data }
+        return { id: 'singleton', ...safeResult }
     } catch (e: any) {
-        // Раньше эта ошибка была silent — UI получал null и не знал что
-        // именно поле провайдер/режим попало в enum-mismatch и весь
-        // UPDATE откатился. Перебрасываем: handleSaveProvider /
-        // handleTestConnection покажут toast с реальной причиной.
-        console.error('[AI Config] saveAiConfig error:', e?.message ?? e)
-        throw new Error(`Не удалось сохранить настройки AI: ${e?.message ?? 'unknown error'}`)
+        // Credential-bearing persistence failures are deliberately generic:
+        // provider values never enter logs, action results or propagated errors.
+        const detail = includesProviderCredential
+            ? 'ошибка сохранения учётных данных'
+            : e?.message ?? 'unknown error'
+        console.error('[AI Config] saveAiConfig error:', detail)
+        throw new Error(`Не удалось сохранить настройки AI: ${detail}`)
     }
 }
 
@@ -198,12 +197,9 @@ export async function testSavedConnection() {
         // снова видит «нужна проверка».
         if (result.ok) {
             try {
-                await prisma.$executeRaw`
-                    UPDATE "AiAgentConfig"
-                    SET "connectionStatus" = 'ok',
-                        "lastConnectionCheckAt" = NOW()
-                    WHERE id = 'singleton'
-                `
+                await recordSavedAiConnectionSuccessV1({
+                    contract: RECORD_SAVED_AI_CONNECTION_SUCCESS_COMMAND_V1,
+                })
             } catch { /* silent */ }
         }
         return result
@@ -616,17 +612,7 @@ export async function deleteAiProfile(id: string) {
 
 export async function setActiveAiProfile(id: string | null) {
     await assertCanEditAi()
-    if (id) {
-        const exists = await prisma.aiAgentProfile.findUnique({ where: { id }, select: { id: true } })
-        if (!exists) throw new Error('Профиль не найден')
-    }
-    // Используем upsert чтобы не упасть, если AiAgentConfig.singleton
-    // ещё не создан (свежий деплой без seed'а).
-    await prisma.aiAgentConfig.upsert({
-        where: { id: 'singleton' },
-        update: { activeProfileId: id },
-        create: { id: 'singleton', activeProfileId: id, activeChannels: [] },
-    })
+    await setActiveAiProfileV1({ contract: SET_ACTIVE_AI_PROFILE_COMMAND_V1, profileId: id })
     revalidatePath('/settings/ai')
 }
 
@@ -771,12 +757,10 @@ export async function saveExtractionQualityTier(
     if (!['economy', 'balanced', 'quality'].includes(tier)) {
         throw new Error('Недопустимый tier')
     }
-    await prisma.$executeRaw`
-        UPDATE "AiAgentConfig"
-        SET "extractionQualityTier" = ${tier},
-            "updatedAt"             = NOW()
-        WHERE id = 'singleton'
-    `
+    await saveExtractionQualityTierV1({
+        contract: SAVE_EXTRACTION_QUALITY_TIER_COMMAND_V1,
+        tier,
+    })
     revalidatePath('/settings/ai')
 }
 

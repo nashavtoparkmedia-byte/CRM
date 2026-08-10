@@ -177,6 +177,25 @@ assertCheck('Configuration AI governance uses all 13 owner commands',aiKnowledge
 const aiKnowledgeGovernanceWrites=extractPrismaWrites(aiKnowledgeGovernanceConsumer).filter((write)=>write.model==='aiKnowledgeItem'||write.tables?.includes('AiKnowledgeItem'))
 assertCheck('13 foreign AiKnowledgeItem writes removed from Configuration governance caller',aiKnowledgeGovernanceWrites.length===0,JSON.stringify(aiKnowledgeGovernanceWrites))
 
+const callingAiConfigCommands=[
+    ['SAVE_AI_AGENT_CONFIG_COMMAND_V1','saveAiAgentConfigV1'],
+    ['RECORD_SAVED_AI_CONNECTION_SUCCESS_COMMAND_V1','recordSavedAiConnectionSuccessV1'],
+    ['SET_ACTIVE_AI_PROFILE_COMMAND_V1','setActiveAiProfileV1'],
+    ['SAVE_EXTRACTION_QUALITY_TIER_COMMAND_V1','saveExtractionQualityTierV1'],
+]
+assertCheck('Configuration AiAgentConfig uses all four Calling owner commands',callingAiConfigCommands.every(([contract,runtime])=>aiKnowledgeGovernanceConsumer.includes(contract)&&aiKnowledgeGovernanceConsumer.includes(`${runtime}(`)),'Calling AiAgentConfig owner command absent')
+const callingAiConfigWrites=extractPrismaWrites(aiKnowledgeGovernanceConsumer).filter((write)=>write.model==='aiAgentConfig'||write.tables?.includes('AiAgentConfig'))
+assertCheck('five foreign AiAgentConfig writes removed from Configuration caller',callingAiConfigWrites.length===0,JSON.stringify(callingAiConfigWrites))
+assertCheck('legacy credential maps only through one opaque capture',aiKnowledgeGovernanceConsumer.includes("field === 'apiKeyEncrypted'")&&aiKnowledgeGovernanceConsumer.includes("field: 'providerCredential'")&&aiKnowledgeGovernanceConsumer.includes('captureAiAgentProviderCredentialV1(data[field])'),'opaque credential capture absent')
+assertCheck('raw owner credential field is rejected by legacy action',aiKnowledgeGovernanceConsumer.includes("field === 'providerCredential'")&&aiKnowledgeGovernanceConsumer.includes("field: '__unsupported_provider_credential__', value: null"),'legacy action accepts providerCredential directly')
+assertCheck('AiAgentConfig save result and credential errors are secret-safe',aiKnowledgeGovernanceConsumer.includes("return { id: 'singleton', ...safeResult }")&&!aiKnowledgeGovernanceConsumer.includes("return { id: 'singleton', ...data }")&&aiKnowledgeGovernanceConsumer.includes('ошибка сохранения учётных данных'),'legacy action can return or expose credential data')
+const callingAiConfigContract=source('gravity-mvp/src/contracts/calling/v1/ai-agent-config-commands.ts')
+assertCheck('Calling AiAgentConfig contract has a closed 23-field union',callingAiConfigContract.includes('AI_AGENT_CONFIG_PATCH_FIELDS_V1')&&(callingAiConfigContract.slice(callingAiConfigContract.indexOf('AI_AGENT_CONFIG_PATCH_FIELDS_V1'),callingAiConfigContract.indexOf('] as const',callingAiConfigContract.indexOf('AI_AGENT_CONFIG_PATCH_FIELDS_V1'))).match(/^  '[^']+',?$/gm)||[]).length===23&&!callingAiConfigContract.includes('apiKeyEncrypted'),'Calling AiAgentConfig contract shape drifted')
+const callingAiConfigAdapter=source('gravity-mvp/src/modules/calling/public/v1/legacy-prisma-ai-agent-config-adapter.ts')
+const callingAdapterWrites=extractPrismaWrites(callingAiConfigAdapter)
+assertCheck('Calling owns five static AiAgentConfig persistence sites',callingAdapterWrites.length===5&&callingAdapterWrites.every((write)=>(write.model==='aiAgentConfig'||write.tables?.includes('AiAgentConfig'))&&(write.kind!=='raw'||write.dynamic===false)),'Calling AiAgentConfig persistence is dynamic or misowned')
+assertCheck('Calling credential references are private and one-shot',callingAiConfigAdapter.includes('new WeakMap<OpaqueCredentialRefV1, string>()')&&callingAiConfigAdapter.includes('credentialValues.delete(reference)')&&!/export function (?:reveal|unseal|read).*Credential/i.test(callingAiConfigAdapter),'Calling credential reference lifetime drifted')
+
 const handler = source('gravity-mvp/src/modules/work-management/public/v1/create-task-handler.ts')
 assertCheck(
     'owner handler depends on a persistence port',
