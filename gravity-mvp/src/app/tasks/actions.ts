@@ -711,9 +711,9 @@ export async function createTask(input: CreateTaskInput): Promise<TaskDTO> {
         try {
             const scenarioData = await buildInitialScenarioData(input.scenario, input.driverId)
             if (Object.keys(scenarioData).length > 0) {
-                await prisma.$executeRaw`
-                    UPDATE tasks SET "scenarioData" = ${JSON.stringify(scenarioData)}::jsonb WHERE id = ${task.id}
-                `
+                await prisma.$executeRawUnsafe(
+                    'UPDATE tasks SET "scenarioData" = $1::jsonb WHERE id = $2', JSON.stringify(scenarioData), task.id,
+                )
             }
         } catch {
             // Non-critical: scenarioData is nullable

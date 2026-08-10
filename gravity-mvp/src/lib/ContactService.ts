@@ -336,14 +336,15 @@ export class ContactService {
   static async cleanupDanglingIdentities(contactIds: string[]): Promise<number> {
     if (contactIds.length === 0) return 0
 
-    const result = await prisma.$executeRaw`
-      DELETE FROM "ContactIdentity"
-      WHERE "contactId" = ANY(${contactIds}::text[])
-        AND id NOT IN (
-          SELECT "contactIdentityId" FROM "Chat"
-          WHERE "contactIdentityId" IS NOT NULL
-        )
-    `
+    const result = await prisma.$executeRawUnsafe(
+      `DELETE FROM "ContactIdentity"
+       WHERE "contactId" = ANY($1::text[])
+         AND id NOT IN (
+           SELECT "contactIdentityId" FROM "Chat"
+           WHERE "contactIdentityId" IS NOT NULL
+         )`,
+      contactIds,
+    )
     if (result > 0) {
       console.log(`[ContactService] Cleaned up ${result} dangling identities for ${contactIds.length} contacts`)
     }

@@ -109,9 +109,9 @@ export async function updateScenarioField(
         },
     }
 
-    await prisma.$executeRaw`
-        UPDATE tasks SET "scenarioData" = ${JSON.stringify(updated)}::jsonb WHERE id = ${taskId}
-    `
+    await prisma.$executeRawUnsafe(
+        'UPDATE tasks SET "scenarioData" = $1::jsonb WHERE id = $2', JSON.stringify(updated), taskId,
+    )
 }
 
 // ─── Reset a field to auto/derived (removes manual override) ──────
@@ -163,9 +163,9 @@ export async function resetScenarioField(taskId: string, fieldId: string): Promi
         }
     }
 
-    await prisma.$executeRaw`
-        UPDATE tasks SET "scenarioData" = ${JSON.stringify(updated)}::jsonb WHERE id = ${taskId}
-    `
+    await prisma.$executeRawUnsafe(
+        'UPDATE tasks SET "scenarioData" = $1::jsonb WHERE id = $2', JSON.stringify(updated), taskId,
+    )
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────

@@ -325,36 +325,48 @@ async function createBlockedByTrustedItem(
         makeConflictsTag(trustedItemId),
     ])
 
-    await prisma.$executeRaw`
-        INSERT INTO "AiKnowledgeItem" (
+    await prisma.$executeRawUnsafe(
+        `INSERT INTO "AiKnowledgeItem" (
             id, "sectionId", title, "canonicalStatement",
             tags, confidence,
             "sourceCount", "uniqueManagerCount",
             status, "isActive", "safetyLevel",
             "createdBy", "createdAt", "updatedAt"
-        ) VALUES (
-            ${itemId}, ${sectionId}, ${candidate.title}, ${candidate.canonical_statement},
-            ${tags}::text[], ${candidate.confidence},
-            1, ${pair.managerUserId ? 1 : 0},
+         ) VALUES (
+            $1, $2, $3, $4, $5::text[], $6, 1, $7,
             'draft'::"AiKnowledgeStatus", false, 'requires_human'::"AiKnowledgeSafety",
             'extractor', NOW(), NOW()
-        )
-    `
-    await prisma.$executeRaw`
-        INSERT INTO "AiKnowledgeSource" (
+         )`,
+        itemId,
+        sectionId,
+        candidate.title,
+        candidate.canonical_statement,
+        tags,
+        candidate.confidence,
+        pair.managerUserId ? 1 : 0,
+    )
+    await prisma.$executeRawUnsafe(
+        `INSERT INTO "AiKnowledgeSource" (
             id, "itemId", "originType",
             "messageId", "chatId", channel, "managerUserId",
-            "connectionId",
-            excerpt, "excerptHash", confidence, "occurredAt", "createdAt"
-        ) VALUES (
-            ${sourceId}, ${itemId}, ${pair.originType}::"AiKnowledgeSourceOrigin",
-            ${pair.managerMessageId}, ${pair.chatId},
-            ${pair.channel}::"ChatChannel", ${pair.managerUserId},
-            ${pair.connectionId},
-            ${maskedExcerpt}, ${excerptHash}, ${candidate.confidence}, ${pair.managerAt},
-            NOW()
-        )
-    `
+            "connectionId", excerpt, "excerptHash", confidence, "occurredAt", "createdAt"
+         ) VALUES (
+            $1, $2, $3::"AiKnowledgeSourceOrigin", $4, $5,
+            $6::"ChatChannel", $7, $8, $9, $10, $11, $12, NOW()
+         )`,
+        sourceId,
+        itemId,
+        pair.originType,
+        pair.managerMessageId,
+        pair.chatId,
+        pair.channel,
+        pair.managerUserId,
+        pair.connectionId,
+        maskedExcerpt,
+        excerptHash,
+        candidate.confidence,
+        pair.managerAt,
+    )
     return { itemId }
 }
 
@@ -372,36 +384,51 @@ async function createItemWithSource(
 
     const tags = mergeTags(candidate.tags, [`type:${candidate.type}`])
 
-    await prisma.$executeRaw`
-        INSERT INTO "AiKnowledgeItem" (
+    await prisma.$executeRawUnsafe(
+        `INSERT INTO "AiKnowledgeItem" (
             id, "sectionId", title, "canonicalStatement",
             tags, confidence,
             "sourceCount", "uniqueManagerCount",
             status, "isActive", "safetyLevel",
             "createdBy", "createdAt", "updatedAt"
-        ) VALUES (
-            ${itemId}, ${sectionId}, ${candidate.title}, ${candidate.canonical_statement},
-            ${tags}::text[], ${candidate.confidence},
-            1, ${pair.managerUserId ? 1 : 0},
-            ${status}::"AiKnowledgeStatus", ${isActive}, ${safetyLevel}::"AiKnowledgeSafety",
+         ) VALUES (
+            $1, $2, $3, $4, $5::text[], $6, 1, $7,
+            $8::"AiKnowledgeStatus", $9, $10::"AiKnowledgeSafety",
             'extractor', NOW(), NOW()
-        )
-    `
-    await prisma.$executeRaw`
-        INSERT INTO "AiKnowledgeSource" (
+         )`,
+        itemId,
+        sectionId,
+        candidate.title,
+        candidate.canonical_statement,
+        tags,
+        candidate.confidence,
+        pair.managerUserId ? 1 : 0,
+        status,
+        isActive,
+        safetyLevel,
+    )
+    await prisma.$executeRawUnsafe(
+        `INSERT INTO "AiKnowledgeSource" (
             id, "itemId", "originType",
             "messageId", "chatId", channel, "managerUserId",
-            "connectionId",
-            excerpt, "excerptHash", confidence, "occurredAt", "createdAt"
-        ) VALUES (
-            ${sourceId}, ${itemId}, ${pair.originType}::"AiKnowledgeSourceOrigin",
-            ${pair.managerMessageId}, ${pair.chatId},
-            ${pair.channel}::"ChatChannel", ${pair.managerUserId},
-            ${pair.connectionId},
-            ${maskedExcerpt}, ${excerptHash}, ${candidate.confidence}, ${pair.managerAt},
-            NOW()
-        )
-    `
+            "connectionId", excerpt, "excerptHash", confidence, "occurredAt", "createdAt"
+         ) VALUES (
+            $1, $2, $3::"AiKnowledgeSourceOrigin", $4, $5,
+            $6::"ChatChannel", $7, $8, $9, $10, $11, $12, NOW()
+         )`,
+        sourceId,
+        itemId,
+        pair.originType,
+        pair.managerMessageId,
+        pair.chatId,
+        pair.channel,
+        pair.managerUserId,
+        pair.connectionId,
+        maskedExcerpt,
+        excerptHash,
+        candidate.confidence,
+        pair.managerAt,
+    )
     return { itemId, activated: isActive }
 }
 
@@ -415,21 +442,28 @@ async function mergeIntoItem(
     let sourceAdded = false
     try {
         const sourceId = 'kbs_' + Math.random().toString(36).slice(2, 14)
-        await prisma.$executeRaw`
-            INSERT INTO "AiKnowledgeSource" (
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "AiKnowledgeSource" (
                 id, "itemId", "originType",
                 "messageId", "chatId", channel, "managerUserId",
-                "connectionId",
-                excerpt, "excerptHash", confidence, "occurredAt", "createdAt"
-            ) VALUES (
-                ${sourceId}, ${item.id}, ${pair.originType}::"AiKnowledgeSourceOrigin",
-                ${pair.managerMessageId}, ${pair.chatId},
-                ${pair.channel}::"ChatChannel", ${pair.managerUserId},
-                ${pair.connectionId},
-                ${maskedExcerpt}, ${excerptHash}, ${candidate.confidence}, ${pair.managerAt},
-                NOW()
-            )
-        `
+                "connectionId", excerpt, "excerptHash", confidence, "occurredAt", "createdAt"
+             ) VALUES (
+                $1, $2, $3::"AiKnowledgeSourceOrigin", $4, $5,
+                $6::"ChatChannel", $7, $8, $9, $10, $11, $12, NOW()
+             )`,
+            sourceId,
+            item.id,
+            pair.originType,
+            pair.managerMessageId,
+            pair.chatId,
+            pair.channel,
+            pair.managerUserId,
+            pair.connectionId,
+            maskedExcerpt,
+            excerptHash,
+            candidate.confidence,
+            pair.managerAt,
+        )
         sourceAdded = true
     } catch {
         return { added: false, promoted: false }
@@ -447,17 +481,24 @@ async function mergeIntoItem(
 
     const newTags = mergeTags(item.tags, candidate.tags, [`type:${candidate.type}`])
 
-    await prisma.$executeRaw`
-        UPDATE "AiKnowledgeItem"
-        SET "sourceCount"        = ${newCount},
-            "uniqueManagerCount" = ${newMgrCount},
-            confidence           = ${newConf},
-            tags                 = ${newTags}::text[],
-            status               = ${status}::"AiKnowledgeStatus",
-            "isActive"           = ${isActive},
-            "updatedAt"          = NOW()
-        WHERE id = ${item.id}
-    `
+    await prisma.$executeRawUnsafe(
+        `UPDATE "AiKnowledgeItem"
+         SET "sourceCount" = $1,
+             "uniqueManagerCount" = $2,
+             confidence = $3,
+             tags = $4::text[],
+             status = $5::"AiKnowledgeStatus",
+             "isActive" = $6,
+             "updatedAt" = NOW()
+         WHERE id = $7`,
+        newCount,
+        newMgrCount,
+        newConf,
+        newTags,
+        status,
+        isActive,
+        item.id,
+    )
     item.sourceCount        = newCount
     item.uniqueManagerCount = newMgrCount
     item.confidence         = newConf
@@ -471,12 +512,16 @@ async function mergeIntoItem(
 async function markConflict(itemA: ItemRow, itemB: ItemRow): Promise<string> {
     const groupId = itemA.conflictGroupId ?? itemB.conflictGroupId
         ?? ('cfl_' + Math.random().toString(36).slice(2, 14))
-    await prisma.$executeRaw`
-        UPDATE "AiKnowledgeItem"
-        SET "conflictGroupId" = ${groupId}, "updatedAt" = NOW()
-        WHERE id IN (${itemA.id}, ${itemB.id})
-          AND ("conflictGroupId" IS NULL OR "conflictGroupId" = ${groupId})
-    `
+    await prisma.$executeRawUnsafe(
+        `UPDATE "AiKnowledgeItem"
+         SET "conflictGroupId" = $1, "updatedAt" = NOW()
+         WHERE id IN ($2, $3)
+           AND ("conflictGroupId" IS NULL OR "conflictGroupId" = $4)`,
+        groupId,
+        itemA.id,
+        itemB.id,
+        groupId,
+    )
     itemA.conflictGroupId = groupId
     itemB.conflictGroupId = groupId
     return groupId
@@ -652,11 +697,11 @@ async function processBatch(
 // ─── Job lifecycle ────────────────────────────────────────────────
 
 async function updateJobProgress(jobId: string, progress: ExtractionJobProgress): Promise<void> {
-    await prisma.$executeRaw`
-        UPDATE "AiExtractionJob"
-        SET progress = ${progress}::jsonb
-        WHERE id = ${jobId}
-    `
+    await prisma.$executeRawUnsafe(
+        'UPDATE "AiExtractionJob" SET progress = $1::jsonb WHERE id = $2',
+        JSON.stringify(progress),
+        jobId,
+    )
 }
 
 async function finalizeJob(
@@ -665,14 +710,18 @@ async function finalizeJob(
     error:    string | null,
     progress: ExtractionJobProgress,
 ): Promise<void> {
-    await prisma.$executeRaw`
-        UPDATE "AiExtractionJob"
-        SET status         = ${status}::"AiExtractionStatus",
-            progress       = ${progress}::jsonb,
-            "errorMessage" = ${error},
-            "finishedAt"   = NOW()
-        WHERE id = ${jobId}
-    `
+    await prisma.$executeRawUnsafe(
+        `UPDATE "AiExtractionJob"
+         SET status = $1::"AiExtractionStatus",
+             progress = $2::jsonb,
+             "errorMessage" = $3,
+             "finishedAt" = NOW()
+         WHERE id = $4`,
+        status,
+        JSON.stringify(progress),
+        error,
+        jobId,
+    )
 }
 
 // ─── Main entry ──────────────────────────────────────────────────
@@ -704,17 +753,23 @@ export async function runExtraction(jobId: string): Promise<void> {
     }
     const { provider, model } = resolveModel(tier, config)
 
-    await prisma.$executeRaw`
-        UPDATE "AiExtractionJob"
-        SET status                    = 'running'::"AiExtractionStatus",
-            "startedAt"               = NOW(),
-            "extractionProvider"      = ${provider},
-            "extractionModel"         = ${model},
-            "extractionPromptVersion" = ${PROMPT_VERSION},
-            "extractionQualityTier"   = ${tier},
-            progress                  = ${progress}::jsonb
-        WHERE id = ${jobId}
-    `
+    await prisma.$executeRawUnsafe(
+        `UPDATE "AiExtractionJob"
+         SET status = 'running'::"AiExtractionStatus",
+             "startedAt" = NOW(),
+             "extractionProvider" = $1,
+             "extractionModel" = $2,
+             "extractionPromptVersion" = $3,
+             "extractionQualityTier" = $4,
+             progress = $5::jsonb
+         WHERE id = $6`,
+        provider,
+        model,
+        PROMPT_VERSION,
+        tier,
+        JSON.stringify(progress),
+        jobId,
+    )
 
     try {
         const sectionsAll = await loadSections()

@@ -26,10 +26,11 @@ export async function emitMessageReceived(message: Message): Promise<void> {
     // Создаём событие в очереди pipeline через raw SQL
     // (не требует regenerate Prisma client — status поле добавлено миграцией)
     const eventId = `evt_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
-    await prisma.$executeRaw`
-        INSERT INTO "MessageEventLog" (id, "messageId", "eventType", status, "createdAt", "updatedAt")
-        VALUES (${eventId}, ${message.id}, 'MessageReceived', 'pending', NOW(), NOW())
-    `
+    await prisma.$executeRawUnsafe(
+        `INSERT INTO "MessageEventLog" (id, "messageId", "eventType", status, "createdAt", "updatedAt")
+         VALUES ($1, $2, 'MessageReceived', 'pending', NOW(), NOW())`,
+        eventId, message.id,
+    )
 
     await setAiStatus(message.id, 'pending')
 

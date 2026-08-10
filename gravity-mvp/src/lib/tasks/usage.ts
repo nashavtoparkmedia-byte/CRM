@@ -28,16 +28,14 @@ export async function recordUsage(
 
         const payloadJson = payload ? JSON.stringify(payload) : null
 
-        await prisma.$executeRaw`
-            INSERT INTO usage_events (id, "userId", action, payload, "createdAt")
-            VALUES (
-                ${id},
-                ${userId},
-                ${action},
-                ${payloadJson}::jsonb,
-                NOW()
-            )
-        `
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO usage_events (id, "userId", action, payload, "createdAt")
+             VALUES ($1, $2, $3, $4::jsonb, NOW())`,
+            id,
+            userId,
+            action,
+            payloadJson,
+        )
     } catch {
         // Telemetry must not break the app
     }
