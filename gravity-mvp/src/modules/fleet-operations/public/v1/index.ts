@@ -18,6 +18,8 @@ import { createRunApiLogRetentionHandlerV1,createRunDriverEventRetentionHandlerV
 import { legacyPrismaFleetEventRetentionPortV1 } from './legacy-prisma-event-retention-adapter'
 import { createFindDriverByExactPhoneHandlerV1 } from './find-driver-by-exact-phone-handler'
 import { legacyPrismaFindDriverByExactPhonePortV1 } from './legacy-prisma-find-driver-by-exact-phone-adapter'
+import { createReconcileDriverProfileHandlerV1 } from './reconcile-driver-profile-handler'
+import { legacyPrismaReconcileDriverProfilePortV1 } from './legacy-prisma-reconcile-driver-profile-adapter'
 export { createUpdateDriverStateHandlerV1 } from './update-driver-state-handler'
 export type { UpdateDriverStatePersistencePortV1 } from './update-driver-state-handler'
 export const updateDriverStateV1=createUpdateDriverStateHandlerV1(legacyPrismaUpdateDriverStatePortV1)
@@ -53,3 +55,6 @@ export const runApiLogRetentionV1=createRunApiLogRetentionHandlerV1(legacyPrisma
 export { createFindDriverByExactPhoneHandlerV1 } from './find-driver-by-exact-phone-handler'
 export type { FindDriverByExactPhonePersistencePortV1 } from './find-driver-by-exact-phone-handler'
 export const findDriverByExactPhoneV1=createFindDriverByExactPhoneHandlerV1(legacyPrismaFindDriverByExactPhonePortV1)
+export { createReconcileDriverProfileHandlerV1 } from './reconcile-driver-profile-handler'
+export type { ReconcileDriverProfilePersistencePortV1 } from './reconcile-driver-profile-handler'
+export const reconcileDriverProfileV1=createReconcileDriverProfileHandlerV1(legacyPrismaReconcileDriverProfilePortV1)

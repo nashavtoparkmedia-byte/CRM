@@ -2,6 +2,8 @@
 import { PrismaClient } from '@prisma/client';
 import fetch from 'node-fetch';
 import * as fs from 'fs';
+import { RECONCILE_DRIVER_PROFILE_COMMAND_V1 } from '../src/contracts/fleet-operations/v1';
+import { reconcileDriverProfileV1 } from '../src/modules/fleet-operations/public/v1';
 
 const prisma = new PrismaClient();
 
@@ -83,19 +85,7 @@ async function main() {
                 const lastName = dp.last_name || '';
                 const fullName = `${lastName} ${firstName}`.trim() || 'No Name';
 
-                await prisma.driver.upsert({
-                    where: { yandexDriverId: id },
-                    create: {
-                        yandexDriverId: id,
-                        fullName,
-                        lastOrderAt,
-                        segment: 'unknown',
-                    },
-                    update: {
-                        fullName,
-                        lastOrderAt,
-                    }
-                });
+                await reconcileDriverProfileV1({ contract: RECONCILE_DRIVER_PROFILE_COMMAND_V1, yandexDriverId: id, fullName, lastOrderAt });
                 upsertedCount++;
             }
 
