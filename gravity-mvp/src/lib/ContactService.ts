@@ -326,44 +326,6 @@ export class ContactService {
   }
 
   /**
-   * Ensure Chat has contactId, contactIdentityId, and driverId (if Contact is linked to a Driver).
-   */
-  static async ensureChatLinked(chatId: string, contactId: string, identityId: string): Promise<void> {
-    const updateData: any = {
-      contactId,
-      contactIdentityId: identityId,
-    }
-
-    // Auto-link driverId if Contact is linked to a Driver and Chat doesn't have driverId yet
-    const chat = await prisma.chat.findUnique({
-      where: { id: chatId },
-      select: { driverId: true },
-    })
-
-    if (chat && !chat.driverId) {
-      const contact = await prisma.contact.findUnique({
-        where: { id: contactId },
-        select: { yandexDriverId: true },
-      })
-
-      if (contact?.yandexDriverId) {
-        const driver = await prisma.driver.findUnique({
-          where: { yandexDriverId: contact.yandexDriverId },
-          select: { id: true },
-        })
-        if (driver) {
-          updateData.driverId = driver.id
-        }
-      }
-    }
-
-    await prisma.chat.update({
-      where: { id: chatId },
-      data: updateData,
-    })
-  }
-
-  /**
    * Cleanup dangling ContactIdentities after channel data deletion.
    * Scoped: only checks identities belonging to the specified contactIds.
    *

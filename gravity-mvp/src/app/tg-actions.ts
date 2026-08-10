@@ -8,8 +8,8 @@ import QRCode from 'qrcode'
 import { revalidatePath } from 'next/cache'
 import { NewMessage, Raw } from 'telegram/events'
 import * as registry from '@/lib/TransportRegistry'
-import { attachBinaryMessageMediaV1, deleteHistoryImportJobsForChannelV1, deleteHistoryImportJobsForConnectionV1, patchHistoryImportJobV1 } from '@/modules/messaging/public/v1'
-import { ATTACH_BINARY_MESSAGE_MEDIA_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CHANNEL_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CONNECTION_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { attachBinaryMessageMediaV1, deleteHistoryImportJobsForChannelV1, deleteHistoryImportJobsForConnectionV1, ensureConversationContactLinkV1, patchHistoryImportJobV1 } from '@/modules/messaging/public/v1'
+import { ATTACH_BINARY_MESSAGE_MEDIA_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CHANNEL_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CONNECTION_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1 } from '@/contracts/messaging/v1'
 
 // Global map to keep track of active login clients for QR
 // Note: In a production serverless environment, this would need a different approach (like a separate service or Redis)
@@ -394,11 +394,12 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
                 null,  // TG GramJS не передаёт номер телефона
                 message.sender?.firstName || message.sender?.username || null,
             )
-            await ContactService.ensureChatLinked(
-                unifiedChat.id,
-                contactResult.contact.id,
-                contactResult.identity.id,
-            )
+            await ensureConversationContactLinkV1({
+                contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
+                chatId: unifiedChat.id,
+                contactId: contactResult.contact.id,
+                contactIdentityId: contactResult.identity.id,
+            })
         } catch (contactErr: any) {
             console.error(`[${loggerPrefix}] ContactService error (non-blocking): ${contactErr.message}`)
         }

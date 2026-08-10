@@ -4,6 +4,8 @@ import { DriverMatchService } from '@/lib/DriverMatchService'
 import { ContactService } from '@/lib/ContactService'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import crypto from 'crypto'
+import { ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { ensureConversationContactLinkV1 } from '@/modules/messaging/public/v1'
 
 // PR-Г: placeholder detection — name = "..", ". .", "TG NNN", pure digits.
 // Используется для умного update: новое реальное имя замещает placeholder
@@ -159,11 +161,12 @@ export async function POST(req: NextRequest) {
                     phoneDigits,
                     isPlaceholderName(bestName) ? null : bestName,
                 )
-                await ContactService.ensureChatLinked(
-                    unifiedChat.id,
-                    contactResult.contact.id,
-                    contactResult.identity.id,
-                )
+                await ensureConversationContactLinkV1({
+                    contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
+                    chatId: unifiedChat.id,
+                    contactId: contactResult.contact.id,
+                    contactIdentityId: contactResult.identity.id,
+                })
             } else {
                 // Phone не извлекли — используем externalChatId как identity-id
                 const contactResult = await ContactService.resolveContact(
@@ -172,11 +175,12 @@ export async function POST(req: NextRequest) {
                     null,
                     isPlaceholderName(bestName) ? null : bestName,
                 )
-                await ContactService.ensureChatLinked(
-                    unifiedChat.id,
-                    contactResult.contact.id,
-                    contactResult.identity.id,
-                )
+                await ensureConversationContactLinkV1({
+                    contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
+                    chatId: unifiedChat.id,
+                    contactId: contactResult.contact.id,
+                    contactIdentityId: contactResult.identity.id,
+                })
             }
         } catch (contactErr: any) {
             console.error(`[WEBHOOK-MAX] ContactService error (non-blocking): ${contactErr.message}`)

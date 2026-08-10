@@ -11,8 +11,8 @@ import { broadcastChatMessage } from '@/lib/messageStreamBus'
 import * as registry from '@/lib/TransportRegistry'
 import { opsLog } from '@/lib/opsLog'
 import { WWEBJS_AUTH_DIR } from '@/lib/whatsapp/WhatsAppCleanup'
-import { ATTACH_MESSAGE_MEDIA_COMMAND_V1, CREATE_CHANNEL_MESSAGE_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, PATCH_MESSAGE_DELIVERY_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, type HistoryImportJobPatchV1 } from '@/contracts/messaging/v1'
-import { attachMessageMediaV1, createChannelMessageV1, patchChannelConversationV1, patchHistoryImportJobV1, patchMessageDeliveryV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
+import { ATTACH_MESSAGE_MEDIA_COMMAND_V1, CREATE_CHANNEL_MESSAGE_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, PATCH_MESSAGE_DELIVERY_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, type HistoryImportJobPatchV1 } from '@/contracts/messaging/v1'
+import { attachMessageMediaV1, createChannelMessageV1, ensureConversationContactLinkV1, patchChannelConversationV1, patchHistoryImportJobV1, patchMessageDeliveryV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
 
 // 25MB per file. Was 10MB but modern iPhone photos (12MP JPEG) and
 // short videos easily exceed that — skipped media left the UI with
@@ -546,7 +546,12 @@ async function syncHistory(connectionId: string, client: Client) {
                             // Для @lid передаём identity externalId = весь LID-JID, phone=null.
                             // НЕ цифры из @lid (это linked-device id, не phone) — иначе фабрикуем phantom phone.
                             const contactResult = await ContactService.resolveContact('whatsapp', serialized, null, chatRaw.name)
-                            await ContactService.ensureChatLinked(unifiedSyncChat.id, contactResult.contact.id, contactResult.identity.id)
+                            await ensureConversationContactLinkV1({
+                                contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
+                                chatId: unifiedSyncChat.id,
+                                contactId: contactResult.contact.id,
+                                contactIdentityId: contactResult.identity.id,
+                            })
                             await enrichWaChatNameFromSibling(
                                 unifiedSyncChat.id,
                                 unifiedSyncChat.name,
@@ -555,7 +560,12 @@ async function syncHistory(connectionId: string, client: Client) {
                             ).catch(err => console.warn(`[WA-SERVICE] enrichChatName failed: ${err.message}`))
                         } else if (rawPhone && /^\d{10,15}$/.test(rawPhone)) {
                             const contactResult = await ContactService.resolveContact('whatsapp', rawPhone, rawPhone, chatRaw.name)
-                            await ContactService.ensureChatLinked(unifiedSyncChat.id, contactResult.contact.id, contactResult.identity.id)
+                            await ensureConversationContactLinkV1({
+                                contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
+                                chatId: unifiedSyncChat.id,
+                                contactId: contactResult.contact.id,
+                                contactIdentityId: contactResult.identity.id,
+                            })
                             // PR-Л: если у этого нового chat name=null/placeholder, но
                             // у sibling-чата того же contactId уже есть pushname —
                             // подтягиваем. Закрывает источник «Без имени» @lid дубликатов.
@@ -1130,11 +1140,12 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                     phoneForResolve,
                     (msg as any).notifyName || unifiedChat.name || null,
                 )
-                await ContactService.ensureChatLinked(
-                    unifiedChat.id,
-                    contactResult.contact.id,
-                    contactResult.identity.id,
-                )
+                await ensureConversationContactLinkV1({
+                    contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
+                    chatId: unifiedChat.id,
+                    contactId: contactResult.contact.id,
+                    contactIdentityId: contactResult.identity.id,
+                })
                 // Backfill phone onto contact when LID resolved to a real number.
                 // resolveContact may have returned an existing contact (found via old
                 // @lid identity) that was created before phone resolution was available.
@@ -2014,7 +2025,12 @@ export async function importWhatsAppHistory(
                         if (isLid) {
                             // Для @lid: externalId = весь LID-JID, phone=null. См. live-path выше.
                             const contactResult = await ContactService.resolveContact('whatsapp', serialized, null, chatRaw.name)
-                            await ContactService.ensureChatLinked(unifiedChat.id, contactResult.contact.id, contactResult.identity.id)
+                            await ensureConversationContactLinkV1({
+                                contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
+                                chatId: unifiedChat.id,
+                                contactId: contactResult.contact.id,
+                                contactIdentityId: contactResult.identity.id,
+                            })
                             await enrichWaChatNameFromSibling(
                                 unifiedChat.id,
                                 unifiedChat.name,
@@ -2024,7 +2040,12 @@ export async function importWhatsAppHistory(
                             totalContacts++
                         } else if (rawPhone && /^\d{10,15}$/.test(rawPhone)) {
                             const contactResult = await ContactService.resolveContact('whatsapp', rawPhone, rawPhone, chatRaw.name)
-                            await ContactService.ensureChatLinked(unifiedChat.id, contactResult.contact.id, contactResult.identity.id)
+                            await ensureConversationContactLinkV1({
+                                contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
+                                chatId: unifiedChat.id,
+                                contactId: contactResult.contact.id,
+                                contactIdentityId: contactResult.identity.id,
+                            })
                             // PR-Л: тот же sibling-lookup как в syncHistory.
                             // Если этот chat дубликат @lid existing-чата с pushname —
                             // подтянем имя автоматически.

@@ -13,6 +13,8 @@ import {
 import { attachContactIdentityV1 } from '@/modules/contacts/public/v1'
 import { PROMOTE_CHANNEL_DISPLAY_NAME_V2, RESOLVE_CONTACT_COMMAND_V2 } from '@/contracts/contacts/v2'
 import { resolveContactV2 } from '@/modules/contacts/public/v2'
+import { ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { ensureConversationContactLinkV1 } from '@/modules/messaging/public/v1'
 
 export async function POST(req: NextRequest) {
     try {
@@ -172,11 +174,12 @@ export async function POST(req: NextRequest) {
                         candidateDisplayName: tgDisplayName,
                     })
                 }
-                await ContactService.ensureChatLinked(
-                    unifiedChat.id,
-                    contactResult.contact.id,
-                    contactResult.identity.id,
-                )
+                await ensureConversationContactLinkV1({
+                    contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
+                    chatId: unifiedChat.id,
+                    contactId: contactResult.contact.id,
+                    contactIdentityId: contactResult.identity.id,
+                })
                 // Store username + name in identity metadata so the profile can show "Name (@username)"
                 await attachContactIdentityV1({
                     contract: ATTACH_CONTACT_IDENTITY_COMMAND_V1,

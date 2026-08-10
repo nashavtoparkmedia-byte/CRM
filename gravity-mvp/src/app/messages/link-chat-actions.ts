@@ -5,6 +5,8 @@ import { ContactService } from "@/lib/ContactService"
 import { revalidatePath } from "next/cache"
 import { SET_CONTACT_DISPLAY_NAME_COMMAND_V1 } from "@/contracts/contacts/v1"
 import { setContactDisplayNameV1 } from "@/modules/contacts/public/v1"
+import { ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1 } from "@/contracts/messaging/v1"
+import { ensureConversationContactLinkV1 } from "@/modules/messaging/public/v1"
 
 /**
  * PR-О: Server actions для UI «Привязать контакт» в чатах.
@@ -82,7 +84,12 @@ export async function linkChatToDriverManually(chatId: string, driverId: string)
                     phoneDigits,
                     driver.fullName,
                 )
-                await ContactService.ensureChatLinked(chat.id, contactResult.contact.id, contactResult.identity.id)
+                await ensureConversationContactLinkV1({
+                    contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
+                    chatId: chat.id,
+                    contactId: contactResult.contact.id,
+                    contactIdentityId: contactResult.identity.id,
+                })
             } catch (err: any) {
                 console.warn(`[linkChatToDriverManually] ContactService failed (non-blocking): ${err.message}`)
             }

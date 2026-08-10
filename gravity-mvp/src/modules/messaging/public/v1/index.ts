@@ -36,6 +36,8 @@ import { createRunCommunicationEventRetentionHandlerV1 } from './communication-e
 import { legacyPrismaCommunicationEventRetentionPortV1 } from './legacy-prisma-communication-event-retention-adapter'
 import { createDetachContactConversationsHandlerV1 } from './contact-retention-handler'
 import { legacyPrismaContactConversationRetentionPortV1 } from './legacy-prisma-contact-retention-adapter'
+import { createEnsureConversationContactLinkHandlerV1 } from './conversation-contact-link-handler'
+import { legacyPrismaConversationContactLinkPortV1 } from './legacy-prisma-conversation-contact-link-adapter'
 
 export { createAttachMessageMediaHandlerV1 } from './attach-message-media-handler'
 export type { AttachMessageMediaPersistencePortV1 } from './attach-message-media-handler'
@@ -117,3 +119,6 @@ export const runCommunicationEventRetentionV1=createRunCommunicationEventRetenti
 export { createDetachContactConversationsHandlerV1 } from './contact-retention-handler'
 export type { ContactConversationRetentionPersistencePortV1 } from './contact-retention-handler'
 export const detachContactConversationsV1=createDetachContactConversationsHandlerV1(legacyPrismaContactConversationRetentionPortV1)
+export { createEnsureConversationContactLinkHandlerV1 } from './conversation-contact-link-handler'
+export type { ConversationContactLinkPersistencePortV1 } from './conversation-contact-link-handler'
+export const ensureConversationContactLinkV1=createEnsureConversationContactLinkHandlerV1(legacyPrismaConversationContactLinkPortV1)

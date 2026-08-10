@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { ContactService } from '@/lib/ContactService'
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
+import { ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { ensureConversationContactLinkV1 } from '@/modules/messaging/public/v1'
 
 export async function POST(request: Request) {
     try {
@@ -78,11 +80,12 @@ export async function POST(request: Request) {
                 phone,
                 displayName,
             )
-            await ContactService.ensureChatLinked(
-                chat.id,
-                contactResult.contact.id,
-                contactResult.identity.id,
-            )
+            await ensureConversationContactLinkV1({
+                contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
+                chatId: chat.id,
+                contactId: contactResult.contact.id,
+                contactIdentityId: contactResult.identity.id,
+            })
         } catch (contactErr: any) {
             console.error(`[API-START-CHAT] ContactService error (non-blocking): ${contactErr.message}`)
         }

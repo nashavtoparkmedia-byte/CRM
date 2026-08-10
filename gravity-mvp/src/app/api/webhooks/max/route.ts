@@ -12,9 +12,9 @@ import { startMaxContactResolutionShadow } from '@/lib/contacts/max-contact-reso
 import type { LegacyContactResolutionOutcome } from '@/lib/contacts/contact-resolution-shadow.types'
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
 import { opsLog } from '@/lib/opsLog'
-import { CREATE_EXTERNAL_CONVERSATION_COMMAND_V1, DELETE_MESSAGE_COMMAND_V1, DELETE_MESSAGE_MEDIA_COMMAND_V1, PATCH_EXTERNAL_CONVERSATION_COMMAND_V1, REPLACE_EXTERNAL_MESSAGE_COMMAND_V1, UPSERT_EXTERNAL_MESSAGE_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { CREATE_EXTERNAL_CONVERSATION_COMMAND_V1, DELETE_MESSAGE_COMMAND_V1, DELETE_MESSAGE_MEDIA_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_EXTERNAL_CONVERSATION_COMMAND_V1, REPLACE_EXTERNAL_MESSAGE_COMMAND_V1, UPSERT_EXTERNAL_MESSAGE_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { ATTACH_MESSAGE_MEDIA_COMMAND_V2 } from '@/contracts/messaging/v2'
-import { createExternalConversationV1, deleteMessageMediaV1, deleteMessageV1, patchExternalConversationV1, replaceExternalMessageV1, upsertExternalMessageV1 } from '@/modules/messaging/public/v1'
+import { createExternalConversationV1, deleteMessageMediaV1, deleteMessageV1, ensureConversationContactLinkV1, patchExternalConversationV1, replaceExternalMessageV1, upsertExternalMessageV1 } from '@/modules/messaging/public/v1'
 import { attachMessageMediaV2 } from '@/modules/messaging/public/v2'
 
 function metadataRecord(metadata: unknown): Record<string, unknown> {
@@ -579,11 +579,12 @@ export async function POST(request: Request) {
           maxPhone,
           senderName || null,
         )
-        await ContactService.ensureChatLinked(
-          chat.id,
-          contactResult.contact.id,
-          contactResult.identity.id,
-        )
+        await ensureConversationContactLinkV1({
+          contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
+          chatId: chat.id,
+          contactId: contactResult.contact.id,
+          contactIdentityId: contactResult.identity.id,
+        })
         legacyContactResolution = contactResult.isNew
           ? { status: 'contact_created', contactId: contactResult.contact.id }
           : { status: 'contact_reused', contactId: contactResult.contact.id, source: 'unknown' }
