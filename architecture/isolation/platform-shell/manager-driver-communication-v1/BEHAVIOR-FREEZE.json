@@ -1,0 +1,84 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1",
+  "milestone": "CRM-ARCH-007R-MANAGER-DRIVER-COMMUNICATION",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "6abb89a99984fa01d97aa335df11525a6c022a81",
+  "source_commit": "b817a5f522c7c8ffde7bc083e33c1ae426fe6e34",
+  "captured_at": "2026-08-10T07:20:25Z",
+  "verified_at": "2026-08-10T07:20:25Z",
+  "legacy_sources": [
+    {
+      "file": "gravity-mvp/src/app/drivers/actions.ts",
+      "before": "ebcf7d309cf4c468a173b41974189c81dd085a0760cb15d113d3757f16690512",
+      "after": "89c7edf786016794d3c1c1078feff79296349f4b3435f7817296537bbbf632df"
+    },
+    {
+      "file": "gravity-mvp/src/app/drivers/components/DriverCard.tsx",
+      "before": "374e5ce3bd8347c75f33671e4de57145676f42045fb73569a65de67448115db7",
+      "after": "cff277cf855a3640f2431d4bdaa2e8d5cd12f68c45abf01d6169f7f02a7789a9"
+    },
+    {
+      "file": "gravity-mvp/src/app/drivers/DriversClient.tsx",
+      "before": "7fba693d54bbad5c429d37ed311fb12ed1ae07f71a083c63491c572997c1e5dc",
+      "after": "171522196fa1dcd1c1aef7fcf2df8ba5dd5b250e72536e5f342b0bdb98726bf0"
+    },
+    {
+      "file": "gravity-mvp/src/app/dashboard/components/RiskDriversTable.tsx",
+      "before": "1cd9c01e7263fe69cf0e1d00fbccbd244b749467dacd6a27d5dad6d35c3bbeec",
+      "after": "8c11ed12ce18ebdd7f69968d7e16f396a2b107171549ee4f8a6f25463e6543e7"
+    },
+    {
+      "file": "gravity-mvp/src/app/inbox/InboxClient.tsx",
+      "before": "4ddeec9b535afc0dd999481e9c945c9326a597a894e265f6f68f89d394214954",
+      "after": "87d3d66757355401485a1425a7cad30bde917d780ccbeda3df3d99b463eea1c8"
+    },
+    {
+      "file": "gravity-mvp/src/modules/fleet-operations/public/v1/log-manager-call-action.ts",
+      "before": "990ed038fee304175cfcf8c7cd4fd1dac46d84285dd5193d8a05c3dd1c5a6a7c",
+      "after": null,
+      "state": "retired"
+    }
+  ],
+  "unchanged_historical_surfaces": [
+    {
+      "file": "gravity-mvp/src/contracts/fleet-operations/v1/log-manager-call-command.ts",
+      "before": "876e9ef4eb68f950dd9106c32a6ac3b7873fc8c9c1bdf4cb4ecbed431ac95b77",
+      "after": "876e9ef4eb68f950dd9106c32a6ac3b7873fc8c9c1bdf4cb4ecbed431ac95b77"
+    },
+    {
+      "file": "gravity-mvp/src/modules/fleet-operations/public/v1/log-manager-call-handler.ts",
+      "before": "4cc3c7096cb1786e0ecd2afb500fbbab545296ba5a05193f15de3e0634d4de4c",
+      "after": "4cc3c7096cb1786e0ecd2afb500fbbab545296ba5a05193f15de3e0634d4de4c"
+    }
+  ],
+  "source_hashes_after": {
+    "gravity-mvp/src/app/api/platform/drivers/[id]/manager-communication/route.ts": "8ae8d2950eae98f6f65cec20cbd038a990dd6e0249d6dca999bd4be50597f5f4",
+    "gravity-mvp/src/contracts/messaging/v1/record-manager-driver-communication-command.ts": "f9167138d12a97b6e94de8ca0422fbdc7c95664b329cbf2d8b4d301cfc55c733",
+    "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-record-manager-driver-communication-adapter.ts": "6fc1e98dc627718a8b9bf85f7c15a6fc52c57ef921a324061a2d4d6cf2208847",
+    "gravity-mvp/src/modules/messaging/public/v1/record-manager-driver-communication-handler.ts": "e032e543d5b41d31edc91c63607b2af0145f30f37b88668abae664a6d5f335da",
+    "gravity-mvp/src/modules/platform-shell/internal/manager-driver-communication-orchestrator.ts": "9e7d8eafc7fb049cf441e7ba3badff268b438b6123ac5cd6167b2c0fbb92dac9"
+  },
+  "behavior": [
+    "call logging retains the exact local-day DriverDaySummary upsert followed by the exact phone outbound CommunicationEvent row and Russian content",
+    "message logging retains the exact local-day DriverDaySummary upsert followed by the exact Telegram outbound CommunicationEvent row and Russian content",
+    "Platform preserves Fleet-before-Messaging sequential order, local setHours midnight construction, no transaction, no retry and no parallelism",
+    "a Fleet failure still prevents the event insert, while a later Messaging failure leaves the completed day-summary mutation intact and remains visible",
+    "the four browser consumers retain five invocations: four call activities and one message activity, with no provider send",
+    "DriverCard and DriversClient retain event stopPropagation ordering; DriverCard, RiskDriversTable and Inbox success state follows successful delivery",
+    "non-success HTTP responses throw before UI success state, and uncaught owner failures remain non-success route responses",
+    "the historical Fleet manager-call contract and pure handler remain byte-identical while only their obsolete runtime facade retires",
+    "no revalidation, transaction, recovery, provider send or database capability was added to Platform orchestration"
+  ],
+  "bounded_drift": [
+    "the live mutation crossing changes from imported Server Actions or direct action calls to a relative same-origin Platform HTTP endpoint",
+    "POST is explicitly JSON-only and fails closed on missing or mismatched Origin, Host or protocol and on a contradictory forwarded host",
+    "the route accepts only the exact body shape with activity call or message and rejects malformed, extra-field and unknown activity input",
+    "strict Messaging v1 envelopes reject malformed, extra-field, empty and unsupported-version commands before persistence",
+    "public handlers, HTTP delivery and Platform orchestration add in-process frames and may change stack traces without changing persisted values or UI success ordering"
+  ],
+  "out_of_scope": [
+    "actual telephone calls, Telegram sends or any other provider transport",
+    "contact merge, AI governance, Calling configuration and unsafe-fragment hardening",
+    "database access, webhook invocation, deployed application runtime execution, service activation, deployment, production mutation and secrets"
+  ]
+}

@@ -92,13 +92,14 @@
     "architecture/isolation/messaging/conversation-contact-link-v1/module-manifest-amendments.json",
     "architecture/isolation/work-management/scenario-field-settings-v1/module-manifest-amendments.json",
     "architecture/isolation/platform-shell/contact-conversation-api-v1/module-manifest-amendments.json",
-    "architecture/isolation/platform-shell/manual-driver-telegram-delivery-v1/module-manifest-amendments.json"
+    "architecture/isolation/platform-shell/manual-driver-telegram-delivery-v1/module-manifest-amendments.json",
+    "architecture/isolation/platform-shell/manager-driver-communication-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007R-MANUAL-DRIVER-TELEGRAM-DELIVERY",
-  "registry_base_commit": "4d27223b6950c0c824e762675fe2af960d69f0f7",
+  "registry_milestone": "CRM-ARCH-007R-MANAGER-DRIVER-COMMUNICATION",
+  "registry_base_commit": "6abb89a99984fa01d97aa335df11525a6c022a81",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",

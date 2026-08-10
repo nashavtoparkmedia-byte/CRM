@@ -1,0 +1,14 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "CRM-ARCH-007R-MANAGER-DRIVER-COMMUNICATION",
+  "amendments": [
+    {
+      "context": "messaging",
+      "add_commands": [
+        "RecordManagerDriverCommunicationCommand.v1"
+      ],
+      "reason": "Expose only the manager-to-driver communication event operation required by Platform Shell orchestration."
+    }
+  ]
+}

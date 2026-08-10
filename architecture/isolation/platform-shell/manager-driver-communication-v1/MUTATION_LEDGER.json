@@ -1,0 +1,33 @@
+{
+  "schema": "yoko.crm.mutation-ledger.v1",
+  "milestone": "CRM-ARCH-007R-MANAGER-DRIVER-COMMUNICATION",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "6abb89a99984fa01d97aa335df11525a6c022a81",
+  "source_commit": "b817a5f522c7c8ffde7bc083e33c1ae426fe6e34",
+  "verified_at": "2026-08-10T07:20:25Z",
+  "source": [
+    "one same-origin JSON-only Platform Shell mutation route",
+    "one strict Messaging v1 owner command with closed result",
+    "one Messaging owner handler and narrow legacy Prisma adapter",
+    "one internal Platform Shell orchestrator composing existing Fleet and new Messaging owner commands sequentially",
+    "four browser consumers and five live invocations migrated to a relative URL",
+    "two legacy action functions and one obsolete compatibility runtime facade retired while pure historical surfaces remain",
+    "route, orchestration, repository and successor-aware historical controls",
+    "one-context public-surface amendment with no dependency amendment",
+    "deterministically regenerated strict registry with four exact retirements",
+    "checksummed source-gate evidence package"
+  ],
+  "production": [],
+  "database": [],
+  "providers": [],
+  "webhooks": [],
+  "services": [],
+  "deployment": [],
+  "policy_source_mutated": true,
+  "registry_source_mutated": true,
+  "module_rule_source_mutated": false,
+  "source_control_only": true,
+  "manager_communication_mutation_executed_against_database": false,
+  "production_mutated": false,
+  "secret_values_read_or_emitted": false
+}
