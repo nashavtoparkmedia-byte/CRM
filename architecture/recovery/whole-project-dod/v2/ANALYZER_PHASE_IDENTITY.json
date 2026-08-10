@@ -1,0 +1,133 @@
+{
+  "schema": "yoko.crm.whole-project-dod-analyzer-phase.v2",
+  "phase": "TRUTHFUL_WRITE_AND_CREDENTIAL_DATABASE_BASELINE",
+  "generated_at": "2026-08-10T14:41:29Z",
+  "source": {
+    "commit": "3339325fea53d671008d580e17939d8f72a4602b",
+    "tree": "68e1ccc8f27a96a06ea126bdf83ea8584d39707f",
+    "parent": "88acc1882dd79c3426e95b66023e00689c12ebc7",
+    "detached_clean_evidence_roots": [
+      "/opt/codex-work/crm-architecture-analyzer-freeze-3339325f",
+      "/opt/codex-work/crm-architecture-analyzer-repro-3339325f"
+    ],
+    "tracked_worktree_clean": true,
+    "tracked_worktree_status_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+  },
+  "runtime": {
+    "node_version": "v22.18.0",
+    "node_executable_sha256": "ccacb2d6d87ba6d118b2bffc1ae33747a05cc5fc6b1f1ec4fc1d420b687e952d",
+    "typescript_version": "5.9.3",
+    "typescript_module_sha256": "3ae902c92cc44dace175c0e69e13a4b0899f6983c6121d76b9ab8dd5795e7675",
+    "gravity_package_lock_sha256": "43f78c98d0780e0bcba4cba369a69f2027a30553bc247fecba1b0c1f1c6fe432"
+  },
+  "analyzers": {
+    "repository_driver": {
+      "path": "tools/architecture/v2/analyze.mjs",
+      "sha256": "76c369e4bca3d0924812007b69970bdd81416128ddfffedf3e1c2c71dea99138"
+    },
+    "write_ast": {
+      "path": "tools/architecture/v2/write-analyzer.mjs",
+      "sha256": "9ee0ea34ced414875260e4201071a818548615647f5459fdba29a7447e96c1b8"
+    },
+    "sql": {
+      "path": "tools/architecture/v2/sql-mutation-analyzer.mjs",
+      "sha256": "e5b13f72682047addacc288a29e6d2a61a4dc4514b1872f65ed48bdc891d0705"
+    },
+    "tracked_surface_inventory": {
+      "path": "tools/architecture/v2/tracked-surface-inventory.mjs",
+      "sha256": "4590d717b8552e46131992898d3f25525b86a3dd950f91fc41735339b9a802e3"
+    },
+    "credential_access": {
+      "path": "tools/architecture/v2/credential-analyzer.mjs",
+      "sha256": "ac795ab00a48d69752b08e8f657aaecc5346ff4a52c45c28b64c1aea730491ae"
+    },
+    "credential_inventory": {
+      "path": "tools/architecture/v2/credential-inventory.mjs",
+      "sha256": "759c7e0cfcc5474eced2a0f72cb93cf1d138043a8007b096a6c5c8980274f884"
+    }
+  },
+  "tests": {
+    "write_sql_cases": 71,
+    "write_sql_status": "PASS",
+    "repository_mixed_language_status": "PASS",
+    "tracked_surface_inventory_status": "PASS",
+    "credential_analyzer_status": "PASS",
+    "credential_inventory_status": "PASS",
+    "git_diff_check_status": "PASS"
+  },
+  "evidence": {
+    "write_baseline": {
+      "path": "architecture/recovery/whole-project-dod/v2/WHOLE_REPOSITORY_WRITE_BASELINE.json",
+      "sha256": "0277639218ea5294d761343b55ca610e24258141f5318a228ee1688fe2e4bb2b",
+      "analysis_sha256": "3c88bcc3febfc4e2d5223b8bb603fad3953cb85ac9b2ca2e3075400d6981a1ba"
+    },
+    "credential_baseline": {
+      "path": "architecture/recovery/whole-project-dod/v2/CREDENTIAL_DATABASE_ACCESS_BASELINE.json",
+      "sha256": "0274eb89d4f1fcf4671ac5025091df61dd55b28a1f02c69fad7044c15df1feb4",
+      "analysis_sha256": "1dc8907f600bb89122be2ceb857e4f3f201c27b3549824beff27665911f94592"
+    },
+    "cross_checkout_reproduction": {
+      "write_byte_identical": true,
+      "credential_byte_identical": true,
+      "independent_checkout_count": 2
+    }
+  },
+  "write_summary": {
+    "tracked_executable_surfaces": 1615,
+    "discovered_write_sites": 1572,
+    "owner_writes": 420,
+    "foreign_writes": 47,
+    "ambiguous_writes": 634,
+    "migration_only_writes": 468,
+    "historical_dead_writes": 0,
+    "test_writes": 3,
+    "operational_script_writes": 482,
+    "raw_sql_writes": 918,
+    "parse_findings": 0,
+    "unreviewed_operational_surfaces": 418
+  },
+  "credential_summary": {
+    "credential_database_accesses": 509,
+    "credential_reads": 245,
+    "credential_record_writes": 102,
+    "unresolved_database_accesses": 162,
+    "secret_reads": 201,
+    "metadata_only_reads": 44,
+    "ambiguous_credential_accesses": 162,
+    "owner_direct_accesses": 212,
+    "foreign_direct_accesses": 55,
+    "unclassified_accesses": 208,
+    "migration_only_accesses": 22,
+    "historical_dead_accesses": 0,
+    "test_accesses": 12,
+    "possible_public_secret_risks": 229,
+    "parse_findings": 0
+  },
+  "integrity": {
+    "duplicate_write_file_signature_keys": 0,
+    "duplicate_credential_file_signature_policy_access_keys": 0,
+    "absolute_repository_paths_in_baselines": 0,
+    "credential_values_or_source_excerpts_emitted": false,
+    "serialized_secret_marker_hits": 0
+  },
+  "claims": {
+    "old_103_denominator_superseded": true,
+    "old_whole_repository_foreign_writes_zero_claim_superseded": true,
+    "delegate_cast_writes_detected": true,
+    "tracked_operational_scripts_included": true,
+    "prisma_drizzle_generic_sql_and_mixed_sql_covered": true,
+    "credential_database_reads_and_writes_inventoried": true,
+    "operational_disposition_complete": false,
+    "credential_boundary_complete": false,
+    "whole_project_definition_of_done_reached": false
+  },
+  "guardrails": {
+    "production_mutated": false,
+    "database_mutated": false,
+    "services_restarted_or_reloaded": false,
+    "primary_dirty_worktree_mutated": false,
+    "ai_calls_worktree_mutated": false,
+    "historical_evidence_rewritten": false,
+    "forbidden_evidence_validator_executed": false
+  }
+}
