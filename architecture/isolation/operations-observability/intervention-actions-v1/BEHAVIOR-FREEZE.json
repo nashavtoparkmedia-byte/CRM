@@ -1,0 +1,49 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1",
+  "milestone": "CRM-ARCH-007R-INTERVENTION-ACTIONS",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "e8811394458d2ee7e731aa51f5ff00c65d958901",
+  "source_commit": "fb53587e5377c272fefa58c58d521c8524a8e511",
+  "captured_at": "2026-08-10T03:14:13Z",
+  "verified_at": "2026-08-10T03:23:02Z",
+  "consumer": "gravity-mvp/src/app/team-overview/actions.ts",
+  "consumer_before_sha256": "b01c8ab8e92ae6f0a0ff1d215f21d22bca6a4b9a676756681ca7b421c747d89f",
+  "consumer_after_sha256": "f9529a3d36604c938035c2ed4b4064c15ff3c5e17634668b88e512190c2cf2db",
+  "behavior": [
+    "the complete intervention_actions repository boundary moves to Operations Observability while Analytics Reporting retains use-case orchestration and presentation computation",
+    "the process-local compatibility latch begins false, returns immediately only after a successful prior ensure, and becomes true only after all three DDL statements complete",
+    "compatibility DDL remains three separate sequential nontransactional statements in the inherited order: CREATE TABLE IF NOT EXISTS, conditional score_at_action/outcome column repair, then CREATE INDEX IF NOT EXISTS",
+    "a failed DDL statement leaves the latch false so a later call retries from CREATE TABLE; concurrent first callers remain uncoalesced and can each execute the idempotent three-statement sequence",
+    "the DDL remains unqualified and the conditional column checks retain their exact information_schema table-name and column-name predicates",
+    "every public repository operation defensively ensures compatibility, while Analytics explicitly ensures before caller-owned clocks, randomness and cutoff construction",
+    "action ID generation remains ia_ plus caller Date.now plus the six-character Math.random base-36 suffix and occurs only after ensure succeeds",
+    "comment trim-or-null and score nullish-to-null normalization remain caller-owned and occur after ensure and before create",
+    "create persists the exact id, manager, closed action value, normalized comment and score; created_at remains database-clock NOW through the declared compatibility-table and Prisma database default",
+    "pending selection remains outcome IS NULL, score_at_action IS NOT NULL and created_at less-than-or-equal to the caller cutoff, with no ORDER BY",
+    "the outcome window, one caller Date.now cutoff, manager score map, missing-manager skip, threshold computation and one-by-one awaited update order remain caller-owned",
+    "outcome update remains id-only, changes only outcome, ignores affected-row count and treats a missing row as successful completion",
+    "latest-action selection retains DISTINCT ON manager_id with manager_id then created_at descending order and no deterministic tie-breaker for equal timestamps",
+    "latest rows retain raw action/outcome string compatibility; timestamp ISO conversion and outcome casting remain caller-owned",
+    "effectiveness selection retains action/outcome grouped COUNT(*)::text rows, outcome-not-null filtering and action/outcome ordering; parsing, known-outcome accumulation, labels, rates and final sorting remain caller-owned",
+    "completion-timing selection retains all outcome-not-null created_at rows in descending order; the minimum sample, seven-day inclusive recent cutoff, rounding, clamping and insufficient-data result remain caller-owned",
+    "completion-timing ensure, read and mapping failures remain caught by the existing local fallback; other repository failures remain visible to their existing caller boundary",
+    "team overview still evaluates pending outcomes before loading the latest action for each manager",
+    "the four raw read SQL strings and three compatibility DDL strings are byte-identical after relocation",
+    "no transaction, batch outcome write, retry wrapper, promise latch or rollback compensation is added"
+  ],
+  "bounded_drift": [
+    "typed Prisma create replaces the fixed positional INSERT, so generated SQL, returned-row behavior, Prisma error class/message and recorded query text may differ; the returned row remains ignored",
+    "typed create omits created_at and relies on the exact compatibility DDL plus declared Prisma database DEFAULT NOW(), retaining database-clock semantics for conforming or compatibility-created tables",
+    "typed updateMany replaces the fixed positional UPDATE, so generated SQL and Prisma error representation may differ while zero-row success and ignored affected count are preserved",
+    "strict versioned request parsing can reject malformed envelopes, unsupported versions, extra fields, invalid dates, invalid outcomes, invalid action values and non-finite scores earlier than the legacy raw path",
+    "owner-side camel-case row mapping and public-handler frames add negligible in-process timing and can change stack traces without changing successful values"
+  ],
+  "out_of_scope": [
+    "manager-health and health-history repository relocation",
+    "the inherited Analytics imports of Work Management internal configuration",
+    "business-policy changes to intervention actions, outcome thresholds, timing windows, labels or queue priority",
+    "schema migration design, removal of compatibility DDL or raw read modernization",
+    "raw-write-owner-overrides and frozen CRM-ARCH-003 ownership evidence regeneration",
+    "database access, scheduler execution, service or runtime activation, deployment and production mutation"
+  ]
+}

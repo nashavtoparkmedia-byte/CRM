@@ -36,6 +36,7 @@ const workIndex = read('gravity-mvp/src/modules/work-management/public/v1/index.
 const consumer = read('gravity-mvp/src/lib/RetentionCleanup.ts')
 const amendmentPath = 'architecture/isolation/operations-observability/archived-contact-purge-v1/module-manifest-amendments.json'
 const amendment = JSON.parse(read(amendmentPath))
+const migration = JSON.parse(read('architecture/isolation/operations-observability/archived-contact-purge-v1/migration-manifest.json'))
 const policy = JSON.parse(read('architecture/enforcement/v1/policy.json'))
 const registry = JSON.parse(read('architecture/enforcement/v1/exceptions.json'))
 const contracts = contactsContract + messagingContract + workContract
@@ -193,17 +194,22 @@ check(
   'manifest amendment widened or drifted',
 )
 check(
-  'strict policy binds archived-contact milestone to event-retention parent',
+  'accepted archived-contact evidence stays bound to the event-retention parent',
   policy.manifest_amendments.includes(amendmentPath) &&
-    policy.registry_milestone === 'CRM-ARCH-007R-ARCHIVED-CONTACT-PURGE' &&
-    policy.registry_base_commit === 'fb16db6ef7759c4a1bd73e0012485a5e6777a03a',
-  'policy identity drift',
+    migration.base_commit === 'fb16db6ef7759c4a1bd73e0012485a5e6777a03a' &&
+    migration.enforcement?.before === 1429 &&
+    migration.enforcement?.after === 1419 &&
+    migration.enforcement?.direct_before === 99 &&
+    migration.enforcement?.direct_after === 96 &&
+    migration.enforcement?.undeclared_dependency_before === 377 &&
+    migration.enforcement?.undeclared_dependency_after === 370,
+  'accepted archived-contact evidence identity drift',
 )
 check(
   'exact three writes and seven redundant dependency findings retire with no new capacity',
-  registry.summary?.direct_foreign_prisma_write === 96 &&
-    registry.summary?.undeclared_dependency === 370 &&
-    registry.exceptions.length === 1419 &&
+  registry.summary?.direct_foreign_prisma_write <= 96 &&
+    registry.summary?.undeclared_dependency <= 370 &&
+    registry.exceptions.length <= 1419 &&
     [
       'arch_268626904318c85d53361d4e',
       'arch_76d3bcc4d7b0267149f18cf2',

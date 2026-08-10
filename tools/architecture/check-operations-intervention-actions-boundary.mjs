@@ -24,6 +24,11 @@ const adapter = read('gravity-mvp/src/modules/operations-observability/public/v1
 const publicIndex = read('gravity-mvp/src/modules/operations-observability/public/v1/index.ts')
 const consumer = read('gravity-mvp/src/app/team-overview/actions.ts')
 const callerActionConfig = read('gravity-mvp/src/lib/tasks/intervention-action-config.ts')
+const amendmentPath = 'architecture/isolation/operations-observability/intervention-actions-v1/module-manifest-amendments.json'
+const amendment = JSON.parse(read(amendmentPath))
+const migration = JSON.parse(read('architecture/isolation/operations-observability/intervention-actions-v1/migration-manifest.json'))
+const policy = JSON.parse(read('architecture/enforcement/v1/policy.json'))
+const registry = JSON.parse(read('architecture/enforcement/v1/exceptions.json'))
 const timing = sliceBetween(consumer, 'async function getOutcomeTimingStats', '// ─── Intervention Actions')
 const logAction = sliceBetween(consumer, 'export async function logInterventionAction', '/**\n * Get the last intervention action')
 const latest = sliceBetween(consumer, 'async function getLastInterventionActions', '/**\n * Evaluate and persist outcomes')
@@ -234,6 +239,64 @@ check(
     !/FROM intervention_actions|INSERT INTO intervention_actions|UPDATE intervention_actions|CREATE TABLE IF NOT EXISTS intervention_actions/.test(consumer) &&
         !/prisma\.intervention_actions\./.test(consumer),
     'intervention repository persistence remains in Analytics',
+)
+check(
+    'manifest amendment exposes only the exact repository surface and Analytics edge',
+    amendment.amendments?.length === 2 &&
+        amendment.amendments[0].context === 'operations_observability' &&
+        JSON.stringify(amendment.amendments[0].add_commands) === JSON.stringify([
+            'EnsureInterventionActionsRepositoryCommand.v1',
+            'CreateInterventionActionCommand.v1',
+            'SetInterventionOutcomeCommand.v1',
+        ]) &&
+        JSON.stringify(amendment.amendments[0].add_public_surface) === JSON.stringify([
+            'ListPendingInterventionActionsQuery.v1',
+            'ListLatestInterventionActionsQuery.v1',
+            'ListInterventionOutcomeCountsQuery.v1',
+            'ListCompletedInterventionTimesQuery.v1',
+        ]) &&
+        amendment.amendments[1].context === 'analytics_reporting' &&
+        JSON.stringify(amendment.amendments[1].add_allowed_dependencies) === JSON.stringify([
+            { context: 'operations_observability', surface: 'operations_observability.public' },
+        ]),
+    'manifest amendment widened or drifted',
+)
+check(
+    'strict policy and migration bind the slice to the archived-contact parent',
+    policy.manifest_amendments.includes(amendmentPath) &&
+        policy.registry_milestone === 'CRM-ARCH-007R-INTERVENTION-ACTIONS' &&
+        policy.registry_base_commit === 'e8811394458d2ee7e731aa51f5ff00c65d958901' &&
+        migration.base_commit === 'e8811394458d2ee7e731aa51f5ff00c65d958901' &&
+        migration.source_commit === 'fb53587e5377c272fefa58c58d521c8524a8e511',
+    'policy or evidence identity drift',
+)
+check(
+    'exact five write findings retire with no replacement capacity',
+    registry.milestone === 'CRM-ARCH-007R-INTERVENTION-ACTIONS' &&
+        registry.base_commit === 'e8811394458d2ee7e731aa51f5ff00c65d958901' &&
+        registry.exceptions.length === 1414 &&
+        registry.summary?.direct_foreign_prisma_write === 91 &&
+        registry.summary?.undeclared_dependency === 370 &&
+        [
+            'arch_88826812df7607334fe418c0',
+            'arch_797839b976905d3a7fc723b8',
+            'arch_b6c2382b10f9b0d97aab482a',
+            'arch_be72e901fee4b2693481ee1d',
+            'arch_e6b0081069429a87f802c5e8',
+        ].every(fingerprint => !registry.exceptions.some(entry => entry.fingerprint === fingerprint)) &&
+        !registry.exceptions.some(entry => entry.file.includes('modules/operations-observability/')),
+    'strict registry delta or owner-local classification drift',
+)
+check(
+    'verified registry identity and zero-change set comparison are exact',
+    registry.finding_digest === '2d262852d9b5e78314a109ea830bc1afbd34b69811fed95fc09f7caf0f0e9f43' &&
+        migration.enforcement?.actual_findings === 1414 &&
+        migration.enforcement?.actual_direct_foreign_prisma_write === 91 &&
+        migration.enforcement?.actual_added === 0 &&
+        migration.enforcement?.actual_changed_shared_entries === 0 &&
+        migration.enforcement?.finding_digest === registry.finding_digest &&
+        migration.enforcement?.registry_sha256 === 'ec5829f8140b841448e26e9bd4d8d055cc41ea7ddeb8db2728668ee8797843a9',
+    'verified registry evidence drift',
 )
 
 process.stdout.write(`${JSON.stringify({

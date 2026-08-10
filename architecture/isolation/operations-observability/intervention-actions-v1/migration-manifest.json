@@ -1,0 +1,96 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1",
+  "milestone": "CRM-ARCH-007R-INTERVENTION-ACTIONS",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "e8811394458d2ee7e731aa51f5ff00c65d958901",
+  "source_commit": "fb53587e5377c272fefa58c58d521c8524a8e511",
+  "context": "operations_observability",
+  "caller_context": "analytics_reporting",
+  "plan": {
+    "id": "intervention-actions-v1",
+    "migration_references": [
+      "migration_3b35a508fa1bce00",
+      "migration_420421d559f606ce"
+    ],
+    "file": "gravity-mvp/src/app/team-overview/actions.ts",
+    "model": "intervention_actions",
+    "role": "production_source_inactive",
+    "sites": [
+      {
+        "fingerprint": "arch_88826812df7607334fe418c0",
+        "baseline_line": 812,
+        "operation": "ensure-table-ddl"
+      },
+      {
+        "fingerprint": "arch_797839b976905d3a7fc723b8",
+        "baseline_line": 813,
+        "operation": "ensure-columns-ddl"
+      },
+      {
+        "fingerprint": "arch_b6c2382b10f9b0d97aab482a",
+        "baseline_line": 814,
+        "operation": "ensure-index-ddl"
+      },
+      {
+        "fingerprint": "arch_be72e901fee4b2693481ee1d",
+        "baseline_line": 831,
+        "operation": "create-action"
+      },
+      {
+        "fingerprint": "arch_e6b0081069429a87f802c5e8",
+        "baseline_line": 886,
+        "operation": "set-outcome"
+      }
+    ],
+    "reads": [
+      "completed-intervention-times",
+      "latest-intervention-action-per-manager",
+      "pending-intervention-actions-at-or-before-cutoff",
+      "intervention-outcome-counts"
+    ]
+  },
+  "contracts": [
+    "operations_observability.EnsureInterventionActionsRepositoryCommand.v1",
+    "operations_observability.CreateInterventionActionCommand.v1",
+    "operations_observability.SetInterventionOutcomeCommand.v1",
+    "operations_observability.ListPendingInterventionActionsQuery.v1",
+    "operations_observability.ListLatestInterventionActionsQuery.v1",
+    "operations_observability.ListInterventionOutcomeCountsQuery.v1",
+    "operations_observability.ListCompletedInterventionTimesQuery.v1"
+  ],
+  "dependency": {
+    "added": "analytics_reporting -> operations_observability.public",
+    "effective_added_dependencies": 1,
+    "cycle_verification": 0
+  },
+  "enforcement": {
+    "baseline_registry_commit": "e8811394458d2ee7e731aa51f5ff00c65d958901",
+    "baseline_findings": 1419,
+    "baseline_direct_foreign_prisma_write": 96,
+    "retired": [
+      "arch_88826812df7607334fe418c0",
+      "arch_797839b976905d3a7fc723b8",
+      "arch_b6c2382b10f9b0d97aab482a",
+      "arch_be72e901fee4b2693481ee1d",
+      "arch_e6b0081069429a87f802c5e8"
+    ],
+    "actual_findings": 1414,
+    "actual_exceptions": 1414,
+    "actual_direct_foreign_prisma_write": 91,
+    "actual_undeclared_dependency": 370,
+    "actual_removed": 5,
+    "actual_added": 0,
+    "actual_changed_shared_entries": 0,
+    "finding_digest": "2d262852d9b5e78314a109ea830bc1afbd34b69811fed95fc09f7caf0f0e9f43",
+    "registry_sha256": "ec5829f8140b841448e26e9bd4d8d055cc41ea7ddeb8db2728668ee8797843a9",
+    "registry_deterministic": true
+  },
+  "verified_at": "2026-08-10T03:23:02Z",
+  "source_control_mutation": {
+    "module_policy": true,
+    "strict_registry": true,
+    "source_only": true
+  },
+  "execution_performed": false,
+  "rollback": "e8811394458d2ee7e731aa51f5ff00c65d958901"
+}

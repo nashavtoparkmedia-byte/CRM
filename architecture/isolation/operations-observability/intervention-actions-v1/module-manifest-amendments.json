@@ -1,0 +1,32 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "CRM-ARCH-007R-INTERVENTION-ACTIONS",
+  "amendments": [
+    {
+      "context": "operations_observability",
+      "add_commands": [
+        "EnsureInterventionActionsRepositoryCommand.v1",
+        "CreateInterventionActionCommand.v1",
+        "SetInterventionOutcomeCommand.v1"
+      ],
+      "add_public_surface": [
+        "ListPendingInterventionActionsQuery.v1",
+        "ListLatestInterventionActionsQuery.v1",
+        "ListInterventionOutcomeCountsQuery.v1",
+        "ListCompletedInterventionTimesQuery.v1"
+      ],
+      "reason": "Expose the exact intervention_actions compatibility repository through Operations Observability without generic SQL, table, predicate, patch or transaction capability."
+    },
+    {
+      "context": "analytics_reporting",
+      "add_allowed_dependencies": [
+        {
+          "context": "operations_observability",
+          "surface": "operations_observability.public"
+        }
+      ],
+      "reason": "Route the accepted Analytics-owned intervention use case through the Operations Observability repository boundary."
+    }
+  ]
+}
