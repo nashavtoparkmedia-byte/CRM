@@ -83,13 +83,14 @@
     "architecture/isolation/messaging/whatsapp-chat-v1/module-manifest-amendments.json",
     "architecture/isolation/messaging/retention-message-v1/module-manifest-amendments.json",
     "architecture/isolation/messaging/telegram-binary-media-v1/module-manifest-amendments.json",
-    "architecture/isolation/messaging/max-maintenance-v1/module-manifest-amendments.json"
+    "architecture/isolation/messaging/max-maintenance-v1/module-manifest-amendments.json",
+    "architecture/isolation/ai-knowledge/legacy-knowledge-entry-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007R-STATIC-SQL-OWNERSHIP",
-  "registry_base_commit": "1703de389e7f2c39900a387dad6cd8ff52024c5c",
+  "registry_milestone": "CRM-ARCH-007R-AI-KNOWLEDGE-LEGACY-ENTRY",
+  "registry_base_commit": "4e77d30934665d69fb69f5156b235175dec3b67f",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",

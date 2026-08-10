@@ -14,6 +14,8 @@ import { createApplyKnowledgeItemCoachEditHandlerV1,createVerifyKnowledgeItemHan
 import { legacyPrismaKnowledgeItemReviewPortV1 } from './legacy-prisma-knowledge-item-review-adapter'
 import { createPatchProposedReplyHandlerV1,createUpsertProposedReplyHandlerV1 } from './proposed-reply-handler'
 import { legacyPrismaProposedReplyPortV1 } from './legacy-prisma-proposed-reply-adapter'
+import { createCreateLegacyKnowledgeEntryHandlerV1, createDeleteLegacyKnowledgeEntryHandlerV1, createUpdateLegacyKnowledgeEntryHandlerV1 } from './legacy-knowledge-entry-handler'
+import { legacyPrismaLegacyKnowledgeEntryPortV1 } from './legacy-prisma-legacy-knowledge-entry-adapter'
 
 export { createRecordKnowledgeUsageHandlerV1 } from './record-knowledge-usage-handler'
 export type { RecordKnowledgeUsagePersistencePortV1 } from './record-knowledge-usage-handler'
@@ -42,3 +44,8 @@ export { createPatchProposedReplyHandlerV1,createUpsertProposedReplyHandlerV1 } 
 export type { ProposedReplyPersistencePortV1 } from './proposed-reply-handler'
 export const upsertProposedReplyV1=createUpsertProposedReplyHandlerV1(legacyPrismaProposedReplyPortV1)
 export const patchProposedReplyV1=createPatchProposedReplyHandlerV1(legacyPrismaProposedReplyPortV1)
+export { createCreateLegacyKnowledgeEntryHandlerV1, createDeleteLegacyKnowledgeEntryHandlerV1, createUpdateLegacyKnowledgeEntryHandlerV1 } from './legacy-knowledge-entry-handler'
+export type { LegacyKnowledgeEntryPersistencePortV1 } from './legacy-knowledge-entry-handler'
+export const createLegacyKnowledgeEntryV1=createCreateLegacyKnowledgeEntryHandlerV1(legacyPrismaLegacyKnowledgeEntryPortV1)
+export const updateLegacyKnowledgeEntryV1=createUpdateLegacyKnowledgeEntryHandlerV1(legacyPrismaLegacyKnowledgeEntryPortV1)
+export const deleteLegacyKnowledgeEntryV1=createDeleteLegacyKnowledgeEntryHandlerV1(legacyPrismaLegacyKnowledgeEntryPortV1)

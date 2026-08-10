@@ -8,8 +8,8 @@ import { revalidatePath } from 'next/cache'
 import { importTelegramHistory } from '@/app/tg-actions'
 import { importWhatsAppHistory } from '@/lib/whatsapp/WhatsAppService'
 import { getUsers } from '@/lib/users/user-service'
-import { ATTACH_MANUAL_KNOWLEDGE_SOURCE_COMMAND_V1, DISABLE_KNOWLEDGE_SOURCES_COMMAND_V1, QUEUE_KNOWLEDGE_EXTRACTION_COMMAND_V1, REVIEW_AI_DECISION_COMMAND_V1, UPDATE_RETRIEVAL_POLICY_COMMAND_V1 } from '@/contracts/ai-knowledge/v1'
-import { attachManualKnowledgeSourceV1, disableKnowledgeSourcesV1, queueKnowledgeExtractionV1, reviewAiDecisionV1, updateRetrievalPolicyV1 } from '@/modules/ai-knowledge/public/v1'
+import { ATTACH_MANUAL_KNOWLEDGE_SOURCE_COMMAND_V1, CREATE_LEGACY_KNOWLEDGE_ENTRY_COMMAND_V1, DELETE_LEGACY_KNOWLEDGE_ENTRY_COMMAND_V1, DISABLE_KNOWLEDGE_SOURCES_COMMAND_V1, QUEUE_KNOWLEDGE_EXTRACTION_COMMAND_V1, REVIEW_AI_DECISION_COMMAND_V1, UPDATE_LEGACY_KNOWLEDGE_ENTRY_COMMAND_V1, UPDATE_RETRIEVAL_POLICY_COMMAND_V1 } from '@/contracts/ai-knowledge/v1'
+import { attachManualKnowledgeSourceV1, createLegacyKnowledgeEntryV1, deleteLegacyKnowledgeEntryV1, disableKnowledgeSourcesV1, queueKnowledgeExtractionV1, reviewAiDecisionV1, updateLegacyKnowledgeEntryV1, updateRetrievalPolicyV1 } from '@/modules/ai-knowledge/public/v1'
 import { CREATE_AI_AGENT_PROFILE_COMMAND_V1, DELETE_AI_AGENT_PROFILE_COMMAND_V1, UPDATE_AI_AGENT_PROFILE_COMMAND_V1 } from '@/contracts/calling/v1'
 import { createAiAgentProfileV1, deleteAiAgentProfileV1, updateAiAgentProfileV1 } from '@/modules/calling/public/v1'
 import { CANCEL_HISTORY_IMPORT_JOB_COMMAND_V1, DELETE_HISTORY_IMPORT_JOB_COMMAND_V1, QUEUE_HISTORY_IMPORT_JOB_COMMAND_V1 } from '@/contracts/messaging/v1'
@@ -250,17 +250,7 @@ export async function createKnowledgeEntry(data: {
 }) {
     await assertCanEditAi()
     const id = `kb_${Date.now()}`
-    await prisma.$executeRaw`
-        INSERT INTO "KnowledgeBaseEntry" (id, title, category, "sampleQuestions", answer, tags, channels, active, priority, "createdAt", "updatedAt")
-        VALUES (
-            ${id}, ${data.title}, ${data.category},
-            ${JSON.stringify(data.sampleQuestions)}::jsonb,
-            ${data.answer},
-            ${data.tags}::text[],
-            ${data.channels}::text[],
-            true, ${data.priority}, NOW(), NOW()
-        )
-    `
+    await createLegacyKnowledgeEntryV1({ contract: CREATE_LEGACY_KNOWLEDGE_ENTRY_COMMAND_V1, entryId: id, data })
     revalidatePath('/settings/ai')
     return { id, ...data, active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
 }
@@ -273,18 +263,13 @@ export async function updateKnowledgeEntry(id: string, data: Partial<{
     await assertCanEditAi()
     const fields = Object.keys(data)
     if (fields.length === 0) return
-    const sets = fields.map((k, i) => `"${k}" = $${i + 1}`).join(', ')
-    const vals = Object.values(data)
-    await prisma.$executeRawUnsafe(
-        `UPDATE "KnowledgeBaseEntry" SET ${sets}, "lastReviewedAt" = NOW(), "updatedAt" = NOW() WHERE id = $${vals.length + 1}`,
-        ...vals, id
-    )
+    await updateLegacyKnowledgeEntryV1({ contract: UPDATE_LEGACY_KNOWLEDGE_ENTRY_COMMAND_V1, entryId: id, patch: data })
     revalidatePath('/settings/ai')
 }
 
 export async function deleteKnowledgeEntry(id: string) {
     await assertCanEditAi()
-    await prisma.$executeRaw`DELETE FROM "KnowledgeBaseEntry" WHERE id = ${id}`
+    await deleteLegacyKnowledgeEntryV1({ contract: DELETE_LEGACY_KNOWLEDGE_ENTRY_COMMAND_V1, entryId: id })
     revalidatePath('/settings/ai')
 }
 
