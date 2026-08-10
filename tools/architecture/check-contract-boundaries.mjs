@@ -162,14 +162,45 @@ assertCheck(
 
 const srcRoot = path.join(root, 'gravity-mvp/src')
 const internalImportViolations = []
+const moduleRules = JSON.parse(source('architecture/evidence/v1/module-rules.json'))
+const contextIndex = JSON.parse(source('architecture/contexts/v1/context-index.json'))
+const moduleContext = new Map()
+for (const entry of contextIndex.contexts) {
+    const manifest = JSON.parse(source(entry.path))
+    for (const technicalModule of manifest.technical_modules) {
+        moduleContext.set(technicalModule, manifest.context.id)
+    }
+}
+const compiledModuleRules = moduleRules.modules.map((rule) => ({ ...rule, regex: new RegExp(rule.match) }))
+const slugContext = (slug) => ({
+    'platform-shell': 'platform_shell',
+    'work-management': 'work_management',
+}[slug] ?? slug.replaceAll('-', '_'))
+
+function classifyContext(relative) {
+    const moduleMatch = relative.match(/^gravity-mvp\/src\/modules\/([^/]+)\//)
+    if (moduleMatch) return slugContext(moduleMatch[1])
+    const contractMatch = relative.match(/^gravity-mvp\/src\/contracts\/([^/]+)\//)
+    if (contractMatch) return slugContext(contractMatch[1])
+    if (relative.startsWith('gravity-mvp/src/infrastructure/')) return 'platform_shell'
+    const technicalModule = compiledModuleRules.find((rule) => rule.regex.test(relative))?.id
+    return moduleContext.get(technicalModule) ?? null
+}
+
 function scanInternalImports(directory) {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
         const candidate = path.join(directory, entry.name)
         if (entry.isDirectory()) scanInternalImports(candidate)
         else if (/\.(?:ts|tsx|js|mjs)$/.test(entry.name)) {
             const body = fs.readFileSync(candidate, 'utf8')
-            if (/from\s+['"]@\/modules\/[^'"]+\/internal(?:\/|['"])/.test(body)) {
-                internalImportViolations.push(path.relative(root, candidate))
+            const relative = path.relative(root, candidate).split(path.sep).join('/')
+            const sourceContext = classifyContext(relative)
+            const imports = body.matchAll(/from\s+['"]@\/modules\/([^/'"]+)\/internal(?:\/[^'"]*)?['"]/g)
+            for (const match of imports) {
+                const targetContext = slugContext(match[1])
+                if (sourceContext !== targetContext) {
+                    internalImportViolations.push(`${relative}:${sourceContext ?? 'unclassified'}>${targetContext}`)
+                }
             }
         }
     }

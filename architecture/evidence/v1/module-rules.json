@@ -16,6 +16,7 @@
   ],
   "exclude_segments": ["node_modules", ".next", "dist", "build", "coverage", ".artifacts"],
   "modules": [
+    {"id":"gravity_core","context":"core","match":"^gravity-mvp/src/app/api/contacts/(?:start-conversation/route\\.ts|\\[id\\]/chats/route\\.ts)$"},
     {"id":"nginx","context":"edge","match":"^deploy/nginx/"},
     {"id":"telephony_config","context":"telephony","match":"^telephony/"},
     {"id":"audio_bridge","context":"calls","match":"^tools/audio-bridge-day1/"},

@@ -38,6 +38,8 @@ import { createDetachContactConversationsHandlerV1 } from './contact-retention-h
 import { legacyPrismaContactConversationRetentionPortV1 } from './legacy-prisma-contact-retention-adapter'
 import { createEnsureConversationContactLinkHandlerV1 } from './conversation-contact-link-handler'
 import { legacyPrismaConversationContactLinkPortV1 } from './legacy-prisma-conversation-contact-link-adapter'
+import { createFindAndBackfillContactConversationHandlerV1, createOpenFallbackContactConversationHandlerV1 } from './contact-conversation-handler'
+import { legacyPrismaContactConversationPortV1 } from './legacy-prisma-contact-conversation-adapter'
 
 export { createAttachMessageMediaHandlerV1 } from './attach-message-media-handler'
 export type { AttachMessageMediaPersistencePortV1 } from './attach-message-media-handler'
@@ -122,3 +124,7 @@ export const detachContactConversationsV1=createDetachContactConversationsHandle
 export { createEnsureConversationContactLinkHandlerV1 } from './conversation-contact-link-handler'
 export type { ConversationContactLinkPersistencePortV1 } from './conversation-contact-link-handler'
 export const ensureConversationContactLinkV1=createEnsureConversationContactLinkHandlerV1(legacyPrismaConversationContactLinkPortV1)
+export { createFindAndBackfillContactConversationHandlerV1, createOpenFallbackContactConversationHandlerV1 } from './contact-conversation-handler'
+export type { ContactConversationPersistencePortV1 } from './contact-conversation-handler'
+export const findAndBackfillContactConversationV1=createFindAndBackfillContactConversationHandlerV1(legacyPrismaContactConversationPortV1)
+export const openFallbackContactConversationV1=createOpenFallbackContactConversationHandlerV1(legacyPrismaContactConversationPortV1)

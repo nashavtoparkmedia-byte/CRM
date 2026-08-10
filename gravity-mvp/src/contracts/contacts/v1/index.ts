@@ -41,3 +41,4 @@ export type {
 export * from './contact-phone-commands'
 export * from './fleet-contact-commands'
 export * from './contact-retention-command'
+export * from './contact-conversation-commands'

@@ -16,6 +16,8 @@ import { createMirrorDriverActionResultHandlerV1,createRecordDriverActionHandler
 import { legacyPrismaDriverActionPortV1 } from './legacy-prisma-driver-action-adapter'
 import { createRunApiLogRetentionHandlerV1,createRunDriverEventRetentionHandlerV1 } from './event-retention-handler'
 import { legacyPrismaFleetEventRetentionPortV1 } from './legacy-prisma-event-retention-adapter'
+import { createFindDriverByExactPhoneHandlerV1 } from './find-driver-by-exact-phone-handler'
+import { legacyPrismaFindDriverByExactPhonePortV1 } from './legacy-prisma-find-driver-by-exact-phone-adapter'
 export { createUpdateDriverStateHandlerV1 } from './update-driver-state-handler'
 export type { UpdateDriverStatePersistencePortV1 } from './update-driver-state-handler'
 export const updateDriverStateV1=createUpdateDriverStateHandlerV1(legacyPrismaUpdateDriverStatePortV1)
@@ -48,3 +50,6 @@ export { createRunApiLogRetentionHandlerV1,createRunDriverEventRetentionHandlerV
 export type { FleetEventRetentionPersistencePortV1 } from './event-retention-handler'
 export const runDriverEventRetentionV1=createRunDriverEventRetentionHandlerV1(legacyPrismaFleetEventRetentionPortV1)
 export const runApiLogRetentionV1=createRunApiLogRetentionHandlerV1(legacyPrismaFleetEventRetentionPortV1)
+export { createFindDriverByExactPhoneHandlerV1 } from './find-driver-by-exact-phone-handler'
+export type { FindDriverByExactPhonePersistencePortV1 } from './find-driver-by-exact-phone-handler'
+export const findDriverByExactPhoneV1=createFindDriverByExactPhoneHandlerV1(legacyPrismaFindDriverByExactPhonePortV1)

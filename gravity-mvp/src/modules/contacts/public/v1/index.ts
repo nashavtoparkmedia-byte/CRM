@@ -10,6 +10,12 @@ import { createCreateFleetContactHandlerV1, createPatchFleetContactHandlerV1 } f
 import { legacyPrismaFleetContactPortV1 } from './legacy-prisma-fleet-contact-adapter'
 import { createDeleteContactForRetentionHandlerV1 } from './contact-retention-handler'
 import { legacyPrismaContactRetentionPortV1 } from './legacy-prisma-contact-retention-adapter'
+import {
+    createGetPreferredActiveContactPhoneHandlerV1,
+    createPrepareContactConversationIdentityHandlerV1,
+    createResolveChannelContactHandlerV1,
+} from './contact-conversation-handler'
+import { legacyPrismaContactConversationPortV1 } from './legacy-prisma-contact-conversation-adapter'
 
 export { createResolveContactHandlerV1 } from './resolve-contact-handler'
 export type { ResolveContactPersistencePortV1 } from './resolve-contact-handler'
@@ -33,3 +39,17 @@ export const createFleetContactV1 = createCreateFleetContactHandlerV1(legacyPris
 export { createDeleteContactForRetentionHandlerV1 } from './contact-retention-handler'
 export type { ContactRetentionPersistencePortV1 } from './contact-retention-handler'
 export const deleteContactForRetentionV1 = createDeleteContactForRetentionHandlerV1(legacyPrismaContactRetentionPortV1)
+export {
+    createGetPreferredActiveContactPhoneHandlerV1,
+    createPrepareContactConversationIdentityHandlerV1,
+    createResolveChannelContactHandlerV1,
+} from './contact-conversation-handler'
+export type {
+    ContactConversationPersistencePortV1,
+    PrepareContactConversationIdentityPersistenceResultV1,
+} from './contact-conversation-handler'
+export const resolveChannelContactV1 = createResolveChannelContactHandlerV1(legacyPrismaContactConversationPortV1)
+export const prepareContactConversationIdentityV1 =
+    createPrepareContactConversationIdentityHandlerV1(legacyPrismaContactConversationPortV1)
+export const getPreferredActiveContactPhoneV1 =
+    createGetPreferredActiveContactPhoneHandlerV1(legacyPrismaContactConversationPortV1)
