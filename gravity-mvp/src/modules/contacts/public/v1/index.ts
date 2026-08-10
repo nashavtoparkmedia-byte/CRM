@@ -16,6 +16,11 @@ import {
     createResolveChannelContactHandlerV1,
 } from './contact-conversation-handler'
 import { legacyPrismaContactConversationPortV1 } from './legacy-prisma-contact-conversation-adapter'
+import { createMergeContactsHandlerV1 } from './contact-merge-handler'
+import {
+    legacyPrismaContactMergeQueriesV1,
+    legacyPrismaContactMergeUnitOfWorkV1,
+} from './legacy-prisma-contact-merge-adapter'
 
 export { createResolveContactHandlerV1 } from './resolve-contact-handler'
 export type { ResolveContactPersistencePortV1 } from './resolve-contact-handler'
@@ -53,3 +58,33 @@ export const prepareContactConversationIdentityV1 =
     createPrepareContactConversationIdentityHandlerV1(legacyPrismaContactConversationPortV1)
 export const getPreferredActiveContactPhoneV1 =
     createGetPreferredActiveContactPhoneHandlerV1(legacyPrismaContactConversationPortV1)
+export {
+    ContactMergeErrorV1,
+    createMergeContactsHandlerV1,
+} from './contact-merge-handler'
+export type {
+    ContactMergeContactsQueryRepositoryV1,
+    ContactMergeContactsRepositoryV1,
+    ContactMergeDriverV1,
+    ContactMergeErrorCodeV1,
+    ContactMergeFleetQueryRepositoryV1,
+    ContactMergeFleetRepositoryV1,
+    ContactMergeHandlerDependenciesV1,
+    ContactMergeIdentityV1,
+    ContactMergeMessagingRepositoryV1,
+    ContactMergePhoneV1,
+    ContactMergeQueryRepositoriesV1,
+    ContactMergeSimpleLinkContactsRepositoryV1,
+    ContactMergeSimpleLinkMessagingRepositoryV1,
+    ContactMergeSimpleLinkRepositoriesV1,
+    ContactMergeSnapshotV1,
+    ContactMergeSourceV1,
+    ContactMergeSurvivorV1,
+    ContactMergeTransactionalRepositoriesV1,
+    ContactMergeUnitOfWorkV1,
+    ContactMergeWorkRepositoryV1,
+} from './contact-merge-handler'
+export const mergeContactsV1 = createMergeContactsHandlerV1({
+    queries: legacyPrismaContactMergeQueriesV1,
+    unitOfWork: legacyPrismaContactMergeUnitOfWorkV1,
+})

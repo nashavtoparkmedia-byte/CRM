@@ -39,6 +39,16 @@
       "model": "DomainOutboxEvent",
       "file": "gravity-mvp/src/modules/calling/internal/recording-ready-prisma-adapter.ts",
       "reason": "same transaction as Calling aggregate write; declared by CRM-ARCH-005 outbox manifest"
+    },
+    {
+      "model": "Chat",
+      "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
+      "reason": "exact CRM-ARCH-007R D2 contact-merge unit of work; named Messaging repository operations remain in the same ordered cross-owner transaction"
+    },
+    {
+      "model": "Task",
+      "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
+      "reason": "exact CRM-ARCH-007R D2 contact-merge unit of work; named Work Management repository operations remain in the same ordered cross-owner transaction"
     }
   ],
   "manifest_amendments": [
