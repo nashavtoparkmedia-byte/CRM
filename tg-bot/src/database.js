@@ -72,22 +72,6 @@ class Database {
                 )
             `);
 
-            await this.run(`
-                CREATE TABLE IF NOT EXISTS connection_requests (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    telegram_id TEXT UNIQUE,
-                    username TEXT,
-                    full_name TEXT,
-                    phone TEXT,
-                    vu_link TEXT,
-                    sts_link TEXT,
-                    status TEXT DEFAULT 'New',
-                    notes TEXT,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            `);
-
             // Ensure columns exist (migrations)
             const migrations = [
                 `ALTER TABLE users ADD COLUMN state TEXT DEFAULT 'IDLE'`,
@@ -149,33 +133,6 @@ class Database {
     async getUserState(telegramId) {
         const user = await this.getUserByTelegramId(telegramId);
         return user ? user.state : 'IDLE';
-    }
-
-    async upsertConnectionLocal(telegramId, username, data) {
-        try {
-            // Check if exists
-            const existing = await this.get('SELECT id FROM connection_requests WHERE telegram_id = ?', [telegramId.toString()]);
-
-            if (existing) {
-                const keys = Object.keys(data);
-                const values = Object.values(data);
-                const setClause = keys.map(key => `${key} = ?`).join(', ');
-                await this.run(
-                    `UPDATE connection_requests SET ${setClause}, updated_at = datetime('now') WHERE telegram_id = ?`,
-                    [...values, telegramId.toString()]
-                );
-            } else {
-                const keys = ['telegram_id', 'username', ...Object.keys(data)];
-                const placeholders = keys.map(() => '?').join(', ');
-                const values = [telegramId.toString(), username, ...Object.values(data)];
-                await this.run(
-                    `INSERT INTO connection_requests (${keys.join(', ')}) VALUES (${placeholders})`,
-                    values
-                );
-            }
-        } catch (err) {
-            logger.error('Upsert connection local error:', err);
-        }
     }
 
     async getUserByTelegramId(telegramId) {

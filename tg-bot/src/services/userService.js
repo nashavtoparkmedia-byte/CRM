@@ -16,10 +16,6 @@ class UserService {
         return await db.getUserState(telegramId);
     }
 
-    async upsertConnectionLocal(telegramId, username, data) {
-        await db.upsertConnectionLocal(telegramId, username, data);
-    }
-
     // Update user data
     async updateUser(telegramId, data) {
         await db.updateUser(telegramId, data);
