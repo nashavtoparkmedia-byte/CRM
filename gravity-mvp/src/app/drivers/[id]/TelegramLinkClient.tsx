@@ -1,11 +1,17 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Link2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { saveDriverTelegramLink, removeDriverTelegramLink } from './actions'
+
+interface DriverTelegramLinkActionResult {
+    success: boolean
+    error?: string
+    mutated?: boolean
+}
 
 interface Props {
     driverId: string
@@ -14,10 +20,12 @@ interface Props {
 }
 
 export default function TelegramLinkClient({ driverId, initialTelegramId, initialUsername }: Props) {
+    const router = useRouter()
     const [telegramId, setTelegramId] = useState(initialTelegramId ? initialTelegramId.toString() : '')
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState<string | null>(null)
+    const endpoint = `/api/platform/drivers/${encodeURIComponent(driverId)}/telegram-link`
 
     const handleSave = async () => {
         if (!telegramId.trim()) return
@@ -27,14 +35,20 @@ export default function TelegramLinkClient({ driverId, initialTelegramId, initia
         setSuccess(null)
 
         try {
-            const res = await saveDriverTelegramLink(driverId, telegramId)
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ telegramId }),
+            })
+            const res = await response.json() as DriverTelegramLinkActionResult
             if (res.success) {
                 setSuccess('Telegram ID успешно привязан')
+                if (res.mutated) router.refresh()
             } else {
                 setError(res.error || 'Ошибка привязки')
             }
-        } catch (err: any) {
-            setError(err.message || 'Ошибка сети')
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Ошибка сети')
         } finally {
             setLoading(false)
         }
@@ -48,15 +62,17 @@ export default function TelegramLinkClient({ driverId, initialTelegramId, initia
         setSuccess(null)
 
         try {
-            const res = await removeDriverTelegramLink(driverId)
+            const response = await fetch(endpoint, { method: 'DELETE' })
+            const res = await response.json() as DriverTelegramLinkActionResult
             if (res.success) {
                 setTelegramId('')
                 setSuccess('Telegram ID успешно отвязан')
+                if (res.mutated) router.refresh()
             } else {
                 setError(res.error || 'Ошибка отвязки')
             }
-        } catch (err: any) {
-            setError(err.message || 'Ошибка сети')
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Ошибка сети')
         } finally {
             setLoading(false)
         }
