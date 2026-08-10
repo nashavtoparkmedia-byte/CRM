@@ -1,0 +1,33 @@
+{
+  "schema": "yoko.crm.mutation-ledger.v1",
+  "milestone": "CRM-ARCH-007R-MANUAL-DRIVER-TELEGRAM-DELIVERY",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "4d27223b6950c0c824e762675fe2af960d69f0f7",
+  "source_commit": "144cb01fafb1c98dc9f9cf5ac07d6fa8273969ac",
+  "verified_at": "2026-08-10T06:43:26Z",
+  "source": [
+    "one same-origin JSON-only Platform Shell mutation route",
+    "three strict Telegram Channel v1 owner commands with closed results",
+    "owner handlers and narrow legacy Prisma or bot-notification adapters",
+    "one internal Platform Shell orchestrator preserving exact sequential behavior",
+    "one browser caller migrated from imported Server Actions to a relative URL",
+    "legacy driver detail mutation action retired while its page read remains unchanged",
+    "route, orchestration, repository and boundary controls",
+    "one-context public-surface amendment with no dependency amendment",
+    "deterministically regenerated strict registry with two exact retirements",
+    "checksummed source-gate evidence package"
+  ],
+  "production": [],
+  "database": [],
+  "providers": [],
+  "webhooks": [],
+  "services": [],
+  "deployment": [],
+  "policy_source_mutated": true,
+  "registry_source_mutated": true,
+  "module_rule_source_mutated": false,
+  "source_control_only": true,
+  "driver_telegram_mutation_executed_against_database": false,
+  "production_mutated": false,
+  "secret_values_read_or_emitted": false
+}

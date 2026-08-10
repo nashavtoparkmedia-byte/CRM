@@ -1,0 +1,61 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1",
+  "milestone": "CRM-ARCH-007R-MANUAL-DRIVER-TELEGRAM-DELIVERY",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "4d27223b6950c0c824e762675fe2af960d69f0f7",
+  "source_commit": "144cb01fafb1c98dc9f9cf5ac07d6fa8273969ac",
+  "captured_at": "2026-08-10T06:43:26Z",
+  "verified_at": "2026-08-10T06:43:26Z",
+  "legacy_sources": [
+    {
+      "file": "gravity-mvp/src/app/drivers/[id]/actions.ts",
+      "before": "f4f5b11767b29c2f509a95bd797e945511abb8f2b6002ffece15030c74215aaf",
+      "after": null,
+      "state": "retired"
+    },
+    {
+      "file": "gravity-mvp/src/app/drivers/[id]/TelegramLinkClient.tsx",
+      "before": "e2be8e2e0363ce41b00abc21e8f8d07f34915bda7c2b82dc52b0c522a540055d",
+      "after": "6fb7affe465f8a0259ccf84bdac29bfe1b8a8f2815a1081193afe7300fad7e44"
+    }
+  ],
+  "unchanged_consumers": [
+    {
+      "file": "gravity-mvp/src/app/drivers/[id]/page.tsx",
+      "before": "ca55c43e4bf5f9e4307d44e0e1a388b92d58d90ba153815d3f973156c1e05529",
+      "after": "ca55c43e4bf5f9e4307d44e0e1a388b92d58d90ba153815d3f973156c1e05529"
+    }
+  ],
+  "source_hashes_after": {
+    "gravity-mvp/src/app/api/platform/drivers/[id]/telegram-link/route.ts": "c3cf6ca37a6dd78e219f5748ffba8a8b283ec6df653204609a1a52a2d8919d7d",
+    "gravity-mvp/src/app/drivers/[id]/TelegramLinkClient.tsx": "6fb7affe465f8a0259ccf84bdac29bfe1b8a8f2815a1081193afe7300fad7e44",
+    "gravity-mvp/src/contracts/telegram-channel/v1/manual-driver-telegram-link-commands.ts": "57ed8a2300ed3b6c648330064003154f96c6da0bafc3ae99e6e43183288916bf",
+    "gravity-mvp/src/modules/platform-shell/internal/driver-telegram-link-orchestrator.ts": "19f9694b5793692f09d4a6716cda1a342d5236df0e47c58545b99a0c4d495d38",
+    "gravity-mvp/src/modules/telegram-channel/public/v1/legacy-prisma-manual-driver-telegram-link-adapter.ts": "8341a145f2810cef5f25d1ec7cd7fb180a99dce54ee3d81b903dfce621947380",
+    "gravity-mvp/src/modules/telegram-channel/public/v1/legacy-bot-api-manual-driver-telegram-link-notification-adapter.ts": "2817a5937dab4b9509a3edb75e7884ae36dbb3e284717558348b751fb6489dcd"
+  },
+  "behavior": [
+    "save converts the submitted scalar to BigInt before persistence and retains the exact DriverTelegram upsert where, update and create shapes",
+    "the exact P2002 telegramId conflict text and generic database error text remain unchanged, and all failures retain the existing log prefixes",
+    "an optional truthy driver name retains save-before-notify ordering, the exact Russian notification payload and chatId conversion",
+    "the live client still omits driverName, so the historically dormant optional notification remains dormant for the current UI path",
+    "notification network failures remain best-effort logged and swallowed while non-2xx responses remain ignored; save and revalidation continue",
+    "unlink retains exact delete shape, P2025 idempotent success without logging or revalidation, and generic failure logging and text",
+    "revalidation follows successful owner work; revalidation failure remains mapped by the same outer save or unlink error behavior",
+    "the client retains digit-only input, blank-save suppression, confirmation text, loading state, success and error strings, and clear-on-unlink behavior",
+    "the page retains its exact caller-owned DriverTelegram read and the existing client props",
+    "no transaction, retry, parallelism, recovery or provider send was added to Platform orchestration"
+  ],
+  "bounded_drift": [
+    "the live mutation crossing changes from an imported Next Server Action to a relative same-origin Platform HTTP endpoint",
+    "POST is now explicitly JSON-only and both mutations fail closed on missing or mismatched Origin, Host or protocol and on a contradictory forwarded host",
+    "the client explicitly refreshes the router only when the handled result reports an actual mutation, preserving the P2025 no-revalidation distinction",
+    "strict v1 owner envelopes reject malformed, extra-field, empty and unsupported-version requests before persistence",
+    "public handlers and Platform orchestration add in-process frames and may change stack traces without changing handled values"
+  ],
+  "out_of_scope": [
+    "manager CommunicationEvent logging and contact merge",
+    "AI governance, Calling configuration and unsafe-fragment hardening",
+    "database access, provider or webhook invocation, deployed application runtime execution, service activation, deployment, production mutation and secrets"
+  ]
+}

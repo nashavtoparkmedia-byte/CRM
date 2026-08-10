@@ -91,13 +91,14 @@
     "architecture/isolation/operations-observability/manager-health-v1/module-manifest-amendments.json",
     "architecture/isolation/messaging/conversation-contact-link-v1/module-manifest-amendments.json",
     "architecture/isolation/work-management/scenario-field-settings-v1/module-manifest-amendments.json",
-    "architecture/isolation/platform-shell/contact-conversation-api-v1/module-manifest-amendments.json"
+    "architecture/isolation/platform-shell/contact-conversation-api-v1/module-manifest-amendments.json",
+    "architecture/isolation/platform-shell/manual-driver-telegram-delivery-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007R-CONTACT-CONVERSATION-API",
-  "registry_base_commit": "23ad1aac6569ec329c75b3f8ae3b892c20160123",
+  "registry_milestone": "CRM-ARCH-007R-MANUAL-DRIVER-TELEGRAM-DELIVERY",
+  "registry_base_commit": "4d27223b6950c0c824e762675fe2af960d69f0f7",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",
