@@ -109,8 +109,8 @@
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007R-CONTACT-MERGE-TRANSACTION",
-  "registry_base_commit": "51e4734d781d7d998f3beba393e397c125c72ef2",
+  "registry_milestone": "CRM-ARCH-007R-AI-KNOWLEDGE-GOVERNANCE",
+  "registry_base_commit": "2dfa7ebe0683a21cb53ff8f5caf59f2562b60de0",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",
