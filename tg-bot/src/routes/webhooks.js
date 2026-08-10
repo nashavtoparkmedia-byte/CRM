@@ -1,28 +1,49 @@
 const express = require('express');
 const router = express.Router();
 const telegramService = require('../services/telegramService');
-const sheetsService = require('../services/sheets');
+const { requireTelegramWebhookSecret } = require('../security/webhookAuth');
 
-router.post('/:botToken', async (req, res) => {
-    const { botToken } = req.params;
+// Preferred ABI: the public URL contains an opaque database identifier, never
+// a Telegram API credential. Configure the same TELEGRAM_WEBHOOK_SECRET as
+// Telegram's secret_token so Telegram authenticates every delivery.
+router.post('/telegram/:botId', requireTelegramWebhookSecret, (req, res) => {
+    return handleWebhook(req, res, { id: req.params.botId });
+});
+
+// Migration-only compatibility lane. It is disabled by default and, even when
+// deliberately enabled, still requires the Telegram secret header. Operators
+// should replace legacy token-bearing webhook URLs with /telegram/:botId.
+router.post('/:botToken', (req, res, next) => {
+    if (process.env.ALLOW_LEGACY_WEBHOOK_PATH !== 'true') {
+        return res.status(404).json({ error: 'Not found' });
+    }
+    return requireTelegramWebhookSecret(req, res, next);
+}, (req, res) => {
+    return handleWebhook(req, res, { token: req.params.botToken });
+});
+
+async function handleWebhook(req, res, botWhere) {
     const prisma = req.prisma;
     const update = req.body;
 
-    // Telegram expects 200 OK immediately to acknowledge receipt, 
+    // Authentication was completed before acknowledgement. Telegram expects
+    // 200 promptly after that point or it will retry the update.
     // otherwise it will retry sending the webhook.
     res.status(200).send('OK');
 
     try {
         // 1. Validate Bot
         const bot = await prisma.bot.findUnique({
-            where: { token: botToken },
+            where: botWhere,
             include: { surveys: { where: { isActive: true }, take: 1 } }
         });
 
         if (!bot || !bot.isActive) {
-            console.warn(`[Webhook] Received update for inactive/unknown bot token: ${botToken.substring(0, 10)}...`);
+            console.warn('[Webhook] Received update for inactive or unknown bot mapping');
             return;
         }
+
+        const botToken = bot.token;
 
         const survey = bot.surveys?.[0];
         if (!survey || !survey.isActive) {
@@ -175,7 +196,7 @@ router.post('/:botToken', async (req, res) => {
     } catch (error) {
         console.error('[Webhook] Unhandled Error processing update:', error);
     }
-});
+}
 
 async function sendQuestion(botToken, chatId, question) {
     let replyMarkup = undefined;
@@ -191,3 +212,4 @@ async function sendQuestion(botToken, chatId, question) {
 }
 
 module.exports = router;
+module.exports.handleWebhook = handleWebhook;

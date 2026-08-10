@@ -2,8 +2,10 @@ import { getApiLogs } from '../actions'
 export const dynamic = 'force-dynamic'
 import NeumorphicCard from '@/components/NeumorphicCard'
 import Header from '@/components/Header'
+import { requireIntegrationAdminPageAccess } from '@/modules/identity-access/public/v1'
 
 export default async function LogsPage() {
+    await requireIntegrationAdminPageAccess('/logs')
     const logs = await getApiLogs()
 
     return (

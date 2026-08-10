@@ -1001,6 +1001,29 @@ test('opaque known-relation payloads remain fail-closed nested writes', () => {
     ))))
 })
 
+test('flat dynamic payload does not hide a statically resolved model write', () => {
+    const result = analyzePrismaWriteSites([
+        'const data = getPayload()',
+        'prisma.contact.update({ where: { id }, data })',
+    ].join('\n'), { fileName: 'flat-dynamic-payload.ts', knownModels: ['Contact'] })
+    assert.equal(result.sites.length, 1)
+    assert.equal(result.sites[0].kind, 'model')
+    assert.equal(result.sites[0].ambiguous, false)
+    assert.equal(result.sites[0].write_projection_dynamic, true)
+    assert.deepEqual(result.sites[0].nested_operations, [])
+})
+
+test('known scalar constructors and serializers in SQL parameters are not SQL fragments', () => {
+    const result = analyzePrismaWriteSites([
+        'const created = new Date()',
+        'const payload = JSON.stringify({ ok: true })',
+        'prisma.$executeRaw`INSERT INTO audit (createdAt, payload) VALUES (${created}, ${payload})`',
+    ].join('\n'), { fileName: 'scalar-template-values.ts' })
+    assert.equal(result.sites.length, 1)
+    assert.equal(result.sites[0].ambiguous, false)
+    assert.deepEqual(result.sites[0].ambiguity_reasons, [])
+})
+
 test('model writes retain structural payload field names without values', () => {
     const sites = extractPrismaWrites([
         "prisma.customIntegration.create({ data: { apiKey: 'not-emitted', name: 'x' } })",

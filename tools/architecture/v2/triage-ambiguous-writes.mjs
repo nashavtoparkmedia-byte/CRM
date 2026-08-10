@@ -11,8 +11,8 @@ if (!input || !output) {
 
 const focusedOwnershipDecisions = new Map([
   ...['45645e0b760a5827a47289517fa298c1a3bcd215068e418d7c93e887b8ad17ac','81f28083be28056e5c9be0ca8018f6ec9121a53bee49136fe9fd7e710afdb913','64934aa9a77c0de5bafd842a668fa1b1f10654ce0a3ffa06cfe7a7fd3b995046','8779aa7c9ab18d702c45db346d6e34b2262c14d2744796efbc77bd6bcf6927a2','68e7b2590b446a521037a09ba257bd2dc3e9dc5160ae46e2838bc955f203ab4d','48452c703f3878500e43002f7311f83f1a84a5d7a7c7fc02ac262672a49917b9','f2385246a9722e1692eaa96a81289d48e1bc42701ab7bbaf653642fac72b7e40'].map(signature => [signature, 'OWNER_VALID']),
-  ['86fcbe86cb9f15f5d9c844fbecfb12a912ca3a5d9a1fce95e39d4a1f3b663048', 'OWNERSHIP_MANIFEST_GAP_REVIEW'],
-  ['caa58a0bf05960a1b641812d8efa055fd89b6ae683268dfce77b9ccdc93ea32b', 'OWNERSHIP_MANIFEST_GAP_REVIEW'],
+  ['86fcbe86cb9f15f5d9c844fbecfb12a912ca3a5d9a1fce95e39d4a1f3b663048', 'OWNER_VALID'],
+  ['caa58a0bf05960a1b641812d8efa055fd89b6ae683268dfce77b9ccdc93ea32b', 'OWNER_VALID'],
   ['9889a11d1518f34196c9816f3f1269910329f7a85ecc744f6776bce4a0a46d63', 'FOREIGN'],
   ['ecda9ca05cf1f46ae206a4f23e9354efba9740023f838d202b5a9ea22b27d323', 'FOREIGN'],
 ])
@@ -25,10 +25,20 @@ function classify(site) {
   ) {
     return { disposition: 'CONFIRMED_NON_WRITE', rationale: 'Source inspection proves an in-memory Map lookup or analyzer detector literal, not a database operation.' }
   }
+  // A queryRaw site with a fully resolved, read-only SQL statement is an
+  // analyzer false positive when it was retained only because raw reads are
+  // inventoried. Keep side-effecting routines and dynamic SQL unresolved;
+  // this branch requires both an empty mutation operation set and no
+  // ambiguity reasons.
+  if (site.kind === 'raw' && reasons.size === 0 && (site.operations ?? []).length === 0) {
+    return { disposition: 'CONFIRMED_NON_WRITE', rationale: 'SQL analysis resolved a read-only queryRaw statement with no mutation operations.' }
+  }
   if (/^mixed-script-command:(?:prisma (?:db push|migrate (?:deploy|resolve))|pg_restore)$/u.test(site.method)) {
     return { disposition: 'CONFIRMED_WRITE_OWNER_UNRESOLVED', rationale: 'The executable command is intrinsically database-mutating; it requires a narrow migration or restore capability owner.' }
   }
-  if (site.kind === 'model' && reasons.size === 0) {
+  const payloadOnlyAmbiguity = reasons.size > 0
+    && [...reasons].every((reason) => reason === 'dynamic_payload_may_contain_nested_write')
+  if (site.kind === 'model' && (reasons.size === 0 || payloadOnlyAmbiguity)) {
     return { disposition: 'CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED', rationale: 'A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.' }
   }
   if (site.kind === 'raw' && reasons.size === 0) {

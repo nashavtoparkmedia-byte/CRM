@@ -11,6 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { PageContainer } from '@/components/ui/PageContainer'
 import { PageHeader } from '@/components/layout/PageHeader'
+import { requireIntegrationAdminPageAccess } from '@/modules/identity-access/public/v1'
 
 export const dynamic = 'force-dynamic'
 
@@ -121,6 +122,7 @@ const API_ENDPOINTS = [
 ]
 
 export default async function ApiSettingsPage() {
+    await requireIntegrationAdminPageAccess('/settings/api')
     const connections = await getApiConnections()
 
     return (

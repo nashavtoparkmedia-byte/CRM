@@ -361,7 +361,7 @@ async function handleStart(ctx) {
                     include: { surveys: true }
                 });
                 if (!botDb) {
-                    logger.info(`Auto-creating bot in DB on /start with token ${botToken.substring(0, 8)}...`);
+                    logger.info('Auto-creating configured bot mapping in DB on /start');
                     botDb = await prisma.bot.create({
                         data: {
                             token: botToken,

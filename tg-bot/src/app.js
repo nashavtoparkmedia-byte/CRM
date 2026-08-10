@@ -1,3 +1,4 @@
+require('./utils/log-interceptor');
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const cors = require('cors');
@@ -31,7 +32,7 @@ app.use('/api/bot', crmRouter);
 // Global Error Handler
 app.use((err, req, res, next) => {
     console.error('[Global Error]:', err);
-    res.status(500).json({ error: 'Internal Server Error', message: err.message });
+    res.status(500).json({ error: 'Internal Server Error' });
 });
 
 const PORT = process.env.API_PORT || 3001;

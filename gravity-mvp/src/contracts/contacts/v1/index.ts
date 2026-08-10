@@ -39,6 +39,7 @@ export type {
 } from './set-contact-display-name-command'
 
 export * from './contact-phone-commands'
+export * from './mark-temporary-contact-phone-command'
 export * from './fleet-contact-commands'
 export * from './contact-retention-command'
 export * from './contact-conversation-commands'

@@ -4,17 +4,33 @@ import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
 import { DELETE_CONVERSATIONS_BY_ID_COMMAND_V1, DELETE_LEGACY_EXTERNAL_CONVERSATIONS_COMMAND_V1, DELETE_QUEUED_MESSAGES_FOR_CONNECTION_COMMAND_V1, DELIVER_QUEUED_MESSAGES_FOR_CONNECTION_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { deleteConversationsByIdV1, deleteLegacyExternalConversationsV1, deleteQueuedMessagesForConnectionV1, deliverQueuedMessagesForConnectionV1 } from '@/modules/messaging/public/v1'
+import { projectMaxConnectionMetadata } from '@/modules/max-channel/public/v1/max-connection-public-metadata'
+import { requireIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
 
 // Get all saved MAX bots
 export async function getMaxConnections() {
+    await requireIntegrationAdminAccess()
     try {
         const connections = await prisma.maxConnection.findMany({
             orderBy: [
                 { isDefault: 'desc' },
                 { createdAt: 'desc' },
             ],
+            select: {
+                id: true,
+                name: true,
+                isActive: true,
+                isDefault: true,
+                createdAt: true,
+                updatedAt: true,
+            },
         })
-        return connections
+        return connections.map(connection => projectMaxConnectionMetadata({
+            ...connection,
+            // botToken is required by the persistence schema. Its value is
+            // intentionally not selected for a browser-facing list.
+            credentialConfigured: true,
+        }))
     } catch (error) {
         console.error("Error fetching MAX connections:", error)
         return []
@@ -23,6 +39,7 @@ export async function getMaxConnections() {
 
 // Add a new MAX bot token
 export async function addMaxConnection(botToken: string, name: string) {
+    await requireIntegrationAdminAccess()
     if (!botToken || !botToken.trim()) {
         throw new Error("Token is required")
     }
@@ -44,19 +61,36 @@ export async function addMaxConnection(botToken: string, name: string) {
                 botToken: botToken.trim(),
                 name: name.trim() || "MAX Bot",
                 isDefault,
-            }
+            },
+            select: {
+                id: true,
+                name: true,
+                isActive: true,
+                isDefault: true,
+                createdAt: true,
+                updatedAt: true,
+            },
         })
 
         revalidatePath("/max")
-        return { success: true, connection: newConnection }
-    } catch (error: any) {
-        console.error("Failed to add MAX connection:", error)
-        throw new Error(error.message || "Failed to add bot")
+        return {
+            success: true,
+            connection: projectMaxConnectionMetadata({
+                ...newConnection,
+                credentialConfigured: true,
+            }),
+        }
+    } catch {
+        // Prisma errors may embed invocation arguments. Never log or return an
+        // error object from a mutation that carried a bot token.
+        console.error("Failed to add MAX connection")
+        throw new Error("Failed to add bot")
     }
 }
 
 // Disconnect/Remove a MAX bot
 export async function disconnectMax(id: string) {
+    await requireIntegrationAdminAccess()
     try {
         const connection = await prisma.maxConnection.findUnique({ where: { id } })
         if (!connection) return { success: false, error: "Not found" }
@@ -85,6 +119,7 @@ export async function disconnectMax(id: string) {
 }
 
 export async function pauseMaxConnection(id: string, deleteMessages: boolean) {
+    await requireIntegrationAdminAccess()
     console.log(`[MAX-ACTIONS] pauseMaxConnection id=${id} deleteMessages=${deleteMessages}`)
     await prisma.maxConnection.update({
         where: { id },
@@ -97,6 +132,7 @@ export async function pauseMaxConnection(id: string, deleteMessages: boolean) {
 }
 
 export async function resumeMaxConnection(id: string, catchUp: boolean) {
+    await requireIntegrationAdminAccess()
     console.log(`[MAX-ACTIONS] resumeMaxConnection id=${id} catchUp=${catchUp}`)
     if (catchUp) {
         // Flush buffered MAX messages from unified table
@@ -121,6 +157,7 @@ export async function resumeMaxConnection(id: string, catchUp: boolean) {
 }
 
 export async function deleteMaxMessages(id: string) {
+    await requireIntegrationAdminAccess()
     console.log(`[MAX-ACTIONS] deleteMaxMessages connectionId=${id}`)
     const chats = await (prisma.chat as any).findMany({
         where: { channel: 'max' },
@@ -166,6 +203,7 @@ export async function deleteMaxMessages(id: string) {
 
 // Update settings (name, default status)
 export async function updateMaxConnectionSettings(id: string, name: string, isDefault: boolean) {
+    await requireIntegrationAdminAccess()
     try {
         if (isDefault) {
             // Unset current default

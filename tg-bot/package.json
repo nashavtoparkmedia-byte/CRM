@@ -5,7 +5,8 @@
   "main": "bot.js",
   "scripts": {
     "start": "node start.js",
-    "start:direct": "node bot.js"
+    "start:direct": "node bot.js",
+    "test:security-boundaries": "node --test src/security/*.test.js"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

@@ -4,8 +4,8 @@ import { DriverMatchService } from '@/lib/DriverMatchService'
 import { ContactService } from '@/lib/ContactService'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import crypto from 'crypto'
-import { ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1 } from '@/contracts/messaging/v1'
-import { ensureConversationContactLinkV1 } from '@/modules/messaging/public/v1'
+import { ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, UPSERT_EXTERNAL_MESSAGE_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { ensureConversationContactLinkV1, patchChannelConversationV1, upsertChannelConversationV1, upsertExternalMessageV1 } from '@/modules/messaging/public/v1'
 
 // PR-Г: placeholder detection — name = "..", ". .", "TG NNN", pure digits.
 // Используется для умного update: новое реальное имя замещает placeholder
@@ -72,10 +72,7 @@ export async function POST(req: NextRequest) {
             if (oldChat) {
                 const newChat = await (prisma.chat as any).findUnique({ where: { externalChatId: String(maxChatId) } })
                 if (!newChat) {
-                    await (prisma.chat as any).update({
-                        where: { id: oldChat.id },
-                        data: { externalChatId: String(maxChatId) }
-                    })
+                    await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: oldChat.id }, patch: { externalChatId: String(maxChatId) } })
                     console.log(`[WEBHOOK-MAX] MIGRATED chat ${oldChat.id}: ${oldExternalId} → ${maxChatId}`)
                 }
             }
@@ -97,7 +94,7 @@ export async function POST(req: NextRequest) {
                         where: { channel: 'max', driverId: driver.id, externalChatId: { not: newExId } }
                     })
                     if (staleChat) {
-                        await (prisma.chat as any).update({ where: { id: staleChat.id }, data: { externalChatId: newExId } })
+                        await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: staleChat.id }, patch: { externalChatId: newExId } })
                         console.log(`[WEBHOOK-MAX] MIGRATED old-chatId ${staleChat.externalChatId} → ${newExId} (driver ${driver.id})`)
                     }
                 } else if (driverCandidates.length > 1) {
@@ -128,25 +125,14 @@ export async function POST(req: NextRequest) {
         })()
 
         if (!unifiedChat) {
-            unifiedChat = await (prisma.chat as any).create({
-                data: {
-                    externalChatId,
-                    channel: 'max',
-                    name: bestName,
-                    lastMessageAt: sentAt,
-                    status: 'new'
-                }
-            })
+            const created = await upsertChannelConversationV1({ contract: UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, externalChatId, channel: 'max', name: bestName, chatType: 'private', metadata: {} })
+            unifiedChat = created.conversation as any
+            await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: sentAt } })
         } else {
             // Update name только если current placeholder, а новое — лучше
             const shouldUpdateName = isPlaceholderName(unifiedChat.name) && !isPlaceholderName(bestName)
-            unifiedChat = await (prisma.chat as any).update({
-                where: { id: unifiedChat.id },
-                data: {
-                    lastMessageAt: sentAt,
-                    ...(shouldUpdateName ? { name: bestName } : {})
-                }
-            })
+            const patched = await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: sentAt, ...(shouldUpdateName ? { name: bestName } : {}) } })
+            unifiedChat = patched.conversation as any
         }
 
         // PR-Г: ContactService integration. Раньше для MAX не вызывался —
@@ -223,19 +209,17 @@ export async function POST(req: NextRequest) {
         })
 
         if (!existingMessage) {
-            await (prisma.message as any).create({
-                data: {
-                    id: messageId,
-                    chatId: unifiedChat.id,
-                    direction,
-                    content: text,
-                    channel: 'max',
-                    type: 'text',
-                    sentAt,
-                    status: 'delivered',
-                    ...(maxExternalId ? { externalId: String(maxExternalId) } : {}),
-                    ...(replyToExternalId ? { metadata: { replyToExternalId } } : {}),
-                }
+            await upsertExternalMessageV1({
+                contract: UPSERT_EXTERNAL_MESSAGE_COMMAND_V1,
+                lookupExternalId: String(maxExternalId || messageId),
+                chatId: unifiedChat.id,
+                direction,
+                type: 'text',
+                content: text,
+                channel: 'max',
+                externalId: maxExternalId ? String(maxExternalId) : messageId,
+                sentAt,
+                metadata: replyToExternalId ? { replyToExternalId } : {},
             })
 
             // Workflow: only trigger inbound workflow for driver messages

@@ -464,6 +464,27 @@ function definitelyScalarExpression(expression, checker, seen = new Set()) {
         || ts.isNoSubstitutionTemplateLiteral(candidate)
         || [ts.SyntaxKind.TrueKeyword, ts.SyntaxKind.FalseKeyword, ts.SyntaxKind.NullKeyword].includes(candidate.kind)
     ) return true
+    if (ts.isNewExpression(candidate)) {
+        const callee = unwrapExpression(candidate.expression)
+        // These constructors produce bound scalar values in SQL template
+        // interpolations; they cannot contribute SQL syntax.
+        if (ts.isIdentifier(callee) && callee.text === 'Date') return true
+    }
+    if (ts.isBinaryExpression(candidate) && candidate.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+        return definitelyScalarExpression(candidate.left, checker, new Set(seen))
+            && definitelyScalarExpression(candidate.right, checker, new Set(seen))
+    }
+    if (ts.isCallExpression(candidate)) {
+        const callee = unwrapExpression(candidate.expression)
+        if (ts.isIdentifier(callee) && new Set(['String', 'Number', 'Boolean', 'BigInt']).has(callee.text)) return true
+        if (ts.isPropertyAccessExpression(callee)) {
+            const receiver = unwrapExpression(callee.expression)
+            if (ts.isIdentifier(receiver) && receiver.text === 'JSON' && callee.name.text === 'stringify') return true
+            if (['toISOString', 'toString', 'valueOf', 'getTime'].includes(callee.name.text)) {
+                return definitelyScalarExpression(receiver, checker, new Set(seen))
+            }
+        }
+    }
     if (!ts.isIdentifier(candidate)) return false
     const symbol = checker.getSymbolAtLocation(candidate)
     if (!symbol || seen.has(symbol)) return false
@@ -2040,9 +2061,17 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
         const nestedAmbiguity = nestedOperations.length > 0
         const payload = writePayloadShape(node)
         const dynamicPayloadAmbiguity = payload.write_projection_dynamic
+        // A statically resolved delegate and mutating method remain a
+        // confirmed model write even when only the *flat payload shape* is
+        // dynamic (for example `data` passed through a local object alias).
+        // Payload uncertainty is retained as evidence below; it must not be
+        // confused with an unresolved receiver/delegate. Nested relation
+        // writes still remain fail-closed because they can cross ownership
+        // boundaries and are represented in `nested_operations`.
+        const operationAmbiguity = Boolean(resolved.ambiguous) || nestedAmbiguity
         sites.push({
             ...baseRecord(node, resolved),
-            kind: resolved.ambiguous || nestedAmbiguity || dynamicPayloadAmbiguity ? 'ambiguous_model' : 'model',
+            kind: operationAmbiguity ? 'ambiguous_model' : 'model',
             model: resolved.model,
             candidate_models: [...new Set(resolved.candidate_models ?? [])].sort(),
             method: resolved.method,
@@ -2051,7 +2080,7 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
                 'create', 'createManyAndReturn', 'delete', 'update', 'updateManyAndReturn', 'upsert',
             ]).has(resolved.method) ? readProjection(node, 'findMany') : null,
             nested_operations: nestedOperations,
-            ambiguous: Boolean(resolved.ambiguous) || nestedAmbiguity || dynamicPayloadAmbiguity,
+            ambiguous: operationAmbiguity,
             ambiguity_reasons: [...new Set([
                 ...(resolved.ambiguity_reasons ?? []),
                 ...(nestedAmbiguity ? ['nested_relation_write_requires_schema_resolution'] : []),

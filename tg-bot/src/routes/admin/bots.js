@@ -1,22 +1,28 @@
 const express = require('express');
 const router = express.Router();
+const { projectBotMetadata } = require('../../security/publicCredentialMetadata');
+
+const publicBotSelect = {
+    id: true,
+    name: true,
+    username: true,
+    isActive: true,
+    createdAt: true,
+    surveys: true,
+    _count: {
+        select: { users: true }
+    }
+};
 
 // GET all bots
 router.get('/', async (req, res, next) => {
     try {
         const bots = await req.prisma.bot.findMany({
-            include: {
-                surveys: true,
-                _count: {
-                    select: { users: true }
-                }
-            }
+            select: publicBotSelect
         });
-        res.json(bots);
+        res.json(bots.map(bot => projectBotMetadata(bot)));
     } catch (error) {
         console.error('Bot list fetch error:', error);
-        const fs = require('fs');
-        fs.writeFileSync('last_bot_error.json', JSON.stringify({ error: error.message, stack: error.stack, time: new Date() }, null, 2), 'utf8');
         next(error);
     }
 });
@@ -26,15 +32,10 @@ router.get('/:id', async (req, res, next) => {
     try {
         const bot = await req.prisma.bot.findUnique({
             where: { id: req.params.id },
-            include: {
-                surveys: true,
-                _count: {
-                    select: { users: true }
-                }
-            }
+            select: publicBotSelect
         });
         if (!bot) return res.status(404).json({ error: 'Bot not found' });
-        res.json(bot);
+        res.json(projectBotMetadata(bot));
     } catch (error) {
         next(error);
     }
@@ -59,18 +60,17 @@ router.post('/', async (req, res, next) => {
                 surveys: {
                     create: [{ title: 'Основной опрос', triggerButton: '📊 Опрос качества' }]
                 }
-            }
+            },
+            select: publicBotSelect
         });
 
-        res.status(201).json(bot);
+        res.status(201).json(projectBotMetadata(bot));
     } catch (error) {
         // Перехват ошибки уникального токена
         if (error.code === 'P2002' && error.meta?.target?.includes('token')) {
             return res.status(400).json({ error: 'Бот с таким токеном уже существует.' });
         }
         console.error('Bot creation error:', error);
-        const fs = require('fs');
-        fs.writeFileSync('last_bot_error.json', JSON.stringify({ error: error.message, stack: error.stack, time: new Date() }, null, 2), 'utf8');
         next(error);
     }
 });
@@ -83,9 +83,10 @@ router.put('/:id', async (req, res, next) => {
 
         const bot = await req.prisma.bot.update({
             where: { id },
-            data: { isActive, name }
+            data: { isActive, name },
+            select: publicBotSelect
         });
-        res.json(bot);
+        res.json(projectBotMetadata(bot));
     } catch (error) {
         next(error);
     }

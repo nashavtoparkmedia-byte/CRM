@@ -1,5 +1,10 @@
 {
-  "allowed_dependencies": [],
+  "allowed_dependencies": [
+    {
+      "context": "identity_access",
+      "surface": "identity_access.public"
+    }
+  ],
   "commands": [
     "RunIntegrityCheckCommand.v1",
     "RunRetentionCommand.v1",

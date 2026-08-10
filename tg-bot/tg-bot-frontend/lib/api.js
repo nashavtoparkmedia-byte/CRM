@@ -1,42 +1,17 @@
 import axios from 'axios';
 
-// Relative URL — Next.js rewrites to TG_BOT_API_URL/api/admin (see next.config.mjs)
+// Relative URL — the authenticated same-origin API route proxies to the
+// server-only TG_BOT_API_URL and adds upstream Basic auth there.
 const API_BASE = '/api/admin';
 
 // Create an axios instance
 const api = axios.create({
     baseURL: API_BASE,
+    withCredentials: true,
     headers: {
         'Content-Type': 'application/json',
     },
 });
-
-// Intercept requests to add Basic Auth header
-api.interceptors.request.use(
-    (config) => {
-        // In a real app, prefer HttpOnly Cookies or JWT.
-        // Here we use Base64 Basic Auth stored in localStorage per MVP spec.
-        const token = typeof window !== 'undefined' ? localStorage.getItem('crm_token') : null;
-        if (token) {
-            config.headers['Authorization'] = `Basic ${token}`;
-        }
-        return config;
-    },
-    (error) => Promise.reject(error)
-);
-
-// On 401 drop the stale token so a reload re-triggers SSO injection from the
-// parent CRM (or the /login fallback). Without this an invalid token kept
-// failing every request with no recovery path.
-api.interceptors.response.use(
-    (response) => response,
-    (error) => {
-        if (error.response?.status === 401 && typeof window !== 'undefined') {
-            localStorage.removeItem('crm_token');
-        }
-        return Promise.reject(error);
-    }
-);
 
 // --- BOTS ---
 export const fetchBots = async () => (await api.get('/bots')).data;

@@ -208,15 +208,18 @@ export async function register() {
         const tempPhoneExpInterval = setInterval(async () => {
             await OperationalJobs.run('temp_phone_expire', async () => {
                 const { prisma } = await import('@/lib/prisma')
-                const res = await (prisma.contactPhone as any).updateMany({
+                const { deactivateContactPhoneV1 } = await import('@/modules/contacts/public/v1')
+                const { DEACTIVATE_CONTACT_PHONE_COMMAND_V1 } = await import('@/contracts/contacts/v1')
+                const expired = await prisma.contactPhone.findMany({
                     where: {
                         isTemporary: true,
                         isActive: true,
                         expiresAt: { lt: new Date() },
                     },
-                    data: { isActive: false, isPrimary: false },
+                    select: { id: true },
                 })
-                return { deactivated: res.count, at: new Date().toISOString() }
+                await Promise.all(expired.map((phone) => deactivateContactPhoneV1({ contract: DEACTIVATE_CONTACT_PHONE_COMMAND_V1, contactPhoneId: phone.id })))
+                return { deactivated: expired.length, at: new Date().toISOString() }
             })
         }, 60 * 60 * 1000)  // every hour
         OperationalJobs.registerInterval(tempPhoneExpInterval)

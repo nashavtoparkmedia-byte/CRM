@@ -2,6 +2,8 @@
   "allowed_dependencies": [],
   "commands": [
     "AuthenticateUserCommand.v1",
+    "AuthenticateIntegrationAdminCommand.v1",
+    "EndIntegrationAdminSessionCommand.v1",
     "EndUserSessionCommand.v1"
   ],
   "compatibility_strategy": "Preserve current cookie/session semantics behind an identity public adapter until all callers migrate.",
@@ -11,7 +13,11 @@
   },
   "credential_relationships": {
     "database_models": [],
-    "environment_names": [],
+    "environment_names": [
+      "ADMIN_PASS",
+      "ADMIN_USER",
+      "NODE_ENV"
+    ],
     "policy": "Names and access locations only. Values stay inside the owning adapter and never cross a public contract."
   },
   "events": [
@@ -49,6 +55,7 @@
   "provider_relationships": [],
   "public_surface": [
     "CurrentUserQuery.v1",
+    "IntegrationAdminAuthorization.v1",
     "UserIdentity.v1"
   ],
   "responsibility": "CRM operator identity, authentication state and authorization-facing user lookup.",

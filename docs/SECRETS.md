@@ -71,7 +71,9 @@ age -d -i ~/age-key.txt .env.production.age > .env.production
 |--------|------------------|---------|
 | `BOT_TOKEN` (рабочий бот водителей) | tg-bot | **C** — кто угодно сможет писать от имени бота |
 | `BOT_TOKEN` (`@yoko_park_bot` — алертный) | health-monitor.sh | **C** |
-| `ADMIN_PASS`, `ADMIN_USER` | tg-bot frontend (basic auth админки) | **C** |
+| `ADMIN_PASS`, `ADMIN_USER` | Gravity integration-admin login and tg-bot server-side admin authentication | **C** |
+| `ADMIN_SESSION_SECRET` | подпись HttpOnly-сессии tg-bot frontend (при отсутствии сессия подписывается `ADMIN_PASS`) | **C** |
+| `TELEGRAM_WEBHOOK_SECRET` | проверка заголовка `X-Telegram-Bot-Api-Secret-Token` для Telegram webhook | **C** |
 | `ADMIN_IDS` (список Telegram ID админов) | tg-bot | M — это не секрет, но не публикуем |
 | `BOT_CRM_SECRET` | tg-bot ↔ gravity-mvp (межсервисная авторизация) | **C** |
 

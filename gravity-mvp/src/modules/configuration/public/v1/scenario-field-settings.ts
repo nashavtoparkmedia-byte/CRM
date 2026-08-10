@@ -1,0 +1,8 @@
+import { prisma } from '@/lib/prisma'
+
+const UPSERT_SQL = `INSERT INTO scenario_field_settings (id, "scenarioId", "fieldId", "showInList", "showInCard", "filterable", "sortable", "groupable", "order", "updatedAt", "updatedBy") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::timestamp,$11) ON CONFLICT ("scenarioId", "fieldId") DO UPDATE SET "showInList"=COALESCE(EXCLUDED."showInList", scenario_field_settings."showInList"), "showInCard"=COALESCE(EXCLUDED."showInCard", scenario_field_settings."showInCard"), "filterable"=COALESCE(EXCLUDED."filterable", scenario_field_settings."filterable"), "sortable"=COALESCE(EXCLUDED."sortable", scenario_field_settings."sortable"), "groupable"=COALESCE(EXCLUDED."groupable", scenario_field_settings."groupable"), "order"=COALESCE(EXCLUDED."order", scenario_field_settings."order"), "updatedAt"=EXCLUDED."updatedAt", "updatedBy"=EXCLUDED."updatedBy"`
+const RESET_SQL = `DELETE FROM scenario_field_settings WHERE "scenarioId" = $1 AND "fieldId" = $2`
+export async function upsertScenarioFieldSettingV1(input: { scenarioId: string; fieldId: string; patch: Record<string, unknown>; userId?: string | null }) {
+    await prisma.$executeRawUnsafe(UPSERT_SQL, `${input.scenarioId}_${input.fieldId}`, input.scenarioId, input.fieldId, input.patch.showInList ?? null, input.patch.showInCard ?? null, input.patch.filterable ?? null, input.patch.sortable ?? null, input.patch.groupable ?? null, input.patch.order ?? null, new Date().toISOString(), input.userId ?? null)
+}
+export async function resetScenarioFieldSettingV1(scenarioId: string, fieldId: string) { await prisma.$executeRawUnsafe(RESET_SQL, scenarioId, fieldId) }

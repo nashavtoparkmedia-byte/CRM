@@ -29,9 +29,9 @@ if (socksUrl) {
         const { SocksProxyAgent } = require('socks-proxy-agent');
         const agent = new SocksProxyAgent(socksUrl);
         telegrafOptions.telegram = { agent };
-        logger.info(`Telegram API via SOCKS proxy ${socksUrl}`);
+        logger.info('Telegram API via configured SOCKS proxy');
     } catch (e) {
-        logger.error(`Failed to init SOCKS proxy ${socksUrl}: ${e.message}`);
+        logger.error(`Failed to init configured SOCKS proxy: ${e.message}`);
     }
 }
 
@@ -331,7 +331,7 @@ async function initializeBotInDb() {
                 include: { surveys: true }
             });
             if (!botDb) {
-                logger.info(`Auto-creating bot in DB on startup with token ${botToken.substring(0, 8)}...`);
+                logger.info('Auto-creating configured bot mapping in DB on startup');
                 botDb = await prisma.bot.create({
                     data: {
                         token: botToken,

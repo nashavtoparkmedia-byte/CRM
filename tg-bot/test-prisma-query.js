@@ -1,11 +1,13 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const { sanitizeLogValue } = require('./src/security/redactSecrets');
 require('dotenv').config();
 
 async function testQuery() {
     try {
         const botToken = process.env.BOT_TOKEN;
-        console.log('Testing with token:', botToken);
+        const tokenStatus = botToken ? 'CONFIGURED' : 'MISSING';
+        console.log('Testing configured bot mapping:', tokenStatus);
 
         const bot = await prisma.bot.findUnique({
             where: { token: botToken },
@@ -26,7 +28,7 @@ async function testQuery() {
             }
         }
     } catch (err) {
-        console.error('QUERY FAILED:', err);
+        console.error('QUERY FAILED:', sanitizeLogValue(err));
     } finally {
         await prisma.$disconnect();
     }

@@ -42,6 +42,10 @@ import { createFindAndBackfillContactConversationHandlerV1, createOpenFallbackCo
 import { legacyPrismaContactConversationPortV1 } from './legacy-prisma-contact-conversation-adapter'
 import { createRecordManagerDriverCommunicationHandlerV1 } from './record-manager-driver-communication-handler'
 import { legacyPrismaRecordManagerDriverCommunicationPortV1 } from './legacy-prisma-record-manager-driver-communication-adapter'
+import { createPatchMessageMetadataHandlerV1 } from './patch-message-metadata-handler'
+import { legacyPrismaPatchMessageMetadataPortV1 } from './legacy-prisma-patch-message-metadata-adapter'
+import { createDeleteConversationsByChannelHandlerV1 } from './delete-conversations-by-channel-handler'
+import { legacyPrismaDeleteConversationsByChannelPortV1 } from './legacy-prisma-delete-conversations-by-channel-adapter'
 
 export { createAttachMessageMediaHandlerV1 } from './attach-message-media-handler'
 export type { AttachMessageMediaPersistencePortV1 } from './attach-message-media-handler'
@@ -135,3 +139,9 @@ export type { RecordManagerDriverCommunicationPersistencePortV1 } from './record
 export const recordManagerDriverCommunicationV1 = createRecordManagerDriverCommunicationHandlerV1(
     legacyPrismaRecordManagerDriverCommunicationPortV1,
 )
+export { createPatchMessageMetadataHandlerV1 } from './patch-message-metadata-handler'
+export const patchMessageMetadataV1 = createPatchMessageMetadataHandlerV1(
+    legacyPrismaPatchMessageMetadataPortV1,
+)
+export { createDeleteConversationsByChannelHandlerV1 } from './delete-conversations-by-channel-handler'
+export const deleteConversationsByChannelV1 = createDeleteConversationsByChannelHandlerV1(legacyPrismaDeleteConversationsByChannelPortV1)

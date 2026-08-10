@@ -3,19 +3,16 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { CheckCircle2, Trash2, Loader2, MessageCircle, Wifi, WifiOff, RefreshCw, AlertTriangle, PauseCircle, PlayCircle, LogOut, Pencil, Check, X } from 'lucide-react'
-import { createWhatsAppConnection, getWhatsAppConnections, getWhatsAppStatus, disconnectWhatsApp, refreshWhatsAppQR, pauseWhatsAppConnection, resumeWhatsAppConnection, deleteWhatsAppMessages, forceResetWhatsAppSession, renameWhatsAppConnection } from './whatsapp-actions'
+import { createWhatsAppConnection, getWhatsAppConnections, getWhatsAppStatus, getWhatsAppQrCode, disconnectWhatsApp, refreshWhatsAppQR, pauseWhatsAppConnection, resumeWhatsAppConnection, deleteWhatsAppMessages, forceResetWhatsAppSession, renameWhatsAppConnection } from './whatsapp-actions'
+import type { WhatsAppConnectionPublicMetadata } from '@/modules/whatsapp-channel/public/v1/whatsapp-connection-public-metadata'
 import ChannelSyncBlock from "@/components/ChannelSyncBlock"
 
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 
-type WaConnection = {
-    id: string
-    name: string | null
-    status: string
-    phoneNumber: string | null
-    sessionData: string | null
-    createdAt?: string | Date
+type WaConnection = Omit<WhatsAppConnectionPublicMetadata, 'createdAt' | 'updatedAt'> & {
+    createdAt: string | Date
+    updatedAt: string | Date
     // Derived fields from getActualStatus — may be undefined for stale connections
     actualState?: string
     actualLabel?: string
@@ -111,8 +108,10 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
         setLiveStatus(conn.actualState || conn.status)
         setLiveLastError(conn.lastError || null)
         setLiveCanForceReset(conn.canForceReset || false)
-        if ((conn.actualState === 'qr_required' || conn.status === 'qr') && conn.sessionData?.startsWith('data:')) {
-            setLiveQr(conn.sessionData)
+        if (conn.actualState === 'qr_required' || conn.status === 'qr') {
+            void getWhatsAppQrCode(conn.id).then(result => setLiveQr(result.qrCodeDataUrl))
+        } else {
+            setLiveQr(null)
         }
     }, [conn])
 
@@ -132,8 +131,11 @@ function ConnectionCard({ conn, onRefresh }: { conn: WaConnection; onRefresh: ()
                 if (typeof (fresh as any).isPaused === 'boolean') {
                     setLivePaused((fresh as any).isPaused)
                 }
-                if ((actual === 'qr_required' || actual === 'qr') && fresh.sessionData?.startsWith('data:')) {
-                    setLiveQr(fresh.sessionData)
+                if (actual === 'qr_required' || actual === 'qr') {
+                    const result = await getWhatsAppQrCode(conn.id)
+                    setLiveQr(result.qrCodeDataUrl)
+                } else {
+                    setLiveQr(null)
                 }
                 if (actual === 'ready') {
                     if (pollingRef.current) clearInterval(pollingRef.current)

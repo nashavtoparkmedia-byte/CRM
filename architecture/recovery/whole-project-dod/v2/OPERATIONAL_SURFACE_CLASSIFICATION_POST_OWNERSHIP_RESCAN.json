@@ -1,0 +1,72 @@
+{
+  "schema": "yoko.crm.operational-surface-classification.v2",
+  "generated_at": "2026-08-10T22:30:32.616Z",
+  "baseline_sha256": "0f1ddfcbb95ffaf87cf381b28087edce5e113d5180a69deecf9b8c1782b71fa0",
+  "scope": "Post-ownership authoritative inventory reconciliation; previous 438 operational surfaces remain covered by existing classification artifacts; four newly surfaced registry entries classified here.",
+  "summary": {
+    "authoritative_operational_surfaces": 442,
+    "previously_classified": 438,
+    "newly_classified": 4,
+    "unclassified": 0,
+    "active_application_runtime": 400,
+    "dead_historical": 38,
+    "active_tooling": 4
+  },
+  "classifications": [
+    {
+      "path": "gravity-mvp/scripts/trigger-import.ts",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "status": "ACTIVE_OPERATIONAL",
+      "functional_owner": "messaging",
+      "data_written": "messaging-owned import-job command through public v1 contract",
+      "affected_domains": [
+        "messaging",
+        "configuration"
+      ],
+      "approved_architecture_path": "messaging public v1 HistoryImportJobCommand.v1",
+      "architecture_bypass": false,
+      "evidence": "Existing compatibility CLI delegates to the owned public command boundary."
+    },
+    {
+      "path": "tools/architecture/v2/maintenance-capability-policy.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "status": "ACTIVE_OPERATIONAL",
+      "functional_owner": "architecture_recovery",
+      "data_written": "filesystem evidence/artifact output",
+      "affected_domains": [
+        "architecture_enforcement"
+      ],
+      "approved_architecture_path": "bounded analyzer/triage artifact writer",
+      "architecture_bypass": false,
+      "evidence": "No database client/import; writes only bounded evidence output."
+    },
+    {
+      "path": "tools/architecture/v2/materialize-maintenance-capabilities.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "status": "ACTIVE_OPERATIONAL",
+      "functional_owner": "architecture_recovery",
+      "data_written": "filesystem evidence/artifact output",
+      "affected_domains": [
+        "architecture_enforcement"
+      ],
+      "approved_architecture_path": "bounded analyzer/triage artifact writer",
+      "architecture_bypass": false,
+      "evidence": "No database client/import; writes only bounded evidence output."
+    },
+    {
+      "path": "tools/architecture/v2/triage-ambiguous-writes.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "status": "ACTIVE_OPERATIONAL",
+      "functional_owner": "architecture_recovery",
+      "data_written": "filesystem evidence/artifact output",
+      "affected_domains": [
+        "architecture_enforcement"
+      ],
+      "approved_architecture_path": "bounded analyzer/triage artifact writer",
+      "architecture_bypass": false,
+      "evidence": "No database client/import; writes only bounded evidence output."
+    }
+  ],
+  "policy": "Every active operational writer requires an exact owner-controlled capability; tooling writes only evidence artifacts and provider scripts use public owner contracts.",
+  "verdict": "CLASSIFIED_NO_UNREVIEWED_OPERATIONAL_SURFACES"
+}

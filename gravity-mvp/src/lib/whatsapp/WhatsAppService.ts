@@ -13,6 +13,7 @@ import { opsLog } from '@/lib/opsLog'
 import { WWEBJS_AUTH_DIR } from '@/lib/whatsapp/WhatsAppCleanup'
 import { ATTACH_MESSAGE_MEDIA_COMMAND_V1, CREATE_CHANNEL_MESSAGE_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, PATCH_MESSAGE_DELIVERY_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, type HistoryImportJobPatchV1 } from '@/contracts/messaging/v1'
 import { attachMessageMediaV1, createChannelMessageV1, ensureConversationContactLinkV1, patchChannelConversationV1, patchHistoryImportJobV1, patchMessageDeliveryV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
+import { clearPendingWhatsAppQr, publishPendingWhatsAppQr } from './whatsapp-qr-ceremony'
 
 // 25MB per file. Was 10MB but modern iPhone photos (12MP JPEG) and
 // short videos easily exceed that — skipped media left the UI with
@@ -214,25 +215,11 @@ async function handleLiveGroupMessage(msg: Message, connectionId: string): Promi
         where: { externalChatId: groupJid },
     })
     if (!unifiedChat) {
-        unifiedChat = await (prisma.chat as any).create({
-            data: {
-                externalChatId: groupJid,
-                channel: 'whatsapp',
-                name: groupName || groupJid,
-                chatType: 'group',
-                lastMessageAt: ts,
-                metadata: { connectionId },
-            },
-        })
+        const created = await upsertChannelConversationV1({ contract: UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, externalChatId: groupJid, channel: 'whatsapp', name: groupName || groupJid, chatType: 'group', metadata: { connectionId } })
+        unifiedChat = created.conversation as any
+        await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: ts } })
     } else {
-        await (prisma.chat as any).update({
-            where: { id: unifiedChat.id },
-            data: {
-                lastMessageAt: ts,
-                chatType: 'group',
-                ...(groupName ? { name: groupName } : {}),
-            },
-        })
+        await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: ts, ...(groupName ? { name: groupName } : {}) } })
     }
 
     // Legacy WhatsAppMessage
@@ -402,7 +389,10 @@ async function safeUpdateConnection(connectionId: string, data: any) {
             console.log(`[WA-SERVICE] Connection ${connectionId} not found, destroying client.`)
             destroyClient(connectionId).catch(() => {})
         } else {
-            console.error(`[WA-SERVICE] Failed to update connection ${connectionId}:`, err)
+            // data can contain sessionData. Prisma diagnostics may echo the
+            // invocation, so retain only the non-secret error code.
+            const code = typeof err?.code === 'string' ? err.code : 'database_error'
+            console.error(`[WA-SERVICE] Failed to update connection ${connectionId}: ${code}`)
         }
     }
 }
@@ -423,8 +413,8 @@ async function saveSession(connectionId: string, client: Client) {
         JSON.parse(session)
         await safeUpdateConnection(connectionId, { sessionData: session })
         console.log(`[WA-SERVICE] Session saved for connectionId: ${connectionId}`)
-    } catch (err) {
-        console.error(`[WA-SERVICE] Failed to save session for ${connectionId}:`, err)
+    } catch {
+        console.error(`[WA-SERVICE] Failed to save session for ${connectionId}`)
     }
 }
 
@@ -825,7 +815,10 @@ async function doInitializeClient(connectionId: string): Promise<void> {
             opsLog('info', 'wa_qr_received', { connectionId, instanceId })
             const QRCode = (await import('qrcode')).default
             const qrDataUrl = await QRCode.toDataURL(qr)
-            await safeUpdateConnection(connectionId, { status: 'qr', sessionData: qrDataUrl })
+            publishPendingWhatsAppQr(connectionId, instanceId, qrDataUrl)
+            // sessionData is reserved for established server-side session
+            // snapshots. QR authorization material is ephemeral process state.
+            await safeUpdateConnection(connectionId, { status: 'qr', sessionData: null })
         } catch (err) {
             console.error(`[WA-SERVICE] QR event error for ${connectionId}:`, err)
         }
@@ -835,6 +828,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
         if (!registry.isCurrentInstance(connectionId, instanceId)) return
         try {
             opsLog('info', 'wa_authenticated', { connectionId, instanceId })
+            clearPendingWhatsAppQr(connectionId, instanceId)
             await safeUpdateConnection(connectionId, { status: 'authenticated' })
             // saveSession moved to 'ready' handler — on 'authenticated', WA Web may still be
             // navigating internally and pupPage.evaluate can trigger "Execution context destroyed"
@@ -847,6 +841,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
         try {
             if (!registry.isCurrentInstance(connectionId, instanceId)) return
             registry.setReady(connectionId, instanceId)
+            clearPendingWhatsAppQr(connectionId, instanceId)
             opsLog('info', 'wa_ready', { connectionId, instanceId, phone: client.info?.wid?.user })
             const info = client.info
             await safeUpdateConnection(connectionId, {
@@ -1079,14 +1074,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
             if (unifiedChat) {
                 // Always update potential variant IDs to the standardized format
                 try {
-                    await (prisma.chat as any).update({
-                        where: { id: unifiedChat.id },
-                        data: {
-                            externalChatId: normalizedExternalId,
-                            lastMessageAt: ts,
-                            metadata: { ...(unifiedChat.metadata as any || {}), connectionId }
-                        }
-                    })
+                    await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { externalChatId: normalizedExternalId, lastMessageAt: ts } })
                 } catch (updateErr: any) {
                     if (updateErr.code === 'P2002') {
                         // Another chat already has normalizedExternalId — use it as the canonical chat
@@ -1094,21 +1082,16 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                         if (phoneChat) {
                             console.warn(`[WA-SERVICE] Unique conflict on externalChatId update — redirecting to phone chat ${phoneChat.id}`)
                             unifiedChat = phoneChat
-                            await (prisma.chat as any).update({ where: { id: phoneChat.id }, data: { lastMessageAt: ts } })
+                            await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: phoneChat.id }, patch: { lastMessageAt: ts } })
                         }
                     } else {
                         throw updateErr
                     }
                 }
             } else {
-                unifiedChat = await (prisma.chat as any).create({
-                    data: {
-                        externalChatId: normalizedExternalId,
-                        channel: 'whatsapp',
-                        lastMessageAt: ts,
-                        metadata: { connectionId }
-                    }
-                })
+                const created = await upsertChannelConversationV1({ contract: UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, externalChatId: normalizedExternalId, channel: 'whatsapp', name: null, chatType: 'private', metadata: { connectionId } })
+                unifiedChat = created.conversation as any
+                await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: ts } })
             }
 
             // Relink driver on every inbound if missing
@@ -1289,6 +1272,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
     client.on('auth_failure', async (msg) => {
         try {
             if (!registry.isCurrentInstance(connectionId, instanceId)) return
+            clearPendingWhatsAppQr(connectionId, instanceId)
             opsLog('error', 'wa_auth_failure', { connectionId, instanceId, reason: String(msg) })
             // Unrecoverable — no auto-reconnect
             registry.setFailed(connectionId, instanceId, `auth_failure: ${msg}`)
@@ -1303,6 +1287,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
     client.on('disconnected', async (reason) => {
         try {
             if (!registry.isCurrentInstance(connectionId, instanceId)) return
+            clearPendingWhatsAppQr(connectionId, instanceId)
             await safeUpdateConnection(connectionId, { status: 'disconnected' })
             clients.delete(connectionId)
             instanceIds.delete(connectionId) // FIX 5: drop stale instanceId — next init creates a new one
@@ -1339,6 +1324,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
         })
     } catch (err: any) {
         const elapsedMs = Date.now() - initStartedAt
+        clearPendingWhatsAppQr(connectionId, instanceId)
         const msg = err?.message ?? String(err)
         const errorClass =
             /browser is already running/i.test(msg) ? 'browser_already_running' :
@@ -1375,6 +1361,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
 }
 
 export async function destroyClient(connectionId: string): Promise<void> {
+    clearPendingWhatsAppQr(connectionId)
     const client = clients.get(connectionId)
     if (!client) return
     console.log(`[WA-TRANSPORT] client_destroying connId=${connectionId}`)

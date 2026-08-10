@@ -16,8 +16,8 @@
     "GENUINELY_DYNAMIC_UNRESOLVED"
   ],
   "summary": {
-    "CONFIRMED_WRITE_OWNER_RESOLVED": 9,
-    "CONFIRMED_WRITE_OWNER_UNRESOLVED": 266,
+    "CONFIRMED_WRITE_OWNER_RESOLVED": 11,
+    "CONFIRMED_WRITE_OWNER_UNRESOLVED": 264,
     "DYNAMIC_DELEGATE_UNRESOLVED": 79,
     "DYNAMIC_SQL_UNRESOLVED": 254,
     "QUERY_RAW_SIDE_EFFECT_UNRESOLVED": 26,
@@ -20609,10 +20609,10 @@
         "registry_classified": false
       },
       "ambiguity_reasons": [],
-      "disposition": "CONFIRMED_WRITE_OWNER_UNRESOLVED",
-      "rationale": "Focused review confirmed a real schema-scoped ownership gap; no manifest change is assumed.",
-      "ownership_classification": "OWNERSHIP_MANIFEST_GAP_REVIEW",
-      "final_ownership_classification": "OWNERSHIP_MANIFEST_GAP_REVIEW"
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID"
     },
     {
       "site_signature": "9889a11d1518f34196c9816f3f1269910329f7a85ecc744f6776bce4a0a46d63",
@@ -20829,10 +20829,10 @@
         "registry_classified": false
       },
       "ambiguity_reasons": [],
-      "disposition": "CONFIRMED_WRITE_OWNER_UNRESOLVED",
-      "rationale": "Focused review confirmed a real schema-scoped ownership gap; no manifest change is assumed.",
-      "ownership_classification": "OWNERSHIP_MANIFEST_GAP_REVIEW",
-      "final_ownership_classification": "OWNERSHIP_MANIFEST_GAP_REVIEW"
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID"
     },
     {
       "site_signature": "3afc3b30c9aa7ac08a8fb38eed14a9629ff6385fbd0a2bb18cb5d7b981835894",

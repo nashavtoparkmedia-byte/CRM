@@ -23,7 +23,7 @@
     {
       "context": "configuration",
       "path": "architecture/contexts/v1/manifests/configuration.json",
-      "sha256": "3e6031c11ad9b643a900b58aaf5d6be5651fc7f1396707971953f669b25cb0f1"
+      "sha256": "c523cfc35f2b2a70d4572b5229a9504d843d916dad39cd5c31138fe4f0a234a2"
     },
     {
       "context": "contacts",
@@ -43,12 +43,12 @@
     {
       "context": "identity_access",
       "path": "architecture/contexts/v1/manifests/identity_access.json",
-      "sha256": "6a7ea375f7529102b1871dd07d310e71a8b4731f399af047209fc923d57dbfd8"
+      "sha256": "eb44907d810d3d10aaca63c14594f1e5ab2b806eed27ad965f4759f187eb5f81"
     },
     {
       "context": "max_channel",
       "path": "architecture/contexts/v1/manifests/max_channel.json",
-      "sha256": "465abcbbea00b4e520cdc53d3c925f126475280184538e77cc4f51d3dc4ac00c"
+      "sha256": "1fc214908432a84c84517375c25f0e2d5e0657a594f19758a257c694bd31bcca"
     },
     {
       "context": "messaging",
@@ -58,7 +58,7 @@
     {
       "context": "operations_observability",
       "path": "architecture/contexts/v1/manifests/operations_observability.json",
-      "sha256": "2d30eafc73c4b35a9bbde955f15ecb5c16ee31ec622a2b9a43687feed7612df6"
+      "sha256": "8f5a7a8599205164dd61a416de45db4ed46997ea8c25e828fc4e25ea0bb4e99a"
     },
     {
       "context": "platform_shell",
@@ -68,12 +68,12 @@
     {
       "context": "telegram_channel",
       "path": "architecture/contexts/v1/manifests/telegram_channel.json",
-      "sha256": "d0a0137c4845629a07a3a900b8b75bb9af7564c3573cd7fdb139987544ed962a"
+      "sha256": "d078069a296608e2d8d64240ba8727032237383cd2268d11f3b9a62cb87de2f7"
     },
     {
       "context": "whatsapp_channel",
       "path": "architecture/contexts/v1/manifests/whatsapp_channel.json",
-      "sha256": "e21b6dcc6d90ca590887a70a4bc8123f51468483679f1f3f26a2f977698d1061"
+      "sha256": "e6d483a3d72dabe5ef34f92ff1a0002b126374456c2d9ea4146336c862512418"
     },
     {
       "context": "work_management",
@@ -84,7 +84,7 @@
   "controls": {
     "context_decisions": {
       "path": "architecture/contexts/v1/context-decisions.json",
-      "sha256": "e2c3f419b4c3ff8a705fbc2d4d5c5630b27b39ef6843c2afe1403f44776c8d2e"
+      "sha256": "f08bbd7a278b9174fb4b9138c27509e6da3f7fa3e1b85fd2fd86ca3304b28ea8"
     },
     "credential_access": {
       "path": "architecture/evidence/v1/credential-access.json",

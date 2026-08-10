@@ -13,8 +13,8 @@ import {
 import { attachContactIdentityV1 } from '@/modules/contacts/public/v1'
 import { PROMOTE_CHANNEL_DISPLAY_NAME_V2, RESOLVE_CONTACT_COMMAND_V2 } from '@/contracts/contacts/v2'
 import { resolveContactV2 } from '@/modules/contacts/public/v2'
-import { ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1 } from '@/contracts/messaging/v1'
-import { ensureConversationContactLinkV1 } from '@/modules/messaging/public/v1'
+import { CREATE_CHANNEL_MESSAGE_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { createChannelMessageV1, ensureConversationContactLinkV1, patchChannelConversationV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
 
 export async function POST(req: NextRequest) {
     try {
@@ -37,40 +37,15 @@ export async function POST(req: NextRequest) {
             const sentAt = timestamp ? new Date(timestamp) : new Date()
             const groupExternalId = `telegram:group:${tgChatId}`
 
-            let unifiedChat = await (prisma.chat as any).upsert({
-                where: { externalChatId: groupExternalId },
-                update: { lastMessageAt: sentAt },
-                create: {
-                    externalChatId: groupExternalId,
-                    channel: 'telegram',
-                    chatType: chatType,       // 'group' | 'supergroup' | 'channel'
-                    name: chatTitle || `TG Group ${tgChatId}`,
-                    lastMessageAt: sentAt,
-                    metadata: { chatTitle, chatType }
-                }
-            })
+            let unifiedChat = (await upsertChannelConversationV1({ contract: UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, externalChatId: groupExternalId, channel: 'telegram', chatType: 'group', name: chatTitle || `TG Group ${tgChatId}`, metadata: { chatTitle, chatType } })).conversation as any
+            await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: sentAt } })
 
             // senderName priority: firstName > username > fallback ID
             const senderDisplay = firstName
                 ? (lastName ? `${firstName} ${lastName}` : firstName)
                 : (username ? `@${username}` : `User ${telegramId}`)
 
-            await (prisma.message as any).create({
-                data: {
-                    chatId: unifiedChat.id,
-                    direction: direction === 'OUTGOING' ? 'outbound' : 'inbound',
-                    content: text,
-                    channel: 'telegram',
-                    type: 'text',
-                    sentAt,
-                    status: 'delivered',
-                    metadata: {
-                        senderId: telegramId.toString(),
-                        senderName: senderDisplay,
-                        senderUsername: username || null
-                    }
-                }
-            })
+            await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: unifiedChat.id, direction: direction === 'OUTGOING' ? 'outbound' : 'inbound', content: text, channel: 'telegram', type: 'text', sentAt, status: 'delivered', externalId: `telegram:group:${tgChatId}:${sentAt.getTime()}`, metadata: { senderId: telegramId.toString(), senderName: senderDisplay, senderUsername: username || null } })
 
             // Lightweight workflow: only unreadCount + lastInboundAt (no requiresResponse, no status transition)
             if (direction !== 'OUTGOING') {
@@ -121,19 +96,8 @@ export async function POST(req: NextRequest) {
             let retries = 3;
             while (retries > 0) {
                 try {
-                    unifiedChat = await (prisma.chat as any).upsert({
-                        where: { externalChatId },
-                        // PR-А: при update тоже обновляем name — для existing
-                        // чатов с устаревшим `TG <id>` имя приходит c новым
-                        // inbound и автоматически апдейтится. Live backfill.
-                        update: { lastMessageAt: sentAt, name: tgDisplayName },
-                        create: {
-                            externalChatId,
-                            channel: 'telegram',
-                            name: tgDisplayName,
-                            lastMessageAt: sentAt
-                        }
-                    })
+                    unifiedChat = (await upsertChannelConversationV1({ contract: UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, externalChatId, channel: 'telegram', name: tgDisplayName, chatType: 'private', metadata: {} })).conversation as any
+                    await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: sentAt, name: tgDisplayName } })
                     break; // Success
                 } catch (e: any) {
                     retries--;
@@ -220,18 +184,7 @@ export async function POST(req: NextRequest) {
                 if (Array.isArray(attachments) && attachments.length > 0) {
                     msgMetadata.attachments = attachments
                 }
-                await (prisma.message as any).create({
-                    data: {
-                        chatId: unifiedChat.id,
-                        direction: msgDirection,
-                        content: text,
-                        channel: 'telegram',
-                        type: msgType,
-                        sentAt: sentAt,
-                        status: 'delivered',
-                        metadata: msgMetadata,
-                    }
-                })
+                await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: unifiedChat.id, direction: msgDirection, content: text, channel: 'telegram', type: msgType as any, sentAt, status: 'delivered', externalId: `telegram:${telegramId}:${sentAt.getTime()}`, metadata: msgMetadata })
 
                 // Workflow: update status/unread/requiresResponse
                 if (msgDirection === 'inbound') {

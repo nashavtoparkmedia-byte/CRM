@@ -59,7 +59,7 @@ interface AiConfig {
     enabled: boolean
     mode: string
     provider: string
-    apiKeyEncrypted?: string | null
+    providerCredentialConfigured: boolean
     classificationModel: string
     responseModel: string
     language: string
@@ -330,7 +330,7 @@ export default function AiControlCenterClient({
         id: 'singleton', enabled: false, mode: 'off', provider: 'anthropic',
         classificationModel: 'claude-haiku-4-5', responseModel: 'claude-sonnet-4-5',
         language: 'ru', confidenceThreshold: 0.75, maxAutoRepliesPerChat: 5,
-        activeChannels: [],
+        activeChannels: [], providerCredentialConfigured: false,
     })
     const [kb, setKb]                 = useState<KbEntry[]>(initialKb)
     const [importJobs, setImportJobs] = useState<ImportJob[]>(initialImportJobs)
@@ -1763,7 +1763,7 @@ export default function AiControlCenterClient({
     const autoTestedRef = useRef(false)
     useEffect(() => {
         if (autoTestedRef.current) return
-        if (!config.apiKeyEncrypted) return
+        if (!config.providerCredentialConfigured) return
         if (config.connectionStatus === 'ok') return  // уже OK, ничего не делаем
         autoTestedRef.current = true
         setTestStatus('testing')
@@ -1786,7 +1786,7 @@ export default function AiControlCenterClient({
         }).catch(() => {
             setTestStatus('idle')
         })
-    }, [config.apiKeyEncrypted, config.connectionStatus])
+    }, [config.providerCredentialConfigured, config.connectionStatus])
 
     const handleTestConnection = async () => {
         if (!apiKey.trim()) { showToast('Введите API ключ'); return }
@@ -1794,7 +1794,7 @@ export default function AiControlCenterClient({
         const result = await testAiConnection(config.provider, apiKey, config.classificationModel)
         if (result.ok) {
             // PR5 UX fix: раньше «Проверить» сохраняла только connectionStatus,
-            // а сам apiKeyEncrypted оставался пустым в БД до клика «Сохранить».
+            // а сам provider credential оставался пустым в БД до клика «Сохранить».
             // Это создавало ловушку: зелёная галочка «ключ активен», но
             // «Собрать ядро» disabled с "API ключ не настроен". Теперь при
             // успешной проверке сразу персистим ключ — отдельный клик
@@ -1802,7 +1802,7 @@ export default function AiControlCenterClient({
             try {
                 await saveAiConfig({
                     provider:            config.provider,
-                    apiKeyEncrypted:     apiKey,
+                    providerCredential: apiKey,
                     classificationModel: config.classificationModel,
                     responseModel:       config.responseModel,
                     connectionStatus:    'ok',
@@ -1810,7 +1810,7 @@ export default function AiControlCenterClient({
                 })
                 setConfig(c => ({
                     ...c,
-                    apiKeyEncrypted:      apiKey,
+                    providerCredentialConfigured: true,
                     connectionStatus:     'ok',
                     lastConnectionCheckAt: new Date().toISOString(),
                 }))
@@ -1832,10 +1832,14 @@ export default function AiControlCenterClient({
         try {
             await saveAiConfig({
                 provider:            config.provider,
-                ...(apiKey.trim() ? { apiKeyEncrypted: apiKey } : {}),
+                ...(apiKey.trim() ? { providerCredential: apiKey } : {}),
                 classificationModel: config.classificationModel,
                 responseModel:       config.responseModel,
             })
+            if (apiKey.trim()) {
+                setConfig(current => ({ ...current, providerCredentialConfigured: true }))
+                setApiKey('')
+            }
             showToast('Сохранено')
         } catch (e: any) {
             showToast('Ошибка: ' + e.message)
@@ -1878,7 +1882,7 @@ export default function AiControlCenterClient({
         })
         // PR9.18: очищаем local input при switch — иначе ключ от
         // предыдущего провайдера остаётся в input field, что выглядит
-        // как баг. БД-сохранённый ключ (config.apiKeyEncrypted)
+        // как баг. БД-сохранённый ключ (providerCredentialConfigured)
         // продолжает работать; input просто пустой.
         setApiKey('')
         setTestStatus('idle')
@@ -1894,7 +1898,7 @@ export default function AiControlCenterClient({
         if (testStatus === 'error')   return 'error'
         if (config.connectionStatus === 'ok')    return 'ok'
         if (config.connectionStatus === 'error') return 'error'
-        if (apiKey.trim() || config.apiKeyEncrypted) return 'unchecked'
+        if (apiKey.trim() || config.providerCredentialConfigured) return 'unchecked'
         return 'empty'
     })()
     // Color theme + texts per status
@@ -2060,7 +2064,7 @@ export default function AiControlCenterClient({
                                     setConfig(c => ({ ...c, connectionStatus: null }))
                                 }
                             }}
-                            placeholder={config.apiKeyEncrypted ? '••••••••••••••••' : providerDef.keyPlaceholder}
+                            placeholder={config.providerCredentialConfigured ? '••••••••••••••••' : providerDef.keyPlaceholder}
                             className="flex-1 h-[36px] border border-[#E0E0E0] rounded-lg px-3 text-[13px] outline-none focus:border-[#3390EC] font-mono"
                         />
                         <button
@@ -2082,12 +2086,12 @@ export default function AiControlCenterClient({
                             <XCircle size={11} /> {testError}
                         </div>
                     )}
-                    {/* PR9.19: явное пояснение про сохранённый ключ +
-                        last-4 chars для уверенности «он реально есть». */}
-                    {config.apiKeyEncrypted && !apiKey.trim() ? (
+                    {/* PR9.19: явное пояснение про сохранённый ключ без
+                        возврата какой-либо части credential в браузер. */}
+                    {config.providerCredentialConfigured && !apiKey.trim() ? (
                         <div className="mt-1.5 flex items-center gap-[2px] text-[11px] text-gray-600">
                             <span className="inline-flex items-center gap-1 px-[2px] py-0.5 bg-emerald-50 border border-emerald-200 rounded font-mono text-emerald-700">
-                                <CheckCircle2 size={11} /> сохранён ключ •••{(config.apiKeyEncrypted as string).slice(-4)}
+                                <CheckCircle2 size={11} /> ключ сохранён
                             </span>
                             <span className="text-gray-500">— работает автоматически. Введи новый чтобы заменить.</span>
                         </div>
@@ -3961,7 +3965,7 @@ export default function AiControlCenterClient({
         // внизу sources panel — он primary action.
         const coreEmpty = readiness.counts.activeItems === 0
         const lastExtr = readiness.lastExtraction
-        const noKey = !config.apiKeyEncrypted || (config.apiKeyEncrypted as string).trim() === ''
+        const noKey = !config.providerCredentialConfigured
         const extractionRunning = activeExtractionJob &&
             (activeExtractionJob.status === 'queued' || activeExtractionJob.status === 'running')
 

@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ApiConnection } from "@prisma/client";
 import { addApiConnection, deleteApiConnection, testApiRequest, updateApiConnectionName } from "./actions";
+import type { ApiConnectionPublicMetadata } from "@/modules/fleet-operations/public/v1/api-connection-public-metadata";
 import { Trash2, Plus, Pencil, Check, Server, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +19,7 @@ function formatDate(date: Date | string) {
 export default function ApiListClient({
     initialConnections,
 }: {
-    initialConnections: ApiConnection[];
+    initialConnections: ApiConnectionPublicMetadata[];
 }) {
     const [isAdding, setIsAdding] = useState(false);
     const [loadingTest, setLoadingTest] = useState<string | null>(null);
@@ -56,7 +56,7 @@ export default function ApiListClient({
         setLoadingTest(null);
     };
 
-    const startEditName = (conn: ApiConnection) => {
+    const startEditName = (conn: ApiConnectionPublicMetadata) => {
         setEditingName(conn.id);
         setNameValue(conn.name || "");
     };

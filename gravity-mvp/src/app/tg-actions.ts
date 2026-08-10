@@ -5,46 +5,129 @@ import { TelegramClient, Api } from 'telegram'
 import { StringSession } from 'telegram/sessions'
 import { CustomFile } from 'telegram/client/uploads'
 import QRCode from 'qrcode'
+import { randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { NewMessage, Raw } from 'telegram/events'
 import * as registry from '@/lib/TransportRegistry'
-import { attachBinaryMessageMediaV1, deleteHistoryImportJobsForChannelV1, deleteHistoryImportJobsForConnectionV1, ensureConversationContactLinkV1, patchHistoryImportJobV1 } from '@/modules/messaging/public/v1'
-import { ATTACH_BINARY_MESSAGE_MEDIA_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CHANNEL_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CONNECTION_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { attachBinaryMessageMediaV1, attachMessageMediaV1, createChannelMessageV1, deleteConversationsByIdV1, deleteHistoryImportJobsForChannelV1, deleteHistoryImportJobsForConnectionV1, ensureConversationContactLinkV1, patchChannelConversationV1, patchHistoryImportJobV1, patchMessageDeliveryV1, patchMessageMetadataV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
+import { ATTACH_BINARY_MESSAGE_MEDIA_COMMAND_V1, ATTACH_MESSAGE_MEDIA_COMMAND_V1, CREATE_CHANNEL_MESSAGE_COMMAND_V1, DELETE_CONVERSATIONS_BY_ID_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CHANNEL_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CONNECTION_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, PATCH_MESSAGE_DELIVERY_COMMAND_V1, PATCH_MESSAGE_METADATA_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { projectTelegramConnectionMetadata } from '@/modules/telegram-channel/public/v1/telegram-connection-public-metadata'
+import { requireIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
 
 // Global map to keep track of active login clients for QR
 // Note: In a production serverless environment, this would need a different approach (like a separate service or Redis)
 // But for local MVP development, this works.
-const activeLogins = new Map<string, {
+type ActiveTelegramLogin = {
     client: TelegramClient,
     qrUrl: string,
     status: string,
+    apiId: number,
+    apiHash: string,
+    expiresAt: number,
+    expiryTimer?: ReturnType<typeof setTimeout>,
     resolvePassword?: (password: string) => void
-}>()
+}
+
+const TELEGRAM_LOGIN_TTL_MS = 10 * 60 * 1000
+const TELEGRAM_TERMINAL_STATUS_TTL_MS = 30 * 1000
+const activeLogins = new Map<string, ActiveTelegramLogin>()
+const terminalLogins = new Map<string, { status: 'expired' | 'error'; expiresAt: number }>()
+
+function pruneTerminalLogins(now = Date.now()): void {
+    for (const [loginId, terminal] of terminalLogins) {
+        if (terminal.expiresAt <= now) terminalLogins.delete(loginId)
+    }
+}
+
+async function disposeActiveLogin(
+    loginId: string,
+    terminalStatus?: 'expired' | 'error',
+): Promise<void> {
+    const current = activeLogins.get(loginId)
+    if (!current) return
+    activeLogins.delete(loginId)
+    if (current.expiryTimer) clearTimeout(current.expiryTimer)
+    const pendingPasswordResolver = current.resolvePassword
+    current.resolvePassword = undefined
+    // Release signInUserWithQrCode if it is awaiting our 2FA callback. The
+    // disconnected client will reject the empty value, allowing the promise
+    // closure (including temporary apiHash) to be collected.
+    if (pendingPasswordResolver) pendingPasswordResolver('')
+    if (terminalStatus) {
+        const expiresAt = Date.now() + TELEGRAM_TERMINAL_STATUS_TTL_MS
+        terminalLogins.set(loginId, {
+            status: terminalStatus,
+            expiresAt,
+        })
+        const terminalTimer = setTimeout(() => {
+            if (terminalLogins.get(loginId)?.expiresAt === expiresAt) {
+                terminalLogins.delete(loginId)
+            }
+        }, TELEGRAM_TERMINAL_STATUS_TTL_MS)
+        terminalTimer.unref?.()
+    }
+    try {
+        await current.client.disconnect()
+    } catch (error) {
+        console.warn(`[TG-AUTH] Client teardown failed for loginId ${loginId}:`, error)
+    }
+}
+
+function scheduleLoginExpiry(loginId: string): ReturnType<typeof setTimeout> {
+    const timer = setTimeout(() => {
+        void disposeActiveLogin(loginId, 'expired')
+    }, TELEGRAM_LOGIN_TTL_MS)
+    timer.unref?.()
+    return timer
+}
 
 export async function getTelegramAuthQR(apiId: number, apiHash: string) {
+    await requireIntegrationAdminAccess()
     console.log(`[TG-AUTH] Starting QR generation for API ID: ${apiId}`)
     const stringSession = new StringSession('')
     const client = new TelegramClient(stringSession, apiId, apiHash, {
         connectionRetries: 5,
     })
 
-    await client.connect()
+    try {
+        await client.connect()
+    } catch {
+        try { await client.disconnect() } catch { /* best-effort teardown */ }
+        throw new Error('Unable to start Telegram authentication')
+    }
     console.log(`[TG-AUTH] Client connected to Telegram`)
 
-    const loginId = Math.random().toString(36).substring(7)
+    const loginId = randomUUID()
+    activeLogins.set(loginId, {
+        client,
+        qrUrl: '',
+        status: 'starting',
+        apiId,
+        apiHash,
+        expiresAt: Date.now() + TELEGRAM_LOGIN_TTL_MS,
+        expiryTimer: scheduleLoginExpiry(loginId),
+    })
 
     // We start the login process in the background
-    const loginPromise = client.signInUserWithQrCode(
+    // Promise.resolve().then also turns a synchronous library failure into the
+    // same rejection path, so every login failure reaches client teardown.
+    const loginPromise = Promise.resolve().then(() => client.signInUserWithQrCode(
         { apiId, apiHash },
         {
             qrCode: async (code) => {
                 console.log(`[TG-AUTH] QR Code received, expires in ${code.expires}s`)
                 const qrUrl = await QRCode.toDataURL(`tg://login?token=${code.token.toString('base64url')}`)
-                activeLogins.set(loginId, { client, qrUrl, status: 'awaiting_scan' })
+                // API credentials stay server-side for the bounded login
+                // ceremony. Status polling needs only the opaque loginId.
+                const current = activeLogins.get(loginId)
+                if (!current || current.client !== client) return
+                activeLogins.set(loginId, { ...current, qrUrl, status: 'awaiting_scan' })
                 console.log(`[TG-AUTH] QR URL set for loginId: ${loginId}`)
             },
-            password: async (hint) => {
-                console.log(`[TG-AUTH] Password requested by Telegram (hint: ${hint})`)
+            password: async () => {
+                // Telegram's 2FA hint can contain user-chosen sensitive text;
+                // record only that the ceremony reached this state.
+                console.log('[TG-AUTH] Password requested by Telegram')
                 const current = activeLogins.get(loginId)
                 if (current) {
                     activeLogins.set(loginId, { ...current, status: '2fa_required' })
@@ -62,11 +145,10 @@ export async function getTelegramAuthQR(apiId: number, apiHash: string) {
             },
             onError: (err: any) => {
                 console.error(`[TG-AUTH] QR Login Error for loginId ${loginId}:`, err)
-                const current = activeLogins.get(loginId)
-                if (current) activeLogins.set(loginId, { ...current, status: 'error' })
+                void disposeActiveLogin(loginId, 'error')
             }
-        }
-    )
+        },
+    ))
 
     // Background promise handling
     loginPromise.then(async (user) => {
@@ -82,32 +164,52 @@ export async function getTelegramAuthQR(apiId: number, apiHash: string) {
 
         if (errorMsg.includes('TIMEOUT')) {
             console.log(`[TG-AUTH] QR Login timed out for loginId: ${loginId}`)
-            if (current) activeLogins.set(loginId, { ...current, status: 'expired' })
+            if (current) void disposeActiveLogin(loginId, 'expired')
         } else {
             console.error(`[TG-AUTH] Auth confirmation error for loginId ${loginId}:`, err)
-            if (current) activeLogins.set(loginId, { ...current, status: 'error' })
+            if (current) void disposeActiveLogin(loginId, 'error')
         }
     })
 
     // Wait a bit for the QR code to be generated
     let retries = 0
-    while (!activeLogins.has(loginId) && retries < 20) {
+    while (!activeLogins.get(loginId)?.qrUrl && !terminalLogins.has(loginId) && retries < 20) {
         await new Promise(resolve => setTimeout(resolve, 500))
         retries++
     }
 
     const loginData = activeLogins.get(loginId)
-    if (!loginData) {
+    if (!loginData?.qrUrl) {
         console.error(`[TG-AUTH] Failed to generate QR code after ${retries} retries`)
+        await disposeActiveLogin(loginId, 'error')
         throw new Error('Failed to generate QR code')
     }
 
     return { loginId, qrUrl: loginData.qrUrl }
 }
 
+/** Reuse an existing connection's Telegram application credentials without
+ * serializing apiHash to the browser. */
+export async function getTelegramAuthQRFromSavedConnection(connectionId: string) {
+    await requireIntegrationAdminAccess()
+    const connection = await prisma.telegramConnection.findUnique({
+        where: { id: connectionId },
+        select: { apiId: true, apiHash: true },
+    })
+    if (!connection?.apiId || !connection?.apiHash) {
+        throw new Error('Saved Telegram application credentials are unavailable')
+    }
+    return getTelegramAuthQR(connection.apiId, connection.apiHash)
+}
+
 export async function submitTelegram2FAPassword(loginId: string, password: string) {
+    await requireIntegrationAdminAccess()
     console.log(`[TG-AUTH] Received 2FA password for loginId: ${loginId}`)
     const data = activeLogins.get(loginId)
+    if (data && data.expiresAt <= Date.now()) {
+        await disposeActiveLogin(loginId, 'expired')
+        return { success: false, error: 'Session expired' }
+    }
     if (!data || !data.resolvePassword) {
         console.error(`[TG-AUTH] Login data or resolver not found for 2FA submission: ${loginId}`)
         return { success: false, error: 'Session expired or not waiting for password' }
@@ -116,6 +218,11 @@ export async function submitTelegram2FAPassword(loginId: string, password: strin
     try {
         console.log(`[TG-AUTH] Resolving password promise...`)
         data.resolvePassword(password)
+        activeLogins.set(loginId, {
+            ...data,
+            status: 'awaiting_scan',
+            resolvePassword: undefined,
+        })
         // Note: The status will be updated to 'success' by the background loginPromise.then()
         return { success: true }
     } catch (err: any) {
@@ -124,17 +231,27 @@ export async function submitTelegram2FAPassword(loginId: string, password: strin
     }
 }
 
-export async function checkTelegramAuthStatus(loginId: string, apiId: number, apiHash: string) {
+export async function checkTelegramAuthStatus(loginId: string) {
+    await requireIntegrationAdminAccess()
+    pruneTerminalLogins()
+    const terminal = terminalLogins.get(loginId)
+    if (terminal) return { status: terminal.status }
+
     const data = activeLogins.get(loginId)
     console.log(`[TG-AUTH] Checking status for loginId: ${loginId}, Current status: ${data?.status}`)
 
     if (!data) return { status: 'expired' }
+    if (data.expiresAt <= Date.now()) {
+        await disposeActiveLogin(loginId, 'expired')
+        return { status: 'expired' }
+    }
 
     if (data.status === 'success') {
+        activeLogins.set(loginId, { ...data, status: 'persisting' })
         console.log(`[TG-AUTH] Login success detected for loginId: ${loginId}. Saving session...`)
-        const sessionString = (data.client.session as StringSession).save()
 
         try {
+            const sessionString = (data.client.session as StringSession).save()
             // Fetch user info to get the telegram ID
             const me = await data.client.getMe()
             const telegramId = me.id.toString()
@@ -154,8 +271,8 @@ export async function checkTelegramAuthStatus(loginId: string, apiId: number, ap
                 where: { id: telegramId },
                 create: {
                     id: telegramId,
-                    apiId,
-                    apiHash,
+                    apiId: data.apiId,
+                    apiHash: data.apiHash,
                     sessionString,
                     isActive: true,
                     phoneNumber,
@@ -163,8 +280,8 @@ export async function checkTelegramAuthStatus(loginId: string, apiId: number, ap
                     name: me.firstName ? `${me.firstName} ${me.lastName || ''}`.trim() : `Account ${telegramId}`
                 },
                 update: {
-                    apiId,
-                    apiHash,
+                    apiId: data.apiId,
+                    apiHash: data.apiHash,
                     sessionString,
                     isActive: true,
                     phoneNumber
@@ -172,35 +289,59 @@ export async function checkTelegramAuthStatus(loginId: string, apiId: number, ap
                 }
             })
             console.log(`[TG-AUTH] Session saved to database successfully`)
-            activeLogins.delete(loginId)
+            await disposeActiveLogin(loginId)
             revalidatePath('/telegram')
             return { status: 'success' }
-        } catch (dbErr) {
-            console.error(`[TG-AUTH] Database error saving session:`, dbErr)
+        } catch {
+            // The failed Prisma invocation carried apiHash and sessionString;
+            // its diagnostic object is intentionally not emitted.
+            console.error('[TG-AUTH] Database error saving session')
+            await disposeActiveLogin(loginId, 'error')
             return { status: 'error' }
         }
     }
 
     // Double check if client somehow authorized but status didn't update
-    if (data.client.connected && await data.client.isUserAuthorized()) {
-        console.log(`[TG-AUTH] Client is authorized, but status was still: ${data.status}. Updating to success manually.`)
-        activeLogins.set(loginId, { ...data, status: 'success' })
-        // Next poll will pick it up and save to DB
+    try {
+        if (data.client.connected && await data.client.isUserAuthorized()) {
+            console.log(`[TG-AUTH] Client is authorized, but status was still: ${data.status}. Updating to success manually.`)
+            activeLogins.set(loginId, { ...data, status: 'success' })
+            // Next poll will pick it up and save to DB
+        }
+    } catch (error) {
+        console.error(`[TG-AUTH] Authorization status failed for loginId ${loginId}:`, error)
+        await disposeActiveLogin(loginId, 'error')
+        return { status: 'error' }
     }
 
     return { status: data.status, qrUrl: data.qrUrl }
 }
 
 export async function getTelegramConnections() {
-    const conns = await (prisma as any).telegramConnection.findMany({
+    await requireIntegrationAdminAccess()
+    const conns = await prisma.telegramConnection.findMany({
         where: { sessionString: { not: null } },
-        orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }]
+        orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
+        select: {
+            id: true,
+            apiId: true,
+            isActive: true,
+            phoneNumber: true,
+            createdAt: true,
+            updatedAt: true,
+            isDefault: true,
+            name: true,
+        },
     })
-    // Map isActive=false → isPaused=true for the UI
-    return conns.map((c: any) => ({ ...c, isPaused: !c.isActive }))
+    return conns.map(connection => projectTelegramConnectionMetadata({
+        ...connection,
+        apiHashConfigured: true,
+        sessionConfigured: true,
+    }))
 }
 
 export async function updateTelegramConnectionSettings(id: string, name: string, isDefault: boolean) {
+    await requireIntegrationAdminAccess()
     if (isDefault) {
         // Unset any existing default
         await (prisma as any).telegramConnection.updateMany({
@@ -217,6 +358,7 @@ export async function updateTelegramConnectionSettings(id: string, name: string,
 }
 
 export async function disconnectTelegram(id: string) {
+    await requireIntegrationAdminAccess()
     const connection = await (prisma as any).telegramConnection.findUnique({ where: { id } })
     
     await (prisma as any).telegramConnection.update({
@@ -268,6 +410,7 @@ let _initPromise: Promise<void> | null = null
 
 /** Get runtime status — delegates to TransportRegistry. */
 export async function getTelegramRuntimeStatus() {
+    await requireIntegrationAdminAccess()
     return registry.getAllEntries().filter(e => e.channel === 'telegram')
 }
 
@@ -354,25 +497,14 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
         })()
 
         if (!unifiedChat) {
-            unifiedChat = await (prisma.chat as any).create({
-                data: {
-                    externalChatId,
-                    channel: 'telegram',
-                    name: senderName || `TG ${senderId}`,
-                    lastMessageAt: now,
-                    status: 'new'
-                }
-            })
+            const created = await upsertChannelConversationV1({ contract: UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, externalChatId, channel: 'telegram', name: senderName || `TG ${senderId}`, chatType: 'private', metadata: {} })
+            unifiedChat = created.conversation as any
+            await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: now } })
             chatCreated = true
             console.log(`[${loggerPrefix}] AUTO-CREATED chat=${unifiedChat.id} for externalChatId=${externalChatId} name="${senderName || `TG ${senderId}`}"`)
         } else {
-            await (prisma.chat as any).update({
-                where: { id: unifiedChat.id },
-                data: {
-                    lastMessageAt: now,
-                    ...(senderName ? { name: senderName } : {}),
-                }
-            })
+            const patched = await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: now, ...(senderName ? { name: senderName } : {}) } })
+            unifiedChat = patched.conversation as any
         }
 
         // 2. Relink driver if missing (on every inbound)
@@ -441,16 +573,7 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
                                     (mediaInfo.type === 'image' ? 'image/jpeg' : 'application/octet-stream')
                                 const dataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`
                                 const fileName = message.media?.document?.attributes?.find((a: any) => a.fileName)?.fileName || null
-                                await (prisma.messageAttachment as any).create({
-                                    data: {
-                                        messageId: existing.id,
-                                        type: mediaInfo.type,
-                                        url: dataUrl,
-                                        fileName,
-                                        fileSize: buffer.length,
-                                        mimeType,
-                                    }
-                                })
+                                await attachMessageMediaV1({ contract: ATTACH_MESSAGE_MEDIA_COMMAND_V1, messageId: existing.id, mediaType: mediaInfo.type, url: dataUrl, fileName, fileSize: buffer.length, mimeType })
                                 console.log(`[${loggerPrefix}] MEDIA retry-saved for existing msg=${existing.id}`)
                             }
                         }
@@ -461,18 +584,8 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
             }
         } else {
             const msgType = mediaInfo?.type || 'text'
-            const savedMsg = await (prisma.message as any).create({
-                data: {
-                    chatId: unifiedChat.id,
-                    direction: 'inbound',
-                    content: text,
-                    channel: 'telegram',
-                    type: msgType,
-                    sentAt: now,
-                    status: 'delivered',
-                    externalId: externalMsgId
-                }
-            })
+            const savedMsgResult = await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: unifiedChat.id, direction: 'inbound', content: text, channel: 'telegram', type: msgType as any, sentAt: now, status: 'delivered', externalId: externalMsgId || `telegram:${unifiedChat.id}:${now.getTime()}` })
+            const savedMsg = savedMsgResult.message as any
 
             // Download and save media attachment (photo, voice, video, document, sticker)
             if (mediaInfo && msgType !== 'text' && message.downloadMedia) {
@@ -485,16 +598,7 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
                                 (msgType === 'image' ? 'image/jpeg' : 'application/octet-stream')
                             const dataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`
                             const fileName = message.media?.document?.attributes?.find((a: any) => a.fileName)?.fileName || null
-                            await (prisma.messageAttachment as any).create({
-                                data: {
-                                    messageId: savedMsg.id,
-                                    type: msgType,
-                                    url: dataUrl,
-                                    fileName,
-                                    fileSize: buffer.length,
-                                    mimeType,
-                                }
-                            })
+                            await attachMessageMediaV1({ contract: ATTACH_MESSAGE_MEDIA_COMMAND_V1, messageId: savedMsg.id, mediaType: msgType, url: dataUrl, fileName, fileSize: buffer.length, mimeType })
                             console.log(`[${loggerPrefix}] MEDIA saved: ${msgType} ${mimeType} for msg=${savedMsg.id}`)
                         }
                     }
@@ -568,28 +672,15 @@ async function processOutboundMirrorMessage(message: any, connectionId: string, 
 
     if (existing) {
         if (!existing.externalId && externalMsgId) {
-            await (prisma.message as any).update({
-                where: { id: existing.id },
-                data: { externalId: externalMsgId },
-            })
+            await patchMessageDeliveryV1({ contract: PATCH_MESSAGE_DELIVERY_COMMAND_V1, messageId: existing.id, externalId: externalMsgId, status: 'delivered' })
         }
         console.log(`[${loggerPrefix}] DEDUP: skipped msgId=${externalMsgId} (existing=${existing.id})`)
         return
     }
 
     // New outbound message sent from outside CRM — mirror it
-    const saved = await (prisma.message as any).create({
-        data: {
-            chatId: chat.id,
-            direction: 'outbound',
-            content: text,
-            channel: 'telegram',
-            type: msgType,
-            sentAt,
-            status: 'delivered',
-            externalId: externalMsgId,
-        },
-    })
+    const savedResult = await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: chat.id, direction: 'outbound', content: text, channel: 'telegram', type: msgType as any, sentAt, status: 'delivered', externalId: externalMsgId || `telegram:${chat.id}:${sentAt.getTime()}` })
+    const saved = savedResult.message as any
 
     // Download media if present
     if (mediaInfo && msgType !== 'text' && message.downloadMedia) {
@@ -613,10 +704,7 @@ async function processOutboundMirrorMessage(message: any, connectionId: string, 
     }
 
     // Update chat's lastMessageAt
-    await (prisma.chat as any).update({
-        where: { id: chat.id },
-        data: { lastMessageAt: sentAt },
-    })
+    await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: chat.id }, patch: { lastMessageAt: sentAt } })
 
     console.log(`[${loggerPrefix}] MIRRORED outbound msgId=${externalMsgId} type=${msgType} chat=${chat.id}`)
 
@@ -679,10 +767,7 @@ async function processReactionUpdate(event: any) {
         }
 
         const updatedMetadata = { ...((message.metadata as Record<string, any>) || {}), reactions: reactionsMap }
-        await (prisma.message as any).update({
-            where: { id: message.id },
-            data: { metadata: updatedMetadata },
-        })
+        await patchMessageMetadataV1({ contract: PATCH_MESSAGE_METADATA_COMMAND_V1, messageId: message.id, metadata: updatedMetadata })
 
         const { broadcastChatMessage } = await import('@/lib/messageStreamBus')
         broadcastChatMessage(message.chatId, { id: message.id, metadata: updatedMetadata })
@@ -1068,30 +1153,18 @@ export async function sendTelegramMessage(phoneNumber: string, message: string, 
                      unifiedChat = await (prisma.chat as any).findUnique({ where: { id: metadata.chatId } })
                      if (unifiedChat) {
                          console.log(`[TG-SEND] Migrating chat ${unifiedChat.id} from ${unifiedChat.externalChatId} to ${externalChatId}`)
-                         unifiedChat = await (prisma.chat as any).update({
-                             where: { id: unifiedChat.id },
-                             data: { externalChatId, lastMessageAt: new Date() }
-                         })
+                         const migrated = await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { externalChatId, lastMessageAt: new Date() } })
+                         unifiedChat = migrated.conversation as any
                      }
                 }
 
                 // 3. Create if still not found
                 if (!unifiedChat) {
-                    unifiedChat = await (prisma.chat as any).create({
-                        data: {
-                            id: `chat_tg_${tgId}`,
-                            externalChatId,
-                            channel: 'telegram',
-                            name: `TG ${tgId}`,
-                            driverId: metadata?.driverId || null,
-                            lastMessageAt: new Date()
-                        }
-                    })
+                    const created = await upsertChannelConversationV1({ contract: UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, externalChatId, channel: 'telegram', name: `TG ${tgId}`, chatType: 'private', metadata: {} })
+                    unifiedChat = created.conversation as any
+                    await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: new Date(), ...(metadata?.driverId ? { driverId: metadata.driverId } : {}) } })
                 } else {
-                    await (prisma.chat as any).update({
-                        where: { id: unifiedChat.id },
-                        data: { lastMessageAt: new Date(), driverId: unifiedChat.driverId || metadata?.driverId }
-                    })
+                    await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: new Date(), ...(metadata?.driverId ? { driverId: unifiedChat.driverId || metadata.driverId } : {}) } })
                 }
 
                 // 4. Update DriverTelegram link if possible
@@ -1130,29 +1203,11 @@ export async function sendTelegramMessage(phoneNumber: string, message: string, 
 
                 if (existing) {
                     console.log(`[TG-SEND] Found existing message ${existing.id}, updating status to delivered...`)
-                    await (prisma.message as any).update({
-                        where: { id: existing.id },
-                        data: { 
-                            externalId,
-                            status: 'delivered',
-                            sentAt: existing.sentAt
-                        }
-                    })
+                    await patchMessageDeliveryV1({ contract: PATCH_MESSAGE_DELIVERY_COMMAND_V1, messageId: existing.id, externalId, status: 'delivered', sentAt: existing.sentAt })
                     console.log(`[TG-SEND] Update SUCCESS`)
                 } else {
                     console.log(`[TG-SEND] No existing message found, creating new record...`)
-                    await (prisma.message as any).create({
-                        data: {
-                            chatId: unifiedChat.id,
-                            direction: 'outbound',
-                            content: message,
-                            channel: 'telegram',
-                            type: 'text',
-                            sentAt: new Date(),
-                            status: 'delivered',
-                            externalId
-                        }
-                    })
+                    await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: unifiedChat.id, direction: 'outbound', content: message, channel: 'telegram', type: 'text', sentAt: new Date(), status: 'delivered', externalId })
                     console.log(`[TG-SEND] Create SUCCESS`)
                 }
                 return { success: true, externalId: result?.id?.toString() }
@@ -1361,20 +1416,10 @@ export async function importTelegramHistory(
                 // Upsert unified Chat
                 let unifiedChat = await (prisma.chat as any).findUnique({ where: { externalChatId } })
                 if (!unifiedChat) {
-                    unifiedChat = await (prisma.chat as any).create({
-                        data: {
-                            externalChatId,
-                            channel: 'telegram',
-                            name: chatName,
-                            status: 'new',
-                            metadata: { connectionId: connection.id }
-                        }
-                    })
+                    const created = await upsertChannelConversationV1({ contract: UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, externalChatId, channel: 'telegram', name: chatName, chatType: 'private', metadata: { connectionId: connection.id } })
+                    unifiedChat = created.conversation as any
                 } else {
-                    await (prisma.chat as any).update({
-                        where: { id: unifiedChat.id },
-                        data: { name: chatName }
-                    })
+                    await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { name: chatName } })
                 }
 
                 // Contact resolution
@@ -1428,18 +1473,8 @@ export async function importTelegramHistory(
 
                     totalMessages++
                     if (!existing) {
-                        const savedHistMsg = await (prisma.message as any).create({
-                            data: {
-                                chatId: unifiedChat.id,
-                                direction: isOutbound ? 'outbound' : 'inbound',
-                                content: msgText,
-                                channel: 'telegram',
-                                type: histMsgType,
-                                sentAt: ts,
-                                status: 'delivered',
-                                externalId: externalMsgId,
-                            }
-                        })
+                        const savedHistResult = await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: unifiedChat.id, direction: isOutbound ? 'outbound' : 'inbound', content: msgText, channel: 'telegram', type: histMsgType as any, sentAt: ts, status: 'delivered', externalId: externalMsgId || `telegram:${unifiedChat.id}:${ts.getTime()}` })
+                        const savedHistMsg = savedHistResult.message as any
 
                         // Download media for history import
                         if (histMediaInfo && histMsgType !== 'text' && client) {
@@ -1450,16 +1485,7 @@ export async function importTelegramHistory(
                                         (histMsgType === 'image' ? 'image/jpeg' : 'application/octet-stream')
                                     const dataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`
                                     const fileName = msg.media?.document?.attributes?.find((a: any) => a.fileName)?.fileName || null
-                                    await (prisma.messageAttachment as any).create({
-                                        data: {
-                                            messageId: savedHistMsg.id,
-                                            type: histMsgType,
-                                            url: dataUrl,
-                                            fileName,
-                                            fileSize: buffer.length,
-                                            mimeType,
-                                        }
-                                    })
+                                    await attachMessageMediaV1({ contract: ATTACH_MESSAGE_MEDIA_COMMAND_V1, messageId: savedHistMsg.id, mediaType: histMsgType, url: dataUrl, fileName, fileSize: buffer.length, mimeType })
                                 }
                             } catch (mediaErr: any) {
                                 // Non-blocking — message saved, media skipped
@@ -1472,10 +1498,7 @@ export async function importTelegramHistory(
 
                 // Update lastMessageAt
                 if (chatMaxTs) {
-                    await (prisma.chat as any).update({
-                        where: { id: unifiedChat.id },
-                        data: { lastMessageAt: chatMaxTs }
-                    })
+                    await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: chatMaxTs } })
                 }
 
                 // Periodic progress update (every 5 chats)
@@ -1560,6 +1583,7 @@ async function updateTgImportJob(jobId: string, data: {
 }
 
 export async function pauseTelegramConnection(id: string, deleteMessages?: boolean) {
+    await requireIntegrationAdminAccess()
     console.log(`[TG] pauseTelegramConnection id=${id} deleteMessages=${deleteMessages}`)
 
     // Mark as paused (isActive=false → isPaused=true in UI)
@@ -1583,6 +1607,7 @@ export async function pauseTelegramConnection(id: string, deleteMessages?: boole
 }
 
 export async function resumeTelegramConnection(id: string, catchUp?: boolean) {
+    await requireIntegrationAdminAccess()
     console.log(`[TG] resumeTelegramConnection id=${id} catchUp=${catchUp}`)
 
     // Mark as active (isPaused=false in UI)
@@ -1608,6 +1633,7 @@ export async function resumeTelegramConnection(id: string, catchUp?: boolean) {
 }
 
 export async function deleteConnectionMessages(connectionId: string) {
+    await requireIntegrationAdminAccess()
     const { ContactService } = await import('@/lib/ContactService')
 
     // Find telegram chats scoped to this connection (via metadata.connectionId)
@@ -1634,8 +1660,7 @@ export async function deleteConnectionMessages(connectionId: string) {
     const contactIds = [...new Set(tgChats.map((c: any) => c.contactId).filter(Boolean))] as string[]
 
     // Delete messages then chats
-    await (prisma.message as any).deleteMany({ where: { chatId: { in: chatIds } } })
-    await (prisma.chat as any).deleteMany({ where: { id: { in: chatIds } } })
+    await deleteConversationsByIdV1({ contract: DELETE_CONVERSATIONS_BY_ID_COMMAND_V1, conversationIds: chatIds })
 
     // Cleanup dangling identities
     if (contactIds.length > 0) {

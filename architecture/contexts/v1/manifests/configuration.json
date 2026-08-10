@@ -23,6 +23,10 @@
     {
       "context": "avito_acquisition",
       "surface": "avito_acquisition.public"
+    },
+    {
+      "context": "identity_access",
+      "surface": "identity_access.public"
     }
   ],
   "commands": [

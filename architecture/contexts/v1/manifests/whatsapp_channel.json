@@ -7,6 +7,10 @@
     {
       "context": "contacts",
       "surface": "contacts.public"
+    },
+    {
+      "context": "identity_access",
+      "surface": "identity_access.public"
     }
   ],
   "commands": [

@@ -4,12 +4,12 @@ import Layout from '../components/Layout';
 import { useRouter } from 'next/router';
 
 function AuthGuard({ children }) {
-  const { token, loading } = useAuth();
+  const { authenticated, loading } = useAuth();
   const router = useRouter();
 
   if (loading) return <div>Загрузка...</div>;
 
-  if (!token && router.pathname !== '/login') {
+  if (!authenticated && router.pathname !== '/login') {
     router.push('/login');
     return null;
   }

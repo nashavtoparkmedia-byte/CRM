@@ -85,8 +85,9 @@ COPY --from=builder --chown=app:app /app/node_modules ./node_modules
 COPY --from=builder --chown=app:app /app/.next ./.next
 COPY --from=builder --chown=app:app /app/public ./public
 COPY --from=builder --chown=app:app /app/prisma ./prisma
-# Скрипты миграций — могут понадобиться в runtime (prisma migrate deploy)
-COPY --from=builder --chown=app:app /app/scripts ./scripts
+# Prisma migrate deploy consumes only ./prisma/migrations. Operational,
+# historical and one-shot scripts are deliberately absent from the runtime
+# image; production maintenance goes through the finite operator control plane.
 # Runtime-data: user-service.ts читает src/data/users.json через fs.readFile
 # (server action). Без этого dropdown «Войти...» пустой и залогиниться нельзя.
 COPY --from=builder --chown=app:app /app/src/data ./src/data
@@ -112,5 +113,6 @@ ENTRYPOINT ["/usr/bin/tini", "--"]
 # *_drift / 20260612000000_sync_schema_drift) и эквивалентна schema.prisma.
 # Существующая БД должна быть забейслайнена один раз:
 #   npx prisma migrate resolve --applied <name> для каждой миграции
-# (см. scripts/baseline-vps.sh) — дальше deploy применяет только новые.
+# Existing databases are baselined through the finite operator profile; normal
+# starts only deploy migrations already present under ./prisma/migrations.
 CMD ["sh", "-c", "npx prisma migrate deploy && npm run start"]

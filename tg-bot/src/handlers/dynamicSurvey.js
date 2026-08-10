@@ -203,7 +203,7 @@ async function finishSurvey(ctx) {
         let botDb = await prisma.bot.findFirst({ where: { token: botToken } });
 
         if (!botDb) {
-            logger.info(`Bot mapping not found in DB for token ${botToken}. Auto-creating it.`);
+            logger.info('Configured bot mapping not found in DB; auto-creating it');
             botDb = await prisma.bot.create({
                 data: {
                     token: botToken,

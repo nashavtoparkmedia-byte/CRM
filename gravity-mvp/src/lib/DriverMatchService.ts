@@ -1,4 +1,6 @@
 import { prisma } from '@/lib/prisma'
+import { PATCH_CHANNEL_CONVERSATION_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { patchChannelConversationV1 } from '@/modules/messaging/public/v1'
 
 type DriverCandidate = {
     id: string
@@ -214,10 +216,7 @@ export class DriverMatchService {
                 return false
             }
             if (!chat?.driverId) {
-                await (prisma.chat as any).update({
-                    where: { id: chatId },
-                    data: { driverId: result.driver.id }
-                })
+                await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId }, patch: { driverId: result.driver.id } })
             }
             console.log(`[DriverMatch] LINKED chat=${chatId} -> driver=${result.driver.id}`)
             return true

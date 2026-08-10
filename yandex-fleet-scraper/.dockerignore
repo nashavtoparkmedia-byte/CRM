@@ -18,3 +18,13 @@ screenshots
 # Probe-скрипты — не нужны в проде (если нужны для отладки на VPS, копируем вручную)
 src/scripts/probe-*.ts
 src/scripts/login.ts
+# Unsafe repair/codemod and local diagnostic surfaces never enter the service
+# image. Active login/import commands remain named package capabilities.
+fix-accounts.ts
+src/scripts/heal-account.ts
+update_locator.cjs
+update_locator_href.cjs
+update_locator_row.cjs
+tests/
+dev.db
+prisma/dev.db

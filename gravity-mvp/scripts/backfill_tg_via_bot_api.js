@@ -70,7 +70,7 @@ async function getChatViaBotApi(token, chatId) {
 async function main() {
     console.log(`[backfill-tg-bot] ${DRY_RUN ? 'DRY RUN' : 'LIVE'} mode`)
     const token = readBotToken()
-    console.log(`[backfill-tg-bot] bot token loaded (${token.slice(0, 10)}...)`)
+    console.log('[backfill-tg-bot] bot token loaded')
 
     // TG chats with placeholder
     const chats = await prisma.chat.findMany({

@@ -4,14 +4,35 @@ import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { CREATE_API_CONNECTION_COMMAND_V1, DELETE_API_CONNECTION_COMMAND_V1, DELETE_API_LOGS_COMMAND_V1, RECORD_API_LOG_COMMAND_V1, UPDATE_API_CONNECTION_NAME_COMMAND_V1 } from '@/contracts/fleet-operations/v1'
 import { createApiConnectionV1, deleteApiConnectionV1, deleteApiLogsV1, recordApiLogV1, updateApiConnectionNameV1 } from '@/modules/fleet-operations/public/v1'
+import { projectApiConnectionMetadata } from '@/modules/fleet-operations/public/v1/api-connection-public-metadata'
+import { requireIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
 
 export async function getApiConnections() {
-    return await prisma.apiConnection.findMany({
+    await requireIntegrationAdminAccess()
+    const connections = await prisma.apiConnection.findMany({
         orderBy: { createdAt: 'desc' },
+        select: {
+            id: true,
+            clid: true,
+            parkId: true,
+            name: true,
+            createdAt: true,
+        },
     })
+    return connections.map(connection => projectApiConnectionMetadata({
+        id: connection.id,
+        clid: connection.clid,
+        parkId: connection.parkId,
+        name: connection.name,
+        createdAt: connection.createdAt,
+        // apiKey is required and validated non-empty on creation. Do not
+        // select its value merely to derive a browser-facing status flag.
+        credentialConfigured: true,
+    }))
 }
 
 export async function addApiConnection(formData: FormData) {
+    await requireIntegrationAdminAccess()
     const clid = formData.get('clid') as string
     const apiKey = formData.get('apiKey') as string
     const parkId = formData.get('parkId') as string
@@ -21,23 +42,33 @@ export async function addApiConnection(formData: FormData) {
         throw new Error('Missing required fields')
     }
 
-    await createApiConnectionV1({ contract: CREATE_API_CONNECTION_COMMAND_V1, clid, apiKey, parkId, name: name || null })
+    try {
+        await createApiConnectionV1({ contract: CREATE_API_CONNECTION_COMMAND_V1, clid, apiKey, parkId, name: name || null })
+    } catch {
+        // Credential-bearing persistence inputs must never be reflected through
+        // framework error logging or a server-action response.
+        console.error('[API-CONNECTION] Failed to create connection')
+        throw new Error('Failed to create API connection')
+    }
 
     revalidatePath('/')
 }
 
 export async function updateApiConnectionName(id: string, name: string) {
+    await requireIntegrationAdminAccess()
     await updateApiConnectionNameV1({ contract: UPDATE_API_CONNECTION_NAME_COMMAND_V1, connectionId: id, name: name || null })
     revalidatePath('/')
 }
 
 export async function deleteApiConnection(id: string) {
+    await requireIntegrationAdminAccess()
     await deleteApiLogsV1({ contract: DELETE_API_LOGS_COMMAND_V1, connectionId: id })
     await deleteApiConnectionV1({ contract: DELETE_API_CONNECTION_COMMAND_V1, connectionId: id })
     revalidatePath('/')
 }
 
 export async function getApiLogs() {
+    await requireIntegrationAdminAccess()
     return await prisma.apiLog.findMany({
         orderBy: { createdAt: 'desc' },
         include: { connection: { select: { clid: true, parkId: true } } },
@@ -46,6 +77,7 @@ export async function getApiLogs() {
 }
 
 export async function testApiRequest(connectionId: string, testPayload?: string) {
+    await requireIntegrationAdminAccess()
     const connection = await prisma.apiConnection.findUnique({
         where: { id: connectionId }
     })

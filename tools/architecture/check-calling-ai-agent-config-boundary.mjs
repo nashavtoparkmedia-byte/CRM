@@ -30,6 +30,24 @@ const retiredFingerprints = [
   'arch_d4c8bd3927c6aaaf4956a4cd',
 ]
 
+// The integration-admin authorization surface is intentionally exposed from
+// Identity Access to these already-approved callers. That manifest dependency
+// retires the corresponding stale undeclared-dependency exceptions without
+// changing any runtime import to an internal module.
+const identityDependencyRetirements = new Set([
+  'arch_c254fdb923e70af8b8e1f296',
+  'arch_de40c467ff5ed464320a41b4',
+  'arch_b3e41eb2c5c3ed6dca974811',
+  'arch_a6c352e279979a71d019aaa6',
+  'arch_270ac7f8b720f8c37f8a161b',
+  'arch_a87f41f1c4333ba308913fc6',
+  'arch_a12405b62d0ef60873a794b4',
+  'arch_2f87e2510d27cdf2ff0fc5c4',
+  'arch_123c3aa7a015fb4115618b7b',
+  'arch_89e981e31ff8f0b1c9f4d281',
+  'arch_1f028f5650942942b018e9c1',
+])
+
 const commandPairs = [
   ['SAVE_AI_AGENT_CONFIG_COMMAND_V1', 'saveAiAgentConfigV1'],
   [
@@ -61,12 +79,19 @@ check('all five foreign AiAgentConfig writes are absent from the caller', () => 
   assert.doesNotMatch(actions, /prisma\.aiAgentConfig\.(?:create|update|updateMany|upsert|delete)/)
 })
 
-check('save caller maps the legacy credential to an opaque token and returns no secret', () => {
-  assert.match(actions, /field === 'apiKeyEncrypted'/)
-  assert.match(actions, /field: 'providerCredential'/)
-  assert.match(actions, /captureAiAgentProviderCredentialV1\(data\[field\]\)/)
-  assert.match(actions, /field === 'providerCredential'/)
-  assert.match(actions, /field: '__unsupported_provider_credential__', value: null/)
+check('save caller maps the public credential input to an opaque token and rejects persistence names', () => {
+  assert.match(
+    actions,
+    /field === 'providerCredential'[\s\S]{0,500}field: 'providerCredential'[\s\S]{0,500}captureAiAgentProviderCredentialV1\(data\[field\]\)/,
+  )
+  assert.match(
+    actions,
+    /field === 'apiKeyEncrypted'[\s\S]{0,300}field: '__unsupported_provider_credential__', value: null/,
+  )
+  assert.doesNotMatch(
+    actions,
+    /field === 'apiKeyEncrypted'[\s\S]{0,300}captureAiAgentProviderCredentialV1/,
+  )
   assert.match(actions, /return \{ id: 'singleton', \.\.\.safeResult \}/)
   assert.doesNotMatch(actions, /return \{ id: 'singleton', \.\.\.data \}/)
   assert.match(actions, /includesProviderCredential[\s\S]*ошибка сохранения учётных данных/)
@@ -170,12 +195,20 @@ const currentIds = new Set(scan.findings.map((finding) => finding.fingerprint))
 const registry = readJson(scan.policy.exception_registry)
 const registryIds = new Set(registry.exceptions.map((exception) => exception.fingerprint))
 
-check('only the exact five reviewed D4 findings retire without replacement', () => {
+check('reviewed D4 and approved Identity dependency findings retire without replacement', () => {
   for (const fingerprint of retiredFingerprints) assert.equal(currentIds.has(fingerprint), false)
+  for (const fingerprint of identityDependencyRetirements) {
+    assert.equal(currentIds.has(fingerprint), false)
+    assert.equal(registryIds.has(fingerprint), false)
+  }
   const additions = [...currentIds].filter((fingerprint) => !registryIds.has(fingerprint))
   assert.deepEqual(additions, [])
-  assert.equal(scan.findings.length, 1295)
-  assert.equal(scan.scanned_files, 1015)
+  const registryRetirements = registry.exceptions.filter(
+    (exception) => !currentIds.has(exception.fingerprint),
+  )
+  assert.deepEqual(registryRetirements, [])
+  assert.equal(scan.findings.length, registry.exceptions.length)
+  assert.ok(scan.scanned_files >= 1015)
   assert.equal(scan.findings.filter(
     (finding) => finding.rule === 'direct_foreign_prisma_write',
   ).length, 0)

@@ -19,8 +19,9 @@ import {
     resumeMaxConnection,
     deleteMaxMessages
 } from "../../../max-actions"
+import type { MaxConnectionPublicMetadata } from "@/modules/max-channel/public/v1/max-connection-public-metadata"
 
-export default function MaxLoginClient({ initialConnections = [] }: { initialConnections: any[] }) {
+export default function MaxLoginClient({ initialConnections = [] }: { initialConnections: MaxConnectionPublicMetadata[] }) {
     const [isAddingNew, setIsAddingNew] = useState(initialConnections.length === 0)
     const [activeTab, setActiveTab] = useState("bots")
     
@@ -296,7 +297,9 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
                                                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Активен
                                                         </span>
                                                     )}
-                                                    <span className="text-[11px] text-muted-foreground font-mono">{conn.botToken.substring(0, 10)}...</span>
+                                                    <span className="text-[11px] text-muted-foreground">
+                                                        {conn.botTokenConfigured ? 'токен настроен' : 'токен не настроен'}
+                                                    </span>
                                                 </div>
                                             </div>
                                         </div>

@@ -25,6 +25,8 @@ import type { ChatChannel } from '@prisma/client'
 import type { LeadSource } from './types'
 import { ENSURE_LEAD_CONVERSATION_COMMAND_V1, RECEIVE_MESSAGE_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { ensureLeadConversationV1, receiveMessageV1 } from '@/modules/messaging/public/v1'
+import { MARK_TEMPORARY_CONTACT_PHONE_COMMAND_V1 } from '@/contracts/contacts/v1'
+import { markTemporaryContactPhoneV1 } from '@/modules/contacts/public/v1'
 
 // LeadSource → ChatChannel. У нас сейчас полное совпадение (avito,
 // whatsapp, telegram, phone), но 'site' не имеет канала в чатах.
@@ -108,10 +110,7 @@ export async function ingestLead(input: IngestLeadInput): Promise<IngestLeadResu
     if (normalized) {
       const ttlDays = Number(process.env.AVITO_TEMP_PHONE_TTL_DAYS ?? '14')
       const expiresAt = new Date(Date.now() + ttlDays * 86400_000)
-      await (prisma.contactPhone as any).updateMany({
-        where: { contactId: resolved.contact.id, phone: normalized, isTemporary: false },
-        data: { isTemporary: true, expiresAt, label: 'Временный (Авито)' },
-      })
+      await markTemporaryContactPhoneV1({ contract: MARK_TEMPORARY_CONTACT_PHONE_COMMAND_V1, contactId: resolved.contact.id, phone: normalized, expiresAt, label: 'Временный (Авито)' })
     }
   }
 

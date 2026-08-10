@@ -1,41 +1,99 @@
 {
   "schema": "yoko.crm.write-ownership-derived-state.v1",
-  "generated_at": "2026-08-10T21:44:48Z",
+  "generated_at": "2026-08-10T22:30:32.620Z",
   "program": "WHOLE-PROJECT DOD RECOVERY",
-  "phase": "MAINTENANCE_MIGRATION_CAPABILITY_CLOSURE",
+  "phase": "WRITE_OWNERSHIP_CLOSURE_AUTHORITATIVE_RESCAN",
   "verdict": "EXTERNAL_FINAL_ACCEPTANCE_FAILED",
   "ready": false,
   "frozen_baseline": {
     "path": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json",
-    "sha256": "73259b98675789afb00258c1f1fac33c8799202f962b9944001a9bf05cfdf003",
-    "analysis_sha256": "3a9a5005e6897d1eb91b9ec5f504acf5916ffc258becae5b04d364bb6a0d59ae",
-    "new_scan_run": false
+    "sha256": "0f1ddfcbb95ffaf87cf381b28087edce5e113d5180a69deecf9b8c1782b71fa0",
+    "analysis_sha256": "7c179cee03ba3835c9979d5209f7a077b5cf478b315e4ad6d9df6125787e61c2",
+    "new_scan_run": true,
+    "previous_frozen_sha256": "73259b98675789afb00258c1f1fac33c8799202f962b9944001a9bf05cfdf003"
   },
   "metrics": {
-    "confirmed_writes_total_derived": 1213,
-    "owner_valid": 427,
-    "confirmed_foreign_raw": 49,
-    "closed_foreign_in_worktree_pending_rescan": 3,
-    "maintenance_migration_confirmed_records": 264,
-    "maintenance_migration_preliminary_units": 188,
-    "maintenance_migration_approved_capabilities": 0,
-    "maintenance_migration_pending_evidence": 187,
-    "maintenance_migration_remediated_pending_rescan": 1,
-    "ownership_manifest_review_remaining": 2,
-    "confirmed_non_writes": 6,
-    "dynamic_delegate_unresolved": 79,
-    "dynamic_sql_unresolved": 254,
+    "confirmed_writes_discovered": 1507,
+    "confirmed_writes_total_derived": 927,
+    "owner_valid": 456,
+    "confirmed_foreign_raw": 0,
+    "closed_foreign_in_worktree_pending_rescan": 0,
+    "closed_foreign_total": 47,
+    "ambiguous_remaining": 580,
+    "maintenance_migration_confirmed_records": 271,
+    "dynamic_delegate_unresolved": 34,
+    "dynamic_sql_unresolved": 238,
     "query_raw_side_effect_unresolved": 26,
+    "confirmed_non_writes": 4,
+    "operational_surfaces_total": 442,
     "operational_surfaces_classified_active": 400,
     "operational_surfaces_classified_historical_dead": 38,
+    "operational_surfaces_newly_classified": 4,
     "operational_surfaces_unclassified": 0,
-    "temporary_exceptions": "CURRENT_RECOMPUTE_PENDING; historical detector count must not be used as current truth",
+    "temporary_exceptions": "CURRENT_RECOMPUTE_PENDING",
     "intentional_exceptions": "CURRENT_RECOMPUTE_PENDING"
   },
-  "focused_ownership_review": {"reviewed":10,"owner_valid":7,"manifest_gap":2,"new_foreign":1},
+  "focused_ownership_review": {
+    "reviewed": 10,
+    "owner_valid": 9,
+    "manifest_gap": 0,
+    "new_foreign": 1
+  },
   "active_conflict_remediation": [
-    {"source":"gravity-mvp/scripts/sync-drivers-activity.ts","target":"Driver.upsert","result":"fleet_operations.ReconcileDriverProfileCommand.v1 owner boundary implemented and targeted test passing","state":"REMEDIATED_PENDING_AUTHORITATIVE_RESCAN"},
-    {"source":"gravity-mvp/scripts/trigger_import.js","target":"HistoryImportJob INSERT","result":"existing messaging.QueueHistoryImportJobCommand.v1 owner boundary adopted; compatibility CLI retained; targeted tests passing","state":"REMEDIATED_PENDING_AUTHORITATIVE_RESCAN"}
+    {
+      "source": "gravity-mvp/scripts/sync-drivers-activity.ts",
+      "target": "Driver.upsert",
+      "result": "fleet_operations.ReconcileDriverProfileCommand.v1 owner boundary implemented and targeted test passing",
+      "state": "REMEDIATED_PENDING_AUTHORITATIVE_RESCAN"
+    },
+    {
+      "source": "gravity-mvp/scripts/trigger_import.js",
+      "target": "HistoryImportJob INSERT",
+      "result": "existing messaging.QueueHistoryImportJobCommand.v1 owner boundary adopted; compatibility CLI retained; targeted tests passing",
+      "state": "REMEDIATED_PENDING_AUTHORITATIVE_RESCAN"
+    },
+    {
+      "source": "tg-bot/src/database.js",
+      "target": "connection_requests",
+      "result": "unused write-only foreign onboarding mirror removed; Google Sheets operational flow preserved",
+      "state": "REMEDIATED_PENDING_AUTHORITATIVE_RESCAN"
+    },
+    {
+      "source": "provider ingress batch",
+      "target": "messaging-owned Chat/Message/MessageAttachment",
+      "result": "MAX, Telegram, WhatsApp provider paths route unified conversation/message writes through messaging public v1 contracts; targeted analyzer reports zero foreign sites in remediated files",
+      "state": "REMEDIATED_PENDING_AUTHORITATIVE_RESCAN"
+    }
   ],
-  "next_action": "Establish lifecycle/reachability evidence and owner-controlled adapters for the 188 narrow preliminary maintenance units; resolve two Telegram SQLite ownership gaps; then process dynamic delegates, queryRaw, and dynamic SQL before one bounded authoritative scan."
+  "next_action": "Continue ambiguity closure (271 ownership-unresolved, 34 dynamic delegates, 238 dynamic SQL, 26 queryRaw side-effect records) and preserved security/credential validation; no READY claim.",
+  "targeted_batch": {
+    "artifact": "architecture/recovery/whole-project-dod/v2/WRITE_OWNERSHIP_CLOSURE_BATCH_20260810.json",
+    "triage_artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_OWNERSHIP_RESCAN.json",
+    "closed_foreign_in_batch": 47,
+    "flat_payload_resolved": 45,
+    "static_read_nonwrites_resolved": 14,
+    "provider_write_sites_removed": 60
+  },
+  "authoritative_rescan": {
+    "artifact": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260810T2228Z.json",
+    "baseline_sha256": "0f1ddfcbb95ffaf87cf381b28087edce5e113d5180a69deecf9b8c1782b71fa0",
+    "analysis_sha256": "7c179cee03ba3835c9979d5209f7a077b5cf478b315e4ad6d9df6125787e61c2",
+    "triage_artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_OWNERSHIP_RESCAN.json",
+    "triage_sha256": "92f6dc0c7b470d449074ea31e03c78fbdccefd568e3f3a95aa1f170c4ddbfdda",
+    "execution": {
+      "ambiguous_candidates": 580,
+      "complete": true,
+      "elapsed_ms": 329210.954079,
+      "failures": [],
+      "files_completed": 1650,
+      "files_discovered": 1650,
+      "mode": "fresh_process_per_javascript_surface",
+      "progress_every": 25,
+      "worker_failures": 0,
+      "worker_limit": 4,
+      "worker_timeout_ms": 120000,
+      "worker_timeouts": 0,
+      "writes_discovered": 1507
+    }
+  }
 }

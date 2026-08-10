@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { broadcastChatMessage } from '@/lib/messageStreamBus'
+import { PATCH_MESSAGE_METADATA_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { patchMessageMetadataV1 } from '@/modules/messaging/public/v1'
 
 // POST /api/webhook/max/reaction
 // Вызывается скрапером когда пользователь ставит/убирает реакцию в MAX веб-интерфейсе.
@@ -43,10 +45,8 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        const updated = await (prisma.message as any).update({
-            where: { id: message.id },
-            data: { metadata: { ...meta, reactions } },
-        })
+        const updated = { ...message, metadata: { ...meta, reactions } }
+        await patchMessageMetadataV1({ contract: PATCH_MESSAGE_METADATA_COMMAND_V1, messageId: message.id, metadata: updated.metadata })
 
         // Broadcast via SSE so open chat tabs refresh instantly
         try { broadcastChatMessage(updated.chatId, updated) } catch {}

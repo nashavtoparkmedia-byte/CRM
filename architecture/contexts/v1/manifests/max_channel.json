@@ -11,6 +11,10 @@
     {
       "context": "fleet_operations",
       "surface": "fleet_operations.public"
+    },
+    {
+      "context": "identity_access",
+      "surface": "identity_access.public"
     }
   ],
   "commands": [

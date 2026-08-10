@@ -1,0 +1,5 @@
+export const DELETE_CONVERSATIONS_BY_CHANNEL_COMMAND_V1 = 'messaging.DeleteConversationsByChannelCommand.v1' as const
+export const DELETE_CONVERSATIONS_BY_CHANNEL_RESULT_V1 = 'messaging.DeleteConversationsByChannelResult.v1' as const
+export interface DeleteConversationsByChannelCommandV1 { contract: typeof DELETE_CONVERSATIONS_BY_CHANNEL_COMMAND_V1; channel: 'whatsapp' | 'telegram' | 'max' }
+export interface DeleteConversationsByChannelResultV1 { contract: typeof DELETE_CONVERSATIONS_BY_CHANNEL_RESULT_V1; completed: true }
+export function parseDeleteConversationsByChannelCommandV1(input: unknown): DeleteConversationsByChannelCommandV1 { if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('command must be an object'); const value = input as Record<string, unknown>; if (value.contract !== DELETE_CONVERSATIONS_BY_CHANNEL_COMMAND_V1) throw new Error(`contract must equal ${DELETE_CONVERSATIONS_BY_CHANNEL_COMMAND_V1}`); if (!['whatsapp', 'telegram', 'max'].includes(String(value.channel))) throw new Error('channel is invalid'); return value as unknown as DeleteConversationsByChannelCommandV1 }

@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "f3d919d6ba652c8d97ae6ff0ca44f0044003154b6a6f0c923a93cae772f7ba84",
+  "finding_digest": "8fe630cc50e85c520aa3cc2f8df6a1ec56e1e595cde62548ae28e52d20d35c9d",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -16,7 +16,7 @@
     "direct_provider_transport_access": 38,
     "internal_module_import": 374,
     "non_public_cross_context_import": 530,
-    "undeclared_dependency": 353
+    "undeclared_dependency": 342
   },
   "exceptions": [
     {
@@ -505,22 +505,6 @@
       "subject": "monitoring>users:gravity-mvp/src/lib/users/user-service.ts",
       "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
       "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>identity_access/users"
-      ]
-    },
-    {
-      "fingerprint": "arch_c254fdb923e70af8b8e1f296",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/admin/reprocess-recordings/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "identity_access",
-      "subject": "monitoring>users:gravity-mvp/src/lib/users/user-service.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:operations_observability/monitoring>identity_access/users"
@@ -3057,22 +3041,6 @@
       ]
     },
     {
-      "fingerprint": "arch_de40c467ff5ed464320a41b4",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/settings/ai-call-keys/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "identity_access",
-      "subject": "settings>users:gravity-mvp/src/lib/users/user-service.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>identity_access/users"
-      ]
-    },
-    {
       "fingerprint": "arch_5ff04b81327a205dc7fce9f2",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/api/settings/ai-call-keys/route.ts",
@@ -3167,22 +3135,6 @@
       "subject": "settings>users:gravity-mvp/src/lib/users/user-service.ts",
       "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
       "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>identity_access/users"
-      ]
-    },
-    {
-      "fingerprint": "arch_b3e41eb2c5c3ed6dca974811",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/settings/ai-call-projects/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "identity_access",
-      "subject": "settings>users:gravity-mvp/src/lib/users/user-service.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:configuration/settings>identity_access/users"
@@ -3287,22 +3239,6 @@
       ]
     },
     {
-      "fingerprint": "arch_a6c352e279979a71d019aaa6",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/settings/ai-call-scenarios/[id]/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "identity_access",
-      "subject": "settings>users:gravity-mvp/src/lib/users/user-service.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>identity_access/users"
-      ]
-    },
-    {
       "fingerprint": "arch_7978adaa7e9ab21e0b9e8561",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/api/settings/ai-call-scenarios/[id]/route.ts",
@@ -3395,22 +3331,6 @@
       "subject": "settings>users:gravity-mvp/src/lib/users/user-service.ts",
       "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
       "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>identity_access/users"
-      ]
-    },
-    {
-      "fingerprint": "arch_270ac7f8b720f8c37f8a161b",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/settings/ai-call-scenarios/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "identity_access",
-      "subject": "settings>users:gravity-mvp/src/lib/users/user-service.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:configuration/settings>identity_access/users"
@@ -3566,22 +3486,6 @@
       ]
     },
     {
-      "fingerprint": "arch_a87f41f1c4333ba308913fc6",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/settings/telephony-connection/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "identity_access",
-      "subject": "settings>users:gravity-mvp/src/lib/users/user-service.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>identity_access/users"
-      ]
-    },
-    {
       "fingerprint": "arch_a3ebc607b6df3d24012e7c49",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/api/settings/telephony-connection/route.ts",
@@ -3640,22 +3544,6 @@
       "subject": "settings>users:gravity-mvp/src/lib/users/user-service.ts",
       "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
       "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>identity_access/users"
-      ]
-    },
-    {
-      "fingerprint": "arch_a12405b62d0ef60873a794b4",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/settings/telephony-status/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "identity_access",
-      "subject": "settings>users:gravity-mvp/src/lib/users/user-service.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:configuration/settings>identity_access/users"
@@ -11258,22 +11146,6 @@
       ]
     },
     {
-      "fingerprint": "arch_2f87e2510d27cdf2ff0fc5c4",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/settings/ai/actions.ts",
-      "line_at_baseline": 10,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "identity_access",
-      "subject": "settings>users:gravity-mvp/src/lib/users/user-service.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>identity_access/users"
-      ]
-    },
-    {
       "fingerprint": "arch_5e4eedf802906722b76cc0d0",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/settings/ai/actions.ts",
@@ -11869,22 +11741,6 @@
       ]
     },
     {
-      "fingerprint": "arch_123c3aa7a015fb4115618b7b",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/settings/ai/page.tsx",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "identity_access",
-      "subject": "settings>users:gravity-mvp/src/lib/users/user-service.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>identity_access/users"
-      ]
-    },
-    {
       "fingerprint": "arch_171bee68f9e53cd8f7fdec01",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/settings/api/page.tsx",
@@ -12285,22 +12141,6 @@
       "subject": "settings>users:gravity-mvp/src/lib/users/user-service.ts",
       "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
       "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>identity_access/users"
-      ]
-    },
-    {
-      "fingerprint": "arch_89e981e31ff8f0b1c9f4d281",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/settings/dictionaries/page.tsx",
-      "line_at_baseline": 14,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "identity_access",
-      "subject": "settings>users:gravity-mvp/src/lib/users/user-service.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:configuration/settings>identity_access/users"
@@ -14100,22 +13940,6 @@
       "subject": "settings>users:gravity-mvp/src/lib/users/user-service.ts",
       "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
       "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>identity_access/users"
-      ]
-    },
-    {
-      "fingerprint": "arch_1f028f5650942942b018e9c1",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/settings/integrations/telephony/page.tsx",
-      "line_at_baseline": 1,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "identity_access",
-      "subject": "settings>users:gravity-mvp/src/lib/users/user-service.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:configuration/settings>identity_access/users"

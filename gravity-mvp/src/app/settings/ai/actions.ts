@@ -74,20 +74,17 @@ import {
     setActiveAiProfileV1,
     updateAiAgentProfileV1,
 } from '@/modules/calling/public/v1'
+import { projectAiAgentConfigMetadata } from '@/modules/calling/public/v1/ai-agent-config-public-metadata'
+import { requireIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
 import { CANCEL_HISTORY_IMPORT_JOB_COMMAND_V1, DELETE_HISTORY_IMPORT_JOB_COMMAND_V1, QUEUE_HISTORY_IMPORT_JOB_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { cancelHistoryImportJobV1, deleteHistoryImportJobV1, queueHistoryImportJobV1 } from '@/modules/messaging/public/v1'
 
 // ─── Role guard ───────────────────────────────────────────────────
 //
-// UI уже скрывает кнопки настройки от менеджеров — но server actions
-// можно вызвать вручную через DevTools / fetch. Этот guard ставит
-// тот же чек на серверной стороне.
-//
-// ВАЖНО: НЕ используем общий getCurrentUser() — он fallback'ится на
-// `u3` (Руководитель) когда cookie crm_user_id отсутствует. Менеджер
-// мог бы удалить cookie через DevTools и обойти проверку. Здесь —
-// строгая логика: нет cookie → нет прав; пользователь не найден → нет
-// прав; роль не Администратор/Руководитель → нет прав.
+// UI hides configuration controls from managers, but server actions remain
+// directly callable. crm_user_id is an unsigned identity selector, so the
+// mutation boundary uses the independently authenticated integration-admin
+// session backed by the provisioned ADMIN_USER / ADMIN_PASS capability.
 //
 // Helper не exported: в файле с 'use server' все exported функции
 // становятся server actions, а нам нужна внутренняя проверка.
@@ -104,30 +101,61 @@ import { cancelHistoryImportJobV1, deleteHistoryImportJobV1, queueHistoryImportJ
 //   - create/update/deleteKnowledgeEntry
 //   - createImportJob / cancelImportJob / deleteImportJob
 async function assertCanEditAi() {
-    const cookieStore = await cookies()
-    const id = cookieStore.get('crm_user_id')?.value
-    if (!id) throw new Error('Недостаточно прав')
-    const users = await getUsers()
-    const user = users.find(u => u.id === id)
-    if (!user) throw new Error('Недостаточно прав')
-    if (user.role !== 'Администратор' && user.role !== 'Руководитель') {
-        throw new Error('Недостаточно прав')
-    }
+    // crm_user_id is an unsigned UI identity selector and cannot authorize
+    // credential/configuration changes. Require possession of the project
+    // administrator credential through the signed HttpOnly session instead.
+    await requireIntegrationAdminAccess()
 }
 
 // ─── AiAgentConfig ────────────────────────────────────────────────
 
 export async function getAiConfig() {
+    await requireIntegrationAdminAccess()
     try {
-        const rows = await prisma.$queryRaw<any[]>`SELECT * FROM "AiAgentConfig" WHERE id = 'singleton' LIMIT 1`
-        const cfg = rows[0] ?? null
+        const cfg = await prisma.aiAgentConfig.findUnique({
+            where: { id: 'singleton' },
+            select: {
+                id: true,
+                enabled: true,
+                mode: true,
+                provider: true,
+                apiKeyEncrypted: true,
+                classificationModel: true,
+                responseModel: true,
+                language: true,
+                confidenceThreshold: true,
+                maxAutoRepliesPerChat: true,
+                activeChannels: true,
+                escalationPolicy: true,
+                workingHours: true,
+                routingRules: true,
+                promptRole: true,
+                promptTone: true,
+                promptAllowed: true,
+                promptForbidden: true,
+                activeProfileId: true,
+                connectionStatus: true,
+                lastConnectionCheckAt: true,
+                extractionQualityTier: true,
+                extractionPromptVersion: true,
+                internEnabled: true,
+                createdAt: true,
+                updatedAt: true,
+            },
+        })
         // activeChannels — String[] без DB-default. Частичный первый INSERT в
         // saveAiConfig мог оставить колонку NULL, и клиент падал на
         // config.activeChannels.map(...) → "Cannot read properties of null
         // (reading 'map')" (вся страница /settings/ai = client-side exception).
         // Коалесцируем к [] здесь — защищает всех consumer'ов разом.
-        if (cfg && cfg.activeChannels == null) cfg.activeChannels = []
-        return cfg
+        if (!cfg) return null
+        return projectAiAgentConfigMetadata({
+            ...cfg,
+            activeChannels: cfg.activeChannels ?? [],
+            lastConnectionCheckAt: cfg.lastConnectionCheckAt?.toISOString() ?? null,
+            createdAt: cfg.createdAt.toISOString(),
+            updatedAt: cfg.updatedAt.toISOString(),
+        })
     } catch { return null }
 }
 
@@ -135,21 +163,20 @@ export async function saveAiConfig(data: Record<string, any>) {
     await assertCanEditAi()
     const fields = Object.keys(data)
     if (fields.length === 0) return null
-    const includesProviderCredential = fields.includes('apiKeyEncrypted')
+    const includesProviderCredential = fields.includes('providerCredential')
     try {
         const entries: Array<{ field: string; value: unknown }> = []
         const safeResult: Record<string, any> = {}
         for (const field of fields) {
-            if (field === 'apiKeyEncrypted') {
+            if (field === 'providerCredential') {
                 entries.push({
                     field: 'providerCredential',
                     value: data[field] === null
                         ? null
                         : captureAiAgentProviderCredentialV1(data[field]),
                 })
-            } else if (field === 'providerCredential') {
-                // Owner field names are not accepted on the legacy physical API.
-                // Route the name (never its value) into strict contract rejection.
+            } else if (field === 'apiKeyEncrypted') {
+                // Persistence field names are not part of the browser-facing API.
                 entries.push({ field: '__unsupported_provider_credential__', value: null })
             } else {
                 entries.push({ field, value: data[field] })

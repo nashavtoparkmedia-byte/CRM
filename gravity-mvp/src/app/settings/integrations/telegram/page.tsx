@@ -6,10 +6,12 @@ import { ExternalLink, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SectionDescription } from '@/components/ui/SectionDescription'
 import { PageContainer } from '@/components/ui/PageContainer'
+import { requireIntegrationAdminPageAccess } from '@/modules/identity-access/public/v1'
 
 export const dynamic = 'force-dynamic'
 
 export default async function TelegramSettingsPage() {
+    await requireIntegrationAdminPageAccess('/settings/integrations/telegram')
     const connections = await getTelegramConnections()
 
     return (
