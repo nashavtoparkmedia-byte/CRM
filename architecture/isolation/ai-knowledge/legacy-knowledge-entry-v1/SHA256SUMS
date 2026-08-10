@@ -1,10 +1,10 @@
 ca43529bdb704fa699348021d0cadf9eb43bf64dd3b6000b285b92e6b31abf2d  architecture/enforcement/v1/exceptions.json
 c6789b13a47ac8498b8864d5aa299b86abc9dd80ef8f588e9703e0c5ce59ecc3  architecture/enforcement/v1/policy.json
-e766e4402823368fac18faeec7515999c49c802a06aac36460565d9c9fe748f7  architecture/isolation/ai-knowledge/legacy-knowledge-entry-v1/BEHAVIOR-FREEZE.json
-e7603492db20923828c11d5e0cc1670799714119d6672a07d70dc5f74c950316  architecture/isolation/ai-knowledge/legacy-knowledge-entry-v1/CRM-ARCH-007R-AI-KNOWLEDGE-LEGACY-ENTRY-GATE.md
+41cb639520666e259bffe68ffbc3501a0f4ef25efe780f4ad6050181e593b810  architecture/isolation/ai-knowledge/legacy-knowledge-entry-v1/BEHAVIOR-FREEZE.json
+f75217bd116517562fd506d5fed5235d5cd8f2f9c90a6cfd123ceb81e1b6e21a  architecture/isolation/ai-knowledge/legacy-knowledge-entry-v1/CRM-ARCH-007R-AI-KNOWLEDGE-LEGACY-ENTRY-GATE.md
 3d65396931b1e3cd9bfcfe612a8763ea6605a7d06df6081d60cf4a68ffdca80d  architecture/isolation/ai-knowledge/legacy-knowledge-entry-v1/MUTATION_LEDGER.json
-1572bb3fcd8fc559787f046c8190be5764e617d7fbad60ea0068432021038a4b  architecture/isolation/ai-knowledge/legacy-knowledge-entry-v1/REVIEW-1-EXECUTOR.md
-19e1f9036a09ebde2194dbfc74a645f92a03ee2a928f41d46833f623907fc79f  architecture/isolation/ai-knowledge/legacy-knowledge-entry-v1/REVIEW-2-CRITIC.md
+2a4435573b8cbda78285ac9ffc52a483b0e730ffc74b3b630a56336048d72ce1  architecture/isolation/ai-knowledge/legacy-knowledge-entry-v1/REVIEW-1-EXECUTOR.md
+a46ce60f070179eedd7e5aa94dc89671ce0278e5fbd37344a6cde3c1badfe470  architecture/isolation/ai-knowledge/legacy-knowledge-entry-v1/REVIEW-2-CRITIC.md
 624a2f80567078e32a31bae3ca20e5196074c16af1049a344c22177ed699d0b1  architecture/isolation/ai-knowledge/legacy-knowledge-entry-v1/SELECTION.md
 0848f25b01b8609004815bf0e094296321be0fe1aa8c8abc1db1d4cd8393ef2e  architecture/isolation/ai-knowledge/legacy-knowledge-entry-v1/migration-manifest.json
 61ac699d9e973efa94fdf8ead901c004ac8a7b08a3c53fa90070baceb16fcce9  architecture/isolation/ai-knowledge/legacy-knowledge-entry-v1/module-manifest-amendments.json
