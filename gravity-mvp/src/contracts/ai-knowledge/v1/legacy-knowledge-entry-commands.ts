@@ -104,8 +104,9 @@ function object(value: unknown, key: string, allowed: readonly string[]): Record
 }
 
 function stringArray(value: unknown, key: string): void {
-    if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
-        invalid(`${key} must be an array of strings`)
+    if (!Array.isArray(value)) invalid(`${key} must be an array of strings`)
+    for (let index = 0; index < value.length; index += 1) {
+        if (typeof value[index] !== 'string') invalid(`${key} must be an array of strings`)
     }
 }
 

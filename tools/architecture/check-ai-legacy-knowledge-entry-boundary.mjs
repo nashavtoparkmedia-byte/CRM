@@ -16,6 +16,10 @@ const handler = read('gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-know
 const adapter = read('gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-legacy-knowledge-entry-adapter.ts')
 const publicIndex = read('gravity-mvp/src/modules/ai-knowledge/public/v1/index.ts')
 const consumer = read('gravity-mvp/src/app/settings/ai/actions.ts')
+const amendmentPath = 'architecture/isolation/ai-knowledge/legacy-knowledge-entry-v1/module-manifest-amendments.json'
+const amendment = JSON.parse(read(amendmentPath))
+const policy = JSON.parse(read('architecture/enforcement/v1/policy.json'))
+const registry = JSON.parse(read('architecture/enforcement/v1/exceptions.json'))
 const create = section(consumer, 'createKnowledgeEntry', 'updateKnowledgeEntry')
 const update = section(consumer, 'updateKnowledgeEntry', 'deleteKnowledgeEntry')
 const del = section(consumer, 'deleteKnowledgeEntry', 'getDecisionLogs')
@@ -114,6 +118,35 @@ check(
         return commandAt >= 0 && revalidateAt > commandAt && !body.includes('catch')
     }),
     'failure visibility or revalidation drift',
+)
+check(
+    'AI Knowledge manifest declares exactly the three owner commands',
+    amendment.amendments?.length === 1
+        && amendment.amendments[0].context === 'ai_knowledge'
+        && JSON.stringify(amendment.amendments[0].add_commands) === JSON.stringify([
+            'CreateLegacyKnowledgeEntryCommand.v1',
+            'UpdateLegacyKnowledgeEntryCommand.v1',
+            'DeleteLegacyKnowledgeEntryCommand.v1',
+        ]),
+    'manifest command amendment drift',
+)
+check(
+    'strict policy binds this milestone to the accepted parser parent',
+    policy.manifest_amendments.includes(amendmentPath)
+        && policy.registry_milestone === 'CRM-ARCH-007R-AI-KNOWLEDGE-LEGACY-ENTRY'
+        && policy.registry_base_commit === '4e77d30934665d69fb69f5156b235175dec3b67f',
+    'policy identity drift',
+)
+check(
+    'exact three findings retire with no replacement capacity',
+    registry.summary?.direct_foreign_prisma_write === 100
+        && registry.exceptions.length === 1430
+        && [
+            'arch_64afa85c372c669fd21c130a',
+            'arch_62f433aa20b6558ea65ba817',
+            'arch_cc4a675bb943a6e30726aa0d',
+        ].every((fingerprint) => !registry.exceptions.some((entry) => entry.fingerprint === fingerprint)),
+    'strict exception retirement drift',
 )
 
 process.stdout.write(`${JSON.stringify({ status: failures.length ? 'FAIL' : 'PASS', checks, failures }, null, 2)}\n`)

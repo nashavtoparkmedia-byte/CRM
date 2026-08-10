@@ -19,7 +19,7 @@ const ownerLocalDdlFiles = new Set([
 
 const checks = [
     ['all 12 owner-local DDL false findings are retired', direct.every((finding) => !ownerLocalDdlFiles.has(finding.file))],
-    ['103 genuine foreign or dynamic writes remain explicit', direct.length === 103],
+    ['no more than 103 genuine foreign or dynamic writes remain explicit', direct.length <= 103],
     ['no unexceptionable finding exists', scan.findings.every((finding) => !scan.policy.unexceptionable_rules.includes(finding.rule))],
     ['all source files remain classified', !scan.findings.some((finding) => finding.rule === 'unclassified_production_source')],
     ['effective dependency graph remains acyclic', !scan.findings.some((finding) => finding.rule === 'dependency_graph_cycle')],
