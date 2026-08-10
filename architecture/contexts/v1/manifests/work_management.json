@@ -102,6 +102,15 @@
       "current_writer_modules": [
         "tasks"
       ],
+      "id": "gravity-mvp/prisma/schema.prisma:scenario_field_settings",
+      "mapped_table": null,
+      "model": "scenario_field_settings",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "tasks"
+      ],
       "id": "runtime_raw_sql:usage_events",
       "mapped_table": "usage_events",
       "model": "usage_events",

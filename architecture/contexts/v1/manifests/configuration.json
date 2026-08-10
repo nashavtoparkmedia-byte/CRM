@@ -110,15 +110,6 @@
       "mapped_table": null,
       "model": "config_change_log",
       "schema": "gravity-mvp/prisma/schema.prisma"
-    },
-    {
-      "current_writer_modules": [
-        "tasks"
-      ],
-      "id": "gravity-mvp/prisma/schema.prisma:scenario_field_settings",
-      "mapped_table": null,
-      "model": "scenario_field_settings",
-      "schema": "gravity-mvp/prisma/schema.prisma"
     }
   ],
   "protected": true,

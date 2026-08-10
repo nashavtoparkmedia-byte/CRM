@@ -36,6 +36,7 @@ export {
 } from './complete-task-command'
 
 export * from './contact-retention-command'
+export * from './scenario-field-settings'
 
 export type {
     CompleteTaskCommandV1,

@@ -6,6 +6,12 @@ import { legacyPrismaTaskAssignmentPortV1 } from './legacy-prisma-assignment-ada
 import { legacyPrismaTaskCompletionPortV1 } from './legacy-prisma-completion-adapter'
 import { createDetachContactTasksHandlerV1 } from './contact-retention-handler'
 import { legacyPrismaContactTaskRetentionPortV1 } from './legacy-prisma-contact-retention-adapter'
+import {
+  createGetMergedScenarioFieldsHandlerV1,
+  createResetScenarioFieldSettingHandlerV1,
+  createUpsertScenarioFieldSettingHandlerV1,
+} from './scenario-field-settings-handler'
+import { legacyPrismaScenarioFieldSettingsPortV1 } from './legacy-prisma-scenario-field-settings-adapter'
 
 export { createCreateTaskHandlerV1 } from './create-task-handler'
 export type { CreateTaskPersistencePortV1 } from './create-task-handler'
@@ -21,3 +27,18 @@ export const completeTaskV1 = createCompleteTaskHandlerV1(legacyPrismaTaskComple
 export { createDetachContactTasksHandlerV1 } from './contact-retention-handler'
 export type { ContactTaskRetentionPersistencePortV1 } from './contact-retention-handler'
 export const detachContactTasksV1 = createDetachContactTasksHandlerV1(legacyPrismaContactTaskRetentionPortV1)
+export {
+  createGetMergedScenarioFieldsHandlerV1,
+  createResetScenarioFieldSettingHandlerV1,
+  createUpsertScenarioFieldSettingHandlerV1,
+} from './scenario-field-settings-handler'
+export type { ScenarioFieldSettingsPersistencePortV1 } from './scenario-field-settings-handler'
+export const getMergedScenarioFieldsV1 = createGetMergedScenarioFieldsHandlerV1(
+  legacyPrismaScenarioFieldSettingsPortV1,
+)
+export const upsertScenarioFieldSettingV1 = createUpsertScenarioFieldSettingHandlerV1(
+  legacyPrismaScenarioFieldSettingsPortV1,
+)
+export const resetScenarioFieldSettingV1 = createResetScenarioFieldSettingHandlerV1(
+  legacyPrismaScenarioFieldSettingsPortV1,
+)
