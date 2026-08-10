@@ -35,6 +35,8 @@ export {
     parseCompleteTaskCommandV1,
 } from './complete-task-command'
 
+export * from './contact-retention-command'
+
 export type {
     CompleteTaskCommandV1,
     CompleteTaskResultV1,

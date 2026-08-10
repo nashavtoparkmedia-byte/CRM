@@ -34,6 +34,8 @@ import { createDeleteConversationsByIdHandlerV1,createDeleteLegacyExternalConver
 import { legacyPrismaChannelMaintenancePortV1 } from './legacy-prisma-channel-maintenance-adapter'
 import { createRunCommunicationEventRetentionHandlerV1 } from './communication-event-retention-handler'
 import { legacyPrismaCommunicationEventRetentionPortV1 } from './legacy-prisma-communication-event-retention-adapter'
+import { createDetachContactConversationsHandlerV1 } from './contact-retention-handler'
+import { legacyPrismaContactConversationRetentionPortV1 } from './legacy-prisma-contact-retention-adapter'
 
 export { createAttachMessageMediaHandlerV1 } from './attach-message-media-handler'
 export type { AttachMessageMediaPersistencePortV1 } from './attach-message-media-handler'
@@ -112,3 +114,6 @@ export const deleteConversationsByIdV1=createDeleteConversationsByIdHandlerV1(le
 export { createRunCommunicationEventRetentionHandlerV1 } from './communication-event-retention-handler'
 export type { CommunicationEventRetentionPersistencePortV1 } from './communication-event-retention-handler'
 export const runCommunicationEventRetentionV1=createRunCommunicationEventRetentionHandlerV1(legacyPrismaCommunicationEventRetentionPortV1)
+export { createDetachContactConversationsHandlerV1 } from './contact-retention-handler'
+export type { ContactConversationRetentionPersistencePortV1 } from './contact-retention-handler'
+export const detachContactConversationsV1=createDetachContactConversationsHandlerV1(legacyPrismaContactConversationRetentionPortV1)

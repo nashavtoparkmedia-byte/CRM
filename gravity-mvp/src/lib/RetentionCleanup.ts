@@ -1,9 +1,13 @@
 import { prisma } from '@/lib/prisma'
 import { opsLog } from '@/lib/opsLog'
 import { RUN_API_LOG_RETENTION_COMMAND_V1, RUN_DRIVER_EVENT_RETENTION_COMMAND_V1 } from '@/contracts/fleet-operations/v1'
-import { DELETE_RETAINED_MESSAGES_COMMAND_V1, PURGE_MESSAGE_RETRY_METADATA_COMMAND_V1, RUN_COMMUNICATION_EVENT_RETENTION_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { DELETE_CONTACT_FOR_RETENTION_COMMAND_V1 } from '@/contracts/contacts/v1'
+import { DELETE_RETAINED_MESSAGES_COMMAND_V1, DETACH_CONTACT_CONVERSATIONS_COMMAND_V1, PURGE_MESSAGE_RETRY_METADATA_COMMAND_V1, RUN_COMMUNICATION_EVENT_RETENTION_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { DETACH_CONTACT_TASKS_COMMAND_V1 } from '@/contracts/work-management/v1'
+import { deleteContactForRetentionV1 } from '@/modules/contacts/public/v1'
 import { runApiLogRetentionV1, runDriverEventRetentionV1 } from '@/modules/fleet-operations/public/v1'
-import { deleteRetainedMessagesV1, purgeMessageRetryMetadataV1, runCommunicationEventRetentionV1 } from '@/modules/messaging/public/v1'
+import { deleteRetainedMessagesV1, detachContactConversationsV1, purgeMessageRetryMetadataV1, runCommunicationEventRetentionV1 } from '@/modules/messaging/public/v1'
+import { detachContactTasksV1 } from '@/modules/work-management/public/v1'
 
 /**
  * RetentionCleanup — bounded, idempotent data lifecycle cleanup.
@@ -243,9 +247,18 @@ export class RetentionCleanup {
       if (!dryRun) {
         // Cascade: ContactPhone, ContactIdentity deleted automatically
         // Must first unlink chats and tasks
-        await prisma.$executeRaw`UPDATE "Chat" SET "contactId" = NULL, "contactIdentityId" = NULL WHERE "contactId" = ${id}`
-        await prisma.$executeRaw`UPDATE "tasks" SET "contactId" = NULL WHERE "contactId" = ${id}`
-        await prisma.$executeRaw`DELETE FROM "Contact" WHERE id = ${id}`
+        await detachContactConversationsV1({
+          contract: DETACH_CONTACT_CONVERSATIONS_COMMAND_V1,
+          contactId: id,
+        })
+        await detachContactTasksV1({
+          contract: DETACH_CONTACT_TASKS_COMMAND_V1,
+          contactId: id,
+        })
+        await deleteContactForRetentionV1({
+          contract: DELETE_CONTACT_FOR_RETENTION_COMMAND_V1,
+          contactId: id,
+        })
       }
       deleted++
     }
