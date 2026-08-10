@@ -110,8 +110,8 @@
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007R-CALLING-AI-AGENT-CONFIG",
-  "registry_base_commit": "f61d39832252994b96f4f5aba525c125561c19f2",
+  "registry_milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
+  "registry_base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",
