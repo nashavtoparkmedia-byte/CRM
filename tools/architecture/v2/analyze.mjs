@@ -429,11 +429,12 @@ function revealShellPayload(searchable, text, bodyStart, bodyEnd) {
   }
 }
 
-function executableQuotedCommandText(text) {
+function executableQuotedCommandText(text, options = {}) {
   const masked = maskQuotedAndCommentText(text)
   const commentMasked = maskCommentText(text)
   const searchable = [...masked]
-  const importsChildProcess = /(?:from\s*|require\s*\(\s*)['"](?:node:)?child_process['"]/u.test(text)
+  const importsChildProcess = Boolean(options.assumeNodeChildProcess)
+    || /(?:from\s*|require\s*\(\s*)['"](?:node:)?child_process['"]/u.test(text)
   // Parse exec-form Docker/YAML arrays independently. A generic quote walker
   // can be desynchronized by unrelated shell quoting earlier in the file,
   // while the array itself is a bounded one-line grammar.
@@ -495,7 +496,7 @@ function executableQuotedCommandText(text) {
  */
 export function mixedDatabaseCommandSinks(text, options = {}) {
   const staticFragments = options.staticFragments ?? mixedSqlFragments(text)
-  const masked = executableQuotedCommandText(text)
+  const masked = executableQuotedCommandText(text, options)
   const commandPatterns = [
     /\b(pg_restore|pg_dump|mysqldump|psql|mysql|sqlite3|sqlcmd)\b|\bprisma\s+(migrate\s+(?:deploy|dev|reset|resolve)|db\s+(?:push|execute))\b/giu,
     DATABASE_DYNAMIC_METHOD_SINK,
@@ -581,7 +582,7 @@ export function mixedDatabaseCommandSinks(text, options = {}) {
   ))
 }
 
-export function standaloneSqlSites(surface, text, mixedLanguage = false) {
+export function standaloneSqlSites(surface, text, mixedLanguage = false, options = {}) {
   const fragments = mixedLanguage
     ? mixedSqlFragments(text)
     : [{ sql: text, index: 0, source: 'standalone_sql' }]
@@ -590,6 +591,7 @@ export function standaloneSqlSites(surface, text, mixedLanguage = false) {
     analysis: analyzeSqlScript(fragment.sql, { forceDynamic: mixedLanguage }),
   }))
   const commandSinks = mixedLanguage ? mixedDatabaseCommandSinks(text, {
+    ...options,
     staticFragments: analyses
       .filter(({ analysis }) => analysis.operations.length > 0 || (analysis.read_tables ?? []).length > 0)
       .map(({ fragment }) => fragment),
@@ -672,7 +674,13 @@ export function standaloneSqlSites(surface, text, mixedLanguage = false) {
 }
 
 export function javascriptDatabaseCommandSites(surface, text) {
-  return standaloneSqlSites(surface, text, true).filter((site) => (
+  // Most JS-family files cannot launch a database CLI and should not pay the
+  // mixed-shell quote-walker cost. Keep direct `exec`/`spawn` fixtures
+  // detectable, but enter the route only when a supported CLI is present.
+  if (!/\b(?:pg_restore|pg_dump|mysqldump|psql|mysql|sqlite3|sqlcmd)\b|\bprisma\s+(?:migrate|db)\b/iu.test(text)) {
+    return []
+  }
+  return standaloneSqlSites(surface, text, true, { assumeNodeChildProcess: true }).filter((site) => (
     site.method.startsWith('mixed-script-command:')
   ))
 }

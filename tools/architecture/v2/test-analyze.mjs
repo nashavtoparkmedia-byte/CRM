@@ -195,6 +195,9 @@ for (const command of languageExecutionCommands) {
   )
 }
 for (const source of [
+  "exec('pg_restore -d crm backup.dump')",
+  "spawn('pg_restore', ['-d', 'crm', 'backup.dump'])",
+  "execFile('pg_restore', ['-d', 'crm', 'backup.dump'])",
   "import { exec } from 'node:child_process'; exec('pg_restore -d crm backup.dump')",
   "const { spawn } = require('child_process'); spawn('pg_restore', ['-d', 'crm', 'backup.dump'])",
   "const cp = require('node:child_process'); cp.execFile('pg_restore', ['-d', 'crm', 'backup.dump'])",
