@@ -15,6 +15,10 @@ const messagingContract = read('gravity-mvp/src/contracts/messaging/v1/communica
 const messagingHandler = read('gravity-mvp/src/modules/messaging/public/v1/communication-event-retention-handler.ts')
 const messagingAdapter = read('gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-communication-event-retention-adapter.ts')
 const consumer = read('gravity-mvp/src/lib/RetentionCleanup.ts')
+const amendmentPath = 'architecture/isolation/operations-observability/event-retention-v1/module-manifest-amendments.json'
+const amendment = JSON.parse(read(amendmentPath))
+const policy = JSON.parse(read('architecture/enforcement/v1/policy.json'))
+const registry = JSON.parse(read('architecture/enforcement/v1/exceptions.json'))
 const contracts = fleetContract + messagingContract
 const handlers = fleetHandler + messagingHandler
 const adapters = fleetAdapter + messagingAdapter
@@ -225,6 +229,38 @@ check(
   'outer error policy retained',
   consumer.includes("opsLog('error', 'retention_cleanup_error', { error: err.message, dryRun })"),
   'runAll error policy drift',
+)
+check(
+  'owner manifest commands exact',
+  amendment.amendments?.length === 2 &&
+    amendment.amendments[0].context === 'fleet_operations' &&
+    JSON.stringify(amendment.amendments[0].add_commands) === JSON.stringify([
+      'RunDriverEventRetentionCommand.v1',
+      'RunApiLogRetentionCommand.v1',
+    ]) &&
+    amendment.amendments[1].context === 'messaging' &&
+    JSON.stringify(amendment.amendments[1].add_commands) === JSON.stringify([
+      'RunCommunicationEventRetentionCommand.v1',
+    ]),
+  'owner manifest command amendment drift',
+)
+check(
+  'strict policy binds milestone to accepted AI parent',
+  policy.manifest_amendments.includes(amendmentPath) &&
+    policy.registry_milestone === 'CRM-ARCH-007R-EVENT-RETENTION' &&
+    policy.registry_base_commit === '2ff1a6ff7a0605f11bdd8e9e6157c93dd1415056',
+  'policy identity drift',
+)
+check(
+  'exact generic dynamic write retires with no replacement capacity',
+  registry.summary?.direct_foreign_prisma_write === 99 &&
+    registry.exceptions.length === 1429 &&
+    !registry.exceptions.some((entry) => entry.fingerprint === 'arch_d6b0723094e2555809f66a51') &&
+    !registry.exceptions.some((entry) => [
+      'gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-event-retention-adapter.ts',
+      'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-communication-event-retention-adapter.ts',
+    ].includes(entry.file)),
+  'strict exception retirement or owner-local classification drift',
 )
 
 process.stdout.write(`${JSON.stringify({

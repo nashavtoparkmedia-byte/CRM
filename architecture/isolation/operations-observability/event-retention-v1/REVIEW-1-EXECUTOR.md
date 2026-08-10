@@ -1,0 +1,3 @@
+# Review 1 — executor
+
+`PASS_WITH_SCOPE_CONFIRMED`. The generic `_cleanupTable` policy surface and unsafe dynamic write are removed. Three strict owner commands retain fixed tagged database-clock selections, strict cutoffs, oldest-first limits, dry-run/empty guards, exact selected-ID deletion, selected-count reporting, full phase order, between-phase deadline checks and outer control flow. No transaction or in-flight cancellation was added. Typed owner-local `deleteMany` can change generated SQL and exact error-log wording, but failure propagation is preserved. No dynamic write, provider, credential, retention job, database execution or runtime activation was introduced.

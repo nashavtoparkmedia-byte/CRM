@@ -18,6 +18,7 @@ const publicIndex = read('gravity-mvp/src/modules/ai-knowledge/public/v1/index.t
 const consumer = read('gravity-mvp/src/app/settings/ai/actions.ts')
 const amendmentPath = 'architecture/isolation/ai-knowledge/legacy-knowledge-entry-v1/module-manifest-amendments.json'
 const amendment = JSON.parse(read(amendmentPath))
+const migration = JSON.parse(read('architecture/isolation/ai-knowledge/legacy-knowledge-entry-v1/migration-manifest.json'))
 const policy = JSON.parse(read('architecture/enforcement/v1/policy.json'))
 const registry = JSON.parse(read('architecture/enforcement/v1/exceptions.json'))
 const create = section(consumer, 'createKnowledgeEntry', 'updateKnowledgeEntry')
@@ -131,16 +132,19 @@ check(
     'manifest command amendment drift',
 )
 check(
-    'strict policy binds this milestone to the accepted parser parent',
+    'accepted AI evidence stays bound to the parser parent',
     policy.manifest_amendments.includes(amendmentPath)
-        && policy.registry_milestone === 'CRM-ARCH-007R-AI-KNOWLEDGE-LEGACY-ENTRY'
-        && policy.registry_base_commit === '653a802149a3526bd3ec99d24f71f00a88be81ef',
-    'policy identity drift',
+        && migration.base_commit === '653a802149a3526bd3ec99d24f71f00a88be81ef'
+        && migration.enforcement?.before === 1433
+        && migration.enforcement?.after === 1430
+        && migration.enforcement?.direct_before === 103
+        && migration.enforcement?.direct_after === 100,
+    'accepted AI evidence identity drift',
 )
 check(
-    'exact three findings retire with no replacement capacity',
-    registry.summary?.direct_foreign_prisma_write === 100
-        && registry.exceptions.length === 1430
+    'exact three findings remain retired with no replacement capacity',
+    registry.summary?.direct_foreign_prisma_write <= 100
+        && registry.exceptions.length <= 1430
         && [
             'arch_4e0297ee9451d50de1fed034',
             'arch_1ad0c6177270bb0f0879e098',

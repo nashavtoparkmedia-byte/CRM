@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007R-AI-KNOWLEDGE-LEGACY-ENTRY",
-  "base_commit": "653a802149a3526bd3ec99d24f71f00a88be81ef",
+  "milestone": "CRM-ARCH-007R-EVENT-RETENTION",
+  "base_commit": "2ff1a6ff7a0605f11bdd8e9e6157c93dd1415056",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "a4af9a9feea6a2adb3cdb3ba8930ceacbe40fb640f51d3ccbba896b44350f074",
+  "finding_digest": "ae22ad6cd340192e3fe0c1e08c05e3c355016182e19ec468e39cd87ab298927a",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,7 +13,7 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 100,
+    "direct_foreign_prisma_write": 99,
     "direct_provider_transport_access": 38,
     "internal_module_import": 379,
     "non_public_cross_context_import": 536,
@@ -22882,28 +22882,11 @@
       ]
     },
     {
-      "fingerprint": "arch_d6b0723094e2555809f66a51",
-      "site_signature": "53550ee29f3618cd9497c0aed0381a06c71d9660dda98fd8c48bc41aed72efb2",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/RetentionCleanup.ts",
-      "line_at_baseline": 206,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": null,
-      "subject": "raw:$executeRawUnsafe:dynamic",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_0ed08765d767793e"
-      ]
-    },
-    {
       "fingerprint": "arch_268626904318c85d53361d4e",
       "site_signature": "6a1db173fb864e990b17a938497973418ac6311ce4d4026618db332f6448e980",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/lib/RetentionCleanup.ts",
-      "line_at_baseline": 251,
+      "line_at_baseline": 246,
       "ordinal": 1,
       "owner_context": "operations_observability",
       "target_context": null,
@@ -22923,7 +22906,7 @@
       "site_signature": "b1b1b686a64127d41015ee0dea74aea52f8da219eb58d606230d49ef193cca78",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/lib/RetentionCleanup.ts",
-      "line_at_baseline": 252,
+      "line_at_baseline": 247,
       "ordinal": 1,
       "owner_context": "operations_observability",
       "target_context": null,
@@ -22943,7 +22926,7 @@
       "site_signature": "db81cc449148816579cf71205da7a9bae6bfa88d3577f1e6276c58993e7ed3b5",
       "rule": "direct_foreign_prisma_write",
       "file": "gravity-mvp/src/lib/RetentionCleanup.ts",
-      "line_at_baseline": 253,
+      "line_at_baseline": 248,
       "ordinal": 1,
       "owner_context": "operations_observability",
       "target_context": null,
