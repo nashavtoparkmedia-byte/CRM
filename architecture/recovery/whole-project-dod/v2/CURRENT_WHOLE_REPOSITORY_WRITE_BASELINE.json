@@ -1,14 +1,14 @@
 {
-  "analysis_sha256": "564763463a95727205fb0c7d1cb7b1461af9b53cd68894297a9570d399de043d",
+  "analysis_sha256": "ff9cf149dc1d02d583d1184415f4a475c079a4174d9eb60d1b3d54180172de1b",
   "execution": {
     "ambiguous_candidates": 275,
     "complete": true,
-    "elapsed_ms": 276275.345693,
+    "elapsed_ms": 279344.245489,
     "failures": [],
     "files_completed": 1693,
     "files_discovered": 1693,
     "mode": "fresh_process_per_javascript_surface",
-    "progress_every": 125,
+    "progress_every": 150,
     "worker_failures": 0,
     "worker_limit": 4,
     "worker_timeout_ms": 120000,
@@ -61,17 +61,19 @@
       },
       "by_lifecycle": {
         "APPLICATION_RUNTIME": 979,
+        "DEAD_HISTORICAL": 29,
         "FIXTURE": 1,
         "MIGRATION": 48,
-        "OPERATIONAL_SCRIPT": 411,
+        "OPERATIONAL_SCRIPT": 382,
         "TEST": 254
       },
       "operational_dispositions": {
+        "DEAD_HISTORICAL": 29,
         "MIGRATION_ONLY": 48,
-        "UNREVIEWED": 411
+        "UNREVIEWED": 382
       },
       "tracked_executable_surfaces": 1693,
-      "unreviewed_operational_surfaces": 411
+      "unreviewed_operational_surfaces": 382
     },
     "surfaces": [
       {
@@ -768,48 +770,48 @@
         "registry_classified": false
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_actions_standards.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_actions_standards2.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_actions_standards3.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_all_nav.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
         "disposition": "UNREVIEWED",
@@ -823,268 +825,268 @@
         "registry_classified": false
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_due_date_edit.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_due_date_show_picker.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_log_actor.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_missing_imports.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_nav_back_to_settings.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_nav_icons.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_nav.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_pane_header_title.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_pane_quick_actions.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_pane_status_icon.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_pane_status_syntax.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_pane_syntax_bracket.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_pane_syntax.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_postponed_layout.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_scroll.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_syntax_extras.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_tags.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_task_event_cookies.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_task_event_cookies2.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_topbar_custom_select.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_topbar_logout.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_topbar_rbac.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_users_delete.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_users_rbac.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
         "disposition": "UNREVIEWED",
@@ -1681,15 +1683,15 @@
         "registry_classified": false
       },
       {
-        "disposition": "UNREVIEWED",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/real_sync.js",
         "production_capability": "UNKNOWN",
-        "rationale": null,
-        "registry_classified": false
+        "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence.",
+        "registry_classified": true
       },
       {
         "disposition": "UNREVIEWED",
@@ -18702,9 +18704,9 @@
   "parse_findings": [],
   "schema": "yoko.crm.whole-repository-write-analysis.v2",
   "source": {
-    "git_commit": "d7cea0be2fa3aec15c50b4e6233c0b1a2a32938c",
+    "git_commit": "6cddd31fb4ee12c01c39ddfb467d970b8a541f82",
     "git_tracked_only": true,
-    "git_tree": "664207060acb4f544a102975a769822aef28b5c6",
+    "git_tree": "8e1f93f5bfa5aed8491f571e4e3b5b077b22e3b6",
     "inventory_schema": "yoko.crm.tracked-executable-surface-inventory.v2",
     "repository_root": ".",
     "tracked_worktree_clean": true,
@@ -18722,7 +18724,7 @@
     "raw_sql_writes": 869,
     "test_writes": 259,
     "tracked_executable_surfaces": 1693,
-    "unreviewed_operational_surfaces": 411
+    "unreviewed_operational_surfaces": 382
   },
   "write_sites": [
     {

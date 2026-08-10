@@ -1,0 +1,380 @@
+{
+  "schema": "yoko.crm.lifecycle-classification-registry.v1",
+  "generated_at": "2026-08-10T23:15:13.375Z",
+  "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
+  "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
+  "summary": {
+    "classified_test": 32,
+    "classified_dead_historical": 29,
+    "classified_total": 61,
+    "unclassified_operational_remaining": 382
+  },
+  "surfaces": [
+    {
+      "path": "gravity-mvp/scripts/smoke_ai_persistence.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/smoke_dev_simulate.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/smoke_explainability_pr4.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/smoke_extraction_pr2.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/smoke_governance_pr2_5.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/smoke_knowledge_pr1.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/smoke_legacy_migration_pr5.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/smoke_pii_check.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/smoke_production_polish_pr5.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/smoke_readiness_pr5.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/smoke_retrieval_pr3.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/smoke_source_control_pr7.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/smoke_trusted_guard_pr6.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/verify-channel-lifecycle.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/verify-contact-merge-v2.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/verify-data.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/verify-deployment.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/verify-e2e-production.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/verify-fix.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/verify-fix.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/verify-lifecycle.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/verify-merge.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/verify-ops-iter2.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/verify-ops.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/verify-reliability.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/verify-workflow.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/verify_channels.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/verify-final-counts.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/verify-max-webhook.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "tg-bot/verify-api-response.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "tg-bot/verify-integration.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "tg-bot/verify-unique-stats.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/fix_actions_standards.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/fix_actions_standards2.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/fix_actions_standards3.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/fix_all_nav.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/fix_due_date_edit.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/fix_due_date_show_picker.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/fix_log_actor.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/fix_missing_imports.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/fix_nav_back_to_settings.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/fix_nav_icons.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/fix_nav.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/fix_pane_header_title.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/fix_pane_quick_actions.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/fix_pane_status_icon.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/fix_pane_status_syntax.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/fix_pane_syntax_bracket.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/fix_pane_syntax.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/fix_postponed_layout.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/fix_scroll.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/fix_syntax_extras.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/fix_tags.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/fix_task_event_cookies.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/fix_task_event_cookies2.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/fix_topbar_custom_select.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/fix_topbar_logout.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/fix_topbar_rbac.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/fix_users_delete.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/fix_users_rbac.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    },
+    {
+      "path": "gravity-mvp/real_sync.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "Nonportable developer-path patcher or historical one-shot synchronizer; no package-script or runtime import reference found; retained as historical evidence."
+    }
+  ]
+}
