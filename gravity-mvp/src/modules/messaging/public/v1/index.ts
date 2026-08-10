@@ -32,6 +32,8 @@ import { createAttachBinaryMessageMediaHandlerV1 } from './attach-binary-message
 import { legacyPrismaAttachBinaryMessageMediaPortV1 } from './legacy-prisma-attach-binary-message-media-adapter'
 import { createDeleteConversationsByIdHandlerV1,createDeleteLegacyExternalConversationsHandlerV1,createDeleteQueuedMessagesForConnectionHandlerV1,createDeliverQueuedMessagesForConnectionHandlerV1 } from './channel-maintenance-handler'
 import { legacyPrismaChannelMaintenancePortV1 } from './legacy-prisma-channel-maintenance-adapter'
+import { createRunCommunicationEventRetentionHandlerV1 } from './communication-event-retention-handler'
+import { legacyPrismaCommunicationEventRetentionPortV1 } from './legacy-prisma-communication-event-retention-adapter'
 
 export { createAttachMessageMediaHandlerV1 } from './attach-message-media-handler'
 export type { AttachMessageMediaPersistencePortV1 } from './attach-message-media-handler'
@@ -107,3 +109,6 @@ export const deliverQueuedMessagesForConnectionV1=createDeliverQueuedMessagesFor
 export const deleteQueuedMessagesForConnectionV1=createDeleteQueuedMessagesForConnectionHandlerV1(legacyPrismaChannelMaintenancePortV1)
 export const deleteLegacyExternalConversationsV1=createDeleteLegacyExternalConversationsHandlerV1(legacyPrismaChannelMaintenancePortV1)
 export const deleteConversationsByIdV1=createDeleteConversationsByIdHandlerV1(legacyPrismaChannelMaintenancePortV1)
+export { createRunCommunicationEventRetentionHandlerV1 } from './communication-event-retention-handler'
+export type { CommunicationEventRetentionPersistencePortV1 } from './communication-event-retention-handler'
+export const runCommunicationEventRetentionV1=createRunCommunicationEventRetentionHandlerV1(legacyPrismaCommunicationEventRetentionPortV1)

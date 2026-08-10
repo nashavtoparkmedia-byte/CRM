@@ -14,6 +14,8 @@ import { createCreateApiConnectionHandlerV1,createDeleteApiConnectionHandlerV1,c
 import { legacyPrismaApiConnectionPortV1 } from './legacy-prisma-api-connection-adapter'
 import { createMirrorDriverActionResultHandlerV1,createRecordDriverActionHandlerV1 } from './driver-action-handler'
 import { legacyPrismaDriverActionPortV1 } from './legacy-prisma-driver-action-adapter'
+import { createRunApiLogRetentionHandlerV1,createRunDriverEventRetentionHandlerV1 } from './event-retention-handler'
+import { legacyPrismaFleetEventRetentionPortV1 } from './legacy-prisma-event-retention-adapter'
 export { createUpdateDriverStateHandlerV1 } from './update-driver-state-handler'
 export type { UpdateDriverStatePersistencePortV1 } from './update-driver-state-handler'
 export const updateDriverStateV1=createUpdateDriverStateHandlerV1(legacyPrismaUpdateDriverStatePortV1)
@@ -42,3 +44,7 @@ export { createMirrorDriverActionResultHandlerV1,createRecordDriverActionHandler
 export type { DriverActionPersistencePortV1 } from './driver-action-handler'
 export const recordDriverActionV1=createRecordDriverActionHandlerV1(legacyPrismaDriverActionPortV1)
 export const mirrorDriverActionResultV1=createMirrorDriverActionResultHandlerV1(legacyPrismaDriverActionPortV1)
+export { createRunApiLogRetentionHandlerV1,createRunDriverEventRetentionHandlerV1 } from './event-retention-handler'
+export type { FleetEventRetentionPersistencePortV1 } from './event-retention-handler'
+export const runDriverEventRetentionV1=createRunDriverEventRetentionHandlerV1(legacyPrismaFleetEventRetentionPortV1)
+export const runApiLogRetentionV1=createRunApiLogRetentionHandlerV1(legacyPrismaFleetEventRetentionPortV1)
