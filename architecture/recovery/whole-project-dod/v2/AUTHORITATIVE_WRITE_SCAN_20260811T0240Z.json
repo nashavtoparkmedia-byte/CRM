@@ -1,0 +1,47 @@
+{
+  "schema": "yoko.crm.authoritative-write-scan-record.v1",
+  "generated_at": "2026-08-10T23:14:56.825Z",
+  "authority": "Bounded authoritative whole-repository scan with lifecycle-only TEST classifications for verification/smoke harnesses; no ownership manifest change, current ledger materialization, not READY.",
+  "inputs": {
+    "previous_baseline_sha256": "118c886e4276f51f0e85f66abe9aa5db87c049e032b174fb99e492c2b37dbebe",
+    "lifecycle_registry": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_TEST_CLASSIFICATION_REGISTRY.json",
+    "analyzer": "tools/architecture/v2/analyze.mjs",
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_TEST_LIFECYCLE.json"
+  },
+  "output": {
+    "baseline": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json",
+    "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
+    "analysis_sha256": "564763463a95727205fb0c7d1cb7b1461af9b53cd68894297a9570d399de043d",
+    "triage_sha256": "7266142388b6a5830f2c1dbddb434773e4984d04d85ad82e8c4c85ca6f296b1b"
+  },
+  "execution": {
+    "ambiguous_candidates": 275,
+    "complete": true,
+    "elapsed_ms": 276275.345693,
+    "failures": [],
+    "files_completed": 1693,
+    "files_discovered": 1693,
+    "mode": "fresh_process_per_javascript_surface",
+    "progress_every": 125,
+    "worker_failures": 0,
+    "worker_limit": 4,
+    "worker_timeout_ms": 120000,
+    "worker_timeouts": 0,
+    "writes_discovered": 1478
+  },
+  "summary": {
+    "ambiguous_writes": 275,
+    "discovered_write_sites": 1478,
+    "foreign_writes": 0,
+    "historical_dead_writes": 0,
+    "migration_only_writes": 468,
+    "operational_script_writes": 205,
+    "owner_writes": 476,
+    "parse_findings": 0,
+    "raw_sql_writes": 869,
+    "test_writes": 259,
+    "tracked_executable_surfaces": 1693,
+    "unreviewed_operational_surfaces": 411
+  },
+  "verdict": "NOT_READY_REQUIRES_AMBIGUITY_AND_OPERATIONAL_CLOSURE"
+}
