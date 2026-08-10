@@ -194,28 +194,23 @@ check(
   'manifest amendment widened or added a dependency',
 )
 check(
-  'strict policy and migration bind the slice to the accepted manager-health parent',
+  'strict policy retains the amendment and migration binds the slice to the accepted manager-health parent',
   policy.manifest_amendments.includes(amendmentPath) &&
-    policy.registry_milestone === 'CRM-ARCH-007R-CONVERSATION-CONTACT-LINK' &&
-    policy.registry_base_commit === '9765eb7202bfe07aa54e137d5e96c8d728c0372f' &&
     migration.base_commit === '9765eb7202bfe07aa54e137d5e96c8d728c0372f' &&
     migration.source_commit === '3c59b2733a6032a7cb1f02be3c42af8a13a0f3ab',
   'policy or evidence identity drift',
 )
 check(
-  'exact current strict registry retires only the accepted write without owner-local replacement capacity',
-  registry.milestone === 'CRM-ARCH-007R-CONVERSATION-CONTACT-LINK' &&
-    registry.base_commit === '9765eb7202bfe07aa54e137d5e96c8d728c0372f' &&
-    registry.finding_digest === '5b21c2b965d736b5451a92a56fb6dfb4dff17c179919b25a795c7ed584349e73' &&
-    registry.exceptions.length === 1407 &&
-    registry.summary?.direct_foreign_prisma_write === 84 &&
-    registry.summary?.direct_provider_transport_access === 38 &&
-    registry.summary?.internal_module_import === 379 &&
-    registry.summary?.non_public_cross_context_import === 536 &&
-    registry.summary?.undeclared_dependency === 370 &&
+  'accepted conversation-link retirement remains closed in later strict registries',
+  registry.exceptions.length <= 1407 &&
+    registry.summary?.direct_foreign_prisma_write <= 84 &&
+    registry.summary?.direct_provider_transport_access <= 38 &&
+    registry.summary?.internal_module_import <= 379 &&
+    registry.summary?.non_public_cross_context_import <= 536 &&
+    registry.summary?.undeclared_dependency <= 370 &&
     !registry.exceptions.some(entry => entry.fingerprint === 'arch_3a32113e59d6d5250460be8d') &&
     !registry.exceptions.some(entry => entry.file.includes('legacy-prisma-conversation-contact-link-adapter.ts')),
-  'strict registry identity, counts or owner-local classification drift',
+  'strict registry monotonicity, retirement or owner-local classification drift',
 )
 check(
   'verified registry evidence preserves the exact one-removal zero-addition comparison',

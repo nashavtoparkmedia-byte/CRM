@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007R-CONVERSATION-CONTACT-LINK",
-  "base_commit": "9765eb7202bfe07aa54e137d5e96c8d728c0372f",
+  "milestone": "CRM-ARCH-007R-SCENARIO-FIELD-SETTINGS",
+  "base_commit": "297bc2700eec77e2a06fbdfee4b57867650ba719",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "5b21c2b965d736b5451a92a56fb6dfb4dff17c179919b25a795c7ed584349e73",
+  "finding_digest": "679a367687a98ca41a9ca2a2bfff3b5af0a16e0cfe67dc663b01a13719875743",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,11 +13,11 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 84,
+    "direct_foreign_prisma_write": 82,
     "direct_provider_transport_access": 38,
-    "internal_module_import": 379,
-    "non_public_cross_context_import": 536,
-    "undeclared_dependency": 370
+    "internal_module_import": 375,
+    "non_public_cross_context_import": 532,
+    "undeclared_dependency": 354
   },
   "exceptions": [
     {
@@ -15134,214 +15134,6 @@
       ]
     },
     {
-      "fingerprint": "arch_dffadff52c7f131dec9fb5df",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/settings/scenarios/[id]/fields/page.tsx",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "work_management",
-      "subject": "settings>tasks:gravity-mvp/src/lib/tasks/scenario-config.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_7a237a87ee8e273e95604997",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/settings/scenarios/[id]/fields/ScenarioFieldsSettingsClient.tsx",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "work_management",
-      "subject": "settings>tasks:gravity-mvp/src/lib/tasks/scenario-settings-types.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_12898585c8b3ccee8d3ea85a",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/settings/scenarios/[id]/fields/ScenarioFieldsSettingsClient.tsx",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "work_management",
-      "subject": "settings>tasks:gravity-mvp/src/lib/tasks/scenario-settings-types.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_d3a1aee5a5e33bdb5a5d6cce",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/settings/scenarios/[id]/fields/ScenarioFieldsSettingsClient.tsx",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "work_management",
-      "subject": "settings>tasks:gravity-mvp/src/lib/tasks/scenario-settings-types.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_b2695dfa3531c0d237e7fce3",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/settings/scenarios/[id]/fields/ScenarioFieldsSettingsClient.tsx",
-      "line_at_baseline": 5,
-      "ordinal": 2,
-      "owner_context": "configuration",
-      "target_context": "work_management",
-      "subject": "settings>tasks:gravity-mvp/src/lib/tasks/scenario-settings-types.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_4b2e1e3af0bdf531180daa15",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/settings/scenarios/[id]/fields/ScenarioFieldsSettingsClient.tsx",
-      "line_at_baseline": 5,
-      "ordinal": 2,
-      "owner_context": "configuration",
-      "target_context": "work_management",
-      "subject": "settings>tasks:gravity-mvp/src/lib/tasks/scenario-settings-types.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_5058caaa02cc2b4b461f5f6a",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/settings/scenarios/[id]/fields/ScenarioFieldsSettingsClient.tsx",
-      "line_at_baseline": 5,
-      "ordinal": 2,
-      "owner_context": "configuration",
-      "target_context": "work_management",
-      "subject": "settings>tasks:gravity-mvp/src/lib/tasks/scenario-settings-types.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_225fae9337a3c287581451da",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/settings/scenarios/actions.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "work_management",
-      "subject": "settings>tasks:gravity-mvp/src/lib/tasks/scenario-settings.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_a7e099839eaf42e321bcb61f",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/settings/scenarios/actions.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "work_management",
-      "subject": "settings>tasks:gravity-mvp/src/lib/tasks/scenario-settings.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_1a5dd98552731f69df510d4f",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/settings/scenarios/actions.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "work_management",
-      "subject": "settings>tasks:gravity-mvp/src/lib/tasks/scenario-settings.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_6f528eedb0009b2e5fda34d9",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/settings/scenarios/actions.ts",
-      "line_at_baseline": 8,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "work_management",
-      "subject": "settings>tasks:gravity-mvp/src/lib/tasks/scenario-settings-types.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_e9eae0979b7c84dba46941bb",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/settings/scenarios/actions.ts",
-      "line_at_baseline": 8,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "work_management",
-      "subject": "settings>tasks:gravity-mvp/src/lib/tasks/scenario-settings-types.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_dcd2086fa84a6f10de82654b",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/settings/scenarios/actions.ts",
-      "line_at_baseline": 8,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "work_management",
-      "subject": "settings>tasks:gravity-mvp/src/lib/tasks/scenario-settings-types.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>work_management/tasks"
-      ]
-    },
-    {
       "fingerprint": "arch_e98a17a2ddf6a5543cb32eae",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/settings/scoring/ScoringSettingsClient.tsx",
@@ -20109,22 +19901,6 @@
       ]
     },
     {
-      "fingerprint": "arch_6e7cdb68eb4f435d44dd2071",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/config-validator.ts",
-      "line_at_baseline": 80,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "work_management",
-      "subject": "settings>tasks:gravity-mvp/src/lib/tasks/completion-config.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>work_management/tasks"
-      ]
-    },
-    {
       "fingerprint": "arch_5dd516abc528902470f6bd65",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/lib/config-validator.ts",
@@ -20151,22 +19927,6 @@
       "subject": "settings>tasks:gravity-mvp/src/lib/tasks/response-config.ts",
       "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
       "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_769499f033ab35fa6c893698",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/config-validator.ts",
-      "line_at_baseline": 85,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "work_management",
-      "subject": "settings>tasks:gravity-mvp/src/lib/tasks/response-config.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:configuration/settings>work_management/tasks"
@@ -20205,22 +19965,6 @@
       ]
     },
     {
-      "fingerprint": "arch_4f9652672c7bd39182b46e35",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/config-validator.ts",
-      "line_at_baseline": 90,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "work_management",
-      "subject": "settings>tasks:gravity-mvp/src/lib/tasks/risk-config.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>work_management/tasks"
-      ]
-    },
-    {
       "fingerprint": "arch_c5a8257ef180f0578c51aa58",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/lib/config-validator.ts",
@@ -20247,22 +19991,6 @@
       "subject": "settings>tasks:gravity-mvp/src/lib/tasks/workload-config.ts",
       "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
       "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_89026328f5535b239dafcfcc",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/config-validator.ts",
-      "line_at_baseline": 96,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "work_management",
-      "subject": "settings>tasks:gravity-mvp/src/lib/tasks/workload-config.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:configuration/settings>work_management/tasks"
@@ -20301,22 +20029,6 @@
       ]
     },
     {
-      "fingerprint": "arch_898401b584810ba53832d60b",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/config-validator.ts",
-      "line_at_baseline": 102,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "work_management",
-      "subject": "settings>tasks:gravity-mvp/src/lib/tasks/pattern-config.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>work_management/tasks"
-      ]
-    },
-    {
       "fingerprint": "arch_9f88440b1979e8c87bdca190",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/lib/config-validator.ts",
@@ -20343,22 +20055,6 @@
       "subject": "settings>tasks:gravity-mvp/src/lib/tasks/intervention-outcome-config.ts",
       "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
       "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_8d26dad454c1d5baba4ed885",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/config-validator.ts",
-      "line_at_baseline": 108,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "work_management",
-      "subject": "settings>tasks:gravity-mvp/src/lib/tasks/intervention-outcome-config.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:configuration/settings>work_management/tasks"
@@ -20397,22 +20093,6 @@
       ]
     },
     {
-      "fingerprint": "arch_d5f00eddbc56bb1d6520a79a",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/config-validator.ts",
-      "line_at_baseline": 115,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "work_management",
-      "subject": "settings>tasks:gravity-mvp/src/lib/tasks/capacity-config.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>work_management/tasks"
-      ]
-    },
-    {
       "fingerprint": "arch_6a34fa0c2c563c3e63d48a9a",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/lib/config-validator.ts",
@@ -20439,22 +20119,6 @@
       "subject": "settings>tasks:gravity-mvp/src/lib/tasks/reliability-config.ts",
       "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
       "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_95fe787bec52d896b8755882",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/config-validator.ts",
-      "line_at_baseline": 121,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "work_management",
-      "subject": "settings>tasks:gravity-mvp/src/lib/tasks/reliability-config.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:configuration/settings>work_management/tasks"
@@ -20493,22 +20157,6 @@
       ]
     },
     {
-      "fingerprint": "arch_9741e0bb3407601906823452",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/config-validator.ts",
-      "line_at_baseline": 127,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "work_management",
-      "subject": "settings>tasks:gravity-mvp/src/lib/tasks/intervention-aging-config.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>work_management/tasks"
-      ]
-    },
-    {
       "fingerprint": "arch_895b22b6ae4828b6279d9df1",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/lib/config-validator.ts",
@@ -20535,22 +20183,6 @@
       "subject": "settings>tasks:gravity-mvp/src/lib/tasks/volatility-config.ts",
       "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
       "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_41465e0831ba0392d03c0425",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/config-validator.ts",
-      "line_at_baseline": 133,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "work_management",
-      "subject": "settings>tasks:gravity-mvp/src/lib/tasks/volatility-config.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:configuration/settings>work_management/tasks"
@@ -20647,22 +20279,6 @@
       "subject": "settings>tasks:gravity-mvp/src/lib/tasks/manager-health-config.ts",
       "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
       "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_76820e608c8736956049675d",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/config-validator.ts",
-      "line_at_baseline": 156,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "work_management",
-      "subject": "settings>tasks:gravity-mvp/src/lib/tasks/manager-health-config.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:configuration/settings>work_management/tasks"
@@ -22743,40 +22359,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "CRM-ARCH-006-supplement:arch_c5aa795cdee1279da7d78dcb"
-      ]
-    },
-    {
-      "fingerprint": "arch_8b3e425d7529f4425243bd47",
-      "site_signature": "ef547514bbac3a7fb9685a7e1fe1d5fb3f2767667253e03ff5bcf01b7b67efdd",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/tasks/scenario-settings.ts",
-      "line_at_baseline": 108,
-      "ordinal": 1,
-      "owner_context": "work_management",
-      "target_context": null,
-      "subject": "raw:$executeRaw:dynamic",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_cf5479ae3da99ee5"
-      ]
-    },
-    {
-      "fingerprint": "arch_66a14ce1b5d8219d467235f1",
-      "site_signature": "706c4ed8d82bb366bcf0dd67700337d2818d1b57385605e61a3e0a9902a7d2de",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/tasks/scenario-settings.ts",
-      "line_at_baseline": 134,
-      "ordinal": 1,
-      "owner_context": "work_management",
-      "target_context": null,
-      "subject": "raw:$executeRaw:dynamic",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_cf5479ae3da99ee5"
       ]
     },
     {

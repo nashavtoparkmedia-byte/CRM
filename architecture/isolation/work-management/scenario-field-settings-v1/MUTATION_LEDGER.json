@@ -1,0 +1,33 @@
+{
+  "schema": "yoko.crm.mutation-ledger.v1",
+  "milestone": "CRM-ARCH-007R-SCENARIO-FIELD-SETTINGS",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "297bc2700eec77e2a06fbdfee4b57867650ba719",
+  "source_commit": "b1f911b7b17273363df764d6e312a40c9f0fa8fc",
+  "verified_at": "2026-08-10T04:55:44Z",
+  "source": [
+    "D2 unique ownership reassignment from Configuration to Work Management with context-index normalization",
+    "strict Work v1 merged-read, upsert and reset contracts with client-safe DTOs",
+    "one closed persistence port with parse-before-port handlers",
+    "private fixed positional owner SQL for upsert and reset",
+    "Configuration actions and client migrated to Work public v1",
+    "legacy Work read and merge policy preserved while direct writes retired",
+    "repository, consumer and boundary controls",
+    "exact Work surface and Configuration dependency amendment",
+    "future-compatible conversation-link cumulative boundary",
+    "deterministically regenerated strict registry with twenty-six exact retirements",
+    "checksummed source-gate evidence package"
+  ],
+  "historical_artifacts_mutated": [],
+  "production": [],
+  "database": [],
+  "services": [],
+  "deployment": [],
+  "policy_source_mutated": true,
+  "registry_source_mutated": true,
+  "ownership_source_mutated": true,
+  "source_control_only": true,
+  "scenario_field_settings_executed_against_database": false,
+  "production_mutated": false,
+  "secret_values_read_or_emitted": false
+}

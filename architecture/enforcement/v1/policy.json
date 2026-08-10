@@ -89,13 +89,14 @@
     "architecture/isolation/operations-observability/archived-contact-purge-v1/module-manifest-amendments.json",
     "architecture/isolation/operations-observability/intervention-actions-v1/module-manifest-amendments.json",
     "architecture/isolation/operations-observability/manager-health-v1/module-manifest-amendments.json",
-    "architecture/isolation/messaging/conversation-contact-link-v1/module-manifest-amendments.json"
+    "architecture/isolation/messaging/conversation-contact-link-v1/module-manifest-amendments.json",
+    "architecture/isolation/work-management/scenario-field-settings-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007R-CONVERSATION-CONTACT-LINK",
-  "registry_base_commit": "9765eb7202bfe07aa54e137d5e96c8d728c0372f",
+  "registry_milestone": "CRM-ARCH-007R-SCENARIO-FIELD-SETTINGS",
+  "registry_base_commit": "297bc2700eec77e2a06fbdfee4b57867650ba719",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",

@@ -1,0 +1,98 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1",
+  "milestone": "CRM-ARCH-007R-SCENARIO-FIELD-SETTINGS",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "297bc2700eec77e2a06fbdfee4b57867650ba719",
+  "source_commit": "b1f911b7b17273363df764d6e312a40c9f0fa8fc",
+  "context": "work_management",
+  "caller_context": "configuration",
+  "plan": {
+    "id": "scenario-field-settings-v1",
+    "model": "scenario_field_settings",
+    "legacy_repository": "gravity-mvp/src/lib/tasks/scenario-settings.ts",
+    "owner_adapter": "gravity-mvp/src/modules/work-management/public/v1/legacy-prisma-scenario-field-settings-adapter.ts",
+    "operations": ["get-merged", "upsert", "reset"],
+    "role": "production_source_inactive"
+  },
+  "contracts": [
+    "work_management.GetMergedScenarioFieldsQuery.v1",
+    "work_management.UpsertScenarioFieldSettingCommand.v1",
+    "work_management.ResetScenarioFieldSettingCommand.v1"
+  ],
+  "ownership": {
+    "previous": "configuration",
+    "actual": "work_management",
+    "unique_owner_count": 1,
+    "decision": "ARCHITECTURE_LEAD_D2"
+  },
+  "dependency": {
+    "added": "configuration -> work_management.public",
+    "effective_added_dependencies": 1,
+    "dependency_relationships": 106,
+    "cycle_verification": 0,
+    "reverse_work_to_configuration": false
+  },
+  "historical_plan": {
+    "id": "migration_cf5479ae3da99ee5",
+    "disposition": "SUPERSEDED_BY_ARCHITECTURE_LEAD_D2",
+    "source_artifact_mutated": false
+  },
+  "enforcement": {
+    "baseline_registry_commit": "297bc2700eec77e2a06fbdfee4b57867650ba719",
+    "baseline_findings": 1407,
+    "baseline_direct_foreign_prisma_write": 84,
+    "direct_slice_retirements": [
+      "arch_7a237a87ee8e273e95604997",
+      "arch_12898585c8b3ccee8d3ea85a",
+      "arch_d3a1aee5a5e33bdb5a5d6cce",
+      "arch_b2695dfa3531c0d237e7fce3",
+      "arch_4b2e1e3af0bdf531180daa15",
+      "arch_5058caaa02cc2b4b461f5f6a",
+      "arch_225fae9337a3c287581451da",
+      "arch_a7e099839eaf42e321bcb61f",
+      "arch_1a5dd98552731f69df510d4f",
+      "arch_6f528eedb0009b2e5fda34d9",
+      "arch_e9eae0979b7c84dba46941bb",
+      "arch_dcd2086fa84a6f10de82654b",
+      "arch_8b3e425d7529f4425243bd47",
+      "arch_66a14ce1b5d8219d467235f1"
+    ],
+    "structural_edge_retirements": [
+      "arch_dffadff52c7f131dec9fb5df",
+      "arch_6e7cdb68eb4f435d44dd2071",
+      "arch_769499f033ab35fa6c893698",
+      "arch_4f9652672c7bd39182b46e35",
+      "arch_89026328f5535b239dafcfcc",
+      "arch_898401b584810ba53832d60b",
+      "arch_8d26dad454c1d5baba4ed885",
+      "arch_d5f00eddbc56bb1d6520a79a",
+      "arch_95fe787bec52d896b8755882",
+      "arch_9741e0bb3407601906823452",
+      "arch_41465e0831ba0392d03c0425",
+      "arch_76820e608c8736956049675d"
+    ],
+    "temporary_pre_amendment_additions": [
+      "arch_f7c0b7bc29b196b41f0003e4",
+      "arch_b4aa8e3fb2ba543ec9c5c78b",
+      "arch_6d9536222f58fcb2f9d4647c"
+    ],
+    "actual_findings": 1381,
+    "actual_exceptions": 1381,
+    "actual_direct_foreign_prisma_write": 82,
+    "actual_direct_provider_transport_access": 38,
+    "actual_internal_module_import": 375,
+    "actual_non_public_cross_context_import": 532,
+    "actual_undeclared_dependency": 354,
+    "actual_removed": 26,
+    "actual_added": 0,
+    "actual_changed_shared_entries": 0,
+    "retained_internal_non_public_protections": 24,
+    "finding_digest": "679a367687a98ca41a9ca2a2bfff3b5af0a16e0cfe67dc663b01a13719875743",
+    "registry_sha256": "c4b786276dd7e896f3cbc321b2eaa4e33a71296347c1cde3cdb68885b40727f0",
+    "registry_deterministic": true
+  },
+  "verified_at": "2026-08-10T04:55:44Z",
+  "source_control_mutation": { "ownership_manifests": true, "module_policy": true, "strict_registry": true, "source_only": true },
+  "execution_performed": false,
+  "rollback": "297bc2700eec77e2a06fbdfee4b57867650ba719"
+}

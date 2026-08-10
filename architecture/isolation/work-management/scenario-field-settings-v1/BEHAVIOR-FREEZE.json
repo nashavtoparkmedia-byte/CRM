@@ -1,0 +1,60 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1",
+  "milestone": "CRM-ARCH-007R-SCENARIO-FIELD-SETTINGS",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "297bc2700eec77e2a06fbdfee4b57867650ba719",
+  "source_commit": "b1f911b7b17273363df764d6e312a40c9f0fa8fc",
+  "captured_at": "2026-08-10T04:55:44Z",
+  "verified_at": "2026-08-10T04:55:44Z",
+  "source_hashes_before": {
+    "architecture/contexts/v1/context-index.json": "8fff42127ba7aa28943be29475202a3ee4b2b0c649635a94cf87fb7fc1cce3ab",
+    "architecture/contexts/v1/manifests/configuration.json": "31a6f0e3813bc050c84dac7d05a7ad9adb82bc89089660e0c690ce52f0643861",
+    "architecture/contexts/v1/manifests/work_management.json": "d1f2cdb50130e560f8fed6e20ebd5ef33af0e6f082139f96183cba9f7b197e4e",
+    "gravity-mvp/src/app/settings/scenarios/[id]/fields/ScenarioFieldsSettingsClient.tsx": "e88a794296a1748bb8a9ae184ab9c7b102bf8e1481086c28c1b909e752649ca3",
+    "gravity-mvp/src/app/settings/scenarios/actions.ts": "d7ddaf5a511b70065ba513e6a2b83bf757c38013cfdd2a03f2f0207e9a0b70ee",
+    "gravity-mvp/src/contracts/work-management/v1/index.ts": "b6a9f56a7e7050a63399e8629f0fcbdd2fe273b888ab6e7c32c8aac2212bbafc",
+    "gravity-mvp/src/lib/tasks/scenario-settings.ts": "70ab1d5a3c9a44af0cf845307f89e39d2f19758328a847b4021346fc6631c471",
+    "gravity-mvp/src/modules/work-management/public/v1/index.ts": "5ea614ddd71855c8268c0815dbc542cf16ffa8e765e56abe118a89801256a655"
+  },
+  "source_hashes_after": {
+    "architecture/contexts/v1/context-index.json": "77fd98ffceeaa5473afc2abdc333480b8e7b01e7a1850af4bca57661177672ae",
+    "architecture/contexts/v1/manifests/configuration.json": "3e6031c11ad9b643a900b58aaf5d6be5651fc7f1396707971953f669b25cb0f1",
+    "architecture/contexts/v1/manifests/work_management.json": "60ce1f36436c7f88c139d7097157c800fc0433dcbc80e0952a29362d373a35ad",
+    "gravity-mvp/src/app/settings/scenarios/[id]/fields/ScenarioFieldsSettingsClient.tsx": "d746c1932cf8763a47f93a9dfc57d8ccdd6ba3b498192d01ad5fdbc0a94ccc9a",
+    "gravity-mvp/src/app/settings/scenarios/actions.ts": "61e872719884b4247a693b8d28543cf8ce6c8a294c0f448339e63b7dec4d4472",
+    "gravity-mvp/src/contracts/work-management/v1/index.ts": "3e8ba1fae741ed4935bce6d38bec75bde37bf30b81dd8ef1c75b4d2be2dff67e",
+    "gravity-mvp/src/contracts/work-management/v1/scenario-field-settings.ts": "bbca4e01f945c120dbb4dd3b68ca4f8bf458ab3d8517c5c92f6a001f685351ab",
+    "gravity-mvp/src/lib/tasks/scenario-settings.ts": "d8e8482816b06592d282b7b67ad97c1797d4c05e31596094d0deb0df27b363e0",
+    "gravity-mvp/src/modules/work-management/public/v1/index.ts": "95d3e7e1b0185d40294b79bc4dc73c0d5541fe12aa3ef8ba8e1c5a2f61845459",
+    "gravity-mvp/src/modules/work-management/public/v1/legacy-prisma-scenario-field-settings-adapter.ts": "3bd256a8e6dfe1b7e3cd179437b39f60e11869df795918aabe7fd6793ee3cc70",
+    "gravity-mvp/src/modules/work-management/public/v1/scenario-field-settings-handler.ts": "e147edf1f4d7d7a2489f89b895af3e38ddd642ddd3993b99d5cff2706d95c696"
+  },
+  "behavior": [
+    "scenario_field_settings has exactly one authoritative owner, Work Management, because the table stores task-scenario presentation policy and its runtime reader/merger is Work-owned",
+    "the Configuration owner entry is removed and the byte-equivalent owned-data entry moves to Work with current_writer_modules tasks; context-index hashes bind both manifests",
+    "the single-scenario read retains one unordered SELECT by scenarioId and returns rows unchanged before caller-owned merging",
+    "merged fields still start from Work scenario defaults, use the override row keyed by fieldId, preserve false and zero through nullish fallback, default sortable and groupable to false, default order to definition index, mark hasOverride and sort ascending by order",
+    "unknown scenarios still return an empty merged list even if the repository returns unrelated rows",
+    "the Work-internal batch reader remains unchanged: empty input returns before database access, one read uses ANY scenarioIds, rows retain database order and are grouped by scenarioId",
+    "upsert still derives id as scenarioId underscore fieldId and captures exactly one application-clock ISO timestamp immediately before persistence",
+    "absent and explicit-null patch fields bind null, while false and zero remain values; the six override columns retain COALESCE and therefore cannot be individually cleared",
+    "updatedAt and updatedBy always replace the prior values, including null userId clearing updatedBy",
+    "upsert remains one statement with no transaction, retry, log or catch; reset remains one delete by scenarioId and fieldId and a missing row succeeds",
+    "Configuration get/reset perform no cookie lookup; update and reorder obtain crm_user_id before the Work command and map missing or empty cookie values to null",
+    "client optimistic toggle and refresh ordering remain unchanged; reorder remains concurrent Promise.all over one command and timestamp per field, with no batch transaction",
+    "all public handler failures and owner errors remain visible to the existing caller boundaries",
+    "Configuration gains one direct Work public dependency and Work gains no reverse Configuration dependency; the effective graph remains acyclic"
+  ],
+  "bounded_drift": [
+    "strict versioned parsing rejects malformed envelopes, extra fields, empty identifiers, unsupported versions, invalid patch values and non-finite order before persistence",
+    "fixed positional SQL replaces tagged-template value binding; SQL formatting, driver parameter representation, recorded query text and stack traces can differ while predicates and update semantics remain exact",
+    "public handler and adapter frames add negligible in-process time; the owner timestamp is captured after public validation rather than before the compatibility call",
+    "the accepted context edge removes the redundant undeclared-dependency classification from twelve pre-existing Configuration-to-Work imports; all twenty-four internal/non-public protections remain"
+  ],
+  "out_of_scope": [
+    "scenario definitions, task enrichment, filter/sort/group business policy or database schema changes",
+    "migration of the remaining Configuration-to-Work internal imports",
+    "historical CRM-ARCH-003 source artifacts, which remain preserved and are explicitly superseded only for this ownership decision",
+    "database access, runtime execution, provider calls, service activation, deployment, production mutation and secrets"
+  ]
+}

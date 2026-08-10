@@ -1,0 +1,28 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "CRM-ARCH-007R-SCENARIO-FIELD-SETTINGS",
+  "amendments": [
+    {
+      "context": "work_management",
+      "add_commands": [
+        "UpsertScenarioFieldSettingCommand.v1",
+        "ResetScenarioFieldSettingCommand.v1"
+      ],
+      "add_public_surface": [
+        "GetMergedScenarioFieldsQuery.v1"
+      ],
+      "reason": "Expose only the merged scenario-field view and exact upsert/reset lifecycle through Work Management ownership without a generic repository, SQL, predicate or transaction capability."
+    },
+    {
+      "context": "configuration",
+      "add_allowed_dependencies": [
+        {
+          "context": "work_management",
+          "surface": "work_management.public"
+        }
+      ],
+      "reason": "Route Configuration scenario-field presentation settings through the Work Management public surface without adding a reverse Work-to-Configuration dependency."
+    }
+  ]
+}
