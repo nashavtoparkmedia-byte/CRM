@@ -1,10 +1,10 @@
 {
   "schema": "yoko.crm.architecture-exception-registry.v1",
   "version": 1,
-  "milestone": "CRM-ARCH-007R-EVENT-RETENTION",
-  "base_commit": "2ff1a6ff7a0605f11bdd8e9e6157c93dd1415056",
+  "milestone": "CRM-ARCH-007R-ARCHIVED-CONTACT-PURGE",
+  "base_commit": "fb16db6ef7759c4a1bd73e0012485a5e6777a03a",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "ae22ad6cd340192e3fe0c1e08c05e3c355016182e19ec468e39cd87ab298927a",
+  "finding_digest": "d9c8df1c4d98d9b47d8e77cc031c44c8b86fdbd5085c59e57c896764daa93c3f",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,11 +13,11 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_foreign_prisma_write": 99,
+    "direct_foreign_prisma_write": 96,
     "direct_provider_transport_access": 38,
     "internal_module_import": 379,
     "non_public_cross_context_import": 536,
-    "undeclared_dependency": 377
+    "undeclared_dependency": 370
   },
   "exceptions": [
     {
@@ -1862,22 +1862,6 @@
       ]
     },
     {
-      "fingerprint": "arch_2f0731db82ab64962a25bd42",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/cron/auto-close-tasks/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "work_management",
-      "subject": "monitoring>tasks:gravity-mvp/src/lib/triggers.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>work_management/tasks"
-      ]
-    },
-    {
       "fingerprint": "arch_58591a7c73a666325d2ab74b",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/api/cron/enforce-followup/route.ts",
@@ -1894,22 +1878,6 @@
       ]
     },
     {
-      "fingerprint": "arch_63ba5b4a4669d613e6cd16f1",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/cron/enforce-followup/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "work_management",
-      "subject": "monitoring>tasks:gravity-mvp/src/lib/triggers.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>work_management/tasks"
-      ]
-    },
-    {
       "fingerprint": "arch_d8e543cec88b61489a0d2416",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/api/cron/escalations/route.ts",
@@ -1920,22 +1888,6 @@
       "subject": "monitoring>tasks:gravity-mvp/src/lib/triggers.ts",
       "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
       "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_f04a8b9f2910b9c345227d1f",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/cron/escalations/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "work_management",
-      "subject": "monitoring>tasks:gravity-mvp/src/lib/triggers.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:operations_observability/monitoring>work_management/tasks"
@@ -2006,22 +1958,6 @@
       ]
     },
     {
-      "fingerprint": "arch_9310b6d863a190924cf95bd2",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/cron/pattern-alerts/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "work_management",
-      "subject": "monitoring>tasks:gravity-mvp/src/lib/triggers.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>work_management/tasks"
-      ]
-    },
-    {
       "fingerprint": "arch_6fa18612b704827acf65d615",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/api/cron/sla-escalation/route.ts",
@@ -2032,22 +1968,6 @@
       "subject": "monitoring>tasks:gravity-mvp/src/lib/triggers.ts",
       "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
       "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_3afb0d0704ed7e43a95d098b",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/cron/sla-escalation/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "work_management",
-      "subject": "monitoring>tasks:gravity-mvp/src/lib/triggers.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:operations_observability/monitoring>work_management/tasks"
@@ -2456,22 +2376,6 @@
       "subject": "monitoring>tasks:gravity-mvp/src/lib/OperationalJobs.ts",
       "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
       "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_4a9d0523cce679b947b0263d",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/health/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "work_management",
-      "subject": "monitoring>tasks:gravity-mvp/src/lib/OperationalJobs.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:operations_observability/monitoring>work_management/tasks"
@@ -10414,22 +10318,6 @@
       "subject": "monitoring>tasks:gravity-mvp/src/lib/OperationalJobs.ts",
       "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
       "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_7650208958f7be1610e5230d",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/monitoring/system-health/actions.ts",
-      "line_at_baseline": 11,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "work_management",
-      "subject": "monitoring>tasks:gravity-mvp/src/lib/OperationalJobs.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:operations_observability/monitoring>work_management/tasks"
@@ -22879,66 +22767,6 @@
         "dependency:calling/ai_calls>platform_shell/gravity_core",
         "dependency:calling/calls>platform_shell/gravity_core",
         "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_268626904318c85d53361d4e",
-      "site_signature": "6a1db173fb864e990b17a938497973418ac6311ce4d4026618db332f6448e980",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/RetentionCleanup.ts",
-      "line_at_baseline": 246,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": null,
-      "subject": "raw:$executeRaw:dynamic",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_2a7e12329db0980a",
-        "migration_3f742dab88bb3d62",
-        "migration_5ec12c4fca542cb5",
-        "migration_9fd5889e5d1307c9"
-      ]
-    },
-    {
-      "fingerprint": "arch_76d3bcc4d7b0267149f18cf2",
-      "site_signature": "b1b1b686a64127d41015ee0dea74aea52f8da219eb58d606230d49ef193cca78",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/RetentionCleanup.ts",
-      "line_at_baseline": 247,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": null,
-      "subject": "raw:$executeRaw:dynamic",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_2a7e12329db0980a",
-        "migration_3f742dab88bb3d62",
-        "migration_5ec12c4fca542cb5",
-        "migration_9fd5889e5d1307c9"
-      ]
-    },
-    {
-      "fingerprint": "arch_b5f33a4a29e14f22da9a05ec",
-      "site_signature": "db81cc449148816579cf71205da7a9bae6bfa88d3577f1e6276c58993e7ed3b5",
-      "rule": "direct_foreign_prisma_write",
-      "file": "gravity-mvp/src/lib/RetentionCleanup.ts",
-      "line_at_baseline": 248,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": null,
-      "subject": "raw:$executeRaw:dynamic",
-      "rationale": "Pre-existing foreign or ambiguous persistence write inventoried before enforcement; no new site is permitted.",
-      "retirement": "Replace this exact site with the owning context public command, verify parity, then delete this exception in the same change.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "migration_2a7e12329db0980a",
-        "migration_3f742dab88bb3d62",
-        "migration_5ec12c4fca542cb5",
-        "migration_9fd5889e5d1307c9"
       ]
     },
     {

@@ -85,13 +85,14 @@
     "architecture/isolation/messaging/telegram-binary-media-v1/module-manifest-amendments.json",
     "architecture/isolation/messaging/max-maintenance-v1/module-manifest-amendments.json",
     "architecture/isolation/ai-knowledge/legacy-knowledge-entry-v1/module-manifest-amendments.json",
-    "architecture/isolation/operations-observability/event-retention-v1/module-manifest-amendments.json"
+    "architecture/isolation/operations-observability/event-retention-v1/module-manifest-amendments.json",
+    "architecture/isolation/operations-observability/archived-contact-purge-v1/module-manifest-amendments.json"
   ],
   "exception_registry": "architecture/enforcement/v1/exceptions.json",
   "legacy_write_supplement": "architecture/enforcement/v1/legacy-write-supplement.json",
   "strict_exception_registry": true,
-  "registry_milestone": "CRM-ARCH-007R-EVENT-RETENTION",
-  "registry_base_commit": "2ff1a6ff7a0605f11bdd8e9e6157c93dd1415056",
+  "registry_milestone": "CRM-ARCH-007R-ARCHIVED-CONTACT-PURGE",
+  "registry_base_commit": "fb16db6ef7759c4a1bd73e0012485a5e6777a03a",
   "exception_review_deadline": "2026-12-31",
   "unexceptionable_rules": [
     "manifest_inconsistency",
