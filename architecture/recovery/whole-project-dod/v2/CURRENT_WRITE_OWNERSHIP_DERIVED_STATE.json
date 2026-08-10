@@ -1,0 +1,41 @@
+{
+  "schema": "yoko.crm.write-ownership-derived-state.v1",
+  "generated_at": "2026-08-10T21:44:48Z",
+  "program": "WHOLE-PROJECT DOD RECOVERY",
+  "phase": "MAINTENANCE_MIGRATION_CAPABILITY_CLOSURE",
+  "verdict": "EXTERNAL_FINAL_ACCEPTANCE_FAILED",
+  "ready": false,
+  "frozen_baseline": {
+    "path": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json",
+    "sha256": "73259b98675789afb00258c1f1fac33c8799202f962b9944001a9bf05cfdf003",
+    "analysis_sha256": "3a9a5005e6897d1eb91b9ec5f504acf5916ffc258becae5b04d364bb6a0d59ae",
+    "new_scan_run": false
+  },
+  "metrics": {
+    "confirmed_writes_total_derived": 1213,
+    "owner_valid": 427,
+    "confirmed_foreign_raw": 49,
+    "closed_foreign_in_worktree_pending_rescan": 3,
+    "maintenance_migration_confirmed_records": 264,
+    "maintenance_migration_preliminary_units": 188,
+    "maintenance_migration_approved_capabilities": 0,
+    "maintenance_migration_pending_evidence": 187,
+    "maintenance_migration_remediated_pending_rescan": 1,
+    "ownership_manifest_review_remaining": 2,
+    "confirmed_non_writes": 6,
+    "dynamic_delegate_unresolved": 79,
+    "dynamic_sql_unresolved": 254,
+    "query_raw_side_effect_unresolved": 26,
+    "operational_surfaces_classified_active": 400,
+    "operational_surfaces_classified_historical_dead": 38,
+    "operational_surfaces_unclassified": 0,
+    "temporary_exceptions": "CURRENT_RECOMPUTE_PENDING; historical detector count must not be used as current truth",
+    "intentional_exceptions": "CURRENT_RECOMPUTE_PENDING"
+  },
+  "focused_ownership_review": {"reviewed":10,"owner_valid":7,"manifest_gap":2,"new_foreign":1},
+  "active_conflict_remediation": [
+    {"source":"gravity-mvp/scripts/sync-drivers-activity.ts","target":"Driver.upsert","result":"fleet_operations.ReconcileDriverProfileCommand.v1 owner boundary implemented and targeted test passing","state":"REMEDIATED_PENDING_AUTHORITATIVE_RESCAN"},
+    {"source":"gravity-mvp/scripts/trigger_import.js","target":"HistoryImportJob INSERT","result":"existing messaging.QueueHistoryImportJobCommand.v1 owner boundary adopted; compatibility CLI retained; targeted tests passing","state":"REMEDIATED_PENDING_AUTHORITATIVE_RESCAN"}
+  ],
+  "next_action": "Establish lifecycle/reachability evidence and owner-controlled adapters for the 188 narrow preliminary maintenance units; resolve two Telegram SQLite ownership gaps; then process dynamic delegates, queryRaw, and dynamic SQL before one bounded authoritative scan."
+}

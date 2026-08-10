@@ -1,0 +1,10 @@
+{
+  "schema": "yoko.crm.operational-surface-classification.v1",
+  "baseline_sha256": "73259b98675789afb00258c1f1fac33c8799202f962b9944001a9bf05cfdf003",
+  "root": "gravity-mvp",
+  "total": 254,
+  "lifecycle": {"APPLICATION_RUNTIME": 4, "OPERATIONAL_SCRIPT": 113, "MIGRATION": 71, "TEST": 33, "GENERATED": 0, "FIXTURE": 0, "DEAD_HISTORICAL": 33},
+  "db": {"candidate_files": 91, "candidate_sites": 470, "direct_read_or_connection_files": 95, "no_direct_db_evidence": 68},
+  "active_operational": {"confirmed_non_write_select": 3, "confirmed_write_conflicts": [{"file":"gravity-mvp/scripts/sync-drivers-activity.ts","operation":"Driver.upsert","owner":"fleet_operations","required_path":"owner-controlled maintenance capability"},{"file":"gravity-mvp/scripts/trigger_import.js","operation":"HistoryImportJob INSERT","owner":"messaging","required_path":"owner-controlled import capability"}]},
+  "dead_evidence": "32 nonportable developer-path source patchers absent from package scripts plus real_sync.js with no top-level invocation; no other surface is classified dead."
+}

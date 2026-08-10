@@ -1,0 +1,11 @@
+{
+  "schema":"yoko.crm.operational-surface-classification.v1",
+  "baseline_sha256":"73259b98675789afb00258c1f1fac33c8799202f962b9944001a9bf05cfdf003",
+  "scope":"all frozen-baseline unreviewed operational surfaces excluding completed tools/** and gravity-mvp/** roots",
+  "total":90,
+  "lifecycle":{"active_recurring_or_config":22,"active_admin":39,"one_shot_pending_retirement":6,"dead_historical":5,"test_config":1,"controlled_operational_or_migration_setup":17},
+  "db":{"direct_write_capable_files":5,"read_only_root_sql_files":2},
+  "direct_write_capable":["scripts/deploy.sh","scripts/migrate-data-apply.sh","scripts/restore-pg.sh","yandex-fleet-scraper/fix-accounts.ts","yandex-fleet-scraper/src/scripts/heal-account.ts"],
+  "policy":"Every active writer requires an exact owner-controlled capability; no root or extension is exempt.",
+  "unclassified":0
+}

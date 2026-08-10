@@ -1,0 +1,10 @@
+{
+  "schema": "yoko.crm.operational-surface-classification.v1",
+  "baseline_sha256": "73259b98675789afb00258c1f1fac33c8799202f962b9944001a9bf05cfdf003",
+  "root": "tools",
+  "total": 94,
+  "lifecycle": {"OPERATIONAL_SCRIPT": 89, "APPLICATION_RUNTIME": 5, "MIGRATION": 0, "TEST": 0, "GENERATED": 0, "FIXTURE": 0, "DEAD_HISTORICAL": 0},
+  "ownership": {"architecture_governance_tooling": 76, "calling": 18},
+  "db_access": {"writes": 0, "access": 0, "confirmed_non_write_self_analysis": 4},
+  "conclusion": "All records are classified; no tools operational surface is a direct database bypass."
+}

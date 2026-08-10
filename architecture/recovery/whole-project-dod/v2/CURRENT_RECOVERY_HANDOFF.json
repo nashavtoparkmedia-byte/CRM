@@ -1,6 +1,6 @@
 {
   "schema": "yoko.crm.current-recovery-handoff.v1",
-  "generated_at": "2026-08-10T21:03:48Z",
+  "generated_at": "2026-08-10T21:44:48Z",
   "authority": "Continuation checkpoint; this file supersedes conversational status claims but does not supersede the durable gap ledger or external NOT READY verdict.",
   "program_state": {
     "whole_project_state": "EXTERNAL_FINAL_ACCEPTANCE_FAILED",
@@ -596,6 +596,9 @@
     }
   ],
   "artifacts": {
+    "write_ownership_derived_state": "architecture/recovery/whole-project-dod/v2/CURRENT_WRITE_OWNERSHIP_DERIVED_STATE.json",
+    "maintenance_capability_registry": "architecture/recovery/whole-project-dod/v2/MAINTENANCE_MIGRATION_CAPABILITY_REGISTRY.json",
+    "ownership_gap_review": "architecture/recovery/whole-project-dod/v2/OWNERSHIP_GAP_FOCUSED_REVIEW.json",
     "current_4ec_outputs": "Historical 4ec outputs remain absent. They are superseded by the bounded current 3ab9ad96 baseline below.",
     "current_authoritative_write_baseline": {
       "record": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260810T2102Z.json",
@@ -704,5 +707,5 @@
     "Production source/artifact and protected Messages production authority were not reconciled in this task.",
     "No upstream/remote ref protects the local recovery lineage."
   ],
-  "exact_next_action": "Begin bounded remediation of non-protected FOREIGN write sites, first grouping the 47 sites by ownership/contract route. Do not touch protected Messages or AI Calls surfaces; retain them for their authoritative reconciliation gates. Then address operational ownership breadth and ambiguity using the current baseline."
+  "exact_next_action": "Continue maintenance/migration capability closure from 188 exact preliminary units: prove lifecycle/reachability, introduce owner-controlled adapters, and keep every unit fail-closed until exact evidence. Resolve two Telegram SQLite ownership gaps, then dynamic delegates/queryRaw/dynamic SQL before one bounded authoritative scan."
 }
