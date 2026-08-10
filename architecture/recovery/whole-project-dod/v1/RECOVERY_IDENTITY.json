@@ -7,7 +7,9 @@
   "worktree": "/opt/codex-work/crm-architecture-dod-recovery",
   "branch": "codex/crm-architecture-dod-recovery",
   "base_commit": "0b61ba296ba2734738d4a21b9d00ce8b110d63cf",
-  "base_tree": "56c452391c68c3cd2bb2ad739240e30ab5ed76ca",
+  "base_tree": "56c452397df4bb7cb05bef3e0d9afd1de9d785a5",
+  "truth_evidence_commit": "df91833a3f473b3827e39e1a48f1576f36435989",
+  "truth_evidence_tree": "39541d7326ee3a308834ac19c0b9448055be61cc",
   "external_review": {
     "task_id": "019feb29-bac2-7a51-84ff-df013bed1a93",
     "turn_id": "019feb29-e0e4-7d62-8116-b347afda47f5",
