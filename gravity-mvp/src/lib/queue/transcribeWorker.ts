@@ -18,7 +18,7 @@ import { prisma } from '@/lib/prisma'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { getRedisConnection } from '@/lib/queue/connection'
 import { TRANSCRIBE_QUEUE, type TranscribeJobData, enqueueAnalyze } from '@/lib/queue/queues'
-import { getObject } from '@/lib/storage/minio'
+import { getObject } from '@/modules/calling/public/v1/recording-storage'
 import { broadcastCall } from '@/lib/callStreamBus'
 import { ProxyAgent, fetch as undiciFetch, FormData as UndiciFormData } from 'undici'
 

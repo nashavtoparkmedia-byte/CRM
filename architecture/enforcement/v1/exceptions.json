@@ -13,10 +13,10 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_provider_transport_access": 38,
+    "direct_provider_transport_access": 34,
     "internal_module_import": 374,
-    "non_public_cross_context_import": 516,
-    "undeclared_dependency": 326
+    "non_public_cross_context_import": 513,
+    "undeclared_dependency": 320
   },
   "exceptions": [
     {
@@ -560,22 +560,6 @@
       ]
     },
     {
-      "fingerprint": "arch_b9938ff0e1f4cc7e92621d3a",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/admin/reprocess-recordings/route.ts",
-      "line_at_baseline": 6,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "calling",
-      "subject": "monitoring>calls:gravity-mvp/src/lib/freeswitch/recordingProcessor.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>calling/calls"
-      ]
-    },
-    {
       "fingerprint": "arch_585441c701efe69839257f27",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/api/admin/reprocess-recordings/route.ts",
@@ -586,22 +570,6 @@
       "subject": "monitoring>calls:gravity-mvp/src/lib/queue/queues.ts",
       "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
       "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>calling/calls"
-      ]
-    },
-    {
-      "fingerprint": "arch_83613fd47dbb316d43cb47b3",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/admin/reprocess-recordings/route.ts",
-      "line_at_baseline": 7,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "calling",
-      "subject": "monitoring>calls:gravity-mvp/src/lib/queue/queues.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:operations_observability/monitoring>calling/calls"
@@ -651,22 +619,6 @@
       "subject": "monitoring>calls:gravity-mvp/src/lib/freeswitch/EslClient.ts",
       "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
       "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>calling/calls"
-      ]
-    },
-    {
-      "fingerprint": "arch_a1e1d7b84e34150dfa0e6181",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/admin/reprocess-recordings/route.ts",
-      "line_at_baseline": 8,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "calling",
-      "subject": "monitoring>calls:gravity-mvp/src/lib/freeswitch/EslClient.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:operations_observability/monitoring>calling/calls"
@@ -874,42 +826,6 @@
       "migration_references": [
         "dependency:calling/ai_calls>identity_access/users",
         "dependency:calling/calls>identity_access/users"
-      ]
-    },
-    {
-      "fingerprint": "arch_7bb288c6f295684fc4a25831",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/calls/[id]/recording/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "platform_shell",
-      "subject": "calls>gravity_core:gravity-mvp/src/lib/storage/minio.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_9f98cbfde3a112eb01483df4",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/calls/[id]/recording/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "platform_shell",
-      "subject": "calls>gravity_core:gravity-mvp/src/lib/storage/minio.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_ui"
       ]
     },
     {
@@ -19192,42 +19108,6 @@
       ]
     },
     {
-      "fingerprint": "arch_71c62de36b229c6c206a4b16",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/freeswitch/recordingProcessor.ts",
-      "line_at_baseline": 23,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "platform_shell",
-      "subject": "calls>gravity_core:gravity-mvp/src/lib/storage/minio.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_8ba1af153c80f18d67a365e2",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/freeswitch/recordingProcessor.ts",
-      "line_at_baseline": 23,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "platform_shell",
-      "subject": "calls>gravity_core:gravity-mvp/src/lib/storage/minio.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
       "fingerprint": "arch_aa0b4e20c768977eecbfef41",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/lib/freeswitch/recordingProcessor.ts",
@@ -19261,38 +19141,6 @@
         "dependency:calling/ai_calls>platform_shell/gravity_core",
         "dependency:calling/calls>platform_shell/gravity_core",
         "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_801cb0b4297b530516dc90b1",
-      "rule": "direct_provider_transport_access",
-      "file": "gravity-mvp/src/lib/health.ts",
-      "line_at_baseline": 92,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": null,
-      "subject": "aws_s3:@aws-sdk/client-s3",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "provider-boundary:aws_s3"
-      ]
-    },
-    {
-      "fingerprint": "arch_3472434aa8b8d9c8b0582bcb",
-      "rule": "direct_provider_transport_access",
-      "file": "gravity-mvp/src/lib/health.ts",
-      "line_at_baseline": 92,
-      "ordinal": 2,
-      "owner_context": "operations_observability",
-      "target_context": null,
-      "subject": "aws_s3:@aws-sdk/client-s3",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "provider-boundary:aws_s3"
       ]
     },
     {
@@ -20397,42 +20245,6 @@
       ]
     },
     {
-      "fingerprint": "arch_7ebd8a6fa43e6a1964126b3c",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/queue/transcribeWorker.ts",
-      "line_at_baseline": 21,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "platform_shell",
-      "subject": "calls>gravity_core:gravity-mvp/src/lib/storage/minio.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_473ad762659a3e3903bde600",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/queue/transcribeWorker.ts",
-      "line_at_baseline": 21,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "platform_shell",
-      "subject": "calls>gravity_core:gravity-mvp/src/lib/storage/minio.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
       "fingerprint": "arch_bc1634f30957026c1244b240",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/lib/queue/transcribeWorker.ts",
@@ -20482,38 +20294,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:platform_shell/gravity_core>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_664936b2b313309a8b1a911e",
-      "rule": "direct_provider_transport_access",
-      "file": "gravity-mvp/src/lib/storage/minio.ts",
-      "line_at_baseline": 10,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": null,
-      "subject": "aws_s3:@aws-sdk/client-s3",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "provider-boundary:aws_s3"
-      ]
-    },
-    {
-      "fingerprint": "arch_2a08683348bf4b812a3b5a45",
-      "rule": "direct_provider_transport_access",
-      "file": "gravity-mvp/src/lib/storage/minio.ts",
-      "line_at_baseline": 11,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": null,
-      "subject": "aws_s3:@aws-sdk/s3-request-presigner",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "provider-boundary:aws_s3"
       ]
     },
     {

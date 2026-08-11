@@ -1,6 +1,14 @@
 export { callingOutboxPublishersV1 } from './outbox-consumers'
 export { persistRecordingReadyV1 } from '../../internal/recording-ready-prisma-adapter'
 export {
+  getObject,
+  getRecordingUrl,
+  probeRecordingStorageV1,
+  S3_BUCKET,
+  uploadFile,
+} from './recording-storage'
+export type { RecordingStorageHealthCheckV1 } from './recording-storage'
+export {
   projectCompletedCallTimelineV1,
   registerCompletedCallTimelineProjectorV1,
 } from './completed-call-timeline-projection'

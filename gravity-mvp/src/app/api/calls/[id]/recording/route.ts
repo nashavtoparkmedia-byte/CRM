@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/users/user-service'
 import { prisma } from '@/lib/prisma'
-import { getObject } from '@/lib/storage/minio'
+import { getObject } from '@/modules/calling/public/v1/recording-storage'
 
 /**
  * GET /api/calls/[id]/recording

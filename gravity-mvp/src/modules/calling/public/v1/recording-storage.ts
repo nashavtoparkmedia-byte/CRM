@@ -1,13 +1,11 @@
 /**
- * S3-compatible storage client for call recordings (and future blobs).
+ * Calling-owned S3/MinIO capability for call recordings.
  *
- * Talks to MinIO in dev and Yandex Object Storage in prod with the same
- * code — set S3_ENDPOINT + S3_ACCESS_KEY + S3_SECRET_KEY + S3_BUCKET in
- * gravity-mvp/.env. forcePathStyle is required for MinIO; harmless for
- * Yandex (they support both styles).
+ * The storage provider is deliberately kept with Calling: recordings are a
+ * call-lifecycle concern. Callers receive only recording operations and a
+ * health result; they cannot obtain the SDK client or provider credentials.
  */
-
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3'
+import { GetObjectCommand, HeadBucketCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { Readable } from 'stream'
 import fs from 'fs/promises'
@@ -33,7 +31,7 @@ function getClient(): S3Client {
     return client
 }
 
-/** Upload a local file to S3 and return its object key. */
+/** Upload a call-recording file and return no provider-level handle. */
 export async function uploadFile(localPath: string, objectKey: string, contentType: string): Promise<void> {
     const body = await fs.readFile(localPath)
     await getClient().send(new PutObjectCommand({
@@ -44,28 +42,16 @@ export async function uploadFile(localPath: string, objectKey: string, contentTy
     }))
 }
 
-/**
- * Generate a short-lived presigned URL for downloading a recording.
- * Default 1 hour — enough for one playback session, prevents URL sharing.
- */
+/** Generate a short-lived recording download URL. */
 export async function getRecordingUrl(objectKey: string, expiresInSec = 3600): Promise<string> {
-    const cmd = new GetObjectCommand({ Bucket: S3_BUCKET, Key: objectKey })
-    return getSignedUrl(getClient(), cmd, { expiresIn: expiresInSec })
+    return getSignedUrl(getClient(), new GetObjectCommand({ Bucket: S3_BUCKET, Key: objectKey }), { expiresIn: expiresInSec })
 }
 
-/**
- * Download an object as a Buffer. Used by the transcription worker — it needs
- * to feed the MP3 bytes directly to the Whisper SDK, which accepts File / Blob.
- * For typical 1-3 minute calls the MP3 is <2MB at 64kbps stereo, so loading
- * fully into memory is fine and simpler than streaming.
- */
+/** Read a recording for the Calling transcription/playback flows. */
 export async function getObject(objectKey: string): Promise<Buffer> {
-    const res = await getClient().send(new GetObjectCommand({
-        Bucket: S3_BUCKET,
-        Key: objectKey,
-    }))
+    const res = await getClient().send(new GetObjectCommand({ Bucket: S3_BUCKET, Key: objectKey }))
     if (!res.Body) throw new Error(`empty body for ${objectKey}`)
-    return await streamToBuffer(res.Body as Readable)
+    return streamToBuffer(res.Body as Readable)
 }
 
 function streamToBuffer(stream: Readable): Promise<Buffer> {
@@ -75,4 +61,25 @@ function streamToBuffer(stream: Readable): Promise<Buffer> {
         stream.on('end', () => resolve(Buffer.concat(chunks)))
         stream.on('error', reject)
     })
+}
+
+export type RecordingStorageHealthCheckV1 = {
+    name: 'minio'
+    ok: boolean
+    ms: number
+    error?: string
+}
+
+/**
+ * Public, side-effect-free storage reachability probe for Platform Health.
+ * It performs only HeadBucket; it never exposes an SDK client or credentials.
+ */
+export async function probeRecordingStorageV1(): Promise<RecordingStorageHealthCheckV1> {
+    const start = Date.now()
+    try {
+        await getClient().send(new HeadBucketCommand({ Bucket: S3_BUCKET }))
+        return { name: 'minio', ok: true, ms: Date.now() - start }
+    } catch (error: any) {
+        return { name: 'minio', ok: false, ms: Date.now() - start, error: error?.message ?? String(error) }
+    }
 }

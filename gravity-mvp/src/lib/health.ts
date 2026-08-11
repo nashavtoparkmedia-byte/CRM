@@ -14,8 +14,8 @@
 //   3. `fs_esl` probe is TCP-connect only. No ESL auth, no `bgapi
 //      originate`, no SIP traffic, no live-call side effects.
 //   4. No new SDKs / monitoring deps. Postgres uses the existing
-//      `prisma` singleton; MinIO uses `@aws-sdk/client-s3` already
-//      wired by `recordingProcessor.ts`; Redis + FS-ESL use Node's
+//      `prisma` singleton; MinIO is probed through Calling's narrow
+//      recording-storage public capability; Redis + FS-ESL use Node's
 //      built-in `net` with a raw TCP probe (Redis also speaks the
 //      one-line `PING` RESP command — server replies `+PONG\r\n`).
 //   5. `ms` is mandatory on every Check, success or failure, including
@@ -26,6 +26,7 @@
 
 import net from 'node:net'
 import { prisma } from '@/lib/prisma'
+import { probeRecordingStorageV1 } from '@/modules/calling/public/v1/recording-storage'
 import { composeHealthResponse, withCheckTimeout } from './health-helpers'
 
 type Check = { name: string; ok: boolean; ms: number; error?: string }
@@ -82,31 +83,7 @@ async function pingRedis(): Promise<Check> {
 
 // ─── MinIO / S3 ───────────────────────────────────────────────────────
 async function pingMinio(): Promise<Check> {
-    const start = Date.now()
-    try {
-        // Lazy-require: the SDK is heavy and shouldn't load on cold
-        // boot of unrelated routes. `require()` inside the function
-        // keeps the cost paid only when /api/health is hit.
-        const { S3Client, HeadBucketCommand } =
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            require('@aws-sdk/client-s3') as typeof import('@aws-sdk/client-s3')
-
-        const endpoint = process.env.S3_ENDPOINT ?? 'http://127.0.0.1:9000'
-        const Bucket = process.env.S3_BUCKET ?? 'recordings'
-        const client = new S3Client({
-            endpoint,
-            region: process.env.S3_REGION ?? 'us-east-1',
-            credentials: {
-                accessKeyId: process.env.S3_ACCESS_KEY ?? 'crmadmin',
-                secretAccessKey: process.env.S3_SECRET_KEY ?? 'crmpassword123',
-            },
-            forcePathStyle: true,
-        })
-        await client.send(new HeadBucketCommand({ Bucket }))
-        return { name: 'minio', ok: true, ms: Date.now() - start }
-    } catch (err: any) {
-        return { name: 'minio', ok: false, ms: Date.now() - start, error: err?.message ?? String(err) }
-    }
+    return probeRecordingStorageV1()
 }
 
 // ─── FreeSWITCH ESL ───────────────────────────────────────────────────
