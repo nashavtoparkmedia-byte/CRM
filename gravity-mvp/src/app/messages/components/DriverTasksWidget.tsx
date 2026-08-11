@@ -1,8 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { getDriverActiveTasks } from '@/app/tasks/actions'
-import type { TaskDTO } from '@/lib/tasks/types'
+import { getDriverActiveTasksV1 as getDriverActiveTasks } from '@/modules/work-management/public/v1/task-query'
+import {
+    WorkTaskCardV1 as TaskCard,
+    type WorkTaskViewV1 as TaskDTO,
+} from '@/modules/work-management/public/v1/task-view'
 import {
     CheckSquare,
     AlertTriangle,
@@ -11,7 +14,6 @@ import {
     Loader2,
 } from 'lucide-react'
 import Link from 'next/link'
-import TaskCard from '@/app/tasks/components/TaskCard'
 import { getScenario, getStage } from '@/modules/work-management/public/v1/scenario-catalog'
 
 export default function DriverTasksWidget({ driverId }: { driverId: string }) {

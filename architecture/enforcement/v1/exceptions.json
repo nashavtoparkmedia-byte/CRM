@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "e0019aa7ffac3476c4f1ba07ee6b75ea8bca3d2789f2e118db897f457eed0303",
+  "finding_digest": "299b8e6e31d4054ce01d593c7cd905619e142d21adf94d8cda069bc599ff53a4",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,8 +13,8 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "internal_module_import": 29,
-    "non_public_cross_context_import": 54,
+    "internal_module_import": 24,
+    "non_public_cross_context_import": 49,
     "undeclared_dependency": 20
   },
   "exceptions": [
@@ -838,70 +838,6 @@
       ]
     },
     {
-      "fingerprint": "arch_13eb2e4430568d80851ed2f9",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/messages/components/ChatHeader.tsx",
-      "line_at_baseline": 14,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "work_management",
-      "subject": "messages>tasks:gravity-mvp/src/app/tasks/actions.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_9eccb02af3948319f71fe25a",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/messages/components/ChatHeader.tsx",
-      "line_at_baseline": 14,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "work_management",
-      "subject": "messages>tasks:gravity-mvp/src/app/tasks/actions.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_af517ec7d2679e2531f5c7e0",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/messages/components/ChatHeader.tsx",
-      "line_at_baseline": 15,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "work_management",
-      "subject": "messages>tasks:gravity-mvp/src/lib/tasks/types.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_553c9eaa84daa165eacab021",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/messages/components/ChatHeader.tsx",
-      "line_at_baseline": 15,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "work_management",
-      "subject": "messages>tasks:gravity-mvp/src/lib/tasks/types.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>work_management/tasks"
-      ]
-    },
-    {
       "fingerprint": "arch_40a7c3a9db0318ea8e9e99a1",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/messages/components/ChatWorkspace.tsx",
@@ -958,102 +894,6 @@
       "owner_context": "messaging",
       "target_context": "work_management",
       "subject": "messages>tasks:gravity-mvp/src/app/tasks/components/TaskCreateModal.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_25520ea2e437183417a7256a",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/messages/components/DriverTasksWidget.tsx",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "work_management",
-      "subject": "messages>tasks:gravity-mvp/src/app/tasks/actions.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_d5ba88f624acb55a67c227f2",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/messages/components/DriverTasksWidget.tsx",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "work_management",
-      "subject": "messages>tasks:gravity-mvp/src/app/tasks/actions.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_a10fb3c9ffca97e6a7d361ca",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/messages/components/DriverTasksWidget.tsx",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "work_management",
-      "subject": "messages>tasks:gravity-mvp/src/lib/tasks/types.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_7a7a3766eacf99cb43da5198",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/messages/components/DriverTasksWidget.tsx",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "work_management",
-      "subject": "messages>tasks:gravity-mvp/src/lib/tasks/types.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_ff92e8b9dec8e37be186456e",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/messages/components/DriverTasksWidget.tsx",
-      "line_at_baseline": 14,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "work_management",
-      "subject": "messages>tasks:gravity-mvp/src/app/tasks/components/TaskCard.tsx",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_20149810bedc4ae41716acf9",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/messages/components/DriverTasksWidget.tsx",
-      "line_at_baseline": 14,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "work_management",
-      "subject": "messages>tasks:gravity-mvp/src/app/tasks/components/TaskCard.tsx",
       "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
       "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
       "expires_on": "2026-12-31",

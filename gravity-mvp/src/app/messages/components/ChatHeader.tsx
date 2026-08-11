@@ -11,8 +11,8 @@ import { formatChatTitle, formatChatTitleDetailed } from "../utils/message-utils
 import { getSegmentLabel } from '@/modules/contacts/public/v1/contact-display-policy'
 import LinkContactModal from "./LinkContactModal"
 
-import { getDriverActiveTasks } from '@/app/tasks/actions'
-import type { TaskDTO } from '@/lib/tasks/types'
+import { getDriverActiveTasksV1 as getDriverActiveTasks } from '@/modules/work-management/public/v1/task-query'
+import type { WorkTaskViewV1 as TaskDTO } from '@/modules/work-management/public/v1/task-view'
 import { getScenario, getStage } from '@/modules/work-management/public/v1/scenario-catalog'
 import Link from 'next/link'
 import CallButton from '@/modules/calling/public/v1/client-ui/CallButton'
