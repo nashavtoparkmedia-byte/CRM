@@ -3,10 +3,10 @@
   "status": "OPEN_LIVE_DEBT_BURN_DOWN",
   "source": "LIVE_ARCHITECTURE_DEBT_RECOMPUTE_20260811.json",
   "opening_finding_count": 1288,
-  "current_finding_count": 235,
-  "exception_covered_live_debt": 235,
+  "current_finding_count": 190,
+  "exception_covered_live_debt": 190,
   "open_finding_count": 0,
-  "actually_closed_since_opening_baseline": 1053,
+  "actually_closed_since_opening_baseline": 1098,
   "confirmed_direct_foreign_prisma_writes": 0,
   "items": [
     {
@@ -223,6 +223,73 @@
       ],
       "approved_path": "Calling public client UI, Fleet-owned driver adapters and a narrow owner-neutral outbound-call client port",
       "status": "CLOSED_CALLING_CLIENT_UI_BOUNDARY"
+    },
+    {
+      "surface": "Messaging channel-sync client and import-job operations",
+      "finding_count": 11,
+      "intent": "Keep channel synchronization UI and exact import-job orchestration inside Messaging while preserving provider-specific behavior.",
+      "owner_context": "messaging",
+      "target_contexts": [
+        "configuration",
+        "max_channel",
+        "telegram_channel",
+        "whatsapp_channel"
+      ],
+      "approved_path": "versioned Messaging client surface and exact owner-controlled sync operations; no broad settings action export",
+      "status": "CLOSED_MESSAGING_CHANNEL_SYNC_CAPABILITY"
+    },
+    {
+      "surface": "Calling AI call scenario management",
+      "finding_count": 6,
+      "intent": "Expose exact scenario/project administration without relocating or duplicating Calling-owned writers.",
+      "owner_context": "calling",
+      "target_context": "configuration",
+      "approved_path": "narrow versioned Calling facade over the unchanged owner repository",
+      "status": "CLOSED_CALLING_SCENARIO_MANAGEMENT"
+    },
+    {
+      "surface": "Calling AI provider settings",
+      "finding_count": 4,
+      "intent": "Keep credential save/delete and fixed OpenAI runtime lookup behind narrow server-only Calling capabilities.",
+      "owner_context": "calling",
+      "target_contexts": [
+        "configuration",
+        "platform_shell"
+      ],
+      "approved_path": "exact server-only admin commands and fixed runtime lookup; no generic plaintext or bulk secret export",
+      "status": "CLOSED_CALLING_PROVIDER_SETTINGS"
+    },
+    {
+      "surface": "Calling call-status policy",
+      "finding_count": 4,
+      "intent": "Publish pure call label, color and icon semantics used by protected Messages without exposing hangup mapping internals.",
+      "owner_context": "calling",
+      "target_context": "messaging",
+      "approved_path": "exact named policy surface with exhaustive rendering matrix characterization",
+      "status": "CLOSED_CALLING_STATUS_POLICY"
+    },
+    {
+      "surface": "Calling AI provider status",
+      "finding_count": 2,
+      "intent": "Expose configured/source/mask metadata to Configuration without exposing plaintext credential access.",
+      "owner_context": "calling",
+      "target_context": "configuration",
+      "approved_path": "read-only versioned status query excluding mask helpers and generic provider getters",
+      "status": "CLOSED_CALLING_PROVIDER_STATUS"
+    },
+    {
+      "surface": "remaining shared UI technical components",
+      "finding_count": 18,
+      "intent": "Keep presentation-only controls and dashboard shell components in shared technical infrastructure.",
+      "owner_context": "shared infrastructure",
+      "target_contexts": [
+        "analytics_reporting",
+        "avito_acquisition",
+        "operations_observability",
+        "work_management"
+      ],
+      "approved_path": "implementation relocation with explicit deprecated aliases and compatibility identity tests",
+      "status": "CLOSED_SHARED_UI_FINAL_BATCH"
     }
   ],
   "prohibited_shortcuts": [
@@ -232,10 +299,10 @@
     "arbitrary Prisma access from an approved adapter"
   ],
   "next_cluster": {
-    "name": "MESSAGING_CHANNEL_SYNC_CLIENT_CAPABILITY",
-    "finding_count": 11,
+    "name": "AI_KNOWLEDGE_ADMIN_READ_MODEL",
+    "finding_count": 6,
     "classification": "EXCEPTION_COVERED_TEMPORARY_LEGACY_DEBT",
-    "acceptance": "Move ChannelSyncBlock into a versioned Messaging client surface, expose only the exact import-job operations it needs through an owner-controlled capability, migrate the MAX, Telegram and WhatsApp consumers, preserve polling/cancellation/totals behavior, and retire the exact findings without broad dependencies."
+    "acceptance": "Implement the existing KnowledgeQuery.v1 intent as a narrow owner read model for Configuration, preserve source-excerpt filtering, expose no repository, provider, audit-writer or arbitrary Prisma capability, and retire only the exact read-query findings."
   },
-  "acceptance": "Uncovered findings and provider transport accesses are zero without new exceptions. The project remains NOT READY while 235 temporary exception-covered live findings remain."
+  "acceptance": "Uncovered findings and provider transport accesses are zero without new exceptions. The project remains NOT READY while 190 temporary exception-covered live findings remain."
 }
