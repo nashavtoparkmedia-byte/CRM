@@ -21,24 +21,22 @@
  * Idempotent — safe to re-run.
  */
 const { PrismaClient } = require('@prisma/client')
+const { moveChatMessagesV1, mergeChatLinksV1, deleteChatV1, normalizeChatExternalIdV1, deleteDuplicateAttachmentsV1 } = require('../src/modules/messaging/public/v1/legacy-prisma-chat-backfill-adapter')
 const prisma = new PrismaClient()
 
 async function mergeWaChat(loser, winner) {
     // Move Messages
-    await prisma.message.updateMany({
-        where: { chatId: loser.id },
-        data:  { chatId: winner.id },
-    })
+    await moveChatMessagesV1(loser.id, winner.id)
     // Move missing driver/contact links
     const updateData = {}
     if (!winner.driverId && loser.driverId) updateData.driverId = loser.driverId
     if (!winner.contactId && loser.contactId) updateData.contactId = loser.contactId
     if (!winner.contactIdentityId && loser.contactIdentityId) updateData.contactIdentityId = loser.contactIdentityId
     if (Object.keys(updateData).length > 0) {
-        await prisma.chat.update({ where: { id: winner.id }, data: updateData })
+        await mergeChatLinksV1(winner.id, updateData)
     }
     // Delete loser (messages already moved, FKs should be clear)
-    await prisma.chat.delete({ where: { id: loser.id } })
+    await deleteChatV1(loser.id)
 }
 
 function phoneKey(externalChatId) {
@@ -83,10 +81,7 @@ async function dedupWaChats() {
         const normalized = `whatsapp:${phone}`
         if (winner.externalChatId !== normalized) {
             try {
-                await prisma.chat.update({
-                    where: { id: winner.id },
-                    data: { externalChatId: normalized },
-                })
+                await normalizeChatExternalIdV1(winner.id, normalized)
                 winner.externalChatId = normalized
             } catch {
                 // Someone else might already have 'whatsapp:<phone>' —
@@ -119,7 +114,7 @@ async function dedupAttachments() {
         seen.add(key)
     }
     if (toDelete.length > 0) {
-        const r = await prisma.messageAttachment.deleteMany({ where: { id: { in: toDelete } } })
+        const r = await deleteDuplicateAttachmentsV1(toDelete)
         console.log(`[DEDUP-ATT] removed ${r.count} duplicate attachment rows`)
     } else {
         console.log('[DEDUP-ATT] no duplicates')

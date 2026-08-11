@@ -13,6 +13,8 @@
  *      to createdAt if that's sane, otherwise now().
  */
 const { PrismaClient } = require('@prisma/client')
+const { deleteUnifiedMessagesByIdsV1, markChannelOutboundDeliveredV1, deleteEmptyUnifiedChatsV1 } = require('../src/modules/messaging/public/v1/legacy-prisma-chat-backfill-adapter')
+const { repairMessageSentAtV1 } = require('../src/modules/messaging/public/v1/legacy-prisma-message-timestamp-maintenance-adapter')
 const prisma = new PrismaClient()
 
 const CHANNELS = ['whatsapp', 'telegram', 'max', 'phone']
@@ -29,7 +31,7 @@ async function cleanChannel(channel) {
     })
     const emptyTextIds = emptyText.filter(m => !(m.content || '').trim()).map(m => m.id)
     if (emptyTextIds.length > 0) {
-        const r = await prisma.message.deleteMany({ where: { id: { in: emptyTextIds } } })
+        const r = await deleteUnifiedMessagesByIdsV1(emptyTextIds)
         console.log(`  Deleted ${r.count} empty-text messages`)
     }
 
@@ -47,20 +49,12 @@ async function cleanChannel(channel) {
         const replacement = m.createdAt && m.createdAt < maxAllowed && m.createdAt > MIN_TS
             ? m.createdAt
             : now
-        await prisma.message.update({ where: { id: m.id }, data: { sentAt: replacement } })
+        await repairMessageSentAtV1(m.id, replacement)
     }
     if (badTs.length > 0) console.log(`  Fixed ${badTs.length} bad-timestamp messages`)
 
     // 3. Stuck outbound (backfilled, externalId set, still marked non-delivered)
-    const stuckFix = await prisma.message.updateMany({
-        where: {
-            channel,
-            direction: 'outbound',
-            externalId: { not: null },
-            status: { in: ['failed', 'sent', 'queued'] },
-        },
-        data: { status: 'delivered' },
-    })
+    const stuckFix = await markChannelOutboundDeliveredV1(channel)
     if (stuckFix.count > 0) console.log(`  Marked ${stuckFix.count} backfilled outbound as delivered`)
 
     // 4. Empty chats (no messages)
@@ -70,7 +64,7 @@ async function cleanChannel(channel) {
     })
     const emptyChatIds = all.filter(c => c._count.messages === 0).map(c => c.id)
     if (emptyChatIds.length > 0) {
-        const r = await prisma.chat.deleteMany({ where: { id: { in: emptyChatIds } } })
+        const r = await deleteEmptyUnifiedChatsV1(emptyChatIds)
         console.log(`  Deleted ${r.count} empty chats`)
     }
 }

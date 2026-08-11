@@ -99,5 +99,19 @@ async function backfillMessageChannelV1(messageId, channel) {
   if (typeof messageId !== 'string' || !messageId || !['whatsapp', 'telegram', 'max', 'phone'].includes(channel)) throw new TypeError('bounded message channel input required')
   const prisma = new PrismaClient(); try { return await prisma.message.update({ where: { id: messageId }, data: { channel } }) } finally { await prisma.$disconnect() }
 }
+async function markChannelOutboundDeliveredV1(channel) {
+  if (!['whatsapp', 'telegram', 'max', 'phone'].includes(channel)) throw new TypeError('unsupported channel')
+  const prisma = new PrismaClient(); try { return await prisma.message.updateMany({ where: { channel, direction: 'outbound', externalId: { not: null }, status: { in: ['failed', 'sent', 'queued'] } }, data: { status: 'delivered' } }) } finally { await prisma.$disconnect() }
+}
+async function mergeChatLinksV1(winnerId, links) {
+  if (typeof winnerId !== 'string' || !winnerId || !links || typeof links !== 'object') throw new TypeError('winnerId and links required')
+  const data = {}; for (const key of ['driverId', 'contactId', 'contactIdentityId']) if (links[key]) data[key] = links[key]
+  if (!Object.keys(data).length) return null
+  const prisma = new PrismaClient(); try { return await prisma.chat.update({ where: { id: winnerId }, data }) } finally { await prisma.$disconnect() }
+}
+async function deleteDuplicateAttachmentsV1(ids) {
+  if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new TypeError('attachment ids required')
+  const prisma = new PrismaClient(); try { return await prisma.messageAttachment.deleteMany({ where: { id: { in: ids } } }) } finally { await prisma.$disconnect() }
+}
 
-module.exports = { backfillLastInboundAtV1, backfillUnreadCountV1, deleteUnifiedMessagesByIdsV1, markBackfilledOutboundDeliveredV1, deleteEmptyUnifiedChatsV1, rewriteLidChatV1, moveMessageToChatV1, deleteUnifiedMessageV1, detachAndDeleteChatV1, normalizeChatExternalIdV1, moveChatMessagesV1, deleteChatV1, refreshChatLastMessageAtV1, wipeWhatsappUnifiedDataV1, backfillMessageChannelV1 }
+module.exports = { backfillLastInboundAtV1, backfillUnreadCountV1, deleteUnifiedMessagesByIdsV1, markBackfilledOutboundDeliveredV1, deleteEmptyUnifiedChatsV1, rewriteLidChatV1, moveMessageToChatV1, deleteUnifiedMessageV1, detachAndDeleteChatV1, normalizeChatExternalIdV1, moveChatMessagesV1, deleteChatV1, refreshChatLastMessageAtV1, wipeWhatsappUnifiedDataV1, backfillMessageChannelV1, markChannelOutboundDeliveredV1, mergeChatLinksV1, deleteDuplicateAttachmentsV1 }

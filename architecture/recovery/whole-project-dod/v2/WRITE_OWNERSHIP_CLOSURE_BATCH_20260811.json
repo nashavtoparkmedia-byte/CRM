@@ -1,20 +1,20 @@
 {
   "schema": "yoko.crm.write-ownership-closure-batch.v2",
-  "generated_at": "2026-08-11T12:12:17.365Z",
+  "generated_at": "2026-08-11T12:22:48.449Z",
   "authority": "Derived evidence ledger; unresolved records remain blocked/ambiguous and are not PASS.",
   "baseline": {
-    "analysis_sha256": "9b05a6e7248b49b76ca9d49a7c2c3fe89a5e4dd67ec4defd4925d49cc15d1e1c",
-    "baseline_sha256": "ef4c17383a8e9c22426b230a0101fb6421f72517dd3235701557eef2f0c81a87",
-    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T151500Z.json",
-    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_DYNAMIC_SQL.json"
+    "analysis_sha256": "f9a1a7c8baf44df5b043292c40d193b6f37f4574b235c8304084c1a829f11d73",
+    "baseline_sha256": "3f98c71162f4564eab85af7bc28f8dc96ebcaaf5e920d171c8d1c9cf91df37b3",
+    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T163000Z.json",
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_CLEANUP_DEDUP.json"
   },
   "metrics": {
-    "confirmed_writes_discovered": 1410,
+    "confirmed_writes_discovered": 1404,
     "confirmed_foreign": 0,
     "closed_foreign": 52,
-    "ambiguous_remaining": 79,
+    "ambiguous_remaining": 70,
     "confirmed_write_owner_resolved": 12,
-    "confirmed_write_owner_unresolved": 26,
+    "confirmed_write_owner_unresolved": 17,
     "dynamic_delegate_unresolved": 6,
     "dynamic_sql_unresolved": 5,
     "query_raw_side_effect_unresolved": 1,
@@ -22,10 +22,10 @@
     "active_operational_surfaces_unclassified": 0,
     "temporary_exceptions": 0,
     "intentional_exceptions": 0,
-    "raw_baseline_ambiguous_records": 79,
+    "raw_baseline_ambiguous_records": 70,
     "owner_valid_writes": 7,
     "resolved_non_writes": 29,
-    "material_unresolved_write_risk": 38,
+    "material_unresolved_write_risk": 29,
     "controlled_migration_writes": 5
   },
   "foreign_write_closure": {
@@ -168,7 +168,7 @@
     "post_rescan_foreign": 0,
     "ambiguity_reduction": 4
   },
-  "next_action": "Resolve remaining 26 ownership-blocked, 6 delegate, 5 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
+  "next_action": "Resolve remaining 17 ownership-blocked, 6 delegate, 5 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
   "new_backfill_capability_batch": {
     "files": [
       "gravity-mvp/scripts/backfill_source_connection_pr7.js",
@@ -434,5 +434,14 @@
     "read_only_reclassified": 2,
     "post_rescan_foreign": 0,
     "ambiguity_reduction": 3
+  },
+  "cleanup_dedup_batch": {
+    "files": [
+      "gravity-mvp/scripts/cleanup-all-channels.js",
+      "gravity-mvp/scripts/dedup-chats-and-attachments.js"
+    ],
+    "writes_routed": 9,
+    "post_rescan_foreign": 0,
+    "ambiguity_reduction": 9
   }
 }
