@@ -2,12 +2,8 @@ import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
 import type {
   ContactMergeQueryRepositoriesV1,
-  ContactMergeSimpleLinkRepositoriesV1,
   ContactMergeTransactionalRepositoriesV1,
-  ContactMergeUnitOfWorkV1,
 } from './contact-merge-handler'
-import { makeMessagingContactMergeRepositories } from '../../../messaging/public/v1/legacy-prisma-contact-merge-adapter'
-import { makeWorkContactMergeRepositories } from '../../../work-management/public/v1/legacy-prisma-contact-merge-adapter'
 
 export const legacyPrismaContactMergeQueriesV1: ContactMergeQueryRepositoriesV1 = {
   contacts: {
@@ -63,22 +59,15 @@ export const legacyPrismaContactMergeQueriesV1: ContactMergeQueryRepositoriesV1 
   },
 }
 
-function makeSimpleLinkRepositories(
-  repositories: ContactMergeTransactionalRepositoriesV1,
-): ContactMergeSimpleLinkRepositoriesV1 {
-  return {
-    contacts: {
-      linkContactToDriver: repositories.contacts.linkContactToDriver,
-    },
-    messaging: {
-      attachUnlinkedContactChatsToDriver: repositories.messaging.attachUnlinkedContactChatsToDriver,
-    },
-  }
-}
-
-function makeTransactionalRepositories(
+/**
+ * Contacts' exact contribution to a contact-merge transaction.  The platform
+ * composition root supplies the remaining owner capabilities while retaining
+ * the single transaction boundary; this adapter never reaches into Messaging
+ * or Work Management.
+ */
+export function makeLegacyPrismaContactMergeRepositoriesV1(
   transaction: Prisma.TransactionClient,
-): ContactMergeTransactionalRepositoriesV1 {
+): Pick<ContactMergeTransactionalRepositoriesV1, 'contacts' | 'fleet'> {
   return {
     contacts: {
       async lockContactPairOrdered(survivorId, mergedId) {
@@ -188,23 +177,5 @@ function makeTransactionalRepositories(
         return driver?.id ?? null
       },
     },
-
-    messaging: makeMessagingContactMergeRepositories(transaction),
-
-    work: makeWorkContactMergeRepositories(transaction),
   }
-}
-
-export const legacyPrismaContactMergeUnitOfWorkV1: ContactMergeUnitOfWorkV1 = {
-  async runSimpleLink(operation) {
-    await prisma.$transaction(async (transaction) => {
-      await operation(makeSimpleLinkRepositories(makeTransactionalRepositories(transaction)))
-    })
-  },
-
-  async runMerge(operation) {
-    await prisma.$transaction(async (transaction) => {
-      await operation(makeTransactionalRepositories(transaction))
-    }, { timeout: 15000 })
-  },
 }

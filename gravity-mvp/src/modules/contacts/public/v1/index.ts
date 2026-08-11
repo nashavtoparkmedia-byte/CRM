@@ -19,10 +19,6 @@ import {
 } from './contact-conversation-handler'
 import { legacyPrismaContactConversationPortV1 } from './legacy-prisma-contact-conversation-adapter'
 import { createMergeContactsHandlerV1 } from './contact-merge-handler'
-import {
-    legacyPrismaContactMergeQueriesV1,
-    legacyPrismaContactMergeUnitOfWorkV1,
-} from './legacy-prisma-contact-merge-adapter'
 
 export { createResolveContactHandlerV1 } from './resolve-contact-handler'
 export type { ResolveContactPersistencePortV1 } from './resolve-contact-handler'
@@ -88,7 +84,3 @@ export type {
     ContactMergeUnitOfWorkV1,
     ContactMergeWorkRepositoryV1,
 } from './contact-merge-handler'
-export const mergeContactsV1 = createMergeContactsHandlerV1({
-    queries: legacyPrismaContactMergeQueriesV1,
-    unitOfWork: legacyPrismaContactMergeUnitOfWorkV1,
-})

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { ContactMergeService, MergeError } from '@/lib/ContactMergeService'
+import { MERGE_CONTACTS_COMMAND_V1 } from '@/contracts/contacts/v1'
+import { ContactMergeErrorV1 } from '@/modules/contacts/public/v1'
+import { mergeContactsV1 } from '@/app/contact-merge-composition'
 
 export async function POST(
   req: NextRequest,
@@ -21,10 +23,17 @@ export async function POST(
   }
 
   try {
-    const result = await ContactMergeService.mergeContactToDriver(contactId, driverId, mergedBy)
-    return NextResponse.json(result)
+    const result = await mergeContactsV1({
+      contract: MERGE_CONTACTS_COMMAND_V1,
+      operation: 'contact_to_driver',
+      contactId,
+      driverId,
+      mergedBy: mergedBy ?? 'system',
+    })
+    const { contract: _contract, ...legacyResult } = result
+    return NextResponse.json(legacyResult)
   } catch (err: any) {
-    if (err instanceof MergeError) {
+    if (err instanceof ContactMergeErrorV1) {
       const statusMap: Record<string, number> = {
         CONTACT_NOT_FOUND: 404,
         DRIVER_NOT_FOUND: 404,
