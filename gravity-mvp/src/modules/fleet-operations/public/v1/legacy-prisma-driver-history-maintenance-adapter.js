@@ -36,5 +36,9 @@ async function upsertDriverDaySummaryV1(driverId, date, tripCount) {
   try { return await prisma.driverDaySummary.upsert({ where: { driverId_date: { driverId, date } }, update: { tripCount }, create: { driverId, date, tripCount } }) }
   finally { await prisma.$disconnect() }
 }
+async function createImportedDriverV1(data) {
+  if (!data || typeof data !== 'object' || typeof data.fullName !== 'string' || typeof data.yandexDriverId !== 'string') throw new TypeError('validated driver data required')
+  const prisma = new PrismaClient(); try { return await prisma.driver.create({ data, select: { id: true, fullName: true, phone: true } }) } finally { await prisma.$disconnect() }
+}
 
-module.exports = { updateDriverLastOrderAtV1, clearDriversLastOrderAtV1, resetDriverDaySummaryV1, upsertDriverDaySummaryV1 }
+module.exports = { updateDriverLastOrderAtV1, clearDriversLastOrderAtV1, resetDriverDaySummaryV1, upsertDriverDaySummaryV1, createImportedDriverV1 }
