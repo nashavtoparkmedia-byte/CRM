@@ -1,20 +1,20 @@
 {
   "schema": "yoko.crm.write-ownership-closure-batch.v2",
-  "generated_at": "2026-08-11T08:26:51.253Z",
+  "generated_at": "2026-08-11T08:37:16.581Z",
   "authority": "Derived evidence ledger; unresolved records remain blocked/ambiguous and are not PASS.",
   "baseline": {
-    "analysis_sha256": "edf648a93f0a4ced1c5774067225af755b4be807b0804e1d1a9f0f6c38cdeee9",
-    "baseline_sha256": "bde6275f68e120aed94ff3256a022c3cdb836e98e46b83b5c1d276c9c1d5d022",
-    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T082622Z.json",
-    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_DRIVER_HISTORY.json"
+    "analysis_sha256": "4fd57a72318cf622250c0a90830a4e45eebddf0e780db7352dd75e41bdf77bc5",
+    "baseline_sha256": "fb11579747a98c7028772fa01d112fa6378285321f016f45f35a681dca979e57",
+    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T083646Z.json",
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_IDENTITY_MAINTENANCE.json"
   },
   "metrics": {
     "confirmed_writes_discovered": 1419,
     "confirmed_foreign": 0,
     "closed_foreign": 52,
-    "ambiguous_remaining": 157,
+    "ambiguous_remaining": 152,
     "confirmed_write_owner_resolved": 7,
-    "confirmed_write_owner_unresolved": 107,
+    "confirmed_write_owner_unresolved": 102,
     "dynamic_delegate_unresolved": 6,
     "dynamic_sql_unresolved": 32,
     "query_raw_side_effect_unresolved": 1,
@@ -163,7 +163,7 @@
     "post_rescan_foreign": 0,
     "ambiguity_reduction": 4
   },
-  "next_action": "Resolve the remaining 107 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
+  "next_action": "Resolve the remaining 102 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
   "new_backfill_capability_batch": {
     "files": [
       "gravity-mvp/scripts/backfill_source_connection_pr7.js",
@@ -237,5 +237,21 @@
     "writes_routed": 6,
     "post_rescan_foreign": 0,
     "ambiguity_reduction": 6
+  },
+  "new_identity_maintenance_batch": {
+    "files": [
+      "gravity-mvp/scripts/backfill-reachability.js",
+      "gravity-mvp/scripts/cleanup-last-fake-ident.js",
+      "gravity-mvp/scripts/import-license-from-csv.ts",
+      "gravity-mvp/scripts/seed-crm-users.ts",
+      "gravity-mvp/scripts/fix-call-messages.ts",
+      "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-identity-maintenance-adapter.js",
+      "gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-driver-license-maintenance-adapter.js",
+      "gravity-mvp/src/modules/identity-access/public/v1/legacy-prisma-crm-user-seed-adapter.js",
+      "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-call-message-cleanup-adapter.js"
+    ],
+    "writes_routed": 5,
+    "post_rescan_foreign": 0,
+    "ambiguity_reduction": 5
   }
 }

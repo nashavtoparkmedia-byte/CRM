@@ -1,12 +1,12 @@
 {
-  "analysis_sha256": "edf648a93f0a4ced1c5774067225af755b4be807b0804e1d1a9f0f6c38cdeee9",
+  "analysis_sha256": "4fd57a72318cf622250c0a90830a4e45eebddf0e780db7352dd75e41bdf77bc5",
   "execution": {
-    "ambiguous_candidates": 157,
+    "ambiguous_candidates": 152,
     "complete": true,
-    "elapsed_ms": 434826.501574,
+    "elapsed_ms": 435998.947738,
     "failures": [],
-    "files_completed": 1710,
-    "files_discovered": 1710,
+    "files_completed": 1714,
+    "files_discovered": 1714,
     "mode": "fresh_process_per_javascript_surface",
     "progress_every": 150,
     "worker_failures": 0,
@@ -47,7 +47,7 @@
         ".bat": 4,
         ".cjs": 3,
         ".dockerfile": 7,
-        ".js": 403,
+        ".js": 407,
         ".mjs": 172,
         ".package-json": 7,
         ".prisma": 4,
@@ -60,7 +60,7 @@
         ".yml": 6
       },
       "by_lifecycle": {
-        "APPLICATION_RUNTIME": 996,
+        "APPLICATION_RUNTIME": 1000,
         "DEAD_HISTORICAL": 35,
         "FIXTURE": 1,
         "MIGRATION": 61,
@@ -72,7 +72,7 @@
         "DEAD_HISTORICAL": 35,
         "MIGRATION_ONLY": 61
       },
-      "tracked_executable_surfaces": 1710,
+      "tracked_executable_surfaces": 1714,
       "unreviewed_operational_surfaces": 0
     },
     "surfaces": [
@@ -13218,6 +13218,18 @@
       },
       {
         "disposition": null,
+        "extension": ".js",
+        "functional_owner": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "migration_target": null,
+        "owner_context": null,
+        "path": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-identity-maintenance-adapter.js",
+        "production_capability": "POSSIBLE",
+        "rationale": null,
+        "registry_classified": false
+      },
+      {
+        "disposition": null,
         "extension": ".ts",
         "functional_owner": null,
         "lifecycle": "APPLICATION_RUNTIME",
@@ -13590,6 +13602,18 @@
       },
       {
         "disposition": null,
+        "extension": ".js",
+        "functional_owner": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "migration_target": null,
+        "owner_context": null,
+        "path": "gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-driver-license-maintenance-adapter.js",
+        "production_capability": "POSSIBLE",
+        "rationale": null,
+        "registry_classified": false
+      },
+      {
+        "disposition": null,
         "extension": ".ts",
         "functional_owner": null,
         "lifecycle": "APPLICATION_RUNTIME",
@@ -13812,6 +13836,18 @@
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/src/modules/identity-access/public/v1/integration-admin-credentials.ts",
+        "production_capability": "POSSIBLE",
+        "rationale": null,
+        "registry_classified": false
+      },
+      {
+        "disposition": null,
+        "extension": ".js",
+        "functional_owner": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "migration_target": null,
+        "owner_context": null,
+        "path": "gravity-mvp/src/modules/identity-access/public/v1/legacy-prisma-crm-user-seed-adapter.js",
         "production_capability": "POSSIBLE",
         "rationale": null,
         "registry_classified": false
@@ -14100,6 +14136,18 @@
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-attach-message-media-adapter.ts",
+        "production_capability": "POSSIBLE",
+        "rationale": null,
+        "registry_classified": false
+      },
+      {
+        "disposition": null,
+        "extension": ".js",
+        "functional_owner": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "migration_target": null,
+        "owner_context": null,
+        "path": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-call-message-cleanup-adapter.js",
         "production_capability": "POSSIBLE",
         "rationale": null,
         "registry_classified": false
@@ -20601,26 +20649,26 @@
   "parse_findings": [],
   "schema": "yoko.crm.whole-repository-write-analysis.v2",
   "source": {
-    "git_commit": "1df859e1c733a2d0dd82b19cf06340ccb6df9e60",
+    "git_commit": "efa10f46d5f6237b36b1d43c2243fa76da9a8656",
     "git_tracked_only": true,
-    "git_tree": "11ce2e9ab9cb95ccf0c68db54d8554965cf4947b",
+    "git_tree": "0e820fb853bfd0d19ff7df38e8a204efe95a6df1",
     "inventory_schema": "yoko.crm.tracked-executable-surface-inventory.v2",
     "repository_root": ".",
     "tracked_worktree_clean": true,
     "tracked_worktree_status_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
   },
   "summary": {
-    "ambiguous_writes": 157,
+    "ambiguous_writes": 152,
     "discovered_write_sites": 1419,
     "foreign_writes": 0,
     "historical_dead_writes": 18,
     "migration_only_writes": 500,
-    "operational_script_writes": 118,
-    "owner_writes": 515,
+    "operational_script_writes": 113,
+    "owner_writes": 520,
     "parse_findings": 0,
     "raw_sql_writes": 814,
     "test_writes": 229,
-    "tracked_executable_surfaces": 1710,
+    "tracked_executable_surfaces": 1714,
     "unreviewed_operational_surfaces": 0
   },
   "write_sites": [
@@ -38805,56 +38853,6 @@
     {
       "ambiguity_reasons": [],
       "ambiguous": false,
-      "candidate_models": [
-        "contactIdentity"
-      ],
-      "classification": "AMBIGUOUS",
-      "column": 11,
-      "confidence": "HIGH",
-      "end": 2124,
-      "file": "gravity-mvp/scripts/backfill-reachability.js",
-      "index": 1938,
-      "kind": "model",
-      "line": 77,
-      "method": "update",
-      "model": "contactIdentity",
-      "nested_operations": [],
-      "owner_contexts": [
-        "contacts"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "return_projection": {
-        "dynamic": false,
-        "mode": "FULL_ROW",
-        "nested_relations": [],
-        "omitted_fields": [],
-        "selected_fields": []
-      },
-      "scope": "Function:main",
-      "site_signature": "8db16d93c4b0a994ed3a45c87cb9555b55094d5f61cf8b352257612e8bfb5666",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": false,
-      "written_fields": [
-        "reachabilityCheckedAt",
-        "reachabilityStatus"
-      ]
-    },
-    {
-      "ambiguity_reasons": [],
-      "ambiguous": false,
       "candidate_models": [],
       "classification": "MIGRATION_ONLY",
       "column": 19,
@@ -40288,56 +40286,6 @@
         "ContactIdentity"
       ],
       "unresolved_targets": []
-    },
-    {
-      "ambiguity_reasons": [],
-      "ambiguous": false,
-      "candidate_models": [
-        "contactIdentity"
-      ],
-      "classification": "AMBIGUOUS",
-      "column": 9,
-      "confidence": "HIGH",
-      "end": 570,
-      "file": "gravity-mvp/scripts/cleanup-last-fake-ident.js",
-      "index": 455,
-      "kind": "model",
-      "line": 11,
-      "method": "update",
-      "model": "contactIdentity",
-      "nested_operations": [],
-      "owner_contexts": [
-        "contacts"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "return_projection": {
-        "dynamic": false,
-        "mode": "FULL_ROW",
-        "nested_relations": [],
-        "omitted_fields": [],
-        "selected_fields": []
-      },
-      "scope": "Function:main",
-      "site_signature": "50c99f9b4436191e7f1f0e954f4ecd194a6db66269e9de7f089db755a4248c27",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": false,
-      "written_fields": [
-        "isActive",
-        "phoneId"
-      ]
     },
     {
       "ambiguity_reasons": [],
@@ -41839,47 +41787,6 @@
       "ambiguity_reasons": [],
       "ambiguous": false,
       "candidate_models": [
-        "message"
-      ],
-      "classification": "AMBIGUOUS",
-      "column": 27,
-      "confidence": "HIGH",
-      "end": 991,
-      "file": "gravity-mvp/scripts/fix-call-messages.ts",
-      "index": 937,
-      "kind": "model",
-      "line": 19,
-      "method": "deleteMany",
-      "model": "message",
-      "nested_operations": [],
-      "owner_contexts": [
-        "messaging"
-      ],
-      "receiver_origin": "import:../src/lib/prisma",
-      "return_projection": null,
-      "scope": "Function:main",
-      "site_signature": "a1b7e1342bdc7240081068fb9b0d080609336905230fbbac5a123f0cca74499a",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": false,
-      "written_fields": []
-    },
-    {
-      "ambiguity_reasons": [],
-      "ambiguous": false,
-      "candidate_models": [
         "taskEvent"
       ],
       "classification": "AMBIGUOUS",
@@ -42152,49 +42059,6 @@
       "unresolved_targets": [],
       "write_projection_dynamic": true,
       "written_fields": []
-    },
-    {
-      "ambiguity_reasons": [],
-      "ambiguous": false,
-      "candidate_models": [
-        "driver"
-      ],
-      "classification": "AMBIGUOUS",
-      "column": 34,
-      "confidence": "HIGH",
-      "end": 1517,
-      "file": "gravity-mvp/scripts/import-license-from-csv.ts",
-      "index": 1393,
-      "kind": "model",
-      "line": 47,
-      "method": "updateMany",
-      "model": "driver",
-      "nested_operations": [],
-      "owner_contexts": [
-        "fleet_operations"
-      ],
-      "receiver_origin": "new:import:@prisma/client",
-      "return_projection": null,
-      "scope": "Function:importLicenses",
-      "site_signature": "16bc4d5b622130f2e1ce7b1aa1b0bffe078035051f722cc199a095a15dc74720",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": false,
-      "written_fields": [
-        "licenseNumber"
-      ]
     },
     {
       "ambiguity_reasons": [],
@@ -43984,55 +43848,6 @@
         "smallCount",
         "totalTrips"
       ]
-    },
-    {
-      "ambiguity_reasons": [
-        "dynamic_payload_may_contain_nested_write"
-      ],
-      "ambiguous": false,
-      "candidate_models": [
-        "crmUser"
-      ],
-      "classification": "AMBIGUOUS",
-      "column": 31,
-      "confidence": "HIGH",
-      "end": 686,
-      "file": "gravity-mvp/scripts/seed-crm-users.ts",
-      "index": 649,
-      "kind": "model",
-      "line": 25,
-      "method": "create",
-      "model": "crmUser",
-      "nested_operations": [],
-      "owner_contexts": [
-        "identity_access"
-      ],
-      "receiver_origin": "new:import:@prisma/client",
-      "return_projection": {
-        "dynamic": false,
-        "mode": "FULL_ROW",
-        "nested_relations": [],
-        "omitted_fields": [],
-        "selected_fields": []
-      },
-      "scope": "Function:main",
-      "site_signature": "cfc3dfabcd2558153cf8854ad01fb0d7149c26d3fae3cb0c9bcaf8e9da23d378",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": true,
-      "written_fields": []
     },
     {
       "ambiguity_reasons": [],
@@ -76600,6 +76415,106 @@
       ]
     },
     {
+      "ambiguity_reasons": [],
+      "ambiguous": false,
+      "candidate_models": [
+        "contactIdentity"
+      ],
+      "classification": "OWNER",
+      "column": 22,
+      "confidence": "HIGH",
+      "end": 774,
+      "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-identity-maintenance-adapter.js",
+      "index": 654,
+      "kind": "model",
+      "line": 11,
+      "method": "update",
+      "model": "contactIdentity",
+      "nested_operations": [],
+      "owner_contexts": [
+        "contacts"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "return_projection": {
+        "dynamic": false,
+        "mode": "FULL_ROW",
+        "nested_relations": [],
+        "omitted_fields": [],
+        "selected_fields": []
+      },
+      "scope": "Function:updateContactIdentityReachabilityV1",
+      "site_signature": "43b0c5aea35f8f72505fe0e6b3bb6b5245aebdcffa26f17e613b275a5ddc4cbf",
+      "source_context": "contacts",
+      "source_identity": "bounded_module_path",
+      "source_technical_module": "contacts.module",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "transaction": {
+        "contained": false,
+        "origin": null
+      },
+      "unresolved_targets": [],
+      "write_projection_dynamic": false,
+      "written_fields": [
+        "reachabilityCheckedAt",
+        "reachabilityStatus"
+      ]
+    },
+    {
+      "ambiguity_reasons": [],
+      "ambiguous": false,
+      "candidate_models": [
+        "contactIdentity"
+      ],
+      "classification": "OWNER",
+      "column": 22,
+      "confidence": "HIGH",
+      "end": 1044,
+      "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-identity-maintenance-adapter.js",
+      "index": 954,
+      "kind": "model",
+      "line": 18,
+      "method": "update",
+      "model": "contactIdentity",
+      "nested_operations": [],
+      "owner_contexts": [
+        "contacts"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "return_projection": {
+        "dynamic": false,
+        "mode": "FULL_ROW",
+        "nested_relations": [],
+        "omitted_fields": [],
+        "selected_fields": []
+      },
+      "scope": "Function:deactivateFakeContactIdentityV1",
+      "site_signature": "fb96d896ff37b3754e12345bbcfddd035ff79b80c5a61f9fc7675cab5e70760b",
+      "source_context": "contacts",
+      "source_identity": "bounded_module_path",
+      "source_technical_module": "contacts.module",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "transaction": {
+        "contained": false,
+        "origin": null
+      },
+      "unresolved_targets": [],
+      "write_projection_dynamic": false,
+      "written_fields": [
+        "isActive",
+        "phoneId"
+      ]
+    },
+    {
       "ambiguity_reasons": [
         "dynamic_sql_fragment",
         "dynamic_sql_marker",
@@ -78291,6 +78206,49 @@
       "ambiguity_reasons": [],
       "ambiguous": false,
       "candidate_models": [
+        "driver"
+      ],
+      "classification": "OWNER",
+      "column": 22,
+      "confidence": "HIGH",
+      "end": 588,
+      "file": "gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-driver-license-maintenance-adapter.js",
+      "index": 508,
+      "kind": "model",
+      "line": 8,
+      "method": "updateMany",
+      "model": "driver",
+      "nested_operations": [],
+      "owner_contexts": [
+        "fleet_operations"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "return_projection": null,
+      "scope": "Function:updateDriverLicenseV1",
+      "site_signature": "3884224a69fa49b282b19751571162888b03fc942df5ed2394a73189072a3c51",
+      "source_context": "fleet_operations",
+      "source_identity": "bounded_module_path",
+      "source_technical_module": "fleet_operations.module",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "transaction": {
+        "contained": false,
+        "origin": null
+      },
+      "unresolved_targets": [],
+      "write_projection_dynamic": false,
+      "written_fields": [
+        "licenseNumber"
+      ]
+    },
+    {
+      "ambiguity_reasons": [],
+      "ambiguous": false,
+      "candidate_models": [
         "driverEvent"
       ],
       "classification": "OWNER",
@@ -78589,6 +78547,56 @@
       "ambiguity_reasons": [],
       "ambiguous": false,
       "candidate_models": [
+        "crmUser"
+      ],
+      "classification": "OWNER",
+      "column": 22,
+      "confidence": "HIGH",
+      "end": 602,
+      "file": "gravity-mvp/src/modules/identity-access/public/v1/legacy-prisma-crm-user-seed-adapter.js",
+      "index": 555,
+      "kind": "model",
+      "line": 9,
+      "method": "create",
+      "model": "crmUser",
+      "nested_operations": [],
+      "owner_contexts": [
+        "identity_access"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "return_projection": {
+        "dynamic": false,
+        "mode": "FULL_ROW",
+        "nested_relations": [],
+        "omitted_fields": [],
+        "selected_fields": []
+      },
+      "scope": "Function:createCrmUserV1",
+      "site_signature": "6c80ca1ac8443e997cb2f7a91077c15852c73953c7f367ee440802ee94950a13",
+      "source_context": "identity_access",
+      "source_identity": "bounded_module_path",
+      "source_technical_module": "identity_access.module",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "transaction": {
+        "contained": false,
+        "origin": null
+      },
+      "unresolved_targets": [],
+      "write_projection_dynamic": false,
+      "written_fields": [
+        "name",
+        "role"
+      ]
+    },
+    {
+      "ambiguity_reasons": [],
+      "ambiguous": false,
+      "candidate_models": [
         "messageAttachment"
       ],
       "classification": "OWNER",
@@ -78705,6 +78713,47 @@
         "type",
         "url"
       ]
+    },
+    {
+      "ambiguity_reasons": [],
+      "ambiguous": false,
+      "candidate_models": [
+        "message"
+      ],
+      "classification": "OWNER",
+      "column": 22,
+      "confidence": "HIGH",
+      "end": 262,
+      "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-call-message-cleanup-adapter.js",
+      "index": 208,
+      "kind": "model",
+      "line": 6,
+      "method": "deleteMany",
+      "model": "message",
+      "nested_operations": [],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "return_projection": null,
+      "scope": "Function:deleteCallMessagesV1",
+      "site_signature": "135aeb33d256a19fddfcc8860496ae0012d9b2318d229055c3906937a3caa00e",
+      "source_context": "messaging",
+      "source_identity": "bounded_module_path",
+      "source_technical_module": "messaging.module",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "transaction": {
+        "contained": false,
+        "origin": null
+      },
+      "unresolved_targets": [],
+      "write_projection_dynamic": false,
+      "written_fields": []
     },
     {
       "ambiguity_reasons": [],
