@@ -629,7 +629,10 @@ export class MessageService {
                     if (connId) {
                         await deliverWA(connId, rawExternalChatId, content, quotedMsgId)
                     } else {
-                        const conn = await prisma.whatsAppConnection.findFirst({ where: { status: 'ready' } })
+                        const conn = await prisma.whatsAppConnection.findFirst({
+                            where: { status: 'ready' },
+                            select: { id: true },
+                        })
                         console.log(`[MessageService] WA Fallback: found ready conn=${conn?.id}`)
                         if (!conn) throw new Error('No ready WhatsApp connection available.')
                         await deliverWA(conn.id, rawExternalChatId, content, quotedMsgId)

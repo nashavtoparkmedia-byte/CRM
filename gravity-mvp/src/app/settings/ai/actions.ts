@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { importTelegramHistory } from '@/app/tg-actions'
 import { importWhatsAppHistory } from '@/lib/whatsapp/WhatsAppService'
+import { getAiAgentProviderConfigV1 } from '@/modules/calling/public/v1/ai-agent-provider-capability'
 import { getUsers } from '@/lib/users/user-service'
 import {
     ARCHIVE_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
@@ -112,37 +113,7 @@ async function assertCanEditAi() {
 export async function getAiConfig() {
     await requireIntegrationAdminAccess()
     try {
-        const cfg = await prisma.aiAgentConfig.findUnique({
-            where: { id: 'singleton' },
-            select: {
-                id: true,
-                enabled: true,
-                mode: true,
-                provider: true,
-                apiKeyEncrypted: true,
-                classificationModel: true,
-                responseModel: true,
-                language: true,
-                confidenceThreshold: true,
-                maxAutoRepliesPerChat: true,
-                activeChannels: true,
-                escalationPolicy: true,
-                workingHours: true,
-                routingRules: true,
-                promptRole: true,
-                promptTone: true,
-                promptAllowed: true,
-                promptForbidden: true,
-                activeProfileId: true,
-                connectionStatus: true,
-                lastConnectionCheckAt: true,
-                extractionQualityTier: true,
-                extractionPromptVersion: true,
-                internEnabled: true,
-                createdAt: true,
-                updatedAt: true,
-            },
-        })
+        const cfg = await getAiAgentProviderConfigV1()
         // activeChannels — String[] без DB-default. Частичный первый INSERT в
         // saveAiConfig мог оставить колонку NULL, и клиент падал на
         // config.activeChannels.map(...) → "Cannot read properties of null
@@ -204,18 +175,14 @@ export async function saveAiConfig(data: Record<string, any>) {
 export async function testSavedConnection() {
     await assertCanEditAi()
     try {
-        const rows = await prisma.$queryRaw<any[]>`
-            SELECT provider, "apiKeyEncrypted", "classificationModel"
-            FROM "AiAgentConfig" WHERE id = 'singleton' LIMIT 1
-        `
-        const cfg = rows[0]
+        const cfg = await getAiAgentProviderConfigV1()
         if (!cfg?.apiKeyEncrypted) {
             return { ok: false, error: 'Ключ не сохранён в БД' }
         }
         const result = await testAiConnection(
-            cfg.provider as string,
-            cfg.apiKeyEncrypted as string,
-            cfg.classificationModel as string,
+            cfg.provider,
+            cfg.apiKeyEncrypted,
+            cfg.classificationModel ?? 'claude-haiku-4-5',
         )
         // PR9.20: persist в БД только при УСПЕХЕ. Если auto-test
         // упал (network glitch, прокси отвалился, rate limit) —
@@ -1431,15 +1398,18 @@ export async function previewDecisionRetry(
     }
 
     // 4. Generator call
-    const cfgRows = await prisma.$queryRaw<any[]>`
-        SELECT provider::text AS provider,
-               "apiKeyEncrypted" AS "apiKey",
-               "responseModel", language,
-               "promptRole", "promptTone", "promptAllowed", "promptForbidden",
-               "activeProfileId"
-        FROM "AiAgentConfig" WHERE id = 'singleton' LIMIT 1
-    `
-    const cfg = cfgRows[0]
+    const providerConfig = await getAiAgentProviderConfigV1()
+    const cfg = providerConfig && {
+        provider: providerConfig.provider,
+        apiKey: providerConfig.apiKeyEncrypted,
+        responseModel: providerConfig.responseModel,
+        language: providerConfig.language,
+        promptRole: providerConfig.promptRole,
+        promptTone: providerConfig.promptTone,
+        promptAllowed: providerConfig.promptAllowed,
+        promptForbidden: providerConfig.promptForbidden,
+        activeProfileId: providerConfig.activeProfileId,
+    }
     if (!cfg?.apiKey) {
         const totalMs = Date.now() - startedAt
         console.warn(`[retry-preview] no API key configured · total ${totalMs}ms`)
