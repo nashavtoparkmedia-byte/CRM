@@ -1,9 +1,9 @@
 {
-  "analysis_sha256": "1136e34f456264877d32ab87e58a6de1b8c34d8c6eda48299696b99b18e6c5bf",
+  "analysis_sha256": "65af50ebe1029b121a33d405fab63a03e8d7f4bf1c2e4e06f79d2dedaf25ed3e",
   "execution": {
-    "ambiguous_candidates": 254,
+    "ambiguous_candidates": 204,
     "complete": true,
-    "elapsed_ms": 401029.317982,
+    "elapsed_ms": 368930.219198,
     "failures": [],
     "files_completed": 1695,
     "files_discovered": 1695,
@@ -61,16 +61,16 @@
       },
       "by_lifecycle": {
         "APPLICATION_RUNTIME": 981,
-        "DEAD_HISTORICAL": 29,
+        "DEAD_HISTORICAL": 35,
         "FIXTURE": 1,
-        "MIGRATION": 48,
-        "OPERATIONAL_SCRIPT": 382,
+        "MIGRATION": 61,
+        "OPERATIONAL_SCRIPT": 363,
         "TEST": 254
       },
       "operational_dispositions": {
-        "ACTIVE": 382,
-        "DEAD_HISTORICAL": 29,
-        "MIGRATION_ONLY": 48
+        "ACTIVE": 363,
+        "DEAD_HISTORICAL": 35,
+        "MIGRATION_ONLY": 61
       },
       "tracked_executable_surfaces": 1695,
       "unreviewed_operational_surfaces": 0
@@ -605,15 +605,15 @@
         "registry_classified": true
       },
       {
-        "disposition": "ACTIVE",
+        "disposition": "MIGRATION_ONLY",
         "extension": ".yml",
-        "functional_owner": "platform_operations",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "functional_owner": null,
+        "lifecycle": "MIGRATION",
         "migration_target": null,
         "owner_context": null,
         "path": "deploy/docker-compose.production.yml",
-        "production_capability": "POSSIBLE",
-        "rationale": "Active operational surface classified in exact-set batch; functional owner platform_operations; approved path: deployment pipeline. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+        "production_capability": "UNKNOWN",
+        "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
         "registry_classified": true
       },
       {
@@ -629,15 +629,15 @@
         "registry_classified": false
       },
       {
-        "disposition": "ACTIVE",
+        "disposition": "MIGRATION_ONLY",
         "extension": ".sql",
-        "functional_owner": "gravity_application_operations",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "functional_owner": null,
+        "lifecycle": "MIGRATION",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/add_partial_index.sql",
-        "production_capability": "POSSIBLE",
-        "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+        "production_capability": "UNKNOWN",
+        "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
         "registry_classified": true
       },
       {
@@ -797,15 +797,15 @@
         "registry_classified": true
       },
       {
-        "disposition": "ACTIVE",
+        "disposition": "MIGRATION_ONLY",
         "extension": ".dockerfile",
-        "functional_owner": "gravity_application_operations",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "functional_owner": null,
+        "lifecycle": "MIGRATION",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/Dockerfile",
-        "production_capability": "POSSIBLE",
-        "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+        "production_capability": "UNKNOWN",
+        "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
         "registry_classified": true
       },
       {
@@ -881,15 +881,15 @@
         "registry_classified": true
       },
       {
-        "disposition": "ACTIVE",
+        "disposition": "MIGRATION_ONLY",
         "extension": ".sql",
-        "functional_owner": "gravity_application_operations",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "functional_owner": null,
+        "lifecycle": "MIGRATION",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/fix_channels.sql",
-        "production_capability": "POSSIBLE",
-        "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+        "production_capability": "UNKNOWN",
+        "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
         "registry_classified": true
       },
       {
@@ -1901,15 +1901,15 @@
         "registry_classified": true
       },
       {
-        "disposition": "ACTIVE",
+        "disposition": "MIGRATION_ONLY",
         "extension": ".js",
-        "functional_owner": "gravity_application_operations",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "functional_owner": null,
+        "lifecycle": "MIGRATION",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/scripts/add-scenario-field-settings-table.js",
-        "production_capability": "POSSIBLE",
-        "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+        "production_capability": "UNKNOWN",
+        "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
         "registry_classified": true
       },
       {
@@ -1997,15 +1997,15 @@
         "registry_classified": true
       },
       {
-        "disposition": "ACTIVE",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "functional_owner": "gravity_application_operations",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "functional_owner": null,
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/scripts/backfill_max_names.js",
-        "production_capability": "POSSIBLE",
-        "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+        "production_capability": "UNKNOWN",
+        "rationale": "README_BACKFILL explicitly labels one-off/deprecated or unusable alternative; no runtime caller Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
         "registry_classified": true
       },
       {
@@ -2069,15 +2069,15 @@
         "registry_classified": true
       },
       {
-        "disposition": "ACTIVE",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "functional_owner": "gravity_application_operations",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "functional_owner": null,
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/scripts/backfill_tg_via_bot_api.js",
-        "production_capability": "POSSIBLE",
-        "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+        "production_capability": "UNKNOWN",
+        "rationale": "README_BACKFILL explicitly labels one-off/deprecated or unusable alternative; no runtime caller Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
         "registry_classified": true
       },
       {
@@ -2093,15 +2093,15 @@
         "registry_classified": true
       },
       {
-        "disposition": "ACTIVE",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "functional_owner": "gravity_application_operations",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "functional_owner": null,
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/scripts/backfill_wa_names.js",
-        "production_capability": "POSSIBLE",
-        "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+        "production_capability": "UNKNOWN",
+        "rationale": "README_BACKFILL explicitly labels one-off/deprecated or unusable alternative; no runtime caller Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
         "registry_classified": true
       },
       {
@@ -2153,15 +2153,15 @@
         "registry_classified": true
       },
       {
-        "disposition": "ACTIVE",
+        "disposition": "MIGRATION_ONLY",
         "extension": ".js",
-        "functional_owner": "gravity_application_operations",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "functional_owner": null,
+        "lifecycle": "MIGRATION",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/scripts/backfill-scenario-data.js",
-        "production_capability": "POSSIBLE",
-        "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+        "production_capability": "UNKNOWN",
+        "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
         "registry_classified": true
       },
       {
@@ -2189,15 +2189,15 @@
         "registry_classified": true
       },
       {
-        "disposition": "ACTIVE",
+        "disposition": "MIGRATION_ONLY",
         "extension": ".sh",
-        "functional_owner": "gravity_application_operations",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "functional_owner": null,
+        "lifecycle": "MIGRATION",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/scripts/baseline-vps.sh",
-        "production_capability": "POSSIBLE",
-        "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+        "production_capability": "UNKNOWN",
+        "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
         "registry_classified": true
       },
       {
@@ -2897,15 +2897,15 @@
         "registry_classified": true
       },
       {
-        "disposition": "ACTIVE",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "functional_owner": "gravity_application_operations",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "functional_owner": null,
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/scripts/create_test_chat.js",
-        "production_capability": "POSSIBLE",
-        "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+        "production_capability": "UNKNOWN",
+        "rationale": "One-shot test/temporary data utility; no package/runtime caller evidence; retained only as historical source Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
         "registry_classified": true
       },
       {
@@ -3269,15 +3269,15 @@
         "registry_classified": true
       },
       {
-        "disposition": "ACTIVE",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".sql",
-        "functional_owner": "gravity_application_operations",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "functional_owner": null,
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/scripts/inject_test_data.sql",
-        "production_capability": "POSSIBLE",
-        "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+        "production_capability": "UNKNOWN",
+        "rationale": "One-shot test/temporary data utility; no package/runtime caller evidence; retained only as historical source Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
         "registry_classified": true
       },
       {
@@ -3413,27 +3413,27 @@
         "registry_classified": true
       },
       {
-        "disposition": "ACTIVE",
+        "disposition": "MIGRATION_ONLY",
         "extension": ".ts",
-        "functional_owner": "gravity_application_operations",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "functional_owner": null,
+        "lifecycle": "MIGRATION",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/scripts/migrate-contacts.ts",
-        "production_capability": "POSSIBLE",
-        "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+        "production_capability": "UNKNOWN",
+        "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
         "registry_classified": true
       },
       {
-        "disposition": "ACTIVE",
+        "disposition": "MIGRATION_ONLY",
         "extension": ".ts",
-        "functional_owner": "gravity_application_operations",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "functional_owner": null,
+        "lifecycle": "MIGRATION",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/scripts/migrate-scenario-from-metadata.ts",
-        "production_capability": "POSSIBLE",
-        "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+        "production_capability": "UNKNOWN",
+        "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
         "registry_classified": true
       },
       {
@@ -3545,15 +3545,15 @@
         "registry_classified": true
       },
       {
-        "disposition": "ACTIVE",
+        "disposition": "MIGRATION_ONLY",
         "extension": ".js",
-        "functional_owner": "gravity_application_operations",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "functional_owner": null,
+        "lifecycle": "MIGRATION",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/scripts/recover-wa-unified-from-legacy.js",
-        "production_capability": "POSSIBLE",
-        "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+        "production_capability": "UNKNOWN",
+        "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
         "registry_classified": true
       },
       {
@@ -3893,15 +3893,15 @@
         "registry_classified": true
       },
       {
-        "disposition": "ACTIVE",
+        "disposition": "DEAD_HISTORICAL",
         "extension": ".js",
-        "functional_owner": "gravity_application_operations",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "functional_owner": null,
+        "lifecycle": "DEAD_HISTORICAL",
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/scripts/temp_swap_driver_to_ahmetov.js",
-        "production_capability": "POSSIBLE",
-        "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+        "production_capability": "UNKNOWN",
+        "rationale": "One-shot test/temporary data utility; no package/runtime caller evidence; retained only as historical source Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
         "registry_classified": true
       },
       {
@@ -15941,15 +15941,15 @@
         "registry_classified": true
       },
       {
-        "disposition": "ACTIVE",
+        "disposition": "MIGRATION_ONLY",
         "extension": ".sh",
-        "functional_owner": "platform_operations",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "functional_owner": null,
+        "lifecycle": "MIGRATION",
         "migration_target": null,
         "owner_context": null,
         "path": "scripts/deploy.sh",
-        "production_capability": "POSSIBLE",
-        "rationale": "Active operational surface classified in exact-set batch; functional owner platform_operations; approved path: approved operations script with explicit invocation. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+        "production_capability": "UNKNOWN",
+        "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
         "registry_classified": true
       },
       {
@@ -15977,15 +15977,15 @@
         "registry_classified": true
       },
       {
-        "disposition": "ACTIVE",
+        "disposition": "MIGRATION_ONLY",
         "extension": ".sh",
-        "functional_owner": "platform_operations",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "functional_owner": null,
+        "lifecycle": "MIGRATION",
         "migration_target": null,
         "owner_context": null,
         "path": "scripts/migrate-data-apply.sh",
-        "production_capability": "POSSIBLE",
-        "rationale": "Active operational surface classified in exact-set batch; functional owner platform_operations; approved path: approved operations script with explicit invocation. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+        "production_capability": "UNKNOWN",
+        "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
         "registry_classified": true
       },
       {
@@ -16025,15 +16025,15 @@
         "registry_classified": true
       },
       {
-        "disposition": "ACTIVE",
+        "disposition": "MIGRATION_ONLY",
         "extension": ".sh",
-        "functional_owner": "platform_operations",
-        "lifecycle": "OPERATIONAL_SCRIPT",
+        "functional_owner": null,
+        "lifecycle": "MIGRATION",
         "migration_target": null,
         "owner_context": null,
         "path": "scripts/restore-pg.sh",
-        "production_capability": "POSSIBLE",
-        "rationale": "Active operational surface classified in exact-set batch; functional owner platform_operations; approved path: approved operations script with explicit invocation. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
+        "production_capability": "UNKNOWN",
+        "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
         "registry_classified": true
       },
       {
@@ -20421,21 +20421,21 @@
   "parse_findings": [],
   "schema": "yoko.crm.whole-repository-write-analysis.v2",
   "source": {
-    "git_commit": "9daadc3d1b9a437c45eb57e197f3592f682f8275",
+    "git_commit": "285e7556aaf9c19aeef94ead2191eaa009bb0ecd",
     "git_tracked_only": true,
-    "git_tree": "a0b2941290bf00e29fe6cad2874391d88abf2d12",
+    "git_tree": "4545c682104c179d40fa9ffdd246df99fb54212d",
     "inventory_schema": "yoko.crm.tracked-executable-surface-inventory.v2",
     "repository_root": ".",
     "tracked_worktree_clean": false,
-    "tracked_worktree_status_sha256": "5889db851c4169bc2e285b5965f1e93ec7dd73738397520a87256a3e1c2bc981"
+    "tracked_worktree_status_sha256": "63832f9d9fa44ea09bad87ca7c5f2c7b4dae41f7c1f78fa3029c902fbd30ff04"
   },
   "summary": {
-    "ambiguous_writes": 254,
+    "ambiguous_writes": 204,
     "discovered_write_sites": 1445,
     "foreign_writes": 0,
-    "historical_dead_writes": 0,
-    "migration_only_writes": 468,
-    "operational_script_writes": 205,
+    "historical_dead_writes": 18,
+    "migration_only_writes": 500,
+    "operational_script_writes": 155,
     "owner_writes": 489,
     "parse_findings": 0,
     "raw_sql_writes": 836,
@@ -21708,7 +21708,7 @@
         "dynamic_database_write_command_requires_review"
       ],
       "ambiguous": true,
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 54,
       "database_command_intent": "WRITE",
       "file": "deploy/docker-compose.production.yml",
@@ -21723,9 +21723,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "tables": [],
@@ -21734,7 +21734,7 @@
     {
       "ambiguity_reasons": [],
       "ambiguous": false,
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 1,
       "file": "gravity-mvp/add_partial_index.sql",
       "kind": "raw",
@@ -21749,18 +21749,16 @@
           "table": "tasks"
         }
       ],
-      "owner_contexts": [
-        "work_management"
-      ],
+      "owner_contexts": [],
       "scope": "<sql-script>",
       "site_signature": "c099548aaa9f0871ea1cc7475912c648b58f64f43308d0bf100b315a39890bcb",
       "source_context": null,
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "tables": [
@@ -21833,7 +21831,7 @@
         "dynamic_database_write_command_requires_review"
       ],
       "ambiguous": true,
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 23,
       "database_command_intent": "WRITE",
       "file": "gravity-mvp/Dockerfile",
@@ -21848,9 +21846,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "tables": [],
@@ -21859,7 +21857,7 @@
     {
       "ambiguity_reasons": [],
       "ambiguous": false,
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 1,
       "file": "gravity-mvp/fix_channels.sql",
       "kind": "raw",
@@ -21874,18 +21872,16 @@
           "table": "Message"
         }
       ],
-      "owner_contexts": [
-        "messaging"
-      ],
+      "owner_contexts": [],
       "scope": "<sql-script>",
       "site_signature": "8a143f3442c3be46652085300b45087ed7c13692b73f9758aece667e6ec47a9e",
       "source_context": null,
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "tables": [
@@ -21896,7 +21892,7 @@
     {
       "ambiguity_reasons": [],
       "ambiguous": false,
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 1,
       "file": "gravity-mvp/fix_channels.sql",
       "kind": "raw",
@@ -21911,18 +21907,16 @@
           "table": "Message"
         }
       ],
-      "owner_contexts": [
-        "messaging"
-      ],
+      "owner_contexts": [],
       "scope": "<sql-script>",
       "site_signature": "a407cdaca37366769948e02c7d37c96c1f30520932fabd46f370a94c48d86bf0",
       "source_context": null,
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "tables": [
@@ -38146,7 +38140,7 @@
       "ambiguity_reasons": [],
       "ambiguous": false,
       "candidate_models": [],
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 15,
       "confidence": "HIGH",
       "dynamic": false,
@@ -38165,9 +38159,7 @@
           "table": "scenario_field_settings"
         }
       ],
-      "owner_contexts": [
-        "configuration"
-      ],
+      "owner_contexts": [],
       "read_projection_dynamic": false,
       "read_tables": [],
       "receiver_origin": "new:module:@prisma/client:PrismaClient",
@@ -38181,9 +38173,9 @@
       "source_technical_module": null,
       "sql_sha256": "0007ea84b325812bc11478377f4d6bcdf56450ec344b99d4b3392af471fae075",
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "tables": [
@@ -38200,7 +38192,7 @@
       "ambiguity_reasons": [],
       "ambiguous": false,
       "candidate_models": [],
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 15,
       "confidence": "HIGH",
       "dynamic": false,
@@ -38219,9 +38211,7 @@
           "table": "scenario_field_settings"
         }
       ],
-      "owner_contexts": [
-        "configuration"
-      ],
+      "owner_contexts": [],
       "read_projection_dynamic": false,
       "read_tables": [],
       "receiver_origin": "new:module:@prisma/client:PrismaClient",
@@ -38235,9 +38225,9 @@
       "source_technical_module": null,
       "sql_sha256": "44bb9e0d3307436d95149b289ec06cf1c61242e3837201f61d3a05e32a7c2ca5",
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "tables": [
@@ -38354,7 +38344,7 @@
       "candidate_models": [
         "chat"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "HISTORICAL_DEAD",
       "column": 19,
       "confidence": "HIGH",
       "end": 2761,
@@ -38365,9 +38355,7 @@
       "method": "update",
       "model": "chat",
       "nested_operations": [],
-      "owner_contexts": [
-        "messaging"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:module:@prisma/client:PrismaClient",
       "return_projection": {
         "dynamic": false,
@@ -38382,9 +38370,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "DEAD_HISTORICAL",
+        "lifecycle": "DEAD_HISTORICAL",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -38403,7 +38391,7 @@
       "candidate_models": [
         "contact"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "HISTORICAL_DEAD",
       "column": 27,
       "confidence": "HIGH",
       "end": 3242,
@@ -38414,9 +38402,7 @@
       "method": "update",
       "model": "contact",
       "nested_operations": [],
-      "owner_contexts": [
-        "contacts"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:module:@prisma/client:PrismaClient",
       "return_projection": {
         "dynamic": false,
@@ -38431,9 +38417,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "DEAD_HISTORICAL",
+        "lifecycle": "DEAD_HISTORICAL",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -39171,7 +39157,7 @@
       "candidate_models": [
         "chat"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "HISTORICAL_DEAD",
       "column": 19,
       "confidence": "HIGH",
       "end": 4741,
@@ -39182,9 +39168,7 @@
       "method": "update",
       "model": "chat",
       "nested_operations": [],
-      "owner_contexts": [
-        "messaging"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:module:@prisma/client:PrismaClient",
       "return_projection": {
         "dynamic": false,
@@ -39199,9 +39183,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "DEAD_HISTORICAL",
+        "lifecycle": "DEAD_HISTORICAL",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -39220,7 +39204,7 @@
       "candidate_models": [
         "contact"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "HISTORICAL_DEAD",
       "column": 27,
       "confidence": "HIGH",
       "end": 5221,
@@ -39231,9 +39215,7 @@
       "method": "update",
       "model": "contact",
       "nested_operations": [],
-      "owner_contexts": [
-        "contacts"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:module:@prisma/client:PrismaClient",
       "return_projection": {
         "dynamic": false,
@@ -39248,9 +39230,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "DEAD_HISTORICAL",
+        "lifecycle": "DEAD_HISTORICAL",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -39364,7 +39346,7 @@
       "candidate_models": [
         "chat"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "HISTORICAL_DEAD",
       "column": 19,
       "confidence": "HIGH",
       "end": 2443,
@@ -39375,9 +39357,7 @@
       "method": "update",
       "model": "chat",
       "nested_operations": [],
-      "owner_contexts": [
-        "messaging"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:module:@prisma/client:PrismaClient",
       "return_projection": {
         "dynamic": false,
@@ -39392,9 +39372,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "DEAD_HISTORICAL",
+        "lifecycle": "DEAD_HISTORICAL",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -39413,7 +39393,7 @@
       "candidate_models": [
         "contact"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "HISTORICAL_DEAD",
       "column": 27,
       "confidence": "HIGH",
       "end": 2921,
@@ -39424,9 +39404,7 @@
       "method": "update",
       "model": "contact",
       "nested_operations": [],
-      "owner_contexts": [
-        "contacts"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:module:@prisma/client:PrismaClient",
       "return_projection": {
         "dynamic": false,
@@ -39441,9 +39419,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "DEAD_HISTORICAL",
+        "lifecycle": "DEAD_HISTORICAL",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -39658,7 +39636,7 @@
       "ambiguity_reasons": [],
       "ambiguous": false,
       "candidate_models": [],
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 19,
       "confidence": "HIGH",
       "dynamic": false,
@@ -39677,9 +39655,7 @@
           "table": "tasks"
         }
       ],
-      "owner_contexts": [
-        "work_management"
-      ],
+      "owner_contexts": [],
       "read_projection_dynamic": false,
       "read_tables": [],
       "receiver_origin": "new:module:@prisma/client:PrismaClient",
@@ -39693,9 +39669,9 @@
       "source_technical_module": null,
       "sql_sha256": "250cfb1559da34f590dc129d0d8b9fd76b58035539aab60ba9ab81745f5f42a0",
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "tables": [
@@ -39905,7 +39881,7 @@
         "dynamic_database_write_command_requires_review"
       ],
       "ambiguous": true,
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 9,
       "database_command_intent": "WRITE",
       "file": "gravity-mvp/scripts/baseline-vps.sh",
@@ -39920,9 +39896,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "tables": [],
@@ -42546,7 +42522,7 @@
       "candidate_models": [
         "chat"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "HISTORICAL_DEAD",
       "column": 22,
       "confidence": "HIGH",
       "end": 706,
@@ -42557,9 +42533,7 @@
       "method": "upsert",
       "model": "chat",
       "nested_operations": [],
-      "owner_contexts": [
-        "messaging"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:module:@prisma/client:PrismaClient",
       "return_projection": {
         "dynamic": false,
@@ -42574,9 +42548,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "DEAD_HISTORICAL",
+        "lifecycle": "DEAD_HISTORICAL",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -42602,7 +42576,7 @@
       "candidate_models": [
         "message"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "HISTORICAL_DEAD",
       "column": 9,
       "confidence": "HIGH",
       "end": 900,
@@ -42613,9 +42587,7 @@
       "method": "create",
       "model": "message",
       "nested_operations": [],
-      "owner_contexts": [
-        "messaging"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:module:@prisma/client:PrismaClient",
       "return_projection": {
         "dynamic": false,
@@ -42630,9 +42602,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "DEAD_HISTORICAL",
+        "lifecycle": "DEAD_HISTORICAL",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -43867,7 +43839,7 @@
     {
       "ambiguity_reasons": [],
       "ambiguous": false,
-      "classification": "AMBIGUOUS",
+      "classification": "HISTORICAL_DEAD",
       "column": 5,
       "file": "gravity-mvp/scripts/inject_test_data.sql",
       "kind": "raw",
@@ -43890,22 +43862,20 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "DEAD_HISTORICAL",
+        "lifecycle": "DEAD_HISTORICAL",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "tables": [
         "v_driver_id"
       ],
-      "unresolved_targets": [
-        "v_driver_id"
-      ]
+      "unresolved_targets": []
     },
     {
       "ambiguity_reasons": [],
       "ambiguous": false,
-      "classification": "AMBIGUOUS",
+      "classification": "HISTORICAL_DEAD",
       "column": 9,
       "file": "gravity-mvp/scripts/inject_test_data.sql",
       "kind": "raw",
@@ -43921,18 +43891,16 @@
           "table": "Chat"
         }
       ],
-      "owner_contexts": [
-        "messaging"
-      ],
+      "owner_contexts": [],
       "scope": "<sql-script>",
       "site_signature": "5c8b2034b7e5a75cdc3d61021124bae14f5182dcc736fb090d4c6a7708c1b78f",
       "source_context": null,
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "DEAD_HISTORICAL",
+        "lifecycle": "DEAD_HISTORICAL",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "tables": [
@@ -43943,7 +43911,7 @@
     {
       "ambiguity_reasons": [],
       "ambiguous": false,
-      "classification": "AMBIGUOUS",
+      "classification": "HISTORICAL_DEAD",
       "column": 9,
       "file": "gravity-mvp/scripts/inject_test_data.sql",
       "kind": "raw",
@@ -43959,18 +43927,16 @@
           "table": "Message"
         }
       ],
-      "owner_contexts": [
-        "messaging"
-      ],
+      "owner_contexts": [],
       "scope": "<sql-script>",
       "site_signature": "2a64371028697a4649cd1154cddc3171d2dad16d5519e6f04cf823fa4fd79dbc",
       "source_context": null,
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "DEAD_HISTORICAL",
+        "lifecycle": "DEAD_HISTORICAL",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "tables": [
@@ -44500,7 +44466,7 @@
       "candidate_models": [
         "contact"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 29,
       "confidence": "HIGH",
       "end": 5461,
@@ -44511,9 +44477,7 @@
       "method": "create",
       "model": "contact",
       "nested_operations": [],
-      "owner_contexts": [
-        "contacts"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:import:@prisma/client",
       "return_projection": {
         "dynamic": false,
@@ -44528,9 +44492,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -44552,7 +44516,7 @@
       "candidate_models": [
         "contactPhone"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 31,
       "confidence": "HIGH",
       "end": 6096,
@@ -44563,9 +44527,7 @@
       "method": "create",
       "model": "contactPhone",
       "nested_operations": [],
-      "owner_contexts": [
-        "contacts"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:import:@prisma/client",
       "return_projection": {
         "dynamic": false,
@@ -44580,9 +44542,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -44604,7 +44566,7 @@
       "candidate_models": [
         "contact"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 17,
       "confidence": "HIGH",
       "end": 6237,
@@ -44615,9 +44577,7 @@
       "method": "update",
       "model": "contact",
       "nested_operations": [],
-      "owner_contexts": [
-        "contacts"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:import:@prisma/client",
       "return_projection": {
         "dynamic": false,
@@ -44632,9 +44592,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -44653,7 +44613,7 @@
       "candidate_models": [
         "contactIdentity"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 13,
       "confidence": "HIGH",
       "end": 8599,
@@ -44664,9 +44624,7 @@
       "method": "create",
       "model": "contactIdentity",
       "nested_operations": [],
-      "owner_contexts": [
-        "contacts"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:import:@prisma/client",
       "return_projection": {
         "dynamic": false,
@@ -44681,9 +44639,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -44708,7 +44666,7 @@
       "candidate_models": [
         "contactPhone"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 31,
       "confidence": "HIGH",
       "end": 10579,
@@ -44719,9 +44677,7 @@
       "method": "create",
       "model": "contactPhone",
       "nested_operations": [],
-      "owner_contexts": [
-        "contacts"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:import:@prisma/client",
       "return_projection": {
         "dynamic": false,
@@ -44736,9 +44692,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -44760,7 +44716,7 @@
       "candidate_models": [
         "contactIdentity"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 13,
       "confidence": "HIGH",
       "end": 11528,
@@ -44771,9 +44727,7 @@
       "method": "create",
       "model": "contactIdentity",
       "nested_operations": [],
-      "owner_contexts": [
-        "contacts"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:import:@prisma/client",
       "return_projection": {
         "dynamic": false,
@@ -44788,9 +44742,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -44815,7 +44769,7 @@
       "candidate_models": [
         "contact"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 33,
       "confidence": "HIGH",
       "end": 15140,
@@ -44826,9 +44780,7 @@
       "method": "create",
       "model": "contact",
       "nested_operations": [],
-      "owner_contexts": [
-        "contacts"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:import:@prisma/client",
       "return_projection": {
         "dynamic": false,
@@ -44843,9 +44795,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -44866,7 +44818,7 @@
       "candidate_models": [
         "contactPhone"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 37,
       "confidence": "HIGH",
       "end": 15880,
@@ -44877,9 +44829,7 @@
       "method": "create",
       "model": "contactPhone",
       "nested_operations": [],
-      "owner_contexts": [
-        "contacts"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:import:@prisma/client",
       "return_projection": {
         "dynamic": false,
@@ -44894,9 +44844,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -44918,7 +44868,7 @@
       "candidate_models": [
         "contact"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 23,
       "confidence": "HIGH",
       "end": 16044,
@@ -44929,9 +44879,7 @@
       "method": "update",
       "model": "contact",
       "nested_operations": [],
-      "owner_contexts": [
-        "contacts"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:import:@prisma/client",
       "return_projection": {
         "dynamic": false,
@@ -44946,9 +44894,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -44967,7 +44915,7 @@
       "candidate_models": [
         "contactIdentity"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 38,
       "confidence": "HIGH",
       "end": 18200,
@@ -44978,9 +44926,7 @@
       "method": "create",
       "model": "contactIdentity",
       "nested_operations": [],
-      "owner_contexts": [
-        "contacts"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:import:@prisma/client",
       "return_projection": {
         "dynamic": false,
@@ -44995,9 +44941,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -45021,7 +44967,7 @@
       "candidate_models": [
         "chat"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 15,
       "confidence": "HIGH",
       "end": 19472,
@@ -45032,9 +44978,7 @@
       "method": "update",
       "model": "chat",
       "nested_operations": [],
-      "owner_contexts": [
-        "messaging"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:import:@prisma/client",
       "return_projection": {
         "dynamic": false,
@@ -45049,9 +44993,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -45071,7 +45015,7 @@
       "candidate_models": [
         "task"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 13,
       "confidence": "HIGH",
       "end": 21048,
@@ -45082,9 +45026,7 @@
       "method": "update",
       "model": "task",
       "nested_operations": [],
-      "owner_contexts": [
-        "work_management"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:import:@prisma/client",
       "return_projection": {
         "dynamic": false,
@@ -45099,9 +45041,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -45120,7 +45062,7 @@
       "candidate_models": [
         "task"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 15,
       "confidence": "HIGH",
       "end": 973,
@@ -45131,9 +45073,7 @@
       "method": "update",
       "model": "task",
       "nested_operations": [],
-      "owner_contexts": [
-        "work_management"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:import:@prisma/client",
       "return_projection": {
         "dynamic": false,
@@ -45148,9 +45088,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -45169,7 +45109,7 @@
       "candidate_models": [
         "message"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 15,
       "confidence": "HIGH",
       "end": 3552,
@@ -45180,9 +45120,7 @@
       "method": "create",
       "model": "message",
       "nested_operations": [],
-      "owner_contexts": [
-        "messaging"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:module:@prisma/client:PrismaClient",
       "return_projection": {
         "dynamic": false,
@@ -45197,9 +45135,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -52774,7 +52712,7 @@
       "candidate_models": [
         "driverAction"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "HISTORICAL_DEAD",
       "column": 11,
       "confidence": "HIGH",
       "end": 948,
@@ -52785,9 +52723,7 @@
       "method": "deleteMany",
       "model": "driverAction",
       "nested_operations": [],
-      "owner_contexts": [
-        "fleet_operations"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:module:@prisma/client:PrismaClient",
       "return_projection": null,
       "scope": "Function:swap",
@@ -52796,9 +52732,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "DEAD_HISTORICAL",
+        "lifecycle": "DEAD_HISTORICAL",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -52815,7 +52751,7 @@
       "candidate_models": [
         "driver"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "HISTORICAL_DEAD",
       "column": 11,
       "confidence": "HIGH",
       "end": 1036,
@@ -52826,9 +52762,7 @@
       "method": "delete",
       "model": "driver",
       "nested_operations": [],
-      "owner_contexts": [
-        "fleet_operations"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:module:@prisma/client:PrismaClient",
       "return_projection": {
         "dynamic": false,
@@ -52843,9 +52777,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "DEAD_HISTORICAL",
+        "lifecycle": "DEAD_HISTORICAL",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -52862,7 +52796,7 @@
       "candidate_models": [
         "driver"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "HISTORICAL_DEAD",
       "column": 30,
       "confidence": "HIGH",
       "end": 1475,
@@ -52873,9 +52807,7 @@
       "method": "upsert",
       "model": "driver",
       "nested_operations": [],
-      "owner_contexts": [
-        "fleet_operations"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:module:@prisma/client:PrismaClient",
       "return_projection": {
         "dynamic": false,
@@ -52890,9 +52822,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "DEAD_HISTORICAL",
+        "lifecycle": "DEAD_HISTORICAL",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -52915,7 +52847,7 @@
       "candidate_models": [
         "driverTelegram"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "HISTORICAL_DEAD",
       "column": 27,
       "confidence": "HIGH",
       "end": 1720,
@@ -52926,9 +52858,7 @@
       "method": "updateMany",
       "model": "driverTelegram",
       "nested_operations": [],
-      "owner_contexts": [
-        "telegram_channel"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:module:@prisma/client:PrismaClient",
       "return_projection": null,
       "scope": "Function:swap",
@@ -52937,9 +52867,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "DEAD_HISTORICAL",
+        "lifecycle": "DEAD_HISTORICAL",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -52958,7 +52888,7 @@
       "candidate_models": [
         "driverTelegram"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "HISTORICAL_DEAD",
       "column": 27,
       "confidence": "HIGH",
       "end": 2183,
@@ -52969,9 +52899,7 @@
       "method": "updateMany",
       "model": "driverTelegram",
       "nested_operations": [],
-      "owner_contexts": [
-        "telegram_channel"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:module:@prisma/client:PrismaClient",
       "return_projection": null,
       "scope": "Function:restore",
@@ -52980,9 +52908,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "DEAD_HISTORICAL",
+        "lifecycle": "DEAD_HISTORICAL",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -53001,7 +52929,7 @@
       "candidate_models": [
         "driverAction"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "HISTORICAL_DEAD",
       "column": 34,
       "confidence": "HIGH",
       "end": 2471,
@@ -53012,9 +52940,7 @@
       "method": "deleteMany",
       "model": "driverAction",
       "nested_operations": [],
-      "owner_contexts": [
-        "fleet_operations"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:module:@prisma/client:PrismaClient",
       "return_projection": null,
       "scope": "Function:restore",
@@ -53023,9 +52949,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "DEAD_HISTORICAL",
+        "lifecycle": "DEAD_HISTORICAL",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -53042,7 +52968,7 @@
       "candidate_models": [
         "driver"
       ],
-      "classification": "AMBIGUOUS",
+      "classification": "HISTORICAL_DEAD",
       "column": 27,
       "confidence": "HIGH",
       "end": 2642,
@@ -53053,9 +52979,7 @@
       "method": "delete",
       "model": "driver",
       "nested_operations": [],
-      "owner_contexts": [
-        "fleet_operations"
-      ],
+      "owner_contexts": [],
       "receiver_origin": "new:module:@prisma/client:PrismaClient",
       "return_projection": {
         "dynamic": false,
@@ -53070,9 +52994,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "DEAD_HISTORICAL",
+        "lifecycle": "DEAD_HISTORICAL",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "transaction": {
@@ -85718,7 +85642,7 @@
         "dynamic_database_write_command_requires_review"
       ],
       "ambiguous": true,
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 41,
       "database_command_intent": "WRITE",
       "file": "scripts/deploy.sh",
@@ -85733,9 +85657,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "tables": [],
@@ -85749,7 +85673,7 @@
         "unresolved_mutation_target"
       ],
       "ambiguous": true,
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 44,
       "file": "scripts/migrate-data-apply.sh",
       "kind": "raw",
@@ -85773,9 +85697,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "tables": [],
@@ -85789,7 +85713,7 @@
         "unresolved_mutation_target"
       ],
       "ambiguous": true,
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 6,
       "file": "scripts/migrate-data-apply.sh",
       "kind": "raw",
@@ -85813,9 +85737,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "tables": [],
@@ -85829,7 +85753,7 @@
         "unresolved_mutation_target"
       ],
       "ambiguous": true,
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 112,
       "file": "scripts/migrate-data-apply.sh",
       "kind": "raw",
@@ -85851,9 +85775,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "tables": [],
@@ -85867,7 +85791,7 @@
         "unresolved_mutation_target"
       ],
       "ambiguous": true,
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 66,
       "file": "scripts/migrate-data-apply.sh",
       "kind": "raw",
@@ -85889,9 +85813,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "tables": [],
@@ -85903,7 +85827,7 @@
         "dynamic_database_write_command_requires_review"
       ],
       "ambiguous": true,
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 31,
       "database_command_intent": "WRITE",
       "file": "scripts/migrate-data-apply.sh",
@@ -85918,9 +85842,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "tables": [],
@@ -85934,7 +85858,7 @@
         "unresolved_mutation_target"
       ],
       "ambiguous": true,
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 1,
       "file": "scripts/restore-pg.sh",
       "kind": "raw",
@@ -85958,9 +85882,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "tables": [],
@@ -85974,7 +85898,7 @@
         "unresolved_mutation_target"
       ],
       "ambiguous": true,
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 1,
       "file": "scripts/restore-pg.sh",
       "kind": "raw",
@@ -85998,9 +85922,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "tables": [],
@@ -86012,7 +85936,7 @@
         "dynamic_database_write_command_requires_review"
       ],
       "ambiguous": true,
-      "classification": "AMBIGUOUS",
+      "classification": "MIGRATION_ONLY",
       "column": 34,
       "database_command_intent": "WRITE",
       "file": "scripts/restore-pg.sh",
@@ -86027,9 +85951,9 @@
       "source_identity": "unclassified",
       "source_technical_module": null,
       "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
+        "disposition": "MIGRATION_ONLY",
+        "lifecycle": "MIGRATION",
+        "production_capability": "UNKNOWN",
         "registry_classified": true
       },
       "tables": [],

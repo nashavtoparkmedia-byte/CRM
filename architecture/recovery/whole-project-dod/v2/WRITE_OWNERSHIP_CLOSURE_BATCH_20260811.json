@@ -1,22 +1,22 @@
 {
   "schema": "yoko.crm.write-ownership-closure-batch.v2",
-  "generated_at": "2026-08-11T06:49:02.790681Z",
+  "generated_at": "2026-08-11T06:58:31.735843Z",
   "authority": "Derived evidence ledger; unresolved records remain blocked/ambiguous and are not PASS.",
   "baseline": {
-    "analysis_sha256": "1136e34f456264877d32ab87e58a6de1b8c34d8c6eda48299696b99b18e6c5bf",
-    "baseline_sha256": "977a7b1e45fda23df25786eb48115f2e6435269cd098a8b428daff369421df92",
-    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T0648Z.json",
-    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_LIFECYCLE_REGISTRY.json"
+    "analysis_sha256": "65af50ebe1029b121a33d405fab63a03e8d7f4bf1c2e4e06f79d2dedaf25ed3e",
+    "baseline_sha256": "4abfe0f72fb96caf36036eadd8ee3c831651fa8988bf437b538e38759ee0ee22",
+    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T0657Z.json",
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_LIFECYCLE_MIGRATION_DEAD.json"
   },
   "metrics": {
     "confirmed_writes_discovered": 1445,
     "confirmed_foreign": 0,
     "closed_foreign": 52,
-    "ambiguous_remaining": 254,
+    "ambiguous_remaining": 204,
     "confirmed_write_owner_resolved": 7,
-    "confirmed_write_owner_unresolved": 182,
+    "confirmed_write_owner_unresolved": 138,
     "dynamic_delegate_unresolved": 6,
-    "dynamic_sql_unresolved": 38,
+    "dynamic_sql_unresolved": 32,
     "query_raw_side_effect_unresolved": 17,
     "confirmed_non_writes": 4,
     "active_operational_surfaces_unclassified": 0,
@@ -132,5 +132,11 @@
     "query_raw_remaining": 17,
     "policy": "Remaining dynamic families stay fail-closed."
   },
-  "verdict": "NOT_READY_MATERIAL_AMBIGUITY_REMAINS"
+  "verdict": "NOT_READY_MATERIAL_AMBIGUITY_REMAINS",
+  "lifecycle_batch": {
+    "artifact": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_MIGRATION_DEAD_CLOSURE_20260811.json",
+    "historical_dead_sites": 18,
+    "controlled_migration_sites": 26,
+    "remaining_active_operational_files": 363
+  }
 }

@@ -1,14 +1,15 @@
 {
   "schema": "yoko.crm.lifecycle-classification-registry.v1",
-  "generated_at": "2026-08-11T06:33:30.202670Z",
+  "generated_at": "2026-08-11T06:51:01.795284Z",
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
     "total_entries": 443,
     "test": 32,
-    "dead_historical": 29,
-    "active_operational": 382,
-    "policy": "Lifecycle registry classifies surfaces only; it never grants write ownership or bypasses exact capability enforcement."
+    "dead_historical": 35,
+    "migration_only": 13,
+    "active_operational": 363,
+    "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
   "surfaces": [
     {
@@ -40,30 +41,24 @@
     },
     {
       "path": "deploy/docker-compose.production.yml",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner platform_operations; approved path: deployment pipeline. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "platform_operations"
+      "lifecycle": "MIGRATION",
+      "disposition": "MIGRATION_ONLY",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
+      "classification_artifact": "OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json"
     },
     {
       "path": "gravity-mvp/Dockerfile",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
+      "lifecycle": "MIGRATION",
+      "disposition": "MIGRATION_ONLY",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
+      "classification_artifact": "OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json"
     },
     {
       "path": "gravity-mvp/add_partial_index.sql",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
+      "lifecycle": "MIGRATION",
+      "disposition": "MIGRATION_ONLY",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
+      "classification_artifact": "OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json"
     },
     {
       "path": "gravity-mvp/append_action.js",
@@ -217,12 +212,10 @@
     },
     {
       "path": "gravity-mvp/fix_channels.sql",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
+      "lifecycle": "MIGRATION",
+      "disposition": "MIGRATION_ONLY",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
+      "classification_artifact": "OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json"
     },
     {
       "path": "gravity-mvp/fix_due_date_edit.js",
@@ -502,12 +495,10 @@
     },
     {
       "path": "gravity-mvp/scripts/add-scenario-field-settings-table.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
+      "lifecycle": "MIGRATION",
+      "disposition": "MIGRATION_ONLY",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
+      "classification_artifact": "OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json"
     },
     {
       "path": "gravity-mvp/scripts/analyze-pollution.ts",
@@ -592,12 +583,10 @@
     },
     {
       "path": "gravity-mvp/scripts/backfill-scenario-data.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
+      "lifecycle": "MIGRATION",
+      "disposition": "MIGRATION_ONLY",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
+      "classification_artifact": "OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json"
     },
     {
       "path": "gravity-mvp/scripts/backfill-trips.js",
@@ -637,12 +626,10 @@
     },
     {
       "path": "gravity-mvp/scripts/backfill_max_names.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "README_BACKFILL explicitly labels one-off/deprecated or unusable alternative; no runtime caller Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
+      "classification_artifact": "OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json"
     },
     {
       "path": "gravity-mvp/scripts/backfill_null_names_from_sibling.js",
@@ -691,12 +678,10 @@
     },
     {
       "path": "gravity-mvp/scripts/backfill_tg_via_bot_api.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "README_BACKFILL explicitly labels one-off/deprecated or unusable alternative; no runtime caller Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
+      "classification_artifact": "OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json"
     },
     {
       "path": "gravity-mvp/scripts/backfill_unread_count.js",
@@ -709,21 +694,17 @@
     },
     {
       "path": "gravity-mvp/scripts/backfill_wa_names.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "README_BACKFILL explicitly labels one-off/deprecated or unusable alternative; no runtime caller Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
+      "classification_artifact": "OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json"
     },
     {
       "path": "gravity-mvp/scripts/baseline-vps.sh",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
+      "lifecycle": "MIGRATION",
+      "disposition": "MIGRATION_ONLY",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
+      "classification_artifact": "OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json"
     },
     {
       "path": "gravity-mvp/scripts/bulk_phantom_lid_cleanup.js",
@@ -1249,12 +1230,10 @@
     },
     {
       "path": "gravity-mvp/scripts/create_test_chat.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "One-shot test/temporary data utility; no package/runtime caller evidence; retained only as historical source Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
+      "classification_artifact": "OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json"
     },
     {
       "path": "gravity-mvp/scripts/debug-max-chats.js",
@@ -1528,12 +1507,10 @@
     },
     {
       "path": "gravity-mvp/scripts/inject_test_data.sql",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "One-shot test/temporary data utility; no package/runtime caller evidence; retained only as historical source Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
+      "classification_artifact": "OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json"
     },
     {
       "path": "gravity-mvp/scripts/inspect-chats.js",
@@ -1636,21 +1613,17 @@
     },
     {
       "path": "gravity-mvp/scripts/migrate-contacts.ts",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
+      "lifecycle": "MIGRATION",
+      "disposition": "MIGRATION_ONLY",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
+      "classification_artifact": "OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json"
     },
     {
       "path": "gravity-mvp/scripts/migrate-scenario-from-metadata.ts",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
+      "lifecycle": "MIGRATION",
+      "disposition": "MIGRATION_ONLY",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
+      "classification_artifact": "OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json"
     },
     {
       "path": "gravity-mvp/scripts/observe-24h.ts",
@@ -1735,12 +1708,10 @@
     },
     {
       "path": "gravity-mvp/scripts/recover-wa-unified-from-legacy.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
+      "lifecycle": "MIGRATION",
+      "disposition": "MIGRATION_ONLY",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
+      "classification_artifact": "OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json"
     },
     {
       "path": "gravity-mvp/scripts/reseed-telephony-config.js",
@@ -1957,12 +1928,10 @@
     },
     {
       "path": "gravity-mvp/scripts/temp_swap_driver_to_ahmetov.js",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "gravity_application_operations"
+      "lifecycle": "DEAD_HISTORICAL",
+      "disposition": "DEAD_HISTORICAL",
+      "rationale": "One-shot test/temporary data utility; no package/runtime caller evidence; retained only as historical source Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
+      "classification_artifact": "OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json"
     },
     {
       "path": "gravity-mvp/scripts/trace-202.js",
@@ -2314,12 +2283,10 @@
     },
     {
       "path": "scripts/deploy.sh",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner platform_operations; approved path: approved operations script with explicit invocation. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "platform_operations"
+      "lifecycle": "MIGRATION",
+      "disposition": "MIGRATION_ONLY",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
+      "classification_artifact": "OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json"
     },
     {
       "path": "scripts/get-ssl.sh",
@@ -2341,12 +2308,10 @@
     },
     {
       "path": "scripts/migrate-data-apply.sh",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner platform_operations; approved path: approved operations script with explicit invocation. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "platform_operations"
+      "lifecycle": "MIGRATION",
+      "disposition": "MIGRATION_ONLY",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
+      "classification_artifact": "OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json"
     },
     {
       "path": "scripts/migrate-data-to-vps.sh",
@@ -2377,12 +2342,10 @@
     },
     {
       "path": "scripts/restore-pg.sh",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active operational surface classified in exact-set batch; functional owner platform_operations; approved path: approved operations script with explicit invocation. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
-      "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
-      "functional_owner": "platform_operations"
+      "lifecycle": "MIGRATION",
+      "disposition": "MIGRATION_ONLY",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability Evidence: OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json exact site records; lifecycle classification does not grant arbitrary write ownership.",
+      "classification_artifact": "OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json"
     },
     {
       "path": "scripts/setup-server.sh",
