@@ -21,6 +21,8 @@
  */
 
 const { PrismaClient } = require('@prisma/client')
+const { wipeWhatsappUnifiedDataV1 } = require('../src/modules/messaging/public/v1/legacy-prisma-chat-backfill-adapter')
+const { wipeLegacyWhatsappDataV1 } = require('../src/modules/whatsapp-channel/public/v1/legacy-prisma-whatsapp-message-timestamp-maintenance-adapter')
 const prisma = new PrismaClient()
 
 async function main() {
@@ -30,19 +32,13 @@ async function main() {
     // Delete in order that respects foreign keys. Messages reference chats,
     // so messages first.
 
-    const waMsg = await prisma.whatsAppMessage.deleteMany({})
+    const { messages: waMsg, chats: waChat, roster } = await wipeLegacyWhatsappDataV1()
     console.log(`[WIPE] Deleted ${waMsg.count} WhatsAppMessage rows`)
 
-    const msg = await prisma.message.deleteMany({ where: { channel: 'whatsapp' } })
+    const { messages: msg, chats: chat } = await wipeWhatsappUnifiedDataV1()
     console.log(`[WIPE] Deleted ${msg.count} Message rows (channel=whatsapp)`)
-
-    const waChat = await prisma.whatsAppChat.deleteMany({})
     console.log(`[WIPE] Deleted ${waChat.count} WhatsAppChat rows`)
-
-    const chat = await prisma.chat.deleteMany({ where: { channel: 'whatsapp' } })
     console.log(`[WIPE] Deleted ${chat.count} Chat rows (channel=whatsapp)`)
-
-    const roster = await prisma.whatsAppChatRoster.deleteMany({})
     console.log(`[WIPE] Deleted ${roster.count} WhatsAppChatRoster rows`)
 
     const elapsed = ((Date.now() - t0) / 1000).toFixed(1)

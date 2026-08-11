@@ -28,4 +28,7 @@ async function deleteEmptyLegacyWhatsAppChatsV1(ids) {
     return { roster, chats }
   } finally { await prisma.$disconnect() }
 }
-module.exports = { repairWhatsAppMessageTimestampV1, deleteLegacyWhatsAppMessageV1, deleteEmptyLegacyWhatsAppChatsV1 }
+async function wipeLegacyWhatsappDataV1() {
+  const prisma = new PrismaClient(); try { const messages = await prisma.whatsAppMessage.deleteMany({}); const chats = await prisma.whatsAppChat.deleteMany({}); const roster = await prisma.whatsAppChatRoster.deleteMany({}); return { messages, chats, roster } } finally { await prisma.$disconnect() }
+}
+module.exports = { repairWhatsAppMessageTimestampV1, deleteLegacyWhatsAppMessageV1, deleteEmptyLegacyWhatsAppChatsV1, wipeLegacyWhatsappDataV1 }
