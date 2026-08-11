@@ -1,5 +1,8 @@
 import { withCronLogging } from '@/lib/cron-health'
-import { detectRootCausePatterns, calculateRootCauseTrends } from '@/lib/triggers'
+import {
+    calculateOperationalRootCauseTrendsV1,
+    detectOperationalRootCausePatternsV1,
+} from '@/modules/work-management/public/v1/operational-trigger-evaluations'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,8 +14,8 @@ export const dynamic = 'force-dynamic'
  * Safe to call multiple times.
  */
 export const GET = withCronLogging('pattern-alerts', async () => {
-    const result = await detectRootCausePatterns()
-    const trends = await calculateRootCauseTrends()
+    const result = await detectOperationalRootCausePatternsV1()
+    const trends = await calculateOperationalRootCauseTrendsV1()
     return {
         ok: true,
         alerts: result.alerts,

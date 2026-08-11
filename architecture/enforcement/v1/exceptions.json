@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "6798ed7de2d9a9e2ef34070e6c657c4cf199df66849109ea5006ff9746f9e43a",
+  "finding_digest": "866887100df9821c1a4488e6a36ab9098195c8d98fc59e9052aff6e1b79d93bb",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -14,7 +14,7 @@
   },
   "summary": {
     "internal_module_import": 46,
-    "non_public_cross_context_import": 90,
+    "non_public_cross_context_import": 85,
     "undeclared_dependency": 26
   },
   "exceptions": [
@@ -32,86 +32,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:messaging/messages>contacts/contacts"
-      ]
-    },
-    {
-      "fingerprint": "arch_f486eeb593f247671f4d2202",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/cron/auto-close-tasks/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "work_management",
-      "subject": "monitoring>tasks:gravity-mvp/src/lib/triggers.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_58591a7c73a666325d2ab74b",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/cron/enforce-followup/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "work_management",
-      "subject": "monitoring>tasks:gravity-mvp/src/lib/triggers.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_d8e543cec88b61489a0d2416",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/cron/escalations/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "work_management",
-      "subject": "monitoring>tasks:gravity-mvp/src/lib/triggers.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_4c432d9d726bd05d643452a4",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/cron/pattern-alerts/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "work_management",
-      "subject": "monitoring>tasks:gravity-mvp/src/lib/triggers.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_6fa18612b704827acf65d615",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/cron/sla-escalation/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "work_management",
-      "subject": "monitoring>tasks:gravity-mvp/src/lib/triggers.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>work_management/tasks"
       ]
     },
     {

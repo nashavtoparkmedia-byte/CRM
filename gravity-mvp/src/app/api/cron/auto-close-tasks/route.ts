@@ -1,5 +1,5 @@
 import { withCronLogging } from '@/lib/cron-health'
-import { evaluateAutoClose } from '@/lib/triggers'
+import { evaluateOperationalAutoCloseV1 } from '@/modules/work-management/public/v1/operational-trigger-evaluations'
 
 /**
  * Auto-close churn/onboarding tasks when driver trip activity is detected.
@@ -13,6 +13,6 @@ import { evaluateAutoClose } from '@/lib/triggers'
  *   onboarding → 'launched'   (водитель вышел на линию)
  */
 export const GET = withCronLogging('auto-close-tasks', async () => {
-    const result = await evaluateAutoClose()
+    const result = await evaluateOperationalAutoCloseV1()
     return { ok: true, ...result }
 })
