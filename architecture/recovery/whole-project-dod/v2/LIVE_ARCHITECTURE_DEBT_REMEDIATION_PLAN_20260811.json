@@ -3,10 +3,10 @@
   "status": "OPEN_LIVE_DEBT_BURN_DOWN",
   "source": "LIVE_ARCHITECTURE_DEBT_RECOMPUTE_20260811.json",
   "opening_finding_count": 1288,
-  "current_finding_count": 506,
-  "exception_covered_live_debt": 506,
+  "current_finding_count": 299,
+  "exception_covered_live_debt": 299,
   "open_finding_count": 0,
-  "actually_closed_since_opening_baseline": 782,
+  "actually_closed_since_opening_baseline": 989,
   "confirmed_direct_foreign_prisma_writes": 0,
   "items": [
     {
@@ -99,6 +99,55 @@
       ],
       "approved_path": "versioned Contacts resolution and exact identity-maintenance capabilities",
       "status": "CLOSED_CONTACTS_OWNER_BOUNDARY"
+    },
+    {
+      "surface": "Work Management client state",
+      "finding_count": 86,
+      "intent": "Keep task stores, selectors, query hooks and mutation hooks within Work ownership while preserving old imports as explicit compatibility shims.",
+      "owner_context": "work_management",
+      "target_contexts": [
+        "work_management",
+        "platform_shell"
+      ],
+      "approved_path": "owner public client-state files, explicit named compatibility shims and focused store behavior tests",
+      "status": "CLOSED_WORK_CLIENT_STATE_OWNERSHIP"
+    },
+    {
+      "surface": "Fleet monitoring policy",
+      "finding_count": 15,
+      "intent": "Keep fleet event vocabulary, status labels, scraper limits and display mappings in the Fleet owner.",
+      "owner_context": "fleet_operations",
+      "target_contexts": [
+        "fleet_operations",
+        "operations_observability"
+      ],
+      "approved_path": "read-only versioned Fleet policy surface plus explicit compatibility shim",
+      "status": "CLOSED_FLEET_MONITORING_POLICY"
+    },
+    {
+      "surface": "Configuration operational health",
+      "finding_count": 14,
+      "intent": "Expose validation results and recent change history without exposing registration, change logging, raw SQL or Prisma.",
+      "owner_context": "configuration",
+      "target_contexts": [
+        "operations_observability",
+        "platform_shell"
+      ],
+      "approved_path": "narrow read-only Configuration facade with exact delegation tests",
+      "status": "CLOSED_CONFIGURATION_HEALTH_QUERY"
+    },
+    {
+      "surface": "Work scenario catalog and team operational policy",
+      "finding_count": 92,
+      "intent": "Publish pure Work-owned scenario metadata, thresholds, classifications and calculations used by Analytics, Messaging and Configuration.",
+      "owner_context": "work_management",
+      "target_contexts": [
+        "analytics_reporting",
+        "configuration",
+        "messaging"
+      ],
+      "approved_path": "two explicit read-only versioned policy surfaces with no wildcard, service, repository or persistence export",
+      "status": "CLOSED_WORK_POLICY_BOUNDARY"
     }
   ],
   "prohibited_shortcuts": [
@@ -108,10 +157,10 @@
     "arbitrary Prisma access from an approved adapter"
   ],
   "next_cluster": {
-    "name": "WORK_MANAGEMENT_CLIENT_STATE_OWNERSHIP",
-    "finding_count": 54,
+    "name": "SHARED_CLASS_NAME_UTILITY_EXTRACTION",
+    "finding_count": 8,
     "classification": "EXCEPTION_COVERED_TEMPORARY_LEGACY_DEBT",
-    "acceptance": "Relocate the task store, list-view store and selectors into Work Management ownership, preserve behavior with compatibility shims and focused store tests, migrate only Work Management consumers, and retire exact findings without declaring a Platform dependency."
+    "acceptance": "Move the pure cn helper into shared technical UI infrastructure, preserve the legacy path as an explicit named shim, migrate all consumers, and retire the exact cross-context findings without declaring business contexts dependent on Platform Shell."
   },
-  "acceptance": "Uncovered findings and provider transport accesses are zero without new exceptions. The project remains NOT READY while 506 temporary exception-covered live findings remain."
+  "acceptance": "Uncovered findings and provider transport accesses are zero without new exceptions. The project remains NOT READY while 299 temporary exception-covered live findings remain."
 }
