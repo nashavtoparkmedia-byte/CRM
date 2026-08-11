@@ -5,7 +5,7 @@ import {
     MessageSquare, CheckCircle2, ShieldAlert,
     Trash2, Plus, LogOut, Check, RefreshCw, Smartphone, PauseCircle, PlayCircle, Loader2
 } from "lucide-react"
-import ChannelSyncBlock from "@/components/ChannelSyncBlock"
+import ChannelSyncBlock from "@/modules/messaging/public/v1/client-ui/channel-sync-block"
 import { Button } from "@/infrastructure/ui/button"
 import { Input } from "@/infrastructure/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/infrastructure/ui/tabs"

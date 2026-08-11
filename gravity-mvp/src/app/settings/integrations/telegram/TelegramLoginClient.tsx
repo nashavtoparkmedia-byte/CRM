@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { CheckCircle2, QrCode, LogOut, Loader2, Send, Plus, Star, Edit2, PauseCircle, PlayCircle, Trash2 } from 'lucide-react'
 import { getTelegramAuthQR, getTelegramAuthQRFromSavedConnection, checkTelegramAuthStatus, disconnectTelegram, submitTelegram2FAPassword, updateTelegramConnectionSettings, pauseTelegramConnection, resumeTelegramConnection, deleteConnectionMessages } from '../../../tg-actions'
 import type { TelegramConnectionPublicMetadata } from '@/modules/telegram-channel/public/v1/telegram-connection-public-metadata'
-import ChannelSyncBlock from "@/components/ChannelSyncBlock"
+import ChannelSyncBlock from "@/modules/messaging/public/v1/client-ui/channel-sync-block"
 
 import { Button } from "@/infrastructure/ui/button"
 import { Input } from "@/infrastructure/ui/input"

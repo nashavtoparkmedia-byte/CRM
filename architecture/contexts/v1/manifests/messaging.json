@@ -42,6 +42,7 @@
     "environment_names": [
       "MAX_SCRAPER_PHONE",
       "MAX_SCRAPER_URL",
+      "NEXTAUTH_URL",
       "NEXT_PUBLIC_FORCE_SHOW_ALL_CHANNELS",
       "TELEGRAM_BOT_URL"
     ],
@@ -210,6 +211,8 @@
     "ConversationView.v1",
     "MessageView.v1",
     "MessageStream.v1",
+    "ChannelSyncClient.v1",
+    "ChannelSyncOperations.v1",
     "CompletedCallTimelineProjector.v1"
   ],
   "responsibility": "Channel-neutral conversations, messages, attachments, communication triggers and history import state.",

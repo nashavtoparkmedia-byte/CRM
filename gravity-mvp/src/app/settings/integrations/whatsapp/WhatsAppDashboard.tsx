@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { CheckCircle2, Trash2, Loader2, MessageCircle, Wifi, WifiOff, RefreshCw, AlertTriangle, PauseCircle, PlayCircle, LogOut, Pencil, Check, X } from 'lucide-react'
 import { createWhatsAppConnection, getWhatsAppConnections, getWhatsAppStatus, getWhatsAppQrCode, disconnectWhatsApp, refreshWhatsAppQR, pauseWhatsAppConnection, resumeWhatsAppConnection, deleteWhatsAppMessages, forceResetWhatsAppSession, renameWhatsAppConnection } from './whatsapp-actions'
 import type { WhatsAppConnectionPublicMetadata } from '@/modules/whatsapp-channel/public/v1/whatsapp-connection-public-metadata'
-import ChannelSyncBlock from "@/components/ChannelSyncBlock"
+import ChannelSyncBlock from "@/modules/messaging/public/v1/client-ui/channel-sync-block"
 
 import { Button } from "@/infrastructure/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/infrastructure/ui/dialog"

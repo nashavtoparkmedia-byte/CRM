@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "f7896a52b5f4b2db7ddb7ac15e70d1a1b4dc3d31a138dbf768300dc5c32190f0",
+  "finding_digest": "96962e6337633375b13283599431f1bdda5ee7c4fd7452f505138c66706f8862",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,9 +13,9 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "internal_module_import": 77,
-    "non_public_cross_context_import": 123,
-    "undeclared_dependency": 35
+    "internal_module_import": 73,
+    "non_public_cross_context_import": 119,
+    "undeclared_dependency": 32
   },
   "exceptions": [
     {
@@ -2528,108 +2528,6 @@
       ]
     },
     {
-      "fingerprint": "arch_32249eafa04bce63505e9179",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/settings/integrations/max/MaxLoginClient.tsx",
-      "line_at_baseline": 8,
-      "ordinal": 1,
-      "owner_context": "max_channel",
-      "target_context": "platform_shell",
-      "subject": "max_provider>gravity_ui:gravity-mvp/src/components/ChannelSyncBlock.tsx",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:max_channel/max_provider>platform_shell/gravity_core",
-        "dependency:max_channel/max_provider>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_16c4c3aca76fa50aa5f5a2ed",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/settings/integrations/max/MaxLoginClient.tsx",
-      "line_at_baseline": 8,
-      "ordinal": 1,
-      "owner_context": "max_channel",
-      "target_context": "platform_shell",
-      "subject": "max_provider>gravity_ui:gravity-mvp/src/components/ChannelSyncBlock.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:max_channel/max_provider>platform_shell/gravity_core",
-        "dependency:max_channel/max_provider>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_a700ff31ff9a1b602749082d",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/settings/integrations/max/MaxLoginClient.tsx",
-      "line_at_baseline": 8,
-      "ordinal": 1,
-      "owner_context": "max_channel",
-      "target_context": "platform_shell",
-      "subject": "max_provider>gravity_ui:gravity-mvp/src/components/ChannelSyncBlock.tsx",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:max_channel/max_provider>platform_shell/gravity_core",
-        "dependency:max_channel/max_provider>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_5710a9c8b09530b86643c937",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/settings/integrations/telegram/TelegramLoginClient.tsx",
-      "line_at_baseline": 6,
-      "ordinal": 1,
-      "owner_context": "telegram_channel",
-      "target_context": "platform_shell",
-      "subject": "telegram_provider>gravity_ui:gravity-mvp/src/components/ChannelSyncBlock.tsx",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:telegram_channel/telegram_provider>platform_shell/gravity_core",
-        "dependency:telegram_channel/telegram_provider>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_5f4850608c8d5030c58260c7",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/settings/integrations/telegram/TelegramLoginClient.tsx",
-      "line_at_baseline": 6,
-      "ordinal": 1,
-      "owner_context": "telegram_channel",
-      "target_context": "platform_shell",
-      "subject": "telegram_provider>gravity_ui:gravity-mvp/src/components/ChannelSyncBlock.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:telegram_channel/telegram_provider>platform_shell/gravity_core",
-        "dependency:telegram_channel/telegram_provider>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_49d1566cd6234ea87b3b8b57",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/settings/integrations/telegram/TelegramLoginClient.tsx",
-      "line_at_baseline": 6,
-      "ordinal": 1,
-      "owner_context": "telegram_channel",
-      "target_context": "platform_shell",
-      "subject": "telegram_provider>gravity_ui:gravity-mvp/src/components/ChannelSyncBlock.tsx",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:telegram_channel/telegram_provider>platform_shell/gravity_core",
-        "dependency:telegram_channel/telegram_provider>platform_shell/gravity_ui"
-      ]
-    },
-    {
       "fingerprint": "arch_b3c7cce62b59ac1a8857061d",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/settings/integrations/telephony-ai/TelephonyAiClient.tsx",
@@ -2675,57 +2573,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:calling/ai_calls>configuration/settings"
-      ]
-    },
-    {
-      "fingerprint": "arch_eb4b13127a2aebf6db7dccce",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/settings/integrations/whatsapp/WhatsAppDashboard.tsx",
-      "line_at_baseline": 7,
-      "ordinal": 1,
-      "owner_context": "whatsapp_channel",
-      "target_context": "platform_shell",
-      "subject": "whatsapp_provider>gravity_ui:gravity-mvp/src/components/ChannelSyncBlock.tsx",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:whatsapp_channel/whatsapp_provider>platform_shell/gravity_core",
-        "dependency:whatsapp_channel/whatsapp_provider>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_852eb9bcfd7b86684d266bc5",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/settings/integrations/whatsapp/WhatsAppDashboard.tsx",
-      "line_at_baseline": 7,
-      "ordinal": 1,
-      "owner_context": "whatsapp_channel",
-      "target_context": "platform_shell",
-      "subject": "whatsapp_provider>gravity_ui:gravity-mvp/src/components/ChannelSyncBlock.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:whatsapp_channel/whatsapp_provider>platform_shell/gravity_core",
-        "dependency:whatsapp_channel/whatsapp_provider>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_addf7efb69ec872a346d7d4a",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/settings/integrations/whatsapp/WhatsAppDashboard.tsx",
-      "line_at_baseline": 7,
-      "ordinal": 1,
-      "owner_context": "whatsapp_channel",
-      "target_context": "platform_shell",
-      "subject": "whatsapp_provider>gravity_ui:gravity-mvp/src/components/ChannelSyncBlock.tsx",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:whatsapp_channel/whatsapp_provider>platform_shell/gravity_core",
-        "dependency:whatsapp_channel/whatsapp_provider>platform_shell/gravity_ui"
       ]
     },
     {
@@ -2972,40 +2819,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:telegram_channel/telegram_provider>messaging/messages"
-      ]
-    },
-    {
-      "fingerprint": "arch_221d5058be8fe7cc65588b87",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/components/ChannelSyncBlock.tsx",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "configuration",
-      "subject": "gravity_ui>settings:gravity-mvp/src/app/settings/ai/actions.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>configuration/settings",
-        "dependency:platform_shell/gravity_ui>configuration/settings"
-      ]
-    },
-    {
-      "fingerprint": "arch_2ef66909d354c08fca851456",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/components/ChannelSyncBlock.tsx",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "configuration",
-      "subject": "gravity_ui>settings:gravity-mvp/src/app/settings/ai/actions.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>configuration/settings",
-        "dependency:platform_shell/gravity_ui>configuration/settings"
       ]
     },
     {

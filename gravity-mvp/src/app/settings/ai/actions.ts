@@ -5,8 +5,6 @@
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
-import { importOperationalTelegramHistoryV1 } from '@/infrastructure/telegram/operational-capabilities'
-import { importOperationalWhatsAppHistoryV1 } from '@/infrastructure/whatsapp/operational-capabilities'
 import { getAiAgentProviderConfigV1 } from '@/modules/calling/public/v1/ai-agent-provider-capability'
 import { listUserIdentitiesV1 as getUsers } from '@/modules/identity-access/public/v1/user-directory'
 import {
@@ -77,8 +75,16 @@ import {
 } from '@/modules/calling/public/v1'
 import { projectAiAgentConfigMetadata } from '@/modules/calling/public/v1/ai-agent-config-public-metadata'
 import { requireIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
-import { CANCEL_HISTORY_IMPORT_JOB_COMMAND_V1, DELETE_HISTORY_IMPORT_JOB_COMMAND_V1, QUEUE_HISTORY_IMPORT_JOB_COMMAND_V1 } from '@/contracts/messaging/v1'
-import { cancelHistoryImportJobV1, deleteHistoryImportJobV1, queueHistoryImportJobV1 } from '@/modules/messaging/public/v1'
+import {
+    cancelImportJob as cancelOwnedImportJob,
+    createImportJob as createOwnedImportJob,
+    deleteImportJob as deleteOwnedImportJob,
+    getAllImportJobs as getOwnedImportJobs,
+    getConnectionTotalsForUi as getOwnedConnectionTotalsForUi,
+    getLastImportJob as getOwnedLastImportJob,
+    type ConnectionTotalsForUi,
+} from '@/modules/messaging/public/v1/channel-sync-operations'
+export type { ConnectionTotalsForUi } from '@/modules/messaging/public/v1/channel-sync-operations'
 
 // ─── Role guard ───────────────────────────────────────────────────
 //
@@ -336,16 +342,11 @@ export async function setOperatorVerdict(logId: string, verdict: 'good' | 'bad' 
 // ─── HistoryImportJob ─────────────────────────────────────────────
 
 export async function getLastImportJob() {
-    try {
-        const rows = await prisma.$queryRaw<any[]>`SELECT * FROM "HistoryImportJob" ORDER BY "createdAt" DESC LIMIT 1`
-        return rows[0] ?? null
-    } catch { return null }
+    return getOwnedLastImportJob()
 }
 
 export async function getAllImportJobs(limit = 10) {
-    try {
-        return await prisma.$queryRaw<any[]>`SELECT * FROM "HistoryImportJob" ORDER BY "createdAt" DESC LIMIT ${limit}`
-    } catch { return [] }
+    return getOwnedImportJobs(limit)
 }
 
 export async function createImportJob(data: {
@@ -354,66 +355,15 @@ export async function createImportJob(data: {
     daysBack?: number
     connectionId?: string
 }) {
-    await assertCanEditAi()
-    const id = `job_${Date.now()}`
-    const daysBack = data.daysBack ?? null
-    const connId = data.connectionId ?? null
-    try {
-        await queueHistoryImportJobV1({ contract: QUEUE_HISTORY_IMPORT_JOB_COMMAND_V1, jobId: id, channels: data.channels, mode: data.mode, daysBack, connectionId: connId })
-    } catch (e: any) {
-        console.error('[AI Import] createImportJob error:', e.message)
-    }
-
-    const job = { id, ...data, connectionId: connId, status: 'queued', chatsScanned: 0, contactsFound: 0, messagesImported: 0, createdAt: new Date().toISOString() }
-    revalidatePath('/settings/ai')
-
-    if (data.channels.includes('max')) {
-        const scraperUrl = process.env.MAX_SCRAPER_URL || 'http://localhost:3005'
-        const crmUrl     = process.env.NEXTAUTH_URL    || 'http://localhost:3002'
-
-        fetch(`${scraperUrl}/import-history`, {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({
-                jobId:    id,
-                crmApiUrl: crmUrl,
-                mode:     data.mode,
-                daysBack: data.daysBack,
-            }),
-        }).catch(e => console.error('[AI Import] scraper call error:', e.message))
-    }
-
-    if (data.channels.includes('telegram')) {
-        importOperationalTelegramHistoryV1(id, data.mode, data.daysBack, data.connectionId)
-            .catch(e => console.error('[AI Import] telegram import error:', e.message))
-    }
-
-    if (data.channels.includes('whatsapp')) {
-        importOperationalWhatsAppHistoryV1(id, data.mode, data.daysBack, data.connectionId)
-            .catch(e => console.error('[AI Import] whatsapp import error:', e.message))
-    }
-
-    return job
+    return createOwnedImportJob(data)
 }
 
 export async function cancelImportJob(id: string) {
-    await assertCanEditAi()
-    try {
-        await cancelHistoryImportJobV1({ contract: CANCEL_HISTORY_IMPORT_JOB_COMMAND_V1, jobId: id })
-        revalidatePath('/settings/ai')
-    } catch (e: any) {
-        console.error('[AI Import] cancelImportJob error:', e.message)
-    }
+    return cancelOwnedImportJob(id)
 }
 
 export async function deleteImportJob(id: string) {
-    await assertCanEditAi()
-    try {
-        await deleteHistoryImportJobV1({ contract: DELETE_HISTORY_IMPORT_JOB_COMMAND_V1, jobId: id })
-        revalidatePath('/settings/ai')
-    } catch (e: any) {
-        console.error('[AI Import] deleteImportJob error:', e.message)
-    }
+    return deleteOwnedImportJob(id)
 }
 
 // ─── Preflight: проверка доступности скрапера ────────────────────
@@ -1963,54 +1913,8 @@ export async function getChannelTotalsForUi(): Promise<ChannelTotalsRow[]> {
  *  total из таблицы Message. Пользователь читал это как «кто-то обманывает».
  *  Источник правды один — Message COUNT, агрегированный по
  *  COALESCE(wc.connectionId, c.metadata->>'connectionId'). */
-export interface ConnectionTotalsForUi {
-    messages:       number
-    chats:          number
-    contacts:       number
-    earliestSentAt: string | null
-    latestSentAt:   string | null
-}
 export async function getConnectionTotalsForUi(connectionId: string): Promise<ConnectionTotalsForUi> {
-    const empty: ConnectionTotalsForUi = {
-        messages: 0, chats: 0, contacts: 0,
-        earliestSentAt: null, latestSentAt: null,
-    }
-    if (!connectionId) return empty
-    try {
-        const rows = await prisma.$queryRaw<Array<{
-            messages: number
-            chats:    number
-            contacts: number
-            earliestSentAt: Date | null
-            latestSentAt:   Date | null
-        }>>`
-            SELECT
-                COUNT(*)::int                              AS messages,
-                COUNT(DISTINCT m."chatId")::int            AS chats,
-                COUNT(DISTINCT c."contactId")::int         AS contacts,
-                MIN(m."sentAt")                            AS "earliestSentAt",
-                MAX(m."sentAt")                            AS "latestSentAt"
-            FROM "Message" m
-            LEFT JOIN "Chat" c          ON c.id = m."chatId"
-            LEFT JOIN "WhatsAppChat" wc ON wc.id = c."externalChatId"
-            WHERE m.channel::text IN ('whatsapp', 'telegram', 'max')
-              AND COALESCE(wc."connectionId", c.metadata->>'connectionId') = ${connectionId}
-        `
-        const r = rows[0]
-        if (!r) return empty
-        return {
-            messages:       Number(r.messages ?? 0),
-            chats:          Number(r.chats ?? 0),
-            contacts:       Number(r.contacts ?? 0),
-            earliestSentAt: r.earliestSentAt ? new Date(r.earliestSentAt).toISOString() : null,
-            latestSentAt:   r.latestSentAt   ? new Date(r.latestSentAt).toISOString()   : null,
-        }
-    } catch (e: any) {
-        if (process.env.NODE_ENV !== 'production') {
-            console.error('[getConnectionTotalsForUi] failed:', e?.message)
-        }
-        return empty
-    }
+    return getOwnedConnectionTotalsForUi(connectionId)
 }
 
 export async function listChannelConnections(): Promise<ChannelConnection[]> {
