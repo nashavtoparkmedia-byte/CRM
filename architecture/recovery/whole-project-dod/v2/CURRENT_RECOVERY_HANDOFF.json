@@ -23,9 +23,9 @@
     "remote_tracking_ref_contains_implementation_head": false,
     "base_commit": "0b61ba296ba2734738d4a21b9d00ce8b110d63cf",
     "base_tree": "56c452397df4bb7cb05bef3e0d9afd1de9d785a5",
-    "implementation_head_before_checkpoint": "4ec527301dbc7a80060df5d8eb6a6081f41b6e90",
+    "implementation_head_before_checkpoint": "30334955",
     "implementation_tree_before_checkpoint": "24fc3d4890d012e25707e05d0ef29aeae333abe6",
-    "checkpoint_commit": "THE_COMMIT_CONTAINING_THIS_ARTIFACT; resolve with git log -1 -- architecture/recovery/whole-project-dod/v2/CURRENT_RECOVERY_HANDOFF.json",
+    "checkpoint_commit": "bb8d6922",
     "task_commit_range": {
       "range": "0b61ba296ba2734738d4a21b9d00ce8b110d63cf..4ec527301dbc7a80060df5d8eb6a6081f41b6e90",
       "commits": 11,
@@ -53,7 +53,8 @@
       "Do not reset, clean, discard, or remove the recovery worktree.",
       "Do not treat the checkpoint commit as analyzer/security acceptance.",
       "Do not use the dirty invocation checkout /opt/codex-work/crm as the recovery implementation worktree."
-    ]
+    ],
+    "checkpoint_scope": "Credential boundary implementation, owner-local scenario-field-settings closure, dead historical capability removal, live architecture debt recompute, and durable handoff evidence."
   },
   "related_worktrees": [
     {
@@ -174,157 +175,7 @@
       ]
     }
   ],
-  "uncommitted_file_purpose_groups": [
-    {
-      "purpose": "Context dependencies/credential declarations, checksum synchronization, removal of 11 reviewed stale Identity exceptions, and AI boundary guard update",
-      "paths": [
-        "architecture/contexts/v1/SHA256SUMS",
-        "architecture/contexts/v1/context-decisions.json",
-        "architecture/contexts/v1/context-index.json",
-        "architecture/contexts/v1/manifests/configuration.json",
-        "architecture/contexts/v1/manifests/identity_access.json",
-        "architecture/contexts/v1/manifests/max_channel.json",
-        "architecture/contexts/v1/manifests/operations_observability.json",
-        "architecture/contexts/v1/manifests/telegram_channel.json",
-        "architecture/contexts/v1/manifests/whatsapp_channel.json",
-        "architecture/enforcement/v1/exceptions.json",
-        "tools/architecture/check-calling-ai-agent-config-boundary.mjs"
-      ]
-    },
-    {
-      "purpose": "Gravity integration-admin signed session, safe login/return flow, and protection of sensitive pages",
-      "paths": [
-        "gravity-mvp/src/app/logs/page.tsx",
-        "gravity-mvp/src/app/settings/ai/page.tsx",
-        "gravity-mvp/src/app/settings/api/page.tsx",
-        "gravity-mvp/src/app/settings/integrations/access/actions.ts",
-        "gravity-mvp/src/app/settings/integrations/access/page.tsx",
-        "gravity-mvp/src/app/settings/integrations/bot/page.tsx",
-        "gravity-mvp/src/app/settings/integrations/max/page.tsx",
-        "gravity-mvp/src/app/settings/integrations/telegram/page.tsx",
-        "gravity-mvp/src/app/settings/integrations/whatsapp/page.tsx",
-        "gravity-mvp/src/modules/identity-access/public/v1/index.ts",
-        "gravity-mvp/src/modules/identity-access/public/v1/integration-admin-auth.ts",
-        "gravity-mvp/src/modules/identity-access/public/v1/integration-admin-credentials.ts"
-      ]
-    },
-    {
-      "purpose": "Browser-safe Fleet/MAX/Telegram/WhatsApp/AI metadata projections and bounded credential/QR/login ceremonies",
-      "paths": [
-        "gravity-mvp/src/app/ApiListClient.tsx",
-        "gravity-mvp/src/app/actions.ts",
-        "gravity-mvp/src/app/max-actions.ts",
-        "gravity-mvp/src/app/settings/ai/AiControlCenterClient.tsx",
-        "gravity-mvp/src/app/settings/ai/actions.ts",
-        "gravity-mvp/src/app/settings/integrations/max/MaxLoginClient.tsx",
-        "gravity-mvp/src/app/settings/integrations/telegram/TelegramLoginClient.tsx",
-        "gravity-mvp/src/app/settings/integrations/whatsapp/WhatsAppDashboard.tsx",
-        "gravity-mvp/src/app/settings/integrations/whatsapp/whatsapp-actions.ts",
-        "gravity-mvp/src/app/tg-actions.ts",
-        "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-        "gravity-mvp/src/lib/whatsapp/whatsapp-qr-ceremony.test.ts",
-        "gravity-mvp/src/lib/whatsapp/whatsapp-qr-ceremony.ts",
-        "gravity-mvp/src/modules/calling/public/v1/ai-agent-config-public-metadata.test.ts",
-        "gravity-mvp/src/modules/calling/public/v1/ai-agent-config-public-metadata.ts",
-        "gravity-mvp/src/modules/fleet-operations/public/v1/api-connection-public-metadata.test.ts",
-        "gravity-mvp/src/modules/fleet-operations/public/v1/api-connection-public-metadata.ts",
-        "gravity-mvp/src/modules/max-channel/public/v1/max-connection-public-metadata.test.ts",
-        "gravity-mvp/src/modules/max-channel/public/v1/max-connection-public-metadata.ts",
-        "gravity-mvp/src/modules/telegram-channel/public/v1/telegram-connection-public-metadata.test.ts",
-        "gravity-mvp/src/modules/telegram-channel/public/v1/telegram-connection-public-metadata.ts",
-        "gravity-mvp/src/modules/whatsapp-channel/public/v1/whatsapp-connection-public-metadata.test.ts",
-        "gravity-mvp/src/modules/whatsapp-channel/public/v1/whatsapp-connection-public-metadata.ts"
-      ]
-    },
-    {
-      "purpose": "Gravity security detector runner and targeted source/credential tests",
-      "paths": [
-        "gravity-mvp/package.json",
-        "gravity-mvp/scripts/check-public-boundaries.mjs",
-        "gravity-mvp/src/lib/security/integration-admin-boundary-source.test.ts",
-        "gravity-mvp/src/lib/security/integration-admin-credentials.test.ts",
-        "gravity-mvp/src/lib/security/public-boundary-source.test.ts"
-      ]
-    },
-    {
-      "purpose": "Remove or block debug DB HTTP access and exclude debug/repair scripts from production images",
-      "paths": [
-        "deploy/nginx/templates/crm.conf.template",
-        "gravity-mvp/Dockerfile",
-        "gravity-mvp/src/app/api/debug-db/list-connections/route.ts [DELETED]",
-        "gravity-mvp/src/proxy.ts",
-        "max-web-scraper/.dockerignore",
-        "yandex-fleet-scraper/.dockerignore"
-      ]
-    },
-    {
-      "purpose": "Required admin/session/webhook secret documentation",
-      "paths": [
-        "docs/SECRETS.md",
-        "tg-bot/README.md"
-      ]
-    },
-    {
-      "purpose": "Remove token/cookie prefixes and raw credential-bearing errors from diagnostics/runtime logs",
-      "paths": [
-        "gravity-mvp/scripts/backfill_tg_via_bot_api.js",
-        "tg-bot/check-bot-token.js",
-        "tg-bot/check-prisma.js",
-        "tg-bot/read-logs-safe.js",
-        "tg-bot/src/bot.js",
-        "tg-bot/src/handlers/dynamicSurvey.js",
-        "tg-bot/src/handlers/start.js",
-        "tg-bot/src/security/redactSecrets.js",
-        "tg-bot/src/utils/log-interceptor.js",
-        "tg-bot/test-prisma-query.js",
-        "tg-bot/test-token.js",
-        "yandex-fleet-scraper/src/scripts/import-chrome-cookies.ts"
-      ]
-    },
-    {
-      "purpose": "tg-bot fail-closed Basic auth, public bot metadata, explicit-config diagnostics and security tests",
-      "paths": [
-        "tg-bot/check-express-api.js",
-        "tg-bot/fetch-mock.js",
-        "tg-bot/package.json",
-        "tg-bot/src/app.js",
-        "tg-bot/src/middleware/auth.js",
-        "tg-bot/src/routes/admin/bots.js",
-        "tg-bot/src/routes/admin/users.js",
-        "tg-bot/src/security/authSecurity.test.js",
-        "tg-bot/src/security/publicCredentialBoundary.source.test.js",
-        "tg-bot/src/security/publicCredentialMetadata.js",
-        "tg-bot/src/security/publicCredentialMetadata.test.js",
-        "tg-bot/test-api.js",
-        "tg-bot/test-dashboard-api.js",
-        "tg-bot/test-headers.js"
-      ]
-    },
-    {
-      "purpose": "Authenticated token-free Telegram webhook and disabled-by-default legacy token route",
-      "paths": [
-        "tg-bot/src/routes/webhooks.js",
-        "tg-bot/src/security/webhookAuth.js"
-      ]
-    },
-    {
-      "purpose": "tg-bot frontend signed HttpOnly session and authenticated same-origin proxy; remove insecure export",
-      "paths": [
-        "tg-bot/tg-bot-frontend/context/AuthContext.js",
-        "tg-bot/tg-bot-frontend/lib/api.js",
-        "tg-bot/tg-bot-frontend/lib/serverAuth.js",
-        "tg-bot/tg-bot-frontend/next.config.mjs",
-        "tg-bot/tg-bot-frontend/pages/_app.js",
-        "tg-bot/tg-bot-frontend/pages/api/admin/[...path].js",
-        "tg-bot/tg-bot-frontend/pages/api/auth/login.js",
-        "tg-bot/tg-bot-frontend/pages/api/auth/logout.js",
-        "tg-bot/tg-bot-frontend/pages/api/auth/session.js",
-        "tg-bot/tg-bot-frontend/pages/api/export.js [DELETED]",
-        "tg-bot/tg-bot-frontend/pages/login.js",
-        "tg-bot/tg-bot-frontend/pages/surveys/[id].js"
-      ]
-    }
-  ],
+  "uncommitted_file_purpose_groups": [],
   "path_status_inventory": {
     "committed_before_checkpoint": {
       "created": [
@@ -490,9 +341,9 @@
       }
     ],
     "implemented_but_not_accepted": [
-      "Analyzer v2 correctness hardening through 4ec52730 and 77 targeted write fixtures plus four companion suites; no current bounded full-repository baseline or final critic PASS.",
-      "Uncommitted Gravity/tg-bot credential exposure, authentication, redaction, webhook, QR/login ceremony and public metadata hardening; delegated targeted tests/builds pass, but no independent critic/final integration/production gate accepted it.",
-      "Uncommitted removal/blocking of debug DB routes and removal of 11 stale Identity dependency exceptions; strict local enforcement reported 1284 findings / 1284 exact exceptions, but the whole-program debt is not closed."
+      "Credential database access inventory, sensitive-field registry, public serialization closure, controlled migration boundary, cross-domain capability review and independent critic are internally PASS; whole-project acceptance remains open.",
+      "Scenario-field-settings writes are owner-local to Work Management; the unused historical chatEventLog capability is removed with no-call-site/schema evidence.",
+      "Live architecture debt recompute is current at 1,288 findings / 1,281 exact exceptions with 7 uncovered dependency findings and zero direct foreign Prisma writes."
     ],
     "investigated": [
       "Current full-repository analyzer performance: two mirrored 4ec scans were CPU-active for more than 3h20 and aborted; no output exists.",
@@ -501,13 +352,10 @@
       "Recovery Git/worktree, durable-state, artifact and process identities reconciled for continuation."
     ],
     "not_started": [
-      "Bounded isolated-worker/progress-instrumented analyzer execution and one current authoritative full scan.",
-      "Current authoritative credential inventory after analyzer performance closure.",
-      "Independent critic/final integration acceptance of current analyzer and uncommitted security implementation.",
-      "Protected Messages authoritative production-source reconciliation.",
+      "Remediation or explicitly accepted narrow contracts for the seven remaining live dependency findings (DriverMatchService, FreeSWITCH EslClient, and contact-merge composition).",
+      "Protected Messages and AI Calls independent production-source reconciliation and final integration acceptance.",
       "Production source/artifact identity reconciliation, preview/backup/rollback gates, deployment or runtime activation.",
-      "Activation of transactional outbox or Privileged Runtime release/config/database/rollback profiles.",
-      "Remaining active architecture debt, central contract, manifest blast-radius and CI coverage recovery beyond the unaccepted security slice."
+      "Final external re-review after all live debt and security gates close."
     ]
   },
   "analyzer": {
@@ -720,10 +568,8 @@
     "ai_calls_mutated": false
   },
   "genuine_blockers": [
-    "Current write analyzer is not operationally bounded and has no current authoritative full-repository output.",
-    "Exact performance root cause is not proven.",
-    "Security implementation is worktree-only and lacks independent final acceptance.",
-    "Production source/artifact and protected Messages production authority were not reconciled in this task.",
+    "Seven uncovered live dependency findings remain; no broad exception or manifest shortcut is accepted.",
+    "Protected Messages/AI Calls production authority and final integration acceptance remain unreconciled.",
     "No upstream/remote ref protects the local recovery lineage."
   ],
   "exact_next_action": "Continue LIVE ARCHITECTURE DEBT remediation; preserve Messages and AI Calls behavior; do not run another whole-repository write scan.",
