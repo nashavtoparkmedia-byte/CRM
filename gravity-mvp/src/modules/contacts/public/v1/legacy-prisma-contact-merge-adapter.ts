@@ -6,6 +6,8 @@ import type {
   ContactMergeTransactionalRepositoriesV1,
   ContactMergeUnitOfWorkV1,
 } from './contact-merge-handler'
+import { makeMessagingContactMergeRepositories } from '../../../messaging/public/v1/legacy-prisma-contact-merge-adapter'
+import { makeWorkContactMergeRepositories } from '../../../work-management/public/v1/legacy-prisma-contact-merge-adapter'
 
 export const legacyPrismaContactMergeQueriesV1: ContactMergeQueryRepositoriesV1 = {
   contacts: {
@@ -187,50 +189,9 @@ function makeTransactionalRepositories(
       },
     },
 
-    messaging: {
-      async remapChatsToIdentity(oldIdentityId, newIdentityId) {
-        await transaction.chat.updateMany({
-          where: { contactIdentityId: oldIdentityId },
-          data: { contactIdentityId: newIdentityId },
-        })
-      },
+    messaging: makeMessagingContactMergeRepositories(transaction),
 
-      async moveChatsToContact(sourceContactId, targetContactId) {
-        await transaction.chat.updateMany({
-          where: { contactId: sourceContactId },
-          data: { contactId: targetContactId },
-        })
-      },
-
-      async moveChatsToDriverContact(sourceContactId, targetContactId, driverId) {
-        await transaction.chat.updateMany({
-          where: { contactId: sourceContactId },
-          data: {
-            contactId: targetContactId,
-            driverId,
-          },
-        })
-      },
-
-      async attachUnlinkedContactChatsToDriver(contactId, driverId) {
-        await transaction.chat.updateMany({
-          where: {
-            contactId,
-            driverId: null,
-          },
-          data: { driverId },
-        })
-      },
-    },
-
-    work: {
-      async moveTasksToContact(sourceContactId, targetContactId) {
-        await transaction.task.updateMany({
-          where: { contactId: sourceContactId },
-          data: { contactId: targetContactId },
-        })
-      },
-    },
+    work: makeWorkContactMergeRepositories(transaction),
   }
 }
 
