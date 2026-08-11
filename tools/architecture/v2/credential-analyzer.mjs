@@ -476,7 +476,25 @@ export function analyzeCredentialAccess(sourceText, options = {}) {
     const matches = uniquePolicies(models, index)
     const recordSite = relationPath.length > 0 ? siteAtRelation(site, relationPath) : site
     for (const policy of matches) {
-      accesses.push(baseRecord(recordSite, policy, 'READ', exposedFieldsForProjection(policy, projection), boundary))
+      // A registered model policy is not permission to silently accept newly
+      // added secret-shaped fields.  Keep the durable policy as the owner
+      // anchor, but augment its sensitive-field view with credential-like
+      // fields selected by this call so an otherwise approved module cannot
+      // bypass enforcement by introducing `refreshToken`, `secret`, etc.
+      const selectedCredentialFields = (projection?.selected_fields ?? [])
+        .filter(credentialLikeField)
+      const effectivePolicy = selectedCredentialFields.some((field) => (
+        !policy.sensitive_fields.some((known) => normalizeName(known) === normalizeName(field))
+      ))
+        ? {
+            ...policy,
+            sensitive_fields: [...new Set([
+              ...policy.sensitive_fields,
+              ...selectedCredentialFields,
+            ])],
+          }
+        : policy
+      accesses.push(baseRecord(recordSite, effectivePolicy, 'READ', exposedFieldsForProjection(effectivePolicy, projection), boundary))
     }
     if (matches.length === 0) {
       const sensitiveFields = (projection?.selected_fields ?? []).filter(credentialLikeField)

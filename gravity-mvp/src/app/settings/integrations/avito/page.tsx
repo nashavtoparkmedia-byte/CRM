@@ -1542,7 +1542,7 @@ export default function AccountsPage() {
       `  • все собранные отклики этого аккаунта\n` +
       `  • все попытки раскрытия телефонов\n` +
       `  • история snapshot'ов\n` +
-      `  • папка Chromium-профиля на диске (${acc.profilePath})\n\n` +
+      `  • папка Chromium-профиля на диске (управляется системой)\n\n` +
       `История Activity Log сохранится для аудита.\n` +
       `Операция необратима.`;
     if (!window.confirm(msg)) return;

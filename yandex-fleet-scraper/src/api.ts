@@ -10,6 +10,12 @@ import client from 'prom-client';
 const prisma = new PrismaClient();
 const fastify = Fastify({ logger: true });
 
+// Admin API DTO: provider session material is never serialized to callers.
+const accountAdminMetadataSelect = {
+    id: true, name: true, state: true, healthScore: true, failureStreak: true,
+    lastKnownChecksLeft: true, lastSuccessAt: true, lastFailureAt: true,
+} as const;
+
 // Setup Redis connection for BullMQ
 const redisConnection = {
     host: process.env.REDIS_HOST || 'localhost',
@@ -237,7 +243,8 @@ fastify.post('/admin/accounts', async (request, reply) => {
     if (!name) return reply.status(400).send({ error: 'Name is required' });
 
     const account = await prisma.account.create({
-        data: { name, state: 'NEED_REAUTH' } // New accounts need auth before becoming ACTIVE
+        data: { name, state: 'NEED_REAUTH' }, // New accounts need auth before becoming ACTIVE
+        select: accountAdminMetadataSelect,
     });
     await updateMetrics();
     return account;
@@ -247,7 +254,10 @@ fastify.put('/admin/accounts/:id/state', async (request, reply) => {
     const { id } = request.params as any;
     const { state, force } = request.body as any;
 
-    const account = await prisma.account.findUnique({ where: { id } });
+    const account = await prisma.account.findUnique({
+        where: { id },
+        select: { id: true, state: true, storageStateEncrypted: true },
+    });
     if (!account) return reply.status(404).send({ error: 'Account not found' });
 
     // Guard against moving to ACTIVE without force bypass or valid storage
@@ -257,7 +267,8 @@ fastify.put('/admin/accounts/:id/state', async (request, reply) => {
 
     const updated = await prisma.account.update({
         where: { id },
-        data: { state }
+        data: { state },
+        select: accountAdminMetadataSelect,
     });
 
     await updateMetrics();

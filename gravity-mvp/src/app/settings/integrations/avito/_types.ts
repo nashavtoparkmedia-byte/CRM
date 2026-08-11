@@ -11,7 +11,7 @@ export interface Account {
   name: string;
   loginPhone: string | null;
   notes: string | null;
-  profilePath: string;
+  profileManaged: boolean;
   status: AccountStatus;
   lastAuthAt: string | null;
   lastScanAt: string | null;

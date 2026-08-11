@@ -7,6 +7,15 @@ import { createApiConnectionV1, deleteApiConnectionV1, deleteApiLogsV1, recordAp
 import { projectApiConnectionMetadata } from '@/modules/fleet-operations/public/v1/api-connection-public-metadata'
 import { requireIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
 
+// Provider calls are the only server-side consumers that require the API key.
+// Keep this selector narrow so a future field cannot cross this boundary by
+// accident through an unbounded Prisma row.
+const yandexCredentialsSelect = {
+    clid: true,
+    apiKey: true,
+    parkId: true,
+} as const
+
 export async function getApiConnections() {
     await requireIntegrationAdminAccess()
     const connections = await prisma.apiConnection.findMany({
@@ -79,7 +88,8 @@ export async function getApiLogs() {
 export async function testApiRequest(connectionId: string, testPayload?: string) {
     await requireIntegrationAdminAccess()
     const connection = await prisma.apiConnection.findUnique({
-        where: { id: connectionId }
+        where: { id: connectionId },
+        select: yandexCredentialsSelect,
     })
 
     if (!connection) throw new Error('Connection not found')
@@ -168,6 +178,7 @@ export interface Driver {
 export async function getDrivers(page: number = 1, limit: number = 20, search?: string, status?: string) {
     const connection = await prisma.apiConnection.findFirst({
         orderBy: { createdAt: 'desc' },
+        select: yandexCredentialsSelect,
     })
 
     if (!connection) return { drivers: [], total: 0, stats: { online: 0, offline: 0, total: 0 } }
@@ -252,7 +263,10 @@ export async function getDrivers(page: number = 1, limit: number = 20, search?: 
  */
 export async function getDriverById(driverProfileId: string): Promise<Driver | null> {
     console.log('[getDriverById] Requesting driver Profile ID:', driverProfileId)
-    const connection = await prisma.apiConnection.findFirst({ orderBy: { createdAt: 'desc' } })
+    const connection = await prisma.apiConnection.findFirst({
+        orderBy: { createdAt: 'desc' },
+        select: yandexCredentialsSelect,
+    })
     if (!connection) return null
 
     try {
@@ -313,7 +327,10 @@ export interface Car {
  */
 export async function getCarById(carId: string, _driverProfileId?: string): Promise<Car | null> {
     console.log('[getCarById] Searching for car ID:', carId)
-    const connection = await prisma.apiConnection.findFirst({ orderBy: { createdAt: 'desc' } })
+    const connection = await prisma.apiConnection.findFirst({
+        orderBy: { createdAt: 'desc' },
+        select: yandexCredentialsSelect,
+    })
     if (!connection) return null
 
     try {
@@ -379,7 +396,10 @@ export async function getCarById(carId: string, _driverProfileId?: string): Prom
  * TODO: implement actual Yandex API call
  */
 export async function changeDriverLimit(driverProfileId: string, newLimit: number): Promise<{ success: boolean; error?: string }> {
-    const connection = await prisma.apiConnection.findFirst({ orderBy: { createdAt: 'desc' } })
+    const connection = await prisma.apiConnection.findFirst({
+        orderBy: { createdAt: 'desc' },
+        select: yandexCredentialsSelect,
+    })
     if (!connection) return { success: false, error: 'No API connection' }
 
     try {
