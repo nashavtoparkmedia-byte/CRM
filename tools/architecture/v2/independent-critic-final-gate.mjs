@@ -15,6 +15,7 @@ const capabilities = readJson('architecture/recovery/whole-project-dod/v2/MAINTE
 const credentialClosure = readJson('architecture/recovery/whole-project-dod/v2/PUBLIC_SECRET_RISK_CLOSURE_20260811.json')
 const credentialMigration = readJson('architecture/recovery/whole-project-dod/v2/CREDENTIAL_DYNAMIC_MIGRATION_BOUNDARY_20260811.json')
 const credentialFields = readJson('architecture/recovery/whole-project-dod/v2/CREDENTIAL_SENSITIVE_FIELD_REGISTRY.json')
+const crossDomain = readJson('architecture/recovery/whole-project-dod/v2/CROSS_DOMAIN_CREDENTIAL_REVIEW_20260811.json')
 
 assert.equal(baseline.execution.complete, true, 'authoritative scan incomplete')
 assert.equal(baseline.execution.worker_failures, 0, 'worker failures present')
@@ -45,5 +46,10 @@ assert.equal(credentialClosure.summary.unresolved, 0, 'credential candidate unre
 assert.equal(credentialClosure.summary.material_credential_unresolved, 0, 'material credential ambiguity remains')
 assert.equal(credentialMigration.summary.material_credential_unresolved, 0, 'dynamic migration materiality unresolved')
 assert.equal(credentialFields.records.length, 14, 'sensitive-field registry drift')
+assert.equal(crossDomain.exact_coverage, true, 'cross-domain credential coverage drift')
+assert.equal(crossDomain.summary.confirmed_unapproved_secret_reads, 0, 'confirmed unapproved cross-domain secret read remains')
 
-console.log('independent final-gate critic: PASS (denominator, ambiguity, credential fields, public serialization, ownership, capability scope, operational bypass, debug boundary, protected paths)')
+const criticStatus = crossDomain.summary.material_capability_gap_remaining === 0
+  ? 'PASS'
+  : 'PASS_WITH_OPEN_CROSS_DOMAIN_CAPABILITY_GAPS'
+console.log(`independent final-gate critic: ${criticStatus} (denominator, ambiguity, credential fields, public serialization, cross-domain capability, ownership, capability scope, operational bypass, debug boundary, protected paths)`)
