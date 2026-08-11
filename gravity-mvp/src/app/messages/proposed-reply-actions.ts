@@ -18,6 +18,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { getAiAgentProviderConfigV1 } from '@/modules/calling/public/v1/ai-agent-provider-capability'
 import { cookies } from 'next/headers'
 import { generateShadowReplyForChat } from '@/lib/pipeline/shadowReply'
 import { writeAuditEntry } from '@/lib/ai/knowledge/auditLog'
@@ -109,10 +110,7 @@ export async function getOrGenerateProposedReply(chatId: string): Promise<Propos
     }
 
     // 3. Check feature flag (default true, но админ может выключить)
-    const config = await prisma.aiAgentConfig.findUnique({
-        where: { id: 'singleton' },
-        select: { enabled: true, internEnabled: true, mode: true, apiKeyEncrypted: true },
-    })
+    const config = await getAiAgentProviderConfigV1()
     if (!config) {
         console.log(`[ai-intern] chatId=${chatId} skip: AiAgentConfig singleton missing`)
         return { skipped: true, reason: 'ai_disabled', message: 'AI не настроен.' }
@@ -315,15 +313,12 @@ export async function coachFromCorrection(
     }
 
     // Получаем config и full canonicalStatement у sources
-    const configRows = await prisma.$queryRaw<Array<{
-        provider: string
-        apiKey:   string | null
-        model:    string
-    }>>`
-        SELECT provider, "apiKeyEncrypted" AS "apiKey", "responseModel" AS model
-        FROM "AiAgentConfig" WHERE id = 'singleton' LIMIT 1
-    `
-    const config = configRows[0]
+    const providerConfig = await getAiAgentProviderConfigV1()
+    const config = providerConfig && {
+        provider: providerConfig.provider,
+        apiKey: providerConfig.apiKeyEncrypted,
+        model: providerConfig.responseModel,
+    }
     if (!config?.apiKey) {
         return { suggestions: [], onlyStyleChange: false, note: 'AI provider not configured' }
     }
@@ -343,8 +338,8 @@ export async function coachFromCorrection(
 
     const result = await runCoach({
         provider:      config.provider,
-        model:         config.model,
-        apiKey:        config.apiKey,
+        model:         config.model ?? 'claude-sonnet-4-5',
+        apiKey:        config.apiKey!,
         originalDraft: proposal.text,
         correctedText,
         items:         itemRows,

@@ -11,6 +11,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { prisma } from '@/lib/prisma'
+import { getAiAgentProviderConfigV1 } from '@/modules/calling/public/v1/ai-agent-provider-capability'
 import {
     RERANK_SYSTEM_PROMPT,
     buildRerankUserPrompt,
@@ -27,14 +28,12 @@ interface AgentConfigLite {
 
 async function loadAgentConfigLite(): Promise<AgentConfigLite | null> {
     try {
-        const rows = await prisma.$queryRaw<any[]>`
-            SELECT
-                provider::text                  AS provider,
-                "apiKeyEncrypted"               AS "apiKey",
-                "classificationModel"
-            FROM "AiAgentConfig" WHERE id = 'singleton' LIMIT 1
-        `
-        return rows[0] ?? null
+        const config = await getAiAgentProviderConfigV1()
+        return config ? {
+            provider: config.provider,
+            apiKey: config.apiKeyEncrypted,
+            classificationModel: config.classificationModel ?? 'claude-haiku-4-5',
+        } : null
     } catch {
         return null
     }

@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { getAiAgentProviderConfigV1 } from '@/modules/calling/public/v1/ai-agent-provider-capability'
 import { Message } from '@prisma/client'
 import { retrieve, type RetrievalTrace, type RetrievableItem } from '@/lib/ai/knowledge/Retriever'
 import { getKnowledgeRuntimeMode } from '@/lib/ai/knowledge/featureFlags'
@@ -66,9 +67,8 @@ export class ContextBuilder {
    */
   async build(message: Message, opts?: { ignoreModeOff?: boolean }): Promise<MessageContext | null> {
     // Load AI config
-    const rows = await prisma.$queryRaw<any[]>`SELECT * FROM "AiAgentConfig" WHERE id = 'singleton' LIMIT 1`
-    if (!rows[0]) return null
-    const raw = rows[0]
+    const raw = await getAiAgentProviderConfigV1()
+    if (!raw) return null
 
     const config: AiConfig = {
       enabled:              raw.enabled,

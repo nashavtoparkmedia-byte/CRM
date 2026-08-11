@@ -5,6 +5,7 @@
  */
 import { prisma } from '@/lib/prisma'
 import { improveDraft, ImprovePreset } from '@/lib/ai/improveDraft'
+import { getAiAgentProviderConfigV1 } from '@/modules/calling/public/v1/ai-agent-provider-capability'
 
 export type ImproveResult =
     | { ok: true;  improved: string }
@@ -20,13 +21,12 @@ export async function improveDraftAction(
     if (t.length < 3) return { ok: false, error: 'Слишком короткий черновик — улучшать нечего' }
 
     // 1. Загрузить provider config (singleton AiAgentConfig)
-    const configRows = await prisma.$queryRaw<Array<{
-        provider: string; apiKey: string | null; model: string
-    }>>`
-        SELECT provider, "apiKeyEncrypted" AS "apiKey", "responseModel" AS model
-        FROM "AiAgentConfig" WHERE id = 'singleton' LIMIT 1
-    `
-    const config = configRows[0]
+    const providerConfig = await getAiAgentProviderConfigV1()
+    const config = providerConfig && {
+        provider: providerConfig.provider,
+        apiKey: providerConfig.apiKeyEncrypted,
+        model: providerConfig.responseModel,
+    }
     if (!config?.apiKey) {
         return { ok: false, error: 'AI provider не настроен в /settings/ai' }
     }
@@ -64,8 +64,8 @@ export async function improveDraftAction(
     try {
         const improved = await improveDraft({
             provider:        config.provider,
-            model:           config.model,
-            apiKey:          config.apiKey,
+            model:           config.model ?? 'claude-sonnet-4-5',
+            apiKey:          config.apiKey!,
             draft:           t,
             preset,
             recentMessages,

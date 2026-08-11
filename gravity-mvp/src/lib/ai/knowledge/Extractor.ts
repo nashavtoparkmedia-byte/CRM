@@ -18,6 +18,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- raw SQL returns. */
 
 import { prisma } from '@/lib/prisma'
+import { getAiAgentProviderConfigV1 } from '@/modules/calling/public/v1/ai-agent-provider-capability'
 import {
     EXTRACTION_SYSTEM_PROMPT,
     PROMPT_VERSION,
@@ -218,18 +219,15 @@ async function callExtractorLLM(
 // ─── DB lookups ───────────────────────────────────────────────────
 
 async function loadAgentConfig(): Promise<AgentConfig | null> {
-    const rows = await prisma.$queryRaw<any[]>`
-        SELECT
-            provider::text                                    AS provider,
-            "apiKeyEncrypted"                                 AS "apiKey",
-            "classificationModel",
-            "responseModel",
-            "extractionQualityTier",
-            "extractionPromptVersion"
-        FROM "AiAgentConfig"
-        WHERE id = 'singleton' LIMIT 1
-    `
-    return rows[0] ?? null
+    const config = await getAiAgentProviderConfigV1()
+    return config ? {
+        provider: config.provider,
+        apiKey: config.apiKeyEncrypted,
+        classificationModel: config.classificationModel ?? 'claude-haiku-4-5',
+        responseModel: config.responseModel ?? 'claude-sonnet-4-5',
+        extractionQualityTier: config.extractionQualityTier,
+        extractionPromptVersion: config.extractionPromptVersion,
+    } : null
 }
 
 async function loadSections(): Promise<SectionRow[]> {
