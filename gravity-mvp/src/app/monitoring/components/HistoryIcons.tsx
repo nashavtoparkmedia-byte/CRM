@@ -1,6 +1,6 @@
 'use client';
 
-import { EVENT_ICONS } from '@/app/monitoring/lib/constants';
+import { EVENT_ICONS } from '@/modules/fleet-operations/public/v1/monitoring-policy';
 
 interface HistoryIconsProps {
     eventTypes: string[];

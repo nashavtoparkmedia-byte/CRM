@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { EVENT_TYPE_WHITELIST } from '@/app/monitoring/lib/constants';
+import { EVENT_TYPE_WHITELIST } from '@/modules/fleet-operations/public/v1/monitoring-policy';
 
 export async function POST(
     req: NextRequest,

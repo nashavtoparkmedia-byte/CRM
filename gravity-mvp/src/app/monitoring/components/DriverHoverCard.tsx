@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import type { DriverEventItem } from '@/app/monitoring/lib/types';
-import { EVENT_ICONS } from '@/app/monitoring/lib/constants';
+import { EVENT_ICONS } from '@/modules/fleet-operations/public/v1/monitoring-policy';
 
 interface DriverHoverCardProps {
     driverId: string;

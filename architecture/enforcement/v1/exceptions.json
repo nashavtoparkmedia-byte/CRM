@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "aec5cca8ee3b124d215a124afb463da72372c705923dbfa5de028ea5246810ea",
+  "finding_digest": "f0f5fb96ace1154d33a72ad2720739a0ea7f1edb2d59cd1c9432cb5e15133543",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,9 +13,9 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "internal_module_import": 140,
-    "non_public_cross_context_import": 211,
-    "undeclared_dependency": 69
+    "internal_module_import": 135,
+    "non_public_cross_context_import": 206,
+    "undeclared_dependency": 64
   },
   "exceptions": [
     {
@@ -280,210 +280,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:operations_observability/monitoring>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_8ffe0c8518de79dcb439f119",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/monitoring/drivers/[id]/event/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "operations_observability",
-      "subject": "drivers>monitoring:gravity-mvp/src/app/monitoring/lib/constants.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>operations_observability/monitoring",
-        "dependency:fleet_operations/yandex_fleet>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_e843585135de0ec93ee4fbb9",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/monitoring/drivers/[id]/event/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "operations_observability",
-      "subject": "drivers>monitoring:gravity-mvp/src/app/monitoring/lib/constants.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>operations_observability/monitoring",
-        "dependency:fleet_operations/yandex_fleet>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_0d4cb0a3a6e4fe9e1cdd13b5",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/monitoring/drivers/[id]/event/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "operations_observability",
-      "subject": "drivers>monitoring:gravity-mvp/src/app/monitoring/lib/constants.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>operations_observability/monitoring",
-        "dependency:fleet_operations/yandex_fleet>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_3ef6bf1ebfb86bfdacfe4893",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/monitoring/drivers/[id]/events/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "operations_observability",
-      "subject": "drivers>monitoring:gravity-mvp/src/app/monitoring/lib/constants.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>operations_observability/monitoring",
-        "dependency:fleet_operations/yandex_fleet>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_087178b2d78e8ee6b7a84fe4",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/monitoring/drivers/[id]/events/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "operations_observability",
-      "subject": "drivers>monitoring:gravity-mvp/src/app/monitoring/lib/constants.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>operations_observability/monitoring",
-        "dependency:fleet_operations/yandex_fleet>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_7b3c9a877776b6f8364e12d7",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/monitoring/drivers/[id]/events/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "operations_observability",
-      "subject": "drivers>monitoring:gravity-mvp/src/app/monitoring/lib/constants.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>operations_observability/monitoring",
-        "dependency:fleet_operations/yandex_fleet>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_5a8ae36a5132e3a7a39d469f",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/monitoring/drivers/[id]/fleet-check/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "operations_observability",
-      "subject": "drivers>monitoring:gravity-mvp/src/app/monitoring/lib/constants.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>operations_observability/monitoring",
-        "dependency:fleet_operations/yandex_fleet>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_990babeede10a12c06a3be14",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/monitoring/drivers/[id]/fleet-check/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "operations_observability",
-      "subject": "drivers>monitoring:gravity-mvp/src/app/monitoring/lib/constants.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>operations_observability/monitoring",
-        "dependency:fleet_operations/yandex_fleet>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_51780c98f4aa377f0eab9d91",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/monitoring/drivers/[id]/fleet-check/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "operations_observability",
-      "subject": "drivers>monitoring:gravity-mvp/src/app/monitoring/lib/constants.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>operations_observability/monitoring",
-        "dependency:fleet_operations/yandex_fleet>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_c3eba19b980c216a627e4dfe",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/monitoring/drivers/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "operations_observability",
-      "subject": "drivers>monitoring:gravity-mvp/src/app/monitoring/lib/constants.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>operations_observability/monitoring",
-        "dependency:fleet_operations/yandex_fleet>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_f5b8e288de27b16eb798e361",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/monitoring/drivers/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "operations_observability",
-      "subject": "drivers>monitoring:gravity-mvp/src/app/monitoring/lib/constants.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>operations_observability/monitoring",
-        "dependency:fleet_operations/yandex_fleet>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_fc827f64097fb9744457119e",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/monitoring/drivers/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "operations_observability",
-      "subject": "drivers>monitoring:gravity-mvp/src/app/monitoring/lib/constants.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>operations_observability/monitoring",
-        "dependency:fleet_operations/yandex_fleet>operations_observability/monitoring"
       ]
     },
     {
@@ -1815,57 +1611,6 @@
       "owner_context": "fleet_operations",
       "target_context": "operations_observability",
       "subject": "drivers>monitoring:gravity-mvp/src/app/monitoring/components/DriverHoverCard.tsx",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>operations_observability/monitoring",
-        "dependency:fleet_operations/yandex_fleet>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_8ed5f1200934252bd40634b8",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/drivers/archive/ArchiveClient.tsx",
-      "line_at_baseline": 25,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "operations_observability",
-      "subject": "drivers>monitoring:gravity-mvp/src/app/monitoring/lib/constants.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>operations_observability/monitoring",
-        "dependency:fleet_operations/yandex_fleet>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_9132ace03ff022c8a5aa0be3",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/drivers/archive/ArchiveClient.tsx",
-      "line_at_baseline": 25,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "operations_observability",
-      "subject": "drivers>monitoring:gravity-mvp/src/app/monitoring/lib/constants.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>operations_observability/monitoring",
-        "dependency:fleet_operations/yandex_fleet>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_e585ef8791ff835855906377",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/drivers/archive/ArchiveClient.tsx",
-      "line_at_baseline": 25,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "operations_observability",
-      "subject": "drivers>monitoring:gravity-mvp/src/app/monitoring/lib/constants.ts",
       "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
       "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
       "expires_on": "2026-12-31",

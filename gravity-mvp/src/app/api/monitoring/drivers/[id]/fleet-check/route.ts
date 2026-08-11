@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { SCRAPER_BASE_URL } from '@/app/monitoring/lib/constants';
+import { SCRAPER_BASE_URL } from '@/modules/fleet-operations/public/v1/monitoring-policy';
 
 export async function POST(
     req: NextRequest,

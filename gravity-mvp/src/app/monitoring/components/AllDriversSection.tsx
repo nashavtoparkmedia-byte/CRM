@@ -7,7 +7,7 @@ import {
 import { Button } from '@/infrastructure/ui/button';
 import { Input } from '@/infrastructure/ui/input';
 import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
-import { FLEET_STATUS_LABELS } from '@/app/monitoring/lib/constants';
+import { FLEET_STATUS_LABELS } from '@/modules/fleet-operations/public/v1/monitoring-policy';
 import { ActionButtons } from './ActionButtons';
 import { HistoryIcons } from './HistoryIcons';
 import { DriverHoverCard } from './DriverHoverCard';

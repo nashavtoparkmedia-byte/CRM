@@ -22,7 +22,7 @@ import { ToastProvider, useToast } from "@/app/monitoring/components/Toast"
 import { ActionButtons } from "@/app/monitoring/components/ActionButtons"
 import { HistoryIcons } from "@/app/monitoring/components/HistoryIcons"
 import { DriverHoverCard } from "@/app/monitoring/components/DriverHoverCard"
-import { FLEET_STATUS_LABELS } from "@/app/monitoring/lib/constants"
+import { FLEET_STATUS_LABELS } from "@/modules/fleet-operations/public/v1/monitoring-policy"
 
 function getFleetStatusLabel(status: string | null, lastCheckAt: string | null): string {
     if (!status && !lastCheckAt) return 'не проверяли';
