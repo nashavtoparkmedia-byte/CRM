@@ -1,12 +1,12 @@
 {
   "schema": "yoko.crm.write-ownership-closure-batch.v2",
-  "generated_at": "2026-08-11T09:56:03.900Z",
+  "generated_at": "2026-08-11T11:04:08.837Z",
   "authority": "Derived evidence ledger; unresolved records remain blocked/ambiguous and are not PASS.",
   "baseline": {
     "analysis_sha256": "34df36e0331f8ab5da26ae5dca22c6c6c583c608a12707d11d89daa51a20b83e",
     "baseline_sha256": "9927c8ea74915e10ccff1f717b681341f76f0153ebd3b8d3b49f2f5fd7f79137",
     "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T113000Z.json",
-    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_TEST_RECLASS.json"
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_RECONCILED_20260811.json"
   },
   "metrics": {
     "confirmed_writes_discovered": 1416,
@@ -21,7 +21,11 @@
     "confirmed_non_writes": 4,
     "active_operational_surfaces_unclassified": 0,
     "temporary_exceptions": 0,
-    "intentional_exceptions": 0
+    "intentional_exceptions": 0,
+    "raw_baseline_ambiguous_records": 95,
+    "owner_valid_writes": 7,
+    "resolved_non_writes": 4,
+    "material_unresolved_write_risk": 84
   },
   "foreign_write_closure": {
     "previous_closed_foreign": 47,
@@ -351,5 +355,25 @@
     "surfaces": 2,
     "ambiguity_reduction": 16,
     "evidence": "Explicit file headers establish TEST_SUPPORT lifecycle; ownership remains fail-closed."
+  },
+  "reconciliation": {
+    "artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_RECONCILIATION_20260811.json",
+    "sha256": "c82d5bbda22d5d75721352d9a840a75fc3457f33b5f7701de1710b66d2188cbb",
+    "raw_baseline_ambiguous_records": 95,
+    "semantic_state_counts": {
+      "MATERIAL_UNRESOLVED_WRITE_RISK": 84,
+      "OWNER_VALID_WRITE": 7,
+      "RESOLVED_NON_WRITE": 4
+    },
+    "reconciliation_exact": true,
+    "missing_seven_record_ids": [
+      "45645e0b760a5827a47289517fa298c1a3bcd215068e418d7c93e887b8ad17ac",
+      "81f28083be28056e5c9be0ca8018f6ec9121a53bee49136fe9fd7e710afdb913",
+      "64934aa9a77c0de5bafd842a668fa1b1f10654ce0a3ffa06cfe7a7fd3b995046",
+      "8779aa7c9ab18d702c45db346d6e34b2262c14d2744796efbc77bd6bcf6927a2",
+      "68e7b2590b446a521037a09ba257bd2dc3e9dc5160ae46e2838bc955f203ab4d",
+      "48452c703f3878500e43002f7311f83f1a84a5d7a7c7fc02ac262672a49917b9",
+      "f2385246a9722e1692eaa96a81289d48e1bc42701ab7bbaf653642fac72b7e40"
+    ]
   }
 }

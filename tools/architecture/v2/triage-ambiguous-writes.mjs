@@ -79,6 +79,7 @@ const records = source.write_sites
         : classify(site)
     const inferredOwnership = focusedDecision ?? ownershipClassification(site, result.disposition)
     return {
+    record_id: site.site_signature,
     site_signature: site.site_signature,
     file: site.file,
     line: site.line,
@@ -106,6 +107,11 @@ const records = source.write_sites
           : inferredOwnership === 'OWNERSHIP_MANIFEST_GAP_REVIEW'
             ? 'OWNERSHIP_MANIFEST_GAP_REVIEW'
             : null,
+    semantic_state: result.disposition === 'CONFIRMED_NON_WRITE'
+      ? 'RESOLVED_NON_WRITE'
+      : result.disposition === 'CONFIRMED_WRITE_OWNER_RESOLVED'
+        ? 'OWNER_VALID_WRITE'
+        : 'MATERIAL_UNRESOLVED_WRITE_RISK',
   }
   })
   .sort((left, right) => left.file.localeCompare(right.file) || left.line - right.line || left.column - right.column)
@@ -121,6 +127,7 @@ const taxonomy = [
   'GENUINELY_DYNAMIC_UNRESOLVED',
 ]
 const summary = {
+  RAW_BASELINE_AMBIGUOUS: records.length,
   CONFIRMED_WRITE_OWNER_RESOLVED: records.filter(record => record.disposition === 'CONFIRMED_WRITE_OWNER_RESOLVED').length,
   CONFIRMED_WRITE_OWNER_UNRESOLVED: records.filter(record => ['CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED', 'CONFIRMED_WRITE_OWNER_UNRESOLVED'].includes(record.disposition) && record.ownership_classification !== 'OWNER_VALID').length,
   DYNAMIC_DELEGATE_UNRESOLVED: records.filter(record => record.disposition === 'GENUINELY_DYNAMIC_OR_UNPROVEN_DELEGATE').length,
@@ -129,7 +136,12 @@ const summary = {
   SOURCE_FAMILY_REVIEW_REQUIRED: records.filter(record => record.disposition === 'SOURCE_FAMILY_REVIEW_REQUIRED').length,
   CONFIRMED_NON_WRITE: records.filter(record => record.disposition === 'CONFIRMED_NON_WRITE').length,
   GENUINELY_DYNAMIC_UNRESOLVED: 0,
+  RESOLVED_NON_WRITE: records.filter(record => record.semantic_state === 'RESOLVED_NON_WRITE').length,
+  OWNER_VALID_WRITE: records.filter(record => record.semantic_state === 'OWNER_VALID_WRITE').length,
+  MATERIAL_UNRESOLVED_WRITE_RISK: records.filter(record => record.semantic_state === 'MATERIAL_UNRESOLVED_WRITE_RISK').length,
 }
+summary.RECONCILIATION_TOTAL = summary.RESOLVED_NON_WRITE + summary.OWNER_VALID_WRITE + summary.MATERIAL_UNRESOLVED_WRITE_RISK
+summary.RECONCILIATION_EXACT = summary.RECONCILIATION_TOTAL === summary.RAW_BASELINE_AMBIGUOUS
 const document = {
   schema: 'yoko.crm.ambiguous-write-triage.v1',
   baseline: {

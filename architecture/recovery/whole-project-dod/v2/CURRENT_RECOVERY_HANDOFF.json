@@ -1,6 +1,6 @@
 {
   "schema": "yoko.crm.current-recovery-handoff.v1",
-  "generated_at": "2026-08-11T09:56:03.900Z",
+  "generated_at": "2026-08-11T11:04:08.837Z",
   "authority": "Continuation checkpoint; supersedes conversational status claims but does not supersede durable gap ledger or external NOT READY verdict.",
   "program_state": {
     "whole_project_state": "EXTERNAL_FINAL_ACCEPTANCE_FAILED",
@@ -647,7 +647,8 @@
     ],
     "stale_evidence_warning": "The four phase artifacts are from critic-blocked commit 3339325f/tree 68e1... and are committed only to preserve historical evidence. They are obsolete/superseded and MUST NOT be used as the current 4ec baseline or acceptance.",
     "temporary_comparison_only": "5a4211a4 mirrored outputs remain in /tmp and are not durable current evidence; their hashes/counts are in the diagnostic checkpoint. WIP /tmp clutter was intentionally not copied.",
-    "latest_triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_TEST_RECLASS.json"
+    "latest_triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_RECONCILED_20260811.json",
+    "ambiguous_reconciliation": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_RECONCILIATION_20260811.json"
   },
   "durable_project_state": {
     "root": "/opt/codex-work/crm-architecture-state",
