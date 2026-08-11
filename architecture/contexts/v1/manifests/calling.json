@@ -264,6 +264,7 @@
     }
   ],
   "public_surface": [
+    "AiCallScenarioManagement.v1",
     "CallView.v1",
     "CallControlPort.v1",
     "CallAnalysisView.v1",

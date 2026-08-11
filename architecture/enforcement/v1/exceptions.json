@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "96962e6337633375b13283599431f1bdda5ee7c4fd7452f505138c66706f8862",
+  "finding_digest": "da3cbe24a66b4106e890d08ffc587ff199d6d3e46cac19be9e27ef44aaf134a3",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,8 +13,8 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "internal_module_import": 73,
-    "non_public_cross_context_import": 119,
+    "internal_module_import": 70,
+    "non_public_cross_context_import": 116,
     "undeclared_dependency": 32
   },
   "exceptions": [
@@ -274,108 +274,6 @@
       "owner_context": "configuration",
       "target_context": "calling",
       "subject": "settings>ai_calls:gravity-mvp/src/lib/ai-call/provider-settings.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>calling/ai_calls",
-        "dependency:configuration/settings>calling/calls"
-      ]
-    },
-    {
-      "fingerprint": "arch_b03e81a60651a5b4a5e9da75",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/settings/ai-call-projects/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "calling",
-      "subject": "settings>ai_calls:gravity-mvp/src/lib/ai-call/scenarios.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>calling/ai_calls",
-        "dependency:configuration/settings>calling/calls"
-      ]
-    },
-    {
-      "fingerprint": "arch_629cbe09bffad20f77dfeed3",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/settings/ai-call-projects/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "calling",
-      "subject": "settings>ai_calls:gravity-mvp/src/lib/ai-call/scenarios.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>calling/ai_calls",
-        "dependency:configuration/settings>calling/calls"
-      ]
-    },
-    {
-      "fingerprint": "arch_7978adaa7e9ab21e0b9e8561",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/settings/ai-call-scenarios/[id]/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "calling",
-      "subject": "settings>ai_calls:gravity-mvp/src/lib/ai-call/scenarios.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>calling/ai_calls",
-        "dependency:configuration/settings>calling/calls"
-      ]
-    },
-    {
-      "fingerprint": "arch_cbd70b285ede7c392c294fec",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/settings/ai-call-scenarios/[id]/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "calling",
-      "subject": "settings>ai_calls:gravity-mvp/src/lib/ai-call/scenarios.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>calling/ai_calls",
-        "dependency:configuration/settings>calling/calls"
-      ]
-    },
-    {
-      "fingerprint": "arch_cf20ad688c3d927648df2a18",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/settings/ai-call-scenarios/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "calling",
-      "subject": "settings>ai_calls:gravity-mvp/src/lib/ai-call/scenarios.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>calling/ai_calls",
-        "dependency:configuration/settings>calling/calls"
-      ]
-    },
-    {
-      "fingerprint": "arch_7749e983a5d8078411ae0d8a",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/settings/ai-call-scenarios/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "calling",
-      "subject": "settings>ai_calls:gravity-mvp/src/lib/ai-call/scenarios.ts",
       "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
       "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
       "expires_on": "2026-12-31",
