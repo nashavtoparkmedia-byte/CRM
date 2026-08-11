@@ -9,7 +9,10 @@
  *
  * Запуск: node scripts/backfill_from_linked.js [--dry-run]
  */
+/* eslint-disable @typescript-eslint/no-require-imports */
 const { PrismaClient } = require('@prisma/client')
+const { restoreChatDisplayNameV1 } = require('../src/modules/messaging/public/v1/legacy-prisma-chat-name-maintenance-adapter')
+const { restoreContactDisplayNameV1 } = require('../src/modules/contacts/public/v1/legacy-prisma-contact-name-maintenance-adapter')
 const prisma = new PrismaClient()
 const DRY_RUN = process.argv.includes('--dry-run')
 
@@ -62,16 +65,10 @@ async function main() {
         else fromContact++
 
         if (!DRY_RUN) {
-            await prisma.chat.update({
-                where: { id: chat.id },
-                data: { name: newName },
-            })
+            await restoreChatDisplayNameV1(chat.externalChatId, newName)
             // Если contact.displayName placeholder, а у нас имя из Driver — обновим
             if (chat.contactId && chat.contact && isPlaceholder(chat.contact.displayName)) {
-                await prisma.contact.update({
-                    where: { id: chat.contactId },
-                    data: { displayName: newName },
-                })
+                await restoreContactDisplayNameV1(chat.contactId, newName)
             }
         }
     }

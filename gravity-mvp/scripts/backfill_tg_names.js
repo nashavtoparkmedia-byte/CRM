@@ -15,7 +15,10 @@
  *
  * Запуск: node scripts/backfill_tg_names.js [--dry-run]
  */
+/* eslint-disable @typescript-eslint/no-require-imports */
 const { PrismaClient } = require('@prisma/client')
+const { restoreChatDisplayNameV1 } = require('../src/modules/messaging/public/v1/legacy-prisma-chat-name-maintenance-adapter')
+const { restoreContactDisplayNameV1 } = require('../src/modules/contacts/public/v1/legacy-prisma-contact-name-maintenance-adapter')
 const { TelegramClient, Api } = require('telegram')
 const { StringSession } = require('telegram/sessions')
 
@@ -119,20 +122,14 @@ async function main() {
                     const usernameStr = user.username ? ` (@${user.username})` : ''
                     console.log(`  [${i+1}/${candidates.length}] ${idStr}: «${chat.name}» → «${newName}»${usernameStr}`)
                     if (!DRY_RUN) {
-                        await prisma.chat.update({
-                            where: { id: chat.id },
-                            data: { name: newName },
-                        })
+                        await restoreChatDisplayNameV1(chat.externalChatId, newName)
                         if (chat.contactId) {
                             const contact = await prisma.contact.findUnique({
                                 where: { id: chat.contactId },
                                 select: { id: true, displayName: true },
                             })
                             if (contact && isPlaceholder(contact.displayName)) {
-                                await prisma.contact.update({
-                                    where: { id: contact.id },
-                                    data: { displayName: newName },
-                                })
+                                await restoreContactDisplayNameV1(contact.id, newName)
                             }
                         }
                     }
