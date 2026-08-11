@@ -12,6 +12,9 @@ const sha256 = (path) => createHash('sha256').update(readFileSync(`${root}${path
 const baseline = readJson('architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json')
 const triage = readJson('architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_FINAL_CLOSURE.json')
 const capabilities = readJson('architecture/recovery/whole-project-dod/v2/MAINTENANCE_MIGRATION_CAPABILITY_REGISTRY.json')
+const credentialClosure = readJson('architecture/recovery/whole-project-dod/v2/PUBLIC_SECRET_RISK_CLOSURE_20260811.json')
+const credentialMigration = readJson('architecture/recovery/whole-project-dod/v2/CREDENTIAL_DYNAMIC_MIGRATION_BOUNDARY_20260811.json')
+const credentialFields = readJson('architecture/recovery/whole-project-dod/v2/CREDENTIAL_SENSITIVE_FIELD_REGISTRY.json')
 
 assert.equal(baseline.execution.complete, true, 'authoritative scan incomplete')
 assert.equal(baseline.execution.worker_failures, 0, 'worker failures present')
@@ -36,5 +39,11 @@ assert.equal(existsSync(`${root}gravity-mvp/src/app/api/debug-db/list-connection
 assert.equal(existsSync(`${root}tg-bot/tg-bot-frontend/pages/api/export.js`), false, 'unauthenticated export endpoint still exposed')
 assert.equal(existsSync(`${root}gravity-mvp/src/modules/messaging/public/v1`), true, 'protected Messages owner path missing')
 assert.equal(existsSync(`${root}gravity-mvp/src/lib/ai-call`), true, 'protected AI Calls path missing')
+assert.equal(credentialClosure.summary.candidate_total, 150, 'credential candidate denominator drift')
+assert.equal(credentialClosure.summary.confirmed_public_secret_exposure, 0, 'public secret exposure remains')
+assert.equal(credentialClosure.summary.unresolved, 0, 'credential candidate unresolved records remain')
+assert.equal(credentialClosure.summary.material_credential_unresolved, 0, 'material credential ambiguity remains')
+assert.equal(credentialMigration.summary.material_credential_unresolved, 0, 'dynamic migration materiality unresolved')
+assert.equal(credentialFields.records.length, 14, 'sensitive-field registry drift')
 
-console.log('independent final-gate critic: PASS (denominator, ambiguity, ownership, capability scope, operational bypass, debug boundary, protected paths)')
+console.log('independent final-gate critic: PASS (denominator, ambiguity, credential fields, public serialization, ownership, capability scope, operational bypass, debug boundary, protected paths)')
