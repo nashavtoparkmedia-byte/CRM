@@ -9,12 +9,14 @@ export type YandexConnectionCredentialsV1 = {
     clid: string
     apiKey: string
     parkId: string
+    name?: string | null
 }
 
 const yandexCredentialsSelect = {
     clid: true,
     apiKey: true,
     parkId: true,
+    name: true,
 } as const
 
 export async function getYandexConnectionCredentialsV1(

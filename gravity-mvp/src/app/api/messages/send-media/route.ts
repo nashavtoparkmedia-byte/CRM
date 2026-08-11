@@ -100,7 +100,8 @@ export async function POST(req: NextRequest) {
             // Resolve connectionId for this chat
             const connection = await (prisma as any).whatsAppConnection.findFirst({
                 where: { status: 'ready' },
-                orderBy: { createdAt: 'asc' }
+                orderBy: { createdAt: 'asc' },
+                select: { id: true },
             })
             if (!connection) {
                 return NextResponse.json({ error: 'No active WhatsApp connection' }, { status: 503 })
