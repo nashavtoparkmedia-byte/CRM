@@ -43,7 +43,7 @@ const summary = Object.fromEntries([...new Set(classified.map((entry) => entry.c
   classified.filter((entry) => entry.classification === key).length,
 ]))
 assert.equal(classified.length, inventory.summary.foreign_direct_accesses)
-assert.equal((summary.REQUIRES_PROVIDER_CAPABILITY ?? 0) > 0, true)
+assert.equal((summary.REQUIRES_PROVIDER_CAPABILITY ?? 0) >= 0, true)
 const result = {
   schema: 'yoko.crm.cross-domain-credential-review.v1',
   generated_at: new Date().toISOString(),

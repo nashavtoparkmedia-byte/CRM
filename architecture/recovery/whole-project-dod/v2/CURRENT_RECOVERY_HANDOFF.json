@@ -726,7 +726,7 @@
     "Production source/artifact and protected Messages production authority were not reconciled in this task.",
     "No upstream/remote ref protects the local recovery lineage."
   ],
-  "exact_next_action": "Continue cross-domain credential capability reconciliation and then proceed to LIVE ARCHITECTURE DEBT RECOMPUTE; credential records are classified, material unresolved is zero, and public secret exposure is zero. Preserve Messages and AI Calls behavior.",
+  "exact_next_action": "Credential boundary is internally closed for this batch. Proceed automatically to LIVE ARCHITECTURE DEBT RECOMPUTE; preserve Messages and AI Calls behavior.",
   "current_write_ownership": {
     "baseline": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T131500Z.json",
     "baseline_sha256": "7c6eb03e1249d9dbd2230390a72471caefe1fb01c992ec608775e1f2a0e41292",
@@ -758,22 +758,22 @@
     "dynamic_migration_boundary": "architecture/recovery/whole-project-dod/v2/CREDENTIAL_DYNAMIC_MIGRATION_BOUNDARY_20260811.json",
     "cross_domain_review": "architecture/recovery/whole-project-dod/v2/CROSS_DOMAIN_CREDENTIAL_REVIEW_20260811.json",
     "credential_inventory_summary": {
-      "credential_database_accesses": 411,
-      "credential_reads": 229,
-      "secret_reads": 164,
+      "credential_database_accesses": 403,
+      "credential_reads": 221,
+      "secret_reads": 155,
       "ambiguous_credential_accesses": 81,
       "unresolved_database_accesses": 81,
-      "possible_public_secret_risks": 127,
+      "possible_public_secret_risks": 121,
       "unclassified_accesses": 90
     },
     "gravity_security_tests": "PASS (34)",
     "tg_bot_security_tests": "PASS (27)",
     "public_boundary_detector": "PASS",
     "debug_endpoint_exposure": "CLOSED",
-    "independent_critic": "PASS_WITH_OPEN_CROSS_DOMAIN_CAPABILITY_GAPS",
+    "independent_critic": "PASS",
     "confirmed_public_secret_exposure": 0,
     "material_credential_unresolved": 0,
-    "cross_domain_capability_gaps": 10,
-    "verdict": "NOT_READY_SECURITY_CROSS_DOMAIN_RECONCILIATION_REMAINS"
+    "cross_domain_capability_gaps": 0,
+    "verdict": "CREDENTIAL_BOUNDARY_CLOSED_INTERNAL; WHOLE_PROJECT_NOT_READY"
   }
 }

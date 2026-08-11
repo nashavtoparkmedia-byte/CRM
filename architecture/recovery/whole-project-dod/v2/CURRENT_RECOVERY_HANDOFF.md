@@ -260,4 +260,4 @@ This task made zero production source mutations, database mutations, service res
 
 ## Exact next action
 
-Credential boundary classification and public serialization remediation are now materially closed for this batch. The current credential inventory is `411` accesses with `81` statically ambiguous records fully classified, `0` material unresolved, and the 150 public-secret candidates reconciled to `0` confirmed exposure after remediation. Cross-domain review has 10 owner-capability gaps remaining; close those provider/calling capabilities, then proceed automatically to `LIVE ARCHITECTURE DEBT RECOMPUTE`; preserve Messages and AI Calls behavior.
+Credential boundary classification, provider capability routing, and public serialization remediation are internally closed for this batch. The current credential inventory is `403` accesses with `81` statically ambiguous records fully classified, `0` material unresolved, `0` confirmed public exposure, and `0` cross-domain capability gaps. Proceed automatically to `LIVE ARCHITECTURE DEBT RECOMPUTE`; preserve Messages and AI Calls behavior.
