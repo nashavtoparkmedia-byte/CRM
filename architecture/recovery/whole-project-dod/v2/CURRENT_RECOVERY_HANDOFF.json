@@ -1,7 +1,7 @@
 {
   "schema": "yoko.crm.current-recovery-handoff.v1",
-  "generated_at": "2026-08-10T21:44:48Z",
-  "authority": "Continuation checkpoint; this file supersedes conversational status claims but does not supersede the durable gap ledger or external NOT READY verdict.",
+  "generated_at": "2026-08-11T07:41:54.211Z",
+  "authority": "Continuation checkpoint; supersedes conversational status claims but does not supersede durable gap ledger or external NOT READY verdict.",
   "program_state": {
     "whole_project_state": "EXTERNAL_FINAL_ACCEPTANCE_FAILED",
     "current_program": "WHOLE-PROJECT DOD RECOVERY",
@@ -169,7 +169,9 @@
     },
     {
       "purpose": "Restore the real Prisma $disconnect syntax so analyzer corpus is truthful",
-      "paths": ["gravity-mvp/debug-drivers.js"]
+      "paths": [
+        "gravity-mvp/debug-drivers.js"
+      ]
     }
   ],
   "uncommitted_file_purpose_groups": [
@@ -257,7 +259,10 @@
     },
     {
       "purpose": "Required admin/session/webhook secret documentation",
-      "paths": ["docs/SECRETS.md", "tg-bot/README.md"]
+      "paths": [
+        "docs/SECRETS.md",
+        "tg-bot/README.md"
+      ]
     },
     {
       "purpose": "Remove token/cookie prefixes and raw credential-bearing errors from diagnostics/runtime logs",
@@ -297,7 +302,10 @@
     },
     {
       "purpose": "Authenticated token-free Telegram webhook and disabled-by-default legacy token route",
-      "paths": ["tg-bot/src/routes/webhooks.js", "tg-bot/src/security/webhookAuth.js"]
+      "paths": [
+        "tg-bot/src/routes/webhooks.js",
+        "tg-bot/src/security/webhookAuth.js"
+      ]
     },
     {
       "purpose": "tg-bot frontend signed HttpOnly session and authenticated same-origin proxy; remove insecure export",
@@ -342,7 +350,9 @@
         "tools/architecture/v2/tracked-surface-inventory.mjs",
         "tools/architecture/v2/write-analyzer.mjs"
       ],
-      "modified": ["gravity-mvp/debug-drivers.js"],
+      "modified": [
+        "gravity-mvp/debug-drivers.js"
+      ],
       "deleted": [],
       "renamed": []
     },
@@ -601,13 +611,13 @@
     "ownership_gap_review": "architecture/recovery/whole-project-dod/v2/OWNERSHIP_GAP_FOCUSED_REVIEW.json",
     "current_4ec_outputs": "Historical 4ec outputs remain absent. They are superseded by the bounded current 3ab9ad96 baseline below.",
     "current_authoritative_write_baseline": {
-      "record": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260810T2102Z.json",
+      "record": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T074027Z.json",
       "baseline": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json",
-      "baseline_sha256": "73259b98675789afb00258c1f1fac33c8799202f962b9944001a9bf05cfdf003",
+      "baseline_sha256": "da89b9b3d8d6e5cba2d5d69e58a4fa9b8de8b44d7282690bcf7ce01b3990ab81",
       "progress": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_PROGRESS.jsonl",
-      "progress_sha256": "bb77f0b8a5e1f5ebb310f1ec7c61a19cef53b699f8a40abe2b662b7911181ee5",
-      "analysis_sha256": "3a9a5005e6897d1eb91b9ec5f504acf5916ffc258becae5b04d364bb6a0d59ae",
-      "result": "1639/1639 surfaces; 0 failures/timeouts; 47 FOREIGN; 640 AMBIGUOUS; 438 unreviewed operational surfaces",
+      "progress_sha256": "707fe530a910d303206aea12f34d76298172601a67f4940dc73501f8a9d2ab63",
+      "analysis_sha256": "2d3bf0deba5a8b8893a5b0cfdd4a3dc31a438f7ff4f072df64398d6dd62d135c",
+      "result": "1700/1700 surfaces; 0 failures/timeouts; 0 FOREIGN; 177 AMBIGUOUS; 0 unreviewed operational surfaces",
       "classification": "CURRENT_BASELINE_NOT_ACCEPTANCE"
     },
     "durably_preserved": [
@@ -662,8 +672,15 @@
         "PRODUCTION_CHANGE_LEDGER.json",
         "EVIDENCE_INDEX.json"
       ],
-      "created": ["FINAL_DOD_GAP_LEDGER.json", "WHOLE_PROJECT_EVIDENCE_INDEX.json"],
-      "checkpoint_pointer_updates": ["PROJECT_STATE.json", "EVIDENCE_INDEX.json", "WHOLE_PROJECT_EVIDENCE_INDEX.json"]
+      "created": [
+        "FINAL_DOD_GAP_LEDGER.json",
+        "WHOLE_PROJECT_EVIDENCE_INDEX.json"
+      ],
+      "checkpoint_pointer_updates": [
+        "PROJECT_STATE.json",
+        "EVIDENCE_INDEX.json",
+        "WHOLE_PROJECT_EVIDENCE_INDEX.json"
+      ]
     }
   },
   "identities": {

@@ -1,6 +1,9 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
+
 const { loadEnvConfig } = require('@next/env')
 loadEnvConfig(process.cwd())
 const { PrismaClient } = require('@prisma/client')
+const { reseedTelephonyAiConfigV1 } = require('../src/modules/calling/public/v1/legacy-prisma-ai-maintenance-adapter')
 const prisma = new PrismaClient()
 
 const CRITERIA = [
@@ -42,24 +45,11 @@ const NEXT_ACTIONS = [
 ]
 
 async function main() {
-    const updated = await prisma.telephonyAiConfig.upsert({
-        where: { id: 'singleton' },
-        update: {
-            criteria: CRITERIA,
-            outcomeOptions: OUTCOMES,
-            sentimentOptions: SENTIMENTS,
-            nextActionOptions: NEXT_ACTIONS,
-        },
-        create: {
-            id: 'singleton',
-            enabled: true,
-            model: 'gpt-4o',
-            systemPrompt: '(generated from criteria)',
-            criteria: CRITERIA,
-            outcomeOptions: OUTCOMES,
-            sentimentOptions: SENTIMENTS,
-            nextActionOptions: NEXT_ACTIONS,
-        },
+    const updated = await reseedTelephonyAiConfigV1({
+        criteria: CRITERIA,
+        outcomeOptions: OUTCOMES,
+        sentimentOptions: SENTIMENTS,
+        nextActionOptions: NEXT_ACTIONS,
     })
     console.log('Reseeded. criteria:', updated.criteria?.length ?? 0,
                 'outcomes:', updated.outcomeOptions?.length ?? 0,
