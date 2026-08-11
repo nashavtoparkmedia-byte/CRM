@@ -18,7 +18,7 @@
     {
       "context": "calling",
       "path": "architecture/contexts/v1/manifests/calling.json",
-      "sha256": "63252285d40e81db8eeb15f3c99d796f81e6a9f612031ecc7911ba4b1b8f41d1"
+      "sha256": "c1770e1f38b7e201b56e055f661bfa0bbfc72c31d4319b7b17ef511941e1bfbf"
     },
     {
       "context": "configuration",
@@ -53,7 +53,7 @@
     {
       "context": "messaging",
       "path": "architecture/contexts/v1/manifests/messaging.json",
-      "sha256": "4b802a788028cbd1b9f387433e399c7c8d60124e2927a4e7d1d4cfdfca39dc12"
+      "sha256": "9d51d08a4c7c20c9171494ff012b7e0eb99c096b126d8e218bc11460597b6298"
     },
     {
       "context": "operations_observability",

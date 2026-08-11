@@ -27,13 +27,11 @@ import { prisma } from '@/lib/prisma'
 import { opsLog } from '@/lib/opsLog'
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
 import { broadcastCall } from '@/lib/callStreamBus'
-import { broadcastChatMessage } from '@/lib/messageStreamBus'
 import { getSipExtensionForUser, getUserIdForSipExtension } from '@/lib/sip/extensions'
 import { processRecording } from '@/lib/freeswitch/recordingProcessor'
 import { ContactService } from '@/lib/ContactService'
 import { mapHangupCauseToStatus, callStatusLabel, type CallDirection } from '@/lib/calls/status'
-import { SYNC_CALL_TIMELINE_COMMAND_V1 } from '@/contracts/messaging/v1'
-import { syncCallTimelineV1 } from '@/modules/messaging/public/v1'
+import { projectCompletedCallTimelineV1 } from '@/modules/calling/public/v1/completed-call-timeline-projection'
 
 const FS_ESL_HOST = process.env.FS_ESL_HOST ?? '127.0.0.1'
 const FS_ESL_PORT = Number(process.env.FS_ESL_PORT ?? 8021)
@@ -567,8 +565,7 @@ export async function syncCallToChat(call: any): Promise<void> {
         call.status === 'rejected' || call.status === 'busy' ? 'rejected' :
         'missed'
 
-    const result = await syncCallTimelineV1({
-        contract: SYNC_CALL_TIMELINE_COMMAND_V1,
+    await projectCompletedCallTimelineV1({
         externalChatId,
         contactId: call.contactId,
         driverId: call.driverId ?? null,
@@ -582,7 +579,6 @@ export async function syncCallToChat(call: any): Promise<void> {
         startedAt: call.startedAt,
         endedAt: call.endedAt ?? null,
     })
-    if (result.action !== 'unchanged') broadcastChatMessage(result.chatId, result.message)
 }
 
 // Status mapping moved to src/lib/calls/status.ts — single source of truth

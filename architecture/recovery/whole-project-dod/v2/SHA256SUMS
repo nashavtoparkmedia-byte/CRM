@@ -149,3 +149,5 @@ ae7d3fec550e12501647c6cdf6b68742d5ac47e6b6a8db791a1cdc61472caf0a  CREDENTIAL_DAT
 4766b2b7be0ded11e899bcb6bdff4c3149937f1c13ca6ba2c4f144fe0cb3fe7f  LIVE_ARCHITECTURE_DEBT_REMEDIATION_PLAN_20260811.json
 ea7ba81c5ad205abc0d29d967d347c11ac13759bdbbe5c64f042f849044bceaf  ../../../../tools/architecture/v2/independent-critic-final-gate.mjs
 f340b34fbfc699f78ca462fd1936906d489dbae8cf30cb16dc040a09fd9a33c2  CURRENT_RECOVERY_HANDOFF.json
+61f38c9e8c018a3fb02d3e417ecc7730cb4289f58b5fe6d7a4d047736eb4afe2  LIVE_ARCHITECTURE_DEBT_BASELINE_20260811.json
+b9706e95e5c4f49425c8598c957ff156b580c6d2d52dc6761026266e5ea96595  ../../../../tools/architecture/v2/materialize-live-debt-baseline.mjs

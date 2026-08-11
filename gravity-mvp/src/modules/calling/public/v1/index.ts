@@ -1,5 +1,13 @@
 export { callingOutboxPublishersV1 } from './outbox-consumers'
 export { persistRecordingReadyV1 } from '../../internal/recording-ready-prisma-adapter'
+export {
+  projectCompletedCallTimelineV1,
+  registerCompletedCallTimelineProjectorV1,
+} from './completed-call-timeline-projection'
+export type {
+  CompletedCallTimelineProjectionV1,
+  CompletedCallTimelineProjectorV1,
+} from './completed-call-timeline-projection'
 import{createCreateAiAgentProfileHandlerV1,createDeleteAiAgentProfileHandlerV1,createUpdateAiAgentProfileHandlerV1}from'./ai-agent-profile-handler'
 import{legacyPrismaAiAgentProfilePortV1}from'./legacy-prisma-ai-agent-profile-adapter'
 import{createRecordSavedAiConnectionSuccessHandlerV1,createSaveAiAgentConfigHandlerV1,createSaveExtractionQualityTierHandlerV1,createSetActiveAiProfileHandlerV1}from'./ai-agent-config-handler'

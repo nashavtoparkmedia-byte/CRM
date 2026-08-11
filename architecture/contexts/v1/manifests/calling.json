@@ -257,7 +257,8 @@
   "public_surface": [
     "CallView.v1",
     "CallControlPort.v1",
-    "CallAnalysisView.v1"
+    "CallAnalysisView.v1",
+    "CompletedCallTimelineProjectionPort.v1"
   ],
   "responsibility": "Call lifecycle, FreeSWITCH/SIP integration, audio bridge, transcription and call analysis.",
   "schema": "yoko.crm.module-manifest.v1",

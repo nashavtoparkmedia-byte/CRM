@@ -209,7 +209,8 @@
   "public_surface": [
     "ConversationView.v1",
     "MessageView.v1",
-    "MessageStream.v1"
+    "MessageStream.v1",
+    "CompletedCallTimelineProjector.v1"
   ],
   "responsibility": "Channel-neutral conversations, messages, attachments, communication triggers and history import state.",
   "schema": "yoko.crm.module-manifest.v1",

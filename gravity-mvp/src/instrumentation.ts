@@ -253,6 +253,9 @@ export async function register() {
 
         // ── Telephony: ESL listener to FreeSWITCH ─────────────────────────
         try {
+            const { registerCompletedCallTimelineProjectorV1 } = await import('@/modules/calling/public/v1')
+            const { messagingCompletedCallTimelineProjectorV1 } = await import('@/modules/messaging/public/v1')
+            registerCompletedCallTimelineProjectorV1(messagingCompletedCallTimelineProjectorV1)
             const { startEslListener } = await import('@/lib/freeswitch/EslClient')
             await startEslListener()
             opsLog('info', 'esl_listener_started', { operation: 'startup' })

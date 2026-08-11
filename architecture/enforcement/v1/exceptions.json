@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "77d1ea2a4b8291a638ddbbf2efe4ff0231fa8c6201205fd9ae7d7e350fdea520",
+  "finding_digest": "c2ebf94ca79af8c5aae7a02c36551beed6654120b7c36c13db28f324556d2652",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -15,7 +15,7 @@
   "summary": {
     "direct_provider_transport_access": 38,
     "internal_module_import": 374,
-    "non_public_cross_context_import": 530,
+    "non_public_cross_context_import": 529,
     "undeclared_dependency": 339
   },
   "exceptions": [
@@ -19429,22 +19429,6 @@
         "dependency:calling/ai_calls>platform_shell/gravity_core",
         "dependency:calling/calls>platform_shell/gravity_core",
         "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_de2f2d2400c2f4d5da3985e0",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
-      "line_at_baseline": 30,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "messaging",
-      "subject": "calls>messages:gravity-mvp/src/lib/messageStreamBus.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/calls>messaging/messages"
       ]
     },
     {
