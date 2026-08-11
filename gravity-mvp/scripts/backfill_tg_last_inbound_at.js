@@ -4,24 +4,14 @@
  *
  * Запускать: node scripts/backfill_tg_last_inbound_at.js
  */
-const { PrismaClient } = require('@prisma/client')
-const prisma = new PrismaClient()
+/* eslint-disable @typescript-eslint/no-require-imports */
+
+const { backfillLastInboundAtV1 } = require('../src/modules/messaging/public/v1/legacy-prisma-chat-backfill-adapter')
 
 async function main() {
     console.log('[BACKFILL] Starting lastInboundAt backfill...')
 
-    const result = await prisma.$executeRaw`
-        UPDATE "Chat" c
-        SET "lastInboundAt" = sub."maxInbound"
-        FROM (
-            SELECT m."chatId", MAX(m."sentAt") AS "maxInbound"
-            FROM "Message" m
-            WHERE m.direction = 'inbound'
-            GROUP BY m."chatId"
-        ) sub
-        WHERE c.id = sub."chatId"
-          AND (c."lastInboundAt" IS NULL OR c."lastInboundAt" < sub."maxInbound")
-    `
+    const result = await backfillLastInboundAtV1()
 
     console.log(`[BACKFILL] Updated ${result} chats with lastInboundAt`)
     console.log('[BACKFILL] Done.')
@@ -30,4 +20,4 @@ async function main() {
 main().catch(e => {
     console.error('[BACKFILL] Error:', e.message)
     process.exit(1)
-}).finally(() => prisma.$disconnect())
+})

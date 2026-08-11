@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+/* eslint-disable @typescript-eslint/no-require-imports */
 /**
  * PR7.6.5b — idempotent backfill of AiKnowledgeSource.connectionId
  * for legacy WhatsApp sources.
@@ -29,6 +29,7 @@
  */
 
 const { PrismaClient } = require('@prisma/client')
+const { backfillLegacyWhatsAppSourceConnectionsV1 } = require('../src/modules/ai-knowledge/public/v1/legacy-prisma-source-connection-backfill-adapter')
 const prisma = new PrismaClient()
 
 const DRY_RUN = process.env.DRY_RUN === '1'
@@ -95,15 +96,7 @@ async function main() {
     // ── 4. Apply UPDATE ──────────────────────────────────────────
     // PostgreSQL UPDATE...FROM с JOIN-style sub-query. Один statement,
     // atomic, без race conditions.
-    const updated = await prisma.$executeRaw`
-        UPDATE "AiKnowledgeSource" s
-        SET "connectionId" = wc."connectionId"
-        FROM "Chat" c, "WhatsAppChat" wc
-        WHERE s."connectionId" IS NULL
-          AND s.channel::text  = 'whatsapp'
-          AND c.id  = s."chatId"
-          AND wc.id = c."externalChatId"
-    `
+    const updated = await backfillLegacyWhatsAppSourceConnectionsV1()
     console.log(`\n[backfill] UPDATE done. Rows affected: ${updated}`)
 
     // ── 5. Verify after ──────────────────────────────────────────
