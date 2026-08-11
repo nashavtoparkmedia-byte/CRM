@@ -1,20 +1,20 @@
 {
   "schema": "yoko.crm.write-ownership-closure-batch.v2",
-  "generated_at": "2026-08-11T07:59:28.507Z",
+  "generated_at": "2026-08-11T08:08:31.997Z",
   "authority": "Derived evidence ledger; unresolved records remain blocked/ambiguous and are not PASS.",
   "baseline": {
-    "analysis_sha256": "f69988c7ed61e8d3d7612b6f112ed5ba8de464fb97524f59bc750234e9abaaf1",
-    "baseline_sha256": "59183f13283af344733c22634c13c8737272f5bd6da0e31ad70e9223a4cf09bd",
-    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T075859Z.json",
-    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_NAME_BACKFILLS.json"
+    "analysis_sha256": "af1f429ee1f565f5e49dfe71fd30a65e8a49089fea5f47e134a474fa933fd7f3",
+    "baseline_sha256": "46feafaaaaa4119799ef73a335cd7fc02088e07b9e84e390e3091ad875d0bf23",
+    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T080802Z.json",
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_PARK_TIMESTAMP.json"
   },
   "metrics": {
     "confirmed_writes_discovered": 1421,
     "confirmed_foreign": 0,
     "closed_foreign": 52,
-    "ambiguous_remaining": 169,
+    "ambiguous_remaining": 165,
     "confirmed_write_owner_resolved": 7,
-    "confirmed_write_owner_unresolved": 119,
+    "confirmed_write_owner_unresolved": 115,
     "dynamic_delegate_unresolved": 6,
     "dynamic_sql_unresolved": 32,
     "query_raw_side_effect_unresolved": 1,
@@ -163,7 +163,7 @@
     "post_rescan_foreign": 0,
     "ambiguity_reduction": 4
   },
-  "next_action": "Resolve the remaining 119 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
+  "next_action": "Resolve the remaining 115 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
   "new_backfill_capability_batch": {
     "files": [
       "gravity-mvp/scripts/backfill_source_connection_pr7.js",
@@ -204,5 +204,17 @@
     "post_rescan_foreign": 0,
     "ambiguity_reduction": 4,
     "write_site_consolidation": "Existing shared Chat capability avoids duplicate write sites; denominator reflects consolidated owner implementation."
+  },
+  "new_park_timestamp_batch": {
+    "files": [
+      "gravity-mvp/scripts/set_park_names.js",
+      "gravity-mvp/scripts/clamp-wa-timestamps.js",
+      "gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-api-connection-maintenance-adapter.js",
+      "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-message-timestamp-maintenance-adapter.js",
+      "gravity-mvp/src/modules/whatsapp-channel/public/v1/legacy-prisma-whatsapp-message-timestamp-maintenance-adapter.js"
+    ],
+    "writes_routed": 4,
+    "post_rescan_foreign": 0,
+    "ambiguity_reduction": 4
   }
 }

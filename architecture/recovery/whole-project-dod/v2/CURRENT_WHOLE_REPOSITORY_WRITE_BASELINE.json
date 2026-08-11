@@ -1,12 +1,12 @@
 {
-  "analysis_sha256": "f69988c7ed61e8d3d7612b6f112ed5ba8de464fb97524f59bc750234e9abaaf1",
+  "analysis_sha256": "af1f429ee1f565f5e49dfe71fd30a65e8a49089fea5f47e134a474fa933fd7f3",
   "execution": {
-    "ambiguous_candidates": 169,
+    "ambiguous_candidates": 165,
     "complete": true,
-    "elapsed_ms": 396453.29179,
+    "elapsed_ms": 376831.975076,
     "failures": [],
-    "files_completed": 1704,
-    "files_discovered": 1704,
+    "files_completed": 1707,
+    "files_discovered": 1707,
     "mode": "fresh_process_per_javascript_surface",
     "progress_every": 150,
     "worker_failures": 0,
@@ -47,7 +47,7 @@
         ".bat": 4,
         ".cjs": 3,
         ".dockerfile": 7,
-        ".js": 397,
+        ".js": 400,
         ".mjs": 172,
         ".package-json": 7,
         ".prisma": 4,
@@ -60,7 +60,7 @@
         ".yml": 6
       },
       "by_lifecycle": {
-        "APPLICATION_RUNTIME": 990,
+        "APPLICATION_RUNTIME": 993,
         "DEAD_HISTORICAL": 35,
         "FIXTURE": 1,
         "MIGRATION": 61,
@@ -72,7 +72,7 @@
         "DEAD_HISTORICAL": 35,
         "MIGRATION_ONLY": 61
       },
-      "tracked_executable_surfaces": 1704,
+      "tracked_executable_surfaces": 1707,
       "unreviewed_operational_surfaces": 0
     },
     "surfaces": [
@@ -13494,6 +13494,18 @@
       },
       {
         "disposition": null,
+        "extension": ".js",
+        "functional_owner": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "migration_target": null,
+        "owner_context": null,
+        "path": "gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-api-connection-maintenance-adapter.js",
+        "production_capability": "POSSIBLE",
+        "rationale": null,
+        "registry_classified": false
+      },
+      {
+        "disposition": null,
         "extension": ".ts",
         "functional_owner": null,
         "lifecycle": "APPLICATION_RUNTIME",
@@ -14310,6 +14322,18 @@
       },
       {
         "disposition": null,
+        "extension": ".js",
+        "functional_owner": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "migration_target": null,
+        "owner_context": null,
+        "path": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-message-timestamp-maintenance-adapter.js",
+        "production_capability": "POSSIBLE",
+        "rationale": null,
+        "registry_classified": false
+      },
+      {
+        "disposition": null,
         "extension": ".ts",
         "functional_owner": null,
         "lifecycle": "APPLICATION_RUNTIME",
@@ -14856,6 +14880,18 @@
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/src/modules/telegram-channel/public/v1/telegram-connection-public-metadata.ts",
+        "production_capability": "POSSIBLE",
+        "rationale": null,
+        "registry_classified": false
+      },
+      {
+        "disposition": null,
+        "extension": ".js",
+        "functional_owner": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "migration_target": null,
+        "owner_context": null,
+        "path": "gravity-mvp/src/modules/whatsapp-channel/public/v1/legacy-prisma-whatsapp-message-timestamp-maintenance-adapter.js",
         "production_capability": "POSSIBLE",
         "rationale": null,
         "registry_classified": false
@@ -20529,26 +20565,26 @@
   "parse_findings": [],
   "schema": "yoko.crm.whole-repository-write-analysis.v2",
   "source": {
-    "git_commit": "b4bfa893af3a12f1129da5bd14f0c5c28c08127f",
+    "git_commit": "d89909ef5583d3d592f30b20780a8a7663fdecf2",
     "git_tracked_only": true,
-    "git_tree": "669b78f12df0f95c784937784a1048ea1eef59af",
+    "git_tree": "8408c4e41b8de121899666c12991027e8149517f",
     "inventory_schema": "yoko.crm.tracked-executable-surface-inventory.v2",
     "repository_root": ".",
-    "tracked_worktree_clean": false,
-    "tracked_worktree_status_sha256": "8be96017d8546a69ea4926bdba7fbdba02e3d45a53c8d3db0d09aadc39a82434"
+    "tracked_worktree_clean": true,
+    "tracked_worktree_status_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
   },
   "summary": {
-    "ambiguous_writes": 169,
+    "ambiguous_writes": 165,
     "discovered_write_sites": 1421,
     "foreign_writes": 0,
     "historical_dead_writes": 18,
     "migration_only_writes": 500,
-    "operational_script_writes": 130,
-    "owner_writes": 505,
+    "operational_script_writes": 126,
+    "owner_writes": 509,
     "parse_findings": 0,
     "raw_sql_writes": 814,
     "test_writes": 229,
-    "tracked_executable_surfaces": 1704,
+    "tracked_executable_surfaces": 1707,
     "unreviewed_operational_surfaces": 0
   },
   "write_sites": [
@@ -39558,104 +39594,6 @@
     {
       "ambiguity_reasons": [],
       "ambiguous": false,
-      "candidate_models": [
-        "message"
-      ],
-      "classification": "AMBIGUOUS",
-      "column": 15,
-      "confidence": "HIGH",
-      "end": 1290,
-      "file": "gravity-mvp/scripts/clamp-wa-timestamps.js",
-      "index": 1180,
-      "kind": "model",
-      "line": 31,
-      "method": "update",
-      "model": "message",
-      "nested_operations": [],
-      "owner_contexts": [
-        "messaging"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "return_projection": {
-        "dynamic": false,
-        "mode": "FULL_ROW",
-        "nested_relations": [],
-        "omitted_fields": [],
-        "selected_fields": []
-      },
-      "scope": "Function:main",
-      "site_signature": "430ca80be3a85fb0d126da600fe8107955ef3a527e27e8de7ecb4e892d81e269",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": false,
-      "written_fields": [
-        "sentAt"
-      ]
-    },
-    {
-      "ambiguity_reasons": [],
-      "ambiguous": false,
-      "candidate_models": [
-        "whatsAppMessage"
-      ],
-      "classification": "AMBIGUOUS",
-      "column": 15,
-      "confidence": "HIGH",
-      "end": 2017,
-      "file": "gravity-mvp/scripts/clamp-wa-timestamps.js",
-      "index": 1871,
-      "kind": "model",
-      "line": 47,
-      "method": "update",
-      "model": "whatsAppMessage",
-      "nested_operations": [],
-      "owner_contexts": [
-        "whatsapp_channel"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "return_projection": {
-        "dynamic": false,
-        "mode": "FULL_ROW",
-        "nested_relations": [],
-        "omitted_fields": [],
-        "selected_fields": []
-      },
-      "scope": "Function:main",
-      "site_signature": "e09f933bc1c11aa17c3157e061e064ccf88cdcc8a76f556c5ad2576873bb3755",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": false,
-      "written_fields": [
-        "timestamp"
-      ]
-    },
-    {
-      "ambiguity_reasons": [],
-      "ambiguous": false,
       "candidate_models": [],
       "classification": "AMBIGUOUS",
       "column": 27,
@@ -44887,92 +44825,6 @@
         "error_message",
         "executed_at",
         "status"
-      ]
-    },
-    {
-      "ambiguity_reasons": [],
-      "ambiguous": false,
-      "candidate_models": [
-        "apiConnection"
-      ],
-      "classification": "AMBIGUOUS",
-      "column": 22,
-      "confidence": "HIGH",
-      "end": 424,
-      "file": "gravity-mvp/scripts/set_park_names.js",
-      "index": 299,
-      "kind": "model",
-      "line": 8,
-      "method": "updateMany",
-      "model": "apiConnection",
-      "nested_operations": [],
-      "owner_contexts": [
-        "fleet_operations"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "return_projection": null,
-      "scope": "Function:run",
-      "site_signature": "c408e243f5adebf60a36fdfd4fd191a1e36023003c83ecd051a70c47f640fe85",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": false,
-      "written_fields": [
-        "name"
-      ]
-    },
-    {
-      "ambiguity_reasons": [],
-      "ambiguous": false,
-      "candidate_models": [
-        "apiConnection"
-      ],
-      "classification": "AMBIGUOUS",
-      "column": 20,
-      "confidence": "HIGH",
-      "end": 623,
-      "file": "gravity-mvp/scripts/set_park_names.js",
-      "index": 490,
-      "kind": "model",
-      "line": 14,
-      "method": "updateMany",
-      "model": "apiConnection",
-      "nested_operations": [],
-      "owner_contexts": [
-        "fleet_operations"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "return_projection": null,
-      "scope": "Function:run",
-      "site_signature": "e8cc9cb6a43d4f0cb36491be607531363c7c7035770fd26f58d056e02da4dc2c",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": false,
-      "written_fields": [
-        "name"
       ]
     },
     {
@@ -78128,6 +77980,92 @@
       "ambiguity_reasons": [],
       "ambiguous": false,
       "candidate_models": [
+        "apiConnection"
+      ],
+      "classification": "OWNER",
+      "column": 24,
+      "confidence": "HIGH",
+      "end": 420,
+      "file": "gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-api-connection-maintenance-adapter.js",
+      "index": 289,
+      "kind": "model",
+      "line": 9,
+      "method": "updateMany",
+      "model": "apiConnection",
+      "nested_operations": [],
+      "owner_contexts": [
+        "fleet_operations"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "return_projection": null,
+      "scope": "Function:renameDefaultParkConnectionsV1",
+      "site_signature": "bcbb210e9a2740eff52d1102d129acb1de4db599aa9bf627cff2c3d84215ddba",
+      "source_context": "fleet_operations",
+      "source_identity": "bounded_module_path",
+      "source_technical_module": "fleet_operations.module",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "transaction": {
+        "contained": false,
+        "origin": null
+      },
+      "unresolved_targets": [],
+      "write_projection_dynamic": false,
+      "written_fields": [
+        "name"
+      ]
+    },
+    {
+      "ambiguity_reasons": [],
+      "ambiguous": false,
+      "candidate_models": [
+        "apiConnection"
+      ],
+      "classification": "OWNER",
+      "column": 27,
+      "confidence": "HIGH",
+      "end": 586,
+      "file": "gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-api-connection-maintenance-adapter.js",
+      "index": 447,
+      "kind": "model",
+      "line": 13,
+      "method": "updateMany",
+      "model": "apiConnection",
+      "nested_operations": [],
+      "owner_contexts": [
+        "fleet_operations"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "return_projection": null,
+      "scope": "Function:renameDefaultParkConnectionsV1",
+      "site_signature": "d35903d423e523fe35cdcbb118964ad02c632fce9312b980d52923bb6a213a08",
+      "source_context": "fleet_operations",
+      "source_identity": "bounded_module_path",
+      "source_technical_module": "fleet_operations.module",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "transaction": {
+        "contained": false,
+        "origin": null
+      },
+      "unresolved_targets": [],
+      "write_projection_dynamic": false,
+      "written_fields": [
+        "name"
+      ]
+    },
+    {
+      "ambiguity_reasons": [],
+      "ambiguous": false,
+      "candidate_models": [
         "apiLog"
       ],
       "classification": "OWNER",
@@ -81536,6 +81474,55 @@
         "message"
       ],
       "classification": "OWNER",
+      "column": 22,
+      "confidence": "HIGH",
+      "end": 751,
+      "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-message-timestamp-maintenance-adapter.js",
+      "index": 693,
+      "kind": "model",
+      "line": 16,
+      "method": "update",
+      "model": "message",
+      "nested_operations": [],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "return_projection": {
+        "dynamic": false,
+        "mode": "FULL_ROW",
+        "nested_relations": [],
+        "omitted_fields": [],
+        "selected_fields": []
+      },
+      "scope": "Function:repairMessageSentAtV1",
+      "site_signature": "7ca9076fad7cd8e677534eab5cf337f9238bd64f44fa3e769845dcb1fbb27f67",
+      "source_context": "messaging",
+      "source_identity": "bounded_module_path",
+      "source_technical_module": "messaging.module",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "transaction": {
+        "contained": false,
+        "origin": null
+      },
+      "unresolved_targets": [],
+      "write_projection_dynamic": false,
+      "written_fields": [
+        "sentAt"
+      ]
+    },
+    {
+      "ambiguity_reasons": [],
+      "ambiguous": false,
+      "candidate_models": [
+        "message"
+      ],
+      "classification": "OWNER",
       "column": 15,
       "confidence": "HIGH",
       "end": 439,
@@ -83332,6 +83319,55 @@
       "unresolved_targets": [],
       "write_projection_dynamic": false,
       "written_fields": []
+    },
+    {
+      "ambiguity_reasons": [],
+      "ambiguous": false,
+      "candidate_models": [
+        "whatsAppMessage"
+      ],
+      "classification": "OWNER",
+      "column": 22,
+      "confidence": "HIGH",
+      "end": 823,
+      "file": "gravity-mvp/src/modules/whatsapp-channel/public/v1/legacy-prisma-whatsapp-message-timestamp-maintenance-adapter.js",
+      "index": 731,
+      "kind": "model",
+      "line": 16,
+      "method": "update",
+      "model": "whatsAppMessage",
+      "nested_operations": [],
+      "owner_contexts": [
+        "whatsapp_channel"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "return_projection": {
+        "dynamic": false,
+        "mode": "FULL_ROW",
+        "nested_relations": [],
+        "omitted_fields": [],
+        "selected_fields": []
+      },
+      "scope": "Function:repairWhatsAppMessageTimestampV1",
+      "site_signature": "0ed6110f21b18d86332d03e856cd5e70da6fc2b00e4b7f577455a57c480bab76",
+      "source_context": "whatsapp_channel",
+      "source_identity": "bounded_module_path",
+      "source_technical_module": "whatsapp_channel.module",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "transaction": {
+        "contained": false,
+        "origin": null
+      },
+      "unresolved_targets": [],
+      "write_projection_dynamic": false,
+      "written_fields": [
+        "timestamp"
+      ]
     },
     {
       "ambiguity_reasons": [
