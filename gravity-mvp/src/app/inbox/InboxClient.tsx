@@ -17,7 +17,7 @@ import type { InboxTask } from "./actions"
 import { resolveTask } from "./actions"
 import { SegmentBadge } from "@/modules/fleet-operations/public/v1/segment-badge"
 import { Button } from "@/infrastructure/ui/button"
-import { Input } from "@/components/ui/input"
+import { Input } from "@/infrastructure/ui/input"
 import Link from "next/link"
 
 async function recordManagerCommunication(driverId: string, activity: "call" | "message") {

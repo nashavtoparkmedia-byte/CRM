@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/infrastructure/ui/card"
 import { Button } from "@/infrastructure/ui/button"
-import { Input } from "@/components/ui/input"
+import { Input } from "@/infrastructure/ui/input"
 import { getUnlinkedTelegramUsers, linkTelegramUserToDriver } from '../../../tg-bot-actions'
 import { getDrivers } from '../../../actions'
 import { Link2, Search, UserCheck } from 'lucide-react'

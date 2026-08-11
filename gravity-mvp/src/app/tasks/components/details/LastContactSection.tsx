@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Clock, User } from 'lucide-react'
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/infrastructure/ui/tooltip'
 
 interface LastContactEvent {
     id: string

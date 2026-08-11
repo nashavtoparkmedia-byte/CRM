@@ -3,9 +3,9 @@
 import { useState } from 'react';
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
+} from '@/infrastructure/ui/table';
 import { Button } from '@/infrastructure/ui/button';
-import { Input } from '@/components/ui/input';
+import { Input } from '@/infrastructure/ui/input';
 import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { FLEET_STATUS_LABELS } from '@/app/monitoring/lib/constants';
 import { ActionButtons } from './ActionButtons';

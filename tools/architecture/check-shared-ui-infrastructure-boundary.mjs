@@ -11,11 +11,29 @@ const legacyTargets = [
   'gravity-mvp/src/components/ui/PageContainer.tsx',
   'gravity-mvp/src/components/ui/button.tsx',
   'gravity-mvp/src/components/layout/PageShell.tsx',
+  'gravity-mvp/src/components/ui/input.tsx',
+  'gravity-mvp/src/components/ui/SectionDescription.tsx',
+  'gravity-mvp/src/components/ui/dialog.tsx',
+  'gravity-mvp/src/components/ui/badge.tsx',
+  'gravity-mvp/src/components/layout/PageHeader.tsx',
+  'gravity-mvp/src/components/ui/table.tsx',
+  'gravity-mvp/src/components/ui/tooltip.tsx',
+  'gravity-mvp/src/components/ui/card.tsx',
+  'gravity-mvp/src/components/ui/tabs.tsx',
 ]
 const replacements = [
   ['gravity-mvp/src/infrastructure/ui/PageContainer.tsx', /export function PageContainer/],
   ['gravity-mvp/src/infrastructure/ui/button.tsx', /const Button = React\.forwardRef/],
   ['gravity-mvp/src/infrastructure/ui/PageShell.tsx', /export function PageShell/],
+  ['gravity-mvp/src/infrastructure/ui/input.tsx', /const Input = React\.forwardRef/],
+  ['gravity-mvp/src/infrastructure/ui/SectionDescription.tsx', /export function SectionDescription/],
+  ['gravity-mvp/src/infrastructure/ui/dialog.tsx', /const Dialog = DialogPrimitive\.Root/],
+  ['gravity-mvp/src/infrastructure/ui/badge.tsx', /function Badge/],
+  ['gravity-mvp/src/infrastructure/ui/PageHeader.tsx', /export function PageHeader/],
+  ['gravity-mvp/src/infrastructure/ui/table.tsx', /const Table = React\.forwardRef/],
+  ['gravity-mvp/src/infrastructure/ui/tooltip.tsx', /const Tooltip = TooltipPrimitive\.Root/],
+  ['gravity-mvp/src/infrastructure/ui/card.tsx', /const Card = React\.forwardRef/],
+  ['gravity-mvp/src/infrastructure/ui/tabs.tsx', /const Tabs = TabsPrimitive\.Root/],
 ]
 
 for (const [file, implementation] of replacements) {
@@ -40,7 +58,7 @@ assert.deepEqual(scan.findings.filter((finding) =>
 process.stdout.write(`${JSON.stringify({
   status: 'PASS',
   extracted_implementations: replacements.length,
-  retired_findings: 255,
+  retired_findings: 426,
   current_findings: scan.findings.length,
   registry_entries: registry.exceptions.length,
 }, null, 2)}\n`)

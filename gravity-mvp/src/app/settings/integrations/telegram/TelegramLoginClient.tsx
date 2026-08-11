@@ -7,8 +7,8 @@ import type { TelegramConnectionPublicMetadata } from '@/modules/telegram-channe
 import ChannelSyncBlock from "@/components/ChannelSyncBlock"
 
 import { Button } from "@/infrastructure/ui/button"
-import { Input } from "@/components/ui/input"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
+import { Input } from "@/infrastructure/ui/input"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/infrastructure/ui/dialog"
 
 export default function TelegramLoginClient({ initialConnections = [] }: { initialConnections: TelegramConnectionPublicMetadata[] }) {
     const [isAddingNew, setIsAddingNew] = useState(initialConnections.length === 0)

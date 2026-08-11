@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { PageContainer } from '@/infrastructure/ui/PageContainer'
-import { PageHeader } from '@/components/layout/PageHeader'
+import { PageHeader } from '@/infrastructure/ui/PageHeader'
 import { 
     getDictionaries, 
     addDictionaryItem, 

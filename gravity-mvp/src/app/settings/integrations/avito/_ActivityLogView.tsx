@@ -11,8 +11,8 @@
  */
 
 import { useEffect, useState } from 'react';
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card } from '@/infrastructure/ui/card';
+import { Badge } from '@/infrastructure/ui/badge';
 import { api } from './_api-client';
 import type { ActivityLogEntry } from './_types';
 

@@ -1,6 +1,6 @@
 import { getWhatsAppConnections } from './whatsapp-actions'
 import { WhatsAppDashboard } from './WhatsAppDashboard'
-import { SectionDescription } from '@/components/ui/SectionDescription'
+import { SectionDescription } from '@/infrastructure/ui/SectionDescription'
 import { MessageCircle } from 'lucide-react'
 import { PageContainer } from '@/infrastructure/ui/PageContainer'
 import { requireIntegrationAdminPageAccess } from '@/modules/identity-access/public/v1'

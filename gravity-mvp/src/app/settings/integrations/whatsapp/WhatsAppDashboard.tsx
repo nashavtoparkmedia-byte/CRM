@@ -8,7 +8,7 @@ import type { WhatsAppConnectionPublicMetadata } from '@/modules/whatsapp-channe
 import ChannelSyncBlock from "@/components/ChannelSyncBlock"
 
 import { Button } from "@/infrastructure/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/infrastructure/ui/dialog"
 
 type WaConnection = Omit<WhatsAppConnectionPublicMetadata, 'createdAt' | 'updatedAt'> & {
     createdAt: string | Date

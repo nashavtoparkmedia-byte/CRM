@@ -30,7 +30,7 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/components/ui/table"
+} from "@/infrastructure/ui/table"
 
 import { ActivityGrid } from "./components/ActivityGrid"
 import { ScoringDot } from "./components/ScoringDot"

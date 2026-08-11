@@ -30,8 +30,8 @@ import {
     ChevronUp
 } from "lucide-react"
 import { Button } from "@/infrastructure/ui/button"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
+import { Input } from "@/infrastructure/ui/input"
+import { Badge } from "@/infrastructure/ui/badge"
 
 interface Conversation {
     id: string

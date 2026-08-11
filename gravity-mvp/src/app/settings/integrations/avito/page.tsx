@@ -34,9 +34,9 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/infrastructure/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { Badge } from '@/infrastructure/ui/badge';
+import { Card } from '@/infrastructure/ui/card';
+import { Input } from '@/infrastructure/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -46,19 +46,19 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/infrastructure/ui/dialog';
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
-} from '@/components/ui/tabs';
+} from '@/infrastructure/ui/tabs';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@/components/ui/tooltip';
+} from '@/infrastructure/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { api } from './_api-client';
 import {

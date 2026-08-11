@@ -7,9 +7,9 @@ import {
 } from "lucide-react"
 import ChannelSyncBlock from "@/components/ChannelSyncBlock"
 import { Button } from "@/infrastructure/ui/button"
-import { Input } from "@/components/ui/input"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { Input } from "@/infrastructure/ui/input"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/infrastructure/ui/tabs"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/infrastructure/ui/dialog"
 import {
     addMaxConnection,
     disconnectMax,

@@ -13,7 +13,7 @@
 import { useRef, useState, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Upload, Download, Loader2, ChevronDown, FileSpreadsheet, FileText } from 'lucide-react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/infrastructure/ui/dialog'
 import { pushToast } from '@/lib/tasks/toast-store'
 import { recordUsage } from '@/lib/tasks/usage'
 import { useTasksStore } from '@/store/tasks-store'

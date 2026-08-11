@@ -4,7 +4,7 @@ import TelegramManualLinkClient from './TelegramManualLinkClient'
 import Link from 'next/link'
 import { ExternalLink, Send } from 'lucide-react'
 import { Button } from '@/infrastructure/ui/button'
-import { SectionDescription } from '@/components/ui/SectionDescription'
+import { SectionDescription } from '@/infrastructure/ui/SectionDescription'
 import { PageContainer } from '@/infrastructure/ui/PageContainer'
 import { requireIntegrationAdminPageAccess } from '@/modules/identity-access/public/v1'
 

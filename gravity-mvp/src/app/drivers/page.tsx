@@ -1,7 +1,7 @@
 import { getDriversWithCells } from './actions'
 import { getTelegramConnections } from '../tg-actions'
 import DriversClient from './DriversClient'
-import { SectionDescription } from '@/components/ui/SectionDescription'
+import { SectionDescription } from '@/infrastructure/ui/SectionDescription'
 
 export const dynamic = 'force-dynamic'
 

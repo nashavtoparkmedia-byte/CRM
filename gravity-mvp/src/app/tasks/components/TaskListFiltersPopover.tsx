@@ -11,7 +11,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useMemo } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/infrastructure/ui/dialog'
 import { SlidersHorizontal, RotateCcw } from 'lucide-react'
 import { useTasksStore } from '@/store/tasks-store'
 import { useTopParks } from '@/store/tasks-selectors'

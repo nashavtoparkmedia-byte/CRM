@@ -3,7 +3,7 @@ import { Activity, Beaker } from 'lucide-react'
 
 import { SECTIONS } from '@/config/sections'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { SectionDescription } from '@/components/ui/SectionDescription'
+import { SectionDescription } from '@/infrastructure/ui/SectionDescription'
 
 interface PageShellProps {
   sectionKey: string

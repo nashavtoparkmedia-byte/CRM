@@ -8,7 +8,7 @@ import { sendTelegramMessage } from "../../tg-actions"
 import { sendMaxDriverMessageV1 } from "@/infrastructure/fleet/driver-max-messaging"
 import { DriverCardGrid } from "../components/DriverCardGrid"
 import { Button } from "@/infrastructure/ui/button"
-import { Input } from "@/components/ui/input"
+import { Input } from "@/infrastructure/ui/input"
 
 interface CardsClientProps {
     initialDrivers: DriverCardType[]

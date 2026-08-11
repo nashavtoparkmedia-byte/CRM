@@ -7,10 +7,10 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
+} from "@/infrastructure/ui/table"
+import { Badge } from "@/infrastructure/ui/badge"
 import { PageContainer } from '@/infrastructure/ui/PageContainer'
-import { PageHeader } from '@/components/layout/PageHeader'
+import { PageHeader } from '@/infrastructure/ui/PageHeader'
 import { requireIntegrationAdminPageAccess } from '@/modules/identity-access/public/v1'
 
 export const dynamic = 'force-dynamic'

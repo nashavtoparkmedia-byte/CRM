@@ -7,7 +7,7 @@ import type { DriverWithCells } from "../actions"
 import { syncArchivedDrivers } from "../actions"
 
 import { Button } from "@/infrastructure/ui/button"
-import { Input } from "@/components/ui/input"
+import { Input } from "@/infrastructure/ui/input"
 import {
     Table,
     TableBody,
@@ -15,7 +15,7 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/components/ui/table"
+} from "@/infrastructure/ui/table"
 
 import { FleetCheckModal } from "@/app/monitoring/components/FleetCheckModal"
 import { ToastProvider, useToast } from "@/app/monitoring/components/Toast"

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import { FileText } from 'lucide-react'
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/infrastructure/ui/tooltip'
 import { TaskEventDTO } from '@/lib/tasks/types'
 import { getClosedReasons } from '@/lib/tasks/scenario-config'
 import { CONTACT_EVENT_TYPES, isLateResponse, formatResponseTime } from '@/lib/tasks/response-config'

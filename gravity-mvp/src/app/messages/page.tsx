@@ -1,7 +1,7 @@
 import { Metadata } from "next"
 import ChatsLayout from "./components/ChatsLayout"
 import MessagesShell from "./components/MessagesShell"
-import { SectionDescription } from "@/components/ui/SectionDescription"
+import { SectionDescription } from "@/infrastructure/ui/SectionDescription"
 import { prisma } from "@/lib/prisma"
 
 export default async function MessagesPage({
