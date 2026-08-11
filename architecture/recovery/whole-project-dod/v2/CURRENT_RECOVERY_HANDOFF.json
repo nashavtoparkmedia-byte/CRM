@@ -726,7 +726,7 @@
     "Production source/artifact and protected Messages production authority were not reconciled in this task.",
     "No upstream/remote ref protects the local recovery lineage."
   ],
-  "exact_next_action": "Continue automatically with security/credential closure: validate existing security/auth changes, inventory credential DB reads, enforce sensitive-field boundaries, close debug endpoint exposure, and run an independent critic pass. Preserve Messages and AI Calls behavior.",
+  "exact_next_action": "Continue credential-sensitive-field remediation and re-inventory; unresolved DB credential accesses and possible public-secret risks remain fail-closed. Preserve Messages and AI Calls behavior.",
   "current_write_ownership": {
     "baseline": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T131500Z.json",
     "baseline_sha256": "7c6eb03e1249d9dbd2230390a72471caefe1fb01c992ec608775e1f2a0e41292",
@@ -750,5 +750,23 @@
     "intentional_exceptions": 0,
     "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_FINAL_CLOSURE.json",
     "triage_sha256": "ce3e297f1fe736815fd310094a066717a53d8e4631cbae85f99046963f3c9f70"
+  },
+  "security_continuation": {
+    "credential_inventory": "architecture/recovery/whole-project-dod/v2/CREDENTIAL_DATABASE_ACCESS_FINAL_20260811.json",
+    "credential_inventory_summary": {
+      "credential_database_accesses": 427,
+      "credential_reads": 245,
+      "secret_reads": 185,
+      "ambiguous_credential_accesses": 81,
+      "unresolved_database_accesses": 81,
+      "possible_public_secret_risks": 150,
+      "unclassified_accesses": 90
+    },
+    "gravity_security_tests": "PASS (34)",
+    "tg_bot_security_tests": "PASS (27)",
+    "public_boundary_detector": "PASS",
+    "debug_endpoint_exposure": "CLOSED",
+    "independent_critic": "PASS",
+    "verdict": "NOT_READY_SECURITY_CREDENTIAL_AMBIGUITY_REMAINS"
   }
 }
