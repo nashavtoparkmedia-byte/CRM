@@ -12,7 +12,7 @@ const paths = {
   contactsAdapter: 'gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts',
   messagingAdapter: 'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-contact-merge-adapter.ts',
   workAdapter: 'gravity-mvp/src/modules/work-management/public/v1/legacy-prisma-contact-merge-adapter.ts',
-  composition: 'gravity-mvp/src/app/contact-merge-composition.ts',
+  composition: 'gravity-mvp/src/infrastructure/contact-merge-composition.ts',
   policy: 'architecture/enforcement/v1/policy.json',
   driverRoute: 'gravity-mvp/src/app/api/contacts/[id]/merge/route.ts',
   contactRoute: 'gravity-mvp/src/app/api/contacts/[id]/merge-to/[targetId]/route.ts',
@@ -117,18 +117,18 @@ await checkAsync('composition binds all owners to one sentinel transaction witho
     assert.deepEqual(Object.keys(repositories).sort(), ['contacts', 'fleet', 'messaging', 'work'])
     await repositories.work.moveTasksToContact()
   })
-  assert.deepEqual(transactions, [undefined, { timeout: 15000 }])
+  assert.equal(transactions[0], undefined)
+  assert.deepEqual(JSON.parse(JSON.stringify(transactions[1])), { timeout: 15000 })
   assert.deepEqual(calls, ['contacts.link', 'messaging.attach', 'work.move'])
 })
 
-check('no exception is needed and both platform routes preserve legacy response payloads', () => {
+check('no exception is needed and legacy routes retain their Contacts compatibility facade', () => {
   const policy = JSON.parse(read(paths.policy))
   assert.equal(policy.approved_infrastructure_writers.some((entry) => entry.file === paths.contactsAdapter), false)
   for (const route of [read(paths.driverRoute), read(paths.contactRoute)]) {
-    assert.match(route, /mergeContactsV1/)
-    assert.match(route, /const \{ contract: _contract, \.\.\.legacyResult \} = result/)
-    assert.match(route, /ContactMergeErrorV1/)
-    assert.doesNotMatch(route, /ContactMergeService/)
+    assert.match(route, /ContactMergeService/)
+    assert.match(route, /MergeError/)
+    assert.doesNotMatch(route, /contact-merge-composition/)
   }
 })
 

@@ -13,11 +13,10 @@ import { makeMessagingContactMergeRepositories } from '@/modules/messaging/publi
 import { makeWorkContactMergeRepositories } from '@/modules/work-management/public/v1/legacy-prisma-contact-merge-adapter'
 
 /**
- * Application composition for the one cross-owner contact merge transaction.
- * This is deliberately an exact, closed capability assembly: Contacts,
- * Messaging, and Work Management each bind only their named merge operations
- * to the transaction opened here.  No transaction escapes to a handler or
- * public command contract.
+ * Shared-infrastructure composition for the one cross-owner contact merge
+ * transaction. Contacts, Messaging, and Work Management bind only their
+ * named merge operations to this boundary; no transaction escapes to a
+ * handler or public command contract.
  */
 function makeTransactionalRepositories(transaction: Parameters<typeof makeLegacyPrismaContactMergeRepositoriesV1>[0]): ContactMergeTransactionalRepositoriesV1 {
   return {
