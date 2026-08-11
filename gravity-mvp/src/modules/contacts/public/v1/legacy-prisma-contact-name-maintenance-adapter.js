@@ -26,4 +26,11 @@ async function restoreContactDisplayNameIfPrefixedV1(contactId, displayName) {
     return await prisma.contact.update({ where: { id: contactId }, data: { displayName } })
   } finally { await prisma.$disconnect() }
 }
-module.exports = { restoreContactDisplayNameV1, restoreContactDisplayNameIfPrefixedV1 }
+async function renameFakePhoneContactV1(contactId, expectedName, displayName) {
+  validateText(contactId, 'contactId'); validateText(expectedName, 'expectedName'); validateText(displayName, 'displayName'); const prisma = new PrismaClient()
+  try { const c = await prisma.contact.findUnique({ where: { id: contactId }, select: { displayName: true } }); if (c?.displayName !== expectedName) return null; return await prisma.contact.update({ where: { id: contactId }, data: { displayName } }) } finally { await prisma.$disconnect() }
+}
+async function deactivateContactPhoneV1(phoneId) {
+  validateText(phoneId, 'phoneId'); const prisma = new PrismaClient(); try { return await prisma.contactPhone.update({ where: { id: phoneId }, data: { isActive: false, isPrimary: false } }) } finally { await prisma.$disconnect() }
+}
+module.exports = { restoreContactDisplayNameV1, restoreContactDisplayNameIfPrefixedV1, renameFakePhoneContactV1, deactivateContactPhoneV1 }

@@ -1,20 +1,20 @@
 {
   "schema": "yoko.crm.write-ownership-closure-batch.v2",
-  "generated_at": "2026-08-11T09:37:42.675Z",
+  "generated_at": "2026-08-11T09:46:19.765Z",
   "authority": "Derived evidence ledger; unresolved records remain blocked/ambiguous and are not PASS.",
   "baseline": {
-    "analysis_sha256": "e42f43b5d78424930be5f5d0d989cae32b00d08915a95191342b0c752db385aa",
-    "baseline_sha256": "99e6c5d72bf19550abfad25245d55ce7490afb0251b3fe9907ddb889970160be",
-    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T100000Z.json",
-    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_WA_JUNK.json"
+    "analysis_sha256": "468808b89b9b60bdd3d86d8f46ad33ffd0f7ebb4c02f057bbb711186e83cbd39",
+    "baseline_sha256": "bf99dc455028ddbc80a48d22ba6a3b16376581d88033e8bd55bdeec220eec629",
+    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T104500Z.json",
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_LID_CLEANUP.json"
   },
   "metrics": {
     "confirmed_writes_discovered": 1416,
     "confirmed_foreign": 0,
     "closed_foreign": 52,
-    "ambiguous_remaining": 120,
+    "ambiguous_remaining": 111,
     "confirmed_write_owner_resolved": 7,
-    "confirmed_write_owner_unresolved": 70,
+    "confirmed_write_owner_unresolved": 61,
     "dynamic_delegate_unresolved": 6,
     "dynamic_sql_unresolved": 32,
     "query_raw_side_effect_unresolved": 1,
@@ -163,7 +163,7 @@
     "post_rescan_foreign": 0,
     "ambiguity_reduction": 4
   },
-  "next_action": "Resolve remaining 70 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
+  "next_action": "Resolve remaining 61 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
   "new_backfill_capability_batch": {
     "files": [
       "gravity-mvp/scripts/backfill_source_connection_pr7.js",
@@ -333,5 +333,16 @@
       "targeted analyzer: cleanup-wa-junk zero direct write sites",
       "maintenance capability exact-scope policy PASS"
     ]
+  },
+  "new_lid_cleanup_capability_batch": {
+    "files": [
+      "gravity-mvp/scripts/cleanup-lid-fake-contacts.js",
+      "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-chat-backfill-adapter.js",
+      "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-name-maintenance-adapter.js",
+      "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-identity-maintenance-adapter.js"
+    ],
+    "writes_routed": 9,
+    "post_rescan_foreign": 0,
+    "ambiguity_reduction": 9
   }
 }

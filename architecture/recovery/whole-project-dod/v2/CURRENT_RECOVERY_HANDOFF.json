@@ -1,6 +1,6 @@
 {
   "schema": "yoko.crm.current-recovery-handoff.v1",
-  "generated_at": "2026-08-11T09:37:42.675Z",
+  "generated_at": "2026-08-11T09:46:19.765Z",
   "authority": "Continuation checkpoint; supersedes conversational status claims but does not supersede durable gap ledger or external NOT READY verdict.",
   "program_state": {
     "whole_project_state": "EXTERNAL_FINAL_ACCEPTANCE_FAILED",
@@ -611,13 +611,13 @@
     "ownership_gap_review": "architecture/recovery/whole-project-dod/v2/OWNERSHIP_GAP_FOCUSED_REVIEW.json",
     "current_4ec_outputs": "Historical 4ec outputs remain absent. They are superseded by the bounded current 3ab9ad96 baseline below.",
     "current_authoritative_write_baseline": {
-      "record": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T100000Z.json",
+      "record": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T104500Z.json",
       "baseline": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json",
-      "baseline_sha256": "99e6c5d72bf19550abfad25245d55ce7490afb0251b3fe9907ddb889970160be",
+      "baseline_sha256": "bf99dc455028ddbc80a48d22ba6a3b16376581d88033e8bd55bdeec220eec629",
       "progress": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_PROGRESS.jsonl",
-      "progress_sha256": "919a48242cba33dbf48a8ab4edd1515f5b16e6799dc9e07e5e8b4423e25abf00",
-      "analysis_sha256": "e42f43b5d78424930be5f5d0d989cae32b00d08915a95191342b0c752db385aa",
-      "result": "1720/1720 surfaces; 0 failures/timeouts; 0 FOREIGN; 120 AMBIGUOUS; 0 unreviewed operational surfaces",
+      "progress_sha256": "e609e5d25f04d87d4cdd176012141d3b213139a35a85ceebee058d0abdcc2aee",
+      "analysis_sha256": "468808b89b9b60bdd3d86d8f46ad33ffd0f7ebb4c02f057bbb711186e83cbd39",
+      "result": "1720/1720 surfaces; 0 failures/timeouts; 0 FOREIGN; 111 AMBIGUOUS; 0 unreviewed operational surfaces",
       "classification": "CURRENT_BASELINE_NOT_ACCEPTANCE"
     },
     "durably_preserved": [
@@ -647,7 +647,7 @@
     ],
     "stale_evidence_warning": "The four phase artifacts are from critic-blocked commit 3339325f/tree 68e1... and are committed only to preserve historical evidence. They are obsolete/superseded and MUST NOT be used as the current 4ec baseline or acceptance.",
     "temporary_comparison_only": "5a4211a4 mirrored outputs remain in /tmp and are not durable current evidence; their hashes/counts are in the diagnostic checkpoint. WIP /tmp clutter was intentionally not copied.",
-    "latest_triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_WA_JUNK.json"
+    "latest_triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_LID_CLEANUP.json"
   },
   "durable_project_state": {
     "root": "/opt/codex-work/crm-architecture-state",

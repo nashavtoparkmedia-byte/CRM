@@ -27,6 +27,9 @@
 const { loadEnvConfig } = require('@next/env')
 loadEnvConfig(process.cwd())
 const { PrismaClient } = require('@prisma/client')
+const { rewriteLidChatV1, moveMessageToChatV1, deleteUnifiedMessageV1, detachAndDeleteChatV1 } = require('../src/modules/messaging/public/v1/legacy-prisma-chat-backfill-adapter')
+const { renameFakePhoneContactV1, deactivateContactPhoneV1 } = require('../src/modules/contacts/public/v1/legacy-prisma-contact-name-maintenance-adapter')
+const { repointOrDeactivateFakeIdentityV1 } = require('../src/modules/contacts/public/v1/legacy-prisma-contact-identity-maintenance-adapter')
 const prisma = new PrismaClient()
 
 async function main() {
@@ -83,46 +86,32 @@ async function main() {
                         select: { id: true },
                     })
                     if (dup) {
-                        await prisma.message.delete({ where: { id: m.id } })
+                        await deleteUnifiedMessageV1(m.id)
                         continue
                     }
                 }
-                await prisma.message.update({ where: { id: m.id }, data: { chatId: existingLidChat.id } })
+                await moveMessageToChatV1(m.id, existingLidChat.id)
                 moved++
             }
             console.log(`  moved ${moved} messages`)
             // Detach the fake chat's identity link, then delete the chat.
-            await prisma.chat.update({ where: { id: chat.id }, data: { contactIdentityId: null } })
-            await prisma.chat.delete({ where: { id: chat.id } })
+            await detachAndDeleteChatV1(chat.id)
         } else {
-            await prisma.chat.update({
-                where: { id: chat.id },
-                data: {
-                    externalChatId: `${lid}@lid`,
-                    // Only set name if it's empty — preserve user-set names
-                    name: chat.name ?? lidLabel,
-                },
-            })
+            await rewriteLidChatV1(chat.id, `${lid}@lid`, chat.name ?? lidLabel)
         }
 
         if (chat.contact) {
             // 2. Rename contact only if displayName matches the fake "+7XXX" pattern.
             //    If the operator has renamed it (e.g. via merge), leave alone.
             if (chat.contact.displayName === fakeE164) {
-                await prisma.contact.update({
-                    where: { id: chat.contact.id },
-                    data: { displayName: lidLabel },
-                })
+                await renameFakePhoneContactV1(chat.contact.id, fakeE164, lidLabel)
                 console.log(`  contact displayName: ${fakeE164} → ${lidLabel}`)
             }
 
             // 3. Deactivate fake ContactPhone
             const fakePhoneRow = chat.contact.phones.find(p => p.phone === fakeE164)
             if (fakePhoneRow) {
-                await prisma.contactPhone.update({
-                    where: { id: fakePhoneRow.id },
-                    data: { isActive: false, isPrimary: false },
-                })
+                await deactivateContactPhoneV1(fakePhoneRow.id)
                 console.log(`  contactPhone ${fakeE164}: deactivated`)
             }
 
@@ -137,17 +126,8 @@ async function main() {
                     where: { channel: 'whatsapp', externalId: lid },
                 })
                 if (!existingLidIdent) {
-                    await prisma.contactIdentity.update({
-                        where: { id: fakeIdentity.id },
-                        data: { externalId: lid, phoneId: null },
-                    })
-                    console.log(`  contactIdentity whatsapp:${fakePhoneDigits} → whatsapp:${lid}`)
-                } else {
-                    await prisma.contactIdentity.update({
-                        where: { id: fakeIdentity.id },
-                        data: { isActive: false, phoneId: null },
-                    })
-                    console.log(`  contactIdentity whatsapp:${fakePhoneDigits}: deactivated (real LID identity already exists)`)
+                    await repointOrDeactivateFakeIdentityV1(fakeIdentity.id, lid)
+                    console.log(`  contactIdentity whatsapp:${fakePhoneDigits}: reconciled to whatsapp:${lid}`)
                 }
             }
         }
