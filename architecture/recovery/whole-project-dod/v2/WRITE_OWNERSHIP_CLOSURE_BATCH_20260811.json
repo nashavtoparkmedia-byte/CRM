@@ -1,20 +1,20 @@
 {
   "schema": "yoko.crm.write-ownership-closure-batch.v2",
-  "generated_at": "2026-08-11T09:04:22.230Z",
+  "generated_at": "2026-08-11T09:13:28.112Z",
   "authority": "Derived evidence ledger; unresolved records remain blocked/ambiguous and are not PASS.",
   "baseline": {
-    "analysis_sha256": "f3420cd36162f881fd8a16907db0d194e54528166dde6d4c56674b4a9652a5b7",
-    "baseline_sha256": "ee038e775096b40ff20a092f4a32f84c60bac04d1e582bd89a3f96fd69108673",
-    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T090337Z.json",
-    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_MEGRABYAN.json"
+    "analysis_sha256": "33060187edb55e488c70cbb1cbb2b4bd44bc2851d9a8bb37c2737bb3272c6172",
+    "baseline_sha256": "ccbe70d3771395b1d90658fc71aa9ed2243b21ea875b51eb2080f4dc60c27313",
+    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T091241Z.json",
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_DUPLICATE_WA.json"
   },
   "metrics": {
     "confirmed_writes_discovered": 1419,
     "confirmed_foreign": 0,
     "closed_foreign": 52,
-    "ambiguous_remaining": 141,
+    "ambiguous_remaining": 135,
     "confirmed_write_owner_resolved": 7,
-    "confirmed_write_owner_unresolved": 91,
+    "confirmed_write_owner_unresolved": 85,
     "dynamic_delegate_unresolved": 6,
     "dynamic_sql_unresolved": 32,
     "query_raw_side_effect_unresolved": 1,
@@ -163,7 +163,7 @@
     "post_rescan_foreign": 0,
     "ambiguity_reduction": 4
   },
-  "next_action": "Resolve the remaining 91 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
+  "next_action": "Resolve the remaining 85 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
   "new_backfill_capability_batch": {
     "files": [
       "gravity-mvp/scripts/backfill_source_connection_pr7.js",
@@ -270,6 +270,16 @@
       "gravity-mvp/scripts/cleanup_megrabyan_phantom.js",
       "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-megrabyan-chat-cleanup-adapter.js",
       "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-megrabyan-identity-cleanup-adapter.js"
+    ],
+    "writes_routed": 6,
+    "post_rescan_foreign": 0,
+    "ambiguity_reduction": 6
+  },
+  "new_duplicate_wa_batch": {
+    "files": [
+      "gravity-mvp/scripts/fix_lid_phone_duplicate.js",
+      "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-duplicate-wa-chat-maintenance-adapter.js",
+      "gravity-mvp/src/modules/whatsapp-channel/public/v1/legacy-prisma-duplicate-wa-chat-maintenance-adapter.js"
     ],
     "writes_routed": 6,
     "post_rescan_foreign": 0,

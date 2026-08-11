@@ -1,12 +1,12 @@
 {
-  "analysis_sha256": "f3420cd36162f881fd8a16907db0d194e54528166dde6d4c56674b4a9652a5b7",
+  "analysis_sha256": "33060187edb55e488c70cbb1cbb2b4bd44bc2851d9a8bb37c2737bb3272c6172",
   "execution": {
-    "ambiguous_candidates": 141,
+    "ambiguous_candidates": 135,
     "complete": true,
-    "elapsed_ms": 410883.110918,
+    "elapsed_ms": 384995.77269,
     "failures": [],
-    "files_completed": 1718,
-    "files_discovered": 1718,
+    "files_completed": 1720,
+    "files_discovered": 1720,
     "mode": "fresh_process_per_javascript_surface",
     "progress_every": 150,
     "worker_failures": 0,
@@ -47,7 +47,7 @@
         ".bat": 4,
         ".cjs": 3,
         ".dockerfile": 7,
-        ".js": 411,
+        ".js": 413,
         ".mjs": 172,
         ".package-json": 7,
         ".prisma": 4,
@@ -60,7 +60,7 @@
         ".yml": 6
       },
       "by_lifecycle": {
-        "APPLICATION_RUNTIME": 1004,
+        "APPLICATION_RUNTIME": 1006,
         "DEAD_HISTORICAL": 35,
         "FIXTURE": 1,
         "MIGRATION": 61,
@@ -72,7 +72,7 @@
         "DEAD_HISTORICAL": 35,
         "MIGRATION_ONLY": 61
       },
-      "tracked_executable_surfaces": 1718,
+      "tracked_executable_surfaces": 1720,
       "unreviewed_operational_surfaces": 0
     },
     "surfaces": [
@@ -14346,6 +14346,18 @@
       },
       {
         "disposition": null,
+        "extension": ".js",
+        "functional_owner": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "migration_target": null,
+        "owner_context": null,
+        "path": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-duplicate-wa-chat-maintenance-adapter.js",
+        "production_capability": "POSSIBLE",
+        "rationale": null,
+        "registry_classified": false
+      },
+      {
+        "disposition": null,
         "extension": ".ts",
         "functional_owner": null,
         "lifecycle": "APPLICATION_RUNTIME",
@@ -15000,6 +15012,18 @@
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/src/modules/telegram-channel/public/v1/telegram-connection-public-metadata.ts",
+        "production_capability": "POSSIBLE",
+        "rationale": null,
+        "registry_classified": false
+      },
+      {
+        "disposition": null,
+        "extension": ".js",
+        "functional_owner": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "migration_target": null,
+        "owner_context": null,
+        "path": "gravity-mvp/src/modules/whatsapp-channel/public/v1/legacy-prisma-duplicate-wa-chat-maintenance-adapter.js",
         "production_capability": "POSSIBLE",
         "rationale": null,
         "registry_classified": false
@@ -20697,26 +20721,26 @@
   "parse_findings": [],
   "schema": "yoko.crm.whole-repository-write-analysis.v2",
   "source": {
-    "git_commit": "faef259eb6c27c1846d985756e56aff724846608",
+    "git_commit": "184191b25839ec703cabc81cd130a0f7dbea8216",
     "git_tracked_only": true,
-    "git_tree": "e527f6bb6f5f6b35c5671c439ca07e3f84f12d92",
+    "git_tree": "67780aecb2caa8d55b623b5c14ec7c03db969bcd",
     "inventory_schema": "yoko.crm.tracked-executable-surface-inventory.v2",
     "repository_root": ".",
     "tracked_worktree_clean": true,
     "tracked_worktree_status_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
   },
   "summary": {
-    "ambiguous_writes": 141,
+    "ambiguous_writes": 135,
     "discovered_write_sites": 1419,
     "foreign_writes": 0,
     "historical_dead_writes": 18,
     "migration_only_writes": 500,
-    "operational_script_writes": 102,
-    "owner_writes": 531,
+    "operational_script_writes": 96,
+    "owner_writes": 537,
     "parse_findings": 0,
     "raw_sql_writes": 814,
     "test_writes": 229,
-    "tracked_executable_surfaces": 1718,
+    "tracked_executable_surfaces": 1720,
     "unreviewed_operational_surfaces": 0
   },
   "write_sites": [
@@ -41033,286 +41057,6 @@
       "written_fields": [
         "displayName"
       ]
-    },
-    {
-      "ambiguity_reasons": [],
-      "ambiguous": false,
-      "candidate_models": [
-        "message"
-      ],
-      "classification": "AMBIGUOUS",
-      "column": 25,
-      "confidence": "HIGH",
-      "end": 1388,
-      "file": "gravity-mvp/scripts/fix_lid_phone_duplicate.js",
-      "index": 1292,
-      "kind": "model",
-      "line": 29,
-      "method": "updateMany",
-      "model": "message",
-      "nested_operations": [],
-      "owner_contexts": [
-        "messaging"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "return_projection": null,
-      "scope": "Function:main",
-      "site_signature": "faf03388ac42d60d3e02e99752d31fab719f4cba059d8a441ab488e697f9e6f2",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": false,
-      "written_fields": [
-        "chatId"
-      ]
-    },
-    {
-      "ambiguity_reasons": [],
-      "ambiguous": false,
-      "candidate_models": [
-        "chat"
-      ],
-      "classification": "AMBIGUOUS",
-      "column": 11,
-      "confidence": "HIGH",
-      "end": 1586,
-      "file": "gravity-mvp/scripts/fix_lid_phone_duplicate.js",
-      "index": 1546,
-      "kind": "model",
-      "line": 36,
-      "method": "delete",
-      "model": "chat",
-      "nested_operations": [],
-      "owner_contexts": [
-        "messaging"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "return_projection": {
-        "dynamic": false,
-        "mode": "FULL_ROW",
-        "nested_relations": [],
-        "omitted_fields": [],
-        "selected_fields": []
-      },
-      "scope": "Function:main",
-      "site_signature": "8fa2c932bc6cb17d333ee4778cfb3fa66e344eab4cf0cca26581aeffa469fdf7",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": false,
-      "written_fields": []
-    },
-    {
-      "ambiguity_reasons": [],
-      "ambiguous": false,
-      "candidate_models": [
-        "chat"
-      ],
-      "classification": "AMBIGUOUS",
-      "column": 9,
-      "confidence": "HIGH",
-      "end": 1772,
-      "file": "gravity-mvp/scripts/fix_lid_phone_duplicate.js",
-      "index": 1682,
-      "kind": "model",
-      "line": 41,
-      "method": "update",
-      "model": "chat",
-      "nested_operations": [],
-      "owner_contexts": [
-        "messaging"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "return_projection": {
-        "dynamic": false,
-        "mode": "FULL_ROW",
-        "nested_relations": [],
-        "omitted_fields": [],
-        "selected_fields": []
-      },
-      "scope": "Function:main",
-      "site_signature": "77d1fa7048ba7a17f92d70471121b4d7a83c7837a67664c6ce468e315fb1a022",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": false,
-      "written_fields": [
-        "externalChatId"
-      ]
-    },
-    {
-      "ambiguity_reasons": [],
-      "ambiguous": false,
-      "candidate_models": [
-        "whatsAppChat"
-      ],
-      "classification": "AMBIGUOUS",
-      "column": 11,
-      "confidence": "HIGH",
-      "end": 2317,
-      "file": "gravity-mvp/scripts/fix_lid_phone_duplicate.js",
-      "index": 2076,
-      "kind": "model",
-      "line": 51,
-      "method": "upsert",
-      "model": "whatsAppChat",
-      "nested_operations": [],
-      "owner_contexts": [
-        "whatsapp_channel"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "return_projection": {
-        "dynamic": false,
-        "mode": "FULL_ROW",
-        "nested_relations": [],
-        "omitted_fields": [],
-        "selected_fields": []
-      },
-      "scope": "Function:main",
-      "site_signature": "a890b0ed9d87b1866a252740f0409b70e05afa32530abaae246dd193ff7e84ad",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": false,
-      "written_fields": [
-        "connectionId",
-        "id",
-        "lastMessageAt"
-      ]
-    },
-    {
-      "ambiguity_reasons": [],
-      "ambiguous": false,
-      "candidate_models": [
-        "whatsAppMessage"
-      ],
-      "classification": "AMBIGUOUS",
-      "column": 11,
-      "confidence": "HIGH",
-      "end": 2440,
-      "file": "gravity-mvp/scripts/fix_lid_phone_duplicate.js",
-      "index": 2328,
-      "kind": "model",
-      "line": 56,
-      "method": "updateMany",
-      "model": "whatsAppMessage",
-      "nested_operations": [],
-      "owner_contexts": [
-        "whatsapp_channel"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "return_projection": null,
-      "scope": "Function:main",
-      "site_signature": "3a10b9001add04cc83b3c03a5b60ac2f0c4f3985c8b1cc88d5b2cd220f2800b4",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": false,
-      "written_fields": [
-        "chatId"
-      ]
-    },
-    {
-      "ambiguity_reasons": [],
-      "ambiguous": false,
-      "candidate_models": [
-        "whatsAppChat"
-      ],
-      "classification": "AMBIGUOUS",
-      "column": 11,
-      "confidence": "HIGH",
-      "end": 2514,
-      "file": "gravity-mvp/scripts/fix_lid_phone_duplicate.js",
-      "index": 2451,
-      "kind": "model",
-      "line": 57,
-      "method": "delete",
-      "model": "whatsAppChat",
-      "nested_operations": [],
-      "owner_contexts": [
-        "whatsapp_channel"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "return_projection": {
-        "dynamic": false,
-        "mode": "FULL_ROW",
-        "nested_relations": [],
-        "omitted_fields": [],
-        "selected_fields": []
-      },
-      "scope": "Function:main",
-      "site_signature": "bf5a6782b5fa9a082fc357487f1198925040dafd6caf111d4578714f71e973af",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": false,
-      "written_fields": []
     },
     {
       "ambiguity_reasons": [],
@@ -80067,6 +79811,145 @@
       "ambiguity_reasons": [],
       "ambiguous": false,
       "candidate_models": [
+        "message"
+      ],
+      "classification": "OWNER",
+      "column": 21,
+      "confidence": "HIGH",
+      "end": 639,
+      "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-duplicate-wa-chat-maintenance-adapter.js",
+      "index": 556,
+      "kind": "model",
+      "line": 15,
+      "method": "updateMany",
+      "model": "message",
+      "nested_operations": [],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "return_projection": null,
+      "scope": "Function:mergeDuplicateWaChatV1",
+      "site_signature": "da7e2645426b340e5bee1bee5190811df4074baa12c9309e2c2ef43ece4c2782",
+      "source_context": "messaging",
+      "source_identity": "bounded_module_path",
+      "source_technical_module": "messaging.module",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "transaction": {
+        "contained": false,
+        "origin": null
+      },
+      "unresolved_targets": [],
+      "write_projection_dynamic": false,
+      "written_fields": [
+        "chatId"
+      ]
+    },
+    {
+      "ambiguity_reasons": [],
+      "ambiguous": false,
+      "candidate_models": [
+        "chat"
+      ],
+      "classification": "OWNER",
+      "column": 13,
+      "confidence": "HIGH",
+      "end": 697,
+      "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-duplicate-wa-chat-maintenance-adapter.js",
+      "index": 652,
+      "kind": "model",
+      "line": 16,
+      "method": "delete",
+      "model": "chat",
+      "nested_operations": [],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "return_projection": {
+        "dynamic": false,
+        "mode": "FULL_ROW",
+        "nested_relations": [],
+        "omitted_fields": [],
+        "selected_fields": []
+      },
+      "scope": "Function:mergeDuplicateWaChatV1",
+      "site_signature": "8500ddec83a4ef898fe72084c42a45ba447a313ebf76d8555ce03b89d5602912",
+      "source_context": "messaging",
+      "source_identity": "bounded_module_path",
+      "source_technical_module": "messaging.module",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "transaction": {
+        "contained": false,
+        "origin": null
+      },
+      "unresolved_targets": [],
+      "write_projection_dynamic": false,
+      "written_fields": []
+    },
+    {
+      "ambiguity_reasons": [],
+      "ambiguous": false,
+      "candidate_models": [
+        "chat"
+      ],
+      "classification": "OWNER",
+      "column": 27,
+      "confidence": "HIGH",
+      "end": 813,
+      "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-duplicate-wa-chat-maintenance-adapter.js",
+      "index": 730,
+      "kind": "model",
+      "line": 18,
+      "method": "update",
+      "model": "chat",
+      "nested_operations": [],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "return_projection": {
+        "dynamic": false,
+        "mode": "FULL_ROW",
+        "nested_relations": [],
+        "omitted_fields": [],
+        "selected_fields": []
+      },
+      "scope": "Function:mergeDuplicateWaChatV1",
+      "site_signature": "6d174eba56bf8c2fd278d94bd7a37eaf0197a94a9a62edc891849c69eded31bf",
+      "source_context": "messaging",
+      "source_identity": "bounded_module_path",
+      "source_technical_module": "messaging.module",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "transaction": {
+        "contained": false,
+        "origin": null
+      },
+      "unresolved_targets": [],
+      "write_projection_dynamic": false,
+      "written_fields": [
+        "externalChatId"
+      ]
+    },
+    {
+      "ambiguity_reasons": [],
+      "ambiguous": false,
+      "candidate_models": [
         "chat"
       ],
       "classification": "OWNER",
@@ -83263,6 +83146,147 @@
       "source_context": "telegram_channel",
       "source_identity": "bounded_module_path",
       "source_technical_module": "telegram_channel.module",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "transaction": {
+        "contained": false,
+        "origin": null
+      },
+      "unresolved_targets": [],
+      "write_projection_dynamic": false,
+      "written_fields": []
+    },
+    {
+      "ambiguity_reasons": [],
+      "ambiguous": false,
+      "candidate_models": [
+        "whatsAppChat"
+      ],
+      "classification": "OWNER",
+      "column": 11,
+      "confidence": "HIGH",
+      "end": 610,
+      "file": "gravity-mvp/src/modules/whatsapp-channel/public/v1/legacy-prisma-duplicate-wa-chat-maintenance-adapter.js",
+      "index": 412,
+      "kind": "model",
+      "line": 11,
+      "method": "upsert",
+      "model": "whatsAppChat",
+      "nested_operations": [],
+      "owner_contexts": [
+        "whatsapp_channel"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "return_projection": {
+        "dynamic": false,
+        "mode": "FULL_ROW",
+        "nested_relations": [],
+        "omitted_fields": [],
+        "selected_fields": []
+      },
+      "scope": "Function:repairLegacyDuplicateWaChatV1",
+      "site_signature": "88e7697e3f2c60ad0cfd5cb1650c8a324e8aeab6ea5bdc7aa03ba4bde31278dc",
+      "source_context": "whatsapp_channel",
+      "source_identity": "bounded_module_path",
+      "source_technical_module": "whatsapp_channel.module",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "transaction": {
+        "contained": false,
+        "origin": null
+      },
+      "unresolved_targets": [],
+      "write_projection_dynamic": false,
+      "written_fields": [
+        "connectionId",
+        "id",
+        "lastMessageAt"
+      ]
+    },
+    {
+      "ambiguity_reasons": [],
+      "ambiguous": false,
+      "candidate_models": [
+        "whatsAppMessage"
+      ],
+      "classification": "OWNER",
+      "column": 11,
+      "confidence": "HIGH",
+      "end": 711,
+      "file": "gravity-mvp/src/modules/whatsapp-channel/public/v1/legacy-prisma-duplicate-wa-chat-maintenance-adapter.js",
+      "index": 621,
+      "kind": "model",
+      "line": 12,
+      "method": "updateMany",
+      "model": "whatsAppMessage",
+      "nested_operations": [],
+      "owner_contexts": [
+        "whatsapp_channel"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "return_projection": null,
+      "scope": "Function:repairLegacyDuplicateWaChatV1",
+      "site_signature": "bc8e17f39c75359eb9667b038b6265a3886f3231c382e121ca16c4504006461f",
+      "source_context": "whatsapp_channel",
+      "source_identity": "bounded_module_path",
+      "source_technical_module": "whatsapp_channel.module",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "transaction": {
+        "contained": false,
+        "origin": null
+      },
+      "unresolved_targets": [],
+      "write_projection_dynamic": false,
+      "written_fields": [
+        "chatId"
+      ]
+    },
+    {
+      "ambiguity_reasons": [],
+      "ambiguous": false,
+      "candidate_models": [
+        "whatsAppChat"
+      ],
+      "classification": "OWNER",
+      "column": 11,
+      "confidence": "HIGH",
+      "end": 775,
+      "file": "gravity-mvp/src/modules/whatsapp-channel/public/v1/legacy-prisma-duplicate-wa-chat-maintenance-adapter.js",
+      "index": 722,
+      "kind": "model",
+      "line": 13,
+      "method": "delete",
+      "model": "whatsAppChat",
+      "nested_operations": [],
+      "owner_contexts": [
+        "whatsapp_channel"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "return_projection": {
+        "dynamic": false,
+        "mode": "FULL_ROW",
+        "nested_relations": [],
+        "omitted_fields": [],
+        "selected_fields": []
+      },
+      "scope": "Function:repairLegacyDuplicateWaChatV1",
+      "site_signature": "30feefd3cf2ffa24df33eea6405185a4857ea657221856ad4606927572806dbf",
+      "source_context": "whatsapp_channel",
+      "source_identity": "bounded_module_path",
+      "source_technical_module": "whatsapp_channel.module",
       "surface": {
         "disposition": null,
         "lifecycle": "APPLICATION_RUNTIME",
