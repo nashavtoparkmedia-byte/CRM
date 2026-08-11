@@ -1077,10 +1077,10 @@ export async function createManualKnowledgeItem(input: {
 // Source-of-truth для shadow/runtime — env (см. featureFlags.ts).
 
 import {
-    isShadowModeEnabled,
-    isRuntimeEnabled,
-    getKnowledgeRuntimeMode,
-} from '@/lib/ai/knowledge/featureFlags'
+    getKnowledgeRuntimeModeV1 as getKnowledgeRuntimeMode,
+    isKnowledgeRuntimeEnabledV1 as isRuntimeEnabled,
+    isKnowledgeShadowModeEnabledV1 as isShadowModeEnabled,
+} from '@/modules/ai-knowledge/public/v1/knowledge-operational-status'
 
 export interface RetrievalPolicy {
     minConfidenceForReply:     number
@@ -1494,17 +1494,17 @@ export async function previewDecisionRetry(
 // counts не несут чувствительных данных. Reuse logic в smoke.
 
 import {
-    getKnowledgeReadiness,
-} from '@/lib/ai/knowledge/readiness'
+    getKnowledgeReadinessV1 as getKnowledgeReadiness,
+} from '@/modules/ai-knowledge/public/v1/knowledge-operational-status'
 export type {
-    KnowledgeReadinessBundle,
-    KnowledgeReadinessCounts,
-    KnowledgeLastExtraction,
-    KnowledgeActivity7d,
-    KnowledgeHealth7d,
-    ReadinessCheck,
-    ReadinessCheckStatus,
-} from '@/lib/ai/knowledge/readiness'
+    KnowledgeReadinessBundleV1 as KnowledgeReadinessBundle,
+    KnowledgeReadinessCountsV1 as KnowledgeReadinessCounts,
+    KnowledgeLastExtractionV1 as KnowledgeLastExtraction,
+    KnowledgeActivity7dV1 as KnowledgeActivity7d,
+    KnowledgeHealth7dV1 as KnowledgeHealth7d,
+    KnowledgeReadinessCheckV1 as ReadinessCheck,
+    KnowledgeReadinessCheckStatusV1 as ReadinessCheckStatus,
+} from '@/modules/ai-knowledge/public/v1/knowledge-operational-status'
 
 /** Bundle для readiness row в шапке и для runtime warning модала.
  *  Подтягивается на page.tsx загрузке + после операций governance

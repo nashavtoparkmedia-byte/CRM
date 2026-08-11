@@ -2,7 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { getAiAgentProviderConfigV1 } from '@/modules/calling/public/v1/ai-agent-provider-capability'
 import { Message } from '@prisma/client'
 import { retrieve, type RetrievalTrace, type RetrievableItem } from '@/lib/ai/knowledge/Retriever'
-import { getKnowledgeRuntimeMode } from '@/lib/ai/knowledge/featureFlags'
+import { getKnowledgeRuntimeModeV1 as getKnowledgeRuntimeMode } from '@/modules/ai-knowledge/public/v1/knowledge-operational-status'
 
 export interface AiConfig {
   enabled: boolean
