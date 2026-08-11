@@ -167,18 +167,18 @@ export async function register() {
 
         // Integrity checks: every 30 minutes
         const integrityInterval = setInterval(async () => {
-            const { IntegrityChecker } = await import('@/lib/IntegrityChecker')
+            const { runOperationalIntegrityCheckV1 } = await import('@/modules/operations-observability/public/v1/scheduled-maintenance-operations')
             await OperationalJobs.run('integrity', async () => {
-                return await IntegrityChecker.runAll()
+                return await runOperationalIntegrityCheckV1()
             })
         }, 30 * 60 * 1000)
         OperationalJobs.registerInterval(integrityInterval)
 
         // Run integrity check once at startup (after 30s delay)
         setTimeout(async () => {
-            const { IntegrityChecker } = await import('@/lib/IntegrityChecker')
+            const { runOperationalIntegrityCheckV1 } = await import('@/modules/operations-observability/public/v1/scheduled-maintenance-operations')
             await OperationalJobs.run('integrity', async () => {
-                return await IntegrityChecker.runAll()
+                return await runOperationalIntegrityCheckV1()
             })
         }, 30000)
 
@@ -229,9 +229,8 @@ export async function register() {
         // Retention cleanup: every 24 hours
         const cleanupInterval = setInterval(async () => {
             await OperationalJobs.run('retention_cleanup', async () => {
-                const { RetentionCleanup } = await import('@/lib/RetentionCleanup')
-                const dryRun = process.env.RETENTION_DRY_RUN === 'true'
-                return await RetentionCleanup.runAll(dryRun)
+                const { runScheduledRetentionCleanupV1 } = await import('@/modules/operations-observability/public/v1/scheduled-maintenance-operations')
+                return await runScheduledRetentionCleanupV1()
             })
         }, 24 * 60 * 60 * 1000)
         OperationalJobs.registerInterval(cleanupInterval)
@@ -239,8 +238,8 @@ export async function register() {
         // Daily stability check: every 24 hours (offset 1 hour after cleanup)
         const stabilityInterval = setInterval(async () => {
             await OperationalJobs.run('stability_check', async () => {
-                const { runStabilityCheck } = await import('@/lib/stability-check')
-                return await runStabilityCheck('daily')
+                const { runDailyOperationalStabilityCheckV1 } = await import('@/modules/operations-observability/public/v1/scheduled-maintenance-operations')
+                return await runDailyOperationalStabilityCheckV1()
             })
         }, 24 * 60 * 60 * 1000)
         OperationalJobs.registerInterval(stabilityInterval)
@@ -248,8 +247,8 @@ export async function register() {
         // Run initial stability check 60s after startup
         setTimeout(async () => {
             await OperationalJobs.run('stability_check', async () => {
-                const { runStabilityCheck } = await import('@/lib/stability-check')
-                return await runStabilityCheck('daily')
+                const { runDailyOperationalStabilityCheckV1 } = await import('@/modules/operations-observability/public/v1/scheduled-maintenance-operations')
+                return await runDailyOperationalStabilityCheckV1()
             })
         }, 60000)
 

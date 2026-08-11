@@ -58,7 +58,7 @@
     {
       "context": "operations_observability",
       "path": "architecture/contexts/v1/manifests/operations_observability.json",
-      "sha256": "5214fea44d2f8918e63599cdf0bfa2151c2833cbb78c6b4715adc5b500fec205"
+      "sha256": "4a429f0608cb3206fdb16ac287de22289b1679128e15fccf6192ae26c4fd5634"
     },
     {
       "context": "platform_shell",

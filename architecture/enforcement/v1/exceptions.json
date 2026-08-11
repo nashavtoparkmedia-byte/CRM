@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "0c164ef8820193fc7b156fac91477145bc3918f9fa2c9da88a9ede9459cfdd14",
+  "finding_digest": "6798ed7de2d9a9e2ef34070e6c657c4cf199df66849109ea5006ff9746f9e43a",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,8 +13,8 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "internal_module_import": 49,
-    "non_public_cross_context_import": 95,
+    "internal_module_import": 46,
+    "non_public_cross_context_import": 90,
     "undeclared_dependency": 26
   },
   "exceptions": [
@@ -2128,134 +2128,6 @@
       "migration_references": [
         "dependency:platform_shell/gravity_core>work_management/tasks",
         "dependency:platform_shell/gravity_ui>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_beae109d247ac460c6a6b8f5",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 148,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "operations_observability",
-      "subject": "gravity_core>monitoring:gravity-mvp/src/lib/IntegrityChecker.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_38c3ee4ccd2493f2174a4192",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 148,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "operations_observability",
-      "subject": "gravity_core>monitoring:gravity-mvp/src/lib/IntegrityChecker.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_39ad16bed547f0e5266edc34",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 157,
-      "ordinal": 2,
-      "owner_context": "platform_shell",
-      "target_context": "operations_observability",
-      "subject": "gravity_core>monitoring:gravity-mvp/src/lib/IntegrityChecker.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_473b096bdd5f2bac3459424a",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 157,
-      "ordinal": 2,
-      "owner_context": "platform_shell",
-      "target_context": "operations_observability",
-      "subject": "gravity_core>monitoring:gravity-mvp/src/lib/IntegrityChecker.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_e1c844353b8d2e3c8108205a",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 227,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "operations_observability",
-      "subject": "gravity_core>monitoring:gravity-mvp/src/lib/RetentionCleanup.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_e11d455ae38ef930ea2e42c2",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 227,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "operations_observability",
-      "subject": "gravity_core>monitoring:gravity-mvp/src/lib/RetentionCleanup.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_9c0973d2258be759e1d5afc0",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 237,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "operations_observability",
-      "subject": "gravity_core>monitoring:gravity-mvp/src/lib/stability-check.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_f5cf809bde662fbb6e32b703",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 246,
-      "ordinal": 2,
-      "owner_context": "platform_shell",
-      "target_context": "operations_observability",
-      "subject": "gravity_core>monitoring:gravity-mvp/src/lib/stability-check.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>operations_observability/monitoring"
       ]
     },
     {

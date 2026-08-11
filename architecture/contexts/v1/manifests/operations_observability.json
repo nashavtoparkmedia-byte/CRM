@@ -167,7 +167,8 @@
   "public_surface": [
     "HealthSnapshot.v1",
     "IntegrityReport.v1",
-    "OperationalAlert.v1"
+    "OperationalAlert.v1",
+    "ScheduledMaintenanceOperations.v1"
   ],
   "responsibility": "Health, integrity, retention, stability, execution locks and operational telemetry.",
   "schema": "yoko.crm.module-manifest.v1",
