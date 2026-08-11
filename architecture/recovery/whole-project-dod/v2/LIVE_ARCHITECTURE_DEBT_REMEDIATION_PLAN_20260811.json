@@ -3,10 +3,10 @@
   "status": "OPEN_LIVE_DEBT_BURN_DOWN",
   "source": "LIVE_ARCHITECTURE_DEBT_RECOMPUTE_20260811.json",
   "opening_finding_count": 1288,
-  "current_finding_count": 1280,
-  "exception_covered_live_debt": 1280,
+  "current_finding_count": 1113,
+  "exception_covered_live_debt": 1113,
   "open_finding_count": 0,
-  "actually_closed_since_opening_baseline": 8,
+  "actually_closed_since_opening_baseline": 175,
   "confirmed_direct_foreign_prisma_writes": 0,
   "items": [
     {
@@ -35,6 +35,15 @@
       "target_contexts": ["messaging", "work_management"],
       "approved_path": "owner-controlled transactional composition capability with exact operations; do not copy foreign writers into Contacts",
       "status": "CLOSED_EXACT_OWNER_TRANSACTION_COMPOSITION"
+    },
+    {
+      "surface": "WhatsApp and Yandex Fleet provider runtime consumers",
+      "finding_count": 40,
+      "intent": "Keep provider clients, browser pages, transport Store objects and scheduled sync options inside their owning contexts.",
+      "owner_contexts": ["whatsapp_channel", "fleet_operations"],
+      "target_contexts": ["platform_shell", "messaging", "operations_observability", "configuration"],
+      "approved_path": "exact owner-controlled runtime, diagnostic, history, reachability and scheduled-sync capabilities; shared composition exposes projections only",
+      "status": "CLOSED_PROVIDER_TRANSPORT_BOUNDARY"
     }
   ],
   "prohibited_shortcuts": [
@@ -44,10 +53,10 @@
     "arbitrary Prisma access from an approved adapter"
   ],
   "next_cluster": {
-    "name": "PROVIDER_TRANSPORT_BOUNDARY",
-    "finding_count": 38,
+    "name": "SHARED_TECHNICAL_UI_EXTRACTION",
+    "finding_count": 255,
     "classification": "EXCEPTION_COVERED_TEMPORARY_LEGACY_DEBT",
-    "acceptance": "Replace direct provider transport access with exact owner-controlled capabilities and retire matching exceptions."
+    "acceptance": "Move the actual PageContainer, Button and PageShell implementations into shared technical infrastructure, keep only compatibility shims at legacy paths, migrate exact consumers, and retire matching exceptions without creating a public barrel or new domain dependency."
   },
-  "acceptance": "The seven uncovered findings are closed without new exceptions. The project remains NOT READY while 1,280 exception-covered live findings remain."
+  "acceptance": "Uncovered findings and provider transport accesses are zero without new exceptions. The project remains NOT READY while 1,113 temporary exception-covered live findings remain."
 }

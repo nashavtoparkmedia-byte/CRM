@@ -4,6 +4,8 @@ Captured: `2026-08-11T13:30:00Z`
 
 This is the authoritative continuation checkpoint for the current task. It is a handoff, not an acceptance artifact. The whole-project state remains `EXTERNAL_FINAL_ACCEPTANCE_FAILED`; the current program remains `WHOLE-PROJECT DOD RECOVERY`; the project is **not READY**.
 
+Latest live-debt checkpoint (`bc7430c2`): strict architecture enforcement scans 1,122 files across 16 contexts with 1,113 findings, all 1,113 still temporary exception-covered debt, zero uncovered findings, zero stale exceptions, and zero detector/digest errors. The rule counts are 342 internal imports, 477 non-public cross-context imports, 294 undeclared dependencies, zero provider-transport accesses, and zero direct foreign Prisma writes. Exactly 175 findings have been actually closed since the 1,288-finding opening denominator. The next bounded cluster is the 255-finding shared technical UI extraction for PageContainer, Button, and PageShell; no whole-repository write scan is warranted.
+
 The machine-readable companion, `CURRENT_RECOVERY_HANDOFF.json`, contains the exhaustive every-path status/purpose inventory, exact commands/results, identities, worktree records, and next action. Read both files before changing code.
 
 ## Bounded analyzer and current baseline update
@@ -260,8 +262,8 @@ This task made zero production source mutations, database mutations, service res
 
 ## Exact next action
 
-Credential boundary classification, provider capability routing, and public serialization remediation are internally closed for this batch. The current credential inventory is `403` accesses with `81` statically ambiguous records fully classified, `0` material unresolved, `0` confirmed public exposure, and `0` cross-domain capability gaps. Continue automatically with `LIVE ARCHITECTURE DEBT` remediation; preserve Messages and AI Calls behavior and do not repeat the whole-repository write scan.
+Credential boundary classification, provider capability routing, and public serialization remediation are internally closed for this batch. The current credential inventory is `403` accesses with `81` statically ambiguous records fully classified, `0` material unresolved, `0` confirmed public exposure, and `0` cross-domain capability gaps. Continue automatically with the 255-finding `SHARED TECHNICAL UI EXTRACTION` cluster; preserve Messages and AI Calls behavior and do not repeat the whole-repository write scan.
 
 ### Live architecture debt recompute
 
-The bounded recompute scanned 1,092 files across 16 contexts. After the owner-local scenario-field-settings closure and removal of the unused historical `chatEventLog` capability, current live debt is: 374 internal imports, 530 non-public cross-context imports, 346 undeclared dependencies, 38 provider-transport accesses, 0 direct foreign Prisma writes, 7 uncovered findings, and 0 stale exceptions (1,288 findings / 1,281 exception-covered). Detector parse health and finding-digest health are both clean; the remaining seven findings are active dependency architecture debt. Evidence is in `LIVE_ARCHITECTURE_DEBT_RECOMPUTE_20260811.json` and `LIVE_ARCHITECTURE_DEBT_SUMMARY_20260811.json`.
+The bounded recompute scanned 1,122 files across 16 contexts. Current live debt is: 342 internal imports, 477 non-public cross-context imports, 294 undeclared dependencies, 0 provider-transport accesses, 0 direct foreign Prisma writes, 0 uncovered findings, and 0 stale exceptions (1,113 findings / 1,113 exception-covered). Detector parse and finding-digest health are clean. This is `NOT_READY_LIVE_DEBT_REMAINS`; evidence is in `LIVE_ARCHITECTURE_DEBT_RECOMPUTE_20260811.json` and `LIVE_ARCHITECTURE_DEBT_SUMMARY_20260811.json`.
