@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getYandexConnectionCredentialsV1, listYandexConnectionCredentialsV1, listYandexConnectionMetadataV1 } from '@/modules/fleet-operations/public/v1/yandex-connection-capability'
 import { PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, RECORD_PENDING_BOT_LINK_REQUEST_COMMAND_V1, UPSERT_DRIVER_TELEGRAM_LINK_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
 import { patchDriverTelegramLinkV1, recordPendingBotLinkRequestV1, upsertDriverTelegramLinkV1 } from '@/modules/telegram-channel/public/v1'
 import {
@@ -113,8 +114,8 @@ async function handleCheckLink(payload: any) {
 
         // Use driver's activeParkId if available — otherwise fall back to any connection
         const connection = mapping.activeParkId
-            ? await prisma.apiConnection.findFirst({ where: { parkId: mapping.activeParkId } })
-            : await prisma.apiConnection.findFirst({ orderBy: { createdAt: 'asc' } })
+            ? await getYandexConnectionCredentialsV1(undefined, mapping.activeParkId)
+            : await getYandexConnectionCredentialsV1()
         if (connection) {
             const headers: Record<string, string> = {
                 'X-Client-ID': connection.clid,
@@ -261,7 +262,7 @@ async function handleSyncUser(payload: any) {
     console.log(`[Webhook] sync_user: TG ${telegramId}, Phone ${phone}`)
 
     // 1. Try to auto-link by phone via Yandex API — search ALL parks
-    const connections = await prisma.apiConnection.findMany({ orderBy: { createdAt: 'asc' } })
+    const connections = await listYandexConnectionCredentialsV1()
     const normalizedPhone = phone.replace(/[\s+\-()]/g, '')
 
     for (const connection of connections) {
@@ -401,8 +402,8 @@ async function handleChangeLimit(payload: any) {
 
     // 2. Use the driver's active park connection
     const connection = mapping.activeParkId
-        ? await prisma.apiConnection.findFirst({ where: { parkId: mapping.activeParkId } })
-        : await prisma.apiConnection.findFirst({ orderBy: { createdAt: 'asc' } })
+        ? await getYandexConnectionCredentialsV1(undefined, mapping.activeParkId)
+        : await getYandexConnectionCredentialsV1()
 
     if (!connection) {
         return NextResponse.json({ error: 'No active Yandex API connection in CRM' }, { status: 500 })
@@ -524,10 +525,10 @@ async function handleSearchCarByPlate(payload: any) {
     if (telegramId) {
         const mapping = await prisma.driverTelegram.findFirst({ where: { telegramId: BigInt(telegramId) } })
         if (mapping?.activeParkId) {
-            connection = await prisma.apiConnection.findFirst({ where: { parkId: mapping.activeParkId } })
+            connection = await getYandexConnectionCredentialsV1(undefined, mapping.activeParkId)
         }
     }
-    if (!connection) connection = await prisma.apiConnection.findFirst({ orderBy: { createdAt: 'asc' } })
+    if (!connection) connection = await getYandexConnectionCredentialsV1()
     if (!connection) return NextResponse.json({ error: 'No Yandex connection' }, { status: 503 })
 
     const prefix = platePrefix.toUpperCase().replace(/\s/g, '')
@@ -585,8 +586,8 @@ async function handleUpdateDriverCar(payload: any) {
     if (!mapping?.driverId) return NextResponse.json({ error: 'NOT_LINKED' }, { status: 404 })
 
     const connection = mapping.activeParkId
-        ? await prisma.apiConnection.findFirst({ where: { parkId: mapping.activeParkId } })
-        : await prisma.apiConnection.findFirst({ orderBy: { createdAt: 'asc' } })
+        ? await getYandexConnectionCredentialsV1(undefined, mapping.activeParkId)
+        : await getYandexConnectionCredentialsV1()
     if (!connection) return NextResponse.json({ error: 'No Yandex connection' }, { status: 503 })
 
     const headers: Record<string, string> = {
@@ -685,8 +686,8 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
     let effectiveYandexId = driver.yandexDriverId!
     try {
         const conn = mapping.activeParkId
-            ? await prisma.apiConnection.findFirst({ where: { parkId: mapping.activeParkId } })
-            : await prisma.apiConnection.findFirst({ orderBy: { createdAt: 'asc' } })
+            ? await getYandexConnectionCredentialsV1(undefined, mapping.activeParkId)
+            : await getYandexConnectionCredentialsV1()
         if (conn && driver.fullName) {
             const checkRes = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list', {
                 method: 'POST',
@@ -775,10 +776,7 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
 }
 
 async function handleListParks() {
-    const parks = await prisma.apiConnection.findMany({
-        select: { parkId: true, name: true },
-        orderBy: { createdAt: 'asc' }
-    })
+    const parks = await listYandexConnectionMetadataV1()
     return NextResponse.json({
         parks: parks.map(p => ({ parkId: p.parkId, name: p.name || p.parkId }))
     })
@@ -791,7 +789,7 @@ async function handleSetActivePark(payload: any) {
     const mapping = await prisma.driverTelegram.findFirst({ where: { telegramId: BigInt(telegramId) } })
     if (!mapping) return NextResponse.json({ error: 'NOT_LINKED' }, { status: 404 })
 
-    const park = await prisma.apiConnection.findFirst({ where: { parkId } })
+    const park = await getYandexConnectionCredentialsV1(undefined, parkId)
     if (!park) return NextResponse.json({ error: 'PARK_NOT_FOUND' }, { status: 404 })
 
     // Verify driver exists in this park via Yandex Fleet
@@ -846,7 +844,7 @@ async function handleGetParkInfo(payload: any) {
     if (!mapping) return NextResponse.json({ linked: false })
     let parkName: string | null = null
     if (mapping.activeParkId) {
-        const park = await prisma.apiConnection.findFirst({ where: { parkId: mapping.activeParkId } })
+        const park = await getYandexConnectionCredentialsV1(undefined, mapping.activeParkId)
         parkName = park?.name || mapping.activeParkId
     }
     return NextResponse.json({ linked: true, activeParkId: mapping.activeParkId || null, parkName })
