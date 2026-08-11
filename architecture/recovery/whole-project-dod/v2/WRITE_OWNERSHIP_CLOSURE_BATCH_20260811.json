@@ -1,12 +1,12 @@
 {
   "schema": "yoko.crm.write-ownership-closure-batch.v2",
-  "generated_at": "2026-08-11T12:00:05.951Z",
+  "generated_at": "2026-08-11T12:02:30.277Z",
   "authority": "Derived evidence ledger; unresolved records remain blocked/ambiguous and are not PASS.",
   "baseline": {
     "analysis_sha256": "74c3c39ef308e01bcd2ce22ecc29f4c86974241145f812ba2ba1a80070fda2ca",
     "baseline_sha256": "d2e82bd724a5a9d6a316f0774473d5c5d276b1ff3840b3a1ebe0717dd6294598",
     "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T143000Z.json",
-    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_FLEET_TG.json"
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_READONLY_RECLASS.json"
   },
   "metrics": {
     "confirmed_writes_discovered": 1410,
@@ -16,16 +16,16 @@
     "confirmed_write_owner_resolved": 11,
     "confirmed_write_owner_unresolved": 26,
     "dynamic_delegate_unresolved": 6,
-    "dynamic_sql_unresolved": 32,
+    "dynamic_sql_unresolved": 9,
     "query_raw_side_effect_unresolved": 1,
-    "confirmed_non_writes": 4,
+    "confirmed_non_writes": 27,
     "active_operational_surfaces_unclassified": 0,
     "temporary_exceptions": 0,
     "intentional_exceptions": 0,
     "raw_baseline_ambiguous_records": 80,
     "owner_valid_writes": 7,
-    "resolved_non_writes": 4,
-    "material_unresolved_write_risk": 65,
+    "resolved_non_writes": 27,
+    "material_unresolved_write_risk": 42,
     "controlled_migration_writes": 4
   },
   "foreign_write_closure": {
@@ -168,7 +168,7 @@
     "post_rescan_foreign": 0,
     "ambiguity_reduction": 4
   },
-  "next_action": "Resolve remaining 26 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
+  "next_action": "Resolve remaining 26 ownership-blocked, 6 delegate, 9 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
   "new_backfill_capability_batch": {
     "files": [
       "gravity-mvp/scripts/backfill_source_connection_pr7.js",
@@ -414,5 +414,12 @@
     "writes_routed": 3,
     "post_rescan_foreign": 0,
     "ambiguity_reduction": 3
+  },
+  "readonly_sql_reclassification": {
+    "artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_RECONCILIATION_READONLY_RECLASS.json",
+    "sha256": "7263e713cddd986df05fce41aa94e86c8a525135d8c2d6f24316a167888a61dd",
+    "records_resolved": 23,
+    "dynamic_sql_remaining": 9,
+    "evidence": "Explicit SELECT-only templates with bound parameters/fragments; mutation-capable dynamic SQL remains unresolved."
   }
 }

@@ -21,6 +21,13 @@ const focusedOwnershipDecisions = new Map([
   ['94c8e6d4c7d0f3203debaf993aaa75f5127d6629d76b607f94f380494c170fd5', 'CONTROLLED_MIGRATION'],
 ])
 
+const confirmedReadOnlyDecisions = new Set([
+  '36c9b52b2b9c7b0d7ec8bec4120e6772b5421558fb0f591ed1ef2f9306aadce7', 'bd5f029e6d7e1ae7767d85e524d2a69134bd87aef53352ebeb7caf364aa54825', '3331c0d6e52e665c9f373dfa9a50f8b351bfffe7678db5d300bf2c01c46996bc', '037b459fcefcde89d3f50f66e7cb3d69cf7788f5451ec7ebe9cee41e94291b91', 'd7b60d9168005c4268cd46df849f684067e5994e79744e430f76ccc5b14f08bb', 'dd15e3ca3b8b8470797072b94d9ee74c5a0d4f66aba7c7104f566faa790e6590',
+  '8004a8dc8d8d1183024debb2be7bf79572b663ab596b6497a2e8058cb51b46fa', 'b2c3ae6fc6828d9d51e85f6f01d3dff86df72a5ced9f863516a2d0276c1c61e3', 'e8319859102636b4b4915c12f4c1dccaac2f97309e2fe5853109ef441b95bae6', '69ae5095adc3a7847274305f5f6a963d449606b60094335bb37a22a0423b4f9c', '5cff329cbbb30ad80f4a934dadf91c774bdf4c1c77907e08527b8159762e554a', '3ee3e1ff772ceba991f2e501083d76c3fad96f5b0fc9831a0f47c1a827f37df8', '0c81e542c6ee55171cb049c0570617f3fa9ea12402305bfe8014d2c953c51caa',
+  'e1c81095a11532a1ba56e2629b9316a15d42ad5062aa52dfa190283adb26f5e1', '040c0d8f2319e57f6b22e2e2dbc3065fe5fbf10ad306e15ff687cf87f3604057', 'ea322bd576b8b6ee4240ed4611e602b63d1cdcb2befa71a84a886a55afb4ac4f', '3f0f0682204964ed2be82d5effe35517b5e8eaa97f73dbc4344cbc63d361907f', '31e7ff73ab8a69a2a5f72de16d08e899a46e9cc48004c42e034335d5e622637c', '6c84c5974dc29a3cd814144d007c6669c061d6217ca8837671847aaf97206891',
+  '6fe3c1e8c14600a70e17a2782784bf9dbe45318c0ca596bc87d4ebcd3a1837c4', '490105b516a84ebfd5c94ad7544581e9628ae1f95dffee0c0940ba8b0bfa9dad', 'b00356e49038391b1ecb1efbefd7c929b2e1e15f2cc6580a32df27a68f04c982', 'b340d44a632b98bc4560d64af31050bbc6c2c4d2c086bd2e88ad2afefe3baf42',
+])
+
 function classify(site) {
   const reasons = new Set(site.ambiguity_reasons ?? [])
   if (
@@ -76,7 +83,9 @@ const records = source.write_sites
   .filter(site => site.classification === 'AMBIGUOUS')
   .map(site => {
     const focusedDecision = focusedOwnershipDecisions.get(site.site_signature) ?? null
-    const result = focusedDecision === 'OWNER_VALID' || focusedDecision === 'FOREIGN' || focusedDecision === 'CONTROLLED_MIGRATION'
+    const result = confirmedReadOnlyDecisions.has(site.site_signature)
+      ? { disposition: 'CONFIRMED_NON_WRITE', rationale: 'Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.' }
+      : focusedDecision === 'OWNER_VALID' || focusedDecision === 'FOREIGN' || focusedDecision === 'CONTROLLED_MIGRATION'
       ? { disposition: 'CONFIRMED_WRITE_OWNER_RESOLVED', rationale: 'Focused architecture/source review resolved writer and target ownership against current decisions.' }
       : focusedDecision === 'OWNERSHIP_MANIFEST_GAP_REVIEW'
         ? { disposition: 'CONFIRMED_WRITE_OWNER_UNRESOLVED', rationale: 'Focused review confirmed a real schema-scoped ownership gap; no manifest change is assumed.' }
