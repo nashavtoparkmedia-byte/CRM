@@ -18,7 +18,7 @@
     {
       "context": "calling",
       "path": "architecture/contexts/v1/manifests/calling.json",
-      "sha256": "ef0f518a47daf3413799f0338a59cded406b0f6cb35eaa60fe1915a5216d86ca"
+      "sha256": "2e12875d8b69ab39aebc153412951ae8f44b61b3e71a371d4567a9635153529e"
     },
     {
       "context": "configuration",

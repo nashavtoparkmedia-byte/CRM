@@ -28,8 +28,8 @@ export async function getOpenAI(): Promise<ReturnType<typeof createOpenAIClientV
         // Dynamic import: provider-settings pulls in prisma, AES helpers,
         // and a 30s in-memory cache. Lazy-loading keeps cold-start cost
         // off CRM boot when nothing needs OpenAI yet.
-        const { getValue } = await import('@/lib/ai-call/provider-settings')
-        apiKey = (await getValue('openai', 'apiKey')) ?? undefined
+        const { getOpenAiRuntimeProviderCredentialV1 } = await import('@/modules/calling/public/v1/ai-call-provider-settings')
+        apiKey = (await getOpenAiRuntimeProviderCredentialV1()) ?? undefined
     }
     if (!apiKey) {
         throw new Error('OPENAI_API_KEY is not set (env or AiProviderSetting/openai/apiKey)')

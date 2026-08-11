@@ -3,7 +3,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUserIdentityV1 as getCurrentUser } from '@/modules/identity-access/public/v1/user-directory'
 import { getAiCallKeysStatus } from '@/lib/ai-call/keys-status'
-import { saveValue, deleteValue, type Provider, type Key } from '@/lib/ai-call/provider-settings'
+import {
+    deleteAiCallProviderSettingV1,
+    saveAiCallProviderSettingV1,
+    type AiCallProvider as Provider,
+    type AiCallProviderSettingKey as Key,
+} from '@/modules/calling/public/v1/ai-call-provider-settings'
 
 export const dynamic = 'force-dynamic'
 
@@ -80,7 +85,7 @@ export async function POST(req: NextRequest) {
     // Secret iff it's an apiKey. folderId is public, mockMode is a boolean
     // string — neither needs encryption.
     const isSecret = key === 'apiKey'
-    await saveValue(provider, key, value, { secret: isSecret })
+    await saveAiCallProviderSettingV1(provider, key, value, { secret: isSecret })
     return NextResponse.json({ ok: true })
 }
 
@@ -106,7 +111,7 @@ export async function DELETE(req: NextRequest) {
         return NextResponse.json({ error: 'invalid_provider_key_pair' }, { status: 400 })
     }
 
-    await deleteValue(provider, key)
+    await deleteAiCallProviderSettingV1(provider, key)
     return NextResponse.json({ ok: true })
 }
 
