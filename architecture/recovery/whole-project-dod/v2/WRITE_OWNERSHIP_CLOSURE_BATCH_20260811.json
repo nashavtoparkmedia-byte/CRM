@@ -1,20 +1,20 @@
 {
   "schema": "yoko.crm.write-ownership-closure-batch.v2",
-  "generated_at": "2026-08-11T08:08:31.997Z",
+  "generated_at": "2026-08-11T08:17:09.087Z",
   "authority": "Derived evidence ledger; unresolved records remain blocked/ambiguous and are not PASS.",
   "baseline": {
-    "analysis_sha256": "af1f429ee1f565f5e49dfe71fd30a65e8a49089fea5f47e134a474fa933fd7f3",
-    "baseline_sha256": "46feafaaaaa4119799ef73a335cd7fc02088e07b9e84e390e3091ad875d0bf23",
-    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T080802Z.json",
-    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_PARK_TIMESTAMP.json"
+    "analysis_sha256": "b28ead84d55846ff2d689b2317a9c9d0e29c4415b3bd7807f8393e018d2d3531",
+    "baseline_sha256": "5f6a1b60e8d6759bd4f66fcf0c225f4dc9a13bb6aaaf7f0e480a893a63747a1c",
+    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T081640Z.json",
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_CALL_STATUS.json"
   },
   "metrics": {
     "confirmed_writes_discovered": 1421,
     "confirmed_foreign": 0,
     "closed_foreign": 52,
-    "ambiguous_remaining": 165,
+    "ambiguous_remaining": 163,
     "confirmed_write_owner_resolved": 7,
-    "confirmed_write_owner_unresolved": 115,
+    "confirmed_write_owner_unresolved": 113,
     "dynamic_delegate_unresolved": 6,
     "dynamic_sql_unresolved": 32,
     "query_raw_side_effect_unresolved": 1,
@@ -163,7 +163,7 @@
     "post_rescan_foreign": 0,
     "ambiguity_reduction": 4
   },
-  "next_action": "Resolve the remaining 115 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
+  "next_action": "Resolve the remaining 113 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
   "new_backfill_capability_batch": {
     "files": [
       "gravity-mvp/scripts/backfill_source_connection_pr7.js",
@@ -216,5 +216,15 @@
     "writes_routed": 4,
     "post_rescan_foreign": 0,
     "ambiguity_reduction": 4
+  },
+  "new_call_status_batch": {
+    "files": [
+      "gravity-mvp/scripts/backfill-call-statuses.js",
+      "gravity-mvp/src/modules/calling/public/v1/legacy-prisma-call-status-maintenance-adapter.js",
+      "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-call-message-maintenance-adapter.js"
+    ],
+    "writes_routed": 2,
+    "post_rescan_foreign": 0,
+    "ambiguity_reduction": 2
   }
 }

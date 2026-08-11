@@ -1,6 +1,6 @@
 {
   "schema": "yoko.crm.current-recovery-handoff.v1",
-  "generated_at": "2026-08-11T08:08:55.114Z",
+  "generated_at": "2026-08-11T08:17:32.492Z",
   "authority": "Continuation checkpoint; supersedes conversational status claims but does not supersede durable gap ledger or external NOT READY verdict.",
   "program_state": {
     "whole_project_state": "EXTERNAL_FINAL_ACCEPTANCE_FAILED",
@@ -611,13 +611,13 @@
     "ownership_gap_review": "architecture/recovery/whole-project-dod/v2/OWNERSHIP_GAP_FOCUSED_REVIEW.json",
     "current_4ec_outputs": "Historical 4ec outputs remain absent. They are superseded by the bounded current 3ab9ad96 baseline below.",
     "current_authoritative_write_baseline": {
-      "record": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T080802Z.json",
+      "record": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T081640Z.json",
       "baseline": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json",
-      "baseline_sha256": "46feafaaaaa4119799ef73a335cd7fc02088e07b9e84e390e3091ad875d0bf23",
+      "baseline_sha256": "5f6a1b60e8d6759bd4f66fcf0c225f4dc9a13bb6aaaf7f0e480a893a63747a1c",
       "progress": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_PROGRESS.jsonl",
-      "progress_sha256": "80e43f8ca2fc3661dd444e3b96bd3e31b9d394a82490c2fa66230614920e7e88",
-      "analysis_sha256": "af1f429ee1f565f5e49dfe71fd30a65e8a49089fea5f47e134a474fa933fd7f3",
-      "result": "1707/1707 surfaces; 0 failures/timeouts; 0 FOREIGN; 165 AMBIGUOUS; 0 unreviewed operational surfaces",
+      "progress_sha256": "3c24e3d5e486dddce5094ccd04e6dbdfc8e749adbef687ecff54029c6bb93938",
+      "analysis_sha256": "b28ead84d55846ff2d689b2317a9c9d0e29c4415b3bd7807f8393e018d2d3531",
+      "result": "1709/1709 surfaces; 0 failures/timeouts; 0 FOREIGN; 163 AMBIGUOUS; 0 unreviewed operational surfaces",
       "classification": "CURRENT_BASELINE_NOT_ACCEPTANCE"
     },
     "durably_preserved": [

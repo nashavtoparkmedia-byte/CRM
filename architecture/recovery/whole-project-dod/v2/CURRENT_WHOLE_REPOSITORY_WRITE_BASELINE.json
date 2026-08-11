@@ -1,12 +1,12 @@
 {
-  "analysis_sha256": "af1f429ee1f565f5e49dfe71fd30a65e8a49089fea5f47e134a474fa933fd7f3",
+  "analysis_sha256": "b28ead84d55846ff2d689b2317a9c9d0e29c4415b3bd7807f8393e018d2d3531",
   "execution": {
-    "ambiguous_candidates": 165,
+    "ambiguous_candidates": 163,
     "complete": true,
-    "elapsed_ms": 376831.975076,
+    "elapsed_ms": 379814.436392,
     "failures": [],
-    "files_completed": 1707,
-    "files_discovered": 1707,
+    "files_completed": 1709,
+    "files_discovered": 1709,
     "mode": "fresh_process_per_javascript_surface",
     "progress_every": 150,
     "worker_failures": 0,
@@ -47,7 +47,7 @@
         ".bat": 4,
         ".cjs": 3,
         ".dockerfile": 7,
-        ".js": 400,
+        ".js": 402,
         ".mjs": 172,
         ".package-json": 7,
         ".prisma": 4,
@@ -60,7 +60,7 @@
         ".yml": 6
       },
       "by_lifecycle": {
-        "APPLICATION_RUNTIME": 993,
+        "APPLICATION_RUNTIME": 995,
         "DEAD_HISTORICAL": 35,
         "FIXTURE": 1,
         "MIGRATION": 61,
@@ -72,7 +72,7 @@
         "DEAD_HISTORICAL": 35,
         "MIGRATION_ONLY": 61
       },
-      "tracked_executable_surfaces": 1707,
+      "tracked_executable_surfaces": 1709,
       "unreviewed_operational_surfaces": 0
     },
     "surfaces": [
@@ -12983,6 +12983,18 @@
         "lifecycle": "APPLICATION_RUNTIME",
         "migration_target": null,
         "owner_context": null,
+        "path": "gravity-mvp/src/modules/calling/public/v1/legacy-prisma-call-status-maintenance-adapter.js",
+        "production_capability": "POSSIBLE",
+        "rationale": null,
+        "registry_classified": false
+      },
+      {
+        "disposition": null,
+        "extension": ".js",
+        "functional_owner": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "migration_target": null,
+        "owner_context": null,
         "path": "gravity-mvp/src/modules/calling/public/v1/legacy-prisma-seed-ai-profiles-adapter.js",
         "production_capability": "POSSIBLE",
         "rationale": null,
@@ -14076,6 +14088,18 @@
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-attach-message-media-adapter.ts",
+        "production_capability": "POSSIBLE",
+        "rationale": null,
+        "registry_classified": false
+      },
+      {
+        "disposition": null,
+        "extension": ".js",
+        "functional_owner": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "migration_target": null,
+        "owner_context": null,
+        "path": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-call-message-maintenance-adapter.js",
         "production_capability": "POSSIBLE",
         "rationale": null,
         "registry_classified": false
@@ -20565,26 +20589,26 @@
   "parse_findings": [],
   "schema": "yoko.crm.whole-repository-write-analysis.v2",
   "source": {
-    "git_commit": "d89909ef5583d3d592f30b20780a8a7663fdecf2",
+    "git_commit": "4136d4ff3cf2a164aaacce0738220e71003f8115",
     "git_tracked_only": true,
-    "git_tree": "8408c4e41b8de121899666c12991027e8149517f",
+    "git_tree": "fc1cbd0fe1df15c80d07a3e657e2026f1f33b297",
     "inventory_schema": "yoko.crm.tracked-executable-surface-inventory.v2",
     "repository_root": ".",
     "tracked_worktree_clean": true,
     "tracked_worktree_status_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
   },
   "summary": {
-    "ambiguous_writes": 165,
+    "ambiguous_writes": 163,
     "discovered_write_sites": 1421,
     "foreign_writes": 0,
     "historical_dead_writes": 18,
     "migration_only_writes": 500,
-    "operational_script_writes": 126,
-    "owner_writes": 509,
+    "operational_script_writes": 124,
+    "owner_writes": 511,
     "parse_findings": 0,
     "raw_sql_writes": 814,
     "test_writes": 229,
-    "tracked_executable_surfaces": 1707,
+    "tracked_executable_surfaces": 1709,
     "unreviewed_operational_surfaces": 0
   },
   "write_sites": [
@@ -38715,105 +38739,6 @@
       "write_projection_dynamic": false,
       "written_fields": [
         "displayName"
-      ]
-    },
-    {
-      "ambiguity_reasons": [],
-      "ambiguous": false,
-      "candidate_models": [
-        "call"
-      ],
-      "classification": "AMBIGUOUS",
-      "column": 19,
-      "confidence": "HIGH",
-      "end": 3751,
-      "file": "gravity-mvp/scripts/backfill-call-statuses.js",
-      "index": 3637,
-      "kind": "model",
-      "line": 89,
-      "method": "update",
-      "model": "call",
-      "nested_operations": [],
-      "owner_contexts": [
-        "calling"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "return_projection": {
-        "dynamic": false,
-        "mode": "FULL_ROW",
-        "nested_relations": [],
-        "omitted_fields": [],
-        "selected_fields": []
-      },
-      "scope": "Function:main",
-      "site_signature": "53eb2974da1f23433ae0b58b600d43c620a08a0a4af7c7c9a5d219e87139475a",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": false,
-      "written_fields": [
-        "status"
-      ]
-    },
-    {
-      "ambiguity_reasons": [],
-      "ambiguous": false,
-      "candidate_models": [
-        "message"
-      ],
-      "classification": "AMBIGUOUS",
-      "column": 19,
-      "confidence": "HIGH",
-      "end": 5248,
-      "file": "gravity-mvp/scripts/backfill-call-statuses.js",
-      "index": 5107,
-      "kind": "model",
-      "line": 126,
-      "method": "update",
-      "model": "message",
-      "nested_operations": [],
-      "owner_contexts": [
-        "messaging"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "return_projection": {
-        "dynamic": false,
-        "mode": "FULL_ROW",
-        "nested_relations": [],
-        "omitted_fields": [],
-        "selected_fields": []
-      },
-      "scope": "Function:main",
-      "site_signature": "c1e89b7a9b2bbee1d19f3bbbcd0ce67826fd62d50c8f76ed5a380e04a67bd72d",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": false,
-      "written_fields": [
-        "content",
-        "metadata"
       ]
     },
     {
@@ -76469,6 +76394,55 @@
       ]
     },
     {
+      "ambiguity_reasons": [],
+      "ambiguous": false,
+      "candidate_models": [
+        "call"
+      ],
+      "classification": "OWNER",
+      "column": 22,
+      "confidence": "HIGH",
+      "end": 568,
+      "file": "gravity-mvp/src/modules/calling/public/v1/legacy-prisma-call-status-maintenance-adapter.js",
+      "index": 513,
+      "kind": "model",
+      "line": 13,
+      "method": "update",
+      "model": "call",
+      "nested_operations": [],
+      "owner_contexts": [
+        "calling"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "return_projection": {
+        "dynamic": false,
+        "mode": "FULL_ROW",
+        "nested_relations": [],
+        "omitted_fields": [],
+        "selected_fields": []
+      },
+      "scope": "Function:updateCallStatusV1",
+      "site_signature": "45ff8a37ea9accf8dc7686e75ed11dc194250cdeb7467328e2692467460bafba",
+      "source_context": "calling",
+      "source_identity": "bounded_module_path",
+      "source_technical_module": "calling.module",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "transaction": {
+        "contained": false,
+        "origin": null
+      },
+      "unresolved_targets": [],
+      "write_projection_dynamic": false,
+      "written_fields": [
+        "status"
+      ]
+    },
+    {
       "ambiguity_reasons": [
         "dynamic_payload_may_contain_nested_write"
       ],
@@ -78812,6 +78786,56 @@
         "mimeType",
         "type",
         "url"
+      ]
+    },
+    {
+      "ambiguity_reasons": [],
+      "ambiguous": false,
+      "candidate_models": [
+        "message"
+      ],
+      "classification": "OWNER",
+      "column": 22,
+      "confidence": "HIGH",
+      "end": 790,
+      "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-call-message-maintenance-adapter.js",
+      "index": 721,
+      "kind": "model",
+      "line": 16,
+      "method": "update",
+      "model": "message",
+      "nested_operations": [],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "return_projection": {
+        "dynamic": false,
+        "mode": "FULL_ROW",
+        "nested_relations": [],
+        "omitted_fields": [],
+        "selected_fields": []
+      },
+      "scope": "Function:updateCallMessageV1",
+      "site_signature": "2cccb84161cb741beeabeaab5ad88eb322d7f5abbdf97b031895bd9d4d9d9dd6",
+      "source_context": "messaging",
+      "source_identity": "bounded_module_path",
+      "source_technical_module": "messaging.module",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "transaction": {
+        "contained": false,
+        "origin": null
+      },
+      "unresolved_targets": [],
+      "write_projection_dynamic": false,
+      "written_fields": [
+        "content",
+        "metadata"
       ]
     },
     {
