@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "65bf9a6d057fbbd5431b1ffb8989f8d9d26be88281db49565438017e0db07db2",
+  "finding_digest": "922c80795a7ae0b5ddd988d6ee10c0ac22e149a37d025b0f496f0fad98cbb315",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,7 +13,7 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_provider_transport_access": 34,
+    "direct_provider_transport_access": 29,
     "internal_module_import": 374,
     "non_public_cross_context_import": 513,
     "undeclared_dependency": 320
@@ -19751,22 +19751,6 @@
       ]
     },
     {
-      "fingerprint": "arch_4bf7e066b9f396c70d9f9041",
-      "rule": "direct_provider_transport_access",
-      "file": "gravity-mvp/src/lib/openaiClient.ts",
-      "line_at_baseline": 19,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": null,
-      "subject": "openai:openai",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "provider-boundary:openai"
-      ]
-    },
-    {
       "fingerprint": "arch_18cc0b084f83ce7391b5465b",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/lib/openaiClient.ts",
@@ -20834,70 +20818,6 @@
       "migration_references": [
         "dependency:platform_shell/gravity_core>work_management/tasks",
         "dependency:platform_shell/gravity_ui>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_49feedcca2c05c83ce930919",
-      "rule": "direct_provider_transport_access",
-      "file": "yandex-fleet-scraper/src/api.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": null,
-      "subject": "bullmq:bullmq",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "provider-boundary:bullmq"
-      ]
-    },
-    {
-      "fingerprint": "arch_e46b6bdf152b6bb3edb9eb54",
-      "rule": "direct_provider_transport_access",
-      "file": "yandex-fleet-scraper/src/api.ts",
-      "line_at_baseline": 6,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": null,
-      "subject": "bullmq:ioredis",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "provider-boundary:bullmq"
-      ]
-    },
-    {
-      "fingerprint": "arch_9a27b83d950b22802011e9fe",
-      "rule": "direct_provider_transport_access",
-      "file": "yandex-fleet-scraper/src/worker.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": null,
-      "subject": "bullmq:bullmq",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "provider-boundary:bullmq"
-      ]
-    },
-    {
-      "fingerprint": "arch_5157706a52f2f4336fbf8647",
-      "rule": "direct_provider_transport_access",
-      "file": "yandex-fleet-scraper/src/worker.ts",
-      "line_at_baseline": 8,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": null,
-      "subject": "bullmq:ioredis",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "provider-boundary:bullmq"
       ]
     }
   ]

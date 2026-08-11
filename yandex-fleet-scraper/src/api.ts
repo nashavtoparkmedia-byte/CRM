@@ -1,11 +1,10 @@
 import 'dotenv/config';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import { Queue } from 'bullmq';
 import { PrismaClient } from '@prisma/client';
-import { Redis } from 'ioredis';
 import crypto from 'crypto';
 import client from 'prom-client';
+import { createCheckHistoryQueueV1, createFleetRedisV1 } from './infrastructure/bullmq.js';
 
 const prisma = new PrismaClient();
 const fastify = Fastify({ logger: true });
@@ -16,17 +15,10 @@ const accountAdminMetadataSelect = {
     lastKnownChecksLeft: true, lastSuccessAt: true, lastFailureAt: true,
 } as const;
 
-// Setup Redis connection for BullMQ
-const redisConnection = {
-    host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || '6379'),
-    ...(process.env.REDIS_PASSWORD ? { password: process.env.REDIS_PASSWORD } : {}),
-};
-
-const checksQueue = new Queue('check-history', { connection: redisConnection });
+const checksQueue = createCheckHistoryQueueV1();
 
 // Direct Redis client for driver-action task state. Result lives 1h.
-const redis = new Redis(redisConnection);
+const redis = createFleetRedisV1();
 const DRIVER_ACTION_TTL_SEC = 3600;
 const driverActionKey = (taskId: string) => `driver-action:${taskId}`;
 

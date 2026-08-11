@@ -230,6 +230,11 @@
   "protected": true,
   "provider_relationships": [
     {
+      "adapter_modules": ["yandex-fleet-scraper/src/infrastructure/bullmq"],
+      "name": "bullmq",
+      "role": "fleet check queue and Redis coordination"
+    },
+    {
       "adapter_modules": [
         "yandex_fleet",
         "yfs"

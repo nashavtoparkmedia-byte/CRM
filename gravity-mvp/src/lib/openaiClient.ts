@@ -16,11 +16,11 @@
  * running.
  */
 
-import OpenAI from 'openai'
+import { createOpenAIClientV1 } from '@/infrastructure/providers/openai-client'
 
-let client: OpenAI | null = null
+let client: ReturnType<typeof createOpenAIClientV1> | null = null
 
-export async function getOpenAI(): Promise<OpenAI> {
+export async function getOpenAI(): Promise<ReturnType<typeof createOpenAIClientV1>> {
     if (client) return client
 
     let apiKey = process.env.OPENAI_API_KEY
@@ -40,9 +40,6 @@ export async function getOpenAI(): Promise<OpenAI> {
     // chat/whisper call hits 403 "Country, region, or territory not
     // supported". We force the SDK onto Node's built-in fetch, which is
     // undici-backed and DOES honour the global ProxyAgent → Xray :10809.
-    client = new OpenAI({
-        apiKey,
-        fetch: globalThis.fetch as any,
-    })
+    client = createOpenAIClientV1(apiKey)
     return client
 }

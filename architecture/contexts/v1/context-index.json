@@ -38,7 +38,7 @@
     {
       "context": "fleet_operations",
       "path": "architecture/contexts/v1/manifests/fleet_operations.json",
-      "sha256": "c58a62d3f59559c34b4858f7b496026e30036b423cba494fe00e784962c56905"
+      "sha256": "c690893f2b732f8d1d6a9fd62e112cf9bed1c9a9ea3ec80439c4ab02e036dd03"
     },
     {
       "context": "identity_access",
@@ -63,7 +63,7 @@
     {
       "context": "platform_shell",
       "path": "architecture/contexts/v1/manifests/platform_shell.json",
-      "sha256": "a8df4e7df0a4fd5aa0f5b987855dddf07a7953ea24d4f9293668827d1182b409"
+      "sha256": "0e37e625a38577b4a265333d947773c40225d6328a90de334e03c2e7f02a5fbe"
     },
     {
       "context": "telegram_channel",

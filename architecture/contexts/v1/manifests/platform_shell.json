@@ -112,7 +112,13 @@
   ],
   "owned_data": [],
   "protected": true,
-  "provider_relationships": [],
+  "provider_relationships": [
+    {
+      "adapter_modules": ["infrastructure/providers/openai-client"],
+      "name": "openai",
+      "role": "OpenAI SDK client construction"
+    }
+  ],
   "public_surface": [
     "PlatformHealth.v1",
     "UiComposition.v1"
