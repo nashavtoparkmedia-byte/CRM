@@ -3,10 +3,10 @@
   "status": "OPEN_LIVE_DEBT_BURN_DOWN",
   "source": "LIVE_ARCHITECTURE_DEBT_RECOMPUTE_20260811.json",
   "opening_finding_count": 1288,
-  "current_finding_count": 1113,
-  "exception_covered_live_debt": 1113,
+  "current_finding_count": 506,
+  "exception_covered_live_debt": 506,
   "open_finding_count": 0,
-  "actually_closed_since_opening_baseline": 175,
+  "actually_closed_since_opening_baseline": 782,
   "confirmed_direct_foreign_prisma_writes": 0,
   "items": [
     {
@@ -32,7 +32,10 @@
       "finding_count": 2,
       "intent": "Compose one transactional contact merge across messaging chat links and work-management tasks.",
       "owner_context": "contacts",
-      "target_contexts": ["messaging", "work_management"],
+      "target_contexts": [
+        "messaging",
+        "work_management"
+      ],
       "approved_path": "owner-controlled transactional composition capability with exact operations; do not copy foreign writers into Contacts",
       "status": "CLOSED_EXACT_OWNER_TRANSACTION_COMPOSITION"
     },
@@ -40,10 +43,62 @@
       "surface": "WhatsApp and Yandex Fleet provider runtime consumers",
       "finding_count": 40,
       "intent": "Keep provider clients, browser pages, transport Store objects and scheduled sync options inside their owning contexts.",
-      "owner_contexts": ["whatsapp_channel", "fleet_operations"],
-      "target_contexts": ["platform_shell", "messaging", "operations_observability", "configuration"],
+      "owner_contexts": [
+        "whatsapp_channel",
+        "fleet_operations"
+      ],
+      "target_contexts": [
+        "platform_shell",
+        "messaging",
+        "operations_observability",
+        "configuration"
+      ],
       "approved_path": "exact owner-controlled runtime, diagnostic, history, reachability and scheduled-sync capabilities; shared composition exposes projections only",
       "status": "CLOSED_PROVIDER_TRANSPORT_BOUNDARY"
+    },
+    {
+      "surface": "shared technical UI primitives and Identity user-directory consumers",
+      "finding_count": 489,
+      "intent": "Place shared UI primitives in technical infrastructure and route identity reads through a narrow owner query API.",
+      "owner_context": "shared infrastructure and identity_access",
+      "target_contexts": [
+        "all UI consumers",
+        "calling"
+      ],
+      "approved_path": "implementation extraction with compatibility shims plus a fixed identity query facade",
+      "status": "CLOSED_SEMANTIC_BATCHES"
+    },
+    {
+      "surface": "Telegram runtime and operational consumers",
+      "finding_count": 36,
+      "intent": "Keep Telegram listener lifecycle, delivery, history, reachability and connection projection inside the provider owner.",
+      "owner_context": "telegram_channel",
+      "target_contexts": [
+        "platform_shell",
+        "fleet_operations",
+        "messaging",
+        "operations_observability",
+        "configuration",
+        "work_management"
+      ],
+      "approved_path": "exact owner runtime API plus fixed shared composition; no GramJS client export",
+      "status": "CLOSED_PROVIDER_RUNTIME_BOUNDARY"
+    },
+    {
+      "surface": "ContactService cross-context consumers",
+      "finding_count": 24,
+      "intent": "Resolve channel and phone identities and perform narrow cleanup through the Contacts owner.",
+      "owner_context": "contacts",
+      "target_contexts": [
+        "avito_acquisition",
+        "calling",
+        "max_channel",
+        "messaging",
+        "telegram_channel",
+        "whatsapp_channel"
+      ],
+      "approved_path": "versioned Contacts resolution and exact identity-maintenance capabilities",
+      "status": "CLOSED_CONTACTS_OWNER_BOUNDARY"
     }
   ],
   "prohibited_shortcuts": [
@@ -53,10 +108,10 @@
     "arbitrary Prisma access from an approved adapter"
   ],
   "next_cluster": {
-    "name": "SHARED_TECHNICAL_UI_EXTRACTION",
-    "finding_count": 255,
+    "name": "WORK_MANAGEMENT_CLIENT_STATE_OWNERSHIP",
+    "finding_count": 54,
     "classification": "EXCEPTION_COVERED_TEMPORARY_LEGACY_DEBT",
-    "acceptance": "Move the actual PageContainer, Button and PageShell implementations into shared technical infrastructure, keep only compatibility shims at legacy paths, migrate exact consumers, and retire matching exceptions without creating a public barrel or new domain dependency."
+    "acceptance": "Relocate the task store, list-view store and selectors into Work Management ownership, preserve behavior with compatibility shims and focused store tests, migrate only Work Management consumers, and retire exact findings without declaring a Platform dependency."
   },
-  "acceptance": "Uncovered findings and provider transport accesses are zero without new exceptions. The project remains NOT READY while 1,113 temporary exception-covered live findings remain."
+  "acceptance": "Uncovered findings and provider transport accesses are zero without new exceptions. The project remains NOT READY while 506 temporary exception-covered live findings remain."
 }

@@ -1,10 +1,10 @@
 # Current recovery handoff
 
-Captured: `2026-08-11T13:30:00Z`
+Captured: `2026-08-11T20:58:04Z`
 
 This is the authoritative continuation checkpoint for the current task. It is a handoff, not an acceptance artifact. The whole-project state remains `EXTERNAL_FINAL_ACCEPTANCE_FAILED`; the current program remains `WHOLE-PROJECT DOD RECOVERY`; the project is **not READY**.
 
-Latest live-debt checkpoint (`bc7430c2`): strict architecture enforcement scans 1,122 files across 16 contexts with 1,113 findings, all 1,113 still temporary exception-covered debt, zero uncovered findings, zero stale exceptions, and zero detector/digest errors. The rule counts are 342 internal imports, 477 non-public cross-context imports, 294 undeclared dependencies, zero provider-transport accesses, and zero direct foreign Prisma writes. Exactly 175 findings have been actually closed since the 1,288-finding opening denominator. The next bounded cluster is the 255-finding shared technical UI extraction for PageContainer, Button, and PageShell; no whole-repository write scan is warranted.
+Latest live-debt checkpoint (implementation HEAD `7a6de21a`): strict architecture enforcement scans 1,143 files across 16 contexts with 506 findings, all 506 still temporary exception-covered debt, zero uncovered findings, zero stale exceptions, and zero detector/digest errors. The rule counts are 150 internal imports, 254 non-public cross-context imports, 102 undeclared dependencies, zero provider-transport accesses, and zero direct foreign Prisma writes. Exactly 782 findings have been actually closed since the 1,288-finding opening denominator. Since the previous durable checkpoint, shared UI, Identity user-directory, Telegram runtime, and Contacts identity ownership clusters were remediated without adding exceptions. The next bounded cluster is the 54-finding Work Management client-state ownership correction; no whole-repository write scan is warranted.
 
 The machine-readable companion, `CURRENT_RECOVERY_HANDOFF.json`, contains the exhaustive every-path status/purpose inventory, exact commands/results, identities, worktree records, and next action. Read both files before changing code.
 
@@ -28,7 +28,7 @@ Derived classification has advanced without replacing that frozen baseline. `CUR
 - Branch: `codex/crm-architecture-dod-recovery`
 - Upstream: none; no remote-tracking ref contains the implementation HEAD
 - Recovery base: `0b61ba296ba2734738d4a21b9d00ce8b110d63cf`, tree `56c452397df4bb7cb05bef3e0d9afd1de9d785a5`
-- Implementation HEAD before this checkpoint: `4ec527301dbc7a80060df5d8eb6a6081f41b6e90`, tree `24fc3d4890d012e25707e05d0ef29aeae333abe6`
+- Implementation HEAD before this checkpoint: `7a6de21ac6bfc4025104bcd0f00a38c4699c139a`, tree `9467802b65a07c7c2142fa97c61641bae1747101`
 - Checkpoint commit: the commit containing this file; resolve exactly with `git log -1 -- architecture/recovery/whole-project-dod/v2/CURRENT_RECOVERY_HANDOFF.md`
 - Task range before checkpoint: `0b61ba29..4ec52730`, 11 commits, 22 paths, 10,096 insertions and one deletion
 
@@ -262,8 +262,8 @@ This task made zero production source mutations, database mutations, service res
 
 ## Exact next action
 
-Credential boundary classification, provider capability routing, and public serialization remediation are internally closed for this batch. The current credential inventory is `403` accesses with `81` statically ambiguous records fully classified, `0` material unresolved, `0` confirmed public exposure, and `0` cross-domain capability gaps. Continue automatically with the 255-finding `SHARED TECHNICAL UI EXTRACTION` cluster; preserve Messages and AI Calls behavior and do not repeat the whole-repository write scan.
+Write ownership and credential/security closure remain internally accepted. The current credential inventory is `403` accesses with `81` statically ambiguous records fully classified, `0` material unresolved, `0` confirmed public exposure, and `0` cross-domain capability gaps. Continue automatically with the 54-finding `WORK MANAGEMENT CLIENT STATE OWNERSHIP` cluster: relocate the task store, list-view store, and selectors into Work Management ownership, preserve compatibility shims and focused store behavior, and retire only the exact matching findings. Preserve Messages and AI Calls behavior and do not repeat the whole-repository write scan.
 
 ### Live architecture debt recompute
 
-The bounded recompute scanned 1,122 files across 16 contexts. Current live debt is: 342 internal imports, 477 non-public cross-context imports, 294 undeclared dependencies, 0 provider-transport accesses, 0 direct foreign Prisma writes, 0 uncovered findings, and 0 stale exceptions (1,113 findings / 1,113 exception-covered). Detector parse and finding-digest health are clean. This is `NOT_READY_LIVE_DEBT_REMAINS`; evidence is in `LIVE_ARCHITECTURE_DEBT_RECOMPUTE_20260811.json` and `LIVE_ARCHITECTURE_DEBT_SUMMARY_20260811.json`.
+The bounded recompute scanned 1,143 files across 16 contexts. Current live debt is: 150 internal imports, 254 non-public cross-context imports, 102 undeclared dependencies, 0 provider-transport accesses, 0 direct foreign Prisma writes, 0 uncovered findings, and 0 stale exceptions (506 findings / 506 exception-covered). Temporary exceptions are 506; intentional exceptions are 0; 782 findings are actually closed from the opening denominator. Detector parse and finding-digest health are clean. This is `NOT_READY_LIVE_DEBT_REMAINS`; evidence is in `LIVE_ARCHITECTURE_DEBT_RECOMPUTE_20260811.json` and `LIVE_ARCHITECTURE_DEBT_SUMMARY_20260811.json`.
