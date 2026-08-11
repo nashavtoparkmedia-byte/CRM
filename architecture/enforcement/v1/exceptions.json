@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "3bfb0d3bd9ff4a4cab4009e6d78027d250ac5f1033a3b94e4021c0d94c45fcca",
+  "finding_digest": "de4af584299bd0d18341e20bab64b1ace73203dec028d27f80e51c2a2bb1e1a9",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,8 +13,8 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "internal_module_import": 66,
-    "non_public_cross_context_import": 112,
+    "internal_module_import": 65,
+    "non_public_cross_context_import": 111,
     "undeclared_dependency": 32
   },
   "exceptions": [
@@ -212,40 +212,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:operations_observability/monitoring>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_5ff04b81327a205dc7fce9f2",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/settings/ai-call-keys/route.ts",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "calling",
-      "subject": "settings>ai_calls:gravity-mvp/src/lib/ai-call/keys-status.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>calling/ai_calls",
-        "dependency:configuration/settings>calling/calls"
-      ]
-    },
-    {
-      "fingerprint": "arch_c19234f4c6c68928ebc0adbd",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/settings/ai-call-keys/route.ts",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "calling",
-      "subject": "settings>ai_calls:gravity-mvp/src/lib/ai-call/keys-status.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>calling/ai_calls",
-        "dependency:configuration/settings>calling/calls"
       ]
     },
     {

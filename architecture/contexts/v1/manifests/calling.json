@@ -265,6 +265,7 @@
   ],
   "public_surface": [
     "AiCallProviderSettings.v1",
+    "AiCallProviderStatus.v1",
     "AiCallScenarioManagement.v1",
     "CallView.v1",
     "CallControlPort.v1",

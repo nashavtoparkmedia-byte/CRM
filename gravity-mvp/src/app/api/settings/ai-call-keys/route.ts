@@ -2,7 +2,7 @@
    for AiProviderSetting may not be regenerated on every dev box. */
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUserIdentityV1 as getCurrentUser } from '@/modules/identity-access/public/v1/user-directory'
-import { getAiCallKeysStatus } from '@/lib/ai-call/keys-status'
+import { getAiCallProviderStatusV1 } from '@/modules/calling/public/v1/ai-call-provider-status'
 import {
     deleteAiCallProviderSettingV1,
     saveAiCallProviderSettingV1,
@@ -29,7 +29,7 @@ export async function GET() {
     if (user.role !== 'Администратор' && user.role !== 'Руководитель') {
         return NextResponse.json({ error: 'forbidden' }, { status: 403 })
     }
-    const status = await getAiCallKeysStatus()
+    const status = await getAiCallProviderStatusV1()
     return NextResponse.json(status)
 }
 
