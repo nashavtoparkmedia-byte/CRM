@@ -9,7 +9,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { opsLog } from '@/lib/opsLog'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 
 export const GUARDRAIL_CONFIG = {
     /** Consecutive failures before alert */

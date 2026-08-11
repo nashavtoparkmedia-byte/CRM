@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { ContactService } from '@/lib/ContactService'
-import { normalizePhoneE164 } from '@/lib/phoneUtils'
+import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
 import { ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { ensureConversationContactLinkV1 } from '@/modules/messaging/public/v1'
 

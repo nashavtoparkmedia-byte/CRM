@@ -13,7 +13,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { normalizePhoneE164 } from '@/lib/phoneUtils'
+import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
 
 export interface LinkResult {
   action: 'noop' | 'linked' | 'no_contact' | 'no_driver' | 'ambiguous'

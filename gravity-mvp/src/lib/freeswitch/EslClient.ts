@@ -25,7 +25,7 @@ const Connection = modesl.Connection
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
-import { normalizePhoneE164 } from '@/lib/phoneUtils'
+import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
 import { broadcastCall } from '@/lib/callStreamBus'
 import { getSipExtensionForUser, getUserIdForSipExtension } from '@/lib/sip/extensions'
 import { processRecording } from '@/lib/freeswitch/recordingProcessor'

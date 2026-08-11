@@ -1,4 +1,4 @@
-import { opsLog } from '@/lib/opsLog'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { logCronHealth } from '@/lib/cron-health'
 
 /**

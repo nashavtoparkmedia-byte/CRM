@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import fs from 'fs/promises'
 import path from 'path'
 import { getCurrentUserIdentityV1 as getCurrentUser } from '@/modules/identity-access/public/v1/user-directory'
-import { opsLog } from '@/lib/opsLog'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 
 /**
  * GET / PUT  /api/settings/telephony-connection

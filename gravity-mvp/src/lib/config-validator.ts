@@ -10,7 +10,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { opsLog } from '@/lib/opsLog'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 
 // ─── Config Registry ────────────────────────────────────────────────
 

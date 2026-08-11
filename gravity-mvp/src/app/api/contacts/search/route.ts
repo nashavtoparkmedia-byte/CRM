@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { stripToDigits } from '@/lib/phoneUtils'
+import { stripToDigits } from '@/modules/contacts/public/v1/phone-identity'
 
 /**
  * GET /api/contacts/search?q=...&limit=10

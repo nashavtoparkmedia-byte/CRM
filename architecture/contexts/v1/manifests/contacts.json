@@ -105,6 +105,7 @@
   "protected": true,
   "provider_relationships": [],
   "public_surface": [
+    "PhoneIdentityUtilities.v1",
     "ContactView.v1",
     "ContactLookup.v1",
     "ContactResolution.v1"

@@ -9,7 +9,7 @@ import { enrichWaChatNameFromSibling } from '@/lib/whatsapp/enrichChatName'
 import { emitMessageReceived } from '@/lib/messageEvents'
 import { broadcastChatMessage } from '@/lib/messageStreamBus'
 import * as registry from '@/lib/TransportRegistry'
-import { opsLog } from '@/lib/opsLog'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { WWEBJS_AUTH_DIR } from '@/lib/whatsapp/WhatsAppCleanup'
 import { ATTACH_MESSAGE_MEDIA_COMMAND_V1, CREATE_CHANNEL_MESSAGE_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, PATCH_MESSAGE_DELIVERY_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, type HistoryImportJobPatchV1 } from '@/contracts/messaging/v1'
 import { attachMessageMediaV1, createChannelMessageV1, ensureConversationContactLinkV1, linkMatchedDriverToConversationCapabilityV1, patchChannelConversationV1, patchHistoryImportJobV1, patchMessageDeliveryV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
@@ -1417,7 +1417,7 @@ const HARD_RESTART_COOLDOWN_MS = 5 * 60 * 1000 // 5 min
  * client_missing / client_info_null / similar conditions.
  */
 async function scheduleHardRestart(connectionId: string, reason: string): Promise<void> {
-    const { opsLog } = await import('@/lib/opsLog')
+    const { operationalLogV1: opsLog } = await import('@/infrastructure/operations/operational-log')
 
     const last = hardRestartLastAt.get(connectionId) || 0
     if (Date.now() - last < HARD_RESTART_COOLDOWN_MS) {
@@ -1471,7 +1471,7 @@ async function scheduleHardRestart(connectionId: string, reason: string): Promis
 }
 
 export async function checkAllClientsHealth(): Promise<{ checkedCount: number; unhealthyCount: number; details: Array<{ connectionId: string; healthy: boolean; reason?: string }> }> {
-    const { opsLog } = await import('@/lib/opsLog')
+    const { operationalLogV1: opsLog } = await import('@/infrastructure/operations/operational-log')
     const entries = registry.getAllEntries().filter(e => e.channel === 'whatsapp' && e.state === 'ready')
     const details: Array<{ connectionId: string; healthy: boolean; reason?: string }> = []
     let unhealthyCount = 0

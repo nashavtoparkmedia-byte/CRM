@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { normalizePhoneE164 } from '@/lib/phoneUtils'
+import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
 import {
   startContactConversationByPhoneV1,
   type PlatformContactConversationChannelV1,

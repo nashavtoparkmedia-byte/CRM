@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "77b91d058857ccd34b589f96883678a5ba9752cf476e664ab404f9a379829834",
+  "finding_digest": "32cb0f879135cac65fc0effb5c96d8780601888cbb5a4f7463d82a802aaf87bd",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -15,8 +15,8 @@
   "summary": {
     "direct_provider_transport_access": 0,
     "internal_module_import": 175,
-    "non_public_cross_context_import": 310,
-    "undeclared_dependency": 139
+    "non_public_cross_context_import": 279,
+    "undeclared_dependency": 112
   },
   "exceptions": [
     {
@@ -53,40 +53,6 @@
         "dependency:calling/ai_calls>platform_shell/gravity_core",
         "dependency:calling/calls>platform_shell/gravity_core",
         "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_2065720298abe9ca5d9a60bb",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/channels/check-reachability/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "platform_shell",
-      "subject": "messages>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>platform_shell/gravity_core",
-        "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_6d91244a622a41e816bf7616",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/channels/check-reachability/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "platform_shell",
-      "subject": "messages>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>platform_shell/gravity_core",
-        "dependency:messaging/messages>platform_shell/gravity_ui"
       ]
     },
     {
@@ -154,70 +120,6 @@
       ]
     },
     {
-      "fingerprint": "arch_1c7d0db214a168e871d6102d",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/contacts/[id]/phones/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "contacts",
-      "target_context": "platform_shell",
-      "subject": "contacts>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:contacts/contacts>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_6415a5fd623cb4a16714fa2b",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/contacts/[id]/phones/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "contacts",
-      "target_context": "platform_shell",
-      "subject": "contacts>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:contacts/contacts>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_d92815539f6ac6dc9d0376b8",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/contacts/[id]/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "contacts",
-      "target_context": "platform_shell",
-      "subject": "contacts>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:contacts/contacts>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_fe10b8f0ac615a822c307832",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/contacts/[id]/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "contacts",
-      "target_context": "platform_shell",
-      "subject": "contacts>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:contacts/contacts>platform_shell/gravity_core"
-      ]
-    },
-    {
       "fingerprint": "arch_cb6cbf5e58e1957c0ed45214",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/api/contacts/[id]/route.ts",
@@ -242,38 +144,6 @@
       "owner_context": "contacts",
       "target_context": "platform_shell",
       "subject": "contacts>gravity_core:gravity-mvp/src/lib/contactDisplay.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:contacts/contacts>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_2b215d1f3dfe14110b68bd0b",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/contacts/search/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "contacts",
-      "target_context": "platform_shell",
-      "subject": "contacts>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:contacts/contacts>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_5994bbe3e02e68d8521ded34",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/contacts/search/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "contacts",
-      "target_context": "platform_shell",
-      "subject": "contacts>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
       "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
       "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
       "expires_on": "2026-12-31",
@@ -638,40 +508,6 @@
       ]
     },
     {
-      "fingerprint": "arch_9e655e6d7d047261a8d99006",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/messages/start-chat/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "platform_shell",
-      "subject": "messages>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>platform_shell/gravity_core",
-        "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_21eaf8c57bb2d473223e6273",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/messages/start-chat/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "platform_shell",
-      "subject": "messages>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>platform_shell/gravity_core",
-        "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
       "fingerprint": "arch_8ffe0c8518de79dcb439f119",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/api/monitoring/drivers/[id]/event/route.ts",
@@ -1020,42 +856,6 @@
       ]
     },
     {
-      "fingerprint": "arch_27ff7efe8edf58f9e19160a0",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/monitoring/sync/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "platform_shell",
-      "subject": "yandex_fleet>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>platform_shell/gravity_core",
-        "dependency:fleet_operations/drivers>platform_shell/gravity_ui",
-        "dependency:fleet_operations/yandex_fleet>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_3ab14eef5706130312094b57",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/monitoring/sync/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "platform_shell",
-      "subject": "yandex_fleet>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>platform_shell/gravity_core",
-        "dependency:fleet_operations/drivers>platform_shell/gravity_ui",
-        "dependency:fleet_operations/yandex_fleet>platform_shell/gravity_core"
-      ]
-    },
-    {
       "fingerprint": "arch_5ff04b81327a205dc7fce9f2",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/api/settings/ai-call-keys/route.ts",
@@ -1158,38 +958,6 @@
       ]
     },
     {
-      "fingerprint": "arch_3882b9772719e8c5437c10ee",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/settings/ai-call-projects/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "operations_observability",
-      "subject": "settings>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_5ac5109acf000d3eef001617",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/settings/ai-call-projects/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "operations_observability",
-      "subject": "settings>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>operations_observability/monitoring"
-      ]
-    },
-    {
       "fingerprint": "arch_7978adaa7e9ab21e0b9e8561",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/api/settings/ai-call-scenarios/[id]/route.ts",
@@ -1224,38 +992,6 @@
       ]
     },
     {
-      "fingerprint": "arch_36681205bc0817b04ba76e79",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/settings/ai-call-scenarios/[id]/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "operations_observability",
-      "subject": "settings>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_86cc9e5aa6f4a01778af82f1",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/settings/ai-call-scenarios/[id]/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "operations_observability",
-      "subject": "settings>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>operations_observability/monitoring"
-      ]
-    },
-    {
       "fingerprint": "arch_cf20ad688c3d927648df2a18",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/api/settings/ai-call-scenarios/route.ts",
@@ -1287,70 +1023,6 @@
       "migration_references": [
         "dependency:configuration/settings>calling/ai_calls",
         "dependency:configuration/settings>calling/calls"
-      ]
-    },
-    {
-      "fingerprint": "arch_81939c9665c94f3a782f4f74",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/settings/ai-call-scenarios/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "operations_observability",
-      "subject": "settings>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_d11ec4786ba02b175193a89c",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/settings/ai-call-scenarios/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "operations_observability",
-      "subject": "settings>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_a3ebc607b6df3d24012e7c49",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/settings/telephony-connection/route.ts",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "operations_observability",
-      "subject": "settings>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_ec6327f5c319fffa5ff75253",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/settings/telephony-connection/route.ts",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "operations_observability",
-      "subject": "settings>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>operations_observability/monitoring"
       ]
     },
     {
@@ -1628,38 +1300,6 @@
       ]
     },
     {
-      "fingerprint": "arch_7f996b69780f37762f4b67cc",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/webhook/telegram/route.ts",
-      "line_at_baseline": 8,
-      "ordinal": 1,
-      "owner_context": "telegram_channel",
-      "target_context": "operations_observability",
-      "subject": "telegram_provider>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:telegram_channel/telegram_provider>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_a503803eb047ba4a894633cb",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/webhook/telegram/route.ts",
-      "line_at_baseline": 8,
-      "ordinal": 1,
-      "owner_context": "telegram_channel",
-      "target_context": "operations_observability",
-      "subject": "telegram_provider>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:telegram_channel/telegram_provider>operations_observability/monitoring"
-      ]
-    },
-    {
       "fingerprint": "arch_ac35a921b9c5542e636b0402",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
@@ -1833,72 +1473,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:max_channel/max_provider>contacts/contacts"
-      ]
-    },
-    {
-      "fingerprint": "arch_225978712b5bce06facb89d1",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
-      "line_at_baseline": 13,
-      "ordinal": 1,
-      "owner_context": "max_channel",
-      "target_context": "platform_shell",
-      "subject": "max_provider>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:max_channel/max_provider>platform_shell/gravity_core",
-        "dependency:max_channel/max_provider>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_440faf9c14a0ba5e8233f8eb",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
-      "line_at_baseline": 13,
-      "ordinal": 1,
-      "owner_context": "max_channel",
-      "target_context": "platform_shell",
-      "subject": "max_provider>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:max_channel/max_provider>platform_shell/gravity_core",
-        "dependency:max_channel/max_provider>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_f2b58be9c04ae75d0fb88231",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
-      "line_at_baseline": 14,
-      "ordinal": 1,
-      "owner_context": "max_channel",
-      "target_context": "operations_observability",
-      "subject": "max_provider>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:max_channel/max_provider>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_724bb78433c66a266b869913",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
-      "line_at_baseline": 14,
-      "ordinal": 1,
-      "owner_context": "max_channel",
-      "target_context": "operations_observability",
-      "subject": "max_provider>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:max_channel/max_provider>operations_observability/monitoring"
       ]
     },
     {
@@ -3918,40 +3492,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:messaging/messages>contacts/contacts"
-      ]
-    },
-    {
-      "fingerprint": "arch_4703ca80cae28f240d56c8ea",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/messages/page.tsx",
-      "line_at_baseline": 69,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "platform_shell",
-      "subject": "messages>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>platform_shell/gravity_core",
-        "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_d3005886123949db3a85b002",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/messages/page.tsx",
-      "line_at_baseline": 69,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "platform_shell",
-      "subject": "messages>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>platform_shell/gravity_core",
-        "dependency:messaging/messages>platform_shell/gravity_ui"
       ]
     },
     {
@@ -7700,70 +7240,6 @@
       ]
     },
     {
-      "fingerprint": "arch_0411d57fa4cc86a8064d7de9",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/tg-actions.ts",
-      "line_at_baseline": 780,
-      "ordinal": 1,
-      "owner_context": "telegram_channel",
-      "target_context": "operations_observability",
-      "subject": "telegram_provider>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:telegram_channel/telegram_provider>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_b9b2090d465ef1024ccadfe9",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/tg-actions.ts",
-      "line_at_baseline": 780,
-      "ordinal": 1,
-      "owner_context": "telegram_channel",
-      "target_context": "operations_observability",
-      "subject": "telegram_provider>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:telegram_channel/telegram_provider>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_5961c2a15c00af232260f8df",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/tg-actions.ts",
-      "line_at_baseline": 860,
-      "ordinal": 2,
-      "owner_context": "telegram_channel",
-      "target_context": "operations_observability",
-      "subject": "telegram_provider>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:telegram_channel/telegram_provider>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_96e1e8b96786a969e47a0ae7",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/tg-actions.ts",
-      "line_at_baseline": 860,
-      "ordinal": 2,
-      "owner_context": "telegram_channel",
-      "target_context": "operations_observability",
-      "subject": "telegram_provider>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:telegram_channel/telegram_provider>operations_observability/monitoring"
-      ]
-    },
-    {
       "fingerprint": "arch_7c9cd690e504d40fea42a82e",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/tg-actions.ts",
@@ -8092,22 +7568,6 @@
       ]
     },
     {
-      "fingerprint": "arch_5dff008c12c0d93a3d11ab9a",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 22,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "operations_observability",
-      "subject": "gravity_core>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>operations_observability/monitoring"
-      ]
-    },
-    {
       "fingerprint": "arch_6d85fedbc4efd00e48615fb0",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/instrumentation.ts",
@@ -8415,22 +7875,6 @@
       ]
     },
     {
-      "fingerprint": "arch_9431abc69b14770b6c07b637",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 321,
-      "ordinal": 2,
-      "owner_context": "platform_shell",
-      "target_context": "operations_observability",
-      "subject": "gravity_core>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>operations_observability/monitoring"
-      ]
-    },
-    {
       "fingerprint": "arch_867709106e2c1ebcf9c6aeaf",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/instrumentation.ts",
@@ -8545,38 +7989,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:ai_knowledge/ai_knowledge>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_748c8bcf6042c32fe6e5b358",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/config-validator.ts",
-      "line_at_baseline": 13,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "operations_observability",
-      "subject": "settings>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_2a6cb94b9c446b2f004c4222",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/config-validator.ts",
-      "line_at_baseline": 13,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "operations_observability",
-      "subject": "settings>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>operations_observability/monitoring"
       ]
     },
     {
@@ -8996,138 +8408,6 @@
       ]
     },
     {
-      "fingerprint": "arch_48aba3d1b3bbafdb7e1fe03e",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/contacts/ContactResolutionService.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "contacts",
-      "target_context": "platform_shell",
-      "subject": "contacts>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:contacts/contacts>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_8725ff24c2ce306647139974",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/contacts/ContactResolutionService.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "contacts",
-      "target_context": "platform_shell",
-      "subject": "contacts>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:contacts/contacts>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_c886d4737d8f70a8c220fbc8",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/contacts/yandex-link.ts",
-      "line_at_baseline": 16,
-      "ordinal": 1,
-      "owner_context": "contacts",
-      "target_context": "platform_shell",
-      "subject": "contacts>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:contacts/contacts>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_b4667addc137f40424b8ca0b",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/contacts/yandex-link.ts",
-      "line_at_baseline": 16,
-      "ordinal": 1,
-      "owner_context": "contacts",
-      "target_context": "platform_shell",
-      "subject": "contacts>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:contacts/contacts>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_b0b3ff39cd9e3347b7596c1e",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/ContactService.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "contacts",
-      "target_context": "platform_shell",
-      "subject": "contacts>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:contacts/contacts>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_eef63709d3e5ed7e4c5fde88",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/ContactService.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "contacts",
-      "target_context": "platform_shell",
-      "subject": "contacts>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:contacts/contacts>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_7c9e31082fa69d11a996d5d7",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
-      "line_at_baseline": 28,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "platform_shell",
-      "subject": "calls>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_a567646b688daf787aceab21",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
-      "line_at_baseline": 28,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "platform_shell",
-      "subject": "calls>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
       "fingerprint": "arch_53af322bc338a0a039373ebf",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
@@ -9264,44 +8544,6 @@
       ]
     },
     {
-      "fingerprint": "arch_04c801863d2f3fe1f509d43c",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/leads/intake.ts",
-      "line_at_baseline": 23,
-      "ordinal": 1,
-      "owner_context": "avito_acquisition",
-      "target_context": "platform_shell",
-      "subject": "leads>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:avito_acquisition/avito>platform_shell/gravity_core",
-        "dependency:avito_acquisition/avito>platform_shell/gravity_ui",
-        "dependency:avito_acquisition/leads>platform_shell/gravity_core",
-        "dependency:avito_acquisition/leads>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_bf30fa3885b8de80c6908d12",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/leads/intake.ts",
-      "line_at_baseline": 23,
-      "ordinal": 1,
-      "owner_context": "avito_acquisition",
-      "target_context": "platform_shell",
-      "subject": "leads>gravity_core:gravity-mvp/src/lib/phoneUtils.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:avito_acquisition/avito>platform_shell/gravity_core",
-        "dependency:avito_acquisition/avito>platform_shell/gravity_ui",
-        "dependency:avito_acquisition/leads>platform_shell/gravity_core",
-        "dependency:avito_acquisition/leads>platform_shell/gravity_ui"
-      ]
-    },
-    {
       "fingerprint": "arch_2a17905b2487566e0ef2af1f",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/lib/messageEvents.ts",
@@ -9333,38 +8575,6 @@
       "migration_references": [
         "dependency:messaging/messages>platform_shell/gravity_core",
         "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_c526a69fb7c27fcfc050e927",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/MessageService.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "operations_observability",
-      "subject": "messages>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_69bcc1ef12b2216436b772c9",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/MessageService.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "operations_observability",
-      "subject": "messages>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>operations_observability/monitoring"
       ]
     },
     {
@@ -9451,38 +8661,6 @@
         "dependency:platform_shell/gravity_core>calling/ai_calls",
         "dependency:platform_shell/gravity_core>calling/calls",
         "dependency:platform_shell/gravity_ui>calling/calls"
-      ]
-    },
-    {
-      "fingerprint": "arch_b2f963921b0910149a23989c",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/OperationalJobs.ts",
-      "line_at_baseline": 1,
-      "ordinal": 1,
-      "owner_context": "work_management",
-      "target_context": "operations_observability",
-      "subject": "tasks>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:work_management/tasks>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_1044f77920ff05d2613721e3",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/OperationalJobs.ts",
-      "line_at_baseline": 1,
-      "ordinal": 1,
-      "owner_context": "work_management",
-      "target_context": "operations_observability",
-      "subject": "tasks>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:work_management/tasks>operations_observability/monitoring"
       ]
     },
     {
@@ -9770,22 +8948,6 @@
       ]
     },
     {
-      "fingerprint": "arch_234c3fa31f93699723000bd4",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/retry.ts",
-      "line_at_baseline": 9,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "operations_observability",
-      "subject": "gravity_core>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>operations_observability/monitoring"
-      ]
-    },
-    {
       "fingerprint": "arch_004b1de0c7b79e2ec284c311",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/lib/triggers.ts",
@@ -10007,118 +9169,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:whatsapp_channel/whatsapp_provider>messaging/messages"
-      ]
-    },
-    {
-      "fingerprint": "arch_ca61c9f31a07eae31021f176",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 12,
-      "ordinal": 1,
-      "owner_context": "whatsapp_channel",
-      "target_context": "operations_observability",
-      "subject": "whatsapp_provider>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:whatsapp_channel/whatsapp_provider>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_baf66cfda0d10540c799e369",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 12,
-      "ordinal": 1,
-      "owner_context": "whatsapp_channel",
-      "target_context": "operations_observability",
-      "subject": "whatsapp_provider>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:whatsapp_channel/whatsapp_provider>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_59e9f100be70d9ceaf800484",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 1433,
-      "ordinal": 2,
-      "owner_context": "whatsapp_channel",
-      "target_context": "operations_observability",
-      "subject": "whatsapp_provider>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:whatsapp_channel/whatsapp_provider>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_2fe6ebcfce5f94886fe38f14",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 1433,
-      "ordinal": 2,
-      "owner_context": "whatsapp_channel",
-      "target_context": "operations_observability",
-      "subject": "whatsapp_provider>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:whatsapp_channel/whatsapp_provider>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_0be3c4666399f376f2bfcf36",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 1487,
-      "ordinal": 3,
-      "owner_context": "whatsapp_channel",
-      "target_context": "operations_observability",
-      "subject": "whatsapp_provider>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:whatsapp_channel/whatsapp_provider>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_4f2700ceea38f29f548dc06a",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 1487,
-      "ordinal": 3,
-      "owner_context": "whatsapp_channel",
-      "target_context": "operations_observability",
-      "subject": "whatsapp_provider>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:whatsapp_channel/whatsapp_provider>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_e34f7f7e0a4e74c4c2a3d432",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/modules/platform-shell/public/v1/outbox-runtime.ts",
-      "line_at_baseline": 1,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "operations_observability",
-      "subject": "module:platform_shell>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>operations_observability/monitoring"
       ]
     },
     {

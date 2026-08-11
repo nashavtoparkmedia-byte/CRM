@@ -6,7 +6,7 @@
  * Never retries on logic errors (validation, not found, auth).
  */
 
-import { opsLog } from '@/lib/opsLog'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 
 export interface RetryConfig {
     /** Maximum number of attempts (including first). Default: 3 */

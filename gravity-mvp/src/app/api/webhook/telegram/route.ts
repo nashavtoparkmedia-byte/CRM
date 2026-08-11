@@ -5,7 +5,7 @@ import { changeDriverLimit } from '@/app/actions'
 import { DriverMatchService } from '@/lib/DriverMatchService'
 import { ContactService } from '@/lib/ContactService'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
-import { opsLog } from '@/lib/opsLog'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import {
     ATTACH_CONTACT_IDENTITY_COMMAND_V1,
     REPLACE_IDENTITY_PROFILE_V1,

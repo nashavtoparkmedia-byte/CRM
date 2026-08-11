@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { ChatChannel } from '@prisma/client'
-import { normalizePhoneE164, parseExternalChatId, looksLikePhone } from '@/lib/phoneUtils'
+import { normalizePhoneE164, parseExternalChatId, looksLikePhone } from '@/modules/contacts/public/v1/phone-identity'
 
 interface ResolveResult {
   contact: { id: string; displayName: string }

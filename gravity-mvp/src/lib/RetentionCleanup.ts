@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { opsLog } from '@/lib/opsLog'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { RUN_API_LOG_RETENTION_COMMAND_V1, RUN_DRIVER_EVENT_RETENTION_COMMAND_V1 } from '@/contracts/fleet-operations/v1'
 import { DELETE_CONTACT_FOR_RETENTION_COMMAND_V1 } from '@/contracts/contacts/v1'
 import { DELETE_RETAINED_MESSAGES_COMMAND_V1, DETACH_CONTACT_CONVERSATIONS_COMMAND_V1, PURGE_MESSAGE_RETRY_METADATA_COMMAND_V1, RUN_COMMUNICATION_EVENT_RETENTION_COMMAND_V1 } from '@/contracts/messaging/v1'

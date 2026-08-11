@@ -1,4 +1,4 @@
-import { opsLog } from '@/lib/opsLog'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { callingOutboxPublishersV1 } from '@/modules/calling/public/v1'
 import { prismaOutboxStoreV1 } from '@/infrastructure/outbox/prisma-outbox-store'
 import { normalizeOutboxErrorV1, publishOutboxBatchV1 } from '@/infrastructure/outbox/v1'

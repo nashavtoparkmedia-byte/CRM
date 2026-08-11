@@ -66,7 +66,7 @@ export default async function MessagesPage({
             if (!chat && typeof resolvedParams.phone === 'string') {
                 const phone = resolvedParams.phone.replace(/\D/g, '')
                 if (phone.length >= 10) {
-                    const { normalizePhoneE164 } = await import('@/lib/phoneUtils')
+                    const { normalizePhoneE164 } = await import('@/modules/contacts/public/v1/phone-identity')
                     const normalized = normalizePhoneE164(resolvedParams.phone) || `+${phone}`
                     const newChat = await prisma.chat.create({
                         data: {

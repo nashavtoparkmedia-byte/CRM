@@ -20,7 +20,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { ContactService } from '@/lib/ContactService'
-import { normalizePhoneE164 } from '@/lib/phoneUtils'
+import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
 import type { ChatChannel } from '@prisma/client'
 import type { LeadSource } from './types'
 import { ENSURE_LEAD_CONVERSATION_COMMAND_V1, RECEIVE_MESSAGE_COMMAND_V1 } from '@/contracts/messaging/v1'

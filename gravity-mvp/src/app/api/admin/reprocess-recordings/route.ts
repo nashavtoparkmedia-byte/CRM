@@ -8,7 +8,7 @@ import {
     enqueueRecoveredCallTranscriptionV1,
     recoverCallRecordingV1,
 } from '@/modules/calling/public/v1/recording-recovery'
-import { opsLog } from '@/lib/opsLog'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 
 export const runtime = 'nodejs'
 

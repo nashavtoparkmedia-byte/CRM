@@ -862,7 +862,7 @@ const tgHardRestartLastAt = new Map<string, number>()
 const TG_HARD_RESTART_COOLDOWN_MS = 5 * 60 * 1000
 
 async function scheduleTgHardRestart(connection: any, reason: string): Promise<void> {
-    const { opsLog } = await import('@/lib/opsLog')
+    const { operationalLogV1: opsLog } = await import('@/infrastructure/operations/operational-log')
 
     const last = tgHardRestartLastAt.get(connection.id) || 0
     if (Date.now() - last < TG_HARD_RESTART_COOLDOWN_MS) {
@@ -942,7 +942,7 @@ function startTelegramHealthCheck(connections: any[]) {
             // Check for prolonged degradation (>5 min not ready)
             const degradedMs = registry.getDegradedDuration(conn.id)
             if (degradedMs && degradedMs > 5 * 60 * 1000) {
-                const { opsLog } = await import('@/lib/opsLog')
+                const { operationalLogV1: opsLog } = await import('@/infrastructure/operations/operational-log')
                 const entry = registry.getEntry(conn.id)
                 opsLog('warn', 'tg_prolonged_degradation', {
                     connectionId: conn.id,

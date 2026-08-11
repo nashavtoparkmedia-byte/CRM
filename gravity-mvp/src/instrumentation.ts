@@ -19,7 +19,7 @@ export async function register() {
         console.error('[instrumentation] initProxy failed:', err?.message)
     }
 
-    const { opsLog } = await import('@/lib/opsLog')
+    const { operationalLogV1: opsLog } = await import('@/infrastructure/operations/operational-log')
     opsLog('info', 'server_starting', { operation: 'instrumentation' })
 
     // Warn about missing optional env vars (safe defaults exist)
@@ -343,7 +343,7 @@ export async function register() {
         if (shutdownInProgress) return
         shutdownInProgress = true
 
-        const { opsLog: log } = await import('@/lib/opsLog')
+        const { operationalLogV1: log } = await import('@/infrastructure/operations/operational-log')
         log('info', 'shutdown_start', { signal })
 
         const forceExit = setTimeout(() => {
