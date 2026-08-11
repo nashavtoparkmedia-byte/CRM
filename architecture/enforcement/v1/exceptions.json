@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "5162cb37664d4ae301b9b8c445e5b1027db63da9bbe3a9eb8cf90076c6276a82",
+  "finding_digest": "f7896a52b5f4b2db7ddb7ac15e70d1a1b4dc3d31a138dbf768300dc5c32190f0",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,9 +13,9 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "internal_module_import": 84,
-    "non_public_cross_context_import": 131,
-    "undeclared_dependency": 42
+    "internal_module_import": 77,
+    "non_public_cross_context_import": 123,
+    "undeclared_dependency": 35
   },
   "exceptions": [
     {
@@ -705,60 +705,6 @@
       ]
     },
     {
-      "fingerprint": "arch_a3c217cb950466758f915c64",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/calls/page.tsx",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "platform_shell",
-      "subject": "calls>gravity_ui:gravity-mvp/src/components/sip/CallsList.tsx",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_765d92d29f03c589588e310c",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/calls/page.tsx",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "platform_shell",
-      "subject": "calls>gravity_ui:gravity-mvp/src/components/sip/CallsList.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_b6e8f45a6e7eb596e0c0a967",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/calls/page.tsx",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "platform_shell",
-      "subject": "calls>gravity_ui:gravity-mvp/src/components/sip/CallsList.tsx",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
       "fingerprint": "arch_f2829e60cbf73feeaa722a43",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/dashboard/components/RiskDriversTable.tsx",
@@ -788,168 +734,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:analytics_reporting/analytics>fleet_operations/drivers"
-      ]
-    },
-    {
-      "fingerprint": "arch_20bdbe037ebeca5e3caedeb7",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/drivers/[id]/page.tsx",
-      "line_at_baseline": 8,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "platform_shell",
-      "subject": "drivers>gravity_ui:gravity-mvp/src/components/sip/CallButton.tsx",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>platform_shell/gravity_core",
-        "dependency:fleet_operations/drivers>platform_shell/gravity_ui",
-        "dependency:fleet_operations/yandex_fleet>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_763b881b94bc3e789f328056",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/drivers/[id]/page.tsx",
-      "line_at_baseline": 8,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "platform_shell",
-      "subject": "drivers>gravity_ui:gravity-mvp/src/components/sip/CallButton.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>platform_shell/gravity_core",
-        "dependency:fleet_operations/drivers>platform_shell/gravity_ui",
-        "dependency:fleet_operations/yandex_fleet>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_16235eaf01f17dfb4901e570",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/drivers/[id]/page.tsx",
-      "line_at_baseline": 8,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "platform_shell",
-      "subject": "drivers>gravity_ui:gravity-mvp/src/components/sip/CallButton.tsx",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>platform_shell/gravity_core",
-        "dependency:fleet_operations/drivers>platform_shell/gravity_ui",
-        "dependency:fleet_operations/yandex_fleet>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_1f5f148a0c4ad2984f300751",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/drivers/[id]/page.tsx",
-      "line_at_baseline": 9,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "platform_shell",
-      "subject": "drivers>gravity_ui:gravity-mvp/src/components/sip/CallsList.tsx",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>platform_shell/gravity_core",
-        "dependency:fleet_operations/drivers>platform_shell/gravity_ui",
-        "dependency:fleet_operations/yandex_fleet>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_48c033250f46f0192a0e80d7",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/drivers/[id]/page.tsx",
-      "line_at_baseline": 9,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "platform_shell",
-      "subject": "drivers>gravity_ui:gravity-mvp/src/components/sip/CallsList.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>platform_shell/gravity_core",
-        "dependency:fleet_operations/drivers>platform_shell/gravity_ui",
-        "dependency:fleet_operations/yandex_fleet>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_9d7fab180ed311a1b4d96a0b",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/drivers/[id]/page.tsx",
-      "line_at_baseline": 9,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "platform_shell",
-      "subject": "drivers>gravity_ui:gravity-mvp/src/components/sip/CallsList.tsx",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>platform_shell/gravity_core",
-        "dependency:fleet_operations/drivers>platform_shell/gravity_ui",
-        "dependency:fleet_operations/yandex_fleet>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_30bbc6ac5e9ccf7e7cca0a14",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/drivers/[id]/page.tsx",
-      "line_at_baseline": 10,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "platform_shell",
-      "subject": "drivers>gravity_ui:gravity-mvp/src/components/sip/AiMockCallButton.tsx",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>platform_shell/gravity_core",
-        "dependency:fleet_operations/drivers>platform_shell/gravity_ui",
-        "dependency:fleet_operations/yandex_fleet>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_8e2933d7ec53259a6825f0a0",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/drivers/[id]/page.tsx",
-      "line_at_baseline": 10,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "platform_shell",
-      "subject": "drivers>gravity_ui:gravity-mvp/src/components/sip/AiMockCallButton.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>platform_shell/gravity_core",
-        "dependency:fleet_operations/drivers>platform_shell/gravity_ui",
-        "dependency:fleet_operations/yandex_fleet>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_23b135c6d24bfe66e89c5e26",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/drivers/[id]/page.tsx",
-      "line_at_baseline": 10,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "platform_shell",
-      "subject": "drivers>gravity_ui:gravity-mvp/src/components/sip/AiMockCallButton.tsx",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>platform_shell/gravity_core",
-        "dependency:fleet_operations/drivers>platform_shell/gravity_ui",
-        "dependency:fleet_operations/yandex_fleet>platform_shell/gravity_core"
       ]
     },
     {
@@ -1582,108 +1366,6 @@
       ]
     },
     {
-      "fingerprint": "arch_436cbc67cc6995b295826585",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/messages/components/ChatHeader.tsx",
-      "line_at_baseline": 18,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "platform_shell",
-      "subject": "messages>gravity_ui:gravity-mvp/src/components/sip/CallButton.tsx",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>platform_shell/gravity_core",
-        "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_16efcb251afc7f7c1a7e7b5d",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/messages/components/ChatHeader.tsx",
-      "line_at_baseline": 18,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "platform_shell",
-      "subject": "messages>gravity_ui:gravity-mvp/src/components/sip/CallButton.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>platform_shell/gravity_core",
-        "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_86a5108ac85461345608648f",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/messages/components/ChatHeader.tsx",
-      "line_at_baseline": 18,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "platform_shell",
-      "subject": "messages>gravity_ui:gravity-mvp/src/components/sip/CallButton.tsx",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>platform_shell/gravity_core",
-        "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_d875e5b50dc73dc0ca8aae68",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/messages/components/ChatList.tsx",
-      "line_at_baseline": 18,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "platform_shell",
-      "subject": "messages>gravity_ui:gravity-mvp/src/components/sip/CallToolbar.tsx",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>platform_shell/gravity_core",
-        "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_809fd0e2560663bdacdc27a6",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/messages/components/ChatList.tsx",
-      "line_at_baseline": 18,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "platform_shell",
-      "subject": "messages>gravity_ui:gravity-mvp/src/components/sip/CallToolbar.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>platform_shell/gravity_core",
-        "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_6e8fbd4d5bc5730e9c32f64a",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/messages/components/ChatList.tsx",
-      "line_at_baseline": 18,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "platform_shell",
-      "subject": "messages>gravity_ui:gravity-mvp/src/components/sip/CallToolbar.tsx",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>platform_shell/gravity_core",
-        "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
       "fingerprint": "arch_40a7c3a9db0318ea8e9e99a1",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/messages/components/ChatWorkspace.tsx",
@@ -1745,57 +1427,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:messaging/messages>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_401b765b3ddbdbfe39715a47",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/messages/components/ContactProfileDrawer.tsx",
-      "line_at_baseline": 13,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "platform_shell",
-      "subject": "messages>gravity_ui:gravity-mvp/src/components/sip/CallButton.tsx",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>platform_shell/gravity_core",
-        "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_2abda56a5e6a83e60baed381",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/messages/components/ContactProfileDrawer.tsx",
-      "line_at_baseline": 13,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "platform_shell",
-      "subject": "messages>gravity_ui:gravity-mvp/src/components/sip/CallButton.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>platform_shell/gravity_core",
-        "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_0055ff9df53f0974ffcfe56b",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/messages/components/ContactProfileDrawer.tsx",
-      "line_at_baseline": 13,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "platform_shell",
-      "subject": "messages>gravity_ui:gravity-mvp/src/components/sip/CallButton.tsx",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>platform_shell/gravity_core",
-        "dependency:messaging/messages>platform_shell/gravity_ui"
       ]
     },
     {
@@ -3375,24 +3006,6 @@
       "migration_references": [
         "dependency:platform_shell/gravity_core>configuration/settings",
         "dependency:platform_shell/gravity_ui>configuration/settings"
-      ]
-    },
-    {
-      "fingerprint": "arch_246a3df149120713f6ed8643",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/components/sip/IncomingCallPopup.tsx",
-      "line_at_baseline": 7,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "calling",
-      "subject": "gravity_ui>calls:gravity-mvp/src/lib/sip/callAlertAudio.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>calling/ai_calls",
-        "dependency:platform_shell/gravity_core>calling/calls",
-        "dependency:platform_shell/gravity_ui>calling/calls"
       ]
     },
     {

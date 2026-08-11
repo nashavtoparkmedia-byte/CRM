@@ -84,7 +84,7 @@ afterEach(() => {
 describe('call alert audio', () => {
     it('unlocks the shared context from an explicit user action', async () => {
         const contexts = installAudioContext('suspended')
-        const audio = await import('../callAlertAudio')
+        const audio = await import('@/modules/calling/public/v1/call-alert-audio')
 
         expect(audio.getCallAlertAudioStatus()).toBe('needs-interaction')
         await expect(audio.enableCallAlertAudio()).resolves.toBe('ready')
@@ -95,7 +95,7 @@ describe('call alert audio', () => {
 
     it('does not try to bypass Chrome autoplay from a pushed call event', async () => {
         const contexts = installAudioContext('suspended')
-        const audio = await import('../callAlertAudio')
+        const audio = await import('@/modules/calling/public/v1/call-alert-audio')
 
         await expect(audio.startIncomingRingtone()).resolves.toBeNull()
         expect(contexts).toHaveLength(1)
@@ -104,7 +104,7 @@ describe('call alert audio', () => {
 
     it('starts and stops both ringtone oscillators without closing the unlocked context', async () => {
         const contexts = installAudioContext('running')
-        const audio = await import('../callAlertAudio')
+        const audio = await import('@/modules/calling/public/v1/call-alert-audio')
 
         const ringtone = await audio.startIncomingRingtone()
         expect(ringtone).not.toBeNull()

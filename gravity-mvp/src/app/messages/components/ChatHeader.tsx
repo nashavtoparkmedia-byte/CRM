@@ -15,7 +15,7 @@ import { getDriverActiveTasks } from '@/app/tasks/actions'
 import type { TaskDTO } from '@/lib/tasks/types'
 import { getScenario, getStage } from '@/modules/work-management/public/v1/scenario-catalog'
 import Link from 'next/link'
-import CallButton from '@/components/sip/CallButton'
+import CallButton from '@/modules/calling/public/v1/client-ui/CallButton'
 
 interface ChatHeaderProps {
     chat: Conversation

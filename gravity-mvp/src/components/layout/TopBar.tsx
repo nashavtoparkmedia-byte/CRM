@@ -16,7 +16,7 @@ import {
     queryCurrentUserV1,
 } from '@/modules/identity-access/public/v1/identity-actions';
 import GlobalSearch from "@/components/layout/GlobalSearch";
-import CallToolbar from "@/components/sip/CallToolbar";
+import CallToolbar from "@/modules/calling/public/v1/client-ui/CallToolbar";
 
 export default function TopBar() {
     const [users, setUsers] = useState<any[]>([]);

@@ -11,10 +11,10 @@ const read = (relative) => readFileSync(path.join(root, relative), 'utf8')
 const consumers = [
   'gravity-mvp/src/app/layout.tsx',
   'gravity-mvp/src/app/messages/components/NewChatPopover.tsx',
-  'gravity-mvp/src/components/sip/ActiveCallPopup.tsx',
-  'gravity-mvp/src/components/sip/CallButton.tsx',
-  'gravity-mvp/src/components/sip/CallToolbar.tsx',
-  'gravity-mvp/src/components/sip/IncomingCallPopup.tsx',
+  'gravity-mvp/src/modules/calling/public/v1/client-ui/ActiveCallPopup.tsx',
+  'gravity-mvp/src/modules/calling/public/v1/client-ui/CallButton.tsx',
+  'gravity-mvp/src/modules/calling/public/v1/client-ui/CallToolbar.tsx',
+  'gravity-mvp/src/modules/calling/public/v1/client-ui/IncomingCallPopup.tsx',
 ]
 
 for (const consumer of consumers) {
@@ -30,7 +30,7 @@ assert.doesNotMatch(shim, /export \*/)
 const capability = read('gravity-mvp/src/modules/calling/public/v1/sip-client-context.tsx')
 assert.equal(
   createHash('sha256').update(capability).digest('hex'),
-  'd9fc5d0055d87a1d577d5f0bd25e4628f661a8b0ad37ec4b205cfd5cc908a6eb',
+  '6cf74f4cb7d0d6b1701cba99f7d77ec38c812c4cee31254b33b3c22f40353009',
 )
 assert.match(capability, /CODEC_PRIORITY = \['PCMA', 'PCMU', 'telephone-event', 'CN'\]/)
 assert.match(capability, /export function SipProvider/)
@@ -54,7 +54,7 @@ assert.equal(registry.exceptions.filter((entry) =>
 process.stdout.write(`${JSON.stringify({
   status: 'PASS',
   consumers: consumers.length,
-  implementation_sha256: 'd9fc5d0055d87a1d577d5f0bd25e4628f661a8b0ad37ec4b205cfd5cc908a6eb',
+  implementation_sha256: '6cf74f4cb7d0d6b1701cba99f7d77ec38c812c4cee31254b33b3c22f40353009',
   current_findings: scan.findings.length,
   registry_entries: registry.exceptions.length,
 }, null, 2)}\n`)

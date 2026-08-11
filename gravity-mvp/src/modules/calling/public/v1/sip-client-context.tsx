@@ -19,7 +19,8 @@ import {
     enableCallAlertAudio,
     subscribeCallAlertAudioStatus,
     type CallAlertAudioStatus,
-} from '@/lib/sip/callAlertAudio'
+} from '@/modules/calling/public/v1/call-alert-audio'
+import { OutboundCallingClientProvider } from '@/infrastructure/ui/calling-client-capability'
 
 // Codecs we keep in outbound SDP offers.
 // Megafon SBC silently drops INVITEs whose first audio codec is opus (or anything
@@ -984,7 +985,9 @@ export function SipProvider({ children }: { children: React.ReactNode }) {
 
     return (
         <SipContext.Provider value={{ status, extension, incomingCall, incomingAlert, activeCall, callAlertAudioStatus, enableCallAlerts, reconnect, call, answer, decline, hangup, toggleMute, startPlaceholderOutbound, cancelPlaceholderOutbound, setActiveCallFsUuid }}>
-            {children}
+            <OutboundCallingClientProvider value={{ status, hasActiveCall: !!activeCall, startPlaceholderOutbound, cancelPlaceholderOutbound, setActiveCallFsUuid }}>
+                {children}
+            </OutboundCallingClientProvider>
         </SipContext.Provider>
     )
 }

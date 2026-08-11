@@ -15,8 +15,8 @@ import TopBar from "@/components/layout/TopBar";
 import { QueryProvider } from "@/providers/QueryProvider";
 import { Toaster } from "@/components/ui/sonner";
 import { SipProvider } from '@/modules/calling/public/v1/sip-client-context';
-import IncomingCallPopup from "@/components/sip/IncomingCallPopup";
-import ActiveCallPopup from "@/components/sip/ActiveCallPopup";
+import IncomingCallPopup from "@/modules/calling/public/v1/client-ui/IncomingCallPopup";
+import ActiveCallPopup from "@/modules/calling/public/v1/client-ui/ActiveCallPopup";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

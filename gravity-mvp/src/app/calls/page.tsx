@@ -1,5 +1,5 @@
 import { Phone } from 'lucide-react'
-import CallsList from '@/components/sip/CallsList'
+import CallsList from '@/modules/calling/public/v1/client-ui/CallsList'
 
 export const dynamic = 'force-dynamic'
 

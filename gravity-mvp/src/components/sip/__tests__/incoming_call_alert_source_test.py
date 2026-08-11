@@ -11,7 +11,7 @@ def read(relative: str) -> str:
 
 
 def test_global_stream_creates_alert_without_a_sip_session() -> None:
-    context = read("lib/sip/SipContext.tsx")
+    context = read("modules/calling/public/v1/sip-client-context.tsx")
 
     incoming_branch = re.search(
         r"if \(data\.type === 'incoming'\) \{(?P<body>.*?)\n\s*\}",
@@ -25,7 +25,7 @@ def test_global_stream_creates_alert_without_a_sip_session() -> None:
 
 
 def test_ringtone_uses_one_unlockable_audio_context() -> None:
-    audio = read("lib/sip/callAlertAudio.ts")
+    audio = read("modules/calling/public/v1/call-alert-audio.ts")
 
     assert "let audioContext: AudioContext | null = null" in audio
     assert "await ctx.resume()" in audio
@@ -35,8 +35,8 @@ def test_ringtone_uses_one_unlockable_audio_context() -> None:
 
 
 def test_popup_rings_for_global_alert_and_offers_chrome_unlock() -> None:
-    popup = read("components/sip/IncomingCallPopup.tsx")
-    toolbar = read("components/sip/CallToolbar.tsx")
+    popup = read("modules/calling/public/v1/client-ui/IncomingCallPopup.tsx")
+    toolbar = read("modules/calling/public/v1/client-ui/CallToolbar.tsx")
 
     assert "const attentionCall = incomingCall ?? incomingAlert" in popup
     assert "startIncomingRingtone()" in popup
