@@ -1,15 +1,11 @@
-const { PrismaClient } = require('@prisma/client')
-const p = new PrismaClient()
+/* eslint-disable @typescript-eslint/no-require-imports */
+const { deleteSeededTasksV1 } = require('../src/modules/work-management/public/v1/legacy-prisma-seeded-task-cleanup-adapter')
 
 async function main() {
     // Delete task events for seeded tasks (ids start with 'c')
-    const evts = await p.taskEvent.deleteMany({ where: { taskId: { startsWith: 'c' } } })
+    const { events: evts, tasks } = await deleteSeededTasksV1()
     console.log(`Deleted ${evts.count} task events`)
-
-    const tasks = await p.task.deleteMany({ where: { id: { startsWith: 'c' } } })
     console.log(`Deleted ${tasks.count} tasks`)
-
-    await p.$disconnect()
 }
 
 main().catch(e => { console.error(e); process.exit(1) })
