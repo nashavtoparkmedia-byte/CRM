@@ -336,6 +336,10 @@ describe('Yandex monitoring sync Contact creation idempotency', () => {
         masterSource: 'yandex',
         yandexDriverId: 'yd-1',
       },
+      select: {
+        id: true,
+        primaryPhoneId: true,
+      },
     })
   })
 
