@@ -6,7 +6,7 @@ import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { importTelegramHistory } from '@/app/tg-actions'
-import { importWhatsAppHistory } from '@/lib/whatsapp/WhatsAppService'
+import { importOperationalWhatsAppHistoryV1 } from '@/infrastructure/whatsapp/operational-capabilities'
 import { getAiAgentProviderConfigV1 } from '@/modules/calling/public/v1/ai-agent-provider-capability'
 import { getUsers } from '@/lib/users/user-service'
 import {
@@ -389,7 +389,7 @@ export async function createImportJob(data: {
     }
 
     if (data.channels.includes('whatsapp')) {
-        importWhatsAppHistory(id, data.mode, data.daysBack, data.connectionId)
+        importOperationalWhatsAppHistoryV1(id, data.mode, data.daysBack, data.connectionId)
             .catch(e => console.error('[AI Import] whatsapp import error:', e.message))
     }
 

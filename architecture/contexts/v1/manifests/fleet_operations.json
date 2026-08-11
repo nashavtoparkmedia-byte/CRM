@@ -246,6 +246,7 @@
   "public_surface": [
     "DriverView.v1",
     "FleetSyncStatus.v1",
+    "ScheduledYandexSync.v1",
     "DriverCheckResult.v1"
   ],
   "responsibility": "Driver/fleet state, Yandex synchronization and isolated YFS checking workflow.",

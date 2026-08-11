@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "de26e91541528391794a3fdc2d5eb771eac8dc3c6b7437baa0c811ab06feac24",
+  "finding_digest": "8f910c0b2d156b00981b13730480f315aac6e3d6f580b299a9acdfa6d301adb4",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,10 +13,10 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_provider_transport_access": 12,
-    "internal_module_import": 353,
-    "non_public_cross_context_import": 489,
-    "undeclared_dependency": 299
+    "direct_provider_transport_access": 0,
+    "internal_module_import": 342,
+    "non_public_cross_context_import": 477,
+    "undeclared_dependency": 294
   },
   "exceptions": [
     {
@@ -1104,71 +1104,6 @@
       ]
     },
     {
-      "fingerprint": "arch_57ec186cc17cdf4f20a6df35",
-      "rule": "direct_provider_transport_access",
-      "file": "gravity-mvp/src/app/api/channels/check-reachability/route.ts",
-      "line_at_baseline": 109,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "whatsapp_channel",
-      "subject": "provider-module:whatsapp:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>whatsapp_channel/whatsapp_provider",
-        "provider-boundary:whatsapp"
-      ]
-    },
-    {
-      "fingerprint": "arch_1c9f54f8f9f701e79b9cdf01",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/channels/check-reachability/route.ts",
-      "line_at_baseline": 109,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "whatsapp_channel",
-      "subject": "messages>whatsapp_provider:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>whatsapp_channel/whatsapp_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_8d23ddca682f512f40bc99ca",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/channels/check-reachability/route.ts",
-      "line_at_baseline": 109,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "whatsapp_channel",
-      "subject": "messages>whatsapp_provider:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>whatsapp_channel/whatsapp_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_0d70acdf1f16b741a0087b43",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/channels/check-reachability/route.ts",
-      "line_at_baseline": 109,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "whatsapp_channel",
-      "subject": "messages>whatsapp_provider:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>whatsapp_channel/whatsapp_provider"
-      ]
-    },
-    {
       "fingerprint": "arch_1c7d0db214a168e871d6102d",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/api/contacts/[id]/phones/route.ts",
@@ -1493,136 +1428,6 @@
       ]
     },
     {
-      "fingerprint": "arch_7fa3442ab587c8dcbdc2c483",
-      "rule": "direct_provider_transport_access",
-      "file": "gravity-mvp/src/app/api/debug-db/force-sync/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "whatsapp_channel",
-      "subject": "provider-module:whatsapp:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>whatsapp_channel/whatsapp_provider",
-        "provider-boundary:whatsapp"
-      ]
-    },
-    {
-      "fingerprint": "arch_b588ee5d217a80adbe5acc72",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/debug-db/force-sync/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "whatsapp_channel",
-      "subject": "monitoring>whatsapp_provider:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>whatsapp_channel/whatsapp_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_a3bc3eab2f9096c9638b2ba3",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/debug-db/force-sync/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "whatsapp_channel",
-      "subject": "monitoring>whatsapp_provider:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>whatsapp_channel/whatsapp_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_cb028a64ba8923c0db41b419",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/debug-db/force-sync/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "whatsapp_channel",
-      "subject": "monitoring>whatsapp_provider:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>whatsapp_channel/whatsapp_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_da4ff907735e186da24d1499",
-      "rule": "direct_provider_transport_access",
-      "file": "gravity-mvp/src/app/api/debug-db/init-connection/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "whatsapp_channel",
-      "subject": "provider-module:whatsapp:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>whatsapp_channel/whatsapp_provider",
-        "provider-boundary:whatsapp"
-      ]
-    },
-    {
-      "fingerprint": "arch_f7151eb38e62e9abf0f951fc",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/debug-db/init-connection/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "whatsapp_channel",
-      "subject": "monitoring>whatsapp_provider:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>whatsapp_channel/whatsapp_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_d2429f9a68a3416d5c4bea9a",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/debug-db/init-connection/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "whatsapp_channel",
-      "subject": "monitoring>whatsapp_provider:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>whatsapp_channel/whatsapp_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_eac6764be0eb9b1bfb70cd67",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/debug-db/init-connection/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "whatsapp_channel",
-      "subject": "monitoring>whatsapp_provider:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>whatsapp_channel/whatsapp_provider"
-      ]
-    },
-    {
       "fingerprint": "arch_9d1f88c4b5d112a0f67df5ed",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/api/debug-db/tg-import/route.ts",
@@ -1668,136 +1473,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:operations_observability/monitoring>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_89d5b110ef6c4164fc92c611",
-      "rule": "direct_provider_transport_access",
-      "file": "gravity-mvp/src/app/api/debug-db/wa-diag/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "whatsapp_channel",
-      "subject": "provider-module:whatsapp:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>whatsapp_channel/whatsapp_provider",
-        "provider-boundary:whatsapp"
-      ]
-    },
-    {
-      "fingerprint": "arch_fd21ab4cf7a19a9cd8d6a48a",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/debug-db/wa-diag/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "whatsapp_channel",
-      "subject": "monitoring>whatsapp_provider:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>whatsapp_channel/whatsapp_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_6aa3daf31a52589d812638c1",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/debug-db/wa-diag/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "whatsapp_channel",
-      "subject": "monitoring>whatsapp_provider:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>whatsapp_channel/whatsapp_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_3efc0dbc384e6543228d3f21",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/debug-db/wa-diag/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "whatsapp_channel",
-      "subject": "monitoring>whatsapp_provider:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>whatsapp_channel/whatsapp_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_1bd3e1cf88a2cec30a0a1552",
-      "rule": "direct_provider_transport_access",
-      "file": "gravity-mvp/src/app/api/debug-db/wa-store/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "whatsapp_channel",
-      "subject": "provider-module:whatsapp:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>whatsapp_channel/whatsapp_provider",
-        "provider-boundary:whatsapp"
-      ]
-    },
-    {
-      "fingerprint": "arch_1df0acb96c7b18b380868f8f",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/debug-db/wa-store/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "whatsapp_channel",
-      "subject": "monitoring>whatsapp_provider:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>whatsapp_channel/whatsapp_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_2ae877d19cade646bfc4930a",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/debug-db/wa-store/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "whatsapp_channel",
-      "subject": "monitoring>whatsapp_provider:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>whatsapp_channel/whatsapp_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_4f5660c69e2f592d9dce2297",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/debug-db/wa-store/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "whatsapp_channel",
-      "subject": "monitoring>whatsapp_provider:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>whatsapp_channel/whatsapp_provider"
       ]
     },
     {
@@ -10092,55 +9767,6 @@
       ]
     },
     {
-      "fingerprint": "arch_efdb3df6a327dcdc617a9095",
-      "rule": "direct_provider_transport_access",
-      "file": "gravity-mvp/src/app/settings/ai/actions.ts",
-      "line_at_baseline": 9,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "whatsapp_channel",
-      "subject": "provider-module:whatsapp:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>whatsapp_channel/whatsapp_provider",
-        "provider-boundary:whatsapp"
-      ]
-    },
-    {
-      "fingerprint": "arch_e9591481bb4fde6caddaecbf",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/settings/ai/actions.ts",
-      "line_at_baseline": 9,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "whatsapp_channel",
-      "subject": "settings>whatsapp_provider:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>whatsapp_channel/whatsapp_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_0d228035d611076fcc49f2b2",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/settings/ai/actions.ts",
-      "line_at_baseline": 9,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "whatsapp_channel",
-      "subject": "settings>whatsapp_provider:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>whatsapp_channel/whatsapp_provider"
-      ]
-    },
-    {
       "fingerprint": "arch_0fc5374d662c8465dba09ea5",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/settings/ai/actions.ts",
@@ -17032,104 +16658,6 @@
       ]
     },
     {
-      "fingerprint": "arch_0b36d953fe3fbfd22c4bbb6b",
-      "rule": "direct_provider_transport_access",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 84,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "whatsapp_channel",
-      "subject": "provider-module:whatsapp:gravity-mvp/src/lib/whatsapp/WhatsAppCleanup.ts",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>whatsapp_channel/whatsapp_provider",
-        "provider-boundary:whatsapp"
-      ]
-    },
-    {
-      "fingerprint": "arch_f8873fda6915137cd46212ba",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 84,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "whatsapp_channel",
-      "subject": "gravity_core>whatsapp_provider:gravity-mvp/src/lib/whatsapp/WhatsAppCleanup.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>whatsapp_channel/whatsapp_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_59dd9a5942d691895197d909",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 84,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "whatsapp_channel",
-      "subject": "gravity_core>whatsapp_provider:gravity-mvp/src/lib/whatsapp/WhatsAppCleanup.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>whatsapp_channel/whatsapp_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_0a50b594f51e709ce7529057",
-      "rule": "direct_provider_transport_access",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 99,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "whatsapp_channel",
-      "subject": "provider-module:whatsapp:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>whatsapp_channel/whatsapp_provider",
-        "provider-boundary:whatsapp"
-      ]
-    },
-    {
-      "fingerprint": "arch_8cd938eb23e2e63aba5432a7",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 99,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "whatsapp_channel",
-      "subject": "gravity_core>whatsapp_provider:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>whatsapp_channel/whatsapp_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_a51d1ba68fc1458fbeba7026",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 99,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "whatsapp_channel",
-      "subject": "gravity_core>whatsapp_provider:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>whatsapp_channel/whatsapp_provider"
-      ]
-    },
-    {
       "fingerprint": "arch_62504a0431f613c6ff4cb4a0",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/instrumentation.ts",
@@ -17307,55 +16835,6 @@
       ]
     },
     {
-      "fingerprint": "arch_edbd96a6d2b693a80ba5bcc7",
-      "rule": "direct_provider_transport_access",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 196,
-      "ordinal": 2,
-      "owner_context": "platform_shell",
-      "target_context": "whatsapp_channel",
-      "subject": "provider-module:whatsapp:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>whatsapp_channel/whatsapp_provider",
-        "provider-boundary:whatsapp"
-      ]
-    },
-    {
-      "fingerprint": "arch_6de759eadf9f13a15ca43d63",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 196,
-      "ordinal": 2,
-      "owner_context": "platform_shell",
-      "target_context": "whatsapp_channel",
-      "subject": "gravity_core>whatsapp_provider:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>whatsapp_channel/whatsapp_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_678c3529c2d4b3beeaf99742",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 196,
-      "ordinal": 2,
-      "owner_context": "platform_shell",
-      "target_context": "whatsapp_channel",
-      "subject": "gravity_core>whatsapp_provider:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>whatsapp_channel/whatsapp_provider"
-      ]
-    },
-    {
       "fingerprint": "arch_e1c844353b8d2e3c8108205a",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/instrumentation.ts",
@@ -17420,41 +16899,6 @@
       ]
     },
     {
-      "fingerprint": "arch_446a72e9e37b2189d32742e0",
-      "rule": "direct_provider_transport_access",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 299,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "fleet_operations",
-      "subject": "provider-module:yandex_fleet:gravity-mvp/src/lib/yandexSync.ts",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>fleet_operations/drivers",
-        "dependency:platform_shell/gravity_core>fleet_operations/yandex_fleet",
-        "provider-boundary:yandex_fleet"
-      ]
-    },
-    {
-      "fingerprint": "arch_c6005b73f7d2056b5cf2ca72",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 299,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "fleet_operations",
-      "subject": "gravity_core>yandex_fleet:gravity-mvp/src/lib/yandexSync.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>fleet_operations/drivers",
-        "dependency:platform_shell/gravity_core>fleet_operations/yandex_fleet"
-      ]
-    },
-    {
       "fingerprint": "arch_9431abc69b14770b6c07b637",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/instrumentation.ts",
@@ -17488,55 +16932,6 @@
       ]
     },
     {
-      "fingerprint": "arch_f7d6831a0d023e1e8d93a5af",
-      "rule": "direct_provider_transport_access",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 339,
-      "ordinal": 3,
-      "owner_context": "platform_shell",
-      "target_context": "whatsapp_channel",
-      "subject": "provider-module:whatsapp:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>whatsapp_channel/whatsapp_provider",
-        "provider-boundary:whatsapp"
-      ]
-    },
-    {
-      "fingerprint": "arch_1c2358efc799cfcb94eb1cad",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 339,
-      "ordinal": 3,
-      "owner_context": "platform_shell",
-      "target_context": "whatsapp_channel",
-      "subject": "gravity_core>whatsapp_provider:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>whatsapp_channel/whatsapp_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_19ee68b2b1d8960c6fe50a59",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 339,
-      "ordinal": 3,
-      "owner_context": "platform_shell",
-      "target_context": "whatsapp_channel",
-      "subject": "gravity_core>whatsapp_provider:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>whatsapp_channel/whatsapp_provider"
-      ]
-    },
-    {
       "fingerprint": "arch_bbdaf730617c4b4293b28a7d",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/instrumentation.ts",
@@ -17566,55 +16961,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:platform_shell/gravity_core>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_301daed65581098d7ae8e577",
-      "rule": "direct_provider_transport_access",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 416,
-      "ordinal": 4,
-      "owner_context": "platform_shell",
-      "target_context": "whatsapp_channel",
-      "subject": "provider-module:whatsapp:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>whatsapp_channel/whatsapp_provider",
-        "provider-boundary:whatsapp"
-      ]
-    },
-    {
-      "fingerprint": "arch_59f43d62216eacab5ae543e9",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 416,
-      "ordinal": 4,
-      "owner_context": "platform_shell",
-      "target_context": "whatsapp_channel",
-      "subject": "gravity_core>whatsapp_provider:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>whatsapp_channel/whatsapp_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_4cbcb16b0fd784fbcd8ba46d",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 416,
-      "ordinal": 4,
-      "owner_context": "platform_shell",
-      "target_context": "whatsapp_channel",
-      "subject": "gravity_core>whatsapp_provider:gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>whatsapp_channel/whatsapp_provider"
       ]
     },
     {

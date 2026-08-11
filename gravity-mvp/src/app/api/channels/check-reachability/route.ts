@@ -106,8 +106,8 @@ async function checkChannelReachability(channel: CheckChannel, phone: string): P
   }
 
   if (channel === 'whatsapp') {
-    const { checkReachability } = await import('@/lib/whatsapp/WhatsAppService')
-    const result: any = await checkReachability(phone)
+    const { checkOperationalWhatsAppReachabilityV1 } = await import('@/infrastructure/whatsapp/operational-capabilities')
+    const result = await checkOperationalWhatsAppReachabilityV1(phone)
     if (result.confirmed) {
       return confirmed(channel, { source: 'whatsapp' })
     }

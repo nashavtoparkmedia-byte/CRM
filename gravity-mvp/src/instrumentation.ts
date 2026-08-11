@@ -100,8 +100,8 @@ export async function register() {
         // left behind by an unclean previous exit (taskkill, crash, sleep).
         // Without this, warmup fails with "browser is already running for userDataDir".
         try {
-            const { cleanupStaleWhatsAppSessions } = await import('@/lib/whatsapp/WhatsAppCleanup')
-            const result = await cleanupStaleWhatsAppSessions()
+            const { cleanupStaleWhatsAppRuntimeV1 } = await import('@/modules/whatsapp-channel/public/v1/runtime-operations')
+            const result = await cleanupStaleWhatsAppRuntimeV1()
             opsLog('info', 'whatsapp_cleanup_done', {
                 operation: 'startup',
                 killedChromeCount: result.killedChromeCount,
@@ -115,7 +115,7 @@ export async function register() {
         // ── WhatsApp warmup ──────────────────────────────────────────────
         try {
             const { prisma } = await import('@/lib/prisma')
-            const { initializeClient } = await import('@/lib/whatsapp/WhatsAppService')
+            const { initializeWhatsAppRuntimeV1 } = await import('@/modules/whatsapp-channel/public/v1/runtime-operations')
             // Include 'error'/'idle' so connections that crashed or expired in a
             // previous container run are retried on startup. If the session file
             // is still valid on disk → auto-reconnect; if not → QR shown in UI.
@@ -128,7 +128,7 @@ export async function register() {
             // and races on LocalAuth folder when multiple connections existed.
             for (const conn of readyConns) {
                 try {
-                    await initializeClient(conn.id)
+                    await initializeWhatsAppRuntimeV1(conn.id)
                     opsLog('info', 'whatsapp_warmup_success', { connectionId: conn.id })
                 } catch (err: any) {
                     opsLog('error', 'whatsapp_warmup_failed', { connectionId: conn.id, error: err.message })
@@ -212,8 +212,8 @@ export async function register() {
         // WA watchdog: every 60 seconds
         const watchdogInterval = setInterval(async () => {
             await OperationalJobs.run('wa_watchdog', async () => {
-                const { checkAllClientsHealth } = await import('@/lib/whatsapp/WhatsAppService')
-                const results = await checkAllClientsHealth()
+                const { checkWhatsAppRuntimeHealthV1 } = await import('@/modules/whatsapp-channel/public/v1/runtime-operations')
+                const results = await checkWhatsAppRuntimeHealthV1()
                 return results
             })
         }, 60 * 1000)
@@ -321,8 +321,8 @@ export async function register() {
             if (lastYandexSyncDay === today) return  // already ran today
 
             await OperationalJobs.run('yandex_fleet_sync', async () => {
-                const { runYandexSync } = await import('@/lib/yandexSync')
-                const result = await runYandexSync({ bypassCooldown: true })
+                const { runScheduledYandexSyncV1 } = await import('@/modules/fleet-operations/public/v1/yandex-sync-runtime')
+                const result = await runScheduledYandexSyncV1()
                 if (result.ok) {
                     lastYandexSyncDay = today
                 }
@@ -361,9 +361,9 @@ export async function register() {
 
             // 2. Close WA clients
             try {
-                const { destroyAllClients } = await import('@/lib/whatsapp/WhatsAppService')
-                if (typeof destroyAllClients === 'function') {
-                    await destroyAllClients()
+                const { destroyWhatsAppRuntimeV1 } = await import('@/modules/whatsapp-channel/public/v1/runtime-operations')
+                if (typeof destroyWhatsAppRuntimeV1 === 'function') {
+                    await destroyWhatsAppRuntimeV1()
                     log('info', 'shutdown_wa_clients_closed')
                 }
             } catch (e: any) {
@@ -435,9 +435,9 @@ export async function register() {
         // Best-effort async WA cleanup — we fire-and-forget with a 5s cap then exit.
         const cleanup = (async () => {
             try {
-                const { destroyAllClients } = await import('@/lib/whatsapp/WhatsAppService')
+                const { destroyWhatsAppRuntimeV1 } = await import('@/modules/whatsapp-channel/public/v1/runtime-operations')
                 await Promise.race([
-                    destroyAllClients(),
+                    destroyWhatsAppRuntimeV1(),
                     new Promise(resolve => setTimeout(resolve, 5000)),
                 ])
             } catch { /* ignore */ }

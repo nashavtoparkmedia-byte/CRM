@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getClient, getRuntimeStatus } from '@/lib/whatsapp/WhatsAppService'
+import {
+    listOperationalWhatsAppRuntimeEntriesV1,
+    readOperationalWhatsAppRuntimeConnectionV1,
+} from '@/infrastructure/whatsapp/operational-capabilities'
 import { prisma } from '@/lib/prisma'
 
 // Diagnostic endpoint — reports WhatsApp connection state. Baileys edition.
@@ -12,16 +15,16 @@ export async function GET(req: NextRequest) {
             id: c.id,
             status: c.status,
             phone: c.phoneNumber,
-            hasClient: !!getClient(c.id),
+            hasClient: readOperationalWhatsAppRuntimeConnectionV1(c.id).present,
         }))
         return NextResponse.json({
-            runtime: getRuntimeStatus(),
+            runtime: listOperationalWhatsAppRuntimeEntriesV1(),
             connections: result,
         })
     }
 
-    const sock = getClient(connId)
-    if (!sock) {
+    const runtimeConnection = readOperationalWhatsAppRuntimeConnectionV1(connId)
+    if (!runtimeConnection.present) {
         return NextResponse.json({ error: 'Client not in memory', connId })
     }
 
@@ -51,7 +54,7 @@ export async function GET(req: NextRequest) {
 
         return NextResponse.json({
             connId,
-            wsUser: (sock as any).user?.id ?? null,
+            wsUser: runtimeConnection.providerUserId,
             legacyChats,
             legacyMsgs,
             oldestLegacyMsgTs: oldestMsg?.timestamp ?? null,
