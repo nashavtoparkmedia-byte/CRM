@@ -24,6 +24,7 @@
 const { loadEnvConfig } = require('@next/env')
 loadEnvConfig(process.cwd())
 const { PrismaClient } = require('@prisma/client')
+const { moveChatMessagesV1, deleteUnifiedMessageV1, deleteChatV1, repointChatEventLogV1, refreshChatActivityV1, detachChatIdentityV1, normalizeChatExternalIdV1 } = require('../src/modules/messaging/public/v1/legacy-prisma-chat-backfill-adapter')
 const prisma = new PrismaClient()
 
 function isPhoneFormat(externalChatId) {
@@ -62,6 +63,7 @@ async function mergeForContact(contactId, contactName) {
             where: { chatId: loser.id },
             select: { id: true, externalId: true },
         })
+        const movable = []
         for (const m of loserMsgs) {
             if (m.externalId) {
                 const existing = await prisma.message.findFirst({
@@ -69,26 +71,20 @@ async function mergeForContact(contactId, contactName) {
                     select: { id: true },
                 })
                 if (existing) {
-                    await prisma.message.delete({ where: { id: m.id } })
+                        await deleteUnifiedMessageV1(m.id)
                     droppedDuplicates++
                     continue
                 }
             }
-            await prisma.message.update({
-                where: { id: m.id },
-                data: { chatId: survivor.id },
-            })
-            movedMessages++
+            movable.push(m.id)
         }
+        if (movable.length > 0) { await moveChatMessagesV1(loser.id, survivor.id); movedMessages += movable.length }
 
         // Re-point ChatEventLog (only field with NOT NULL chatId, others are
         // nullable FKs and will be set to null by Prisma onDelete: SetNull
         // if any exist).
         try {
-            await prisma.chatEventLog.updateMany({
-                where: { chatId: loser.id },
-                data: { chatId: survivor.id },
-            })
+            await repointChatEventLogV1(loser.id, survivor.id)
         } catch {}
 
         // Re-point ContactIdentity if it was attached to this Chat via its identity.
@@ -97,12 +93,12 @@ async function mergeForContact(contactId, contactName) {
         // identity from the chat being deleted via setting Chat.contactIdentityId
         // on the loser to null (it's about to be deleted anyway).
         try {
-            await prisma.chat.update({ where: { id: loser.id }, data: { contactIdentityId: null } })
+            await detachChatIdentityV1(loser.id)
         } catch {}
 
         // Delete the loser chat
         try {
-            await prisma.chat.delete({ where: { id: loser.id } })
+            await deleteChatV1(loser.id)
         } catch (e) {
             console.error(`    failed to delete ${loser.id}:`, e.message)
         }
@@ -124,14 +120,7 @@ async function mergeForContact(contactId, contactName) {
         orderBy: { sentAt: 'desc' },
         select: { sentAt: true },
     })
-    await prisma.chat.update({
-        where: { id: survivor.id },
-        data: {
-            lastMessageAt: latest?.sentAt ?? survivor.lastMessageAt,
-            lastInboundAt: latestIn?.sentAt ?? null,
-            lastOutboundAt: latestOut?.sentAt ?? null,
-        },
-    })
+    await refreshChatActivityV1(survivor.id, latest?.sentAt ?? survivor.lastMessageAt, latestIn?.sentAt ?? null, latestOut?.sentAt ?? null)
 
     return { skipped: false, movedMessages, droppedDuplicates, losersDeleted: losers.length }
 }

@@ -18,6 +18,7 @@
 // Запуск: node gravity-mvp/scripts/bulk_phantom_lid_cleanup.js
 
 const { PrismaClient } = require('@prisma/client')
+const { setContactIdentityPhoneV1, deactivateContactIdentityByExternalIdV1 } = require('../src/modules/contacts/public/v1/legacy-prisma-contact-identity-maintenance-adapter')
 const prisma = new PrismaClient()
 
 const CRM_URL = process.env.CRM_URL || 'http://localhost:3002'
@@ -99,24 +100,15 @@ async function processWithMaster(p) {
         select: { primaryPhoneId: true }
     })
     if (master?.primaryPhoneId) {
-        await prisma.contactIdentity.update({
-            where: { id: p.lid_identity_id },
-            data:  { phoneId: master.primaryPhoneId }
-        })
+        await setContactIdentityPhoneV1(p.lid_identity_id, master.primaryPhoneId)
     } else {
         // У master нет primary phone — оставим identity orphan (phoneId=null)
-        await prisma.contactIdentity.update({
-            where: { id: p.lid_identity_id },
-            data:  { phoneId: null }
-        })
+        await setContactIdentityPhoneV1(p.lid_identity_id, null)
     }
 
     // 3. Deactivate @c.us identity if exists (externalId = phantom phone digits)
     const phantomDigits = p.phantom_phone.replace(/\D/g, '')
-    await prisma.contactIdentity.updateMany({
-        where: { contactId: p.master_id, channel: 'whatsapp', externalId: phantomDigits, isActive: true },
-        data:  { isActive: false, phoneId: null }
-    })
+    await deactivateContactIdentityByExternalIdV1(p.master_id, phantomDigits)
 
     // 4. Soft-delete phantom phone
     await deletePhoneViaApi(p.master_id, p.phantom_phone_id)
@@ -133,10 +125,7 @@ async function processOrphan(p) {
 
     // Deactivate @c.us identity if exists
     const phantomDigits = p.phantom_phone.replace(/\D/g, '')
-    await prisma.contactIdentity.updateMany({
-        where: { contactId: p.phantom_id, channel: 'whatsapp', externalId: phantomDigits, isActive: true },
-        data:  { isActive: false, phoneId: null }
-    })
+    await deactivateContactIdentityByExternalIdV1(p.phantom_id, phantomDigits)
 
     // Soft-delete phantom phone (через API — он также очистит primaryPhoneId)
     await deletePhoneViaApi(p.phantom_id, p.phantom_phone_id)

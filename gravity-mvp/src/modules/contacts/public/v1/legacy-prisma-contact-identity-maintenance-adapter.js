@@ -36,4 +36,12 @@ async function repointOrDeactivateFakeIdentityV1(identityId, lid) {
   validateId(identityId, 'identityId'); validateId(lid, 'lid'); const prisma = new PrismaClient()
   try { const existing = await prisma.contactIdentity.findFirst({ where: { channel: 'whatsapp', externalId: lid } }); return existing ? prisma.contactIdentity.update({ where: { id: identityId }, data: { isActive: false, phoneId: null } }) : prisma.contactIdentity.update({ where: { id: identityId }, data: { externalId: lid, phoneId: null } }) } finally { await prisma.$disconnect() }
 }
-module.exports = { updateContactIdentityReachabilityV1, deactivateFakeContactIdentityV1, repointIsakovLidIdentityV1, deactivateIsakovCusIdentityV1, repointOrDeactivateFakeIdentityV1 }
+async function setContactIdentityPhoneV1(identityId, phoneId) {
+  validateId(identityId, 'identityId'); if (phoneId !== null) validateId(phoneId, 'phoneId'); const prisma = new PrismaClient()
+  try { return await prisma.contactIdentity.update({ where: { id: identityId }, data: { phoneId } }) } finally { await prisma.$disconnect() }
+}
+async function deactivateContactIdentityByExternalIdV1(contactId, externalId) {
+  validateId(contactId, 'contactId'); validateId(externalId, 'externalId'); const prisma = new PrismaClient()
+  try { return await prisma.contactIdentity.updateMany({ where: { contactId, channel: 'whatsapp', externalId, isActive: true }, data: { isActive: false, phoneId: null } }) } finally { await prisma.$disconnect() }
+}
+module.exports = { updateContactIdentityReachabilityV1, deactivateFakeContactIdentityV1, repointIsakovLidIdentityV1, deactivateIsakovCusIdentityV1, repointOrDeactivateFakeIdentityV1, setContactIdentityPhoneV1, deactivateContactIdentityByExternalIdV1 }

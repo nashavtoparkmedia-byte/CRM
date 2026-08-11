@@ -1,6 +1,6 @@
 {
   "schema": "yoko.crm.current-recovery-handoff.v1",
-  "generated_at": "2026-08-11T12:22:48.449Z",
+  "generated_at": "2026-08-11T12:32:41.939Z",
   "authority": "Continuation checkpoint; supersedes conversational status claims but does not supersede durable gap ledger or external NOT READY verdict.",
   "program_state": {
     "whole_project_state": "EXTERNAL_FINAL_ACCEPTANCE_FAILED",
@@ -611,13 +611,13 @@
     "ownership_gap_review": "architecture/recovery/whole-project-dod/v2/OWNERSHIP_GAP_FOCUSED_REVIEW.json",
     "current_4ec_outputs": "Historical 4ec outputs remain absent. They are superseded by the bounded current 3ab9ad96 baseline below.",
     "current_authoritative_write_baseline": {
-      "record": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T163000Z.json",
+      "record": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T174500Z.json",
       "baseline": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json",
-      "baseline_sha256": "3f98c71162f4564eab85af7bc28f8dc96ebcaaf5e920d171c8d1c9cf91df37b3",
+      "baseline_sha256": "6d865916f70314c6c04bf63206ab9f01263ed0356b12f81f936c635d7e259351",
       "progress": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_PROGRESS.jsonl",
-      "progress_sha256": "1eb6cbfa7522faa02ff7c3fcc92cc9ebc75e1edd4955b83a85ad816d38ae4b33",
-      "analysis_sha256": "f9a1a7c8baf44df5b043292c40d193b6f37f4574b235c8304084c1a829f11d73",
-      "result": "1721/1721 surfaces; 0 failures/timeouts; 0 FOREIGN; 70 RAW AMBIGUOUS; 29 MATERIAL UNRESOLVED; 0 unreviewed operational surfaces",
+      "progress_sha256": "c511984f33c7a275dee3aca88ad9d69628b95ede62f9e90458dd83d09da100b8",
+      "analysis_sha256": "c7312b201abf2208e564c506cfef93f91dbd771e5f43f00c948f20b409957014",
+      "result": "1721/1721 surfaces; 0 failures/timeouts; 0 FOREIGN; 61 RAW AMBIGUOUS; 20 MATERIAL UNRESOLVED; 0 unreviewed operational surfaces",
       "classification": "CURRENT_BASELINE_NOT_ACCEPTANCE"
     },
     "durably_preserved": [
@@ -647,7 +647,7 @@
     ],
     "stale_evidence_warning": "The four phase artifacts are from critic-blocked commit 3339325f/tree 68e1... and are committed only to preserve historical evidence. They are obsolete/superseded and MUST NOT be used as the current 4ec baseline or acceptance.",
     "temporary_comparison_only": "5a4211a4 mirrored outputs remain in /tmp and are not durable current evidence; their hashes/counts are in the diagnostic checkpoint. WIP /tmp clutter was intentionally not copied.",
-    "latest_triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_CLEANUP_DEDUP.json",
+    "latest_triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_WA_MERGE_PHANTOM.json",
     "ambiguous_reconciliation": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_RECONCILIATION_READONLY_RECLASS.json"
   },
   "durable_project_state": {
