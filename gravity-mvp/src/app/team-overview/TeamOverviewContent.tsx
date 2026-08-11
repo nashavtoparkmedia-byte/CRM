@@ -6,20 +6,32 @@ import {
     Users, AlertTriangle, CheckCircle, ArrowRight,
     Clock, ChevronRight, Repeat2, Heart,
 } from 'lucide-react'
-import { getScenario, getStage } from '@/lib/tasks/scenario-config'
+import { getScenario, getStage } from '@/modules/work-management/public/v1/scenario-catalog'
 import type { TeamOverview, ManagerStats, ManagerNextTask, RootCauseStat, PatternAlert, InterventionPriority, EffectivenessStat, SerializedHealthHistoryPoint } from './actions'
-import type { PersistentRootCause } from '@/lib/tasks/root-cause-persistence-config'
-import type { TeamCapacityResult } from '@/lib/tasks/capacity-config'
-import type { ProcessReliabilityResult } from '@/lib/tasks/reliability-config'
-import { INTERVENTION_AGING_CONFIG } from '@/lib/tasks/intervention-aging-config'
-import { OUTCOME_TIMING_CONFIG, type OutcomeTimingResult } from '@/lib/tasks/outcome-timing-config'
-import type { TeamStabilityResult, RiskPersistenceResult, TeamRiskProfileResult } from '@/lib/tasks/manager-health-config'
-import type { OperationalVolatilityResult } from '@/lib/tasks/volatility-config'
-import type { HealthLevel, HealthScoreBreakdown, HealthTrend } from '@/lib/tasks/manager-health-config'
-import { INTERVENTION_REASON_LABELS, INTERVENTION_REASON_COLORS, type InterventionReason } from '@/lib/tasks/intervention-config'
-import { INTERVENTION_ACTION_LABELS } from '@/lib/tasks/intervention-action-config'
-import type { InterventionAction } from '@/lib/tasks/intervention-action-config'
-import { INTERVENTION_OUTCOME_LABELS, INTERVENTION_OUTCOME_COLORS, EFFECTIVENESS_THRESHOLDS, type InterventionOutcome } from '@/lib/tasks/intervention-outcome-config'
+import {
+    EFFECTIVENESS_THRESHOLDS,
+    INTERVENTION_ACTION_LABELS,
+    INTERVENTION_AGING_CONFIG,
+    INTERVENTION_OUTCOME_COLORS,
+    INTERVENTION_OUTCOME_LABELS,
+    INTERVENTION_REASON_COLORS,
+    INTERVENTION_REASON_LABELS,
+    OUTCOME_TIMING_CONFIG,
+    type HealthLevel,
+    type HealthScoreBreakdown,
+    type HealthTrend,
+    type InterventionAction,
+    type InterventionOutcome,
+    type InterventionReason,
+    type OperationalVolatilityResult,
+    type OutcomeTimingResult,
+    type PersistentRootCause,
+    type ProcessReliabilityResult,
+    type RiskPersistenceResult,
+    type TeamCapacityResult,
+    type TeamRiskProfileResult,
+    type TeamStabilityResult,
+} from '@/modules/work-management/public/v1/team-operational-policy'
 import ReassignModal from './ReassignModal'
 import InterventionActionModal from './InterventionActionModal'
 

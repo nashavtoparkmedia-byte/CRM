@@ -78,7 +78,7 @@
     {
       "context": "work_management",
       "path": "architecture/contexts/v1/manifests/work_management.json",
-      "sha256": "7b5a6ebc8da672169df76f76ea3f8cb2df99f9418c36317dea6263dec8e5e245"
+      "sha256": "ffdeffa53e8337a53ee7ce8006d76ebb09c5cd820ca3439c8c539b2b27deef82"
     }
   ],
   "controls": {

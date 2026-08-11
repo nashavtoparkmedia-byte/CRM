@@ -3,23 +3,53 @@
 import { prisma } from '@/lib/prisma'
 import { ASSIGN_TASK_COMMAND_V1 } from '@/contracts/work-management/v1'
 import { assignTaskV1 } from '@/modules/work-management/public/v1'
-import { isManagerOverloaded } from '@/lib/tasks/workload-config'
-import { CONTACT_EVENT_TYPES, isLateResponse } from '@/lib/tasks/response-config'
-import { isFastClose } from '@/lib/tasks/completion-config'
-import { evaluateTaskRisk } from '@/lib/tasks/risk-config'
-import { RESPONSE_THRESHOLDS } from '@/lib/tasks/response-config'
-import { getRootCauseLabel } from '@/lib/tasks/root-cause-config'
-import { PATTERN_THRESHOLDS } from '@/lib/tasks/pattern-config'
-import { HEALTH_HISTORY_CONFIG, calculateManagerHealthScore, calculateHealthTrend, updateDeclineStreak, isSustainedDecline, computeTeamStability, computeRiskPersistence, computeTeamRiskProfile, type HealthLevel, type HealthScoreBreakdown, type HealthTrend, type HealthHistoryPoint, type HealthSnapshot, type PreviousHealthData, type TeamStabilityResult, type RiskPersistenceResult, type TeamRiskProfileResult } from '@/lib/tasks/manager-health-config'
-import { buildInterventionReasons, type InterventionReason } from '@/lib/tasks/intervention-config'
-import { INTERVENTION_ACTION_LABELS, type InterventionAction } from '@/lib/tasks/intervention-action-config'
-import { evaluateOutcome, INTERVENTION_OUTCOME_CONFIG, type InterventionOutcome } from '@/lib/tasks/intervention-outcome-config'
-import { ROOT_CAUSE_PERSISTENCE_CONFIG, type PersistentRootCause } from '@/lib/tasks/root-cause-persistence-config'
-import { computeTeamCapacity, type TeamCapacityResult } from '@/lib/tasks/capacity-config'
-import { computeProcessReliability, type ProcessReliabilityResult } from '@/lib/tasks/reliability-config'
-import { computeManagerInterventionAgingHours, isInterventionAging, type InterventionAgingResult } from '@/lib/tasks/intervention-aging-config'
-import { OUTCOME_TIMING_CONFIG, type OutcomeTimingResult } from '@/lib/tasks/outcome-timing-config'
-import { computeOperationalVolatility, type OperationalVolatilityResult } from '@/lib/tasks/volatility-config'
+import {
+    CONTACT_EVENT_TYPES,
+    HEALTH_HISTORY_CONFIG,
+    INTERVENTION_ACTION_LABELS,
+    INTERVENTION_OUTCOME_CONFIG,
+    OUTCOME_TIMING_CONFIG,
+    PATTERN_THRESHOLDS,
+    RESPONSE_THRESHOLDS,
+    ROOT_CAUSE_PERSISTENCE_CONFIG,
+    buildInterventionReasons,
+    calculateHealthTrend,
+    calculateManagerHealthScore,
+    computeManagerInterventionAgingHours,
+    computeOperationalVolatility,
+    computeProcessReliability,
+    computeRiskPersistence,
+    computeTeamCapacity,
+    computeTeamRiskProfile,
+    computeTeamStability,
+    evaluateOutcome,
+    evaluateTaskRisk,
+    getRootCauseLabel,
+    isFastClose,
+    isInterventionAging,
+    isLateResponse,
+    isManagerOverloaded,
+    isSustainedDecline,
+    updateDeclineStreak,
+    type HealthHistoryPoint,
+    type HealthLevel,
+    type HealthScoreBreakdown,
+    type HealthSnapshot,
+    type HealthTrend,
+    type InterventionAction,
+    type InterventionAgingResult,
+    type InterventionOutcome,
+    type InterventionReason,
+    type OperationalVolatilityResult,
+    type OutcomeTimingResult,
+    type PersistentRootCause,
+    type PreviousHealthData,
+    type ProcessReliabilityResult,
+    type RiskPersistenceResult,
+    type TeamCapacityResult,
+    type TeamRiskProfileResult,
+    type TeamStabilityResult,
+} from '@/modules/work-management/public/v1/team-operational-policy'
 import {
     CREATE_INTERVENTION_ACTION_COMMAND_V1,
     ENSURE_MANAGER_HEALTH_REPOSITORY_COMMAND_V1,

@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import TaskCard from '@/app/tasks/components/TaskCard'
-import { getScenario, getStage } from '@/lib/tasks/scenario-config'
+import { getScenario, getStage } from '@/modules/work-management/public/v1/scenario-catalog'
 
 export default function DriverTasksWidget({ driverId }: { driverId: string }) {
     const [tasks, setTasks] = useState<TaskDTO[]>([])

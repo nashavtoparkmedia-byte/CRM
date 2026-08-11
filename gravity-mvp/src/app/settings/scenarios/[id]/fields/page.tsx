@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
-import { getScenario } from '@/lib/tasks/scenario-config'
+import { getScenario } from '@/modules/work-management/public/v1/scenario-catalog'
 import { getScenarioFieldsConfig } from '../../actions'
 import ScenarioFieldsSettingsClient from './ScenarioFieldsSettingsClient'
 
