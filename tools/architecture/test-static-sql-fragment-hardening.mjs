@@ -161,17 +161,14 @@ const registryIds = new Set(registry.exceptions.map(exception => exception.finge
 const additions = [...currentIds].filter(id => !registryIds.has(id)).sort()
 const stale = [...registryIds].filter(id => !currentIds.has(id)).sort()
 
-check('exact 27 reviewed dynamic-fragment findings retire with no addition', () => {
-  assert.equal(scan.findings.length, 1295)
+check('exact 27 reviewed dynamic-fragment findings remain retired with no registry drift', () => {
+  assert.equal(registry.exceptions.length, scan.findings.length)
   assert.equal(
     scan.findings.filter(finding => finding.rule === 'direct_foreign_prisma_write').length,
     0,
   )
   assert.deepEqual(additions, [])
-  assert.ok([0, 48, 53].includes(stale.length))
-  if (stale.length > 0) {
-    for (const fingerprint of retiredFingerprints) assert.ok(stale.includes(fingerprint))
-  }
+  assert.deepEqual(stale, [])
   for (const fingerprint of retiredFingerprints) assert.equal(currentIds.has(fingerprint), false)
 })
 

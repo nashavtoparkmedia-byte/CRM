@@ -15,5 +15,5 @@ f41943fa0663caaaea1b69304649f648189b5cb8d6dc262d41c62fb7b9f85b49  gravity-mvp/sr
 24f97576a5fdf6ba0eaf592583336e8fb70960915c391877dc7cb8a1ea2f6156  gravity-mvp/src/modules/ai-knowledge/public/v1/index.ts
 1821c88825ec39b31799b460e1caad11543b7f8c8dd724ed4be064c308b34b0c  gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-proposed-reply-adapter.ts
 164d4d38d46a53dfa563e9ad92a4b0ebb77d4512bff3bdffb6757b3ea572bdc3  gravity-mvp/src/modules/ai-knowledge/public/v1/proposed-reply-handler.ts
-87d449e73450cc0154e3c6fa2e4e58b45b7e1ce8fd7b8f61bb781850f6f49ca7  tools/architecture/check-ai-knowledge-proposed-reply-boundary.mjs
+de54022820158fc17ba987e23e017c94d4d46c46c186e8943f1a9f0e55ecc697  tools/architecture/check-ai-knowledge-proposed-reply-boundary.mjs
 2f1943f61e3e19ef155cf424d88940fa2baa79dc13f0246789ee011671d71af9  tools/architecture/test-ai-knowledge-proposed-reply.mjs

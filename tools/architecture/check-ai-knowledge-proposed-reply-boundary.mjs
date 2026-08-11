@@ -23,7 +23,7 @@ check('sent mapping retained', consumer.includes('proposalId: id, patch: { sentM
 check('dismiss mapping retained', consumer.includes('proposalId: id, patch: { dismissedAt: new Date() }'), 'dismiss mapping drift')
 check('both confirmation paths retained', (consumer.match(/patch: \{ confirmedCorrectAt: new Date\(\) \}/g) || []).length === 2, 'confirmation mapping drift')
 check('trainer and coach remain caller-owned', consumer.includes('verifyKnowledgeItemV1') && consumer.includes('applyKnowledgeItemCoachEditV1') && consumer.includes('runCoach(') && consumer.includes('writeAuditEntry('), 'caller ownership drift')
-check('reads remain caller-owned', consumer.includes('prisma.aiProposedReply.findUnique') && consumer.includes('prisma.message.findFirst') && consumer.includes('prisma.aiAgentConfig.findUnique'), 'read orchestration drift')
+check('reads and provider lookup remain caller-owned', consumer.includes('prisma.aiProposedReply.findUnique') && consumer.includes('prisma.message.findFirst') && consumer.includes('getAiAgentProviderConfigV1()') && !consumer.includes('prisma.aiAgentConfig.findUnique'), 'read or provider orchestration drift')
 check('amendment exact', JSON.stringify(amendment.amendments[0]?.add_commands) === JSON.stringify(['UpsertProposedReplyCommand.v1', 'PatchProposedReplyCommand.v1']), 'amendment drift')
 
 process.stdout.write(`${JSON.stringify({ status: failures.length ? 'FAIL' : 'PASS', checks, failures }, null, 2)}\n`)

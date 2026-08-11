@@ -57,7 +57,7 @@
     "gravity-mvp/src/modules/ai-knowledge/public/v1/knowledge-governance-handler.test.ts": "ee32db8d9e08e6ce4fdc4909e74bd0838c456bcd9ef16c081edad123311f19fb",
     "gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-knowledge-governance-adapter.ts": "002161cde463d01b10a5e8ca993ea121b78917fd2526eb34050028c8c310cbbd",
     "tools/architecture/check-ai-knowledge-governance-boundary.mjs": "5e24e1edcc780e868008d6aa5fe3f949614c5ab50a080772febded1e1ec3a9f1",
-    "tools/architecture/test-ai-knowledge-governance.mjs": "478fc0c8a9b1f05d9afc584ae76cd71767d9a382060c5f14e3b8e008a1beaf48",
+    "tools/architecture/test-ai-knowledge-governance.mjs": "e313705e84cd455171be0b8cc01b36df7a1a5642be59032d3926229b922fe633",
     "tools/architecture/test-ai-knowledge-governance-adapter.mjs": "79a589a0f071d7fac3f0e5e4e604deedda43885918ce96d93a8bb1a363ab6570"
   },
   "behavior": [

@@ -140,18 +140,19 @@ function loadActionHarness({
       revalidatePath(value) { events.push(['revalidate', value]) },
     },
     '@/lib/prisma': { prisma },
-    '@/lib/users/user-service': {
-      async getUsers() { return [{ id: 'actor-1', role: 'Администратор' }] },
+    '@/modules/identity-access/public/v1/user-directory': {
+      async listUserIdentitiesV1() { return [{ id: 'actor-1', role: 'Администратор' }] },
     },
-    '@/lib/ai/knowledge/auditLog': {
-      async writeAuditEntry(input) { events.push(['audit', plain(input)]) },
-      snapshotItem(input) { return input },
-      async getKnowledgeAuditLog() { return [] },
+    '@/modules/ai-knowledge/public/v1/knowledge-governance-audit': {
+      async appendKnowledgeGovernanceAuditV1(input) { events.push(['audit', plain(input)]) },
+      snapshotKnowledgeGovernanceItemV1(input) { return input },
+      async listKnowledgeGovernanceAuditV1() { return [] },
     },
-    '@/lib/ai/knowledge/featureFlags': {
-      isRuntimeEnabled: () => runtimeEnabled,
-      isShadowModeEnabled: () => false,
-      getKnowledgeRuntimeMode: () => 'off',
+    '@/modules/ai-knowledge/public/v1/knowledge-operational-status': {
+      isKnowledgeRuntimeEnabledV1: () => runtimeEnabled,
+      isKnowledgeShadowModeEnabledV1: () => false,
+      getKnowledgeRuntimeModeV1: () => 'legacy',
+      async getKnowledgeReadinessV1() { return {} },
     },
     '@/contracts/ai-knowledge/v1': new Proxy(contracts, {
       get(target, property, receiver) {
@@ -459,8 +460,8 @@ check('protected UI and trainer verification surfaces retain pinned identities',
     trainerHandler: sha256(paths.trainerHandler),
     trainerAdapter: sha256(paths.trainerAdapter),
   }, {
-    ui: '84c310bf76ac7538a10a5c3daedeae54a7a5576123835a094c88b6ae56734e94',
-    trainer: '7a1acd91faf8140364321c8b0480fae7deec686abab3570646861ced9720ae59',
+    ui: 'e49bc7225652999fedb7851a2bce0cec668a9ed3b59d13863cc73a21b62961d3',
+    trainer: '0b88ae8a39b1f55d3468d61483fe2e8541a5d1f13c17378eacc147ae7b68319b',
     trainerContract: '9d3b40f4f5d625330fd3ecb7aadfa64314c193a9e0c03b814e8df5845a1d581b',
     trainerHandler: 'd0fbb7c68365664d9744c5ec5c848461657b458cf613b15118d782546ea08bc6',
     trainerAdapter: 'b50ef3b871e721682a17152955eccc3f595865225f4f579fbe8b54ff10038938',

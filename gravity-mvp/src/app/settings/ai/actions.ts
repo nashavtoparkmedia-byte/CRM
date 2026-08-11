@@ -739,10 +739,10 @@ export async function getExtractionQualityTier(): Promise<'economy' | 'balanced'
 // JSON snapshots в AiKnowledgeAuditLog. Soft-delete only.
 
 import {
-    writeAuditEntry,
-    snapshotItem,
-    getKnowledgeAuditLog as getAuditLogRaw,
-} from '@/lib/ai/knowledge/auditLog'
+    appendKnowledgeGovernanceAuditV1 as writeAuditEntry,
+    snapshotKnowledgeGovernanceItemV1 as snapshotItem,
+    listKnowledgeGovernanceAuditV1 as getAuditLogRaw,
+} from '@/modules/ai-knowledge/public/v1/knowledge-governance-audit'
 
 /**
  * Возвращает userId текущего пользователя если он Admin/Lead, иначе
