@@ -1,10 +1,10 @@
 # Current recovery handoff
 
-Captured: `2026-08-11T22:56:35Z`
+Captured: `2026-08-11T23:32:21Z`
 
 This is the authoritative continuation checkpoint for the current task. It is a handoff, not an acceptance artifact. The whole-project state remains `EXTERNAL_FINAL_ACCEPTANCE_FAILED`; the current program remains `WHOLE-PROJECT DOD RECOVERY`; the project is **not READY**.
 
-Latest live-debt checkpoint (implementation HEAD `91176ed4`): strict architecture enforcement scans 1,200 files across 16 contexts with 157 findings, all 157 still temporary exception-covered debt, zero uncovered findings, zero stale exceptions, zero dependency cycles, and zero detector/digest errors. The rule counts are 46 internal imports, 85 non-public cross-context imports, 26 undeclared dependencies, zero provider-transport accesses, and zero direct foreign Prisma writes. Exactly 1,131 findings have been actually closed since the 1,288-finding opening denominator. Since the previous durable checkpoint, the AI Knowledge admin/status surfaces, protected Messaging delivery recovery, Operations scheduled maintenance, and Work operational trigger evaluations closed 33 findings without adding exceptions. The next bounded cluster is the six-finding AI Knowledge retrieval query; no whole-repository write scan is warranted.
+Latest live-debt checkpoint (implementation HEAD `d0993b26`): strict architecture enforcement scans 1,216 files across 16 contexts with 117 findings, all 117 still temporary exception-covered debt, zero uncovered findings, zero stale exceptions, zero dependency cycles, and zero detector/digest errors. The rule counts are 31 internal imports, 63 non-public cross-context imports, 23 undeclared dependencies, zero provider-transport accesses, and zero direct foreign Prisma writes. Exactly 1,171 findings have been actually closed since the 1,288-finding opening denominator. Since the previous durable checkpoint, eight AI Knowledge/Calling/Operations semantic batches closed 40 findings without adding exceptions, including controlled migration, extraction execution, provider transport and operational-script consumers. The next bounded cluster is the four-finding AI Knowledge coach capability; no whole-repository write scan is warranted.
 
 The machine-readable companion, `CURRENT_RECOVERY_HANDOFF.json`, contains the exhaustive every-path status/purpose inventory, exact commands/results, identities, worktree records, and next action. Read both files before changing code.
 
@@ -28,11 +28,11 @@ Historical derived-classification checkpoint: `CURRENT_WRITE_OWNERSHIP_DERIVED_S
 - Branch: `codex/crm-architecture-dod-recovery`
 - Upstream: none; no remote-tracking ref contains the implementation HEAD
 - Recovery base: `0b61ba296ba2734738d4a21b9d00ce8b110d63cf`, tree `56c452397df4bb7cb05bef3e0d9afd1de9d785a5`
-- Implementation HEAD before this checkpoint: `91176ed4369c94287f63217d3645029ff6bbcc7d`, tree `65682a8db0b3c98327bbc135ba2e389ecf142d94`
+- Implementation HEAD before this checkpoint: `d0993b261498c0179449e4ba0be1f8062ef45822`, tree `95d79b40f19959b24079c8e0d2d846753c33feda`
 - Checkpoint commit: the commit containing this file; resolve exactly with `git log -1 -- architecture/recovery/whole-project-dod/v2/CURRENT_RECOVERY_HANDOFF.md`
-- Task range before checkpoint: `0b61ba29..91176ed4`, 141 commits, 828 paths, 1,858,340 insertions and 29,671 deletions
+- Task range before checkpoint: `0b61ba29..d0993b26`, 150 commits, 873 paths, 1,859,407 insertions and 30,235 deletions
 
-The original recovery checkpoint recorded 0 staged, 67 unstaged tracked paths (65 modified, two deleted), and 36 untracked paths. Those values are retained as historical attribution evidence only. Before this live-debt checkpoint update, all implementation batches through `91176ed4` were committed and the worktree was clean.
+The original recovery checkpoint recorded 0 staged, 67 unstaged tracked paths (65 modified, two deleted), and 36 untracked paths. Those values are retained as historical attribution evidence only. Before this live-debt checkpoint update, all implementation batches through `d0993b26` were committed and the worktree was clean.
 
 This checkpoint update contains only the live-debt recompute, summary, remediation plan, current handoff companions, and their targeted v2 checksums. The implementation and internally accepted security/credential work are already preserved in the recovery branch. Do not reset, clean, discard, or remove this worktree.
 
@@ -250,18 +250,18 @@ The last completed mirror pair in `/tmp` is from superseded `5a4211a4`: write ou
 
 ## Production mutation truth
 
-This task made zero production source mutations, database mutations, service restarts/reloads, deployments, or rollbacks. Recovery source gained a narrow Messaging-owned delivery-recovery facade, while the protected `MessageService` implementation stayed byte-identical and AI Calls behavior stayed unchanged. Production/runtime identity was read-only where reconciled; no production activation was attempted.
+This task made zero production source mutations, database mutations, service restarts/reloads, deployments, or rollbacks. Recovery source gained narrow protected-Messages imports and a Calling-owned chat-completion operation; private MessageService behavior and AI Calls request/tool payloads remain preserved by focused source and runtime gates. Production/runtime identity was read-only where reconciled; no production activation was attempted.
 
 ## Genuine blockers
 
-- 157 temporary exact architecture exceptions remain live debt.
+- 117 temporary exact architecture exceptions remain live debt.
 - Authoritative final CI, protected Messages reconciliation, and production source/artifact acceptance remain incomplete.
 - Recovery lineage is local-only with no upstream/remote tracking ref.
 
 ## Exact next action
 
-Write ownership and credential/security closure remain internally accepted. The current credential inventory is `403` accesses with `81` statically ambiguous records fully classified, `0` material unresolved, `0` confirmed public exposure, and `0` cross-domain capability gaps. Continue automatically with the six-finding `AI KNOWLEDGE RETRIEVAL QUERY` cluster: expose only the exact retrieval behavior needed by Configuration and Platform Shell, preserve filtering, ranking and context assembly, expose no repository, provider, audit-writer or extraction capability, and retire only the current `Retriever.ts` findings. Preserve Messages and AI Calls behavior and do not repeat the whole-repository write scan.
+Write ownership and credential/security closure remain internally accepted. The current credential inventory is `403` accesses with `81` statically ambiguous records fully classified, `0` material unresolved, `0` confirmed public exposure, and `0` cross-domain capability gaps. Continue automatically with the four-finding `AI KNOWLEDGE COACH CAPABILITY` cluster: expose only the exact coach operation and result DTOs required by protected Messages, preserve item-id filtering and error containment, and expose no generic LLM client, prompt or knowledge writer capability. Preserve Messages and AI Calls behavior and do not repeat the whole-repository write scan.
 
 ### Live architecture debt recompute
 
-The bounded recompute scanned 1,200 files across 16 contexts. Current live debt is: 46 internal imports, 85 non-public cross-context imports, 26 undeclared dependencies, 0 provider-transport accesses, 0 direct foreign Prisma writes, 0 uncovered findings, and 0 stale exceptions (157 findings / 157 exception-covered). Temporary exceptions are 157; intentional exceptions are 0; 1,131 findings are actually closed from the opening denominator. Detector parse and finding-digest health are clean. This is `NOT_READY_LIVE_DEBT_REMAINS`; evidence is in `LIVE_ARCHITECTURE_DEBT_RECOMPUTE_20260811.json` and `LIVE_ARCHITECTURE_DEBT_SUMMARY_20260811.json`.
+The bounded recompute scanned 1,216 files across 16 contexts. Current live debt is: 31 internal imports, 63 non-public cross-context imports, 23 undeclared dependencies, 0 provider-transport accesses, 0 direct foreign Prisma writes, 0 uncovered findings, and 0 stale exceptions (117 findings / 117 exception-covered). Temporary exceptions are 117; intentional exceptions are 0; 1,171 findings are actually closed from the opening denominator. Detector parse and finding-digest health are clean. This is `NOT_READY_LIVE_DEBT_REMAINS`; evidence is in `LIVE_ARCHITECTURE_DEBT_RECOMPUTE_20260811.json` and `LIVE_ARCHITECTURE_DEBT_SUMMARY_20260811.json`.
