@@ -13,7 +13,7 @@ import { learnFromOutboundAction } from "../learn-from-outbound-actions"
 import { useConversations, refreshConversations } from "../hooks/useConversations"
 import { useMessages, Message } from "../hooks/useMessages"
 import { useProposedReply } from "../hooks/useProposedReply"
-import TaskCreateModal from "@/app/tasks/components/TaskCreateModal"
+import { WorkTaskCreateModalV1 as TaskCreateModal } from '@/modules/work-management/public/v1/task-view'
 
 export default function ChatWorkspace({
     chatId,

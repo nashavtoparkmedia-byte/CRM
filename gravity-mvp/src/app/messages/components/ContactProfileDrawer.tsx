@@ -9,7 +9,7 @@ import { useContact, type Contact, type ContactIdentity } from "../hooks/useCont
 import { useChannelStatus } from "../hooks/useChannelStatus"
 import { AlertCircle } from "lucide-react"
 import DriverTasksWidget from "./DriverTasksWidget"
-import TaskCreateModal from "@/app/tasks/components/TaskCreateModal"
+import { WorkTaskCreateModalV1 as TaskCreateModal } from '@/modules/work-management/public/v1/task-view'
 import CallButton from "@/modules/calling/public/v1/client-ui/CallButton"
 import { getSegmentLabel } from '@/modules/contacts/public/v1/contact-display-policy'
 

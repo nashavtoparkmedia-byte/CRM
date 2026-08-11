@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "299b8e6e31d4054ce01d593c7cd905619e142d21adf94d8cda069bc599ff53a4",
+  "finding_digest": "77b4029e2b132b214d8990a52d3da5a24a17986c94bb20b6a1f6c671f60369a3",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,8 +13,8 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "internal_module_import": 24,
-    "non_public_cross_context_import": 49,
+    "internal_module_import": 22,
+    "non_public_cross_context_import": 47,
     "undeclared_dependency": 20
   },
   "exceptions": [
@@ -835,70 +835,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:messaging/messages>configuration/settings"
-      ]
-    },
-    {
-      "fingerprint": "arch_40a7c3a9db0318ea8e9e99a1",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/messages/components/ChatWorkspace.tsx",
-      "line_at_baseline": 16,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "work_management",
-      "subject": "messages>tasks:gravity-mvp/src/app/tasks/components/TaskCreateModal.tsx",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_9cde1b44ab4c1a91ad626ec7",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/messages/components/ChatWorkspace.tsx",
-      "line_at_baseline": 16,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "work_management",
-      "subject": "messages>tasks:gravity-mvp/src/app/tasks/components/TaskCreateModal.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_dbf90dfb32e4cc04163b0d2e",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/messages/components/ContactProfileDrawer.tsx",
-      "line_at_baseline": 12,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "work_management",
-      "subject": "messages>tasks:gravity-mvp/src/app/tasks/components/TaskCreateModal.tsx",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_a936c8ea27d951bba6a52738",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/messages/components/ContactProfileDrawer.tsx",
-      "line_at_baseline": 12,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "work_management",
-      "subject": "messages>tasks:gravity-mvp/src/app/tasks/components/TaskCreateModal.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>work_management/tasks"
       ]
     },
     {
