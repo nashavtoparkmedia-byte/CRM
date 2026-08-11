@@ -48,6 +48,9 @@ import { createPatchMessageMetadataHandlerV1 } from './patch-message-metadata-ha
 import { legacyPrismaPatchMessageMetadataPortV1 } from './legacy-prisma-patch-message-metadata-adapter'
 import { createDeleteConversationsByChannelHandlerV1 } from './delete-conversations-by-channel-handler'
 import { legacyPrismaDeleteConversationsByChannelPortV1 } from './legacy-prisma-delete-conversations-by-channel-adapter'
+import { createLinkMatchedDriverToConversationHandlerV1 } from './link-matched-driver-to-conversation-handler'
+import { legacyPrismaMatchedDriverConversationLinkPortV1 } from './legacy-prisma-matched-driver-conversation-link-adapter'
+import { LINK_MATCHED_DRIVER_TO_CONVERSATION_COMMAND_V1 } from '@/contracts/messaging/v1'
 
 export { createAttachMessageMediaHandlerV1 } from './attach-message-media-handler'
 export type { AttachMessageMediaPersistencePortV1 } from './attach-message-media-handler'
@@ -151,3 +154,14 @@ export const patchMessageMetadataV1 = createPatchMessageMetadataHandlerV1(
 )
 export { createDeleteConversationsByChannelHandlerV1 } from './delete-conversations-by-channel-handler'
 export const deleteConversationsByChannelV1 = createDeleteConversationsByChannelHandlerV1(legacyPrismaDeleteConversationsByChannelPortV1)
+export { createLinkMatchedDriverToConversationHandlerV1 } from './link-matched-driver-to-conversation-handler'
+export type { MatchedDriverConversationLinkPersistencePortV1 } from './link-matched-driver-to-conversation-handler'
+const linkMatchedDriverToConversationCommandV1 = createLinkMatchedDriverToConversationHandlerV1(
+    legacyPrismaMatchedDriverConversationLinkPortV1,
+)
+export async function linkMatchedDriverToConversationV1(input: { chatId: string, driverId: string }) {
+    return linkMatchedDriverToConversationCommandV1({
+        contract: LINK_MATCHED_DRIVER_TO_CONVERSATION_COMMAND_V1,
+        ...input,
+    })
+}

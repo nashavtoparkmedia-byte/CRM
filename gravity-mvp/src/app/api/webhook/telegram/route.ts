@@ -14,7 +14,7 @@ import { attachContactIdentityV1 } from '@/modules/contacts/public/v1'
 import { PROMOTE_CHANNEL_DISPLAY_NAME_V2, RESOLVE_CONTACT_COMMAND_V2 } from '@/contracts/contacts/v2'
 import { resolveContactV2 } from '@/modules/contacts/public/v2'
 import { CREATE_CHANNEL_MESSAGE_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1 } from '@/contracts/messaging/v1'
-import { createChannelMessageV1, ensureConversationContactLinkV1, patchChannelConversationV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
+import { createChannelMessageV1, ensureConversationContactLinkV1, linkMatchedDriverToConversationV1, patchChannelConversationV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
 
 export async function POST(req: NextRequest) {
     try {
@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
 
             // Relink driver on every inbound if missing
             if (!unifiedChat.driverId) {
-                const linked = await DriverMatchService.linkChatToDriver(unifiedChat.id, { telegramId: telegramId.toString() })
+                const linked = await DriverMatchService.linkChatToDriver(unifiedChat.id, { telegramId: telegramId.toString() }, linkMatchedDriverToConversationV1)
                 if (linked) {
                     unifiedChat = await (prisma.chat as any).findUnique({ where: { id: unifiedChat.id } })
                 }

@@ -38,15 +38,18 @@ def test_driver_match_name_is_diagnostic_only():
     assert "return drivers[0]" not in name_section
 
 
-def test_link_chat_to_driver_only_writes_on_matched():
+def test_link_chat_to_driver_only_delegates_a_matched_link_to_messaging_owner():
     source = read(DRIVER_MATCH)
     link_section = source.split("static async linkChatToDriver", 1)[1]
     assert "if (result.status === 'matched')" in link_section
-    assert "data: { driverId: result.driver.id }" in link_section
+    assert "linkMatchedDriver({ chatId, driverId: result.driver.id })" in link_section
+    assert "MatchedDriverChatLinkCapability" in source
+    assert "@/contracts/messaging/v1" not in source
+    assert "@/modules/messaging/public/v1" not in source
+    assert "prisma.chat" not in link_section
     assert "if (result.status === 'ambiguous')" in link_section
     assert "return false" in link_section
     assert "driver_match_existing_chat_link_conflict" in link_section
-    assert "if (!chat?.driverId)" in link_section
 
 
 def test_yandex_link_ambiguous_does_not_write_contact_driver():

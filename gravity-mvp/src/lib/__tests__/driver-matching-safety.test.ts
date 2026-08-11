@@ -80,32 +80,37 @@ beforeEach(() => {
 })
 
 describe('DriverMatchService safety matching', () => {
-  test('one driver by confirmed phone returns matched and linkChatToDriver writes Chat.driverId', async () => {
+  test('one driver by confirmed phone returns matched and delegates the Chat link to Messaging', async () => {
     prismaMock.$queryRaw
       .mockResolvedValueOnce([driver('d1')])
       .mockResolvedValueOnce([driver('d1')])
-    prismaMock.chat.findUnique.mockResolvedValueOnce({ driverId: null })
-    prismaMock.chat.update.mockResolvedValueOnce({})
+    const linkMatchedDriver = vi.fn().mockResolvedValue({ linked: true })
 
     const result = await DriverMatchService.matchDriver({ phone: '+7 999 000-00-00' })
-    const linked = await DriverMatchService.linkChatToDriver('chat-1', { phone: '+7 999 000-00-00' })
+    const linked = await DriverMatchService.linkChatToDriver(
+      'chat-1',
+      { phone: '+7 999 000-00-00' },
+      linkMatchedDriver,
+    )
 
     expect(result.status).toBe('matched')
     if (result.status === 'matched') expect(result.driver.id).toBe('d1')
     expect(linked).toBe(true)
-    expect(prismaMock.chat.update).toHaveBeenCalledWith({
-      where: { id: 'chat-1' },
-      data: { driverId: 'd1' },
-    })
+    expect(linkMatchedDriver).toHaveBeenCalledWith({ chatId: 'chat-1', driverId: 'd1' })
   })
 
-  test('matched phone does not overwrite existing different Chat.driverId', async () => {
+  test('matched phone does not overwrite an existing different Chat.driverId', async () => {
     prismaMock.$queryRaw.mockResolvedValueOnce([driver('d1')])
-    prismaMock.chat.findUnique.mockResolvedValueOnce({ driverId: 'existing-driver' })
+    const linkMatchedDriver = vi.fn().mockResolvedValue({ linked: false })
 
-    const linked = await DriverMatchService.linkChatToDriver('chat-1', { phone: '+7 999 000-00-00' })
+    const linked = await DriverMatchService.linkChatToDriver(
+      'chat-1',
+      { phone: '+7 999 000-00-00' },
+      linkMatchedDriver,
+    )
 
     expect(linked).toBe(false)
+    expect(linkMatchedDriver).toHaveBeenCalledWith({ chatId: 'chat-1', driverId: 'd1' })
     expect(prismaMock.chat.update).not.toHaveBeenCalled()
   })
 
@@ -115,10 +120,16 @@ describe('DriverMatchService safety matching', () => {
       .mockResolvedValueOnce([])
 
     const result = await DriverMatchService.matchDriver({ phone: '+7 999 000-00-00' })
-    const linked = await DriverMatchService.linkChatToDriver('chat-1', { phone: '+7 999 000-00-00' })
+    const linkMatchedDriver = vi.fn().mockResolvedValue({ linked: true })
+    const linked = await DriverMatchService.linkChatToDriver(
+      'chat-1',
+      { phone: '+7 999 000-00-00' },
+      linkMatchedDriver,
+    )
 
     expect(result).toEqual({ status: 'not_found', candidates: [] })
     expect(linked).toBe(false)
+    expect(linkMatchedDriver).not.toHaveBeenCalled()
     expect(prismaMock.chat.update).not.toHaveBeenCalled()
   })
 
@@ -143,10 +154,16 @@ describe('DriverMatchService safety matching', () => {
       .mockResolvedValueOnce([driver('name-only')])
 
     const result = await DriverMatchService.matchDriver({ name: 'Роман' })
-    const linked = await DriverMatchService.linkChatToDriver('chat-1', { name: 'Роман' })
+    const linkMatchedDriver = vi.fn().mockResolvedValue({ linked: true })
+    const linked = await DriverMatchService.linkChatToDriver(
+      'chat-1',
+      { name: 'Роман' },
+      linkMatchedDriver,
+    )
 
     expect(result).toEqual({ status: 'not_found', candidates: [] })
     expect(linked).toBe(false)
+    expect(linkMatchedDriver).not.toHaveBeenCalled()
     expect(prismaMock.chat.update).not.toHaveBeenCalled()
   })
 
@@ -162,9 +179,15 @@ describe('DriverMatchService safety matching', () => {
   test('ambiguous phone match does not write Chat.driverId', async () => {
     prismaMock.$queryRaw.mockResolvedValueOnce([driver('a'), driver('b')])
 
-    const linked = await DriverMatchService.linkChatToDriver('chat-ambiguous', { phone: '+7 999 000-00-00' })
+    const linkMatchedDriver = vi.fn().mockResolvedValue({ linked: true })
+    const linked = await DriverMatchService.linkChatToDriver(
+      'chat-ambiguous',
+      { phone: '+7 999 000-00-00' },
+      linkMatchedDriver,
+    )
 
     expect(linked).toBe(false)
+    expect(linkMatchedDriver).not.toHaveBeenCalled()
     expect(prismaMock.chat.update).not.toHaveBeenCalled()
   })
 })

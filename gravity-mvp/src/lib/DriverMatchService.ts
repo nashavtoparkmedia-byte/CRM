@@ -1,6 +1,4 @@
 import { prisma } from '@/lib/prisma'
-import { PATCH_CHANNEL_CONVERSATION_COMMAND_V1 } from '@/contracts/messaging/v1'
-import { patchChannelConversationV1 } from '@/modules/messaging/public/v1'
 
 type DriverCandidate = {
     id: string
@@ -14,6 +12,15 @@ export type DriverMatchResult =
     | { status: 'not_found'; candidates: [] }
     | { status: 'matched'; driver: DriverCandidate }
     | { status: 'ambiguous'; candidates: DriverCandidate[] }
+
+/**
+ * Messaging owns Chat. Fleet matching deliberately receives this narrow
+ * capability from its caller instead of composing Messaging contracts itself.
+ */
+export type MatchedDriverChatLinkCapability = (input: {
+    chatId: string
+    driverId: string
+}) => Promise<{ linked: boolean }>
 
 function sortCandidatesForDiagnostics(candidates: DriverCandidate[]): DriverCandidate[] {
     return [...candidates].sort((a, b) => {
@@ -198,28 +205,24 @@ export class DriverMatchService {
      * Links a Chat to a driver if not already linked.
      * Returns true if successfully linked.
      */
-    static async linkChatToDriver(chatId: string, params: { telegramId?: string | bigint | null, phone?: string | null, name?: string | null }): Promise<boolean> {
+    static async linkChatToDriver(
+        chatId: string,
+        params: { telegramId?: string | bigint | null, phone?: string | null, name?: string | null },
+        linkMatchedDriver: MatchedDriverChatLinkCapability,
+    ): Promise<boolean> {
         const result = await this.matchDriver(params)
         if (result.status === 'matched') {
-            const chat = await (prisma.chat as any).findUnique({
-                where: { id: chatId },
-                select: { driverId: true },
-            })
-            if (chat?.driverId && chat.driverId !== result.driver.id) {
-                console.warn(JSON.stringify({
-                    level: 'warn',
-                    event: 'driver_match_existing_chat_link_conflict',
-                    chatId,
-                    existingDriverId: chat.driverId,
-                    matchedDriverId: result.driver.id,
-                }))
-                return false
+            const link = await linkMatchedDriver({ chatId, driverId: result.driver.id })
+            if (link.linked) {
+                console.log(`[DriverMatch] LINKED chat=${chatId} -> driver=${result.driver.id}`)
+                return true
             }
-            if (!chat?.driverId) {
-                await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId }, patch: { driverId: result.driver.id } })
-            }
-            console.log(`[DriverMatch] LINKED chat=${chatId} -> driver=${result.driver.id}`)
-            return true
+            console.warn(JSON.stringify({
+                level: 'warn',
+                event: 'driver_match_existing_chat_link_conflict',
+                chatId,
+                matchedDriverId: result.driver.id,
+            }))
         }
         if (result.status === 'ambiguous') {
             logDriverMatchAmbiguous('link_chat_to_driver_blocked', result.candidates, { chatId })

@@ -12,7 +12,7 @@ import * as registry from '@/lib/TransportRegistry'
 import { opsLog } from '@/lib/opsLog'
 import { WWEBJS_AUTH_DIR } from '@/lib/whatsapp/WhatsAppCleanup'
 import { ATTACH_MESSAGE_MEDIA_COMMAND_V1, CREATE_CHANNEL_MESSAGE_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, PATCH_MESSAGE_DELIVERY_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, type HistoryImportJobPatchV1 } from '@/contracts/messaging/v1'
-import { attachMessageMediaV1, createChannelMessageV1, ensureConversationContactLinkV1, patchChannelConversationV1, patchHistoryImportJobV1, patchMessageDeliveryV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
+import { attachMessageMediaV1, createChannelMessageV1, ensureConversationContactLinkV1, linkMatchedDriverToConversationV1, patchChannelConversationV1, patchHistoryImportJobV1, patchMessageDeliveryV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
 import { clearPendingWhatsAppQr, publishPendingWhatsAppQr } from './whatsapp-qr-ceremony'
 
 // 25MB per file. Was 10MB but modern iPhone photos (12MP JPEG) and
@@ -1096,9 +1096,9 @@ async function doInitializeClient(connectionId: string): Promise<void> {
 
             // Relink driver on every inbound if missing
             if (!unifiedChat.driverId) {
-                let matched = await DriverMatchService.linkChatToDriver(unifiedChat.id, { phone: phoneDigits })
+                let matched = await DriverMatchService.linkChatToDriver(unifiedChat.id, { phone: phoneDigits }, linkMatchedDriverToConversationV1)
                 if (!matched && unifiedChat.name && unifiedChat.name.includes('+')) {
-                    matched = await DriverMatchService.linkChatToDriver(unifiedChat.id, { phone: unifiedChat.name })
+                    matched = await DriverMatchService.linkChatToDriver(unifiedChat.id, { phone: unifiedChat.name }, linkMatchedDriverToConversationV1)
                 }
                 if (matched) {
                     unifiedChat = await (prisma.chat as any).findUnique({ where: { id: unifiedChat.id } })
