@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendTelegramBotMessage } from '@/app/tg-bot-actions'
-import { changeDriverLimit } from '@/app/actions'
+import { changeDriverLimit } from '@/modules/fleet-operations/public/v1/yandex-fleet-operations'
 import { DriverMatchService } from '@/lib/DriverMatchService'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'

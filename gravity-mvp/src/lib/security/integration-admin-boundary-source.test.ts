@@ -22,7 +22,7 @@ function expectGuardBefore(source: string, name: string, firstProtectedOperation
 
 describe('integration credential authorization source boundary', () => {
     test('API connection credentials, logs, and provider tests authorize first', () => {
-        const source = read('src/app/actions.ts')
+        const source = read('src/modules/fleet-operations/public/v1/yandex-fleet-operations.ts')
         expectGuardBefore(source, 'getApiConnections', /prisma\.apiConnection/)
         expectGuardBefore(source, 'addApiConnection', /formData\.get/)
         expectGuardBefore(source, 'updateApiConnectionName', /updateApiConnectionNameV1/)

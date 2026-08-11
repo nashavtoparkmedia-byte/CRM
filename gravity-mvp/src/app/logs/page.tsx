@@ -1,4 +1,4 @@
-import { getApiLogs } from '../actions'
+import { getApiLogs } from '@/modules/fleet-operations/public/v1/yandex-fleet-operations'
 export const dynamic = 'force-dynamic'
 import NeumorphicCard from '@/components/NeumorphicCard'
 import Header from '@/components/Header'

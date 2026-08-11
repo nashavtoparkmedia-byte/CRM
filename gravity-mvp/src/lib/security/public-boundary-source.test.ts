@@ -7,7 +7,7 @@ const read = (path: string) => readFileSync(join(root, path), 'utf8')
 
 describe('browser-facing credential boundaries', () => {
     test('connection readers use explicit public projections', () => {
-        const api = read('src/app/actions.ts')
+        const api = read('src/modules/fleet-operations/public/v1/yandex-fleet-operations.ts')
         const telegram = read('src/app/tg-actions.ts')
         const max = read('src/app/max-actions.ts')
         const whatsapp = read('src/app/settings/integrations/whatsapp/whatsapp-actions.ts')
@@ -77,7 +77,7 @@ describe('browser-facing credential boundaries', () => {
     test('public projections are context-owned instead of a shared Platform Shell helper', () => {
         expect(existsSync(join(root, 'src/lib/security/public-credential-metadata.ts'))).toBe(false)
         const imports = [
-            read('src/app/actions.ts'),
+            read('src/modules/fleet-operations/public/v1/yandex-fleet-operations.ts'),
             read('src/app/max-actions.ts'),
             read('src/app/tg-actions.ts'),
             read('src/app/settings/integrations/whatsapp/whatsapp-actions.ts'),
@@ -100,7 +100,7 @@ describe('browser-facing credential boundaries', () => {
     })
 
     test('credential-bearing persistence failures do not emit invocation objects', () => {
-        const api = read('src/app/actions.ts')
+        const api = read('src/modules/fleet-operations/public/v1/yandex-fleet-operations.ts')
         const max = read('src/app/max-actions.ts')
         const telegram = read('src/app/tg-actions.ts')
         const whatsapp = read('src/lib/whatsapp/WhatsAppService.ts')

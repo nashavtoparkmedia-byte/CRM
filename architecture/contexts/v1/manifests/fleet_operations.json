@@ -248,7 +248,8 @@
     "FleetSyncStatus.v1",
     "ScheduledYandexSync.v1",
     "DriverCheckResult.v1",
-    "FleetMonitoringPolicy.v1"
+    "FleetMonitoringPolicy.v1",
+    "YandexFleetOperations.v1"
   ],
   "responsibility": "Driver/fleet state, Yandex synchronization and isolated YFS checking workflow.",
   "schema": "yoko.crm.module-manifest.v1",

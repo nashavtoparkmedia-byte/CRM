@@ -1,4 +1,4 @@
-import { getApiConnections } from '../../actions'
+import { getApiConnections } from '@/modules/fleet-operations/public/v1/yandex-fleet-operations'
 import ApiListClient from '../../ApiListClient'
 import {
     Table,

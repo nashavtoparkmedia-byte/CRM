@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { addApiConnection, deleteApiConnection, testApiRequest, updateApiConnectionName } from "./actions";
+import { addApiConnection, deleteApiConnection, testApiRequest, updateApiConnectionName } from '@/modules/fleet-operations/public/v1/yandex-fleet-operations';
 import type { ApiConnectionPublicMetadata } from "@/modules/fleet-operations/public/v1/api-connection-public-metadata";
 import { Trash2, Plus, Pencil, Check, Server, RefreshCw } from "lucide-react";
 import { Button } from "@/infrastructure/ui/button";
