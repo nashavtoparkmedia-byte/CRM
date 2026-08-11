@@ -11,11 +11,14 @@
 // Запуск: node gravity-mvp/scripts/cleanup_isakov_phantom.js
 
 /* eslint-disable @typescript-eslint/no-require-imports */
-const { cleanupIsakovPhantomV1 } = require('../src/modules/operations/public/v1/legacy-prisma-isakov-phantom-cleanup-adapter')
+const { repointIsakovLidIdentityV1, deactivateIsakovCusIdentityV1 } = require('../src/modules/contacts/public/v1/legacy-prisma-contact-identity-maintenance-adapter')
+const { resolveIsakovLegacyChatV1 } = require('../src/modules/messaging/public/v1/legacy-prisma-chat-status-maintenance-adapter')
 
 async function main() {
     console.log('[cleanup] start contactId=cmnjf14sc01cxvp08klpvpz5d')
-    await cleanupIsakovPhantomV1()
+    await repointIsakovLidIdentityV1()
+    await deactivateIsakovCusIdentityV1()
+    await resolveIsakovLegacyChatV1()
 
     console.log('[cleanup] DONE — теперь нужно soft-delete фантом phone через DELETE /api/contacts/.../phones/...')
 }
