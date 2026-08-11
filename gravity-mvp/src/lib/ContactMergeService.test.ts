@@ -17,9 +17,12 @@ vi.mock('@/modules/contacts/public/v1', () => {
 
   return {
     ContactMergeErrorV1,
-    mergeContactsV1: mocks.mergeContactsV1,
   }
 })
+
+vi.mock('@/infrastructure/contact-merge-composition', () => ({
+  mergeContactsV1: mocks.mergeContactsV1,
+}))
 
 import { MERGE_CONTACTS_COMMAND_V1, MERGE_CONTACTS_RESULT_V1 } from '@/contracts/contacts/v1'
 import { ContactMergeService, MergeError } from './ContactMergeService'
