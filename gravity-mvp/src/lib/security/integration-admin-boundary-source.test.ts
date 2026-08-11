@@ -28,7 +28,7 @@ describe('integration credential authorization source boundary', () => {
         expectGuardBefore(source, 'updateApiConnectionName', /updateApiConnectionNameV1/)
         expectGuardBefore(source, 'deleteApiConnection', /deleteApiLogsV1/)
         expectGuardBefore(source, 'getApiLogs', /prisma\.apiLog/)
-        expectGuardBefore(source, 'testApiRequest', /prisma\.apiConnection/)
+        expectGuardBefore(source, 'testApiRequest', /getYandexConnectionCredentialsV1/)
     })
 
     test('Telegram login and connection-management ceremonies authorize first', () => {
@@ -99,7 +99,7 @@ describe('integration credential authorization source boundary', () => {
         expect(guard).not.toContain("cookies()")
         expect(guard).not.toMatch(/get\(['"]crm_user_id/)
         expect(exportedFunction(source, 'saveAiConfig')).toMatch(/await assertCanEditAi\(\)/)
-        expectGuardBefore(source, 'getAiConfig', /prisma\.aiAgentConfig/)
+        expectGuardBefore(source, 'getAiConfig', /getAiAgentProviderConfigV1/)
         expect(exportedFunction(source, 'testSavedConnection')).toMatch(/await assertCanEditAi\(\)/)
         expect(exportedFunction(source, 'testAiConnection')).toMatch(/await assertCanEditAi\(\)/)
     })
