@@ -1,5 +1,10 @@
 {
-  "allowed_dependencies": [],
+  "allowed_dependencies": [
+    {
+      "context": "calling",
+      "surface": "calling.public"
+    }
+  ],
   "commands": [
     "ExtractKnowledgeCommand.v1",
     "UpdateRetrievalPolicyCommand.v1",

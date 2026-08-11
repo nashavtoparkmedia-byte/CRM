@@ -5,16 +5,8 @@
       "surface": "contacts.public"
     },
     {
-      "context": "messaging",
-      "surface": "messaging.public"
-    },
-    {
       "context": "work_management",
       "surface": "work_management.public"
-    },
-    {
-      "context": "ai_knowledge",
-      "surface": "ai_knowledge.public"
     }
   ],
   "commands": [

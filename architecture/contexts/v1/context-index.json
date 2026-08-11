@@ -3,7 +3,7 @@
     {
       "context": "ai_knowledge",
       "path": "architecture/contexts/v1/manifests/ai_knowledge.json",
-      "sha256": "01e38e0d0d9661392e353b1b49a972b44f58c3c5227510e5b396ab40a961424f"
+      "sha256": "69f9cf9a9a14a62313a293f7622fcb5a06db7bc91af04d628002c07ea7218d6a"
     },
     {
       "context": "analytics_reporting",
@@ -18,7 +18,7 @@
     {
       "context": "calling",
       "path": "architecture/contexts/v1/manifests/calling.json",
-      "sha256": "2dac46bc1189d60e2c8016b81248d72991fd937a9a18115c58d007fc351d6ad9"
+      "sha256": "63252285d40e81db8eeb15f3c99d796f81e6a9f612031ecc7911ba4b1b8f41d1"
     },
     {
       "context": "configuration",
@@ -53,7 +53,7 @@
     {
       "context": "messaging",
       "path": "architecture/contexts/v1/manifests/messaging.json",
-      "sha256": "a43006cc8fba25a93c5a914dee4642b533fc96ff32ff6c1459b9639256be3df3"
+      "sha256": "4b802a788028cbd1b9f387433e399c7c8d60124e2927a4e7d1d4cfdfca39dc12"
     },
     {
       "context": "operations_observability",

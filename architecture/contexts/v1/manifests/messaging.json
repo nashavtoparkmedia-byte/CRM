@@ -15,6 +15,10 @@
     {
       "context": "ai_knowledge",
       "surface": "ai_knowledge.public"
+    },
+    {
+      "context": "calling",
+      "surface": "calling.public"
     }
   ],
   "commands": [
