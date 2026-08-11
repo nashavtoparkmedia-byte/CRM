@@ -261,3 +261,7 @@ This task made zero production source mutations, database mutations, service res
 ## Exact next action
 
 Credential boundary classification, provider capability routing, and public serialization remediation are internally closed for this batch. The current credential inventory is `403` accesses with `81` statically ambiguous records fully classified, `0` material unresolved, `0` confirmed public exposure, and `0` cross-domain capability gaps. Proceed automatically to `LIVE ARCHITECTURE DEBT RECOMPUTE`; preserve Messages and AI Calls behavior.
+
+### Live architecture debt recompute
+
+The bounded recompute scanned 1,092 files across 16 contexts. Current detector/live debt is: 374 internal imports, 530 non-public cross-context imports, 347 undeclared dependencies, 38 provider-transport accesses, 5 direct foreign Prisma writes, 13 uncovered findings, and 3 stale exceptions (1,294 findings / 1,284 exception-covered). Detector parse health is zero errors; the finding digest is stale and must be reconciled before authoritative CI. Evidence is in `LIVE_ARCHITECTURE_DEBT_RECOMPUTE_20260811.json` and `LIVE_ARCHITECTURE_DEBT_SUMMARY_20260811.json`.

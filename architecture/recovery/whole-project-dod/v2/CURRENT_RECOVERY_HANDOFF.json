@@ -775,5 +775,26 @@
     "material_credential_unresolved": 0,
     "cross_domain_capability_gaps": 0,
     "verdict": "CREDENTIAL_BOUNDARY_CLOSED_INTERNAL; WHOLE_PROJECT_NOT_READY"
+  },
+  "live_architecture_debt_recompute": {
+    "artifact": "architecture/recovery/whole-project-dod/v2/LIVE_ARCHITECTURE_DEBT_RECOMPUTE_20260811.json",
+    "summary": "architecture/recovery/whole-project-dod/v2/LIVE_ARCHITECTURE_DEBT_SUMMARY_20260811.json",
+    "scanned_files": 1092,
+    "contexts": 16,
+    "findings": 1294,
+    "exception_covered": 1284,
+    "open_findings": 13,
+    "stale_exceptions": 3,
+    "exception_debt": 10,
+    "internal_module_imports": 374,
+    "non_public_cross_context_imports": 530,
+    "undeclared_dependencies": 347,
+    "provider_transport_accesses": 38,
+    "direct_foreign_prisma_writes": 5,
+    "contract_gaps": 0,
+    "manifest_gaps": 0,
+    "detector_parse_errors": 0,
+    "detector_finding_digest_mismatch": 1,
+    "verdict": "LIVE_DEBT_REMAINS"
   }
 }
