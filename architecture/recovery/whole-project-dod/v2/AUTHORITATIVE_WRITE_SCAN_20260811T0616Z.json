@@ -1,12 +1,12 @@
 {
-  "analysis_sha256": "84f8343ecfff4cec4eb594e453464b3d30a0802b28a462a174c3f3c29a74a790",
+  "analysis_sha256": "ec68e7c423a746ed76ea8f785ee83bd89a588ab12f1caa1f46184fd2ea6a8439",
   "execution": {
     "ambiguous_candidates": 254,
     "complete": true,
-    "elapsed_ms": 366664.017872,
+    "elapsed_ms": 379286.036041,
     "failures": [],
-    "files_completed": 1695,
-    "files_discovered": 1695,
+    "files_completed": 1693,
+    "files_discovered": 1693,
     "mode": "fresh_process_per_javascript_surface",
     "progress_every": 150,
     "worker_failures": 0,
@@ -55,12 +55,12 @@
         ".py": 25,
         ".sh": 24,
         ".sql": 53,
-        ".ts": 760,
+        ".ts": 758,
         ".tsx": 240,
         ".yml": 6
       },
       "by_lifecycle": {
-        "APPLICATION_RUNTIME": 981,
+        "APPLICATION_RUNTIME": 979,
         "DEAD_HISTORICAL": 29,
         "FIXTURE": 1,
         "MIGRATION": 48,
@@ -72,7 +72,7 @@
         "MIGRATION_ONLY": 48,
         "UNREVIEWED": 382
       },
-      "tracked_executable_surfaces": 1695,
+      "tracked_executable_surfaces": 1693,
       "unreviewed_operational_surfaces": 382
     },
     "surfaces": [
@@ -12919,17 +12919,6 @@
         "lifecycle": "APPLICATION_RUNTIME",
         "migration_target": null,
         "owner_context": null,
-        "path": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-contact-merge-adapter.ts",
-        "production_capability": "POSSIBLE",
-        "rationale": null,
-        "registry_classified": false
-      },
-      {
-        "disposition": null,
-        "extension": ".ts",
-        "lifecycle": "APPLICATION_RUNTIME",
-        "migration_target": null,
-        "owner_context": null,
         "path": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-contact-retention-adapter.ts",
         "production_capability": "POSSIBLE",
         "rationale": null,
@@ -13668,17 +13657,6 @@
         "migration_target": null,
         "owner_context": null,
         "path": "gravity-mvp/src/modules/work-management/public/v1/legacy-prisma-completion-adapter.ts",
-        "production_capability": "POSSIBLE",
-        "rationale": null,
-        "registry_classified": false
-      },
-      {
-        "disposition": null,
-        "extension": ".ts",
-        "lifecycle": "APPLICATION_RUNTIME",
-        "migration_target": null,
-        "owner_context": null,
-        "path": "gravity-mvp/src/modules/work-management/public/v1/legacy-prisma-contact-merge-adapter.ts",
         "production_capability": "POSSIBLE",
         "rationale": null,
         "registry_classified": false
@@ -18726,9 +18704,9 @@
   "parse_findings": [],
   "schema": "yoko.crm.whole-repository-write-analysis.v2",
   "source": {
-    "git_commit": "c0dd1c88fc37788486d6c8bae48c84ad763716b4",
+    "git_commit": "b269e89865b2918f0cb6981f81ebbe1916aaf6ea",
     "git_tracked_only": true,
-    "git_tree": "473c24ad21a435a8410fd9b3593021817ed6f726",
+    "git_tree": "e47e21a9c4b36a1cb77c4f963f3bb56a89c50c7c",
     "inventory_schema": "yoko.crm.tracked-executable-surface-inventory.v2",
     "repository_root": ".",
     "tracked_worktree_clean": true,
@@ -18737,15 +18715,15 @@
   "summary": {
     "ambiguous_writes": 254,
     "discovered_write_sites": 1445,
-    "foreign_writes": 0,
+    "foreign_writes": 5,
     "historical_dead_writes": 0,
     "migration_only_writes": 468,
     "operational_script_writes": 205,
-    "owner_writes": 489,
+    "owner_writes": 484,
     "parse_findings": 0,
     "raw_sql_writes": 836,
     "test_writes": 234,
-    "tracked_executable_surfaces": 1695,
+    "tracked_executable_surfaces": 1693,
     "unreviewed_operational_surfaces": 382
   },
   "write_sites": [
@@ -77527,11 +77505,11 @@
       "column": 35,
       "confidence": "HIGH",
       "dynamic": true,
-      "end": 1643,
+      "end": 1400,
       "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
-      "index": 1450,
+      "index": 1207,
       "kind": "raw",
-      "line": 47,
+      "line": 45,
       "method": "$queryRaw",
       "model": null,
       "operations": [],
@@ -77583,11 +77561,11 @@
       "column": 15,
       "confidence": "HIGH",
       "dynamic": true,
-      "end": 2667,
+      "end": 2424,
       "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
-      "index": 2506,
+      "index": 2263,
       "kind": "raw",
-      "line": 85,
+      "line": 83,
       "method": "$queryRaw",
       "model": null,
       "operations": [],
@@ -77648,11 +77626,11 @@
       "classification": "OWNER",
       "column": 15,
       "confidence": "HIGH",
-      "end": 3231,
+      "end": 2988,
       "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
-      "index": 3134,
+      "index": 2891,
       "kind": "model",
-      "line": 105,
+      "line": 103,
       "method": "update",
       "model": "contact",
       "nested_operations": [],
@@ -77695,11 +77673,11 @@
       "classification": "OWNER",
       "column": 15,
       "confidence": "HIGH",
-      "end": 3406,
+      "end": 3163,
       "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
-      "index": 3309,
+      "index": 3066,
       "kind": "model",
-      "line": 112,
+      "line": 110,
       "method": "deleteMany",
       "model": "contactIdentity",
       "nested_operations": [],
@@ -77736,11 +77714,11 @@
       "classification": "OWNER",
       "column": 15,
       "confidence": "HIGH",
-      "end": 3651,
+      "end": 3408,
       "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
-      "index": 3503,
+      "index": 3260,
       "kind": "model",
-      "line": 118,
+      "line": 116,
       "method": "updateMany",
       "model": "contactIdentity",
       "nested_operations": [],
@@ -77779,11 +77757,11 @@
       "classification": "OWNER",
       "column": 15,
       "confidence": "HIGH",
-      "end": 3813,
+      "end": 3570,
       "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
-      "index": 3722,
+      "index": 3479,
       "kind": "model",
-      "line": 125,
+      "line": 123,
       "method": "deleteMany",
       "model": "contactPhone",
       "nested_operations": [],
@@ -77820,11 +77798,11 @@
       "classification": "OWNER",
       "column": 15,
       "confidence": "HIGH",
-      "end": 4051,
+      "end": 3808,
       "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
-      "index": 3906,
+      "index": 3663,
       "kind": "model",
-      "line": 131,
+      "line": 129,
       "method": "updateMany",
       "model": "contactPhone",
       "nested_operations": [],
@@ -77862,11 +77840,11 @@
       "column": 19,
       "confidence": "HIGH",
       "dynamic": false,
-      "end": 4791,
+      "end": 4548,
       "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
-      "index": 4167,
+      "index": 3924,
       "kind": "raw",
-      "line": 139,
+      "line": 137,
       "method": "$queryRaw",
       "model": null,
       "operations": [
@@ -77936,11 +77914,11 @@
       "column": 19,
       "confidence": "HIGH",
       "dynamic": false,
-      "end": 5439,
+      "end": 5196,
       "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
-      "index": 4810,
+      "index": 4567,
       "kind": "raw",
-      "line": 155,
+      "line": 153,
       "method": "$queryRaw",
       "model": null,
       "operations": [
@@ -78011,11 +77989,11 @@
       "classification": "OWNER",
       "column": 15,
       "confidence": "HIGH",
-      "end": 5650,
+      "end": 5407,
       "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
-      "index": 5537,
+      "index": 5294,
       "kind": "model",
-      "line": 175,
+      "line": 173,
       "method": "update",
       "model": "contact",
       "nested_operations": [],
@@ -78049,6 +78027,222 @@
       "write_projection_dynamic": false,
       "written_fields": [
         "isArchived"
+      ]
+    },
+    {
+      "ambiguity_reasons": [],
+      "ambiguous": false,
+      "candidate_models": [
+        "chat"
+      ],
+      "classification": "FOREIGN",
+      "column": 15,
+      "confidence": "HIGH",
+      "end": 5934,
+      "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
+      "index": 5785,
+      "kind": "model",
+      "line": 192,
+      "method": "updateMany",
+      "model": "chat",
+      "nested_operations": [],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "transaction-callback:import:@/lib/prisma",
+      "return_projection": null,
+      "scope": "Function:makeTransactionalRepositories/Property:messaging/Method:remapChatsToIdentity",
+      "site_signature": "fd0d4cc29c1d49f02ff7910f67b283286eb39d5bfed9c9a5f5d4215487a775b6",
+      "source_context": "contacts",
+      "source_identity": "bounded_module_path",
+      "source_technical_module": "contacts.module",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "transaction": {
+        "contained": true,
+        "origin": "transaction-callback:import:@/lib/prisma"
+      },
+      "unresolved_targets": [],
+      "write_projection_dynamic": false,
+      "written_fields": [
+        "contactIdentityId"
+      ]
+    },
+    {
+      "ambiguity_reasons": [],
+      "ambiguous": false,
+      "candidate_models": [
+        "chat"
+      ],
+      "classification": "FOREIGN",
+      "column": 15,
+      "confidence": "HIGH",
+      "end": 6163,
+      "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
+      "index": 6026,
+      "kind": "model",
+      "line": 199,
+      "method": "updateMany",
+      "model": "chat",
+      "nested_operations": [],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "transaction-callback:import:@/lib/prisma",
+      "return_projection": null,
+      "scope": "Function:makeTransactionalRepositories/Property:messaging/Method:moveChatsToContact",
+      "site_signature": "303ede4e6a0a5e21c83227e91be86b6c3c6075bbd59af5328d09a943cb4dac02",
+      "source_context": "contacts",
+      "source_identity": "bounded_module_path",
+      "source_technical_module": "contacts.module",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "transaction": {
+        "contained": true,
+        "origin": "transaction-callback:import:@/lib/prisma"
+      },
+      "unresolved_targets": [],
+      "write_projection_dynamic": false,
+      "written_fields": [
+        "contactId"
+      ]
+    },
+    {
+      "ambiguity_reasons": [],
+      "ambiguous": false,
+      "candidate_models": [
+        "chat"
+      ],
+      "classification": "FOREIGN",
+      "column": 15,
+      "confidence": "HIGH",
+      "end": 6453,
+      "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
+      "index": 6271,
+      "kind": "model",
+      "line": 206,
+      "method": "updateMany",
+      "model": "chat",
+      "nested_operations": [],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "transaction-callback:import:@/lib/prisma",
+      "return_projection": null,
+      "scope": "Function:makeTransactionalRepositories/Property:messaging/Method:moveChatsToDriverContact",
+      "site_signature": "609555707c25406e3ec793c1773337f39277be88ec2825c65760bf2372c04aa0",
+      "source_context": "contacts",
+      "source_identity": "bounded_module_path",
+      "source_technical_module": "contacts.module",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "transaction": {
+        "contained": true,
+        "origin": "transaction-callback:import:@/lib/prisma"
+      },
+      "unresolved_targets": [],
+      "write_projection_dynamic": false,
+      "written_fields": [
+        "contactId",
+        "driverId"
+      ]
+    },
+    {
+      "ambiguity_reasons": [],
+      "ambiguous": false,
+      "candidate_models": [
+        "chat"
+      ],
+      "classification": "FOREIGN",
+      "column": 15,
+      "confidence": "HIGH",
+      "end": 6701,
+      "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
+      "index": 6548,
+      "kind": "model",
+      "line": 216,
+      "method": "updateMany",
+      "model": "chat",
+      "nested_operations": [],
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "transaction-callback:import:@/lib/prisma",
+      "return_projection": null,
+      "scope": "Function:makeTransactionalRepositories/Property:messaging/Method:attachUnlinkedContactChatsToDriver",
+      "site_signature": "a046d7d8f7f8ce32d90466a51741bdc7cc877549ea486cbc370fdc498680b40c",
+      "source_context": "contacts",
+      "source_identity": "bounded_module_path",
+      "source_technical_module": "contacts.module",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "transaction": {
+        "contained": true,
+        "origin": "transaction-callback:import:@/lib/prisma"
+      },
+      "unresolved_targets": [],
+      "write_projection_dynamic": false,
+      "written_fields": [
+        "driverId"
+      ]
+    },
+    {
+      "ambiguity_reasons": [],
+      "ambiguous": false,
+      "candidate_models": [
+        "task"
+      ],
+      "classification": "FOREIGN",
+      "column": 15,
+      "confidence": "HIGH",
+      "end": 6949,
+      "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
+      "index": 6812,
+      "kind": "model",
+      "line": 228,
+      "method": "updateMany",
+      "model": "task",
+      "nested_operations": [],
+      "owner_contexts": [
+        "work_management"
+      ],
+      "receiver_origin": "transaction-callback:import:@/lib/prisma",
+      "return_projection": null,
+      "scope": "Function:makeTransactionalRepositories/Property:work/Method:moveTasksToContact",
+      "site_signature": "a8deef7cb61f531dc753996ec170d980348ddd0f3206682059dbac53268d08ff",
+      "source_context": "contacts",
+      "source_identity": "bounded_module_path",
+      "source_technical_module": "contacts.module",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "transaction": {
+        "contained": true,
+        "origin": "transaction-callback:import:@/lib/prisma"
+      },
+      "unresolved_targets": [],
+      "write_projection_dynamic": false,
+      "written_fields": [
+        "contactId"
       ]
     },
     {
@@ -80145,179 +80339,6 @@
         "externalChatId",
         "name",
         "status"
-      ]
-    },
-    {
-      "ambiguity_reasons": [],
-      "ambiguous": false,
-      "candidate_models": [
-        "chat"
-      ],
-      "classification": "OWNER",
-      "column": 13,
-      "confidence": "MEDIUM",
-      "end": 674,
-      "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-contact-merge-adapter.ts",
-      "index": 531,
-      "kind": "model",
-      "line": 12,
-      "method": "updateMany",
-      "model": "chat",
-      "nested_operations": [],
-      "owner_contexts": [
-        "messaging"
-      ],
-      "receiver_origin": "typed-parameter:transaction",
-      "return_projection": null,
-      "scope": "Function:makeMessagingContactMergeRepositories/Method:remapChatsToIdentity",
-      "site_signature": "e12cc57797d94e8069f3400c362e398b97ed46179a2afab16b3f380b28136b84",
-      "source_context": "messaging",
-      "source_identity": "bounded_module_path",
-      "source_technical_module": "messaging.module",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "APPLICATION_RUNTIME",
-        "production_capability": "POSSIBLE",
-        "registry_classified": false
-      },
-      "transaction": {
-        "contained": true,
-        "origin": "typed-parameter:transaction"
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": false,
-      "written_fields": [
-        "contactIdentityId"
-      ]
-    },
-    {
-      "ambiguity_reasons": [],
-      "ambiguous": false,
-      "candidate_models": [
-        "chat"
-      ],
-      "classification": "OWNER",
-      "column": 13,
-      "confidence": "MEDIUM",
-      "end": 907,
-      "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-contact-merge-adapter.ts",
-      "index": 776,
-      "kind": "model",
-      "line": 19,
-      "method": "updateMany",
-      "model": "chat",
-      "nested_operations": [],
-      "owner_contexts": [
-        "messaging"
-      ],
-      "receiver_origin": "typed-parameter:transaction",
-      "return_projection": null,
-      "scope": "Function:makeMessagingContactMergeRepositories/Method:moveChatsToContact",
-      "site_signature": "dc724d9d48c98477ad4419142269df90382f79b0fdd10388a413be419e31d0f2",
-      "source_context": "messaging",
-      "source_identity": "bounded_module_path",
-      "source_technical_module": "messaging.module",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "APPLICATION_RUNTIME",
-        "production_capability": "POSSIBLE",
-        "registry_classified": false
-      },
-      "transaction": {
-        "contained": true,
-        "origin": "typed-parameter:transaction"
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": false,
-      "written_fields": [
-        "contactId"
-      ]
-    },
-    {
-      "ambiguity_reasons": [],
-      "ambiguous": false,
-      "candidate_models": [
-        "chat"
-      ],
-      "classification": "OWNER",
-      "column": 13,
-      "confidence": "MEDIUM",
-      "end": 1174,
-      "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-contact-merge-adapter.ts",
-      "index": 1033,
-      "kind": "model",
-      "line": 26,
-      "method": "updateMany",
-      "model": "chat",
-      "nested_operations": [],
-      "owner_contexts": [
-        "messaging"
-      ],
-      "receiver_origin": "typed-parameter:transaction",
-      "return_projection": null,
-      "scope": "Function:makeMessagingContactMergeRepositories/Method:moveChatsToDriverContact",
-      "site_signature": "1f7fc90f695486030b8ef6850c5a4c5c6fb392f8de6a4b7533b41845c85a9b86",
-      "source_context": "messaging",
-      "source_identity": "bounded_module_path",
-      "source_technical_module": "messaging.module",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "APPLICATION_RUNTIME",
-        "production_capability": "POSSIBLE",
-        "registry_classified": false
-      },
-      "transaction": {
-        "contained": true,
-        "origin": "typed-parameter:transaction"
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": false,
-      "written_fields": [
-        "contactId",
-        "driverId"
-      ]
-    },
-    {
-      "ambiguity_reasons": [],
-      "ambiguous": false,
-      "candidate_models": [
-        "chat"
-      ],
-      "classification": "OWNER",
-      "column": 13,
-      "confidence": "MEDIUM",
-      "end": 1391,
-      "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-contact-merge-adapter.ts",
-      "index": 1279,
-      "kind": "model",
-      "line": 33,
-      "method": "updateMany",
-      "model": "chat",
-      "nested_operations": [],
-      "owner_contexts": [
-        "messaging"
-      ],
-      "receiver_origin": "typed-parameter:transaction",
-      "return_projection": null,
-      "scope": "Function:makeMessagingContactMergeRepositories/Method:attachUnlinkedContactChatsToDriver",
-      "site_signature": "c80a1a12b249bac2a970ff193be6f83c4ef5e35c99ee81136e14ed768b06938b",
-      "source_context": "messaging",
-      "source_identity": "bounded_module_path",
-      "source_technical_module": "messaging.module",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "APPLICATION_RUNTIME",
-        "production_capability": "POSSIBLE",
-        "registry_classified": false
-      },
-      "transaction": {
-        "contained": true,
-        "origin": "typed-parameter:transaction"
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": false,
-      "written_fields": [
-        "driverId"
       ]
     },
     {
@@ -83727,49 +83748,6 @@
         "resolvedAt",
         "resolvedBy",
         "status"
-      ]
-    },
-    {
-      "ambiguity_reasons": [],
-      "ambiguous": false,
-      "candidate_models": [
-        "task"
-      ],
-      "classification": "OWNER",
-      "column": 13,
-      "confidence": "MEDIUM",
-      "end": 529,
-      "file": "gravity-mvp/src/modules/work-management/public/v1/legacy-prisma-contact-merge-adapter.ts",
-      "index": 398,
-      "kind": "model",
-      "line": 10,
-      "method": "updateMany",
-      "model": "task",
-      "nested_operations": [],
-      "owner_contexts": [
-        "work_management"
-      ],
-      "receiver_origin": "typed-parameter:transaction",
-      "return_projection": null,
-      "scope": "Function:makeWorkContactMergeRepositories/Method:moveTasksToContact",
-      "site_signature": "5c4e06b647173e870c2a2c349a54dd17af37d22d5e5efc8f2d6e5da3f0c56a60",
-      "source_context": "work_management",
-      "source_identity": "bounded_module_path",
-      "source_technical_module": "work_management.module",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "APPLICATION_RUNTIME",
-        "production_capability": "POSSIBLE",
-        "registry_classified": false
-      },
-      "transaction": {
-        "contained": true,
-        "origin": "typed-parameter:transaction"
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": false,
-      "written_fields": [
-        "contactId"
       ]
     },
     {
