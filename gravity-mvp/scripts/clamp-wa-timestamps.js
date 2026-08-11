@@ -5,6 +5,9 @@
  *
  * Safe to re-run.
  */
+/* eslint-disable @typescript-eslint/no-require-imports */
+const { repairMessageSentAtV1 } = require('../src/modules/messaging/public/v1/legacy-prisma-message-timestamp-maintenance-adapter')
+const { repairWhatsAppMessageTimestampV1 } = require('../src/modules/whatsapp-channel/public/v1/legacy-prisma-whatsapp-message-timestamp-maintenance-adapter')
 const { PrismaClient } = require('@prisma/client')
 const prisma = new PrismaClient()
 
@@ -28,10 +31,7 @@ async function main() {
         const replacement = m.createdAt && m.createdAt < maxAllowed && m.createdAt > MIN
             ? m.createdAt
             : now
-        await prisma.message.update({
-            where: { id: m.id },
-            data: { sentAt: replacement },
-        })
+        await repairMessageSentAtV1(m.id, replacement)
         console.log(`   [M] id=${m.id.slice(0, 8)}… sentAt ${m.sentAt?.toISOString()} → ${replacement.toISOString()}`)
     }
 
@@ -44,10 +44,7 @@ async function main() {
     })
     console.log(`[CLAMP] Legacy WhatsAppMessage rows with bad timestamp: ${badLegacy.length}`)
     for (const m of badLegacy) {
-        await prisma.whatsAppMessage.update({
-            where: { id_chatId: { id: m.id, chatId: m.chatId } },
-            data: { timestamp: now },
-        })
+        await repairWhatsAppMessageTimestampV1(m.id, m.chatId, now)
         console.log(`   [WM] id=${m.id.slice(0, 8)}… chat=${m.chatId}  ${m.timestamp?.toISOString()} → ${now.toISOString()}`)
     }
 
