@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { broadcastChatMessage } from '@/lib/messageStreamBus'
+import { broadcastChatMessageV1 as broadcastChatMessage } from '@/modules/messaging/public/v1/message-stream'
 import { PATCH_MESSAGE_METADATA_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { patchMessageMetadataV1 } from '@/modules/messaging/public/v1'
 

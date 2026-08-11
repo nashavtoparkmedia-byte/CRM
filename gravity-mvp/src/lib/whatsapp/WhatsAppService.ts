@@ -7,7 +7,7 @@ import { addPhoneToContactV1, resolveChannelContactOperationV1 } from '@/modules
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import { enrichWaChatNameFromSibling } from '@/lib/whatsapp/enrichChatName'
 import { emitMessageReceived } from '@/lib/messageEvents'
-import { broadcastChatMessage } from '@/lib/messageStreamBus'
+import { broadcastChatMessageV1 as broadcastChatMessage } from '@/modules/messaging/public/v1/message-stream'
 import * as registry from '@/lib/TransportRegistry'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { WWEBJS_AUTH_DIR } from '@/lib/whatsapp/WhatsAppCleanup'

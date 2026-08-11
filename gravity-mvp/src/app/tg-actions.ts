@@ -769,7 +769,7 @@ async function processReactionUpdate(event: any) {
         const updatedMetadata = { ...((message.metadata as Record<string, any>) || {}), reactions: reactionsMap }
         await patchMessageMetadataV1({ contract: PATCH_MESSAGE_METADATA_COMMAND_V1, messageId: message.id, metadata: updatedMetadata })
 
-        const { broadcastChatMessage } = await import('@/lib/messageStreamBus')
+        const { broadcastChatMessageV1: broadcastChatMessage } = await import('@/modules/messaging/public/v1/message-stream')
         broadcastChatMessage(message.chatId, { id: message.id, metadata: updatedMetadata })
 
         console.log(`[TG-REACTION] msg=${message.id} reactions=${JSON.stringify(reactionsMap)}`)
