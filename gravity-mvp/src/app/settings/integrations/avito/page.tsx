@@ -37,8 +37,8 @@ import { Button } from '@/infrastructure/ui/button';
 import { Badge } from '@/infrastructure/ui/badge';
 import { Card } from '@/infrastructure/ui/card';
 import { Input } from '@/infrastructure/ui/input';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/infrastructure/ui/label';
+import { Checkbox } from '@/infrastructure/ui/checkbox';
 import {
   Dialog,
   DialogContent,

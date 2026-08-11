@@ -5,7 +5,7 @@ import { dashboardCards } from '@/lib/mock/dashboardData'
 import { SectionDescription } from '@/infrastructure/ui/SectionDescription'
 import { PageContainer } from '@/infrastructure/ui/PageContainer'
 import { PageHeader } from '@/infrastructure/ui/PageHeader'
-import { DashboardTabs } from '@/components/ui/DashboardTabs'
+import { DashboardTabs } from '@/infrastructure/ui/DashboardTabs'
 
 export const dynamic = 'force-dynamic'
 

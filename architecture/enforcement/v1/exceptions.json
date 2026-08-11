@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "de4af584299bd0d18341e20bab64b1ace73203dec028d27f80e51c2a2bb1e1a9",
+  "finding_digest": "1958e787bb1bd0695dcec3607205d2e31ca541ab50bd0bb10db1566e2abc31b3",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,9 +13,9 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "internal_module_import": 65,
-    "non_public_cross_context_import": 111,
-    "undeclared_dependency": 32
+    "internal_module_import": 59,
+    "non_public_cross_context_import": 105,
+    "undeclared_dependency": 26
   },
   "exceptions": [
     {
@@ -915,108 +915,6 @@
       "migration_references": [
         "dependency:fleet_operations/drivers>operations_observability/monitoring",
         "dependency:fleet_operations/yandex_fleet>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_087c0c872f730e1268b2d7bd",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/logs/page.tsx",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "platform_shell",
-      "subject": "monitoring>gravity_ui:gravity-mvp/src/components/NeumorphicCard.tsx",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>platform_shell/gravity_core",
-        "dependency:operations_observability/monitoring>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_310ca4f020e359093a00d9c8",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/logs/page.tsx",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "platform_shell",
-      "subject": "monitoring>gravity_ui:gravity-mvp/src/components/NeumorphicCard.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>platform_shell/gravity_core",
-        "dependency:operations_observability/monitoring>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_bcb493581bbcbcca7ff59f9f",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/logs/page.tsx",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "platform_shell",
-      "subject": "monitoring>gravity_ui:gravity-mvp/src/components/NeumorphicCard.tsx",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>platform_shell/gravity_core",
-        "dependency:operations_observability/monitoring>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_3594135c8ed344837894cd8f",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/logs/page.tsx",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "platform_shell",
-      "subject": "monitoring>gravity_ui:gravity-mvp/src/components/Header.tsx",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>platform_shell/gravity_core",
-        "dependency:operations_observability/monitoring>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_4f220a5e6473a4f960062784",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/logs/page.tsx",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "platform_shell",
-      "subject": "monitoring>gravity_ui:gravity-mvp/src/components/Header.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>platform_shell/gravity_core",
-        "dependency:operations_observability/monitoring>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_3f590564cab17304c7505368",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/logs/page.tsx",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "platform_shell",
-      "subject": "monitoring>gravity_ui:gravity-mvp/src/components/Header.tsx",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>platform_shell/gravity_core",
-        "dependency:operations_observability/monitoring>platform_shell/gravity_ui"
       ]
     },
     {
@@ -2180,120 +2078,6 @@
       ]
     },
     {
-      "fingerprint": "arch_4a8282fec3e436baba04b8fb",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/settings/integrations/avito/page.tsx",
-      "line_at_baseline": 40,
-      "ordinal": 1,
-      "owner_context": "avito_acquisition",
-      "target_context": "platform_shell",
-      "subject": "avito>gravity_ui:gravity-mvp/src/components/ui/label.tsx",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:avito_acquisition/avito>platform_shell/gravity_core",
-        "dependency:avito_acquisition/avito>platform_shell/gravity_ui",
-        "dependency:avito_acquisition/leads>platform_shell/gravity_core",
-        "dependency:avito_acquisition/leads>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_0e60b93f6b36d0fcdca44dea",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/settings/integrations/avito/page.tsx",
-      "line_at_baseline": 40,
-      "ordinal": 1,
-      "owner_context": "avito_acquisition",
-      "target_context": "platform_shell",
-      "subject": "avito>gravity_ui:gravity-mvp/src/components/ui/label.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:avito_acquisition/avito>platform_shell/gravity_core",
-        "dependency:avito_acquisition/avito>platform_shell/gravity_ui",
-        "dependency:avito_acquisition/leads>platform_shell/gravity_core",
-        "dependency:avito_acquisition/leads>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_51342d5051de60ceac15ba0c",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/settings/integrations/avito/page.tsx",
-      "line_at_baseline": 40,
-      "ordinal": 1,
-      "owner_context": "avito_acquisition",
-      "target_context": "platform_shell",
-      "subject": "avito>gravity_ui:gravity-mvp/src/components/ui/label.tsx",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:avito_acquisition/avito>platform_shell/gravity_core",
-        "dependency:avito_acquisition/avito>platform_shell/gravity_ui",
-        "dependency:avito_acquisition/leads>platform_shell/gravity_core",
-        "dependency:avito_acquisition/leads>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_9368d8da35f331f283510c8c",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/settings/integrations/avito/page.tsx",
-      "line_at_baseline": 41,
-      "ordinal": 1,
-      "owner_context": "avito_acquisition",
-      "target_context": "platform_shell",
-      "subject": "avito>gravity_ui:gravity-mvp/src/components/ui/checkbox.tsx",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:avito_acquisition/avito>platform_shell/gravity_core",
-        "dependency:avito_acquisition/avito>platform_shell/gravity_ui",
-        "dependency:avito_acquisition/leads>platform_shell/gravity_core",
-        "dependency:avito_acquisition/leads>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_e80539055ba2d74da7b8e297",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/settings/integrations/avito/page.tsx",
-      "line_at_baseline": 41,
-      "ordinal": 1,
-      "owner_context": "avito_acquisition",
-      "target_context": "platform_shell",
-      "subject": "avito>gravity_ui:gravity-mvp/src/components/ui/checkbox.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:avito_acquisition/avito>platform_shell/gravity_core",
-        "dependency:avito_acquisition/avito>platform_shell/gravity_ui",
-        "dependency:avito_acquisition/leads>platform_shell/gravity_core",
-        "dependency:avito_acquisition/leads>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_d520ba541b4661c39fcaf03f",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/settings/integrations/avito/page.tsx",
-      "line_at_baseline": 41,
-      "ordinal": 1,
-      "owner_context": "avito_acquisition",
-      "target_context": "platform_shell",
-      "subject": "avito>gravity_ui:gravity-mvp/src/components/ui/checkbox.tsx",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:avito_acquisition/avito>platform_shell/gravity_core",
-        "dependency:avito_acquisition/avito>platform_shell/gravity_ui",
-        "dependency:avito_acquisition/leads>platform_shell/gravity_core",
-        "dependency:avito_acquisition/leads>platform_shell/gravity_ui"
-      ]
-    },
-    {
       "fingerprint": "arch_b3c7cce62b59ac1a8857061d",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/settings/integrations/telephony-ai/TelephonyAiClient.tsx",
@@ -2342,57 +2126,6 @@
       ]
     },
     {
-      "fingerprint": "arch_0eda5500e0b550bcceae6a05",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/tasks/components/TaskCreateModal.tsx",
-      "line_at_baseline": 16,
-      "ordinal": 1,
-      "owner_context": "work_management",
-      "target_context": "platform_shell",
-      "subject": "tasks>gravity_ui:gravity-mvp/src/components/ui/DateTimePicker.tsx",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:work_management/tasks>platform_shell/gravity_core",
-        "dependency:work_management/tasks>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_f934ef9edd48e80fc2d5510a",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/tasks/components/TaskCreateModal.tsx",
-      "line_at_baseline": 16,
-      "ordinal": 1,
-      "owner_context": "work_management",
-      "target_context": "platform_shell",
-      "subject": "tasks>gravity_ui:gravity-mvp/src/components/ui/DateTimePicker.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:work_management/tasks>platform_shell/gravity_core",
-        "dependency:work_management/tasks>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_4fbabc1871e475156c83594c",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/tasks/components/TaskCreateModal.tsx",
-      "line_at_baseline": 16,
-      "ordinal": 1,
-      "owner_context": "work_management",
-      "target_context": "platform_shell",
-      "subject": "tasks>gravity_ui:gravity-mvp/src/components/ui/DateTimePicker.tsx",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:work_management/tasks>platform_shell/gravity_core",
-        "dependency:work_management/tasks>platform_shell/gravity_ui"
-      ]
-    },
-    {
       "fingerprint": "arch_a825f3a2f2c8c6401181adea",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/tasks/components/TaskDetailsPane.tsx",
@@ -2438,57 +2171,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:work_management/tasks>configuration/settings"
-      ]
-    },
-    {
-      "fingerprint": "arch_eca9f3c9d6537125a2c73bcc",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/team-overview/page.tsx",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "analytics_reporting",
-      "target_context": "platform_shell",
-      "subject": "analytics>gravity_ui:gravity-mvp/src/components/ui/DashboardTabs.tsx",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:analytics_reporting/analytics>platform_shell/gravity_core",
-        "dependency:analytics_reporting/analytics>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_ad4191d99ab58c0069a2a208",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/team-overview/page.tsx",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "analytics_reporting",
-      "target_context": "platform_shell",
-      "subject": "analytics>gravity_ui:gravity-mvp/src/components/ui/DashboardTabs.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:analytics_reporting/analytics>platform_shell/gravity_core",
-        "dependency:analytics_reporting/analytics>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_6109355bfcf26c36d43c6b37",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/team-overview/page.tsx",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "analytics_reporting",
-      "target_context": "platform_shell",
-      "subject": "analytics>gravity_ui:gravity-mvp/src/components/ui/DashboardTabs.tsx",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:analytics_reporting/analytics>platform_shell/gravity_core",
-        "dependency:analytics_reporting/analytics>platform_shell/gravity_ui"
       ]
     },
     {

@@ -20,6 +20,12 @@ const legacyTargets = [
   'gravity-mvp/src/components/ui/tooltip.tsx',
   'gravity-mvp/src/components/ui/card.tsx',
   'gravity-mvp/src/components/ui/tabs.tsx',
+  'gravity-mvp/src/components/ui/checkbox.tsx',
+  'gravity-mvp/src/components/ui/label.tsx',
+  'gravity-mvp/src/components/ui/DashboardTabs.tsx',
+  'gravity-mvp/src/components/ui/DateTimePicker.tsx',
+  'gravity-mvp/src/components/Header.tsx',
+  'gravity-mvp/src/components/NeumorphicCard.tsx',
 ]
 const replacements = [
   ['gravity-mvp/src/infrastructure/ui/PageContainer.tsx', /export function PageContainer/],
@@ -34,6 +40,12 @@ const replacements = [
   ['gravity-mvp/src/infrastructure/ui/tooltip.tsx', /const Tooltip = TooltipPrimitive\.Root/],
   ['gravity-mvp/src/infrastructure/ui/card.tsx', /const Card = React\.forwardRef/],
   ['gravity-mvp/src/infrastructure/ui/tabs.tsx', /const Tabs = TabsPrimitive\.Root/],
+  ['gravity-mvp/src/infrastructure/ui/checkbox.tsx', /const Checkbox = React\.forwardRef/],
+  ['gravity-mvp/src/infrastructure/ui/label.tsx', /const Label = React\.forwardRef/],
+  ['gravity-mvp/src/infrastructure/ui/DashboardTabs.tsx', /export function DashboardTabs/],
+  ['gravity-mvp/src/infrastructure/ui/DateTimePicker.tsx', /export default function DateTimePicker/],
+  ['gravity-mvp/src/infrastructure/ui/Header.tsx', /export default function Header/],
+  ['gravity-mvp/src/infrastructure/ui/NeumorphicCard.tsx', /export default function NeumorphicCard/],
 ]
 
 for (const [file, implementation] of replacements) {
@@ -58,7 +70,7 @@ assert.deepEqual(scan.findings.filter((finding) =>
 process.stdout.write(`${JSON.stringify({
   status: 'PASS',
   extracted_implementations: replacements.length,
-  retired_findings: 426,
+  retired_findings: 444,
   current_findings: scan.findings.length,
   registry_entries: registry.exceptions.length,
 }, null, 2)}\n`)

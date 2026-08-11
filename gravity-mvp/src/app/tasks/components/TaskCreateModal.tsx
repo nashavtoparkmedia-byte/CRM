@@ -13,7 +13,7 @@ import { checkSimilarTasks, getActiveMainScenarioForDriver } from '@/app/tasks/a
 import type { TaskPriority, TaskSource, SimilarTaskHint } from '@/lib/tasks/types'
 import { SCENARIOS, getAllScenarioOptions } from '@/lib/tasks/scenario-config'
 import Link from 'next/link'
-import DateTimePicker from '@/components/ui/DateTimePicker'
+import DateTimePicker from '@/infrastructure/ui/DateTimePicker'
 
 interface TaskCreateModalProps {
     driverId?: string

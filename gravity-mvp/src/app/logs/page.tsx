@@ -1,7 +1,7 @@
 import { getApiLogs } from '@/modules/fleet-operations/public/v1/yandex-fleet-operations'
 export const dynamic = 'force-dynamic'
-import NeumorphicCard from '@/components/NeumorphicCard'
-import Header from '@/components/Header'
+import NeumorphicCard from '@/infrastructure/ui/NeumorphicCard'
+import Header from '@/infrastructure/ui/Header'
 import { requireIntegrationAdminPageAccess } from '@/modules/identity-access/public/v1'
 
 export default async function LogsPage() {

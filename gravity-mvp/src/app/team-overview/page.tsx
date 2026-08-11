@@ -1,7 +1,7 @@
 import { getTeamOverview } from './actions'
 import { PageContainer } from '@/infrastructure/ui/PageContainer'
 import { PageHeader } from '@/infrastructure/ui/PageHeader'
-import { DashboardTabs } from '@/components/ui/DashboardTabs'
+import { DashboardTabs } from '@/infrastructure/ui/DashboardTabs'
 import TeamOverviewContent from './TeamOverviewContent'
 
 export const dynamic = 'force-dynamic'
