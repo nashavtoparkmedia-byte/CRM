@@ -11,6 +11,10 @@
     {
       "context": "fleet_operations",
       "surface": "fleet_operations.public"
+    },
+    {
+      "context": "configuration",
+      "surface": "configuration.public"
     }
   ],
   "commands": [
@@ -162,8 +166,8 @@
   "provider_relationships": [],
   "public_surface": [
     "HealthSnapshot.v1",
-    "OperationalAlert.v1",
-    "IntegrityReport.v1"
+    "IntegrityReport.v1",
+    "OperationalAlert.v1"
   ],
   "responsibility": "Health, integrity, retention, stability, execution locks and operational telemetry.",
   "schema": "yoko.crm.module-manifest.v1",

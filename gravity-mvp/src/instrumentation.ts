@@ -54,8 +54,11 @@ export async function register() {
     setTimeout(async () => {
         // ── Configuration validation ────────────────────────────────────
         try {
-            const { validateAllConfigs, validateCronSchedules } = await import('@/lib/config-validator')
-            const configResult = validateAllConfigs()
+            const {
+                validateOperationalConfigurationV1,
+                validateOperationalCronSchedulesV1,
+            } = await import('@/modules/configuration/public/v1/operational-configuration-health')
+            const configResult = validateOperationalConfigurationV1()
             if (!configResult.valid) {
                 opsLog('error', 'config_validation_failed', {
                     operation: 'startup',
@@ -65,7 +68,7 @@ export async function register() {
             } else {
                 opsLog('info', 'config_validation_passed', { operation: 'startup', count: configResult.checkedRules })
             }
-            const cronResult = validateCronSchedules()
+            const cronResult = validateOperationalCronSchedulesV1()
             if (!cronResult.valid) {
                 opsLog('error', 'cron_schedule_validation_failed', {
                     operation: 'startup',

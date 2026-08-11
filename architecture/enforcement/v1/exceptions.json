@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "f0f5fb96ace1154d33a72ad2720739a0ea7f1edb2d59cd1c9432cb5e15133543",
+  "finding_digest": "9c7ccfa8d07af42c40e094ccae17e51769bcbdd1005a7067b3d141025526e77a",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,9 +13,9 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "internal_module_import": 135,
-    "non_public_cross_context_import": 206,
-    "undeclared_dependency": 64
+    "internal_module_import": 130,
+    "non_public_cross_context_import": 201,
+    "undeclared_dependency": 60
   },
   "exceptions": [
     {
@@ -280,150 +280,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:operations_observability/monitoring>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_f58936266938883cd59cc487",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/monitoring/guardrails/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "configuration",
-      "subject": "monitoring>settings:gravity-mvp/src/lib/config-validator.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>configuration/settings"
-      ]
-    },
-    {
-      "fingerprint": "arch_9d2afb264a5a994089059e6c",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/monitoring/guardrails/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "configuration",
-      "subject": "monitoring>settings:gravity-mvp/src/lib/config-validator.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>configuration/settings"
-      ]
-    },
-    {
-      "fingerprint": "arch_cf2164013e7beb4ecc6fdaca",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/monitoring/guardrails/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "configuration",
-      "subject": "monitoring>settings:gravity-mvp/src/lib/config-validator.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>configuration/settings"
-      ]
-    },
-    {
-      "fingerprint": "arch_38a46d8355b9dd8bf850d16f",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/monitoring/guardrails/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 2,
-      "owner_context": "operations_observability",
-      "target_context": "configuration",
-      "subject": "monitoring>settings:gravity-mvp/src/lib/config-validator.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>configuration/settings"
-      ]
-    },
-    {
-      "fingerprint": "arch_4b00c0e3b2661a15ee3d9fc6",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/monitoring/guardrails/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 2,
-      "owner_context": "operations_observability",
-      "target_context": "configuration",
-      "subject": "monitoring>settings:gravity-mvp/src/lib/config-validator.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>configuration/settings"
-      ]
-    },
-    {
-      "fingerprint": "arch_96f7db0bca2f25ed22d3d548",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/monitoring/guardrails/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 2,
-      "owner_context": "operations_observability",
-      "target_context": "configuration",
-      "subject": "monitoring>settings:gravity-mvp/src/lib/config-validator.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>configuration/settings"
-      ]
-    },
-    {
-      "fingerprint": "arch_361c11ecce9ac28a5c45d593",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/monitoring/guardrails/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 3,
-      "owner_context": "operations_observability",
-      "target_context": "configuration",
-      "subject": "monitoring>settings:gravity-mvp/src/lib/config-validator.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>configuration/settings"
-      ]
-    },
-    {
-      "fingerprint": "arch_e4523434e30410b817133a65",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/monitoring/guardrails/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 3,
-      "owner_context": "operations_observability",
-      "target_context": "configuration",
-      "subject": "monitoring>settings:gravity-mvp/src/lib/config-validator.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>configuration/settings"
-      ]
-    },
-    {
-      "fingerprint": "arch_9776cb667475c768c01b4650",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/monitoring/guardrails/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 3,
-      "owner_context": "operations_observability",
-      "target_context": "configuration",
-      "subject": "monitoring>settings:gravity-mvp/src/lib/config-validator.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>configuration/settings"
       ]
     },
     {
@@ -2710,54 +2566,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:messaging/messages>ai_knowledge/ai_knowledge"
-      ]
-    },
-    {
-      "fingerprint": "arch_56c0ae4fddb9f1ec2c806a0b",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/monitoring/system-health/actions.ts",
-      "line_at_baseline": 9,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "configuration",
-      "subject": "monitoring>settings:gravity-mvp/src/lib/config-validator.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>configuration/settings"
-      ]
-    },
-    {
-      "fingerprint": "arch_bfc3a4e7997d4be957a7ff0a",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/monitoring/system-health/actions.ts",
-      "line_at_baseline": 9,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "configuration",
-      "subject": "monitoring>settings:gravity-mvp/src/lib/config-validator.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>configuration/settings"
-      ]
-    },
-    {
-      "fingerprint": "arch_966835e1df95273c3e1df105",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/monitoring/system-health/actions.ts",
-      "line_at_baseline": 9,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "configuration",
-      "subject": "monitoring>settings:gravity-mvp/src/lib/config-validator.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>configuration/settings"
       ]
     },
     {
@@ -5299,40 +5107,6 @@
         "dependency:platform_shell/gravity_core>calling/ai_calls",
         "dependency:platform_shell/gravity_core>calling/calls",
         "dependency:platform_shell/gravity_ui>calling/calls"
-      ]
-    },
-    {
-      "fingerprint": "arch_6d85fedbc4efd00e48615fb0",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 38,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "configuration",
-      "subject": "gravity_core>settings:gravity-mvp/src/lib/config-validator.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>configuration/settings",
-        "dependency:platform_shell/gravity_ui>configuration/settings"
-      ]
-    },
-    {
-      "fingerprint": "arch_37dadb893caab4c53fb75c98",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 38,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "configuration",
-      "subject": "gravity_core>settings:gravity-mvp/src/lib/config-validator.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>configuration/settings",
-        "dependency:platform_shell/gravity_ui>configuration/settings"
       ]
     },
     {

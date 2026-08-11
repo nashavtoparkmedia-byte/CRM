@@ -23,7 +23,7 @@
     {
       "context": "configuration",
       "path": "architecture/contexts/v1/manifests/configuration.json",
-      "sha256": "c523cfc35f2b2a70d4572b5229a9504d843d916dad39cd5c31138fe4f0a234a2"
+      "sha256": "4facdbe984bcc46fd28b1a862b2032254426bd0b36206a458f0d43d5a89e987a"
     },
     {
       "context": "contacts",
@@ -58,7 +58,7 @@
     {
       "context": "operations_observability",
       "path": "architecture/contexts/v1/manifests/operations_observability.json",
-      "sha256": "d0bfcd5df96f2fb3f8811974d9c54870ba9689d3f74299209c9c888e8fdd81ff"
+      "sha256": "5214fea44d2f8918e63599cdf0bfa2151c2833cbb78c6b4715adc5b500fec205"
     },
     {
       "context": "platform_shell",
