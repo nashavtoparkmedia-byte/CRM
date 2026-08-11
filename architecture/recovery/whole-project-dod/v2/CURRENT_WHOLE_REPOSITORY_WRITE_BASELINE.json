@@ -1,9 +1,9 @@
 {
-  "analysis_sha256": "65af50ebe1029b121a33d405fab63a03e8d7f4bf1c2e4e06f79d2dedaf25ed3e",
+  "analysis_sha256": "8b69de777307005d16b04dfbe4e2e2b461595ffa249ca1a4b0f77b0d41f7bfbb",
   "execution": {
-    "ambiguous_candidates": 204,
+    "ambiguous_candidates": 188,
     "complete": true,
-    "elapsed_ms": 368930.219198,
+    "elapsed_ms": 413540.75631,
     "failures": [],
     "files_completed": 1695,
     "files_discovered": 1695,
@@ -13,7 +13,7 @@
     "worker_limit": 4,
     "worker_timeout_ms": 120000,
     "worker_timeouts": 0,
-    "writes_discovered": 1445
+    "writes_discovered": 1424
   },
   "inventory": {
     "controls": {
@@ -20421,25 +20421,25 @@
   "parse_findings": [],
   "schema": "yoko.crm.whole-repository-write-analysis.v2",
   "source": {
-    "git_commit": "285e7556aaf9c19aeef94ead2191eaa009bb0ecd",
+    "git_commit": "d6a1609bacbfd8d3c66eb2e6bbe25b6587941b29",
     "git_tracked_only": true,
-    "git_tree": "4545c682104c179d40fa9ffdd246df99fb54212d",
+    "git_tree": "bcd63fe0dcfbb55dae92c0f15f516e27061791ce",
     "inventory_schema": "yoko.crm.tracked-executable-surface-inventory.v2",
     "repository_root": ".",
-    "tracked_worktree_clean": false,
-    "tracked_worktree_status_sha256": "63832f9d9fa44ea09bad87ca7c5f2c7b4dae41f7c1f78fa3029c902fbd30ff04"
+    "tracked_worktree_clean": true,
+    "tracked_worktree_status_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
   },
   "summary": {
-    "ambiguous_writes": 204,
-    "discovered_write_sites": 1445,
+    "ambiguous_writes": 188,
+    "discovered_write_sites": 1424,
     "foreign_writes": 0,
     "historical_dead_writes": 18,
     "migration_only_writes": 500,
-    "operational_script_writes": 155,
+    "operational_script_writes": 149,
     "owner_writes": 489,
     "parse_findings": 0,
-    "raw_sql_writes": 836,
-    "test_writes": 234,
+    "raw_sql_writes": 815,
+    "test_writes": 229,
     "tracked_executable_surfaces": 1695,
     "unreviewed_operational_surfaces": 0
   },
@@ -38484,81 +38484,6 @@
       ]
     },
     {
-      "ambiguity_reasons": [
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
-      ],
-      "ambiguous": true,
-      "candidate_models": [],
-      "classification": "AMBIGUOUS",
-      "column": 31,
-      "confidence": "HIGH",
-      "dynamic": false,
-      "end": 1784,
-      "file": "gravity-mvp/scripts/backfill_source_connection_pr7.js",
-      "index": 1510,
-      "kind": "raw",
-      "line": 41,
-      "method": "$queryRaw",
-      "model": null,
-      "operations": [],
-      "owner_contexts": [],
-      "read_projection_dynamic": false,
-      "read_tables": [
-        "AiKnowledgeSource"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "scope": "Function:main",
-      "select_all": false,
-      "selected_column_sources": [
-        {
-          "field": "channel",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "connectionId",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "int",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "IS",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "text",
-          "table": "AiKnowledgeSource"
-        }
-      ],
-      "selected_columns": [
-        "IS",
-        "channel",
-        "connectionId",
-        "int",
-        "text"
-      ],
-      "site_signature": "7ab3fa539588a44f7618797125280bbc3a89c111344bdffd19b5ffd1c8eaf206",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "sql_sha256": "0a91046c6fb0d0e7a029283dc8df5688830a39a10ed6e2313b4980d9e601cb94",
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "tables": [],
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "written_columns": []
-    },
-    {
       "ambiguity_reasons": [],
       "ambiguous": false,
       "candidate_models": [],
@@ -38644,166 +38569,6 @@
       ]
     },
     {
-      "ambiguity_reasons": [
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
-      ],
-      "ambiguous": true,
-      "candidate_models": [],
-      "classification": "AMBIGUOUS",
-      "column": 30,
-      "confidence": "HIGH",
-      "dynamic": false,
-      "end": 4581,
-      "file": "gravity-mvp/scripts/backfill_source_connection_pr7.js",
-      "index": 4221,
-      "kind": "raw",
-      "line": 110,
-      "method": "$queryRaw",
-      "model": null,
-      "operations": [],
-      "owner_contexts": [],
-      "read_projection_dynamic": false,
-      "read_tables": [
-        "AiKnowledgeSource"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "scope": "Function:main",
-      "select_all": false,
-      "selected_column_sources": [
-        {
-          "field": "channel",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "connectionId",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "int",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "IS",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "NOT",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "text",
-          "table": "AiKnowledgeSource"
-        }
-      ],
-      "selected_columns": [
-        "IS",
-        "NOT",
-        "channel",
-        "connectionId",
-        "int",
-        "text"
-      ],
-      "site_signature": "fc395b9843301e46564031ebda556a5e1cb4ef8d0f40a6ff4af473878f3a2025",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "sql_sha256": "e0b86168b64de1621354e58f99964feac5791ee1632ae718e5f2ebbd4a42be68",
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "tables": [],
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "written_columns": []
-    },
-    {
-      "ambiguity_reasons": [
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
-      ],
-      "ambiguous": true,
-      "candidate_models": [],
-      "classification": "AMBIGUOUS",
-      "column": 31,
-      "confidence": "HIGH",
-      "dynamic": false,
-      "end": 1939,
-      "file": "gravity-mvp/scripts/backfill_source_connection_pr8.js",
-      "index": 1579,
-      "kind": "raw",
-      "line": 44,
-      "method": "$queryRaw",
-      "model": null,
-      "operations": [],
-      "owner_contexts": [],
-      "read_projection_dynamic": false,
-      "read_tables": [
-        "AiKnowledgeSource"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "scope": "Function:main",
-      "select_all": false,
-      "selected_column_sources": [
-        {
-          "field": "channel",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "connectionId",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "int",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "IS",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "NOT",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "text",
-          "table": "AiKnowledgeSource"
-        }
-      ],
-      "selected_columns": [
-        "IS",
-        "NOT",
-        "channel",
-        "connectionId",
-        "int",
-        "text"
-      ],
-      "site_signature": "132a03f97283361c72e0fad556c3e4ea3358b8573f7ab2b3a1a0e990c3e6c2f7",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "sql_sha256": "e0b86168b64de1621354e58f99964feac5791ee1632ae718e5f2ebbd4a42be68",
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "tables": [],
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "written_columns": []
-    },
-    {
       "ambiguity_reasons": [],
       "ambiguous": false,
       "candidate_models": [],
@@ -38882,86 +38647,6 @@
       "written_columns": [
         "connectionId"
       ]
-    },
-    {
-      "ambiguity_reasons": [
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
-      ],
-      "ambiguous": true,
-      "candidate_models": [],
-      "classification": "AMBIGUOUS",
-      "column": 30,
-      "confidence": "HIGH",
-      "dynamic": false,
-      "end": 5137,
-      "file": "gravity-mvp/scripts/backfill_source_connection_pr8.js",
-      "index": 4777,
-      "kind": "raw",
-      "line": 130,
-      "method": "$queryRaw",
-      "model": null,
-      "operations": [],
-      "owner_contexts": [],
-      "read_projection_dynamic": false,
-      "read_tables": [
-        "AiKnowledgeSource"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "scope": "Function:main",
-      "select_all": false,
-      "selected_column_sources": [
-        {
-          "field": "channel",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "connectionId",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "int",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "IS",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "NOT",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "text",
-          "table": "AiKnowledgeSource"
-        }
-      ],
-      "selected_columns": [
-        "IS",
-        "NOT",
-        "channel",
-        "connectionId",
-        "int",
-        "text"
-      ],
-      "site_signature": "c8830d0d8db3d85fd9f519b8b90bd6745d06ccafbb475da9b25f3e7a279f80a5",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "sql_sha256": "e0b86168b64de1621354e58f99964feac5791ee1632ae718e5f2ebbd4a42be68",
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "tables": [],
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "written_columns": []
     },
     {
       "ambiguity_reasons": [],
@@ -40461,86 +40146,6 @@
       "written_columns": []
     },
     {
-      "ambiguity_reasons": [
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
-      ],
-      "ambiguous": true,
-      "candidate_models": [],
-      "classification": "AMBIGUOUS",
-      "column": 26,
-      "confidence": "HIGH",
-      "dynamic": false,
-      "end": 1196,
-      "file": "gravity-mvp/scripts/cleanup_epoch_dates.js",
-      "index": 826,
-      "kind": "raw",
-      "line": 24,
-      "method": "$queryRawUnsafe",
-      "model": null,
-      "operations": [],
-      "owner_contexts": [],
-      "read_projection_dynamic": false,
-      "read_tables": [
-        "tasks"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "scope": "Function:main",
-      "select_all": false,
-      "selected_column_sources": [
-        {
-          "field": "AND",
-          "table": "tasks"
-        },
-        {
-          "field": "dueAt",
-          "table": "tasks"
-        },
-        {
-          "field": "IS",
-          "table": "tasks"
-        },
-        {
-          "field": "nextActionAt",
-          "table": "tasks"
-        },
-        {
-          "field": "NOT",
-          "table": "tasks"
-        },
-        {
-          "field": "slaDeadline",
-          "table": "tasks"
-        }
-      ],
-      "selected_columns": [
-        "AND",
-        "IS",
-        "NOT",
-        "dueAt",
-        "nextActionAt",
-        "slaDeadline"
-      ],
-      "site_signature": "317311b9a06b1fce064e48156c0bcaae078e0d34c610d60e2414ef59283a5540",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "sql_sha256": "6dd4509f01685cd4328a1a1fd546d72000bf34ba7ce4e6acb5dfb5961f710aed",
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "tables": [],
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "written_columns": []
-    },
-    {
       "ambiguity_reasons": [],
       "ambiguous": false,
       "candidate_models": [],
@@ -40707,86 +40312,6 @@
       "written_columns": [
         "slaDeadline"
       ]
-    },
-    {
-      "ambiguity_reasons": [
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
-      ],
-      "ambiguous": true,
-      "candidate_models": [],
-      "classification": "AMBIGUOUS",
-      "column": 25,
-      "confidence": "HIGH",
-      "dynamic": false,
-      "end": 2471,
-      "file": "gravity-mvp/scripts/cleanup_epoch_dates.js",
-      "index": 2101,
-      "kind": "raw",
-      "line": 56,
-      "method": "$queryRawUnsafe",
-      "model": null,
-      "operations": [],
-      "owner_contexts": [],
-      "read_projection_dynamic": false,
-      "read_tables": [
-        "tasks"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "scope": "Function:main",
-      "select_all": false,
-      "selected_column_sources": [
-        {
-          "field": "AND",
-          "table": "tasks"
-        },
-        {
-          "field": "dueAt",
-          "table": "tasks"
-        },
-        {
-          "field": "IS",
-          "table": "tasks"
-        },
-        {
-          "field": "nextActionAt",
-          "table": "tasks"
-        },
-        {
-          "field": "NOT",
-          "table": "tasks"
-        },
-        {
-          "field": "slaDeadline",
-          "table": "tasks"
-        }
-      ],
-      "selected_columns": [
-        "AND",
-        "IS",
-        "NOT",
-        "dueAt",
-        "nextActionAt",
-        "slaDeadline"
-      ],
-      "site_signature": "690844b29cc98737a2131cb0c204977ca1feeafb0b960972661ac21b00f10ad5",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "sql_sha256": "6dd4509f01685cd4328a1a1fd546d72000bf34ba7ce4e6acb5dfb5961f710aed",
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "tables": [],
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "written_columns": []
     },
     {
       "ambiguity_reasons": [],
@@ -49562,162 +49087,6 @@
       "written_columns": []
     },
     {
-      "ambiguity_reasons": [
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
-      ],
-      "ambiguous": true,
-      "candidate_models": [],
-      "classification": "TEST",
-      "column": 35,
-      "confidence": "HIGH",
-      "dynamic": false,
-      "end": 3741,
-      "file": "gravity-mvp/scripts/smoke_production_polish_pr5.js",
-      "index": 3328,
-      "kind": "raw",
-      "line": 74,
-      "method": "$queryRaw",
-      "model": null,
-      "operations": [],
-      "owner_contexts": [],
-      "read_projection_dynamic": false,
-      "read_tables": [
-        "AiKnowledgeItem",
-        "AiKnowledgeUsageLog"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "scope": "Function:main",
-      "select_all": false,
-      "selected_column_sources": [
-        {
-          "field": "AND",
-          "table": null
-        },
-        {
-          "field": "id",
-          "table": "AiKnowledgeItem"
-        },
-        {
-          "field": "int",
-          "table": null
-        },
-        {
-          "field": "isVerified",
-          "table": "AiKnowledgeItem"
-        },
-        {
-          "field": "itemId",
-          "table": "AiKnowledgeUsageLog"
-        },
-        {
-          "field": "usedAt",
-          "table": "AiKnowledgeUsageLog"
-        },
-        {
-          "field": "usedInReply",
-          "table": "AiKnowledgeUsageLog"
-        }
-      ],
-      "selected_columns": [
-        "AND",
-        "id",
-        "int",
-        "isVerified",
-        "itemId",
-        "usedAt",
-        "usedInReply"
-      ],
-      "site_signature": "e0f2b6647605aac09a42953d99a4eb8136489cfad133ebdecf0bd065cf918d53",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "sql_sha256": "1b7582fecd3f50466fb88131b46dff9fbc06ab934ed0d4d802b7ae3bb075d26c",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "TEST",
-        "production_capability": "UNKNOWN",
-        "registry_classified": true
-      },
-      "tables": [],
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "written_columns": []
-    },
-    {
-      "ambiguity_reasons": [
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
-      ],
-      "ambiguous": true,
-      "candidate_models": [],
-      "classification": "TEST",
-      "column": 38,
-      "confidence": "HIGH",
-      "dynamic": false,
-      "end": 4907,
-      "file": "gravity-mvp/scripts/smoke_production_polish_pr5.js",
-      "index": 4114,
-      "kind": "raw",
-      "line": 90,
-      "method": "$queryRaw",
-      "model": null,
-      "operations": [],
-      "owner_contexts": [],
-      "read_projection_dynamic": true,
-      "read_tables": [
-        "AiDecisionLog"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "scope": "Function:main",
-      "select_all": false,
-      "selected_column_sources": [
-        {
-          "field": "int",
-          "table": "AiDecisionLog"
-        },
-        {
-          "field": "IS",
-          "table": "AiDecisionLog"
-        },
-        {
-          "field": "NOT",
-          "table": "AiDecisionLog"
-        },
-        {
-          "field": "shadowRetrievalSummary",
-          "table": "AiDecisionLog"
-        }
-      ],
-      "selected_columns": [
-        "IS",
-        "NOT",
-        "int",
-        "shadowRetrievalSummary"
-      ],
-      "site_signature": "ae81882a898f4226f53cefdec87722faa89e90cafe2936bd2ac6c54c2aea0d96",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "sql_sha256": "15a0da90d6ae96dd0b212446895b18afb736cf6a859ef1c5acc1444ed9af4871",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "TEST",
-        "production_capability": "UNKNOWN",
-        "registry_classified": true
-      },
-      "tables": [],
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "written_columns": []
-    },
-    {
       "ambiguity_reasons": [],
       "ambiguous": false,
       "candidate_models": [],
@@ -50185,76 +49554,6 @@
       "tables": [
         "AiKnowledgeItem"
       ],
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "written_columns": []
-    },
-    {
-      "ambiguity_reasons": [
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
-      ],
-      "ambiguous": true,
-      "candidate_models": [],
-      "classification": "TEST",
-      "column": 28,
-      "confidence": "HIGH",
-      "dynamic": false,
-      "end": 4423,
-      "file": "gravity-mvp/scripts/smoke_readiness_pr5.js",
-      "index": 3557,
-      "kind": "raw",
-      "line": 80,
-      "method": "$queryRaw",
-      "model": null,
-      "operations": [],
-      "owner_contexts": [],
-      "read_projection_dynamic": true,
-      "read_tables": [
-        "AiDecisionLog"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "scope": "Function:main",
-      "select_all": false,
-      "selected_column_sources": [
-        {
-          "field": "escalated",
-          "table": "AiDecisionLog"
-        },
-        {
-          "field": "int",
-          "table": "AiDecisionLog"
-        },
-        {
-          "field": "retrievalDecision",
-          "table": "AiDecisionLog"
-        },
-        {
-          "field": "retrievalMode",
-          "table": "AiDecisionLog"
-        }
-      ],
-      "selected_columns": [
-        "escalated",
-        "int",
-        "retrievalDecision",
-        "retrievalMode"
-      ],
-      "site_signature": "35794de246a71e0e488c756b952400bc9016ddd4b3659267440811180133e358",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "sql_sha256": "c6f651b3c0d62fe263dc8e87dd23784e05f12f1a1279d0668dedfb2028dc56c3",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "TEST",
-        "production_capability": "UNKNOWN",
-        "registry_classified": true
-      },
-      "tables": [],
       "transaction": {
         "contained": false,
         "origin": null
@@ -51929,171 +51228,6 @@
         "status",
         "updatedAt"
       ]
-    },
-    {
-      "ambiguity_reasons": [
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
-      ],
-      "ambiguous": true,
-      "candidate_models": [],
-      "classification": "TEST",
-      "column": 34,
-      "confidence": "HIGH",
-      "dynamic": false,
-      "end": 15159,
-      "file": "gravity-mvp/scripts/smoke_source_control_pr7.js",
-      "index": 14801,
-      "kind": "raw",
-      "line": 308,
-      "method": "$queryRaw",
-      "model": null,
-      "operations": [],
-      "owner_contexts": [],
-      "read_projection_dynamic": false,
-      "read_tables": [
-        "AiKnowledgeSource"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "scope": "Function:main",
-      "select_all": false,
-      "selected_column_sources": [
-        {
-          "field": "channel",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "connectionId",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "int",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "IS",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "NOT",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "text",
-          "table": "AiKnowledgeSource"
-        }
-      ],
-      "selected_columns": [
-        "IS",
-        "NOT",
-        "channel",
-        "connectionId",
-        "int",
-        "text"
-      ],
-      "site_signature": "3efc2b12f867e0cd3b5f76297137666e463681cc8e474a7891221b67157c5a06",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "sql_sha256": "17d334813b1b64889a98ac7a2b4bd0d04a5bfc37473fde5fc2826397118e67a8",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "TEST",
-        "production_capability": "UNKNOWN",
-        "registry_classified": true
-      },
-      "tables": [],
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "written_columns": []
-    },
-    {
-      "ambiguity_reasons": [
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
-      ],
-      "ambiguous": true,
-      "candidate_models": [],
-      "classification": "TEST",
-      "column": 29,
-      "confidence": "HIGH",
-      "dynamic": false,
-      "end": 16351,
-      "file": "gravity-mvp/scripts/smoke_source_control_pr7.js",
-      "index": 15915,
-      "kind": "raw",
-      "line": 332,
-      "method": "$queryRaw",
-      "model": null,
-      "operations": [],
-      "owner_contexts": [],
-      "read_projection_dynamic": true,
-      "read_tables": [
-        "AiKnowledgeSource"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "scope": "Function:main",
-      "select_all": false,
-      "selected_column_sources": [
-        {
-          "field": "channel",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "connectionId",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "id",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "int",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "isActive",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "itemId",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "text",
-          "table": "AiKnowledgeSource"
-        }
-      ],
-      "selected_columns": [
-        "channel",
-        "connectionId",
-        "id",
-        "int",
-        "isActive",
-        "itemId",
-        "text"
-      ],
-      "site_signature": "fa9ca481a72cf3df75f80d5b883f6ef1d364e05d670d553e7089b995bf83c826",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "sql_sha256": "cb713f7c385ac611733cad43c700eb27bb6e6b2bb9865972612a8826b5276660",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "TEST",
-        "production_capability": "UNKNOWN",
-        "registry_classified": true
-      },
-      "tables": [],
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "written_columns": []
     },
     {
       "ambiguity_reasons": [],
@@ -61010,8 +60144,7 @@
       "ambiguity_reasons": [
         "dynamic_sql_fragment",
         "dynamic_sql_marker",
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
+        "query_raw_dynamic_intent_unresolved"
       ],
       "ambiguous": true,
       "candidate_models": [],
@@ -61097,8 +60230,7 @@
       "ambiguity_reasons": [
         "dynamic_sql_fragment",
         "dynamic_sql_marker",
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
+        "query_raw_dynamic_intent_unresolved"
       ],
       "ambiguous": true,
       "candidate_models": [],
@@ -61184,8 +60316,7 @@
       "ambiguity_reasons": [
         "dynamic_sql_fragment",
         "dynamic_sql_marker",
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
+        "query_raw_dynamic_intent_unresolved"
       ],
       "ambiguous": true,
       "candidate_models": [],
@@ -62109,86 +61240,6 @@
         "userId",
         "visibility"
       ]
-    },
-    {
-      "ambiguity_reasons": [
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
-      ],
-      "ambiguous": true,
-      "candidate_models": [],
-      "classification": "AMBIGUOUS",
-      "column": 27,
-      "confidence": "HIGH",
-      "dynamic": false,
-      "end": 4868,
-      "file": "gravity-mvp/src/app/api/health/route.ts",
-      "index": 4101,
-      "kind": "raw",
-      "line": 102,
-      "method": "$queryRaw",
-      "model": null,
-      "operations": [],
-      "owner_contexts": [],
-      "read_projection_dynamic": true,
-      "read_tables": [
-        "Chat"
-      ],
-      "receiver_origin": "import:@/lib/prisma",
-      "scope": "Function:GET",
-      "select_all": false,
-      "selected_column_sources": [
-        {
-          "field": "AND",
-          "table": "Chat"
-        },
-        {
-          "field": "assignedToUserId",
-          "table": "Chat"
-        },
-        {
-          "field": "int",
-          "table": "Chat"
-        },
-        {
-          "field": "IS",
-          "table": "Chat"
-        },
-        {
-          "field": "requiresResponse",
-          "table": "Chat"
-        },
-        {
-          "field": "status",
-          "table": "Chat"
-        }
-      ],
-      "selected_columns": [
-        "AND",
-        "IS",
-        "assignedToUserId",
-        "int",
-        "requiresResponse",
-        "status"
-      ],
-      "site_signature": "e750ae2da99291015c61cea1f2b3b50e87c339926ae38f6df5905c9202172b65",
-      "source_context": "operations_observability",
-      "source_identity": "module_rules",
-      "source_technical_module": "monitoring",
-      "sql_sha256": "6b9b27a6d94e8b36fedec422cf3d0940b4314b3c53a3969e902327c4e4001976",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "APPLICATION_RUNTIME",
-        "production_capability": "POSSIBLE",
-        "registry_classified": false
-      },
-      "tables": [],
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "written_columns": []
     },
     {
       "ambiguity_reasons": [],
@@ -64431,8 +63482,7 @@
       "ambiguity_reasons": [
         "dynamic_sql_fragment",
         "dynamic_sql_marker",
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
+        "query_raw_dynamic_intent_unresolved"
       ],
       "ambiguous": true,
       "candidate_models": [],
@@ -64535,115 +63585,6 @@
       "source_identity": "module_rules",
       "source_technical_module": "settings",
       "sql_sha256": "6167a7563da84abc493ecee58c8ae8e3a12053448ae23bc234c428b54d28c89e",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "APPLICATION_RUNTIME",
-        "production_capability": "POSSIBLE",
-        "registry_classified": false
-      },
-      "tables": [],
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "written_columns": []
-    },
-    {
-      "ambiguity_reasons": [
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
-      ],
-      "ambiguous": true,
-      "candidate_models": [],
-      "classification": "AMBIGUOUS",
-      "column": 22,
-      "confidence": "HIGH",
-      "dynamic": false,
-      "end": 95165,
-      "file": "gravity-mvp/src/app/settings/ai/actions.ts",
-      "index": 93507,
-      "kind": "raw",
-      "line": 2290,
-      "method": "$queryRaw",
-      "model": null,
-      "operations": [],
-      "owner_contexts": [],
-      "read_projection_dynamic": true,
-      "read_tables": [
-        "AiKnowledgeItem",
-        "AiKnowledgeSource"
-      ],
-      "receiver_origin": "import:@/lib/prisma",
-      "scope": "Function:getSourceStatsByConnection",
-      "select_all": false,
-      "selected_column_sources": [
-        {
-          "field": "channel",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "connectionId",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "id",
-          "table": "AiKnowledgeItem"
-        },
-        {
-          "field": "id",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "int",
-          "table": null
-        },
-        {
-          "field": "isActive",
-          "table": "AiKnowledgeItem"
-        },
-        {
-          "field": "isActive",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "isVerified",
-          "table": "AiKnowledgeItem"
-        },
-        {
-          "field": "itemId",
-          "table": "AiKnowledgeSource"
-        },
-        {
-          "field": "status",
-          "table": "AiKnowledgeItem"
-        },
-        {
-          "field": "tags",
-          "table": "AiKnowledgeItem"
-        },
-        {
-          "field": "text",
-          "table": null
-        }
-      ],
-      "selected_columns": [
-        "channel",
-        "connectionId",
-        "id",
-        "int",
-        "isActive",
-        "isVerified",
-        "itemId",
-        "status",
-        "tags",
-        "text"
-      ],
-      "site_signature": "20638b57ef1079f4ace8ade6a8e2556f1c7025ac186c5ec77b5fd21a5d0b9a58",
-      "source_context": "configuration",
-      "source_identity": "module_rules",
-      "source_technical_module": "settings",
-      "sql_sha256": "8ceacc5337822df00068bf277eb24356cc19ed4d0fc2b313383fac8b9431d821",
       "surface": {
         "disposition": null,
         "lifecycle": "APPLICATION_RUNTIME",
@@ -69037,232 +67978,6 @@
     },
     {
       "ambiguity_reasons": [
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
-      ],
-      "ambiguous": true,
-      "candidate_models": [],
-      "classification": "AMBIGUOUS",
-      "column": 28,
-      "confidence": "HIGH",
-      "dynamic": false,
-      "end": 9783,
-      "file": "gravity-mvp/src/lib/ai/knowledge/readiness.ts",
-      "index": 8862,
-      "kind": "raw",
-      "line": 214,
-      "method": "$queryRaw",
-      "model": null,
-      "operations": [],
-      "owner_contexts": [],
-      "read_projection_dynamic": true,
-      "read_tables": [
-        "AiDecisionLog"
-      ],
-      "receiver_origin": "import:@/lib/prisma",
-      "scope": "Function:loadActivity7d",
-      "select_all": false,
-      "selected_column_sources": [
-        {
-          "field": "escalated",
-          "table": "AiDecisionLog"
-        },
-        {
-          "field": "int",
-          "table": "AiDecisionLog"
-        },
-        {
-          "field": "retrievalDecision",
-          "table": "AiDecisionLog"
-        },
-        {
-          "field": "retrievalMode",
-          "table": "AiDecisionLog"
-        }
-      ],
-      "selected_columns": [
-        "escalated",
-        "int",
-        "retrievalDecision",
-        "retrievalMode"
-      ],
-      "site_signature": "3317e5fe76b84b8798fa585ee246c486353b22e9fb7279b9149d73a988d34b7d",
-      "source_context": "ai_knowledge",
-      "source_identity": "module_rules",
-      "source_technical_module": "ai_knowledge",
-      "sql_sha256": "6062e48b4c24326e8d536bc4df58cb49e473a87cc1ea9bcec3bdd0c378b0e8ec",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "APPLICATION_RUNTIME",
-        "production_capability": "POSSIBLE",
-        "registry_classified": false
-      },
-      "tables": [],
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "written_columns": []
-    },
-    {
-      "ambiguity_reasons": [
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
-      ],
-      "ambiguous": true,
-      "candidate_models": [],
-      "classification": "AMBIGUOUS",
-      "column": 38,
-      "confidence": "HIGH",
-      "dynamic": false,
-      "end": 11987,
-      "file": "gravity-mvp/src/lib/ai/knowledge/readiness.ts",
-      "index": 11043,
-      "kind": "raw",
-      "line": 257,
-      "method": "$queryRaw",
-      "model": null,
-      "operations": [],
-      "owner_contexts": [],
-      "read_projection_dynamic": true,
-      "read_tables": [
-        "AiDecisionLog"
-      ],
-      "receiver_origin": "import:@/lib/prisma",
-      "scope": "Function:loadHealth7d",
-      "select_all": false,
-      "selected_column_sources": [
-        {
-          "field": "int",
-          "table": "AiDecisionLog"
-        },
-        {
-          "field": "IS",
-          "table": "AiDecisionLog"
-        },
-        {
-          "field": "NOT",
-          "table": "AiDecisionLog"
-        },
-        {
-          "field": "shadowRetrievalSummary",
-          "table": "AiDecisionLog"
-        }
-      ],
-      "selected_columns": [
-        "IS",
-        "NOT",
-        "int",
-        "shadowRetrievalSummary"
-      ],
-      "site_signature": "9be61cd9bc185269f58a1d770a256e1b130b291c4f571fd9a9eb642db02029fd",
-      "source_context": "ai_knowledge",
-      "source_identity": "module_rules",
-      "source_technical_module": "ai_knowledge",
-      "sql_sha256": "56e0d372ebd4c51851624f4accdef25243d566afa746a70c46b1873220c86cec",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "APPLICATION_RUNTIME",
-        "production_capability": "POSSIBLE",
-        "registry_classified": false
-      },
-      "tables": [],
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "written_columns": []
-    },
-    {
-      "ambiguity_reasons": [
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
-      ],
-      "ambiguous": true,
-      "candidate_models": [],
-      "classification": "AMBIGUOUS",
-      "column": 33,
-      "confidence": "HIGH",
-      "dynamic": false,
-      "end": 13095,
-      "file": "gravity-mvp/src/lib/ai/knowledge/readiness.ts",
-      "index": 12639,
-      "kind": "raw",
-      "line": 292,
-      "method": "$queryRaw",
-      "model": null,
-      "operations": [],
-      "owner_contexts": [],
-      "read_projection_dynamic": false,
-      "read_tables": [
-        "AiKnowledgeItem",
-        "AiKnowledgeUsageLog"
-      ],
-      "receiver_origin": "import:@/lib/prisma",
-      "scope": "Function:loadHealth7d",
-      "select_all": false,
-      "selected_column_sources": [
-        {
-          "field": "AND",
-          "table": null
-        },
-        {
-          "field": "id",
-          "table": "AiKnowledgeItem"
-        },
-        {
-          "field": "int",
-          "table": null
-        },
-        {
-          "field": "isVerified",
-          "table": "AiKnowledgeItem"
-        },
-        {
-          "field": "itemId",
-          "table": "AiKnowledgeUsageLog"
-        },
-        {
-          "field": "usedAt",
-          "table": "AiKnowledgeUsageLog"
-        },
-        {
-          "field": "usedInReply",
-          "table": "AiKnowledgeUsageLog"
-        }
-      ],
-      "selected_columns": [
-        "AND",
-        "id",
-        "int",
-        "isVerified",
-        "itemId",
-        "usedAt",
-        "usedInReply"
-      ],
-      "site_signature": "bb78aef0cdfa08b5a3c551bad4dd503f67eae8b0081e2e64e1206c99f99a4d41",
-      "source_context": "ai_knowledge",
-      "source_identity": "module_rules",
-      "source_technical_module": "ai_knowledge",
-      "sql_sha256": "896f1846b29a6f0642cff4c2b88cb59af520268915e072920a982a4c0d235feb",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "APPLICATION_RUNTIME",
-        "production_capability": "POSSIBLE",
-        "registry_classified": false
-      },
-      "tables": [],
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "written_columns": []
-    },
-    {
-      "ambiguity_reasons": [
         "dynamic_sql_fragment",
         "dynamic_sql_marker",
         "query_raw_dynamic_intent_unresolved"
@@ -71712,71 +70427,6 @@
       ]
     },
     {
-      "ambiguity_reasons": [
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
-      ],
-      "ambiguous": true,
-      "candidate_models": [],
-      "classification": "AMBIGUOUS",
-      "column": 28,
-      "confidence": "HIGH",
-      "dynamic": false,
-      "end": 5386,
-      "file": "gravity-mvp/src/lib/cron-health.ts",
-      "index": 4601,
-      "kind": "raw",
-      "line": 153,
-      "method": "$queryRawUnsafe",
-      "model": null,
-      "operations": [],
-      "owner_contexts": [],
-      "read_projection_dynamic": true,
-      "read_tables": [
-        "cron_health_log"
-      ],
-      "receiver_origin": "import:@/lib/prisma",
-      "scope": "Function:getCronHealthSummary",
-      "select_all": false,
-      "selected_column_sources": [
-        {
-          "field": "cron_name",
-          "table": "cron_health_log"
-        },
-        {
-          "field": "int",
-          "table": "cron_health_log"
-        },
-        {
-          "field": "status",
-          "table": "cron_health_log"
-        }
-      ],
-      "selected_columns": [
-        "cron_name",
-        "int",
-        "status"
-      ],
-      "site_signature": "fa40478e5904255380797faebb699dece55f805f83a73869d7688f19abac3750",
-      "source_context": "operations_observability",
-      "source_identity": "module_rules",
-      "source_technical_module": "monitoring",
-      "sql_sha256": "121f04cc0c0f638504924a7c5648a412a5d4afe8e636c21a6ab1f9a5c7917bac",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "APPLICATION_RUNTIME",
-        "production_capability": "POSSIBLE",
-        "registry_classified": false
-      },
-      "tables": [],
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "written_columns": []
-    },
-    {
       "ambiguity_reasons": [],
       "ambiguous": false,
       "candidate_models": [],
@@ -71990,71 +70640,6 @@
       "tables": [
         "execution_lock"
       ],
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "written_columns": []
-    },
-    {
-      "ambiguity_reasons": [
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
-      ],
-      "ambiguous": true,
-      "candidate_models": [],
-      "classification": "AMBIGUOUS",
-      "column": 33,
-      "confidence": "HIGH",
-      "dynamic": false,
-      "end": 2871,
-      "file": "gravity-mvp/src/lib/failure-detection.ts",
-      "index": 1966,
-      "kind": "raw",
-      "line": 62,
-      "method": "$queryRawUnsafe",
-      "model": null,
-      "operations": [],
-      "owner_contexts": [],
-      "read_projection_dynamic": true,
-      "read_tables": [
-        "cron_health_log"
-      ],
-      "receiver_origin": "import:@/lib/prisma",
-      "scope": "Function:detectFailures",
-      "select_all": false,
-      "selected_column_sources": [
-        {
-          "field": "cron_name",
-          "table": "cron_health_log"
-        },
-        {
-          "field": "int",
-          "table": "cron_health_log"
-        },
-        {
-          "field": "status",
-          "table": "cron_health_log"
-        }
-      ],
-      "selected_columns": [
-        "cron_name",
-        "int",
-        "status"
-      ],
-      "site_signature": "bb684f5bbf245339ed491d1c394deca46d1e60d7286aec4e2a946bfa93f1416e",
-      "source_context": "operations_observability",
-      "source_identity": "module_rules",
-      "source_technical_module": "monitoring",
-      "sql_sha256": "2b8978ff662957cc25cb0d4bb522db32b8d7e13e5ad0273bacc3eb0ae635e572",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "APPLICATION_RUNTIME",
-        "production_capability": "POSSIBLE",
-        "registry_classified": false
-      },
-      "tables": [],
       "transaction": {
         "contained": false,
         "origin": null
@@ -73395,81 +71980,6 @@
       ]
     },
     {
-      "ambiguity_reasons": [
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
-      ],
-      "ambiguous": true,
-      "candidate_models": [],
-      "classification": "AMBIGUOUS",
-      "column": 22,
-      "confidence": "HIGH",
-      "dynamic": false,
-      "end": 6112,
-      "file": "gravity-mvp/src/lib/perf-monitor.ts",
-      "index": 5389,
-      "kind": "raw",
-      "line": 179,
-      "method": "$queryRawUnsafe",
-      "model": null,
-      "operations": [],
-      "owner_contexts": [],
-      "read_projection_dynamic": true,
-      "read_tables": [
-        "perf_log"
-      ],
-      "receiver_origin": "import:@/lib/prisma",
-      "scope": "Function:getPerfSummary",
-      "select_all": false,
-      "selected_column_sources": [
-        {
-          "field": "int",
-          "table": "perf_log"
-        },
-        {
-          "field": "is_slow",
-          "table": "perf_log"
-        },
-        {
-          "field": "operation_name",
-          "table": "perf_log"
-        },
-        {
-          "field": "operation_type",
-          "table": "perf_log"
-        },
-        {
-          "field": "WITHIN",
-          "table": "perf_log"
-        }
-      ],
-      "selected_columns": [
-        "WITHIN",
-        "int",
-        "is_slow",
-        "operation_name",
-        "operation_type"
-      ],
-      "site_signature": "9a845145647930a31e7d39bf5cb62888a230b748110d6c36d767018cf693f6e6",
-      "source_context": "operations_observability",
-      "source_identity": "module_rules",
-      "source_technical_module": "monitoring",
-      "sql_sha256": "b180b700816e1a8380845e8222b5a9c6058b1306b055e4dffb200eaae9ba18af",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "APPLICATION_RUNTIME",
-        "production_capability": "POSSIBLE",
-        "registry_classified": false
-      },
-      "tables": [],
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "written_columns": []
-    },
-    {
       "ambiguity_reasons": [],
       "ambiguous": false,
       "candidate_models": [],
@@ -73728,66 +72238,6 @@
         "reachabilityCheckedAt",
         "reachabilityStatus"
       ]
-    },
-    {
-      "ambiguity_reasons": [
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
-      ],
-      "ambiguous": true,
-      "candidate_models": [],
-      "classification": "AMBIGUOUS",
-      "column": 33,
-      "confidence": "HIGH",
-      "dynamic": false,
-      "end": 2936,
-      "file": "gravity-mvp/src/lib/runtime-guardrails.ts",
-      "index": 2647,
-      "kind": "raw",
-      "line": 85,
-      "method": "$queryRawUnsafe",
-      "model": null,
-      "operations": [],
-      "owner_contexts": [],
-      "read_projection_dynamic": false,
-      "read_tables": [
-        "cron_health_log"
-      ],
-      "receiver_origin": "import:@/lib/prisma",
-      "scope": "Function:checkRuntimeGuardrails",
-      "select_all": false,
-      "selected_column_sources": [
-        {
-          "field": "int",
-          "table": "cron_health_log"
-        },
-        {
-          "field": "status",
-          "table": "cron_health_log"
-        }
-      ],
-      "selected_columns": [
-        "int",
-        "status"
-      ],
-      "site_signature": "92396b03c04f83af0d8031590fac911121131dbeb93bf6ebe9c58a69bae1f0e0",
-      "source_context": "operations_observability",
-      "source_identity": "module_rules",
-      "source_technical_module": "monitoring",
-      "sql_sha256": "56d34e3a196c9427196d24f5fa7aab246d25276cf5d27e8009d196760c6217ef",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "APPLICATION_RUNTIME",
-        "production_capability": "POSSIBLE",
-        "registry_classified": false
-      },
-      "tables": [],
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "written_columns": []
     },
     {
       "ambiguity_reasons": [
@@ -84191,86 +82641,6 @@
       "written_fields": [
         "outcome"
       ]
-    },
-    {
-      "ambiguity_reasons": [
-        "query_raw_intent_unresolved",
-        "select_function_side_effect_unresolved"
-      ],
-      "ambiguous": true,
-      "candidate_models": [],
-      "classification": "AMBIGUOUS",
-      "column": 28,
-      "confidence": "HIGH",
-      "dynamic": false,
-      "end": 3599,
-      "file": "gravity-mvp/src/modules/operations-observability/public/v1/legacy-prisma-intervention-actions-repository.ts",
-      "index": 3147,
-      "kind": "raw",
-      "line": 91,
-      "method": "$queryRawUnsafe",
-      "model": null,
-      "operations": [],
-      "owner_contexts": [],
-      "read_projection_dynamic": true,
-      "read_tables": [
-        "intervention_actions"
-      ],
-      "receiver_origin": "import:@/lib/prisma",
-      "scope": "Method:listLatest",
-      "select_all": false,
-      "selected_column_sources": [
-        {
-          "field": "action",
-          "table": "intervention_actions"
-        },
-        {
-          "field": "comment",
-          "table": "intervention_actions"
-        },
-        {
-          "field": "created_at",
-          "table": "intervention_actions"
-        },
-        {
-          "field": "manager_id",
-          "table": "intervention_actions"
-        },
-        {
-          "field": "outcome",
-          "table": "intervention_actions"
-        },
-        {
-          "field": "score_at_action",
-          "table": "intervention_actions"
-        }
-      ],
-      "selected_columns": [
-        "action",
-        "comment",
-        "created_at",
-        "manager_id",
-        "outcome",
-        "score_at_action"
-      ],
-      "site_signature": "27037b713c00dff072028437381e9a57deb45cdb77b7a99b1551b32e03d80ff0",
-      "source_context": "operations_observability",
-      "source_identity": "bounded_module_path",
-      "source_technical_module": "operations_observability.module",
-      "sql_sha256": "b34a08f4441039bf2909d51288e855373cff3cafdb96a17d2158e2bdbefb0af0",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "APPLICATION_RUNTIME",
-        "production_capability": "POSSIBLE",
-        "registry_classified": false
-      },
-      "tables": [],
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "written_columns": []
     },
     {
       "ambiguity_reasons": [],

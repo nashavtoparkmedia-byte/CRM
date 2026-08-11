@@ -1,23 +1,23 @@
 {
   "schema": "yoko.crm.write-ownership-closure-batch.v2",
-  "generated_at": "2026-08-11T06:58:31.735843Z",
+  "generated_at": "2026-08-11T07:11:21.158965Z",
   "authority": "Derived evidence ledger; unresolved records remain blocked/ambiguous and are not PASS.",
   "baseline": {
-    "analysis_sha256": "65af50ebe1029b121a33d405fab63a03e8d7f4bf1c2e4e06f79d2dedaf25ed3e",
-    "baseline_sha256": "4abfe0f72fb96caf36036eadd8ee3c831651fa8988bf437b538e38759ee0ee22",
-    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T0657Z.json",
-    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_LIFECYCLE_MIGRATION_DEAD.json"
+    "analysis_sha256": "8b69de777307005d16b04dfbe4e2e2b461595ffa249ca1a4b0f77b0d41f7bfbb",
+    "baseline_sha256": "6f13453ed6b989e212625944bb763cd984ba549190aebd9e3d167cc45568d1c4",
+    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T0710Z.json",
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_SAFE_AGGREGATE_SQL.json"
   },
   "metrics": {
-    "confirmed_writes_discovered": 1445,
+    "confirmed_writes_discovered": 1424,
     "confirmed_foreign": 0,
     "closed_foreign": 52,
-    "ambiguous_remaining": 204,
+    "ambiguous_remaining": 188,
     "confirmed_write_owner_resolved": 7,
     "confirmed_write_owner_unresolved": 138,
     "dynamic_delegate_unresolved": 6,
     "dynamic_sql_unresolved": 32,
-    "query_raw_side_effect_unresolved": 17,
+    "query_raw_side_effect_unresolved": 1,
     "confirmed_non_writes": 4,
     "active_operational_surfaces_unclassified": 0,
     "temporary_exceptions": 0,
@@ -138,5 +138,11 @@
     "historical_dead_sites": 18,
     "controlled_migration_sites": 26,
     "remaining_active_operational_files": 363
+  },
+  "analyzer_batch": {
+    "artifact": "tools/architecture/v2/sql-mutation-analyzer.mjs",
+    "regressions": "89/89",
+    "resolved_query_raw_side_effects": 16,
+    "remaining_query_raw_side_effects": 1
   }
 }
