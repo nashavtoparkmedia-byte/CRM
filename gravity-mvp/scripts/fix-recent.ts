@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import { DriverMatchService } from '../src/lib/DriverMatchService' // Relative import from scripts
-import { linkMatchedDriverToConversationV1 } from '../src/modules/messaging/public/v1'
+import { linkMatchedDriverToConversationCapabilityV1 } from '../src/modules/messaging/public/v1'
 
 const prisma = new PrismaClient()
 
@@ -24,14 +24,14 @@ async function main() {
         let matched = false
         if (chat.channel === 'whatsapp' && chat.externalChatId.startsWith('whatsapp:')) {
             const phone = chat.externalChatId.split(':')[1]
-            matched = await DriverMatchService.linkChatToDriver(chat.id, { phone }, linkMatchedDriverToConversationV1)
+            matched = await DriverMatchService.linkChatToDriver(chat.id, { phone }, linkMatchedDriverToConversationCapabilityV1)
             if (!matched && chat.name?.includes('+')) {
-                 matched = await DriverMatchService.linkChatToDriver(chat.id, { phone: chat.name }, linkMatchedDriverToConversationV1)
+                 matched = await DriverMatchService.linkChatToDriver(chat.id, { phone: chat.name }, linkMatchedDriverToConversationCapabilityV1)
             }
         } else if (chat.channel === 'telegram') {
             const tgId = chat.externalChatId.split(':')[1]
             if (tgId) {
-                matched = await DriverMatchService.linkChatToDriver(chat.id, { telegramId: tgId }, linkMatchedDriverToConversationV1)
+                matched = await DriverMatchService.linkChatToDriver(chat.id, { telegramId: tgId }, linkMatchedDriverToConversationCapabilityV1)
             }
         }
         

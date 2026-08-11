@@ -159,7 +159,11 @@ export type { MatchedDriverConversationLinkPersistencePortV1 } from './link-matc
 const linkMatchedDriverToConversationCommandV1 = createLinkMatchedDriverToConversationHandlerV1(
     legacyPrismaMatchedDriverConversationLinkPortV1,
 )
-export async function linkMatchedDriverToConversationV1(input: { chatId: string, driverId: string }) {
+/**
+ * A bound owner capability for consumers that have a strictly matched driver.
+ * The Messaging command envelope is intentionally private to this boundary.
+ */
+export async function linkMatchedDriverToConversationCapabilityV1(input: { chatId: string, driverId: string }) {
     return linkMatchedDriverToConversationCommandV1({
         contract: LINK_MATCHED_DRIVER_TO_CONVERSATION_COMMAND_V1,
         ...input,

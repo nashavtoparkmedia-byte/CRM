@@ -14,7 +14,7 @@ import { normalizePhoneE164 } from '@/lib/phoneUtils'
 import { opsLog } from '@/lib/opsLog'
 import { CREATE_EXTERNAL_CONVERSATION_COMMAND_V1, DELETE_MESSAGE_COMMAND_V1, DELETE_MESSAGE_MEDIA_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_EXTERNAL_CONVERSATION_COMMAND_V1, REPLACE_EXTERNAL_MESSAGE_COMMAND_V1, UPSERT_EXTERNAL_MESSAGE_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { ATTACH_MESSAGE_MEDIA_COMMAND_V2 } from '@/contracts/messaging/v2'
-import { createExternalConversationV1, deleteMessageMediaV1, deleteMessageV1, ensureConversationContactLinkV1, linkMatchedDriverToConversationV1, patchExternalConversationV1, replaceExternalMessageV1, upsertExternalMessageV1 } from '@/modules/messaging/public/v1'
+import { createExternalConversationV1, deleteMessageMediaV1, deleteMessageV1, ensureConversationContactLinkV1, linkMatchedDriverToConversationCapabilityV1, patchExternalConversationV1, replaceExternalMessageV1, upsertExternalMessageV1 } from '@/modules/messaging/public/v1'
 import { attachMessageMediaV2 } from '@/modules/messaging/public/v2'
 
 function metadataRecord(metadata: unknown): Record<string, unknown> {
@@ -557,7 +557,7 @@ export async function POST(request: Request) {
 
     // Привязываем чат к водителю (по телефону/имени из MAX)
     if (!isOutgoing && !chat.driverId && (effectiveSenderPhone || senderName)) {
-      DriverMatchService.linkChatToDriver(chat.id, { phone: effectiveSenderPhone || undefined, name: senderName }, linkMatchedDriverToConversationV1).catch(e =>
+      DriverMatchService.linkChatToDriver(chat.id, { phone: effectiveSenderPhone || undefined, name: senderName }, linkMatchedDriverToConversationCapabilityV1).catch(e =>
         console.error('[MAX Webhook] linkChatToDriver error:', e.message)
       )
     }

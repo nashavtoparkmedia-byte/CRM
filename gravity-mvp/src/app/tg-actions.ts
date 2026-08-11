@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { NewMessage, Raw } from 'telegram/events'
 import * as registry from '@/lib/TransportRegistry'
-import { attachBinaryMessageMediaV1, attachMessageMediaV1, createChannelMessageV1, deleteConversationsByIdV1, deleteHistoryImportJobsForChannelV1, deleteHistoryImportJobsForConnectionV1, ensureConversationContactLinkV1, linkMatchedDriverToConversationV1, patchChannelConversationV1, patchHistoryImportJobV1, patchMessageDeliveryV1, patchMessageMetadataV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
+import { attachBinaryMessageMediaV1, attachMessageMediaV1, createChannelMessageV1, deleteConversationsByIdV1, deleteHistoryImportJobsForChannelV1, deleteHistoryImportJobsForConnectionV1, ensureConversationContactLinkV1, linkMatchedDriverToConversationCapabilityV1, patchChannelConversationV1, patchHistoryImportJobV1, patchMessageDeliveryV1, patchMessageMetadataV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
 import { ATTACH_BINARY_MESSAGE_MEDIA_COMMAND_V1, ATTACH_MESSAGE_MEDIA_COMMAND_V1, CREATE_CHANNEL_MESSAGE_COMMAND_V1, DELETE_CONVERSATIONS_BY_ID_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CHANNEL_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CONNECTION_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, PATCH_MESSAGE_DELIVERY_COMMAND_V1, PATCH_MESSAGE_METADATA_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { projectTelegramConnectionMetadata } from '@/modules/telegram-channel/public/v1/telegram-connection-public-metadata'
 import { requireIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
@@ -509,7 +509,7 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
 
         // 2. Relink driver if missing (on every inbound)
         if (!unifiedChat.driverId) {
-            const linked = await DriverMatchService.linkChatToDriver(unifiedChat.id, { telegramId: senderId }, linkMatchedDriverToConversationV1)
+            const linked = await DriverMatchService.linkChatToDriver(unifiedChat.id, { telegramId: senderId }, linkMatchedDriverToConversationCapabilityV1)
             if (linked) {
                 unifiedChat = await (prisma.chat as any).findUnique({ where: { id: unifiedChat.id } })
                 console.log(`[${loggerPrefix}] RELINKED chat=${unifiedChat.id} to driver=${unifiedChat.driverId}`)
@@ -1432,7 +1432,7 @@ export async function importTelegramHistory(
 
                 // Driver linking
                 if (!unifiedChat.driverId) {
-                    await DriverMatchService.linkChatToDriver(unifiedChat.id, { telegramId: peerId }, linkMatchedDriverToConversationV1)
+                    await DriverMatchService.linkChatToDriver(unifiedChat.id, { telegramId: peerId }, linkMatchedDriverToConversationCapabilityV1)
                 }
 
                 // Fetch messages — determine limit based on mode

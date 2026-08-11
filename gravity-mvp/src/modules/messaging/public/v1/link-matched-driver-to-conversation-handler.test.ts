@@ -24,6 +24,7 @@ vi.mock('@/lib/prisma', () => ({
 }))
 
 import { legacyPrismaMatchedDriverConversationLinkPortV1 } from './legacy-prisma-matched-driver-conversation-link-adapter'
+import { linkMatchedDriverToConversationCapabilityV1 } from './index'
 
 describe('LinkMatchedDriverToConversationCommand.v1', () => {
     it('accepts only the minimal matching-to-conversation command', () => {
@@ -81,6 +82,22 @@ describe('LinkMatchedDriverToConversationCommand.v1', () => {
 })
 
 describe('matched-driver conversation persistence', () => {
+    it('exposes a bound owner capability without making callers provide a contract', async () => {
+        chatUpdateMany.mockResolvedValueOnce({ count: 1 })
+
+        await expect(linkMatchedDriverToConversationCapabilityV1({
+            chatId: 'chat-1',
+            driverId: 'driver-1',
+        })).resolves.toEqual({
+            contract: LINK_MATCHED_DRIVER_TO_CONVERSATION_RESULT_V1,
+            linked: true,
+        })
+        expect(chatUpdateMany).toHaveBeenCalledWith({
+            where: { id: 'chat-1', driverId: null },
+            data: { driverId: 'driver-1' },
+        })
+    })
+
     it('uses an atomic null-only update for the first driver link', async () => {
         chatUpdateMany.mockResolvedValueOnce({ count: 1 })
 

@@ -5,7 +5,7 @@ import { ContactService } from '@/lib/ContactService'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import crypto from 'crypto'
 import { ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, UPSERT_EXTERNAL_MESSAGE_COMMAND_V1 } from '@/contracts/messaging/v1'
-import { ensureConversationContactLinkV1, linkMatchedDriverToConversationV1, patchChannelConversationV1, upsertChannelConversationV1, upsertExternalMessageV1 } from '@/modules/messaging/public/v1'
+import { ensureConversationContactLinkV1, linkMatchedDriverToConversationCapabilityV1, patchChannelConversationV1, upsertChannelConversationV1, upsertExternalMessageV1 } from '@/modules/messaging/public/v1'
 
 // PR-Г: placeholder detection — name = "..", ". .", "TG NNN", pure digits.
 // Используется для умного update: новое реальное имя замещает placeholder
@@ -177,7 +177,7 @@ export async function POST(req: NextRequest) {
             const linked = await DriverMatchService.linkChatToDriver(unifiedChat.id, { 
                 phone: phoneDigits,
                 name: driverName || phone
-            }, linkMatchedDriverToConversationV1)
+            }, linkMatchedDriverToConversationCapabilityV1)
             if (linked) {
                 unifiedChat = await (prisma.chat as any).findUnique({ where: { id: unifiedChat.id } })
             }
