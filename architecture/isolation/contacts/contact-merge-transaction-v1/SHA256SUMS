@@ -9,7 +9,7 @@ a19672eda66cd2caeb28a61a5a67dbcefc16dedfc1f00584bdbc58ea3ec6ab5e  architecture/i
 36797e9e5f22956d1e3213dcdc5b867469b6022eb92dfe1cebbfea781b2a073a  architecture/isolation/contacts/contact-merge-transaction-v1/SELECTION.md
 71b72116334579bf0566700a0bef2d456635e6371af9840ab3890e6c997b72ca  architecture/isolation/contacts/contact-merge-transaction-v1/migration-manifest.json
 262ddd8e33cf2dd8372d7a4e85fe313105cf0e9596a1a63d51395c3f9a2b6bdf  architecture/isolation/contacts/contact-merge-transaction-v1/verification.json
-467a25acefed32c8ba4fe9554fa81441134d269bb564ab3ba563ce9376dadca3  architecture/contexts/v1/manifests/contacts.json
+2c99b38f34d90e56b5771d8b166a78ec905d249e9977c4574497d6684d8e1fed  architecture/contexts/v1/manifests/contacts.json
 aef997b91d69ac326015b834471e9beb436c2a23276d766f9be6b42b7275943d  gravity-mvp/src/app/api/contacts/[id]/merge/route.ts
 ceab4210dfb589719b1558e54ab1bfd408f7598881ae7e7d3a0f6027cb84c40a  gravity-mvp/src/app/api/contacts/[id]/merge-to/[targetId]/route.ts
 b5a96ee22dbc645dad8adb4bb50c4473f317ccba2d8e8e8c2ec52812cf598076  gravity-mvp/src/app/messages/components/ContactProfileDrawer.tsx

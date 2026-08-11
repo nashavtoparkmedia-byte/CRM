@@ -11,7 +11,7 @@ import { AlertCircle } from "lucide-react"
 import DriverTasksWidget from "./DriverTasksWidget"
 import TaskCreateModal from "@/app/tasks/components/TaskCreateModal"
 import CallButton from "@/components/sip/CallButton"
-import { getSegmentLabel } from "@/lib/contactDisplay"
+import { getSegmentLabel } from '@/modules/contacts/public/v1/contact-display-policy'
 
 // Custom field types
 interface CustomField {

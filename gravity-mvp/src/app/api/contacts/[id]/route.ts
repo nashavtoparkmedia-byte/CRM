@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
-import { buildCanonicalContactSummary } from '@/lib/contactDisplay'
+import { buildCanonicalContactSummary } from '@/modules/contacts/public/v1/contact-display-policy'
 
 /**
  * GET /api/contacts/:id

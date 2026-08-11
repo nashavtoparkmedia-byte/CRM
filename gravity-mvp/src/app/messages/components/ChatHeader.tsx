@@ -8,7 +8,7 @@ import { Conversation } from "../hooks/useConversations"
 import { useContact } from "../hooks/useContact"
 import { LeadStatusBadge } from "./LeadStatusBadge"
 import { formatChatTitle, formatChatTitleDetailed } from "../utils/message-utils"
-import { getSegmentLabel } from "@/lib/contactDisplay"
+import { getSegmentLabel } from '@/modules/contacts/public/v1/contact-display-policy'
 import LinkContactModal from "./LinkContactModal"
 
 import { getDriverActiveTasks } from '@/app/tasks/actions'

@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "6bfc84df6c20eaf30a5f5990c203f7e9f62b491e4f1c1d73ee55091e3dc85157",
+  "finding_digest": "0afe84064ebcdc1aff46f055ac3b4041bfe7c9b8be4d3b3e2ce6f9e149929d51",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -14,8 +14,8 @@
   },
   "summary": {
     "internal_module_import": 84,
-    "non_public_cross_context_import": 141,
-    "undeclared_dependency": 46
+    "non_public_cross_context_import": 137,
+    "undeclared_dependency": 42
   },
   "exceptions": [
     {
@@ -32,38 +32,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:messaging/messages>contacts/contacts"
-      ]
-    },
-    {
-      "fingerprint": "arch_cb6cbf5e58e1957c0ed45214",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/contacts/[id]/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "contacts",
-      "target_context": "platform_shell",
-      "subject": "contacts>gravity_core:gravity-mvp/src/lib/contactDisplay.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:contacts/contacts>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_099f4592c9ea999484d78d3a",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/contacts/[id]/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "contacts",
-      "target_context": "platform_shell",
-      "subject": "contacts>gravity_core:gravity-mvp/src/lib/contactDisplay.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:contacts/contacts>platform_shell/gravity_core"
       ]
     },
     {
@@ -1568,40 +1536,6 @@
       ]
     },
     {
-      "fingerprint": "arch_f3cea9be85c0a3c3b9b68daa",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/messages/components/ChatHeader.tsx",
-      "line_at_baseline": 11,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "platform_shell",
-      "subject": "messages>gravity_core:gravity-mvp/src/lib/contactDisplay.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>platform_shell/gravity_core",
-        "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_1640ee1af9b283b414116d68",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/messages/components/ChatHeader.tsx",
-      "line_at_baseline": 11,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "platform_shell",
-      "subject": "messages>gravity_core:gravity-mvp/src/lib/contactDisplay.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>platform_shell/gravity_core",
-        "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
       "fingerprint": "arch_13eb2e4430568d80851ed2f9",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/messages/components/ChatHeader.tsx",
@@ -1874,40 +1808,6 @@
       "owner_context": "messaging",
       "target_context": "platform_shell",
       "subject": "messages>gravity_ui:gravity-mvp/src/components/sip/CallButton.tsx",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>platform_shell/gravity_core",
-        "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_0972f254c49814977757ba3c",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/messages/components/ContactProfileDrawer.tsx",
-      "line_at_baseline": 14,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "platform_shell",
-      "subject": "messages>gravity_core:gravity-mvp/src/lib/contactDisplay.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>platform_shell/gravity_core",
-        "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_580c85bed78def2d9df9f972",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/messages/components/ContactProfileDrawer.tsx",
-      "line_at_baseline": 14,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "platform_shell",
-      "subject": "messages>gravity_core:gravity-mvp/src/lib/contactDisplay.ts",
       "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
       "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
       "expires_on": "2026-12-31",
@@ -4053,40 +3953,6 @@
       "owner_context": "messaging",
       "target_context": "platform_shell",
       "subject": "messages>gravity_core:gravity-mvp/src/lib/pipeline/PipelineWorker.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>platform_shell/gravity_core",
-        "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_320a87e94561bfbf6bd5812c",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/MessageService.ts",
-      "line_at_baseline": 6,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "platform_shell",
-      "subject": "messages>gravity_core:gravity-mvp/src/lib/contactDisplay.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>platform_shell/gravity_core",
-        "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_6507b4ea2492a52a5f2c1f26",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/MessageService.ts",
-      "line_at_baseline": 6,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "platform_shell",
-      "subject": "messages>gravity_core:gravity-mvp/src/lib/contactDisplay.ts",
       "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
       "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
       "expires_on": "2026-12-31",

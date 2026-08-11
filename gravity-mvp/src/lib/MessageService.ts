@@ -2,7 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { ChatChannel, MessageStatus } from '@prisma/client'
-import { buildCanonicalContactSummary } from '@/lib/contactDisplay'
+import { buildCanonicalContactSummary } from '@/modules/contacts/public/v1/contact-display-policy'
 import { getMaxChannelDeliveryV1, getTelegramChannelDeliveryV1, getWhatsAppChannelDeliveryV1 } from '@/modules/messaging/public/v1/channel-delivery-runtime'
 
 function serialize(obj: any): any {
