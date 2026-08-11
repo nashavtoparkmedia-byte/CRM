@@ -1351,6 +1351,48 @@ test('computed Prisma delegate literals are hashed ambiguity, never evidence nam
     assert.equal(JSON.stringify(result).includes(marker), false)
 })
 
+test('transaction client aliases typed and callback-proven resolve to the same delegate', () => {
+    const result = analyzePrismaWriteSites([
+        "import { prisma } from '@/lib/prisma'",
+        "import type { Prisma } from '@prisma/client'",
+        'function makeRepositories(transaction: Prisma.TransactionClient) {',
+        '  return { async archive(id) { await transaction.contact.update({ where: { id }, data: { archived: true } }) } }',
+        '}',
+        'prisma.$transaction(async (transaction) => { await makeRepositories(transaction).archive("c1") })',
+    ].join('\n'), { fileName: 'transaction-alias.ts' })
+    assert.equal(result.sites.filter((site) => site.method === 'update').length, 1)
+    assert.equal(result.sites.find((site) => site.method === 'update').model, 'contact')
+    assert.equal(result.sites.find((site) => site.method === 'update').ambiguous, false)
+})
+
+test('inferred scalar identifiers in tagged SQL are bound parameters, not dynamic SQL', () => {
+    const result = analyzePrismaWriteSites([
+        'async function GET({ params }: { params: Promise<{ id: string }> }) {',
+        '  const { id: driverId } = await params',
+        '  await prisma.$queryRaw`SELECT * FROM "DriverTelegram" WHERE "driverId" = ${driverId}`',
+        '}',
+    ].join('\n'), { fileName: 'inferred-scalar-sql.ts', includeRawReads: true })
+    assert.equal(result.sites.length, 1)
+    assert.equal(result.sites[0].ambiguous, false)
+    assert.equal(result.sites[0].dynamic, false)
+    assert.deepEqual(result.sites[0].read_tables, ['DriverTelegram'])
+})
+
+test('static Prisma.sql conditional fragments remain structurally analyzable', () => {
+    const result = analyzePrismaWriteSites([
+        "import { Prisma } from '@prisma/client'",
+        'async function list(managerId: string | null) {',
+        '  const filter = Prisma.sql`"managerId" = ${managerId}`',
+        '  const optional = managerId ? Prisma.sql`AND ${filter}` : Prisma.empty',
+        '  await prisma.$queryRaw`SELECT id FROM "Call" WHERE 1 = 1 ${optional}`',
+        '}',
+    ].join('\n'), { fileName: 'prisma-sql-fragment.ts', includeReads: true, includeRawReads: true })
+    assert.equal(result.sites.length, 1)
+    assert.equal(result.sites[0].ambiguous, false)
+    assert.equal(result.sites[0].dynamic, false)
+    assert.deepEqual(result.sites[0].read_tables, ['Call'])
+})
+
 test('byte-identical duplicate sites cannot inherit a retired sibling signature', () => {
     const duplicate = 'await prisma.chat.create({})'
     const before = extractPrismaWrites(`async function persist() { ${duplicate}; ${duplicate} }`)

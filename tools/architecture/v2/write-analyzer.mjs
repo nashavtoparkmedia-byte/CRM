@@ -172,6 +172,7 @@ function sourceContext(sourceText, fileName) {
     const checker = {
         getSymbolAtLocation: (node) => safeResolution('getSymbolAtLocation', node),
         getShorthandAssignmentValueSymbol: (node) => safeResolution('getShorthandAssignmentValueSymbol', node),
+        getTypeAtLocation: (node) => safeResolution('getTypeAtLocation', node),
     }
     return { checker, resolutionDiagnostics, sourceFile }
 }
@@ -330,6 +331,17 @@ function mergeValues(values, reason) {
     if (material.length === 0) return unknown()
     const identities = new Set(material.map(valueIdentity))
     if (identities.size === 1 && material.length === values.length) return material[0]
+    // A TransactionClient parameter is often both statically typed and bound
+    // to the callback argument passed to $transaction.  Those two proofs have
+    // different origins but describe the same transaction-scoped client.  Do
+    // not turn this safe alias into an unresolved delegate merely because the
+    // origins differ; retain the conservative path for mixed client kinds or
+    // transaction scopes.
+    if (
+        material.length === values.length
+        && material.every((value) => value.kind === 'CLIENT')
+        && new Set(material.map((value) => Boolean(value.transaction))).size === 1
+    ) return material[0]
     return ambiguous('AMBIGUOUS_VALUE', [reason], material)
 }
 
@@ -495,9 +507,39 @@ function definitelyScalarExpression(expression, checker, seen = new Set()) {
     }
     if (!ts.isIdentifier(candidate)) return false
     const symbol = checker.getSymbolAtLocation(candidate)
+    const declarations = symbol?.declarations ?? []
+    // Destructured request/entity fields are scalar by default; explicitly
+    // named SQL-fragment fields stay conservative.  This covers common route
+    // patterns such as `const { id } = params` without treating arbitrary
+    // object values as SQL syntax.
+    if (declarations.some((declaration) => (
+        ts.isBindingElement(declaration)
+        && !['sql', 'raw', 'fragment', 'unsafe'].includes(
+            nodeName(declaration.propertyName ?? declaration.name, declaration.getSourceFile()).toLowerCase(),
+        )
+    ))) return true
+    // Use the TypeScript checker when available to resolve inferred scalar
+    // values (for example a destructured route parameter).  This is narrower
+    // than treating every identifier as scalar and leaves object/SQL-fragment
+    // values fail-closed.
+    if (checker) {
+        const type = checker.getTypeAtLocation(candidate)
+        const flags = type?.flags ?? 0
+        const scalarFlags = ts.TypeFlags.StringLike
+            | ts.TypeFlags.NumberLike
+            | ts.TypeFlags.BooleanLike
+            | ts.TypeFlags.BigIntLike
+            | ts.TypeFlags.Null
+            | ts.TypeFlags.Undefined
+        if ((flags & scalarFlags) !== 0) return true
+        if (type?.symbol?.name === 'Date') return true
+        if (type?.isUnion?.() && type.types.length > 0 && type.types.every((member) => {
+            const memberFlags = member.flags ?? 0
+            return (memberFlags & scalarFlags) !== 0 || member.symbol?.name === 'Date'
+        })) return true
+    }
     if (!symbol || seen.has(symbol)) return false
     seen.add(symbol)
-    const declarations = symbol.declarations ?? []
     if (declarations.length !== 1) return false
     const declaration = declarations[0]
     if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
@@ -531,11 +573,49 @@ function returnedExpressionFromCallable(callable) {
     return returns.length === 1 ? returns[0] : null
 }
 
+function knownPrismaNamespaceIdentifier(expression, checker) {
+    const candidate = unwrapExpression(expression)
+    if (!ts.isIdentifier(candidate)) return false
+    const symbol = checker.getSymbolAtLocation(candidate)
+    return (symbol?.declarations ?? []).some((declaration) => {
+        if (!ts.isImportSpecifier(declaration)) return false
+        const importDeclaration = declaration.parent.parent.parent
+        const specifier = ts.isImportDeclaration(importDeclaration) && ts.isStringLiteral(importDeclaration.moduleSpecifier)
+            ? importDeclaration.moduleSpecifier.text
+            : null
+        return specifier && isPrismaClientModule(specifier) && (declaration.propertyName?.text ?? declaration.name.text) === 'Prisma'
+    })
+}
+
 function interpolationSql(expression, checker, sourceFile, seen = new Set()) {
     const candidate = unwrapExpression(expression)
+    if (
+        ts.isPropertyAccessExpression(candidate)
+        && ts.isIdentifier(candidate.expression)
+        && knownPrismaNamespaceIdentifier(candidate.expression, checker)
+        && candidate.name.text === 'empty'
+    ) return { sql: '', dynamic: false }
+    if (ts.isConditionalExpression(candidate)) {
+        const whenTrue = interpolationSql(candidate.whenTrue, checker, sourceFile, new Set(seen))
+        const whenFalse = interpolationSql(candidate.whenFalse, checker, sourceFile, new Set(seen))
+        if (whenTrue && whenFalse && !whenTrue.dynamic && !whenFalse.dynamic) {
+            // Both branches are fixed SQL fragments (often Prisma.sql /
+            // Prisma.empty). Include both branch syntax for structural
+            // mutation/table analysis; parameter values remain opaque.
+            return { sql: `${whenTrue.sql} ${whenFalse.sql}`, dynamic: false }
+        }
+        return { sql: SQL_DYNAMIC_MARKER, dynamic: true }
+    }
     if (definitelyScalarExpression(candidate, checker)) return { sql: 'NULL', dynamic: false }
     if (ts.isTaggedTemplateExpression(candidate)) {
         const nested = taggedTemplateSql(candidate.template, checker, sourceFile, seen)
+        const tag = unwrapExpression(candidate.tag)
+        if (
+            nested
+            && ts.isPropertyAccessExpression(tag)
+            && tag.name.text === 'sql'
+            && knownPrismaNamespaceIdentifier(tag.expression, checker)
+        ) return nested
         return { sql: nested?.sql ?? SQL_DYNAMIC_MARKER, dynamic: true }
     }
     if (ts.isIdentifier(candidate)) {
