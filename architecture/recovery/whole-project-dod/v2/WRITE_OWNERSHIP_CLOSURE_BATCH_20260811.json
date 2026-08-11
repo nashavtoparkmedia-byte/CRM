@@ -1,20 +1,20 @@
 {
   "schema": "yoko.crm.write-ownership-closure-batch.v2",
-  "generated_at": "2026-08-11T07:11:21.158965Z",
+  "generated_at": "2026-08-11T07:59:28.507Z",
   "authority": "Derived evidence ledger; unresolved records remain blocked/ambiguous and are not PASS.",
   "baseline": {
-    "analysis_sha256": "8b69de777307005d16b04dfbe4e2e2b461595ffa249ca1a4b0f77b0d41f7bfbb",
-    "baseline_sha256": "6f13453ed6b989e212625944bb763cd984ba549190aebd9e3d167cc45568d1c4",
-    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T0710Z.json",
-    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_SAFE_AGGREGATE_SQL.json"
+    "analysis_sha256": "f69988c7ed61e8d3d7612b6f112ed5ba8de464fb97524f59bc750234e9abaaf1",
+    "baseline_sha256": "59183f13283af344733c22634c13c8737272f5bd6da0e31ad70e9223a4cf09bd",
+    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T075859Z.json",
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_NAME_BACKFILLS.json"
   },
   "metrics": {
-    "confirmed_writes_discovered": 1424,
+    "confirmed_writes_discovered": 1421,
     "confirmed_foreign": 0,
     "closed_foreign": 52,
-    "ambiguous_remaining": 188,
+    "ambiguous_remaining": 169,
     "confirmed_write_owner_resolved": 7,
-    "confirmed_write_owner_unresolved": 138,
+    "confirmed_write_owner_unresolved": 119,
     "dynamic_delegate_unresolved": 6,
     "dynamic_sql_unresolved": 32,
     "query_raw_side_effect_unresolved": 1,
@@ -127,9 +127,9 @@
   "dynamic_review": {
     "delegate_resolved": 11,
     "delegate_remaining": 6,
-    "sql_resolved": 12,
-    "sql_remaining": 38,
-    "query_raw_remaining": 17,
+    "sql_resolved": 16,
+    "sql_remaining": 32,
+    "query_raw_remaining": 1,
     "policy": "Remaining dynamic families stay fail-closed."
   },
   "verdict": "NOT_READY_MATERIAL_AMBIGUITY_REMAINS",
@@ -144,5 +144,65 @@
     "regressions": "89/89",
     "resolved_query_raw_side_effects": 16,
     "remaining_query_raw_side_effects": 1
+  },
+  "new_seed_capability_batch": {
+    "files": [
+      "gravity-mvp/scripts/seed_ai_profiles.js",
+      "gravity-mvp/scripts/seed_knowledge_sections.js",
+      "gravity-mvp/src/modules/calling/public/v1/legacy-prisma-seed-ai-profiles-adapter.js",
+      "gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-seed-knowledge-sections-adapter.js"
+    ],
+    "writes_routed": 4,
+    "owner_capabilities": "calling.seedAiProfilesV1 and ai_knowledge.seedKnowledgeSectionsV1",
+    "targeted_validation": [
+      "89/89 v2 write-analyzer tests",
+      "repository analyzer mixed-language tests",
+      "tracked surface inventory tests",
+      "ESLint targeted seed scripts/adapters"
+    ],
+    "post_rescan_foreign": 0,
+    "ambiguity_reduction": 4
+  },
+  "next_action": "Resolve the remaining 119 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
+  "new_backfill_capability_batch": {
+    "files": [
+      "gravity-mvp/scripts/backfill_source_connection_pr7.js",
+      "gravity-mvp/scripts/backfill_source_connection_pr8.js",
+      "gravity-mvp/scripts/backfill_tg_last_inbound_at.js",
+      "gravity-mvp/scripts/backfill_unread_count.js",
+      "gravity-mvp/scripts/cleanup_epoch_dates.js",
+      "gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-source-connection-backfill-adapter.js",
+      "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-chat-backfill-adapter.js",
+      "gravity-mvp/src/modules/work-management/public/v1/legacy-prisma-task-date-cleanup-adapter.js"
+    ],
+    "writes_routed": 7,
+    "post_rescan_foreign": 0,
+    "ambiguity_reduction": 7
+  },
+  "new_maintenance_repair_batch": {
+    "files": [
+      "gravity-mvp/scripts/fix_ai_intern.js",
+      "gravity-mvp/scripts/reseed-telephony-config.js",
+      "gravity-mvp/scripts/fix_job.js",
+      "gravity-mvp/scripts/fix_name.js",
+      "gravity-mvp/src/modules/calling/public/v1/legacy-prisma-ai-maintenance-adapter.js",
+      "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-history-import-maintenance-adapter.js",
+      "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-chat-name-maintenance-adapter.js"
+    ],
+    "writes_routed": 4,
+    "post_rescan_foreign": 0,
+    "ambiguity_reduction": 4
+  },
+  "new_name_backfill_batch": {
+    "files": [
+      "gravity-mvp/scripts/backfill_from_linked.js",
+      "gravity-mvp/scripts/backfill_tg_names.js",
+      "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-name-maintenance-adapter.js",
+      "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-chat-name-maintenance-adapter.js"
+    ],
+    "writes_routed": 4,
+    "post_rescan_foreign": 0,
+    "ambiguity_reduction": 4,
+    "write_site_consolidation": "Existing shared Chat capability avoids duplicate write sites; denominator reflects consolidated owner implementation."
   }
 }

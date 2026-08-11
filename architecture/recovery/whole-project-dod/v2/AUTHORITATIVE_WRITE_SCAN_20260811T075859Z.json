@@ -1,0 +1,47 @@
+{
+  "schema": "yoko.crm.authoritative-write-scan-record.v1",
+  "generated_at": "2026-08-11T07:59:28.507Z",
+  "authority": "Bounded authoritative scan after shared Chat/Contact name backfill capability remediation; remaining ownership and dynamic ambiguity remains fail-closed, not READY.",
+  "inputs": {
+    "previous_baseline_sha256": "8e60dea58500a1d3cc3a82701d9a26ca2fc51eb16eebda09b4885acc8213030c",
+    "lifecycle_registry": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
+    "analyzer": "tools/architecture/v2/analyze.mjs",
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_NAME_BACKFILLS.json"
+  },
+  "output": {
+    "baseline": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json",
+    "baseline_sha256": "59183f13283af344733c22634c13c8737272f5bd6da0e31ad70e9223a4cf09bd",
+    "analysis_sha256": "f69988c7ed61e8d3d7612b6f112ed5ba8de464fb97524f59bc750234e9abaaf1",
+    "triage_sha256": "95c76825be3bb05c54964ab286418830cea92c81efbb0718d26b7bc2a8de0a22"
+  },
+  "execution": {
+    "ambiguous_candidates": 169,
+    "complete": true,
+    "elapsed_ms": 396453.29179,
+    "failures": [],
+    "files_completed": 1704,
+    "files_discovered": 1704,
+    "mode": "fresh_process_per_javascript_surface",
+    "progress_every": 150,
+    "worker_failures": 0,
+    "worker_limit": 4,
+    "worker_timeout_ms": 120000,
+    "worker_timeouts": 0,
+    "writes_discovered": 1421
+  },
+  "summary": {
+    "ambiguous_writes": 169,
+    "discovered_write_sites": 1421,
+    "foreign_writes": 0,
+    "historical_dead_writes": 18,
+    "migration_only_writes": 500,
+    "operational_script_writes": 130,
+    "owner_writes": 505,
+    "parse_findings": 0,
+    "raw_sql_writes": 814,
+    "test_writes": 229,
+    "tracked_executable_surfaces": 1704,
+    "unreviewed_operational_surfaces": 0
+  },
+  "verdict": "NOT_READY_REQUIRES_OWNERSHIP_AND_DYNAMIC_AMBIGUITY_CLOSURE"
+}
