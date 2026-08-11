@@ -57,7 +57,7 @@ const registry = {
       path: 'gravity-mvp/scripts/active.ts',
       lifecycle: 'OPERATIONAL_SCRIPT',
       disposition: 'ACTIVE',
-      owner_context: 'messaging',
+      functional_owner: 'messaging',
       production_capability: 'POSSIBLE',
       rationale: 'operator runbook',
       migration_target: 'messaging.public.v1',
@@ -90,6 +90,8 @@ assert.equal(inventory.summary.by_lifecycle.MIGRATION, 2)
 assert.equal(inventory.summary.unreviewed_operational_surfaces, 4)
 assert.deepEqual(inventory.controls.stale_registry_entries, [])
 assert.equal(inventory.surfaces.find((surface) => surface.path.endsWith('active.ts')).disposition, 'ACTIVE')
+assert.equal(inventory.surfaces.find((surface) => surface.path.endsWith('active.ts')).functional_owner, 'messaging')
+assert.equal(inventory.surfaces.find((surface) => surface.path.endsWith('active.ts')).owner_context, null)
 
 await assert.rejects(
   () => inventoryTrackedSurfaces('/fixture', {
@@ -108,7 +110,7 @@ await assert.rejects(
     },
     trackedFiles: ['x.ts'],
   }),
-  /must declare owner_context/,
+  /must declare functional_owner/,
 )
 
 await assert.rejects(

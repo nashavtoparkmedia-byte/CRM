@@ -1,16 +1,16 @@
 {
   "schema": "yoko.crm.write-ownership-derived-state.v1",
-  "generated_at": "2026-08-11T06:27:18.733798Z",
+  "generated_at": "2026-08-11T06:49:02.790681Z",
   "program": "WHOLE-PROJECT DOD RECOVERY",
-  "phase": "WRITE_OWNERSHIP_CLOSURE_FOREIGN_REMEDIATION_RESCAN",
+  "phase": "WRITE_OWNERSHIP_CLOSURE_LIFECYCLE_REGISTRY_RESCAN",
   "verdict": "EXTERNAL_FINAL_ACCEPTANCE_FAILED",
   "ready": false,
   "frozen_baseline": {
     "path": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json",
-    "sha256": "6666a1ee867eb15de9582223b59848627237e0afb68d2c3faa278e366b88bc0e",
-    "analysis_sha256": "84f8343ecfff4cec4eb594e453464b3d30a0802b28a462a174c3f3c29a74a790",
+    "sha256": "977a7b1e45fda23df25786eb48115f2e6435269cd098a8b428daff369421df92",
+    "analysis_sha256": "1136e34f456264877d32ab87e58a6de1b8c34d8c6eda48299696b99b18e6c5bf",
     "new_scan_run": true,
-    "previous_frozen_sha256": "c2f9d69cd0d2100429347407f8818c0fd41e73f6aa0c5da6ad73a869745b0ce4"
+    "previous_frozen_sha256": "6666a1ee867eb15de9582223b59848627237e0afb68d2c3faa278e366b88bc0e"
   },
   "metrics": {
     "confirmed_writes_discovered": 1445,
@@ -25,7 +25,7 @@
     "dynamic_sql_unresolved": 38,
     "query_raw_side_effect_unresolved": 17,
     "confirmed_non_writes": 4,
-    "operational_surfaces_total": 382,
+    "operational_surfaces_total": 1695,
     "operational_surfaces_classified_active": 382,
     "operational_surfaces_classified_historical_dead": 67,
     "operational_surfaces_newly_classified": 5,
@@ -37,7 +37,7 @@
     "test_surfaces_classified": 32,
     "dead_historical_classified": 29,
     "operational_surfaces_reviewed_batch": 382,
-    "operational_surfaces_analyzer_registry_unreviewed": 382
+    "operational_surfaces_analyzer_registry_unreviewed": 0
   },
   "focused_ownership_review": {
     "reviewed": 10,
@@ -77,7 +77,7 @@
       "state": "CLOSED_AFTER_AUTHORITATIVE_RESCAN"
     }
   ],
-  "next_action": "Resolve the 182 ownership-blocked records and remaining fail-closed dynamic delegate/SQL/queryRaw records; preserve ambiguity as unresolved until exact evidence exists.",
+  "next_action": "Resolve the 182 ownership-blocked records and remaining fail-closed dynamic delegate/SQL/queryRaw records; lifecycle denominator is now registry-classified without granting ownership.",
   "targeted_batch": {
     "artifact": "architecture/recovery/whole-project-dod/v2/WRITE_OWNERSHIP_CLOSURE_BATCH_20260811.json",
     "triage_artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_FOREIGN_CLOSURE.json",
@@ -88,15 +88,15 @@
     "static_read_nonwrites_resolved": 11
   },
   "authoritative_rescan": {
-    "artifact": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T0626Z.json",
-    "baseline_sha256": "6666a1ee867eb15de9582223b59848627237e0afb68d2c3faa278e366b88bc0e",
-    "analysis_sha256": "84f8343ecfff4cec4eb594e453464b3d30a0802b28a462a174c3f3c29a74a790",
-    "triage_artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_FOREIGN_CLOSURE.json",
-    "triage_sha256": "c45dd191b9a01ae9b93e0589b942f02f3119a7b4fcf0df5edf424a4d5d6faf5c",
+    "artifact": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T0648Z.json",
+    "baseline_sha256": "977a7b1e45fda23df25786eb48115f2e6435269cd098a8b428daff369421df92",
+    "analysis_sha256": "1136e34f456264877d32ab87e58a6de1b8c34d8c6eda48299696b99b18e6c5bf",
+    "triage_artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_LIFECYCLE_REGISTRY.json",
+    "triage_sha256": "f841aa09c4cd9ebe3f48751c637371514c4520144137824a186ec68c27630938",
     "execution": {
       "ambiguous_candidates": 254,
       "complete": true,
-      "elapsed_ms": 366664.017872,
+      "elapsed_ms": 401029.317982,
       "failures": [],
       "files_completed": 1695,
       "files_discovered": 1695,
@@ -115,6 +115,8 @@
     "classified": 382,
     "unclassified": 0,
     "write_capable_files": 73,
-    "policy": "Lifecycle classification is separate from ownership authorization; active writer sites remain fail-closed until exact owner capability evidence."
+    "policy": "Lifecycle classification is separate from ownership authorization; active writer sites remain fail-closed until exact owner capability evidence.",
+    "registry_artifact": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
+    "registry_entries": 443
   }
 }

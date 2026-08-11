@@ -124,8 +124,11 @@ function validateOverride(file, override) {
     throw new Error(`dead historical surface must use DEAD_HISTORICAL disposition: ${file}`)
   }
   if (override.lifecycle === 'OPERATIONAL_SCRIPT' && override.disposition !== 'UNREVIEWED') {
-    if (typeof override.owner_context !== 'string' || override.owner_context.length === 0) {
-      throw new Error(`classified operational surface must declare owner_context: ${file}`)
+    if (
+      (typeof override.functional_owner !== 'string' || override.functional_owner.length === 0)
+      && (typeof override.owner_context !== 'string' || override.owner_context.length === 0)
+    ) {
+      throw new Error(`classified operational surface must declare functional_owner: ${file}`)
     }
     if (typeof override.rationale !== 'string' || override.rationale.length === 0) {
       throw new Error(`classified operational surface must declare rationale: ${file}`)
@@ -160,6 +163,11 @@ export function classifyTrackedSurface(file, registry = null) {
     extension,
     lifecycle,
     disposition,
+    // Lifecycle metadata may name a functional owner for review/reporting,
+    // but it must never become analyzer source ownership. Only an explicit
+    // owner_context entry (used by narrowly controlled legacy fixtures) is
+    // allowed to influence write classification.
+    functional_owner: override?.functional_owner ?? null,
     owner_context: override?.owner_context ?? null,
     production_capability: override?.production_capability ?? (lifecycle === 'APPLICATION_RUNTIME' ? 'POSSIBLE' : 'UNKNOWN'),
     rationale: override?.rationale ?? null,

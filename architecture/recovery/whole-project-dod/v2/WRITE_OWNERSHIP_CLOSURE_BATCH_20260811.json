@@ -1,12 +1,12 @@
 {
   "schema": "yoko.crm.write-ownership-closure-batch.v2",
-  "generated_at": "2026-08-11T06:26:51.910555Z",
+  "generated_at": "2026-08-11T06:49:02.790681Z",
   "authority": "Derived evidence ledger; unresolved records remain blocked/ambiguous and are not PASS.",
   "baseline": {
-    "analysis_sha256": "84f8343ecfff4cec4eb594e453464b3d30a0802b28a462a174c3f3c29a74a790",
-    "baseline_sha256": "6666a1ee867eb15de9582223b59848627237e0afb68d2c3faa278e366b88bc0e",
-    "scan": "AUTHORITATIVE_WRITE_SCAN_20260811T0626Z.json",
-    "triage": "AMBIGUOUS_WRITE_TRIAGE_POST_FOREIGN_CLOSURE.json"
+    "analysis_sha256": "1136e34f456264877d32ab87e58a6de1b8c34d8c6eda48299696b99b18e6c5bf",
+    "baseline_sha256": "977a7b1e45fda23df25786eb48115f2e6435269cd098a8b428daff369421df92",
+    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T0648Z.json",
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_LIFECYCLE_REGISTRY.json"
   },
   "metrics": {
     "confirmed_writes_discovered": 1445,
@@ -19,7 +19,7 @@
     "dynamic_sql_unresolved": 38,
     "query_raw_side_effect_unresolved": 17,
     "confirmed_non_writes": 4,
-    "active_operational_surfaces_unclassified": 382,
+    "active_operational_surfaces_unclassified": 0,
     "temporary_exceptions": 0,
     "intentional_exceptions": 0
   },
@@ -121,7 +121,8 @@
   "operational_classification": {
     "artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
     "classified": 382,
-    "unclassified": 0
+    "unclassified": 0,
+    "registry_artifact": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json"
   },
   "dynamic_review": {
     "delegate_resolved": 11,
