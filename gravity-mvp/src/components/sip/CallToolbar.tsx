@@ -1,7 +1,7 @@
 "use client"
 
 import { Phone, PhoneOff, MicOff, Mic, RefreshCw, Volume2, VolumeX } from "lucide-react"
-import { useSip } from "@/lib/sip/SipContext"
+import { useSip } from '@/modules/calling/public/v1/sip-client-context'
 import { useEffect, useState } from "react"
 
 /**

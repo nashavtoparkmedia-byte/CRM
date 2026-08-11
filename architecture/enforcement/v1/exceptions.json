@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "0afe84064ebcdc1aff46f055ac3b4041bfe7c9b8be4d3b3e2ce6f9e149929d51",
+  "finding_digest": "5162cb37664d4ae301b9b8c445e5b1027db63da9bbe3a9eb8cf90076c6276a82",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -14,7 +14,7 @@
   },
   "summary": {
     "internal_module_import": 84,
-    "non_public_cross_context_import": 137,
+    "non_public_cross_context_import": 131,
     "undeclared_dependency": 42
   },
   "exceptions": [
@@ -1304,24 +1304,6 @@
       ]
     },
     {
-      "fingerprint": "arch_d6b5eb9a727e62127dc7ef37",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/layout.tsx",
-      "line_at_baseline": 17,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "calling",
-      "subject": "gravity_core>calls:gravity-mvp/src/lib/sip/SipContext.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>calling/ai_calls",
-        "dependency:platform_shell/gravity_core>calling/calls",
-        "dependency:platform_shell/gravity_ui>calling/calls"
-      ]
-    },
-    {
       "fingerprint": "arch_087c0c872f730e1268b2d7bd",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/logs/page.tsx",
@@ -1971,22 +1953,6 @@
       "owner_context": "messaging",
       "target_context": "calling",
       "subject": "messages>calls:gravity-mvp/src/lib/calls/status.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>calling/calls"
-      ]
-    },
-    {
-      "fingerprint": "arch_16dcf11516bb39f9c9197ff9",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/messages/components/NewChatPopover.tsx",
-      "line_at_baseline": 7,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "calling",
-      "subject": "messages>calls:gravity-mvp/src/lib/sip/SipContext.tsx",
       "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
       "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
       "expires_on": "2026-12-31",
@@ -3409,78 +3375,6 @@
       "migration_references": [
         "dependency:platform_shell/gravity_core>configuration/settings",
         "dependency:platform_shell/gravity_ui>configuration/settings"
-      ]
-    },
-    {
-      "fingerprint": "arch_2dbc5aa63be9564dbd8f2012",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/components/sip/ActiveCallPopup.tsx",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "calling",
-      "subject": "gravity_ui>calls:gravity-mvp/src/lib/sip/SipContext.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>calling/ai_calls",
-        "dependency:platform_shell/gravity_core>calling/calls",
-        "dependency:platform_shell/gravity_ui>calling/calls"
-      ]
-    },
-    {
-      "fingerprint": "arch_a1270f95908361776ae691e2",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/components/sip/CallButton.tsx",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "calling",
-      "subject": "gravity_ui>calls:gravity-mvp/src/lib/sip/SipContext.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>calling/ai_calls",
-        "dependency:platform_shell/gravity_core>calling/calls",
-        "dependency:platform_shell/gravity_ui>calling/calls"
-      ]
-    },
-    {
-      "fingerprint": "arch_6686ca10938ae7e5e3ca3b92",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/components/sip/CallToolbar.tsx",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "calling",
-      "subject": "gravity_ui>calls:gravity-mvp/src/lib/sip/SipContext.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>calling/ai_calls",
-        "dependency:platform_shell/gravity_core>calling/calls",
-        "dependency:platform_shell/gravity_ui>calling/calls"
-      ]
-    },
-    {
-      "fingerprint": "arch_9434d1f10bf2109881b54e62",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/components/sip/IncomingCallPopup.tsx",
-      "line_at_baseline": 6,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "calling",
-      "subject": "gravity_ui>calls:gravity-mvp/src/lib/sip/SipContext.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>calling/ai_calls",
-        "dependency:platform_shell/gravity_core>calling/calls",
-        "dependency:platform_shell/gravity_ui>calling/calls"
       ]
     },
     {

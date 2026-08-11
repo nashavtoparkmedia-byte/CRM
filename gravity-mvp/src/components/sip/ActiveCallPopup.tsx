@@ -2,7 +2,7 @@
 
 import { PhoneOff, PhoneOutgoing, PhoneIncoming, MicOff, Mic } from "lucide-react"
 import { useEffect, useState } from "react"
-import { useSip } from "@/lib/sip/SipContext"
+import { useSip } from '@/modules/calling/public/v1/sip-client-context'
 
 /**
  * Floating card for any active call (outgoing OR an incoming that was

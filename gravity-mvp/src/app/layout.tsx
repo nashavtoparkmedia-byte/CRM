@@ -14,7 +14,7 @@ import { Sidebar } from "@/components/Sidebar";
 import TopBar from "@/components/layout/TopBar";
 import { QueryProvider } from "@/providers/QueryProvider";
 import { Toaster } from "@/components/ui/sonner";
-import { SipProvider } from "@/lib/sip/SipContext";
+import { SipProvider } from '@/modules/calling/public/v1/sip-client-context';
 import IncomingCallPopup from "@/components/sip/IncomingCallPopup";
 import ActiveCallPopup from "@/components/sip/ActiveCallPopup";
 

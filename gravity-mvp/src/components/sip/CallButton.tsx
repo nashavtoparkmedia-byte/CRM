@@ -2,7 +2,7 @@
 
 import { Phone, PhoneOutgoing, Loader2 } from "lucide-react"
 import { useState } from "react"
-import { useSip } from "@/lib/sip/SipContext"
+import { useSip } from '@/modules/calling/public/v1/sip-client-context'
 import { toast } from "sonner"
 
 /**

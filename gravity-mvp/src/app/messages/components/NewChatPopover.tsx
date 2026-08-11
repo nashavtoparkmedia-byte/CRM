@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react"
 import { X, Search, Send, Loader2, AlertTriangle, Phone } from "lucide-react"
 import { useContactSearch, ContactSearchResult } from "../hooks/useContactSearch"
 import { useStartConversation } from "../hooks/useStartConversation"
-import { useSip } from "@/lib/sip/SipContext"
+import { useSip } from '@/modules/calling/public/v1/sip-client-context'
 import { toast } from "sonner"
 
 const CHANNELS = [

@@ -3,7 +3,7 @@
 import { Phone, PhoneOff, RefreshCw, User, Volume2, VolumeX } from "lucide-react"
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
-import { useSip } from "@/lib/sip/SipContext"
+import { useSip } from '@/modules/calling/public/v1/sip-client-context'
 import { startIncomingRingtone, type ActiveRingtone } from "@/lib/sip/callAlertAudio"
 
 /**
