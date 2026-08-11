@@ -12,7 +12,7 @@
  * Banner ведёт в существующий AiCoachModal (PR9.55) с initialCorrectedText=sentText.
  */
 import { prisma } from '@/lib/prisma'
-import { similarity } from '@/lib/ai/knowledge/textUtils'
+import { compareKnowledgeTextSimilarityV1 as similarity } from '@/modules/ai-knowledge/public/v1/knowledge-text-similarity'
 import { confirmProposedReplyCorrect } from './proposed-reply-actions'
 
 export type LearnResult =
