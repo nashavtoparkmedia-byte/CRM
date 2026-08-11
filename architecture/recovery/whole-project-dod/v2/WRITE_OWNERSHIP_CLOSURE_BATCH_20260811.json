@@ -1,20 +1,20 @@
 {
   "schema": "yoko.crm.write-ownership-closure-batch.v2",
-  "generated_at": "2026-08-11T08:17:09.087Z",
+  "generated_at": "2026-08-11T08:26:51.253Z",
   "authority": "Derived evidence ledger; unresolved records remain blocked/ambiguous and are not PASS.",
   "baseline": {
-    "analysis_sha256": "b28ead84d55846ff2d689b2317a9c9d0e29c4415b3bd7807f8393e018d2d3531",
-    "baseline_sha256": "5f6a1b60e8d6759bd4f66fcf0c225f4dc9a13bb6aaaf7f0e480a893a63747a1c",
-    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T081640Z.json",
-    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_CALL_STATUS.json"
+    "analysis_sha256": "edf648a93f0a4ced1c5774067225af755b4be807b0804e1d1a9f0f6c38cdeee9",
+    "baseline_sha256": "bde6275f68e120aed94ff3256a022c3cdb836e98e46b83b5c1d276c9c1d5d022",
+    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T082622Z.json",
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_DRIVER_HISTORY.json"
   },
   "metrics": {
-    "confirmed_writes_discovered": 1421,
+    "confirmed_writes_discovered": 1419,
     "confirmed_foreign": 0,
     "closed_foreign": 52,
-    "ambiguous_remaining": 163,
+    "ambiguous_remaining": 157,
     "confirmed_write_owner_resolved": 7,
-    "confirmed_write_owner_unresolved": 113,
+    "confirmed_write_owner_unresolved": 107,
     "dynamic_delegate_unresolved": 6,
     "dynamic_sql_unresolved": 32,
     "query_raw_side_effect_unresolved": 1,
@@ -163,7 +163,7 @@
     "post_rescan_foreign": 0,
     "ambiguity_reduction": 4
   },
-  "next_action": "Resolve the remaining 113 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
+  "next_action": "Resolve the remaining 107 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
   "new_backfill_capability_batch": {
     "files": [
       "gravity-mvp/scripts/backfill_source_connection_pr7.js",
@@ -226,5 +226,16 @@
     "writes_routed": 2,
     "post_rescan_foreign": 0,
     "ambiguity_reduction": 2
+  },
+  "new_driver_history_batch": {
+    "files": [
+      "gravity-mvp/scripts/fix-last-order-dates.ts",
+      "gravity-mvp/scripts/backfill-trips.js",
+      "gravity-mvp/scripts/backfill-trips.ts",
+      "gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-driver-history-maintenance-adapter.js"
+    ],
+    "writes_routed": 6,
+    "post_rescan_foreign": 0,
+    "ambiguity_reduction": 6
   }
 }

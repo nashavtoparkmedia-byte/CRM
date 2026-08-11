@@ -1,0 +1,47 @@
+{
+  "schema": "yoko.crm.authoritative-write-scan-record.v1",
+  "generated_at": "2026-08-11T08:26:51.253Z",
+  "authority": "Bounded authoritative scan after driver history backfill capability remediation; remaining ownership and dynamic ambiguity remains fail-closed, not READY.",
+  "inputs": {
+    "previous_baseline_sha256": "5f6a1b60e8d6759bd4f66fcf0c225f4dc9a13bb6aaaf7f0e480a893a63747a1c",
+    "lifecycle_registry": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
+    "analyzer": "tools/architecture/v2/analyze.mjs",
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_DRIVER_HISTORY.json"
+  },
+  "output": {
+    "baseline": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json",
+    "baseline_sha256": "bde6275f68e120aed94ff3256a022c3cdb836e98e46b83b5c1d276c9c1d5d022",
+    "analysis_sha256": "edf648a93f0a4ced1c5774067225af755b4be807b0804e1d1a9f0f6c38cdeee9",
+    "triage_sha256": "db45cb75e6faebf7db0a6d544bfc155aea7c763c383d6b0cb379388907edc5a3"
+  },
+  "execution": {
+    "ambiguous_candidates": 157,
+    "complete": true,
+    "elapsed_ms": 434826.501574,
+    "failures": [],
+    "files_completed": 1710,
+    "files_discovered": 1710,
+    "mode": "fresh_process_per_javascript_surface",
+    "progress_every": 150,
+    "worker_failures": 0,
+    "worker_limit": 4,
+    "worker_timeout_ms": 120000,
+    "worker_timeouts": 0,
+    "writes_discovered": 1419
+  },
+  "summary": {
+    "ambiguous_writes": 157,
+    "discovered_write_sites": 1419,
+    "foreign_writes": 0,
+    "historical_dead_writes": 18,
+    "migration_only_writes": 500,
+    "operational_script_writes": 118,
+    "owner_writes": 515,
+    "parse_findings": 0,
+    "raw_sql_writes": 814,
+    "test_writes": 229,
+    "tracked_executable_surfaces": 1710,
+    "unreviewed_operational_surfaces": 0
+  },
+  "verdict": "NOT_READY_REQUIRES_OWNERSHIP_AND_DYNAMIC_AMBIGUITY_CLOSURE"
+}

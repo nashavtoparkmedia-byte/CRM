@@ -1,19 +1,19 @@
 {
-  "analysis_sha256": "b28ead84d55846ff2d689b2317a9c9d0e29c4415b3bd7807f8393e018d2d3531",
+  "analysis_sha256": "edf648a93f0a4ced1c5774067225af755b4be807b0804e1d1a9f0f6c38cdeee9",
   "execution": {
-    "ambiguous_candidates": 163,
+    "ambiguous_candidates": 157,
     "complete": true,
-    "elapsed_ms": 379814.436392,
+    "elapsed_ms": 434826.501574,
     "failures": [],
-    "files_completed": 1709,
-    "files_discovered": 1709,
+    "files_completed": 1710,
+    "files_discovered": 1710,
     "mode": "fresh_process_per_javascript_surface",
     "progress_every": 150,
     "worker_failures": 0,
     "worker_limit": 4,
     "worker_timeout_ms": 120000,
     "worker_timeouts": 0,
-    "writes_discovered": 1421
+    "writes_discovered": 1419
   },
   "inventory": {
     "controls": {
@@ -47,7 +47,7 @@
         ".bat": 4,
         ".cjs": 3,
         ".dockerfile": 7,
-        ".js": 402,
+        ".js": 403,
         ".mjs": 172,
         ".package-json": 7,
         ".prisma": 4,
@@ -60,7 +60,7 @@
         ".yml": 6
       },
       "by_lifecycle": {
-        "APPLICATION_RUNTIME": 995,
+        "APPLICATION_RUNTIME": 996,
         "DEAD_HISTORICAL": 35,
         "FIXTURE": 1,
         "MIGRATION": 61,
@@ -72,7 +72,7 @@
         "DEAD_HISTORICAL": 35,
         "MIGRATION_ONLY": 61
       },
-      "tracked_executable_surfaces": 1709,
+      "tracked_executable_surfaces": 1710,
       "unreviewed_operational_surfaces": 0
     },
     "surfaces": [
@@ -13578,6 +13578,18 @@
       },
       {
         "disposition": null,
+        "extension": ".js",
+        "functional_owner": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "migration_target": null,
+        "owner_context": null,
+        "path": "gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-driver-history-maintenance-adapter.js",
+        "production_capability": "POSSIBLE",
+        "rationale": null,
+        "registry_classified": false
+      },
+      {
+        "disposition": null,
         "extension": ".ts",
         "functional_owner": null,
         "lifecycle": "APPLICATION_RUNTIME",
@@ -20589,26 +20601,26 @@
   "parse_findings": [],
   "schema": "yoko.crm.whole-repository-write-analysis.v2",
   "source": {
-    "git_commit": "4136d4ff3cf2a164aaacce0738220e71003f8115",
+    "git_commit": "1df859e1c733a2d0dd82b19cf06340ccb6df9e60",
     "git_tracked_only": true,
-    "git_tree": "fc1cbd0fe1df15c80d07a3e657e2026f1f33b297",
+    "git_tree": "11ce2e9ab9cb95ccf0c68db54d8554965cf4947b",
     "inventory_schema": "yoko.crm.tracked-executable-surface-inventory.v2",
     "repository_root": ".",
     "tracked_worktree_clean": true,
     "tracked_worktree_status_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
   },
   "summary": {
-    "ambiguous_writes": 163,
-    "discovered_write_sites": 1421,
+    "ambiguous_writes": 157,
+    "discovered_write_sites": 1419,
     "foreign_writes": 0,
     "historical_dead_writes": 18,
     "migration_only_writes": 500,
-    "operational_script_writes": 124,
-    "owner_writes": 511,
+    "operational_script_writes": 118,
+    "owner_writes": 515,
     "parse_findings": 0,
     "raw_sql_writes": 814,
     "test_writes": 229,
-    "tracked_executable_surfaces": 1709,
+    "tracked_executable_surfaces": 1710,
     "unreviewed_operational_surfaces": 0
   },
   "write_sites": [
@@ -38896,194 +38908,6 @@
       ]
     },
     {
-      "ambiguity_reasons": [],
-      "ambiguous": false,
-      "candidate_models": [
-        "driverDaySummary"
-      ],
-      "classification": "AMBIGUOUS",
-      "column": 15,
-      "confidence": "HIGH",
-      "end": 4161,
-      "file": "gravity-mvp/scripts/backfill-trips.js",
-      "index": 3951,
-      "kind": "model",
-      "line": 131,
-      "method": "updateMany",
-      "model": "driverDaySummary",
-      "nested_operations": [],
-      "owner_contexts": [
-        "fleet_operations"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "return_projection": null,
-      "scope": "Function:main",
-      "site_signature": "294179585ad6a9242f2950002df96ad0d472c939b776497a8d24e63d067b53f9",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": false,
-      "written_fields": [
-        "tripCount"
-      ]
-    },
-    {
-      "ambiguity_reasons": [],
-      "ambiguous": false,
-      "candidate_models": [
-        "driverDaySummary"
-      ],
-      "classification": "AMBIGUOUS",
-      "column": 19,
-      "confidence": "HIGH",
-      "end": 4829,
-      "file": "gravity-mvp/scripts/backfill-trips.js",
-      "index": 4458,
-      "kind": "model",
-      "line": 146,
-      "method": "upsert",
-      "model": "driverDaySummary",
-      "nested_operations": [],
-      "owner_contexts": [
-        "fleet_operations"
-      ],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "return_projection": {
-        "dynamic": false,
-        "mode": "FULL_ROW",
-        "nested_relations": [],
-        "omitted_fields": [],
-        "selected_fields": []
-      },
-      "scope": "Function:main",
-      "site_signature": "a7cc89b6db60f3a5602a4c9b41264eceefbee4ce18b37dc809256951f65f7430",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": false,
-      "written_fields": [
-        "date",
-        "driverId",
-        "tripCount"
-      ]
-    },
-    {
-      "ambiguity_reasons": [],
-      "ambiguous": false,
-      "candidate_models": [
-        "driverDaySummary"
-      ],
-      "classification": "AMBIGUOUS",
-      "column": 15,
-      "confidence": "HIGH",
-      "end": 4377,
-      "file": "gravity-mvp/scripts/backfill-trips.ts",
-      "index": 4167,
-      "kind": "model",
-      "line": 127,
-      "method": "updateMany",
-      "model": "driverDaySummary",
-      "nested_operations": [],
-      "owner_contexts": [
-        "fleet_operations"
-      ],
-      "receiver_origin": "new:import:@prisma/client",
-      "return_projection": null,
-      "scope": "Function:main",
-      "site_signature": "294179585ad6a9242f2950002df96ad0d472c939b776497a8d24e63d067b53f9",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": false,
-      "written_fields": [
-        "tripCount"
-      ]
-    },
-    {
-      "ambiguity_reasons": [],
-      "ambiguous": false,
-      "candidate_models": [
-        "driverDaySummary"
-      ],
-      "classification": "AMBIGUOUS",
-      "column": 19,
-      "confidence": "HIGH",
-      "end": 4975,
-      "file": "gravity-mvp/scripts/backfill-trips.ts",
-      "index": 4604,
-      "kind": "model",
-      "line": 142,
-      "method": "upsert",
-      "model": "driverDaySummary",
-      "nested_operations": [],
-      "owner_contexts": [
-        "fleet_operations"
-      ],
-      "receiver_origin": "new:import:@prisma/client",
-      "return_projection": {
-        "dynamic": false,
-        "mode": "FULL_ROW",
-        "nested_relations": [],
-        "omitted_fields": [],
-        "selected_fields": []
-      },
-      "scope": "Function:main",
-      "site_signature": "a7cc89b6db60f3a5602a4c9b41264eceefbee4ce18b37dc809256951f65f7430",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": false,
-      "written_fields": [
-        "date",
-        "driverId",
-        "tripCount"
-      ]
-    },
-    {
       "ambiguity_reasons": [
         "dynamic_database_command_requires_review",
         "dynamic_database_write_command_requires_review"
@@ -42051,92 +41875,6 @@
       "unresolved_targets": [],
       "write_projection_dynamic": false,
       "written_fields": []
-    },
-    {
-      "ambiguity_reasons": [],
-      "ambiguous": false,
-      "candidate_models": [
-        "driver"
-      ],
-      "classification": "AMBIGUOUS",
-      "column": 30,
-      "confidence": "HIGH",
-      "end": 1401,
-      "file": "gravity-mvp/scripts/fix-last-order-dates.ts",
-      "index": 1082,
-      "kind": "model",
-      "line": 38,
-      "method": "updateMany",
-      "model": "driver",
-      "nested_operations": [],
-      "owner_contexts": [
-        "fleet_operations"
-      ],
-      "receiver_origin": "new:import:@prisma/client",
-      "return_projection": null,
-      "scope": "Function:main",
-      "site_signature": "9a06b24e0770fd90907506511434414037f158db45f54dc0f009ff112a9e41c5",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": false,
-      "written_fields": [
-        "lastOrderAt"
-      ]
-    },
-    {
-      "ambiguity_reasons": [],
-      "ambiguous": false,
-      "candidate_models": [
-        "driver"
-      ],
-      "classification": "AMBIGUOUS",
-      "column": 31,
-      "confidence": "HIGH",
-      "end": 2331,
-      "file": "gravity-mvp/scripts/fix-last-order-dates.ts",
-      "index": 2131,
-      "kind": "model",
-      "line": 70,
-      "method": "updateMany",
-      "model": "driver",
-      "nested_operations": [],
-      "owner_contexts": [
-        "fleet_operations"
-      ],
-      "receiver_origin": "new:import:@prisma/client",
-      "return_projection": null,
-      "scope": "Function:main",
-      "site_signature": "3e8fdd73e094e3c597964d5cd97f65eef4a3b3c5badf351f70309d8ccc290e8c",
-      "source_context": null,
-      "source_identity": "unclassified",
-      "source_technical_module": null,
-      "surface": {
-        "disposition": "ACTIVE",
-        "lifecycle": "OPERATIONAL_SCRIPT",
-        "production_capability": "POSSIBLE",
-        "registry_classified": true
-      },
-      "transaction": {
-        "contained": false,
-        "origin": null
-      },
-      "unresolved_targets": [],
-      "write_projection_dynamic": false,
-      "written_fields": [
-        "lastOrderAt"
-      ]
     },
     {
       "ambiguity_reasons": [],
@@ -78367,6 +78105,186 @@
       "written_fields": [
         "date",
         "driverId"
+      ]
+    },
+    {
+      "ambiguity_reasons": [],
+      "ambiguous": false,
+      "candidate_models": [
+        "driver"
+      ],
+      "classification": "OWNER",
+      "column": 22,
+      "confidence": "HIGH",
+      "end": 769,
+      "file": "gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-driver-history-maintenance-adapter.js",
+      "index": 635,
+      "kind": "model",
+      "line": 15,
+      "method": "updateMany",
+      "model": "driver",
+      "nested_operations": [],
+      "owner_contexts": [
+        "fleet_operations"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "return_projection": null,
+      "scope": "Function:updateDriverLastOrderAtV1",
+      "site_signature": "b9c96fa3d4f4c23fcc1a145633c321f2d8e38cdf33eee0d7f98be67d17d3f274",
+      "source_context": "fleet_operations",
+      "source_identity": "bounded_module_path",
+      "source_technical_module": "fleet_operations.module",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "transaction": {
+        "contained": false,
+        "origin": null
+      },
+      "unresolved_targets": [],
+      "write_projection_dynamic": false,
+      "written_fields": [
+        "lastOrderAt"
+      ]
+    },
+    {
+      "ambiguity_reasons": [],
+      "ambiguous": false,
+      "candidate_models": [
+        "driver"
+      ],
+      "classification": "OWNER",
+      "column": 22,
+      "confidence": "HIGH",
+      "end": 1210,
+      "file": "gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-driver-history-maintenance-adapter.js",
+      "index": 1082,
+      "kind": "model",
+      "line": 22,
+      "method": "updateMany",
+      "model": "driver",
+      "nested_operations": [],
+      "owner_contexts": [
+        "fleet_operations"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "return_projection": null,
+      "scope": "Function:clearDriversLastOrderAtV1",
+      "site_signature": "87cb360e13d02ef3a06b079f7df6df467e45af56e99b62ccf69ad51b4cdd6add",
+      "source_context": "fleet_operations",
+      "source_identity": "bounded_module_path",
+      "source_technical_module": "fleet_operations.module",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "transaction": {
+        "contained": false,
+        "origin": null
+      },
+      "unresolved_targets": [],
+      "write_projection_dynamic": false,
+      "written_fields": [
+        "lastOrderAt"
+      ]
+    },
+    {
+      "ambiguity_reasons": [],
+      "ambiguous": false,
+      "candidate_models": [
+        "driverDaySummary"
+      ],
+      "classification": "OWNER",
+      "column": 22,
+      "confidence": "HIGH",
+      "end": 1615,
+      "file": "gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-driver-history-maintenance-adapter.js",
+      "index": 1492,
+      "kind": "model",
+      "line": 29,
+      "method": "updateMany",
+      "model": "driverDaySummary",
+      "nested_operations": [],
+      "owner_contexts": [
+        "fleet_operations"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "return_projection": null,
+      "scope": "Function:resetDriverDaySummaryV1",
+      "site_signature": "89346fd62861deb02183d20043be63c9e25fc4812843bf0778aff33a3913dc85",
+      "source_context": "fleet_operations",
+      "source_identity": "bounded_module_path",
+      "source_technical_module": "fleet_operations.module",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "transaction": {
+        "contained": false,
+        "origin": null
+      },
+      "unresolved_targets": [],
+      "write_projection_dynamic": false,
+      "written_fields": [
+        "tripCount"
+      ]
+    },
+    {
+      "ambiguity_reasons": [],
+      "ambiguous": false,
+      "candidate_models": [
+        "driverDaySummary"
+      ],
+      "classification": "OWNER",
+      "column": 22,
+      "confidence": "HIGH",
+      "end": 2109,
+      "file": "gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-driver-history-maintenance-adapter.js",
+      "index": 1967,
+      "kind": "model",
+      "line": 36,
+      "method": "upsert",
+      "model": "driverDaySummary",
+      "nested_operations": [],
+      "owner_contexts": [
+        "fleet_operations"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "return_projection": {
+        "dynamic": false,
+        "mode": "FULL_ROW",
+        "nested_relations": [],
+        "omitted_fields": [],
+        "selected_fields": []
+      },
+      "scope": "Function:upsertDriverDaySummaryV1",
+      "site_signature": "5d1b937e657fb73e0298c51f8784195404171d265eea7c41440753dfd2866c5e",
+      "source_context": "fleet_operations",
+      "source_identity": "bounded_module_path",
+      "source_technical_module": "fleet_operations.module",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "transaction": {
+        "contained": false,
+        "origin": null
+      },
+      "unresolved_targets": [],
+      "write_projection_dynamic": false,
+      "written_fields": [
+        "date",
+        "driverId",
+        "tripCount"
       ]
     },
     {
