@@ -10,6 +10,7 @@
  */
 /* eslint-disable no-console */
 const { PrismaClient } = require('@prisma/client')
+const { deleteChurnTasksV1 } = require('../src/modules/work-management/public/v1/legacy-prisma-seeded-task-cleanup-adapter')
 const prisma = new PrismaClient()
 const APPLY = process.argv.includes('--apply')
 
@@ -27,10 +28,8 @@ async function main() {
         return
     }
 
-    const deleted = await prisma.$executeRawUnsafe(
-        `DELETE FROM tasks WHERE scenario = 'churn'`,
-    )
-    console.log(`[cleanup-churn] deleted ${deleted} churn rows (task_events cascade).`)
+    const deleted = await deleteChurnTasksV1()
+    console.log(`[cleanup-churn] deleted ${deleted.count} churn rows (task_events cascade).`)
 
     const after = await prisma.$queryRawUnsafe(`
         SELECT scenario, COUNT(*)::int AS n

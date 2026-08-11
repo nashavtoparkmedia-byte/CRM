@@ -1,25 +1,25 @@
 {
   "schema": "yoko.crm.write-ownership-derived-state.v1",
-  "generated_at": "2026-08-11T09:13:28.112Z",
+  "generated_at": "2026-08-11T09:27:14.714Z",
   "program": "WHOLE-PROJECT DOD RECOVERY",
-  "phase": "WRITE_OWNERSHIP_CLOSURE_DUPLICATE_WA_RESCAN",
+  "phase": "WRITE_OWNERSHIP_CLOSURE_TASK_CHAT_REPAIR_RESCAN",
   "verdict": "EXTERNAL_FINAL_ACCEPTANCE_FAILED",
   "ready": false,
   "frozen_baseline": {
     "path": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json",
-    "sha256": "ccbe70d3771395b1d90658fc71aa9ed2243b21ea875b51eb2080f4dc60c27313",
-    "analysis_sha256": "33060187edb55e488c70cbb1cbb2b4bd44bc2851d9a8bb37c2737bb3272c6172",
+    "sha256": "7086372b5f0dcc1bb66b16704c8dc3fadcb8ecc8c3847e76483c810fe0d0ed6b",
+    "analysis_sha256": "dfe8269a7da39631ad3cddc8f87e3b0447ad25866a330a51e81efdc7c3ec6b8f",
     "new_scan_run": true,
-    "previous_frozen_sha256": "ee038e775096b40ff20a092f4a32f84c60bac04d1e582bd89a3f96fd69108673"
+    "previous_frozen_sha256": "ccbe70d3771395b1d90658fc71aa9ed2243b21ea875b51eb2080f4dc60c27313"
   },
   "metrics": {
-    "confirmed_writes_discovered": 1419,
+    "confirmed_writes_discovered": 1418,
     "confirmed_writes_total_derived": 1203,
     "owner_valid": 476,
     "confirmed_foreign_raw": 0,
     "closed_foreign_in_worktree_pending_rescan": 0,
     "closed_foreign_total": 52,
-    "ambiguous_remaining": 135,
+    "ambiguous_remaining": 128,
     "maintenance_migration_confirmed_records": 500,
     "dynamic_delegate_unresolved": 6,
     "dynamic_sql_unresolved": 32,
@@ -32,8 +32,8 @@
     "operational_surfaces_unclassified": 0,
     "temporary_exceptions": 0,
     "intentional_exceptions": 0,
-    "confirmed_write_owner_unresolved": 85,
-    "material_unresolved_remaining": 124,
+    "confirmed_write_owner_unresolved": 78,
+    "material_unresolved_remaining": 117,
     "test_surfaces_classified": 32,
     "dead_historical_classified": 29,
     "operational_surfaces_reviewed_batch": 382,
@@ -77,10 +77,10 @@
       "state": "CLOSED_AFTER_AUTHORITATIVE_RESCAN"
     }
   ],
-  "next_action": "Resolve the remaining 85 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; continue targeted closure and preserve fail-closed enforcement.",
+  "next_action": "Resolve remaining 78 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
   "targeted_batch": {
     "artifact": "architecture/recovery/whole-project-dod/v2/WRITE_OWNERSHIP_CLOSURE_BATCH_20260811.json",
-    "triage_artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_DUPLICATE_WA.json",
+    "triage_artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_TASK_CHAT_REPAIRS.json",
     "closed_foreign_in_batch": 0,
     "closed_foreign_total": 52,
     "dynamic_delegate_resolved": 11,
@@ -97,18 +97,19 @@
     "owner_split_phantom_writes_routed": 3,
     "foreign_regression_rejected": 3,
     "megrabyan_writes_routed": 6,
-    "duplicate_wa_writes_routed": 6
+    "duplicate_wa_writes_routed": 6,
+    "task_chat_repair_writes_routed": 7
   },
   "authoritative_rescan": {
-    "artifact": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T091241Z.json",
-    "baseline_sha256": "ccbe70d3771395b1d90658fc71aa9ed2243b21ea875b51eb2080f4dc60c27313",
-    "analysis_sha256": "33060187edb55e488c70cbb1cbb2b4bd44bc2851d9a8bb37c2737bb3272c6172",
-    "triage_artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_DUPLICATE_WA.json",
-    "triage_sha256": "44afc864c49028b37c6376f7281fbf6ca7bfb8e01946f657f44f748ec2427baa",
+    "artifact": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T092600Z.json",
+    "baseline_sha256": "7086372b5f0dcc1bb66b16704c8dc3fadcb8ecc8c3847e76483c810fe0d0ed6b",
+    "analysis_sha256": "dfe8269a7da39631ad3cddc8f87e3b0447ad25866a330a51e81efdc7c3ec6b8f",
+    "triage_artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_TASK_CHAT_REPAIRS.json",
+    "triage_sha256": "f5e71d8dd3b6bde13f1ce0b33289143d968c87e48aa4f36c5a9e875e43eed85d",
     "execution": {
-      "ambiguous_candidates": 135,
+      "ambiguous_candidates": 128,
       "complete": true,
-      "elapsed_ms": 384995.77269,
+      "elapsed_ms": 439318.721654,
       "failures": [],
       "files_completed": 1720,
       "files_discovered": 1720,
@@ -118,7 +119,7 @@
       "worker_limit": 4,
       "worker_timeout_ms": 120000,
       "worker_timeouts": 0,
-      "writes_discovered": 1419
+      "writes_discovered": 1418
     }
   },
   "operational_surface_classification": {

@@ -5,6 +5,8 @@
  * В БД уже есть Driver с реальным phone +79221127866 — связываем.
  */
 const { PrismaClient } = require('@prisma/client')
+const { repairChatIdentityV1 } = require('../src/modules/messaging/public/v1/legacy-prisma-chat-name-maintenance-adapter')
+const { restoreContactDisplayNameV1 } = require('../src/modules/contacts/public/v1/legacy-prisma-contact-name-maintenance-adapter')
 const prisma = new PrismaClient()
 
 async function main() {
@@ -20,17 +22,11 @@ async function main() {
     if (!chat) { console.error('Chat not found'); process.exit(1) }
     console.log('Current chat:', chat)
 
-    await prisma.chat.update({
-        where: { id: chatId },
-        data: { driverId, name: realName }
-    })
+    await repairChatIdentityV1(chatId, driverId, realName)
     console.log(`✓ Chat updated: name=${realName}, driverId=${driverId}`)
 
     if (chat.contactId) {
-        await prisma.contact.update({
-            where: { id: chat.contactId },
-            data: { displayName: realName }
-        })
+        await restoreContactDisplayNameV1(chat.contactId, realName)
         console.log(`✓ Contact ${chat.contactId} displayName -> ${realName}`)
     }
 

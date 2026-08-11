@@ -1,20 +1,20 @@
 {
   "schema": "yoko.crm.write-ownership-closure-batch.v2",
-  "generated_at": "2026-08-11T09:13:28.112Z",
+  "generated_at": "2026-08-11T09:27:14.714Z",
   "authority": "Derived evidence ledger; unresolved records remain blocked/ambiguous and are not PASS.",
   "baseline": {
-    "analysis_sha256": "33060187edb55e488c70cbb1cbb2b4bd44bc2851d9a8bb37c2737bb3272c6172",
-    "baseline_sha256": "ccbe70d3771395b1d90658fc71aa9ed2243b21ea875b51eb2080f4dc60c27313",
-    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T091241Z.json",
-    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_DUPLICATE_WA.json"
+    "analysis_sha256": "dfe8269a7da39631ad3cddc8f87e3b0447ad25866a330a51e81efdc7c3ec6b8f",
+    "baseline_sha256": "7086372b5f0dcc1bb66b16704c8dc3fadcb8ecc8c3847e76483c810fe0d0ed6b",
+    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T092600Z.json",
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_TASK_CHAT_REPAIRS.json"
   },
   "metrics": {
-    "confirmed_writes_discovered": 1419,
+    "confirmed_writes_discovered": 1418,
     "confirmed_foreign": 0,
     "closed_foreign": 52,
-    "ambiguous_remaining": 135,
+    "ambiguous_remaining": 128,
     "confirmed_write_owner_resolved": 7,
-    "confirmed_write_owner_unresolved": 85,
+    "confirmed_write_owner_unresolved": 78,
     "dynamic_delegate_unresolved": 6,
     "dynamic_sql_unresolved": 32,
     "query_raw_side_effect_unresolved": 1,
@@ -163,7 +163,7 @@
     "post_rescan_foreign": 0,
     "ambiguity_reduction": 4
   },
-  "next_action": "Resolve the remaining 85 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
+  "next_action": "Resolve remaining 78 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
   "new_backfill_capability_batch": {
     "files": [
       "gravity-mvp/scripts/backfill_source_connection_pr7.js",
@@ -284,5 +284,33 @@
     "writes_routed": 6,
     "post_rescan_foreign": 0,
     "ambiguity_reduction": 6
+  },
+  "new_task_chat_repair_batch": {
+    "files": [
+      "gravity-mvp/scripts/cleanup_churn.js",
+      "gravity-mvp/scripts/backfill-contact-id.ts",
+      "gravity-mvp/scripts/fix_chat_lid_70945844415.js",
+      "gravity-mvp/scripts/strip_max_aria_prefix.js",
+      "gravity-mvp/scripts/backfill_null_names_from_sibling.js",
+      "gravity-mvp/src/modules/work-management/public/v1/legacy-prisma-seeded-task-cleanup-adapter.js",
+      "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-chat-name-maintenance-adapter.js",
+      "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-name-maintenance-adapter.js"
+    ],
+    "writes_routed": 7,
+    "owner_capabilities": [
+      "work-management.deleteChurnTasksV1",
+      "work-management.setTaskContactV1",
+      "messaging.repairChatIdentityV1",
+      "messaging.stripMaxChatPrefixV1",
+      "messaging.backfillSiblingChatV1",
+      "contacts.restoreContactDisplayNameV1",
+      "contacts.restoreContactDisplayNameIfPrefixedV1"
+    ],
+    "post_rescan_foreign": 0,
+    "ambiguity_reduction": 7,
+    "targeted_validation": [
+      "targeted analyzer: five scripts zero direct write sites",
+      "89/89 v2 write-analyzer tests"
+    ]
   }
 }

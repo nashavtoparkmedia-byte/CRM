@@ -11,6 +11,7 @@
  */
 
 import { PrismaClient } from '@prisma/client'
+import { setTaskContactV1 } from '../src/modules/work-management/public/v1/legacy-prisma-seeded-task-cleanup-adapter.js'
 
 const prisma = new PrismaClient()
 
@@ -47,10 +48,7 @@ async function main() {
             continue
         }
 
-        await prisma.task.update({
-            where: { id: task.id },
-            data: { contactId: contact.id },
-        })
+        await setTaskContactV1(task.id, contact.id)
         updated++
 
         if (updated % 50 === 0) {

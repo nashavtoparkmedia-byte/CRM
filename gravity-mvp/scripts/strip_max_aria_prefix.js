@@ -3,6 +3,8 @@
  * сохранённый предыдущей версией NameSync до фикса prefix-strip.
  */
 const { PrismaClient } = require('@prisma/client')
+const { stripMaxChatPrefixV1 } = require('../src/modules/messaging/public/v1/legacy-prisma-chat-name-maintenance-adapter')
+const { restoreContactDisplayNameIfPrefixedV1 } = require('../src/modules/contacts/public/v1/legacy-prisma-contact-name-maintenance-adapter')
 const prisma = new PrismaClient()
 
 async function main() {
@@ -18,12 +20,9 @@ async function main() {
         if (!m) continue
         const cleaned = m[1].trim()
         if (!cleaned) continue
-        await prisma.chat.update({ where: { id: c.id }, data: { name: cleaned } })
+        await stripMaxChatPrefixV1(c.id, cleaned)
         if (c.contactId) {
-            const contact = await prisma.contact.findUnique({ where: { id: c.contactId }, select: { displayName: true } })
-            if (contact && /^Окно чата с/i.test(contact.displayName || '')) {
-                await prisma.contact.update({ where: { id: c.contactId }, data: { displayName: cleaned } })
-            }
+            await restoreContactDisplayNameIfPrefixedV1(c.contactId, cleaned)
         }
         console.log(`  ${c.id}: "${c.name}" → "${cleaned}"`)
         updated++

@@ -17,4 +17,13 @@ async function restoreContactDisplayNameV1(contactId, displayName) {
     await prisma.$disconnect()
   }
 }
-module.exports = { restoreContactDisplayNameV1 }
+async function restoreContactDisplayNameIfPrefixedV1(contactId, displayName) {
+  validateText(contactId, 'contactId'); validateText(displayName, 'displayName')
+  const prisma = new PrismaClient()
+  try {
+    const current = await prisma.contact.findUnique({ where: { id: contactId }, select: { displayName: true } })
+    if (!current || !/^Окно чата с/i.test(current.displayName || '')) return null
+    return await prisma.contact.update({ where: { id: contactId }, data: { displayName } })
+  } finally { await prisma.$disconnect() }
+}
+module.exports = { restoreContactDisplayNameV1, restoreContactDisplayNameIfPrefixedV1 }
