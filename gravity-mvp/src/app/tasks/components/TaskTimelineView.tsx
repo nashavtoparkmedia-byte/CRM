@@ -1,7 +1,7 @@
 'use client'
 
-import { useTimelineTasks } from '@/store/tasks-selectors'
-import { useTasksStore } from '@/store/tasks-store'
+import { useTimelineTasks } from '@/modules/work-management/public/v1/client-state/task-selectors'
+import { useTasksStore } from '@/modules/work-management/public/v1/client-state/task-store'
 import { ChevronLeft, ChevronRight, Calendar, Phone, MessageSquare, FileText, AlertCircle, Bot, Inbox } from 'lucide-react'
 import { useMemo } from 'react'
 import type { TaskDTO } from '@/lib/tasks/types'

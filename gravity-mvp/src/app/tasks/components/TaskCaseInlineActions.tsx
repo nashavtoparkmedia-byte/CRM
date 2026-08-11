@@ -15,7 +15,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Phone, MessageSquare, Clock, Flame, Loader2, ChevronDown } from 'lucide-react'
 import type { TaskDTO } from '@/lib/tasks/types'
-import { useTasksStore } from '@/store/tasks-store'
+import { useTasksStore } from '@/modules/work-management/public/v1/client-state/task-store'
 import { pushToast } from '@/lib/tasks/toast-store'
 import { recordUsage } from '@/lib/tasks/usage'
 import {

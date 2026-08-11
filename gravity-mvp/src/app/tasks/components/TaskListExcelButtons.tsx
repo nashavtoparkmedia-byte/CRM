@@ -16,7 +16,7 @@ import { Upload, Download, Loader2, ChevronDown, FileSpreadsheet, FileText } fro
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/infrastructure/ui/dialog'
 import { pushToast } from '@/lib/tasks/toast-store'
 import { recordUsage } from '@/lib/tasks/usage'
-import { useTasksStore } from '@/store/tasks-store'
+import { useTasksStore } from '@/modules/work-management/public/v1/client-state/task-store'
 import { CHURN_COLUMNS } from '@/lib/tasks/excel-contract'
 import {
     exportChurnXlsx,

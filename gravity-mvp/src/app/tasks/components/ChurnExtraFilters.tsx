@@ -11,8 +11,8 @@
 // and live on the row above.
 // ═══════════════════════════════════════════════════════════════════
 
-import { useTasksStore } from '@/store/tasks-store'
-import { useTopParks } from '@/store/tasks-selectors'
+import { useTasksStore } from '@/modules/work-management/public/v1/client-state/task-store'
+import { useTopParks } from '@/modules/work-management/public/v1/client-state/task-selectors'
 import { recordUsage } from '@/lib/tasks/usage'
 import { AlertOctagon } from 'lucide-react'
 

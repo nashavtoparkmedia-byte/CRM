@@ -1,7 +1,7 @@
 'use client'
 
-import { useGroupedByStatus } from '@/store/tasks-selectors'
-import { useUpdateTask } from '@/hooks/use-task-mutations'
+import { useGroupedByStatus } from '@/modules/work-management/public/v1/client-state/task-selectors'
+import { useUpdateTask } from '@/modules/work-management/public/v1/client-state/use-task-mutations'
 import TaskCard from './TaskCard'
 import type { TaskStatus } from '@/lib/tasks/types'
 import { useState } from 'react'

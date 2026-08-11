@@ -1,8 +1,8 @@
 'use client'
 
 import type { TaskDTO } from '@/lib/tasks/types'
-import { useTasksStore } from '@/store/tasks-store'
-import { useResolveTask, useUpdateTask, useResolveEscalation } from '@/hooks/use-task-mutations'
+import { useTasksStore } from '@/modules/work-management/public/v1/client-state/task-store'
+import { useResolveTask, useUpdateTask, useResolveEscalation } from '@/modules/work-management/public/v1/client-state/use-task-mutations'
 import { getScenario, getStage } from '@/lib/tasks/scenario-config'
 import {
     Check,

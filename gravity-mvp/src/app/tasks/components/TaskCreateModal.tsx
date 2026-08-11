@@ -8,7 +8,7 @@ import {
     Calendar,
     Loader2
 } from 'lucide-react'
-import { useCreateTask } from '@/hooks/use-task-mutations'
+import { useCreateTask } from '@/modules/work-management/public/v1/client-state/use-task-mutations'
 import { checkSimilarTasks, getActiveMainScenarioForDriver } from '@/app/tasks/actions'
 import type { TaskPriority, TaskSource, SimilarTaskHint } from '@/lib/tasks/types'
 import { SCENARIOS, getAllScenarioOptions } from '@/lib/tasks/scenario-config'

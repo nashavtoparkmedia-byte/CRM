@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useTasksQuery } from '@/hooks/use-tasks-query'
-import { useTasksStore } from '@/store/tasks-store'
+import { useTasksQuery } from '@/modules/work-management/public/v1/client-state/use-tasks-query'
+import { useTasksStore } from '@/modules/work-management/public/v1/client-state/task-store'
 import TasksToolbar from './components/TasksToolbar'
 import TaskListView from './components/TaskListView'
 import TaskBoardView from './components/TaskBoardView'

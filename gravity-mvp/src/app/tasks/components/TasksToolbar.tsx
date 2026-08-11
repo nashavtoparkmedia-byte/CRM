@@ -1,7 +1,7 @@
 'use client'
 
-import { useTasksStore } from '@/store/tasks-store'
-import { useTaskCounts } from '@/store/tasks-selectors'
+import { useTasksStore } from '@/modules/work-management/public/v1/client-state/task-store'
+import { useTaskCounts } from '@/modules/work-management/public/v1/client-state/task-selectors'
 import type { TaskView } from '@/lib/tasks/types'
 import {
     List,
@@ -29,7 +29,7 @@ import TaskListExcelButtons from './TaskListExcelButtons'
 import TaskListFiltersPopover from './TaskListFiltersPopover'
 import TaskListPresetsMenu from './TaskListPresetsMenu'
 import { getSystemView, getDefaultViewId } from '@/lib/tasks/list-views'
-import { useListViewStore } from '@/store/list-view-store'
+import { useListViewStore } from '@/modules/work-management/public/v1/client-state/list-view-store'
 import { recordUsage } from '@/lib/tasks/usage'
 import { SCENARIOS, getAllScenarioOptions } from '@/lib/tasks/scenario-config'
 import { getCrmUsers } from '@/app/tasks/actions'
