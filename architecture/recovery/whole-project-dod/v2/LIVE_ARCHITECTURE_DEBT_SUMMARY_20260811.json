@@ -1,165 +1,43 @@
 {
   "schema": "yoko.crm.live-architecture-debt-recompute.v1",
-  "generated_at": "2026-08-11T18:38:58.591Z",
+  "generated_at": "2026-08-11T19:32:01.461Z",
   "source_report": "LIVE_ARCHITECTURE_DEBT_RECOMPUTE_20260811.json",
   "summary": {
-    "scanned_files": 1091,
+    "scanned_files": 1100,
     "contexts": 16,
     "detector_health": {
       "output_present": true,
       "parse_errors": 0,
       "finding_digest_mismatch": 0,
-      "exception_registry_entries": 1281
+      "exception_registry_entries": 1280
     },
     "live_debt": {
-      "findings": 1288,
-      "exception_covered": 1281,
-      "open_findings": 7,
+      "findings": 1280,
+      "exception_covered": 1280,
+      "open_findings": 0,
       "stale_exceptions": 0,
       "internal_module_imports": 374,
-      "non_public_cross_context_imports": 530,
-      "undeclared_dependencies": 346,
+      "non_public_cross_context_imports": 529,
+      "undeclared_dependencies": 339,
       "provider_transport_accesses": 38,
       "direct_foreign_prisma_writes": 0,
       "contract_gaps": 0,
       "manifest_gaps": 0,
-      "exception_debt": 7
+      "temporary_legacy_exceptions": 1280,
+      "intentional_exceptions": 0,
+      "temporary_exceptions": 1280,
+      "exception_debt": 1280,
+      "opening_findings": 1288,
+      "actually_closed_since_opening_baseline": 8
     },
     "detector_errors": [],
-    "open_finding_details": [
-      {
-        "type": "UNCOVERED_VIOLATION",
-        "finding": {
-          "rule": "undeclared_dependency",
-          "file": "gravity-mvp/src/lib/DriverMatchService.ts",
-          "line": 2,
-          "source_context": "fleet_operations",
-          "target_context": "messaging",
-          "subject": "drivers>contract:messaging:gravity-mvp/src/contracts/messaging/v1/index.ts",
-          "site_signature": null,
-          "details": {
-            "specifier": "@/contracts/messaging/v1",
-            "target": "gravity-mvp/src/contracts/messaging/v1/index.ts"
-          },
-          "ordinal": 1,
-          "fingerprint": "arch_95722b702e504cbe3cc78d1f"
-        }
-      },
-      {
-        "type": "UNCOVERED_VIOLATION",
-        "finding": {
-          "rule": "undeclared_dependency",
-          "file": "gravity-mvp/src/lib/DriverMatchService.ts",
-          "line": 3,
-          "source_context": "fleet_operations",
-          "target_context": "messaging",
-          "subject": "drivers>module:messaging:gravity-mvp/src/modules/messaging/public/v1/index.ts",
-          "site_signature": null,
-          "details": {
-            "specifier": "@/modules/messaging/public/v1",
-            "target": "gravity-mvp/src/modules/messaging/public/v1/index.ts"
-          },
-          "ordinal": 1,
-          "fingerprint": "arch_c70997c1eb404752f4fdc90c"
-        }
-      },
-      {
-        "type": "UNCOVERED_VIOLATION",
-        "finding": {
-          "rule": "undeclared_dependency",
-          "file": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
-          "line": 30,
-          "source_context": "calling",
-          "target_context": "messaging",
-          "subject": "calls>messages:gravity-mvp/src/lib/messageStreamBus.ts",
-          "site_signature": null,
-          "details": {
-            "specifier": "@/lib/messageStreamBus",
-            "target": "gravity-mvp/src/lib/messageStreamBus.ts"
-          },
-          "ordinal": 1,
-          "fingerprint": "arch_800720a83d4714ad9f49c31e"
-        }
-      },
-      {
-        "type": "UNCOVERED_VIOLATION",
-        "finding": {
-          "rule": "undeclared_dependency",
-          "file": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
-          "line": 35,
-          "source_context": "calling",
-          "target_context": "messaging",
-          "subject": "calls>contract:messaging:gravity-mvp/src/contracts/messaging/v1/index.ts",
-          "site_signature": null,
-          "details": {
-            "specifier": "@/contracts/messaging/v1",
-            "target": "gravity-mvp/src/contracts/messaging/v1/index.ts"
-          },
-          "ordinal": 1,
-          "fingerprint": "arch_e82669aeb2a364b4789064e3"
-        }
-      },
-      {
-        "type": "UNCOVERED_VIOLATION",
-        "finding": {
-          "rule": "undeclared_dependency",
-          "file": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
-          "line": 36,
-          "source_context": "calling",
-          "target_context": "messaging",
-          "subject": "calls>module:messaging:gravity-mvp/src/modules/messaging/public/v1/index.ts",
-          "site_signature": null,
-          "details": {
-            "specifier": "@/modules/messaging/public/v1",
-            "target": "gravity-mvp/src/modules/messaging/public/v1/index.ts"
-          },
-          "ordinal": 1,
-          "fingerprint": "arch_24d9c5fd6d9926cebac58e7c"
-        }
-      },
-      {
-        "type": "UNCOVERED_VIOLATION",
-        "finding": {
-          "rule": "undeclared_dependency",
-          "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
-          "line": 9,
-          "source_context": "contacts",
-          "target_context": "messaging",
-          "subject": "module:contacts>module:messaging:gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-contact-merge-adapter.ts",
-          "site_signature": null,
-          "details": {
-            "specifier": "../../../messaging/public/v1/legacy-prisma-contact-merge-adapter",
-            "target": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-contact-merge-adapter.ts"
-          },
-          "ordinal": 1,
-          "fingerprint": "arch_bf859504bf785b71529748db"
-        }
-      },
-      {
-        "type": "UNCOVERED_VIOLATION",
-        "finding": {
-          "rule": "undeclared_dependency",
-          "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
-          "line": 10,
-          "source_context": "contacts",
-          "target_context": "work_management",
-          "subject": "module:contacts>module:work_management:gravity-mvp/src/modules/work-management/public/v1/legacy-prisma-contact-merge-adapter.ts",
-          "site_signature": null,
-          "details": {
-            "specifier": "../../../work-management/public/v1/legacy-prisma-contact-merge-adapter",
-            "target": "gravity-mvp/src/modules/work-management/public/v1/legacy-prisma-contact-merge-adapter.ts"
-          },
-          "ordinal": 1,
-          "fingerprint": "arch_5e07688076b9e0734b4b9f59"
-        }
-      }
-    ],
+    "open_finding_details": [],
     "credential_gate": {
       "credential_db_accesses": 403,
       "material_unresolved": 0,
       "public_secret_exposure": 0,
       "cross_domain_capability_gaps": 0
     },
-    "verdict": "LIVE_DEBT_REMAINS"
+    "verdict": "NOT_READY_LIVE_DEBT_REMAINS"
   }
 }

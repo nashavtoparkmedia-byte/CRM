@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "c2ebf94ca79af8c5aae7a02c36551beed6654120b7c36c13db28f324556d2652",
+  "finding_digest": "f2df018b1c01fc4f8dac136ce4e368b7128b00d4e88b044f8433c3236a6bd865",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,

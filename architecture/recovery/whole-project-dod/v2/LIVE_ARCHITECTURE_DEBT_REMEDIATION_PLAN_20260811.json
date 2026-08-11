@@ -1,8 +1,12 @@
 {
   "schema": "yoko.crm.live-architecture-debt-remediation-plan.v1",
-  "status": "OPEN_REMEDIATION",
+  "status": "OPEN_LIVE_DEBT_BURN_DOWN",
   "source": "LIVE_ARCHITECTURE_DEBT_RECOMPUTE_20260811.json",
-  "open_finding_count": 7,
+  "opening_finding_count": 1288,
+  "current_finding_count": 1280,
+  "exception_covered_live_debt": 1280,
+  "open_finding_count": 0,
+  "actually_closed_since_opening_baseline": 8,
   "confirmed_direct_foreign_prisma_writes": 0,
   "items": [
     {
@@ -12,7 +16,7 @@
       "owner_context": "fleet_operations",
       "target_context": "messaging",
       "approved_path": "narrow cross-context contract or orchestration adapter; preserve driver matching safety tests",
-      "status": "OPEN_ARCHITECTURE_DESIGN"
+      "status": "CLOSED_OWNER_CAPABILITY"
     },
     {
       "surface": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
@@ -21,7 +25,7 @@
       "owner_context": "calling",
       "target_context": "messaging",
       "approved_path": "versioned call-event sink or owner-controlled messaging capability; no manifest-only exception",
-      "status": "OPEN_PROTECTED_PATH_REVIEW"
+      "status": "CLOSED_CALLING_OWNED_PROJECTION_PORT"
     },
     {
       "surface": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
@@ -30,7 +34,7 @@
       "owner_context": "contacts",
       "target_contexts": ["messaging", "work_management"],
       "approved_path": "owner-controlled transactional composition capability with exact operations; do not copy foreign writers into Contacts",
-      "status": "OPEN_TRANSACTIONAL_COMPOSITION_REVIEW"
+      "status": "CLOSED_EXACT_OWNER_TRANSACTION_COMPOSITION"
     }
   ],
   "prohibited_shortcuts": [
@@ -39,5 +43,11 @@
     "moving foreign writes into an approved file",
     "arbitrary Prisma access from an approved adapter"
   ],
-  "acceptance": "All seven findings require exact owner-controlled path or remain explicitly open; no readiness claim while open_findings > 0."
+  "next_cluster": {
+    "name": "PROVIDER_TRANSPORT_BOUNDARY",
+    "finding_count": 38,
+    "classification": "EXCEPTION_COVERED_TEMPORARY_LEGACY_DEBT",
+    "acceptance": "Replace direct provider transport access with exact owner-controlled capabilities and retire matching exceptions."
+  },
+  "acceptance": "The seven uncovered findings are closed without new exceptions. The project remains NOT READY while 1,280 exception-covered live findings remain."
 }
