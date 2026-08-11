@@ -2,7 +2,7 @@
    for AI-call models may not be regenerated on every dev box. */
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { opsLog } from '@/lib/opsLog'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { enqueueAnalyze } from '@/lib/queue/queues'
 // PR #57: Structured Outcome Layer. Pure-CommonJS helpers (no TS loader
 // needed; node:test can require them directly).

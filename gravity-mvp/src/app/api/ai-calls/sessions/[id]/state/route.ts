@@ -26,7 +26,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { opsLog } from '@/lib/opsLog'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { isAllowedState, isIdempotentNoOp } from '@/lib/ai-call/state-helpers'
 
 export const dynamic = 'force-dynamic'

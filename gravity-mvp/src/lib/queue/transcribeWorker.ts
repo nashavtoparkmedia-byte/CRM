@@ -15,7 +15,7 @@
 import { Worker, type Job } from 'bullmq'
 import { File } from 'node:buffer'
 import { prisma } from '@/lib/prisma'
-import { opsLog } from '@/lib/opsLog'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { getRedisConnection } from '@/lib/queue/connection'
 import { TRANSCRIBE_QUEUE, type TranscribeJobData, enqueueAnalyze } from '@/lib/queue/queues'
 import { getObject } from '@/lib/storage/minio'

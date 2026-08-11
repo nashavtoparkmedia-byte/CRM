@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "f2df018b1c01fc4f8dac136ce4e368b7128b00d4e88b044f8433c3236a6bd865",
+  "finding_digest": "65bf9a6d057fbbd5431b1ffb8989f8d9d26be88281db49565438017e0db07db2",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -15,8 +15,8 @@
   "summary": {
     "direct_provider_transport_access": 38,
     "internal_module_import": 374,
-    "non_public_cross_context_import": 529,
-    "undeclared_dependency": 339
+    "non_public_cross_context_import": 516,
+    "undeclared_dependency": 326
   },
   "exceptions": [
     {
@@ -724,40 +724,6 @@
       ]
     },
     {
-      "fingerprint": "arch_aa6e710aebb192719078eacd",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/ai-calls/dev-simulate/route.ts",
-      "line_at_baseline": 7,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "operations_observability",
-      "subject": "ai_calls>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>operations_observability/monitoring",
-        "dependency:calling/calls>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_557f86f0971366fea7424d97",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/ai-calls/dev-simulate/route.ts",
-      "line_at_baseline": 7,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "operations_observability",
-      "subject": "ai_calls>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>operations_observability/monitoring",
-        "dependency:calling/calls>operations_observability/monitoring"
-      ]
-    },
-    {
       "fingerprint": "arch_b5c5a069dc82772ef7340f81",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/api/ai-calls/mock/route.ts",
@@ -809,108 +775,6 @@
       ]
     },
     {
-      "fingerprint": "arch_e16cab2568d077c9b79efb98",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/ai-calls/mock/route.ts",
-      "line_at_baseline": 7,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "operations_observability",
-      "subject": "ai_calls>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>operations_observability/monitoring",
-        "dependency:calling/calls>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_74fbeb4636aa1ec240e13c80",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/ai-calls/mock/route.ts",
-      "line_at_baseline": 7,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "operations_observability",
-      "subject": "ai_calls>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>operations_observability/monitoring",
-        "dependency:calling/calls>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_e23f791faf3ed9a0cbf22bef",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/ai-calls/sessions/[id]/finalize/route.ts",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "operations_observability",
-      "subject": "ai_calls>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>operations_observability/monitoring",
-        "dependency:calling/calls>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_00991ef40a58891c085a2eb3",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/ai-calls/sessions/[id]/finalize/route.ts",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "operations_observability",
-      "subject": "ai_calls>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>operations_observability/monitoring",
-        "dependency:calling/calls>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_46eddbb0e70bc1299e061d9e",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/ai-calls/sessions/[id]/state/route.ts",
-      "line_at_baseline": 29,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "operations_observability",
-      "subject": "ai_calls>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>operations_observability/monitoring",
-        "dependency:calling/calls>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_e5333001ba5be1d1da008dcc",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/ai-calls/sessions/[id]/state/route.ts",
-      "line_at_baseline": 29,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "operations_observability",
-      "subject": "ai_calls>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>operations_observability/monitoring",
-        "dependency:calling/calls>operations_observability/monitoring"
-      ]
-    },
-    {
       "fingerprint": "arch_8cb79524126f58d88265481f",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/api/ai-calls/start/route.ts",
@@ -959,40 +823,6 @@
       "migration_references": [
         "dependency:calling/ai_calls>identity_access/users",
         "dependency:calling/calls>identity_access/users"
-      ]
-    },
-    {
-      "fingerprint": "arch_68757ba83062ec53527305eb",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/ai-calls/start/route.ts",
-      "line_at_baseline": 7,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "operations_observability",
-      "subject": "ai_calls>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>operations_observability/monitoring",
-        "dependency:calling/calls>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_b7dbcba640dea7093f4b8283",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/ai-calls/start/route.ts",
-      "line_at_baseline": 7,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "operations_observability",
-      "subject": "ai_calls>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>operations_observability/monitoring",
-        "dependency:calling/calls>operations_observability/monitoring"
       ]
     },
     {
@@ -1185,40 +1015,6 @@
       ]
     },
     {
-      "fingerprint": "arch_edbc68f562ae8033a952ca0d",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/calls/cancel/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "operations_observability",
-      "subject": "calls>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>operations_observability/monitoring",
-        "dependency:calling/calls>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_fbcbd3da03f6acf96b7bb7fd",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/calls/cancel/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "operations_observability",
-      "subject": "calls>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>operations_observability/monitoring",
-        "dependency:calling/calls>operations_observability/monitoring"
-      ]
-    },
-    {
       "fingerprint": "arch_a48c61aa83140187c662aaa2",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/api/calls/originate/route.ts",
@@ -1267,40 +1063,6 @@
       "migration_references": [
         "dependency:calling/ai_calls>identity_access/users",
         "dependency:calling/calls>identity_access/users"
-      ]
-    },
-    {
-      "fingerprint": "arch_f398e74966174024dacfeb2f",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/calls/originate/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "operations_observability",
-      "subject": "calls>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>operations_observability/monitoring",
-        "dependency:calling/calls>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_bce5f693eb2a88a21a41444e",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/calls/originate/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "operations_observability",
-      "subject": "calls>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>operations_observability/monitoring",
-        "dependency:calling/calls>operations_observability/monitoring"
       ]
     },
     {
@@ -19326,40 +19088,6 @@
       ]
     },
     {
-      "fingerprint": "arch_dfd70a7959df13c4afde8acd",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
-      "line_at_baseline": 27,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "operations_observability",
-      "subject": "calls>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>operations_observability/monitoring",
-        "dependency:calling/calls>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_c7327095a571e9bf00bcee76",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
-      "line_at_baseline": 27,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "operations_observability",
-      "subject": "calls>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>operations_observability/monitoring",
-        "dependency:calling/calls>operations_observability/monitoring"
-      ]
-    },
-    {
       "fingerprint": "arch_7c9e31082fa69d11a996d5d7",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
@@ -19461,40 +19189,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:calling/calls>contacts/contacts"
-      ]
-    },
-    {
-      "fingerprint": "arch_df18b9694070a91e16dcaf16",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/freeswitch/recordingProcessor.ts",
-      "line_at_baseline": 22,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "operations_observability",
-      "subject": "calls>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>operations_observability/monitoring",
-        "dependency:calling/calls>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_e15eb92c6d0d793001556b5c",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/freeswitch/recordingProcessor.ts",
-      "line_at_baseline": 22,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "operations_observability",
-      "subject": "calls>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>operations_observability/monitoring",
-        "dependency:calling/calls>operations_observability/monitoring"
       ]
     },
     {
@@ -20631,40 +20325,6 @@
       ]
     },
     {
-      "fingerprint": "arch_c3f55a299fef564daaf4a9b1",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/queue/analyzeWorker.ts",
-      "line_at_baseline": 35,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "operations_observability",
-      "subject": "calls>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>operations_observability/monitoring",
-        "dependency:calling/calls>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_4c604d3404765f56c0f50e14",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/queue/analyzeWorker.ts",
-      "line_at_baseline": 35,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "operations_observability",
-      "subject": "calls>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>operations_observability/monitoring",
-        "dependency:calling/calls>operations_observability/monitoring"
-      ]
-    },
-    {
       "fingerprint": "arch_b8b67f1cc18ac417706c3700",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/lib/queue/analyzeWorker.ts",
@@ -20734,108 +20394,6 @@
         "dependency:calling/ai_calls>platform_shell/gravity_core",
         "dependency:calling/calls>platform_shell/gravity_core",
         "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_614e1b87b7de6ed6017629cc",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/queue/connection.ts",
-      "line_at_baseline": 14,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "operations_observability",
-      "subject": "calls>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>operations_observability/monitoring",
-        "dependency:calling/calls>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_909311b2a241d52a35abc0be",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/queue/connection.ts",
-      "line_at_baseline": 14,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "operations_observability",
-      "subject": "calls>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>operations_observability/monitoring",
-        "dependency:calling/calls>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_ad42b9cfd3c5bd58dc93eb97",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/queue/index.ts",
-      "line_at_baseline": 21,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "operations_observability",
-      "subject": "calls>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>operations_observability/monitoring",
-        "dependency:calling/calls>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_2756325643a7cde44c081487",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/queue/index.ts",
-      "line_at_baseline": 21,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "operations_observability",
-      "subject": "calls>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>operations_observability/monitoring",
-        "dependency:calling/calls>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_a2ba8408ec3a6dcdaf041992",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/queue/transcribeWorker.ts",
-      "line_at_baseline": 18,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "operations_observability",
-      "subject": "calls>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>operations_observability/monitoring",
-        "dependency:calling/calls>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_4fb0eb5e4506c1a9ccc1d43d",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/queue/transcribeWorker.ts",
-      "line_at_baseline": 18,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "operations_observability",
-      "subject": "calls>monitoring:gravity-mvp/src/lib/opsLog.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>operations_observability/monitoring",
-        "dependency:calling/calls>operations_observability/monitoring"
       ]
     },
     {

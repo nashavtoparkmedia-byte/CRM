@@ -11,7 +11,7 @@
  */
 
 import IORedis, { type Redis, type RedisOptions } from 'ioredis'
-import { opsLog } from '@/lib/opsLog'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 
 const REDIS_URL = process.env.REDIS_URL ?? 'redis://127.0.0.1:6379'
 

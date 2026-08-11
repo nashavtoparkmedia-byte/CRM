@@ -18,7 +18,7 @@ export { closeRedisConnection } from '@/lib/queue/connection'
 
 import { startTranscribeWorker } from '@/lib/queue/transcribeWorker'
 import { startAnalyzeWorker } from '@/lib/queue/analyzeWorker'
-import { opsLog } from '@/lib/opsLog'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 
 let started = false
 

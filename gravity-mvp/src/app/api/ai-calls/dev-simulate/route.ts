@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/users/user-service'
 import { getScenario, DEFAULT_PROJECT_ID, listScenarios } from '@/lib/ai-call/scenarios'
 import { simulateAiCall } from '@/lib/ai-call/devSimulator'
-import { opsLog } from '@/lib/opsLog'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 
 export const dynamic = 'force-dynamic'
 

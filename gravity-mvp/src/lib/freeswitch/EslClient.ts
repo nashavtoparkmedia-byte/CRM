@@ -24,7 +24,7 @@ const modesl = _require('modesl') as { Connection: any }
 const Connection = modesl.Connection
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { opsLog } from '@/lib/opsLog'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { normalizePhoneE164 } from '@/lib/phoneUtils'
 import { broadcastCall } from '@/lib/callStreamBus'
 import { getSipExtensionForUser, getUserIdForSipExtension } from '@/lib/sip/extensions'
