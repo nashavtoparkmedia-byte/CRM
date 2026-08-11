@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "66a73a8c455a2bc3bd375c94c64a8db8239a836c50d153dd2fd454d3625d8e32",
+  "finding_digest": "d23ccb7c6146828a339bfee6a7730721fb68abc71efa1a135cbea577b324ca75",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,8 +13,8 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "internal_module_import": 31,
-    "non_public_cross_context_import": 63,
+    "internal_module_import": 29,
+    "non_public_cross_context_import": 61,
     "undeclared_dependency": 23
   },
   "exceptions": [
@@ -822,38 +822,6 @@
       ]
     },
     {
-      "fingerprint": "arch_ac219663ccbdb035fdf66ade",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/messages/components/AiCoachModal.tsx",
-      "line_at_baseline": 28,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "ai_knowledge",
-      "subject": "messages>ai_knowledge:gravity-mvp/src/lib/ai/knowledge/coach.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>ai_knowledge/ai_knowledge"
-      ]
-    },
-    {
-      "fingerprint": "arch_1cef5a2091d43943d759d644",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/messages/components/AiCoachModal.tsx",
-      "line_at_baseline": 28,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "ai_knowledge",
-      "subject": "messages>ai_knowledge:gravity-mvp/src/lib/ai/knowledge/coach.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>ai_knowledge/ai_knowledge"
-      ]
-    },
-    {
       "fingerprint": "arch_d888f9243e881f344e64ffed",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/messages/components/AiInternToggle.tsx",
@@ -1225,38 +1193,6 @@
       "migration_references": [
         "dependency:messaging/messages>platform_shell/gravity_core",
         "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_895e49d81e8c53c49766255b",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
-      "line_at_baseline": 24,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "ai_knowledge",
-      "subject": "messages>ai_knowledge:gravity-mvp/src/lib/ai/knowledge/coach.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>ai_knowledge/ai_knowledge"
-      ]
-    },
-    {
-      "fingerprint": "arch_b21f9a9c286adfd8bf949e8e",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
-      "line_at_baseline": 24,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "ai_knowledge",
-      "subject": "messages>ai_knowledge:gravity-mvp/src/lib/ai/knowledge/coach.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>ai_knowledge/ai_knowledge"
       ]
     },
     {

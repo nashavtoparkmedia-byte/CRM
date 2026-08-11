@@ -25,7 +25,10 @@ import {
     applyCoachSuggestions,
     type ApplyCoachResult,
 } from '../proposed-reply-actions'
-import type { CoachSuggestion, CoachResult } from '@/lib/ai/knowledge/coach'
+import type {
+    KnowledgeCoachSuggestionV1 as CoachSuggestion,
+    KnowledgeCoachResultV1 as CoachResult,
+} from '@/modules/ai-knowledge/public/v1/knowledge-coach'
 
 interface AiCoachModalProps {
     proposalId:    string

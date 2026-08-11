@@ -461,7 +461,7 @@ check('protected UI and trainer verification surfaces retain pinned identities',
     trainerAdapter: sha256(paths.trainerAdapter),
   }, {
     ui: 'e49bc7225652999fedb7851a2bce0cec668a9ed3b59d13863cc73a21b62961d3',
-    trainer: '0b88ae8a39b1f55d3468d61483fe2e8541a5d1f13c17378eacc147ae7b68319b',
+    trainer: '16f6ced0d4ba4192a0ae91fa07f53e4706c2493cab9a2df2b5944f926c8b4484',
     trainerContract: '9d3b40f4f5d625330fd3ecb7aadfa64314c193a9e0c03b814e8df5845a1d581b',
     trainerHandler: 'd0fbb7c68365664d9744c5ec5c848461657b458cf613b15118d782546ea08bc6',
     trainerAdapter: 'b50ef3b871e721682a17152955eccc3f595865225f4f579fbe8b54ff10038938',

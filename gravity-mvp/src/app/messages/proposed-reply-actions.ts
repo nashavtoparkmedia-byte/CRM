@@ -22,7 +22,11 @@ import { getAiAgentProviderConfigV1 } from '@/modules/calling/public/v1/ai-agent
 import { cookies } from 'next/headers'
 import { generateShadowReplyForChat } from '@/lib/pipeline/shadowReply'
 import { appendKnowledgeGovernanceAuditV1 as writeAuditEntry } from '@/modules/ai-knowledge/public/v1/knowledge-governance-audit'
-import { runCoach, type CoachResult, type CoachSuggestion } from '@/lib/ai/knowledge/coach'
+import {
+    runKnowledgeCoachV1 as runCoach,
+    type KnowledgeCoachResultV1 as CoachResult,
+    type KnowledgeCoachSuggestionV1 as CoachSuggestion,
+} from '@/modules/ai-knowledge/public/v1/knowledge-coach'
 import { APPLY_KNOWLEDGE_ITEM_COACH_EDIT_COMMAND_V1, PATCH_PROPOSED_REPLY_COMMAND_V1, UPSERT_PROPOSED_REPLY_COMMAND_V1, VERIFY_KNOWLEDGE_ITEM_COMMAND_V1 } from '@/contracts/ai-knowledge/v1'
 import { applyKnowledgeItemCoachEditV1, patchProposedReplyV1, upsertProposedReplyV1, verifyKnowledgeItemV1 } from '@/modules/ai-knowledge/public/v1'
 

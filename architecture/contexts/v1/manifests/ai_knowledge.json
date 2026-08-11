@@ -179,7 +179,8 @@
     "KnowledgeLegacyMigration.v1",
     "KnowledgeExtractionExecution.v1",
     "KnowledgeTextSimilarity.v1",
-    "KnowledgeRetrievalVersion.v1"
+    "KnowledgeRetrievalVersion.v1",
+    "KnowledgeCoach.v1"
   ],
   "responsibility": "Knowledge sources, extraction, retrieval policy, decisions, proposed replies and explainability audit.",
   "schema": "yoko.crm.module-manifest.v1",
