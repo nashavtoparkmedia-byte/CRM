@@ -6,7 +6,7 @@ import {
     X, Loader2, Headphones, FileText, Sparkles, AlertTriangle,
     PhoneIncoming, PhoneOutgoing, PhoneMissed, PhoneOff,
 } from "lucide-react"
-import { callStatusIcon, type CallStatusValue, type CallDirection } from "@/lib/calls/status"
+import { callStatusIcon, type CallStatusValue, type CallDirection } from "@/modules/calling/public/v1/call-status-policy"
 
 /**
  * In-chat side-drawer with call details. Reads `?call=<id>` from the URL —

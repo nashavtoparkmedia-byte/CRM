@@ -17,7 +17,7 @@
     "gravity-mvp/src/modules/work-management/public/v1/index.ts": "5ea614ddd71855c8268c0815dbc542cf16ffa8e765e56abe118a89801256a655"
   },
   "source_hashes_after": {
-    "architecture/contexts/v1/context-index.json": "75a74f1cbaf0e6e415b1e0bff369523482c7f50dd6bf9e3c1463b88d18041ed1",
+    "architecture/contexts/v1/context-index.json": "a3beb4477d1edfdd7800c06a399297ddcbbe0ad9b0a489991342792633dc9b36",
     "architecture/contexts/v1/manifests/configuration.json": "4facdbe984bcc46fd28b1a862b2032254426bd0b36206a458f0d43d5a89e987a",
     "architecture/contexts/v1/manifests/work_management.json": "ffdeffa53e8337a53ee7ce8006d76ebb09c5cd820ca3439c8c539b2b27deef82",
     "gravity-mvp/src/app/settings/scenarios/[id]/fields/ScenarioFieldsSettingsClient.tsx": "d746c1932cf8763a47f93a9dfc57d8ccdd6ba3b498192d01ad5fdbc0a94ccc9a",

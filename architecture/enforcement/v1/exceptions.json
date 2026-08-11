@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "bd72bea00f3ee9f2166c475d2251badec0afa72e10a7e35c82ba8e9cb397f049",
+  "finding_digest": "3bfb0d3bd9ff4a4cab4009e6d78027d250ac5f1033a3b94e4021c0d94c45fcca",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,8 +13,8 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "internal_module_import": 68,
-    "non_public_cross_context_import": 114,
+    "internal_module_import": 66,
+    "non_public_cross_context_import": 112,
     "undeclared_dependency": 32
   },
   "exceptions": [
@@ -1134,38 +1134,6 @@
       ]
     },
     {
-      "fingerprint": "arch_e45dd086881cbabd2bd68ffd",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/messages/components/CallDetailDrawer.tsx",
-      "line_at_baseline": 9,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "calling",
-      "subject": "messages>calls:gravity-mvp/src/lib/calls/status.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>calling/calls"
-      ]
-    },
-    {
-      "fingerprint": "arch_b5ab6b5e8e908e5cf38dacbc",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/messages/components/CallDetailDrawer.tsx",
-      "line_at_baseline": 9,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "calling",
-      "subject": "messages>calls:gravity-mvp/src/lib/calls/status.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>calling/calls"
-      ]
-    },
-    {
       "fingerprint": "arch_13eb2e4430568d80851ed2f9",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/messages/components/ChatHeader.tsx",
@@ -1421,38 +1389,6 @@
       "migration_references": [
         "dependency:messaging/messages>platform_shell/gravity_core",
         "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_18d661250eb7306c6aca02cf",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/messages/components/MessageFeed.tsx",
-      "line_at_baseline": 7,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "calling",
-      "subject": "messages>calls:gravity-mvp/src/lib/calls/status.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>calling/calls"
-      ]
-    },
-    {
-      "fingerprint": "arch_7255e449b72c350f79757a30",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/messages/components/MessageFeed.tsx",
-      "line_at_baseline": 7,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "calling",
-      "subject": "messages>calls:gravity-mvp/src/lib/calls/status.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>calling/calls"
       ]
     },
     {
