@@ -1,0 +1,15 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "CRM-ARCH-DELIVERY-RUNTIME-V1",
+  "amendments": [
+    {
+      "context": "platform_shell",
+      "add_allowed_dependencies": [
+        { "context": "max_channel", "surface": "max_channel.public" },
+        { "context": "whatsapp_channel", "surface": "whatsapp_channel.public" }
+      ],
+      "reason": "Compose the three provider-owned Messaging delivery capabilities at process startup; Telegram Channel is already an effective Platform dependency."
+    }
+  ]
+}

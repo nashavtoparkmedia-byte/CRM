@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { broadcastChatMessage } from '@/lib/messageStreamBus'
-
-const MAX_SCRAPER_URL = process.env.MAX_SCRAPER_URL || 'http://localhost:3005'
+import { getMaxChannelDeliveryV1, getTelegramChannelDeliveryV1, getWhatsAppChannelDeliveryV1 } from '@/modules/messaging/public/v1/channel-delivery-runtime'
 
 /**
  * Detect media type from MIME.
@@ -76,48 +75,54 @@ export async function POST(req: NextRequest) {
             const maxMetadata = (chat.metadata || {}) as any
             const maxUiChatId = maxMetadata.oldExternalChatId || maxMetadata.uiChatId || null
             const maxPhone = chat.driver?.phone || maxMetadata.phone || null
-            const res = await fetch(`${MAX_SCRAPER_URL}/send-media`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
+            try {
+                const result = await getMaxChannelDeliveryV1().sendMedia({
                     chatId: Number(chat.externalChatId),
-                    base64, filename, mimeType, caption: caption || '',
+                    base64,
+                    filename,
+                    mimeType,
+                    caption: caption || '',
                     mediaType,
                     uiChatId: maxUiChatId ? String(maxUiChatId) : undefined,
                     phone: maxPhone ? String(maxPhone) : undefined,
-                }),
-            })
-            const resData = await res.json().catch(() => ({ error: res.statusText }))
-            if (!res.ok) {
-                sendError = resData.error || res.statusText
+                })
+                externalId = result.externalId || null
+            } catch (error: any) {
+                sendError = error?.message || 'MAX media send failed'
                 console.error('[send-media] MAX error (saving as failed):', sendError)
-                // Don't return — save to DB so operator sees the attempt in chat
-            } else {
-                externalId = resData.externalId || null
             }
         } else if (channel === 'whatsapp') {
-            const { sendMedia } = await import('@/lib/whatsapp/WhatsAppService')
-            // Resolve connectionId for this chat
-            const connection = await (prisma as any).whatsAppConnection.findFirst({
-                where: { status: 'ready' },
-                orderBy: { createdAt: 'asc' },
-                select: { id: true },
-            })
-            if (!connection) {
-                return NextResponse.json({ error: 'No active WhatsApp connection' }, { status: 503 })
-            }
             const waChatId = chat.driver?.phone || chat.externalChatId?.replace('whatsapp:', '') || ''
-            const result = await sendMedia(
-                connection.id, waChatId, base64, filename, mimeType, caption,
-                { sendAsVoice: mediaType === 'voice', sendAsDocument: mediaType === 'document' }
-            )
+            let result
+            try {
+                result = await getWhatsAppChannelDeliveryV1().sendMedia({
+                    chatId: waChatId,
+                    base64,
+                    filename,
+                    mimeType,
+                    caption,
+                    sendAsVoice: mediaType === 'voice',
+                    sendAsDocument: mediaType === 'document',
+                })
+            } catch (error: any) {
+                if (error?.message === 'No ready WhatsApp connection') {
+                    return NextResponse.json({ error: 'No active WhatsApp connection' }, { status: 503 })
+                }
+                throw error
+            }
             externalId = result.externalId
         } else if (channel === 'telegram') {
-            const { sendTelegramMedia } = await import('@/app/tg-actions')
             const target = chat.driver?.telegramId?.toString() ||
                            chat.driver?.phone ||
                            chat.externalChatId?.replace('telegram:', '') || ''
-            const result = await sendTelegramMedia(target, base64, filename, mimeType, caption, profileId)
+            const result = await getTelegramChannelDeliveryV1().sendMedia({
+                target,
+                base64,
+                filename,
+                mimeType,
+                caption,
+                connectionId: profileId,
+            })
             // PR-Щ hotfix: TG может вернуть BigInt — приводим к string явно
             externalId = result.externalId != null ? String(result.externalId) : null
         } else {

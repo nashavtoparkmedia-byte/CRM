@@ -1,9 +1,9 @@
 import { prisma } from '@/lib/prisma'
-import { sendMessage as sendWhatsAppMessage } from './whatsapp/WhatsAppService'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import { opsLog } from '@/lib/opsLog'
 import { ChatChannel, MessageStatus } from '@prisma/client'
 import { buildCanonicalContactSummary } from '@/lib/contactDisplay'
+import { getMaxChannelDeliveryV1, getTelegramChannelDeliveryV1, getWhatsAppChannelDeliveryV1 } from '@/modules/messaging/public/v1/channel-delivery-runtime'
 
 function serialize(obj: any): any {
     return JSON.parse(JSON.stringify(obj, (key, value) =>
@@ -623,38 +623,35 @@ export class MessageService {
         try {
             switch (channel) {
                 case 'whatsapp':
-                    const { sendWhatsAppMessage: deliverWA } = await import('@/app/settings/integrations/whatsapp/whatsapp-actions')
                     const connId = profileId || (targetChat.metadata as any)?.connectionId
                     console.log(`[MessageService] WA Send: connId=${connId}, target=${rawExternalChatId}`)
-                    if (connId) {
-                        await deliverWA(connId, rawExternalChatId, content, quotedMsgId)
-                    } else {
-                        const conn = await prisma.whatsAppConnection.findFirst({
-                            where: { status: 'ready' },
-                            select: { id: true },
-                        })
-                        console.log(`[MessageService] WA Fallback: found ready conn=${conn?.id}`)
-                        if (!conn) throw new Error('No ready WhatsApp connection available.')
-                        await deliverWA(conn.id, rawExternalChatId, content, quotedMsgId)
-                    }
+                    await getWhatsAppChannelDeliveryV1().sendText({
+                        connectionId: connId,
+                        chatId: rawExternalChatId,
+                        content,
+                        quotedMessageId: quotedMsgId,
+                    })
                     deliveryStatus = 'delivered'
                     break
                 
                 case 'max':
-                    const { sendMaxMessage: deliverMax } = await import('@/app/max-actions')
                     const isPersonal = profileId === 'scraper' || !profileId
                     const maxMetadata = (targetChat.metadata || {}) as any
                     console.log(`[MessageService] MAX Send: isPersonal=${isPersonal}, profileId=${profileId}, target=${rawExternalChatId}`)
-                    const maxRes = await deliverMax(rawExternalChatId, content, {
-                        isPersonal,
-                        connectionId: isPersonal ? undefined : profileId,
-                        name: chat.driver?.fullName,
-                        quotedMsgId: providerQuotedMsgId,
-                        quotedText: providerQuotedText,
-                        quotedSentAt: providerQuotedSentAt,
-                        quotedDirection: providerQuotedDirection,
-                        uiChatId: maxMetadata.oldExternalChatId || maxMetadata.uiChatId,
-                        clientMessageId: clientMessageId || messageId
+                    const maxRes = await getMaxChannelDeliveryV1().sendText({
+                        target: rawExternalChatId,
+                        content,
+                        options: {
+                            isPersonal,
+                            connectionId: isPersonal ? undefined : profileId,
+                            name: chat.driver?.fullName,
+                            quotedMsgId: providerQuotedMsgId,
+                            quotedText: providerQuotedText,
+                            quotedSentAt: providerQuotedSentAt,
+                            quotedDirection: providerQuotedDirection,
+                            uiChatId: maxMetadata.oldExternalChatId || maxMetadata.uiChatId,
+                            clientMessageId: clientMessageId || messageId,
+                        },
                     })
                     const rawMaxExternalId = (maxRes as any)?.externalId
                     const rawMaxMessageId = (maxRes as any)?.maxMessageId
@@ -731,17 +728,15 @@ export class MessageService {
                         }
 
                         if (activeProfileId) {
-                            const { sendTelegramMessage: deliverTG } = await import('@/app/tg-actions')
                             const target = rawExternalChatId || chat.driver?.phone?.replace(/\D/g, '')
                             if (!target) throw new Error('No target for TG')
                             
                             try {
-                                const res = await deliverTG(target, content, activeProfileId, {
-                                    // @ts-ignore - dynamic type mismatch
-                                    messageId: messageId,
-                                    chatId: targetChat.id,
-                                    driverId: chat.driver?.id,
-                                    quotedMsgId
+                                const res: any = await getTelegramChannelDeliveryV1().sendText({
+                                    target,
+                                    content,
+                                    connectionId: activeProfileId,
+                                    metadata: { messageId, chatId: targetChat.id, driverId: chat.driver?.id, quotedMsgId },
                                 })
                                 if (res.externalId) deliveryExternalId = res.externalId
                                 deliveryStatus = 'delivered'
@@ -899,15 +894,15 @@ export class MessageService {
 
             switch (message.channel) {
                 case 'whatsapp': {
-                    const { sendWhatsAppMessage: deliverWA } = await import('@/app/settings/integrations/whatsapp/whatsapp-actions')
-                    const waConn = connId || (await prisma.whatsAppConnection.findFirst({ where: { status: 'ready' }, select: { id: true } }))?.id
-                    if (!waConn) throw new Error('No ready WhatsApp connection available.')
-                    await deliverWA(waConn, rawExternalId, message.content)
+                    await getWhatsAppChannelDeliveryV1().sendText({
+                        connectionId: connId,
+                        chatId: rawExternalId,
+                        content: message.content,
+                    })
                     deliveryStatus = 'delivered'
                     break
                 }
                 case 'max': {
-                    const { sendMaxMessage: deliverMax } = await import('@/app/max-actions')
                     const maxMetadata = (chat.metadata || {}) as any
                     let retryQuotedMsgId = meta.quotedMsgId
                     let retryQuotedText: string | undefined
@@ -932,15 +927,19 @@ export class MessageService {
                             retryQuotedDirection = quotedMessage.direction || undefined
                         }
                     }
-                    const retryMaxRes = await deliverMax(rawExternalId, message.content, {
-                        isPersonal: true,
-                        name: chat.driver?.fullName,
-                        quotedMsgId: retryQuotedMsgId,
-                        quotedText: retryQuotedText,
-                        quotedSentAt: retryQuotedSentAt,
-                        quotedDirection: retryQuotedDirection,
-                        uiChatId: maxMetadata.oldExternalChatId || maxMetadata.uiChatId,
-                        clientMessageId: message.clientMessageId || message.id
+                    const retryMaxRes = await getMaxChannelDeliveryV1().sendText({
+                        target: rawExternalId,
+                        content: message.content,
+                        options: {
+                            isPersonal: true,
+                            name: chat.driver?.fullName,
+                            quotedMsgId: retryQuotedMsgId,
+                            quotedText: retryQuotedText,
+                            quotedSentAt: retryQuotedSentAt,
+                            quotedDirection: retryQuotedDirection,
+                            uiChatId: maxMetadata.oldExternalChatId || maxMetadata.uiChatId,
+                            clientMessageId: message.clientMessageId || message.id,
+                        },
                     })
                     const rawMaxExternalId = (retryMaxRes as any)?.externalId
                     const rawMaxMessageId = (retryMaxRes as any)?.maxMessageId
@@ -974,13 +973,12 @@ export class MessageService {
                     break
                 }
                 case 'telegram': {
-                    const { sendTelegramMessage: deliverTG } = await import('@/app/tg-actions')
                     const target = rawExternalId || chat.driver?.phone?.replace(/\D/g, '')
                     if (!target) throw new Error('No target for TG')
                     const defaultConns: any[] = await prisma.$queryRaw`SELECT id FROM "TelegramConnection" WHERE "isActive" = true ORDER BY "isDefault" DESC LIMIT 1`
                     const profileId = defaultConns[0]?.id
                     if (!profileId) throw new Error('No active TG connection')
-                    const res = await deliverTG(target, message.content, profileId, {})
+                    const res: any = await getTelegramChannelDeliveryV1().sendText({ target, content: message.content, connectionId: profileId })
                     if (res.externalId) deliveryExternalId = res.externalId
                     deliveryStatus = 'delivered'
                     break

@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { getMaxChannelDeliveryV1, getTelegramChannelDeliveryV1, getWhatsAppChannelDeliveryV1 } from '@/modules/messaging/public/v1/channel-delivery-runtime'
 
 export interface SendMessageParams {
   chatId:         string   // внутренний Chat.id
@@ -16,8 +17,11 @@ export interface ChannelAdapter {
 
 class MaxAdapter implements ChannelAdapter {
   async send(params: SendMessageParams) {
-    const { sendMaxMessage } = await import('@/app/max-actions')
-    await sendMaxMessage(params.externalChatId, params.content, { isPersonal: true })
+    await getMaxChannelDeliveryV1().sendText({
+      target: params.externalChatId,
+      content: params.content,
+      options: { isPersonal: true },
+    })
   }
 }
 
@@ -25,10 +29,13 @@ class MaxAdapter implements ChannelAdapter {
 
 class TelegramAdapter implements ChannelAdapter {
   async send(params: SendMessageParams) {
-    const { sendTelegramMessage } = await import('@/app/tg-actions')
     // externalChatId имеет вид "telegram:XXXXXXX" или просто ID
     const target = params.externalChatId.replace(/^telegram:/, '')
-    await sendTelegramMessage(target, params.content, params.connectionId)
+    await getTelegramChannelDeliveryV1().sendText({
+      target,
+      content: params.content,
+      connectionId: params.connectionId,
+    })
   }
 }
 
@@ -36,12 +43,11 @@ class TelegramAdapter implements ChannelAdapter {
 
 class WhatsAppAdapter implements ChannelAdapter {
   async send(params: SendMessageParams) {
-    const { sendMessage } = await import('@/lib/whatsapp/WhatsAppService')
     // externalChatId имеет вид "whatsapp:7XXXXXXXXXX"
     const target = params.externalChatId.replace(/^whatsapp:/, '')
     const connectionId = params.connectionId || await this._resolveConnectionId(params.chatId)
     if (!connectionId) throw new Error(`WhatsApp: no connectionId for chat ${params.chatId}`)
-    await sendMessage(connectionId, target, params.content)
+    await getWhatsAppChannelDeliveryV1().sendText({ connectionId, chatId: target, content: params.content })
   }
 
   private async _resolveConnectionId(chatId: string): Promise<string | null> {
