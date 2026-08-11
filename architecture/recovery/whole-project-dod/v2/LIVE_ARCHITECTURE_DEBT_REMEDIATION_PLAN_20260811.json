@@ -3,10 +3,10 @@
   "status": "OPEN_LIVE_DEBT_BURN_DOWN",
   "source": "LIVE_ARCHITECTURE_DEBT_RECOMPUTE_20260811.json",
   "opening_finding_count": 1288,
-  "current_finding_count": 299,
-  "exception_covered_live_debt": 299,
+  "current_finding_count": 235,
+  "exception_covered_live_debt": 235,
   "open_finding_count": 0,
-  "actually_closed_since_opening_baseline": 989,
+  "actually_closed_since_opening_baseline": 1053,
   "confirmed_direct_foreign_prisma_writes": 0,
   "items": [
     {
@@ -148,6 +148,81 @@
       ],
       "approved_path": "two explicit read-only versioned policy surfaces with no wildcard, service, repository or persistence export",
       "status": "CLOSED_WORK_POLICY_BOUNDARY"
+    },
+    {
+      "surface": "shared class-name utility",
+      "finding_count": 8,
+      "intent": "Keep the pure cn helper in shared technical UI infrastructure rather than making business contexts depend on Platform Shell.",
+      "owner_context": "shared infrastructure",
+      "target_contexts": [
+        "all UI consumers"
+      ],
+      "approved_path": "shared technical helper plus explicit named compatibility shim",
+      "status": "CLOSED_SHARED_TECHNICAL_UTILITY"
+    },
+    {
+      "surface": "Calling internal event stream",
+      "finding_count": 10,
+      "intent": "Keep call-stream publication and subscription inside the Calling owner.",
+      "owner_context": "calling",
+      "target_contexts": [
+        "calling"
+      ],
+      "approved_path": "owner-internal stream with exact subscriber behavior tests",
+      "status": "CLOSED_CALLING_INTERNAL_STREAM"
+    },
+    {
+      "surface": "Yandex Fleet operations",
+      "finding_count": 10,
+      "intent": "Keep Yandex operational reads and commands behind Fleet's versioned owner surface.",
+      "owner_context": "fleet_operations",
+      "target_contexts": [
+        "fleet_operations",
+        "platform_shell"
+      ],
+      "approved_path": "versioned Fleet operational capability plus explicit named compatibility shim",
+      "status": "CLOSED_YANDEX_FLEET_OPERATIONS"
+    },
+    {
+      "surface": "Contacts display policy",
+      "finding_count": 8,
+      "intent": "Keep canonical contact labels, phone formatting and provider fallbacks in Contacts.",
+      "owner_context": "contacts",
+      "target_contexts": [
+        "contacts",
+        "messaging"
+      ],
+      "approved_path": "pure versioned Contacts display policy plus explicit named compatibility shim",
+      "status": "CLOSED_CONTACT_DISPLAY_POLICY"
+    },
+    {
+      "surface": "SIP browser context",
+      "finding_count": 6,
+      "intent": "Keep browser SIP registration, state and call controls inside Calling while preserving codec and alert behavior.",
+      "owner_context": "calling",
+      "target_contexts": [
+        "platform_shell",
+        "messaging"
+      ],
+      "approved_path": "versioned Calling client context with byte-preserved implementation and narrow compatibility shim",
+      "status": "CLOSED_SIP_CLIENT_CONTEXT"
+    },
+    {
+      "surface": "Calling client UI and ringtone capability",
+      "finding_count": 22,
+      "intent": "Keep call controls, lists, popups and ringtone logic in Calling without introducing a Fleet-to-Calling dependency cycle.",
+      "owner_contexts": [
+        "calling",
+        "fleet_operations"
+      ],
+      "target_contexts": [
+        "calling",
+        "messaging",
+        "fleet_operations",
+        "platform_shell"
+      ],
+      "approved_path": "Calling public client UI, Fleet-owned driver adapters and a narrow owner-neutral outbound-call client port",
+      "status": "CLOSED_CALLING_CLIENT_UI_BOUNDARY"
     }
   ],
   "prohibited_shortcuts": [
@@ -157,10 +232,10 @@
     "arbitrary Prisma access from an approved adapter"
   ],
   "next_cluster": {
-    "name": "SHARED_CLASS_NAME_UTILITY_EXTRACTION",
-    "finding_count": 8,
+    "name": "MESSAGING_CHANNEL_SYNC_CLIENT_CAPABILITY",
+    "finding_count": 11,
     "classification": "EXCEPTION_COVERED_TEMPORARY_LEGACY_DEBT",
-    "acceptance": "Move the pure cn helper into shared technical UI infrastructure, preserve the legacy path as an explicit named shim, migrate all consumers, and retire the exact cross-context findings without declaring business contexts dependent on Platform Shell."
+    "acceptance": "Move ChannelSyncBlock into a versioned Messaging client surface, expose only the exact import-job operations it needs through an owner-controlled capability, migrate the MAX, Telegram and WhatsApp consumers, preserve polling/cancellation/totals behavior, and retire the exact findings without broad dependencies."
   },
-  "acceptance": "Uncovered findings and provider transport accesses are zero without new exceptions. The project remains NOT READY while 299 temporary exception-covered live findings remain."
+  "acceptance": "Uncovered findings and provider transport accesses are zero without new exceptions. The project remains NOT READY while 235 temporary exception-covered live findings remain."
 }
