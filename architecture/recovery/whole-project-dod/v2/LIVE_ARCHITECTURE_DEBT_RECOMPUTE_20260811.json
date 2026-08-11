@@ -2,13 +2,13 @@
   "schema": "yoko.crm.architecture-enforcement-result.v1",
   "ok": true,
   "errors": [],
-  "findings": 190,
-  "exceptions": 190,
+  "findings": 157,
+  "exceptions": 157,
   "by_rule": {
-    "internal_module_import": 59,
-    "non_public_cross_context_import": 105,
+    "internal_module_import": 46,
+    "non_public_cross_context_import": 85,
     "undeclared_dependency": 26
   },
-  "scanned_files": 1189,
+  "scanned_files": 1200,
   "contexts": 16
 }

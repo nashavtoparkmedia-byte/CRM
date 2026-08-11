@@ -3,10 +3,10 @@
   "status": "OPEN_LIVE_DEBT_BURN_DOWN",
   "source": "LIVE_ARCHITECTURE_DEBT_RECOMPUTE_20260811.json",
   "opening_finding_count": 1288,
-  "current_finding_count": 190,
-  "exception_covered_live_debt": 190,
+  "current_finding_count": 157,
+  "exception_covered_live_debt": 157,
   "open_finding_count": 0,
-  "actually_closed_since_opening_baseline": 1098,
+  "actually_closed_since_opening_baseline": 1131,
   "confirmed_direct_foreign_prisma_writes": 0,
   "items": [
     {
@@ -290,6 +290,54 @@
       ],
       "approved_path": "implementation relocation with explicit deprecated aliases and compatibility identity tests",
       "status": "CLOSED_SHARED_UI_FINAL_BATCH"
+    },
+    {
+      "surface": "AI Knowledge admin read model",
+      "finding_count": 6,
+      "intent": "Publish filtered Knowledge administration reads without leaking source excerpts or repository/provider capabilities.",
+      "owner_context": "ai_knowledge",
+      "target_context": "configuration",
+      "approved_path": "narrow versioned owner read model with source-access policy",
+      "status": "CLOSED_AI_KNOWLEDGE_ADMIN_READ_MODEL"
+    },
+    {
+      "surface": "AI Knowledge operational status",
+      "finding_count": 8,
+      "intent": "Publish fixed readiness and runtime-mode projections without exposing feature-flag internals.",
+      "owner_context": "ai_knowledge",
+      "target_contexts": [
+        "configuration",
+        "platform_shell"
+      ],
+      "approved_path": "read-only versioned operational status capability",
+      "status": "CLOSED_AI_KNOWLEDGE_OPERATIONAL_STATUS"
+    },
+    {
+      "surface": "Messaging delivery recovery operations",
+      "finding_count": 6,
+      "intent": "Keep stuck-message recovery and bounded retry candidate selection inside protected Messaging ownership.",
+      "owner_context": "messaging",
+      "target_context": "platform_shell",
+      "approved_path": "two exact owner-controlled scheduled capabilities with unrelated-write negative enforcement",
+      "status": "CLOSED_MESSAGING_DELIVERY_RECOVERY"
+    },
+    {
+      "surface": "Operations scheduled maintenance",
+      "finding_count": 8,
+      "intent": "Keep integrity, retention and daily stability policies inside Operations ownership.",
+      "owner_context": "operations_observability",
+      "target_context": "platform_shell",
+      "approved_path": "three no-input scheduled capabilities with unrelated-write negative enforcement",
+      "status": "CLOSED_OPERATIONS_SCHEDULED_MAINTENANCE"
+    },
+    {
+      "surface": "Work operational trigger evaluations",
+      "finding_count": 5,
+      "intent": "Route five operational cron endpoints through exact Work-owned trigger evaluations.",
+      "owner_context": "work_management",
+      "target_context": "operations_observability",
+      "approved_path": "six no-input versioned evaluation capabilities preserving route result mapping and execution order",
+      "status": "CLOSED_WORK_OPERATIONAL_TRIGGER_EVALUATIONS"
     }
   ],
   "prohibited_shortcuts": [
@@ -299,10 +347,10 @@
     "arbitrary Prisma access from an approved adapter"
   ],
   "next_cluster": {
-    "name": "AI_KNOWLEDGE_ADMIN_READ_MODEL",
+    "name": "AI_KNOWLEDGE_RETRIEVAL_QUERY",
     "finding_count": 6,
     "classification": "EXCEPTION_COVERED_TEMPORARY_LEGACY_DEBT",
-    "acceptance": "Implement the existing KnowledgeQuery.v1 intent as a narrow owner read model for Configuration, preserve source-excerpt filtering, expose no repository, provider, audit-writer or arbitrary Prisma capability, and retire only the exact read-query findings."
+    "acceptance": "Publish only the exact retrieval/query behavior needed by Configuration and Platform Shell; preserve filtering, ranking and context assembly and expose no repository, provider, audit-writer or extraction capability."
   },
-  "acceptance": "Uncovered findings and provider transport accesses are zero without new exceptions. The project remains NOT READY while 190 temporary exception-covered live findings remain."
+  "acceptance": "Uncovered findings and provider transport accesses are zero without new exceptions. The project remains NOT READY while 157 temporary exception-covered live findings remain."
 }

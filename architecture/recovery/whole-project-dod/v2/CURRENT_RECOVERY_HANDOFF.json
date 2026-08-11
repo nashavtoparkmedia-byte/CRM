@@ -1,11 +1,11 @@
 {
   "schema": "yoko.crm.current-recovery-handoff.v1",
-  "generated_at": "2026-08-11T22:33:21Z",
+  "generated_at": "2026-08-11T22:56:35Z",
   "authority": "Continuation checkpoint; supersedes conversational status claims but does not supersede durable gap ledger or external NOT READY verdict.",
   "program_state": {
     "whole_project_state": "EXTERNAL_FINAL_ACCEPTANCE_FAILED",
     "current_program": "WHOLE-PROJECT DOD RECOVERY",
-    "milestone_status": "LIVE_ARCHITECTURE_DEBT_REMEDIATION_190_REMAINING",
+    "milestone_status": "LIVE_ARCHITECTURE_DEBT_REMEDIATION_157_REMAINING",
     "ready": false,
     "finding_summary": {
       "total": 19,
@@ -23,19 +23,19 @@
     "remote_tracking_ref_contains_implementation_head": false,
     "base_commit": "0b61ba296ba2734738d4a21b9d00ce8b110d63cf",
     "base_tree": "56c452397df4bb7cb05bef3e0d9afd1de9d785a5",
-    "implementation_head_before_checkpoint": "c71f10668df37b2ebce82a5e9702590c0cfcc600",
-    "implementation_tree_before_checkpoint": "6b3040eb8671ffbbe9f7e524ac7b3bf9bf56b36e",
+    "implementation_head_before_checkpoint": "91176ed4369c94287f63217d3645029ff6bbcc7d",
+    "implementation_tree_before_checkpoint": "65682a8db0b3c98327bbc135ba2e389ecf142d94",
     "checkpoint_commit": "SELF_RESOLVE_WITH_GIT_LOG",
     "task_commit_range": {
-      "range": "0b61ba296ba2734738d4a21b9d00ce8b110d63cf..c71f10668df37b2ebce82a5e9702590c0cfcc600",
-      "commits": 135,
-      "paths": 807,
-      "added_paths": 382,
-      "modified_paths": 420,
+      "range": "0b61ba296ba2734738d4a21b9d00ce8b110d63cf..91176ed4369c94287f63217d3645029ff6bbcc7d",
+      "commits": 141,
+      "paths": 828,
+      "added_paths": 398,
+      "modified_paths": 425,
       "deleted_paths": 4,
       "renamed_paths": 1,
-      "insertions": 1857694,
-      "deletions": 29367
+      "insertions": 1858340,
+      "deletions": 29671
     },
     "frozen_pre_checkpoint_worktree_state": {
       "captured_at": "2026-08-10T20:11:52Z",
@@ -56,7 +56,7 @@
       "Do not treat the checkpoint commit as analyzer/security acceptance.",
       "Do not use the dirty invocation checkout /opt/codex-work/crm as the recovery implementation worktree."
     ],
-    "checkpoint_scope": "Live architecture debt burn-down through Messaging channel sync, Calling scenario/provider/status capabilities, protected call-status policy and the final shared UI extraction; durable 190-finding checkpoint."
+    "checkpoint_scope": "Live architecture debt burn-down through AI Knowledge admin/operational surfaces, protected Messaging recovery, Operations scheduled maintenance and Work operational trigger evaluations; durable 157-finding checkpoint."
   },
   "related_worktrees": [
     {
@@ -345,7 +345,7 @@
     "implemented_but_not_accepted": [
       "Write ownership remains internally accepted: 1,404 confirmed writes discovered, 0 confirmed foreign, 53 closed foreign, 0 material ambiguity, and 0 unclassified active operational surfaces.",
       "Credential/security closure remains internally accepted: Gravity 34/34, tg-bot 15/15, 0 material credential unresolved, 0 public secret exposure, and independent critic PASS.",
-      "Live architecture debt is 190 temporary exact exceptions: 59 internal imports, 105 non-public cross-context imports, 26 undeclared dependencies, 0 provider transport accesses, and 1,098 findings actually closed from the 1,288 opening denominator."
+      "Live architecture debt is 157 temporary exact exceptions: 46 internal imports, 85 non-public cross-context imports, 26 undeclared dependencies, 0 provider transport accesses, and 1,131 findings actually closed from the 1,288 opening denominator."
     ],
     "investigated": [
       "Current full-repository analyzer performance: two mirrored 4ec scans were CPU-active for more than 3h20 and aborted; no output exists.",
@@ -354,7 +354,7 @@
       "Recovery Git/worktree, durable-state, artifact and process identities reconciled for continuation."
     ],
     "not_started": [
-      "Remaining 190 live architecture findings and temporary exceptions.",
+      "Remaining 157 live architecture findings and temporary exceptions.",
       "Authoritative final CI after debt closure.",
       "Protected Messages production reconciliation and AI Calls lineage acceptance.",
       "Production source/artifact identity reconciliation, preview/backup/rollback gates, deployment or runtime activation.",
@@ -514,6 +514,24 @@
       "command": "cd gravity-mvp && npx tsc --noEmit --pretty false",
       "scope": "Whole Gravity static type check after Calling and shared-UI batches",
       "result": "30 inherited diagnostics; zero diagnostics in changed paths"
+    },
+    {
+      "category": "live_architecture_checkpoint_157",
+      "command": "node tools/architecture/enforce-architecture.mjs; targeted cluster checkers; node tools/architecture/validate-context-manifests.mjs; sha256sum -c architecture/contexts/v1/SHA256SUMS; sha256sum -c architecture/isolation/work-management/scenario-field-settings-v1/SHA256SUMS",
+      "scope": "Strict detector after five semantic batches closed 33 findings from the durable 190 checkpoint",
+      "result": "PASS: 157 findings / 157 exact temporary exceptions; 0 uncovered; 0 stale; 0 dependency cycles; 0 provider accesses; 0 detector errors"
+    },
+    {
+      "category": "protected_behavior_checkpoint_157",
+      "command": "npm run test:security-boundaries; Messaging delivery recovery and Calling/AI Knowledge targeted suites",
+      "scope": "Credential boundaries and protected Messaging recovery behavior",
+      "result": "Gravity security 34/34 PASS; delivery recovery 2/2 PASS; approved-writer unrelated-operation probes REJECTED; private protected implementations hash-frozen"
+    },
+    {
+      "category": "typescript_checkpoint_157",
+      "command": "cd gravity-mvp && npx tsc --noEmit --pretty false",
+      "scope": "Whole Gravity static type check after five post-190 architecture batches",
+      "result": "30 inherited diagnostics; zero diagnostics in changed paths"
     }
   ],
   "artifacts": {
@@ -631,11 +649,11 @@
     "ai_calls_mutated": false
   },
   "genuine_blockers": [
-    "190 temporary exception-covered live architecture findings remain; exception coverage is debt, not closure.",
+    "157 temporary exception-covered live architecture findings remain; exception coverage is debt, not closure.",
     "Protected Messages/AI Calls production authority and final integration acceptance remain unreconciled.",
     "No upstream/remote ref protects the local recovery lineage."
   ],
-  "exact_next_action": "Implement the existing KnowledgeQuery.v1 intent as a narrow AI Knowledge owner read model for Configuration, preserve source-excerpt filtering, expose no repository, provider, audit-writer or arbitrary Prisma capability, and retire only the exact six read-query findings; do not run another whole-repository write scan.",
+  "exact_next_action": "Implement a narrow AI Knowledge retrieval/query surface for the exact Configuration and Platform Shell consumers, preserve retrieval filtering, ranking and context assembly, expose no repository, provider, audit-writer or extraction capability, and retire only the six current Retriever.ts findings; do not run another whole-repository write scan.",
   "current_write_ownership": {
     "baseline": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T131500Z.json",
     "baseline_sha256": "7c6eb03e1249d9dbd2230390a72471caefe1fb01c992ec608775e1f2a0e41292",
@@ -689,15 +707,15 @@
     "artifact": "architecture/recovery/whole-project-dod/v2/LIVE_ARCHITECTURE_DEBT_RECOMPUTE_20260811.json",
     "summary": "architecture/recovery/whole-project-dod/v2/LIVE_ARCHITECTURE_DEBT_SUMMARY_20260811.json",
     "remediation_plan": "architecture/recovery/whole-project-dod/v2/LIVE_ARCHITECTURE_DEBT_REMEDIATION_PLAN_20260811.json",
-    "scanned_files": 1189,
+    "scanned_files": 1200,
     "contexts": 16,
-    "findings": 190,
-    "exception_covered": 190,
+    "findings": 157,
+    "exception_covered": 157,
     "open_findings": 0,
     "stale_exceptions": 0,
-    "exception_debt": 190,
-    "internal_module_imports": 59,
-    "non_public_cross_context_imports": 105,
+    "exception_debt": 157,
+    "internal_module_imports": 46,
+    "non_public_cross_context_imports": 85,
     "undeclared_dependencies": 26,
     "provider_transport_accesses": 0,
     "direct_foreign_prisma_writes": 0,
@@ -710,15 +728,15 @@
   "live_architecture_debt": {
     "artifact": "architecture/recovery/whole-project-dod/v2/LIVE_ARCHITECTURE_DEBT_RECOMPUTE_20260811.json",
     "summary": "architecture/recovery/whole-project-dod/v2/LIVE_ARCHITECTURE_DEBT_SUMMARY_20260811.json",
-    "scanned_files": 1189,
+    "scanned_files": 1200,
     "contexts": 16,
-    "findings": 190,
-    "exception_covered": 190,
+    "findings": 157,
+    "exception_covered": 157,
     "open_findings": 0,
     "stale_exceptions": 0,
-    "exception_debt": 190,
-    "internal_module_imports": 59,
-    "non_public_cross_context_imports": 105,
+    "exception_debt": 157,
+    "internal_module_imports": 46,
+    "non_public_cross_context_imports": 85,
     "undeclared_dependencies": 26,
     "provider_transport_accesses": 0,
     "direct_foreign_prisma_writes": 0,
