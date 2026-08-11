@@ -1516,17 +1516,17 @@ export async function getKnowledgeReadinessForUi() {
 //
 // Перенос ручной KnowledgeBaseEntry → AiKnowledgeItem. Legacy KB НЕ
 // удаляется (reversible path). UI потом скрывает её под "Legacy".
-// Core логика — в `@/lib/ai/knowledge/legacyMigration`, чтобы smoke
-// мог дёрнуть её напрямую без cookie-context.
+// Controlled migration доступна только через узкую AI Knowledge capability;
+// smoke может вызывать owner-controlled core без cookie-context.
 
 import {
-    getLegacyMigrationPreviewCore,
-    migrateLegacyKnowledgeBaseCore,
-} from '@/lib/ai/knowledge/legacyMigration'
+    previewKnowledgeLegacyMigrationV1 as getLegacyMigrationPreviewCore,
+    executeKnowledgeLegacyMigrationV1 as migrateLegacyKnowledgeBaseCore,
+} from '@/modules/ai-knowledge/public/v1/knowledge-legacy-migration'
 export type {
-    LegacyMigrationPreview,
-    LegacyMigrationResult,
-} from '@/lib/ai/knowledge/legacyMigration'
+    KnowledgeLegacyMigrationPreviewV1 as LegacyMigrationPreview,
+    KnowledgeLegacyMigrationResultV1 as LegacyMigrationResult,
+} from '@/modules/ai-knowledge/public/v1/knowledge-legacy-migration'
 
 /** Preview без записи — для UI confirmation модала перед запуском. */
 export async function getLegacyMigrationPreview() {

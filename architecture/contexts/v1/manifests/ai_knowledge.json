@@ -175,7 +175,8 @@
     "KnowledgeQuery.v1",
     "KnowledgeCitation.v1",
     "ProposedReply.v1",
-    "KnowledgeGovernanceAudit.v1"
+    "KnowledgeGovernanceAudit.v1",
+    "KnowledgeLegacyMigration.v1"
   ],
   "responsibility": "Knowledge sources, extraction, retrieval policy, decisions, proposed replies and explainability audit.",
   "schema": "yoko.crm.module-manifest.v1",
