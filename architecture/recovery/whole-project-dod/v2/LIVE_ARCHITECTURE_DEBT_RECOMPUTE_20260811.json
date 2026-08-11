@@ -3,11 +3,6 @@
   "ok": false,
   "errors": [
     {
-      "type": "FINDING_DIGEST_MISMATCH",
-      "expected": "b28fbc3290f8b1e1b493fa27fe7398fa6ddc0b35d886263916e9a824f5f07226",
-      "actual": "8fe630cc50e85c520aa3cc2f8df6a1ec56e1e595cde62548ae28e52d20d35c9d"
-    },
-    {
       "type": "UNCOVERED_VIOLATION",
       "finding": {
         "rule": "undeclared_dependency",
@@ -100,106 +95,6 @@
     {
       "type": "UNCOVERED_VIOLATION",
       "finding": {
-        "rule": "direct_foreign_prisma_write",
-        "file": "gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-seed-knowledge-sections-adapter.js",
-        "line": 32,
-        "source_context": "ai_knowledge",
-        "target_context": null,
-        "subject": "raw:$executeRaw:dynamic",
-        "site_signature": "12813f86d5cf328912a72ace44c679d93d871aa44e728b724cc6b05f075f9692",
-        "details": {
-          "method": "$executeRaw",
-          "tables": [
-            "AiKnowledgeSection"
-          ],
-          "owners": [
-            "ai_knowledge"
-          ],
-          "unresolved": [],
-          "dynamic": true
-        },
-        "ordinal": 1,
-        "fingerprint": "arch_bb2fbf9e0e73fca2226177f2"
-      }
-    },
-    {
-      "type": "UNCOVERED_VIOLATION",
-      "finding": {
-        "rule": "direct_foreign_prisma_write",
-        "file": "gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-seed-knowledge-sections-adapter.js",
-        "line": 41,
-        "source_context": "ai_knowledge",
-        "target_context": null,
-        "subject": "raw:$executeRaw:dynamic",
-        "site_signature": "50dc4101a4c03542962d812d2961a68b9801d3526276d35c9ad74924b7768b1c",
-        "details": {
-          "method": "$executeRaw",
-          "tables": [
-            "AiKnowledgeSection"
-          ],
-          "owners": [
-            "ai_knowledge"
-          ],
-          "unresolved": [],
-          "dynamic": true
-        },
-        "ordinal": 1,
-        "fingerprint": "arch_2a867c87edffa7c6c35b7ad3"
-      }
-    },
-    {
-      "type": "UNCOVERED_VIOLATION",
-      "finding": {
-        "rule": "direct_foreign_prisma_write",
-        "file": "gravity-mvp/src/modules/configuration/public/v1/scenario-field-settings.ts",
-        "line": 6,
-        "source_context": "configuration",
-        "target_context": "work_management",
-        "subject": "raw:$executeRawUnsafe:scenario_field_settings",
-        "site_signature": "62507a213d93038bf89aa302d391a60bc79ae76796d8e76d60f8e0c0522a02f0",
-        "details": {
-          "method": "$executeRawUnsafe",
-          "tables": [
-            "scenario_field_settings"
-          ],
-          "owners": [
-            "work_management"
-          ],
-          "unresolved": [],
-          "dynamic": false
-        },
-        "ordinal": 1,
-        "fingerprint": "arch_d2cc3be5efc9b90e8dd86aaa"
-      }
-    },
-    {
-      "type": "UNCOVERED_VIOLATION",
-      "finding": {
-        "rule": "direct_foreign_prisma_write",
-        "file": "gravity-mvp/src/modules/configuration/public/v1/scenario-field-settings.ts",
-        "line": 8,
-        "source_context": "configuration",
-        "target_context": "work_management",
-        "subject": "raw:$executeRawUnsafe:scenario_field_settings",
-        "site_signature": "32e656f7ccb9dcfa833312bb8afdadb849685fa418e689d0cd177ee69d0c1b7c",
-        "details": {
-          "method": "$executeRawUnsafe",
-          "tables": [
-            "scenario_field_settings"
-          ],
-          "owners": [
-            "work_management"
-          ],
-          "unresolved": [],
-          "dynamic": false
-        },
-        "ordinal": 1,
-        "fingerprint": "arch_907d5868e04a738b8a5a6582"
-      }
-    },
-    {
-      "type": "UNCOVERED_VIOLATION",
-      "finding": {
         "rule": "undeclared_dependency",
         "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
         "line": 9,
@@ -232,72 +127,16 @@
         "ordinal": 1,
         "fingerprint": "arch_5e07688076b9e0734b4b9f59"
       }
-    },
-    {
-      "type": "UNCOVERED_VIOLATION",
-      "finding": {
-        "rule": "direct_foreign_prisma_write",
-        "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-chat-backfill-adapter.js",
-        "line": 118,
-        "source_context": "messaging",
-        "target_context": null,
-        "subject": "UNOWNED:chatEventLog.updateMany",
-        "site_signature": null,
-        "details": {
-          "model": "chatEventLog",
-          "method": "updateMany",
-          "owner": null
-        },
-        "ordinal": 1,
-        "fingerprint": "arch_ca7a2c49f177bd3e7cff7c1f"
-      }
-    },
-    {
-      "type": "UNCOVERED_VIOLATION",
-      "finding": {
-        "rule": "undeclared_dependency",
-        "file": "gravity-mvp/src/modules/work-management/public/v1/legacy-prisma-scenario-field-settings-adapter.ts",
-        "line": 2,
-        "source_context": "work_management",
-        "target_context": "configuration",
-        "subject": "module:work_management>module:configuration:gravity-mvp/src/modules/configuration/public/v1/index.ts",
-        "site_signature": null,
-        "details": {
-          "specifier": "@/modules/configuration/public/v1",
-          "target": "gravity-mvp/src/modules/configuration/public/v1/index.ts"
-        },
-        "ordinal": 1,
-        "fingerprint": "arch_cc43e1b1c2ebd1cb7fd01682"
-      }
-    },
-    {
-      "type": "STALE_EXCEPTION",
-      "fingerprint": "arch_762766ec559e7badde68f234",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/messages/components/CallDetailDrawer.tsx"
-    },
-    {
-      "type": "STALE_EXCEPTION",
-      "fingerprint": "arch_854dac4bd79a2f1621305d3e",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/messages/components/MessageFeed.tsx"
-    },
-    {
-      "type": "STALE_EXCEPTION",
-      "fingerprint": "arch_1f67c25137744ada4158e14b",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/messages/components/NewChatPopover.tsx"
     }
   ],
-  "findings": 1294,
-  "exceptions": 1284,
+  "findings": 1288,
+  "exceptions": 1281,
   "by_rule": {
-    "direct_foreign_prisma_write": 5,
     "direct_provider_transport_access": 38,
     "internal_module_import": 374,
     "non_public_cross_context_import": 530,
-    "undeclared_dependency": 347
+    "undeclared_dependency": 346
   },
-  "scanned_files": 1092,
+  "scanned_files": 1091,
   "contexts": 16
 }

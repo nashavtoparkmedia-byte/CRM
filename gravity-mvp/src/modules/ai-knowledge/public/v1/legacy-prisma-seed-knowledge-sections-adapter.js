@@ -24,28 +24,30 @@ async function seedKnowledgeSectionsV1(sections) {
   let created = 0
   let updated = 0
   for (const section of sections) {
-    const existing = await prisma.$queryRaw`
-      SELECT id FROM "AiKnowledgeSection" WHERE slug = ${section.slug} LIMIT 1
-    `
-    if (existing.length === 0) {
+    const existing = await prisma.aiKnowledgeSection.findUnique({ where: { slug: section.slug }, select: { id: true } })
+    if (!existing) {
       const id = `sec_${section.slug}_${Date.now()}`
-      await prisma.$executeRaw`
-        INSERT INTO "AiKnowledgeSection"
-          (id, slug, title, description, "iconKey", "sortOrder", "isActive", "createdAt", "updatedAt")
-        VALUES
-          (${id}, ${section.slug}, ${section.title}, ${section.description},
-           ${section.iconKey}, ${section.sortOrder}, true, NOW(), NOW())
-      `
+      await prisma.aiKnowledgeSection.create({
+        data: {
+          id,
+          slug: section.slug,
+          title: section.title,
+          description: section.description,
+          iconKey: section.iconKey,
+          sortOrder: section.sortOrder,
+          isActive: true,
+        },
+      })
       created += 1
     } else {
-      await prisma.$executeRaw`
-        UPDATE "AiKnowledgeSection"
-        SET description = ${section.description},
-            "iconKey" = ${section.iconKey},
-            "sortOrder" = ${section.sortOrder},
-            "updatedAt" = NOW()
-        WHERE slug = ${section.slug}
-      `
+      await prisma.aiKnowledgeSection.update({
+        where: { slug: section.slug },
+        data: {
+          description: section.description,
+          iconKey: section.iconKey,
+          sortOrder: section.sortOrder,
+        },
+      })
       updated += 1
     }
   }

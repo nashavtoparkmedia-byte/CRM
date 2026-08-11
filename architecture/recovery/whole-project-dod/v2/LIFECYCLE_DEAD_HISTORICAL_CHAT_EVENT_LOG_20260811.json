@@ -1,0 +1,14 @@
+{
+  "schema": "yoko.crm.lifecycle-dead-historical-evidence.v1",
+  "generated_at": "2026-08-11T00:00:00.000Z",
+  "surface": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-chat-backfill-adapter.js#repointChatEventLogV1",
+  "lifecycle": "DEAD_HISTORICAL",
+  "evidence": {
+    "repository_call_sites": 0,
+    "repository_imports_of_adapter": 0,
+    "prisma_schema_models_named_chat_event_log": 0,
+    "introduced_by_recovery_commit": "28c0a581e12a0a8066d4167bb89f8508ec2192d9"
+  },
+  "disposition": "removed_unused_capability",
+  "scope": "No active Messages or AI Calls behavior changed; remaining backfill capabilities are preserved."
+}

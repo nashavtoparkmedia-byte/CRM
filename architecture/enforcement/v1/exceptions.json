@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "8fe630cc50e85c520aa3cc2f8df6a1ec56e1e595cde62548ae28e52d20d35c9d",
+  "finding_digest": "77d1ea2a4b8291a638ddbbf2efe4ff0231fa8c6201205fd9ae7d7e350fdea520",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -16,7 +16,7 @@
     "direct_provider_transport_access": 38,
     "internal_module_import": 374,
     "non_public_cross_context_import": 530,
-    "undeclared_dependency": 342
+    "undeclared_dependency": 339
   },
   "exceptions": [
     {
@@ -8321,22 +8321,6 @@
       ]
     },
     {
-      "fingerprint": "arch_762766ec559e7badde68f234",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/messages/components/CallDetailDrawer.tsx",
-      "line_at_baseline": 9,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "calling",
-      "subject": "messages>calls:gravity-mvp/src/lib/calls/status.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>calling/calls"
-      ]
-    },
-    {
       "fingerprint": "arch_f3cea9be85c0a3c3b9b68daa",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/messages/components/ChatHeader.tsx",
@@ -8963,22 +8947,6 @@
       ]
     },
     {
-      "fingerprint": "arch_854dac4bd79a2f1621305d3e",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/messages/components/MessageFeed.tsx",
-      "line_at_baseline": 7,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "calling",
-      "subject": "messages>calls:gravity-mvp/src/lib/calls/status.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>calling/calls"
-      ]
-    },
-    {
       "fingerprint": "arch_16dcf11516bb39f9c9197ff9",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/messages/components/NewChatPopover.tsx",
@@ -8989,22 +8957,6 @@
       "subject": "messages>calls:gravity-mvp/src/lib/sip/SipContext.tsx",
       "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
       "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>calling/calls"
-      ]
-    },
-    {
-      "fingerprint": "arch_1f67c25137744ada4158e14b",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/messages/components/NewChatPopover.tsx",
-      "line_at_baseline": 7,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "calling",
-      "subject": "messages>calls:gravity-mvp/src/lib/sip/SipContext.tsx",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:messaging/messages>calling/calls"

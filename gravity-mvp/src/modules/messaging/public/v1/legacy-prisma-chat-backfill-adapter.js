@@ -113,10 +113,6 @@ async function deleteDuplicateAttachmentsV1(ids) {
   if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new TypeError('attachment ids required')
   const prisma = new PrismaClient(); try { return await prisma.messageAttachment.deleteMany({ where: { id: { in: ids } } }) } finally { await prisma.$disconnect() }
 }
-async function repointChatEventLogV1(fromChatId, toChatId) {
-  if (![fromChatId, toChatId].every(v => typeof v === 'string' && v)) throw new TypeError('chat IDs required')
-  const prisma = new PrismaClient(); try { return await prisma.chatEventLog.updateMany({ where: { chatId: fromChatId }, data: { chatId: toChatId } }) } finally { await prisma.$disconnect() }
-}
 async function detachChatIdentityV1(chatId) {
   if (typeof chatId !== 'string' || !chatId) throw new TypeError('chatId required')
   const prisma = new PrismaClient(); try { return await prisma.chat.update({ where: { id: chatId }, data: { contactIdentityId: null } }) } finally { await prisma.$disconnect() }
@@ -126,4 +122,4 @@ async function refreshChatActivityV1(chatId, lastMessageAt, lastInboundAt, lastO
   const prisma = new PrismaClient(); try { return await prisma.chat.update({ where: { id: chatId }, data: { lastMessageAt, lastInboundAt, lastOutboundAt } }) } finally { await prisma.$disconnect() }
 }
 
-module.exports = { backfillLastInboundAtV1, backfillUnreadCountV1, deleteUnifiedMessagesByIdsV1, markBackfilledOutboundDeliveredV1, deleteEmptyUnifiedChatsV1, rewriteLidChatV1, moveMessageToChatV1, deleteUnifiedMessageV1, detachAndDeleteChatV1, normalizeChatExternalIdV1, moveChatMessagesV1, deleteChatV1, refreshChatLastMessageAtV1, wipeWhatsappUnifiedDataV1, backfillMessageChannelV1, markChannelOutboundDeliveredV1, mergeChatLinksV1, deleteDuplicateAttachmentsV1, repointChatEventLogV1, detachChatIdentityV1, refreshChatActivityV1 }
+module.exports = { backfillLastInboundAtV1, backfillUnreadCountV1, deleteUnifiedMessagesByIdsV1, markBackfilledOutboundDeliveredV1, deleteEmptyUnifiedChatsV1, rewriteLidChatV1, moveMessageToChatV1, deleteUnifiedMessageV1, detachAndDeleteChatV1, normalizeChatExternalIdV1, moveChatMessagesV1, deleteChatV1, refreshChatLastMessageAtV1, wipeWhatsappUnifiedDataV1, backfillMessageChannelV1, markChannelOutboundDeliveredV1, mergeChatLinksV1, deleteDuplicateAttachmentsV1, detachChatIdentityV1, refreshChatActivityV1 }
