@@ -12,6 +12,19 @@ export {
   projectCompletedCallTimelineV1,
   registerCompletedCallTimelineProjectorV1,
 } from './completed-call-timeline-projection'
+export {
+  startCallingEslRuntimeV1,
+  startCallingProcessingRuntimeV1,
+  stopCallingProcessingRuntimeV1,
+} from './runtime-startup'
+export {
+  backfillCompletedCallTimelineV1,
+  enqueueRecoveredCallTranscriptionV1,
+  recoverCallRecordingV1,
+} from './recording-recovery'
+export type { CompletedCallTimelineBackfillV1, RecordingRecoveryV1 } from './recording-recovery'
+export { readMegafonTelephonyHealthV1 } from './telephony-provider-health'
+export type { MegafonTelephonyHealthV1 } from './telephony-provider-health'
 export type {
   CompletedCallTimelineProjectionV1,
   CompletedCallTimelineProjectorV1,

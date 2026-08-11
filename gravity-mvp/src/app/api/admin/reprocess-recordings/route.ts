@@ -3,9 +3,11 @@ import path from 'path'
 import { existsSync } from 'fs'
 import { getCurrentUser } from '@/lib/users/user-service'
 import { prisma } from '@/lib/prisma'
-import { processRecording } from '@/lib/freeswitch/recordingProcessor'
-import { enqueueTranscribe } from '@/lib/queue/queues'
-import { syncCallToChat } from '@/lib/freeswitch/EslClient'
+import {
+    backfillCompletedCallTimelineV1,
+    enqueueRecoveredCallTranscriptionV1,
+    recoverCallRecordingV1,
+} from '@/modules/calling/public/v1/recording-recovery'
 import { opsLog } from '@/lib/opsLog'
 
 export const runtime = 'nodejs'
@@ -73,14 +75,14 @@ export async function POST(req: NextRequest) {
         try {
             // Backfill chat timeline regardless of recording state — even calls
             // with no recording (rejected, no_answer) should appear inline.
-            await syncCallToChat(call).catch(err =>
+            await backfillCompletedCallTimelineV1(call).catch(err =>
                 opsLog('warn', 'backfill_chat_sync_failed', { operation: 'call', callId: call.id, error: err.message })
             )
 
             if (call.recordingPath) {
                 // MP3 already in MinIO — Stage 4 just never got the job for it.
                 // Most common case after the silent enqueueTranscribe failure.
-                await enqueueTranscribe(call.id)
+                await enqueueRecoveredCallTranscriptionV1(call.id)
                 enqueued++
                 results.push({ callId: call.id, fsUuid: call.fsUuid, action: 'transcribe_enqueued' })
                 continue
@@ -99,7 +101,7 @@ export async function POST(req: NextRequest) {
                 continue
             }
 
-            await processRecording({
+            await recoverCallRecordingV1({
                 callId: call.id,
                 fsUuid: call.fsUuid,
                 recordingFile: `/var/lib/freeswitch/recordings/${call.fsUuid}.wav`,

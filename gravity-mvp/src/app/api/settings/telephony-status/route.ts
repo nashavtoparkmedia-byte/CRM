@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import net from 'net'
 import { getCurrentUser } from '@/lib/users/user-service'
-import { getEslConnection } from '@/lib/freeswitch/EslClient'
+import { readMegafonTelephonyHealthV1 } from '@/modules/calling/public/v1/telephony-provider-health'
 
 /**
  * GET /api/settings/telephony-status
@@ -41,26 +41,6 @@ function tcpProbe(host: string, port: number, timeoutMs = DEFAULT_TIMEOUT_MS): P
     })
 }
 
-async function sofiaGatewayStatus(name: string): Promise<{ regState: string | null; raw: string }> {
-    const conn = getEslConnection()
-    if (!conn) return { regState: null, raw: 'esl_not_connected' }
-    const raw: string = await new Promise<string>((resolve) => {
-        conn.api(`sofia status gateway ${name}`, (res: any) => {
-            const body = typeof res?.getBody === 'function' ? res.getBody() : String(res)
-            resolve(String(body))
-        })
-    })
-    // sofia gateway prints TWO lines worth checking:
-    //   Status   UP / DOWN     — is the gateway profile alive in sofia
-    //   State    REGED / FAIL  — registration state with the SBC
-    // We want the registration state (State), not the profile status (Status).
-    const stateLine = /^\s*State\s+(.+?)\s*$/m.exec(raw)
-    if (stateLine) return { regState: stateLine[1].trim(), raw }
-    // Fallback: older sofia builds only print "Status".
-    const statusLine = /^\s*Status\s+(.+?)\s*$/m.exec(raw)
-    return { regState: statusLine ? statusLine[1].trim() : null, raw }
-}
-
 export async function GET() {
     const user = await getCurrentUser()
     if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
@@ -93,29 +73,27 @@ export async function GET() {
     } catch {}
 
     const [
-        eslConnected,
+        telephony,
         wsReachable,
         proxyReachable,
         redisReachable,
         minioReachable,
-        gateway,
     ] = await Promise.all([
-        Promise.resolve(!!getEslConnection()),
+        readMegafonTelephonyHealthV1(),
         tcpProbe(wsHost, wsPort),
         tcpProbe(proxyHost, proxyPort),
         tcpProbe(redisHost, redisPort),
         tcpProbe(minioHost, minioPort),
-        sofiaGatewayStatus('megafon'),
     ])
 
     return NextResponse.json({
         ok: true,
         checks: {
-            esl: { ok: eslConnected, label: 'FreeSWITCH ESL', detail: eslConnected ? 'подключено' : 'нет соединения' },
+            esl: { ok: telephony.eslConnected, label: 'FreeSWITCH ESL', detail: telephony.eslConnected ? 'подключено' : 'нет соединения' },
             megafon: {
-                ok: gateway.regState === 'REGED',
+                ok: telephony.megafonRegistrationState === 'REGED',
                 label: 'Регистрация в МультиФон',
-                detail: gateway.regState ?? 'неизвестно',
+                detail: telephony.megafonRegistrationState ?? 'неизвестно',
             },
             sipWs: { ok: wsReachable, label: 'WebRTC SIP (порт 7080)', detail: wsReachable ? 'слушает' : 'не доступен' },
             proxy: {

@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "d8455a4546dc06dee6e6737ca6286014630c2ab1bd8b7832f95c8c58e5a0c976",
+  "finding_digest": "71d497db5dde942ce19144d71917cc00931d5f881ea46d38838462356b8f2228",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,9 +13,9 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_provider_transport_access": 19,
-    "internal_module_import": 360,
-    "non_public_cross_context_import": 499,
+    "direct_provider_transport_access": 15,
+    "internal_module_import": 356,
+    "non_public_cross_context_import": 492,
     "undeclared_dependency": 302
   },
   "exceptions": [
@@ -508,120 +508,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:operations_observability/monitoring>identity_access/users"
-      ]
-    },
-    {
-      "fingerprint": "arch_7695c6bbb6a75a97e765eb79",
-      "rule": "direct_provider_transport_access",
-      "file": "gravity-mvp/src/app/api/admin/reprocess-recordings/route.ts",
-      "line_at_baseline": 6,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "calling",
-      "subject": "provider-module:freeswitch:gravity-mvp/src/lib/freeswitch/recordingProcessor.ts",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>calling/calls",
-        "provider-boundary:freeswitch"
-      ]
-    },
-    {
-      "fingerprint": "arch_28e89ea5786d9ee4ec692592",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/admin/reprocess-recordings/route.ts",
-      "line_at_baseline": 6,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "calling",
-      "subject": "monitoring>calls:gravity-mvp/src/lib/freeswitch/recordingProcessor.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>calling/calls"
-      ]
-    },
-    {
-      "fingerprint": "arch_4cb103ce1f7deaecc2687600",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/admin/reprocess-recordings/route.ts",
-      "line_at_baseline": 6,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "calling",
-      "subject": "monitoring>calls:gravity-mvp/src/lib/freeswitch/recordingProcessor.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>calling/calls"
-      ]
-    },
-    {
-      "fingerprint": "arch_585441c701efe69839257f27",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/admin/reprocess-recordings/route.ts",
-      "line_at_baseline": 7,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "calling",
-      "subject": "monitoring>calls:gravity-mvp/src/lib/queue/queues.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>calling/calls"
-      ]
-    },
-    {
-      "fingerprint": "arch_74a56cd84a6ce65a1f0e92f5",
-      "rule": "direct_provider_transport_access",
-      "file": "gravity-mvp/src/app/api/admin/reprocess-recordings/route.ts",
-      "line_at_baseline": 8,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "calling",
-      "subject": "provider-module:freeswitch:gravity-mvp/src/lib/freeswitch/EslClient.ts",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>calling/calls",
-        "provider-boundary:freeswitch"
-      ]
-    },
-    {
-      "fingerprint": "arch_dbd140c25e75b29441e1640b",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/admin/reprocess-recordings/route.ts",
-      "line_at_baseline": 8,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "calling",
-      "subject": "monitoring>calls:gravity-mvp/src/lib/freeswitch/EslClient.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>calling/calls"
-      ]
-    },
-    {
-      "fingerprint": "arch_7793ad298fd61ab7b9b10a65",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/admin/reprocess-recordings/route.ts",
-      "line_at_baseline": 8,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "calling",
-      "subject": "monitoring>calls:gravity-mvp/src/lib/freeswitch/EslClient.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>calling/calls"
       ]
     },
     {
@@ -2983,58 +2869,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:configuration/settings>identity_access/users"
-      ]
-    },
-    {
-      "fingerprint": "arch_5108baba220eddd5873f8568",
-      "rule": "direct_provider_transport_access",
-      "file": "gravity-mvp/src/app/api/settings/telephony-status/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "calling",
-      "subject": "provider-module:freeswitch:gravity-mvp/src/lib/freeswitch/EslClient.ts",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>calling/ai_calls",
-        "dependency:configuration/settings>calling/calls",
-        "provider-boundary:freeswitch"
-      ]
-    },
-    {
-      "fingerprint": "arch_7add353c42bab37949875b78",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/settings/telephony-status/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "calling",
-      "subject": "settings>calls:gravity-mvp/src/lib/freeswitch/EslClient.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>calling/ai_calls",
-        "dependency:configuration/settings>calling/calls"
-      ]
-    },
-    {
-      "fingerprint": "arch_166bb6203fc872147480390a",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/settings/telephony-status/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "calling",
-      "subject": "settings>calls:gravity-mvp/src/lib/freeswitch/EslClient.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>calling/ai_calls",
-        "dependency:configuration/settings>calling/calls"
       ]
     },
     {
@@ -17781,79 +17615,6 @@
       ]
     },
     {
-      "fingerprint": "arch_106a367c31e6d48b877f3649",
-      "rule": "direct_provider_transport_access",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 253,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "calling",
-      "subject": "provider-module:freeswitch:gravity-mvp/src/lib/freeswitch/EslClient.ts",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>calling/ai_calls",
-        "dependency:platform_shell/gravity_core>calling/calls",
-        "dependency:platform_shell/gravity_ui>calling/calls",
-        "provider-boundary:freeswitch"
-      ]
-    },
-    {
-      "fingerprint": "arch_4a70e93a51c123940cbf384e",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 253,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "calling",
-      "subject": "gravity_core>calls:gravity-mvp/src/lib/freeswitch/EslClient.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>calling/ai_calls",
-        "dependency:platform_shell/gravity_core>calling/calls",
-        "dependency:platform_shell/gravity_ui>calling/calls"
-      ]
-    },
-    {
-      "fingerprint": "arch_8a34fdeb3a1790921e51ceb9",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 253,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "calling",
-      "subject": "gravity_core>calls:gravity-mvp/src/lib/freeswitch/EslClient.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>calling/ai_calls",
-        "dependency:platform_shell/gravity_core>calling/calls",
-        "dependency:platform_shell/gravity_ui>calling/calls"
-      ]
-    },
-    {
-      "fingerprint": "arch_c238a11928799a86adf6af0e",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 265,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "calling",
-      "subject": "gravity_core>calls:gravity-mvp/src/lib/queue/index.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>calling/ai_calls",
-        "dependency:platform_shell/gravity_core>calling/calls",
-        "dependency:platform_shell/gravity_ui>calling/calls"
-      ]
-    },
-    {
       "fingerprint": "arch_446a72e9e37b2189d32742e0",
       "rule": "direct_provider_transport_access",
       "file": "gravity-mvp/src/instrumentation.ts",
@@ -18000,24 +17761,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:platform_shell/gravity_core>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_5e4cb572350af56d5973b150",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 365,
-      "ordinal": 2,
-      "owner_context": "platform_shell",
-      "target_context": "calling",
-      "subject": "gravity_core>calls:gravity-mvp/src/lib/queue/index.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>calling/ai_calls",
-        "dependency:platform_shell/gravity_core>calling/calls",
-        "dependency:platform_shell/gravity_ui>calling/calls"
       ]
     },
     {

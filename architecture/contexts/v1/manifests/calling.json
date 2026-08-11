@@ -263,7 +263,10 @@
     "CallView.v1",
     "CallControlPort.v1",
     "CallAnalysisView.v1",
-    "CompletedCallTimelineProjectionPort.v1"
+    "CompletedCallTimelineProjectionPort.v1",
+    "CallingRuntime.v1",
+    "RecordingRecovery.v1",
+    "TelephonyProviderHealth.v1"
   ],
   "responsibility": "Call lifecycle, FreeSWITCH/SIP integration, audio bridge, transcription and call analysis.",
   "schema": "yoko.crm.module-manifest.v1",

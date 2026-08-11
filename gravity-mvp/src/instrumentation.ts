@@ -275,8 +275,8 @@ export async function register() {
             const { registerCompletedCallTimelineProjectorV1 } = await import('@/modules/calling/public/v1')
             const { messagingCompletedCallTimelineProjectorV1 } = await import('@/modules/messaging/public/v1')
             registerCompletedCallTimelineProjectorV1(messagingCompletedCallTimelineProjectorV1)
-            const { startEslListener } = await import('@/lib/freeswitch/EslClient')
-            await startEslListener()
+            const { startCallingEslRuntimeV1 } = await import('@/modules/calling/public/v1/runtime-startup')
+            await startCallingEslRuntimeV1()
             opsLog('info', 'esl_listener_started', { operation: 'startup' })
         } catch (err: any) {
             opsLog('error', 'esl_listener_start_failed', { operation: 'startup', error: err.message })
@@ -287,8 +287,8 @@ export async function register() {
         // jobs enqueued by each other (transcribe → analyze). Safe to start
         // before Redis is up; the workers will retry on connect.
         try {
-            const { startCallProcessingWorkers } = await import('@/lib/queue')
-            startCallProcessingWorkers()
+            const { startCallingProcessingRuntimeV1 } = await import('@/modules/calling/public/v1/runtime-startup')
+            startCallingProcessingRuntimeV1()
             opsLog('info', 'call_workers_started', { operation: 'startup' })
         } catch (err: any) {
             opsLog('error', 'call_workers_start_failed', { operation: 'startup', error: err.message })
@@ -387,11 +387,8 @@ export async function register() {
 
             // 3a. Stop BullMQ workers + close Redis
             try {
-                const queueModule = await import('@/lib/queue')
-                await queueModule.stopTranscribeWorker()
-                await queueModule.stopAnalyzeWorker()
-                await queueModule.closeQueues()
-                await queueModule.closeRedisConnection()
+                const { stopCallingProcessingRuntimeV1 } = await import('@/modules/calling/public/v1/runtime-startup')
+                await stopCallingProcessingRuntimeV1()
                 log('info', 'shutdown_queues_closed')
             } catch (e: any) {
                 log('error', 'shutdown_queues_error', { error: e.message })

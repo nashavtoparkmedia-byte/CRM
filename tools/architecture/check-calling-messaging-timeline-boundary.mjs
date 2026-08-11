@@ -47,7 +47,7 @@ check(
 check(
   'Platform Shell wires the sink before ESL starts',
   instrumentation.indexOf('registerCompletedCallTimelineProjectorV1(messagingCompletedCallTimelineProjectorV1)') <
-    instrumentation.indexOf("await import('@/lib/freeswitch/EslClient')"),
+    instrumentation.indexOf("await import('@/modules/calling/public/v1/runtime-startup')"),
   'ESL can start before its Messaging projection sink is registered',
 )
 const callingDependencies = new Set(callingManifest.allowed_dependencies.map((entry) => entry.context))
