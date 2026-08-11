@@ -88,8 +88,8 @@ export async function register() {
 
         // ── Telegram init ────────────────────────────────────────────────
         try {
-            const { initTelegramListeners } = await import('@/app/tg-actions')
-            await initTelegramListeners()
+            const { initializeOperationalTelegramRuntimeV1 } = await import('@/infrastructure/telegram/operational-capabilities')
+            await initializeOperationalTelegramRuntimeV1()
             opsLog('info', 'telegram_init_success', { operation: 'startup' })
         } catch (err: any) {
             opsLog('error', 'telegram_init_failed', { operation: 'startup', error: err.message })
@@ -370,17 +370,11 @@ export async function register() {
                 log('error', 'shutdown_wa_error', { error: e.message })
             }
 
-            // 3. Stop TG health check + disconnect TG clients
+            // 3. Stop the TG health monitor. The legacy module has no client-wide disconnect capability.
             try {
-                const tgModule = await import('@/app/tg-actions') as any
-                if (typeof tgModule.stopTelegramHealthCheck === 'function') {
-                    tgModule.stopTelegramHealthCheck()
-                    log('info', 'shutdown_tg_health_stopped')
-                }
-                if (typeof tgModule.disconnectAllTelegram === 'function') {
-                    await tgModule.disconnectAllTelegram()
-                    log('info', 'shutdown_tg_clients_closed')
-                }
+                const { stopOperationalTelegramRuntimeV1 } = await import('@/infrastructure/telegram/operational-capabilities')
+                await stopOperationalTelegramRuntimeV1()
+                log('info', 'shutdown_tg_health_stopped')
             } catch (e: any) {
                 log('info', 'shutdown_tg_skip', { error: e.message })
             }

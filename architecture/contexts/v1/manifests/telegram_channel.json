@@ -256,6 +256,8 @@
   "public_surface": [
     "TelegramDeliveryPort.v1",
     "TelegramReachability.v1",
+    "TelegramRuntimeOperations.v1",
+    "TelegramConnectionMetadataQuery.v1",
     "BotSurveyApi.v1"
   ],
   "responsibility": "Telegram provider sessions, driver identities, bot survey product and its frontend.",

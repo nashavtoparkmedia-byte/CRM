@@ -5,7 +5,7 @@
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
-import { importTelegramHistory } from '@/app/tg-actions'
+import { importOperationalTelegramHistoryV1 } from '@/infrastructure/telegram/operational-capabilities'
 import { importOperationalWhatsAppHistoryV1 } from '@/infrastructure/whatsapp/operational-capabilities'
 import { getAiAgentProviderConfigV1 } from '@/modules/calling/public/v1/ai-agent-provider-capability'
 import { listUserIdentitiesV1 as getUsers } from '@/modules/identity-access/public/v1/user-directory'
@@ -384,7 +384,7 @@ export async function createImportJob(data: {
     }
 
     if (data.channels.includes('telegram')) {
-        importTelegramHistory(id, data.mode, data.daysBack, data.connectionId)
+        importOperationalTelegramHistoryV1(id, data.mode, data.daysBack, data.connectionId)
             .catch(e => console.error('[AI Import] telegram import error:', e.message))
     }
 

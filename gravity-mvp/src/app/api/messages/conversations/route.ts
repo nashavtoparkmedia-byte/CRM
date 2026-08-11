@@ -7,8 +7,8 @@ async function ensureTelegramListeners() {
     if (_tgInitDone) return
     _tgInitDone = true
     try {
-        const { initTelegramListeners } = await import('@/app/tg-actions')
-        await initTelegramListeners()
+        const { initializeOperationalTelegramRuntimeV1 } = await import('@/infrastructure/telegram/operational-capabilities')
+        await initializeOperationalTelegramRuntimeV1()
         console.log('[API-CONVERSATIONS] Telegram listeners initialized (lazy)')
     } catch (err: any) {
         console.error('[API-CONVERSATIONS] Failed to init TG listeners:', err.message)

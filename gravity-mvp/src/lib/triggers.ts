@@ -2,7 +2,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { logCommunicationEvent } from './communications'
-import { sendTelegramMessage } from '@/app/tg-actions'
+import { sendOperationalTelegramTextV1 } from '@/infrastructure/telegram/operational-capabilities'
 import { createTask } from '@/app/tasks/actions'
 import { getScenario } from '@/lib/tasks/scenario-config'
 import { evaluateTaskRisk } from '@/lib/tasks/risk-config'
@@ -160,7 +160,7 @@ async function executeAutoMessage(
 
     try {
         if (trigger.channel === 'telegram') {
-            await sendTelegramMessage(state.phone, message)
+            await sendOperationalTelegramTextV1(state.phone, message)
         }
         // WhatsApp would go here in the future
 

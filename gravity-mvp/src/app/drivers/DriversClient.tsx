@@ -18,7 +18,7 @@ import {
 import { SegmentCards } from "./components/SegmentCards"
 import { SegmentationSettings } from "./components/SegmentationSettings"
 import { sendMaxDriverMessageV1 } from "@/infrastructure/fleet/driver-max-messaging"
-import { sendTelegramMessage } from "../tg-actions"
+import { sendOperationalTelegramTextV1 } from "@/infrastructure/telegram/operational-capabilities"
 import type { DriverWithCells } from "./actions"
 
 import { cn } from "@/lib/utils"
@@ -119,7 +119,7 @@ function SendMessageModal({
         setStatus("sending")
         try {
             if (channel === "telegram") {
-                await sendTelegramMessage(phone, message, selectedConnection)
+                await sendOperationalTelegramTextV1(phone, message, selectedConnection)
             } else {
                 await sendMaxDriverMessageV1(phone, message, {
                     connectionId: selectedConnection,

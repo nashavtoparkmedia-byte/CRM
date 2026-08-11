@@ -2,7 +2,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { logCommunicationEvent, getDriverTimeline } from '@/lib/communications'
-import { sendTelegramMessage } from '@/app/tg-actions'
+import { sendOperationalTelegramTextV1 } from '@/infrastructure/telegram/operational-capabilities'
 
 export { getDriverTimeline }
 
@@ -29,7 +29,7 @@ export async function sendDriverMessage(
 
     // Send via channel
     if (channel === 'telegram') {
-        await sendTelegramMessage(driver.phone, message, connectionId)
+        await sendOperationalTelegramTextV1(driver.phone, message, connectionId)
     }
     // WhatsApp would go here
 

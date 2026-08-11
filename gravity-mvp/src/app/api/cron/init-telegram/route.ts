@@ -8,7 +8,7 @@ import { withCronLogging } from '@/lib/cron-health'
  * This route is safe to call multiple times (idempotent).
  */
 export const GET = withCronLogging('init-telegram', async () => {
-    const { initTelegramListeners } = await import('@/app/tg-actions')
-    await initTelegramListeners()
+    const { initializeOperationalTelegramRuntimeV1 } = await import('@/infrastructure/telegram/operational-capabilities')
+    await initializeOperationalTelegramRuntimeV1()
     return { ok: true, message: 'Telegram listeners initialized' }
 })

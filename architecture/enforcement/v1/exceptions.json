@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "32cb0f879135cac65fc0effb5c96d8780601888cbb5a4f7463d82a802aaf87bd",
+  "finding_digest": "f34f55d74cb014bb9e67bcf5f0993141b7ce28aa22aeccaf961c7a70068fff01",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,10 +13,9 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_provider_transport_access": 0,
-    "internal_module_import": 175,
-    "non_public_cross_context_import": 279,
-    "undeclared_dependency": 112
+    "internal_module_import": 162,
+    "non_public_cross_context_import": 266,
+    "undeclared_dependency": 102
   },
   "exceptions": [
     {
@@ -69,54 +68,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:messaging/messages>contacts/contacts"
-      ]
-    },
-    {
-      "fingerprint": "arch_2ba25bf10c698bbc3f5628f4",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/channels/check-reachability/route.ts",
-      "line_at_baseline": 97,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "telegram_channel",
-      "subject": "messages>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_397e0bdba46a0aaeac2a1e3e",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/channels/check-reachability/route.ts",
-      "line_at_baseline": 97,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "telegram_channel",
-      "subject": "messages>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_c636273c905521cddf3ee157",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/channels/check-reachability/route.ts",
-      "line_at_baseline": 97,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "telegram_channel",
-      "subject": "messages>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>telegram_channel/telegram_provider"
       ]
     },
     {
@@ -197,54 +148,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:operations_observability/monitoring>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_e3e41ad6a2972240ca2ad819",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/cron/init-telegram/route.ts",
-      "line_at_baseline": 11,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "telegram_channel",
-      "subject": "monitoring>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_2e0ee32cb2d5846c10e9ef24",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/cron/init-telegram/route.ts",
-      "line_at_baseline": 11,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "telegram_channel",
-      "subject": "monitoring>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_025f87d52d7ea3a42cacf5f9",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/cron/init-telegram/route.ts",
-      "line_at_baseline": 11,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "telegram_channel",
-      "subject": "monitoring>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>telegram_channel/telegram_provider"
       ]
     },
     {
@@ -348,54 +251,6 @@
       ]
     },
     {
-      "fingerprint": "arch_9d1f88c4b5d112a0f67df5ed",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/debug-db/tg-import/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "telegram_channel",
-      "subject": "monitoring>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_bd4b02cbcd483e18941a2569",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/debug-db/tg-import/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "telegram_channel",
-      "subject": "monitoring>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_740e5895462c78971f8b080c",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/debug-db/tg-import/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "operations_observability",
-      "target_context": "telegram_channel",
-      "subject": "monitoring>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:operations_observability/monitoring>telegram_channel/telegram_provider"
-      ]
-    },
-    {
       "fingerprint": "arch_377cb8719b3ab3d4a484f7bc",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/api/health/route.ts",
@@ -425,54 +280,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:operations_observability/monitoring>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_3817f00dbe530e0b3c222c5c",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/messages/conversations/route.ts",
-      "line_at_baseline": 10,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "telegram_channel",
-      "subject": "messages>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_75f0046812fbcb15563a3616",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/messages/conversations/route.ts",
-      "line_at_baseline": 10,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "telegram_channel",
-      "subject": "messages>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_04f748ce46cbf371eef041c1",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/messages/conversations/route.ts",
-      "line_at_baseline": 10,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "telegram_channel",
-      "subject": "messages>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>telegram_channel/telegram_provider"
       ]
     },
     {
@@ -1794,54 +1601,6 @@
       ]
     },
     {
-      "fingerprint": "arch_51604dc4dfa0785bde7df392",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/drivers/[id]/page.tsx",
-      "line_at_baseline": 15,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "telegram_channel",
-      "subject": "drivers>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_dbceb4f6e4c07dfe38b1fb13",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/drivers/[id]/page.tsx",
-      "line_at_baseline": 15,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "telegram_channel",
-      "subject": "drivers>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_9b7432c9c5866faabe4aedfe",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/drivers/[id]/page.tsx",
-      "line_at_baseline": 15,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "telegram_channel",
-      "subject": "drivers>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>telegram_channel/telegram_provider"
-      ]
-    },
-    {
       "fingerprint": "arch_7d9a0a408eae2dbec21c2d8e",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/drivers/[id]/timeline-actions.ts",
@@ -1871,54 +1630,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:fleet_operations/drivers>messaging/messages"
-      ]
-    },
-    {
-      "fingerprint": "arch_08d74403aeab56ef7138865a",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/drivers/[id]/timeline-actions.ts",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "telegram_channel",
-      "subject": "drivers>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_47968ef4fd57fe5f419bd358",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/drivers/[id]/timeline-actions.ts",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "telegram_channel",
-      "subject": "drivers>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_7efe10f5ff13af9106115f22",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/drivers/[id]/timeline-actions.ts",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "telegram_channel",
-      "subject": "drivers>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>telegram_channel/telegram_provider"
       ]
     },
     {
@@ -2292,54 +2003,6 @@
       ]
     },
     {
-      "fingerprint": "arch_bcc863a4aaba84770cfb987d",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/drivers/cards/CardsClient.tsx",
-      "line_at_baseline": 7,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "telegram_channel",
-      "subject": "drivers>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_5cafb753f8e1a34afdf0e8a6",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/drivers/cards/CardsClient.tsx",
-      "line_at_baseline": 7,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "telegram_channel",
-      "subject": "drivers>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_91914f9470a605048d8e2ea5",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/drivers/cards/CardsClient.tsx",
-      "line_at_baseline": 7,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "telegram_channel",
-      "subject": "drivers>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>telegram_channel/telegram_provider"
-      ]
-    },
-    {
       "fingerprint": "arch_a086f9fb3af6623c3af4ff47",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/drivers/components/SegmentCards.tsx",
@@ -2376,54 +2039,6 @@
       ]
     },
     {
-      "fingerprint": "arch_7e50c2e253ddda541fa0c27d",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/drivers/DriversClient.tsx",
-      "line_at_baseline": 21,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "telegram_channel",
-      "subject": "drivers>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_24ee306033488ab736b2fd33",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/drivers/DriversClient.tsx",
-      "line_at_baseline": 21,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "telegram_channel",
-      "subject": "drivers>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_88601c40ae71e5885e48edee",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/drivers/DriversClient.tsx",
-      "line_at_baseline": 21,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "telegram_channel",
-      "subject": "drivers>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>telegram_channel/telegram_provider"
-      ]
-    },
-    {
       "fingerprint": "arch_f9706076d749ff2fead30d6b",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/drivers/DriversClient.tsx",
@@ -2457,54 +2072,6 @@
         "dependency:fleet_operations/drivers>platform_shell/gravity_core",
         "dependency:fleet_operations/drivers>platform_shell/gravity_ui",
         "dependency:fleet_operations/yandex_fleet>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_1ad13ff6a0f07dd7c85f190a",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/drivers/page.tsx",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "telegram_channel",
-      "subject": "drivers>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_ed8951abddffb68fa0cf8a43",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/drivers/page.tsx",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "telegram_channel",
-      "subject": "drivers>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_de721b704479354407ad292e",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/drivers/page.tsx",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "telegram_channel",
-      "subject": "drivers>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>telegram_channel/telegram_provider"
       ]
     },
     {
@@ -3750,38 +3317,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:platform_shell/gravity_core>analytics_reporting/analytics"
-      ]
-    },
-    {
-      "fingerprint": "arch_03611df660ce738d85ae8b7e",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/settings/ai/actions.ts",
-      "line_at_baseline": 8,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "telegram_channel",
-      "subject": "settings>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_f7869b4518501ad7a9c181b1",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/settings/ai/actions.ts",
-      "line_at_baseline": 8,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "telegram_channel",
-      "subject": "settings>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>telegram_channel/telegram_provider"
       ]
     },
     {
@@ -7602,38 +7137,6 @@
       ]
     },
     {
-      "fingerprint": "arch_2e4f24c204204d3b5622e376",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 72,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "telegram_channel",
-      "subject": "gravity_core>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_a096c0f9bf69ede7fa39a164",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 72,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "telegram_channel",
-      "subject": "gravity_core>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>telegram_channel/telegram_provider"
-      ]
-    },
-    {
       "fingerprint": "arch_62504a0431f613c6ff4cb4a0",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/instrumentation.ts",
@@ -7889,38 +7392,6 @@
       "migration_references": [
         "dependency:platform_shell/gravity_core>work_management/tasks",
         "dependency:platform_shell/gravity_ui>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_bbdaf730617c4b4293b28a7d",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 350,
-      "ordinal": 2,
-      "owner_context": "platform_shell",
-      "target_context": "telegram_channel",
-      "subject": "gravity_core>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_36b2576ac527f07d11400f57",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 350,
-      "ordinal": 2,
-      "owner_context": "platform_shell",
-      "target_context": "telegram_channel",
-      "subject": "gravity_core>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>telegram_channel/telegram_provider"
       ]
     },
     {
@@ -8977,54 +8448,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:work_management/tasks>messaging/messages"
-      ]
-    },
-    {
-      "fingerprint": "arch_a77d28d067e76857e10bd8e9",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/lib/triggers.ts",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "work_management",
-      "target_context": "telegram_channel",
-      "subject": "tasks>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:work_management/tasks>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_f84ae3afcebb602c985fff87",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/triggers.ts",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "work_management",
-      "target_context": "telegram_channel",
-      "subject": "tasks>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:work_management/tasks>telegram_channel/telegram_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_deea52018b6897a8f535428d",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/triggers.ts",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "work_management",
-      "target_context": "telegram_channel",
-      "subject": "tasks>telegram_provider:gravity-mvp/src/app/tg-actions.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:work_management/tasks>telegram_channel/telegram_provider"
       ]
     },
     {

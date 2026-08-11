@@ -94,8 +94,8 @@ function isCheckChannel(channel: unknown): channel is CheckChannel {
 
 async function checkChannelReachability(channel: CheckChannel, phone: string): Promise<ReachabilityResult> {
   if (channel === 'telegram') {
-    const { checkTelegramReachability } = await import('@/app/tg-actions')
-    const result: any = await checkTelegramReachability(phone)
+    const { checkOperationalTelegramReachabilityV1 } = await import('@/infrastructure/telegram/operational-capabilities')
+    const result = await checkOperationalTelegramReachabilityV1(phone)
     if (result.telegramId) {
       return confirmed(channel, { telegramId: result.telegramId, source: 'telegram' })
     }

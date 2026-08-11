@@ -1,5 +1,5 @@
 import { getDriversWithCells } from './actions'
-import { getTelegramConnections } from '../tg-actions'
+import { listOperationalTelegramConnectionsV1 } from '@/infrastructure/telegram/operational-capabilities'
 import DriversClient from './DriversClient'
 import { SectionDescription } from '@/infrastructure/ui/SectionDescription'
 
@@ -44,7 +44,7 @@ export default async function DriversPage({
         excludeInactive,
     })
     
-    const telegramConnections = await getTelegramConnections()
+    const telegramConnections = await listOperationalTelegramConnectionsV1()
 
     return (
         <PageContainer>
