@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { createAdminBotV1 } = require('../../public-bot-maintenance');
 const { projectBotMetadata } = require('../../security/publicCredentialMetadata');
 
 const publicBotSelect = {
@@ -52,17 +53,7 @@ router.post('/', async (req, res, next) => {
         }
 
         // Атомарное создание бота + связанного опроса
-        const bot = await req.prisma.bot.create({
-            data: {
-                token,
-                name,
-                username,
-                surveys: {
-                    create: [{ title: 'Основной опрос', triggerButton: '📊 Опрос качества' }]
-                }
-            },
-            select: publicBotSelect
-        });
+        const bot = await createAdminBotV1({ token, name, username });
 
         res.status(201).json(projectBotMetadata(bot));
     } catch (error) {

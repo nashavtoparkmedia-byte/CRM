@@ -118,10 +118,7 @@ async function processWithMaster(p) {
 
 async function processOrphan(p) {
     // Repoint @lid identity к null phoneId (orphan)
-    await prisma.contactIdentity.update({
-        where: { id: p.lid_identity_id },
-        data:  { phoneId: null }
-    })
+    await setContactIdentityPhoneV1(p.lid_identity_id, null)
 
     // Deactivate @c.us identity if exists
     const phantomDigits = p.phantom_phone.replace(/\D/g, '')

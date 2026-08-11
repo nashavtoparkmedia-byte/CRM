@@ -44,13 +44,7 @@ class UserService {
     // Get user activity statistics
     async getUserActivity(telegramId) {
         try {
-            const actions = await db.all(
-                `SELECT action_type, COUNT(*) as count 
-                 FROM actions 
-                 WHERE telegram_id = ? 
-                 GROUP BY action_type`,
-                [telegramId.toString()]
-            );
+            const actions = await db.allUserActivity(telegramId.toString());
             return actions;
         } catch (err) {
             logger.error('Error getting user activity:', err);

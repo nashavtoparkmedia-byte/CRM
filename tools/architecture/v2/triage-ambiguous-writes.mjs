@@ -29,6 +29,7 @@ const confirmedReadOnlyDecisions = new Set([
   'e1c81095a11532a1ba56e2629b9316a15d42ad5062aa52dfa190283adb26f5e1', '040c0d8f2319e57f6b22e2e2dbc3065fe5fbf10ad306e15ff687cf87f3604057', 'ea322bd576b8b6ee4240ed4611e602b63d1cdcb2befa71a84a886a55afb4ac4f', '3f0f0682204964ed2be82d5effe35517b5e8eaa97f73dbc4344cbc63d361907f', '31e7ff73ab8a69a2a5f72de16d08e899a46e9cc48004c42e034335d5e622637c', '6c84c5974dc29a3cd814144d007c6669c061d6217ca8837671847aaf97206891',
   '6fe3c1e8c14600a70e17a2782784bf9dbe45318c0ca596bc87d4ebcd3a1837c4', '490105b516a84ebfd5c94ad7544581e9628ae1f95dffee0c0940ba8b0bfa9dad', 'b00356e49038391b1ecb1efbefd7c929b2e1e15f2cc6580a32df27a68f04c982', 'b340d44a632b98bc4560d64af31050bbc6c2c4d2c086bd2e88ad2afefe3baf42',
   '2390d5d610646077ea1572b4ae278b721ceb44b14461dccf8e24817a7b68f541', '1ac9db07b55047f8f0e8b6708e294bf1e033a1e71f5348567b5fb6ee421a6858',
+  '86f57b58a6d3409af7a6a18ca3a9fb36b4dbf11d247c8df8fabde9dddc6c674a',
 ])
 
 function classify(site) {
@@ -52,6 +53,11 @@ function classify(site) {
   }
   const payloadOnlyAmbiguity = reasons.size > 0
     && [...reasons].every((reason) => reason === 'dynamic_payload_may_contain_nested_write')
+  const nestedRelationOnlyAmbiguity = reasons.size > 0
+    && [...reasons].every((reason) => reason === 'nested_relation_write_requires_schema_resolution')
+  if (site.kind === 'ambiguous_model' && nestedRelationOnlyAmbiguity && site.source_context && site.owner_contexts.includes(site.source_context)) {
+    return { disposition: 'CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED', rationale: 'The Prisma model and nested relation are statically resolved, and the owner-controlled capability source matches the schema owner.' }
+  }
   if (site.kind === 'model' && (reasons.size === 0 || payloadOnlyAmbiguity)) {
     return { disposition: 'CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED', rationale: 'A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.' }
   }
@@ -94,6 +100,9 @@ const records = source.write_sites
         ? { disposition: 'CONFIRMED_WRITE_OWNER_UNRESOLVED', rationale: 'Focused review confirmed a real schema-scoped ownership gap; no manifest change is assumed.' }
         : classify(site)
     const inferredOwnership = focusedDecision ?? ownershipClassification(site, result.disposition)
+    const effectiveDisposition = result.disposition === 'CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED' && ['OWNER_VALID', 'CONTROLLED_MIGRATION'].includes(inferredOwnership)
+      ? 'CONFIRMED_WRITE_OWNER_RESOLVED'
+      : result.disposition
     return {
     record_id: site.site_signature,
     site_signature: site.site_signature,
@@ -113,6 +122,7 @@ const records = source.write_sites
     surface: site.surface,
     ambiguity_reasons: site.ambiguity_reasons ?? [],
     ...result,
+    disposition: effectiveDisposition,
     ownership_classification: inferredOwnership,
     final_ownership_classification: inferredOwnership === 'OWNER_VALID'
       ? 'OWNER_VALID'
@@ -123,9 +133,9 @@ const records = source.write_sites
           : inferredOwnership === 'OWNERSHIP_MANIFEST_GAP_REVIEW'
             ? 'OWNERSHIP_MANIFEST_GAP_REVIEW'
             : null,
-    semantic_state: result.disposition === 'CONFIRMED_NON_WRITE'
+    semantic_state: effectiveDisposition === 'CONFIRMED_NON_WRITE'
       ? 'RESOLVED_NON_WRITE'
-      : result.disposition === 'CONFIRMED_WRITE_OWNER_RESOLVED'
+      : effectiveDisposition === 'CONFIRMED_WRITE_OWNER_RESOLVED'
         ? (inferredOwnership === 'CONTROLLED_MIGRATION' ? 'CONTROLLED_MIGRATION_WRITE' : 'OWNER_VALID_WRITE')
         : 'MATERIAL_UNRESOLVED_WRITE_RISK',
   }

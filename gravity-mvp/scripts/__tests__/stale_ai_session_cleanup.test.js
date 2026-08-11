@@ -86,6 +86,10 @@ async function runUnderConfig(rows, { dryRun = false } = {}) {
         now: NOW,
         ttlMin: 30,
         dryRun,
+        updateStaleSession: ({ id, endedAt, metadata }) => stub.call.update({
+            where: { id },
+            data: { aiSessionStatus: 'failed', endedAt, hangupCause: 'AI_SESSION_STALE_CLEANUP', metadata },
+        }),
     })
     return { stub, result }
 }
@@ -206,12 +210,14 @@ test('rerun against same dataset performs no further updates', async () => {
 
     const first = await markStaleSessions({
         prisma: stub, now: NOW, ttlMin: 30, dryRun: false,
+        updateStaleSession: ({ id, endedAt, metadata }) => stub.call.update({ where: { id }, data: { aiSessionStatus: 'failed', endedAt, hangupCause: 'AI_SESSION_STALE_CLEANUP', metadata } }),
     })
     assert.equal(first.updated, 1)
 
     // Second run sees the row now at `failed` → not eligible.
     const second = await markStaleSessions({
         prisma: stub, now: NOW, ttlMin: 30, dryRun: false,
+        updateStaleSession: ({ id, endedAt, metadata }) => stub.call.update({ where: { id }, data: { aiSessionStatus: 'failed', endedAt, hangupCause: 'AI_SESSION_STALE_CLEANUP', metadata } }),
     })
     assert.equal(second.scanned, 0)
     assert.equal(second.updated, 0)

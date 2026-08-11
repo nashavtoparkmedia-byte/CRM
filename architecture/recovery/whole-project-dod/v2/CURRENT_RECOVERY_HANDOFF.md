@@ -1,12 +1,14 @@
 # Current recovery handoff
 
-Captured: `2026-08-10T21:44:48Z`
+Captured: `2026-08-11T13:30:00Z`
 
 This is the authoritative continuation checkpoint for the current task. It is a handoff, not an acceptance artifact. The whole-project state remains `EXTERNAL_FINAL_ACCEPTANCE_FAILED`; the current program remains `WHOLE-PROJECT DOD RECOVERY`; the project is **not READY**.
 
 The machine-readable companion, `CURRENT_RECOVERY_HANDOFF.json`, contains the exhaustive every-path status/purpose inventory, exact commands/results, identities, worktree records, and next action. Read both files before changing code.
 
 ## Bounded analyzer and current baseline update
+
+Ownership closure is internally accepted after the final bounded scan: `1,725/1,725` surfaces, zero worker failures/timeouts, `1,404` confirmed writes discovered, `0` confirmed foreign, `53` closed foreign, `46` raw ambiguous records reconciled exactly (`30` resolved non-writes, `11` owner-valid writes, `5` controlled migrations), zero material unresolved, zero dynamic delegate/SQL/queryRaw ambiguity, and zero unclassified operational surfaces. Current artifacts are `AUTHORITATIVE_WRITE_SCAN_20260811T131500Z.json`, `CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json`, `CURRENT_WHOLE_REPOSITORY_WRITE_PROGRESS.jsonl`, and `AMBIGUOUS_WRITE_TRIAGE_FINAL_CLOSURE.json`. The program remains **not READY** pending the preserved security/credential closure and independent critic pass.
 
 The analyzer execution recovery is complete, but it is not an acceptance. Commits `a1c0d20e` and `3ab9ad96` add fresh-process JavaScript workers capped at four, a 120-second per-surface deadline, structured progress, and atomic output; all 77 write fixtures and four companion suites passed before the scan.
 

@@ -4,6 +4,7 @@ const userService = require('../services/userService');
 const sheetsService = require('../services/sheets');
 const logger = require('../utils/logger');
 const config = require('../config');
+const { ensureSurveyBotV1 } = require('../public-bot-maintenance');
 
 const prisma = new PrismaClient();
 
@@ -204,13 +205,7 @@ async function finishSurvey(ctx) {
 
         if (!botDb) {
             logger.info('Configured bot mapping not found in DB; auto-creating it');
-            botDb = await prisma.bot.create({
-                data: {
-                    token: botToken,
-                    name: config.botName || 'Auto Bot',
-                    surveys: { create: {} }
-                }
-            });
+            botDb = await ensureSurveyBotV1({ token: botToken, name: config.botName || 'Auto Bot' });
         }
 
         if (botDb) {

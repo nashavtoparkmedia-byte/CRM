@@ -6,28 +6,19 @@ class Analytics {
     async getUserStats() {
         try {
             // Total users
-            const totalResult = await db.get('SELECT COUNT(*) as count FROM users');
+            const totalResult = await db.getTotalUsers();
             const total = totalResult ? totalResult.count : 0;
 
             // New users today
-            const todayResult = await db.get(`
-                SELECT COUNT(*) as count FROM users 
-                WHERE date(created_at) = date('now')
-            `);
+            const todayResult = await db.getUsersToday();
             const today = todayResult ? todayResult.count : 0;
 
             // New users yesterday
-            const yesterdayResult = await db.get(`
-                SELECT COUNT(*) as count FROM users 
-                WHERE date(created_at) = date('now', '-1 day')
-            `);
+            const yesterdayResult = await db.getUsersYesterday();
             const yesterday = yesterdayResult ? yesterdayResult.count : 0;
 
             // New users last 7 days
-            const last7DaysResult = await db.get(`
-                SELECT COUNT(*) as count FROM users 
-                WHERE date(created_at) >= date('now', '-7 days')
-            `);
+            const last7DaysResult = await db.getUsersLast7Days();
             const last7Days = last7DaysResult ? last7DaysResult.count : 0;
 
             return {
@@ -46,22 +37,14 @@ class Analytics {
     async getActionStats() {
         try {
             // Total actions
-            const totalResult = await db.get('SELECT COUNT(*) as count FROM actions');
+            const totalResult = await db.getTotalActions();
             const total = totalResult ? totalResult.count : 0;
 
             // Actions by type
-            const actionsByType = await db.all(`
-                SELECT action_type, COUNT(*) as count 
-                FROM actions 
-                GROUP BY action_type 
-                ORDER BY count DESC
-            `);
+            const actionsByType = await db.allActionTypeCounts();
 
             // Actions today
-            const todayResult = await db.get(`
-                SELECT COUNT(*) as count FROM actions 
-                WHERE date(created_at) = date('now')
-            `);
+            const todayResult = await db.getActionsToday();
             const today = todayResult ? todayResult.count : 0;
 
             return {
@@ -79,19 +62,11 @@ class Analytics {
     async getConversionStats() {
         try {
             // Users who started survey
-            const startedResult = await db.get(`
-                SELECT COUNT(DISTINCT telegram_id) as count 
-                FROM actions 
-                WHERE action_type IN ('START_SURVEY', 'CONTROL_SURVEY')
-            `);
+            const startedResult = await db.getStartedSurveyCount();
             const started = startedResult ? startedResult.count : 0;
 
             // Users who completed survey
-            const completedResult = await db.get(`
-                SELECT COUNT(DISTINCT telegram_id) as count 
-                FROM actions 
-                WHERE action_type = 'SURVEY_COMPLETE'
-            `);
+            const completedResult = await db.getCompletedSurveyCount();
             const completed = completedResult ? completedResult.count : 0;
 
             // Conversion rate

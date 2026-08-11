@@ -36,6 +36,8 @@ function makeStubPrisma({ throwOnInsert = null, recordInsert = null } = {}) {
     }
 }
 
+const writerFrom = (prisma) => (data) => prisma.aiCallEvent.createMany({ data, skipDuplicates: true })
+
 function captureLog() {
     const events = []
     const fn = (level, event, ctx) => events.push({ level, event, ctx })
@@ -130,7 +132,7 @@ test('validateEvent: occurredAt as Date OK', () => {
 test('persistEvents: empty array → no insert, no error', async () => {
     const recordedCalls = []
     const prisma = makeStubPrisma({ recordInsert: (data) => recordedCalls.push(data) })
-    const persistEvents = _createPersistEvents(prisma)
+    const persistEvents = _createPersistEvents(writerFrom(prisma))
     const r = await persistEvents({ events: [], callId: 'c', opsLog: captureLog() })
     assert.deepEqual(r, { inserted: 0, skipped: 0, errored: false, issues: [] })
     assert.equal(recordedCalls.length, 0)
@@ -139,7 +141,7 @@ test('persistEvents: empty array → no insert, no error', async () => {
 test('persistEvents: 3 valid events → all inserted', async () => {
     let inserted = null
     const prisma = makeStubPrisma({ recordInsert: (data) => { inserted = data } })
-    const persistEvents = _createPersistEvents(prisma)
+    const persistEvents = _createPersistEvents(writerFrom(prisma))
     const r = await persistEvents({
         events: [
             { type: 'greeting_started', seq: 1, payload: { scenario_id: 's' } },
@@ -158,7 +160,7 @@ test('persistEvents: 3 valid events → all inserted', async () => {
 
 test('persistEvents: mixed valid + invalid → only valid inserted, issues tracked', async () => {
     const prisma = makeStubPrisma()
-    const persistEvents = _createPersistEvents(prisma)
+    const persistEvents = _createPersistEvents(writerFrom(prisma))
     const log = captureLog()
     const r = await persistEvents({
         events: [
@@ -184,7 +186,7 @@ test('persistEvents: Postgres error → returns errored=true, NEVER throws', asy
     const prisma = makeStubPrisma({
         throwOnInsert: new Error('connection refused'),
     })
-    const persistEvents = _createPersistEvents(prisma)
+    const persistEvents = _createPersistEvents(writerFrom(prisma))
     const log = captureLog()
     // The test passes if .resolves at all (doesn't throw):
     const r = await persistEvents({
@@ -200,7 +202,7 @@ test('persistEvents: Postgres error → returns errored=true, NEVER throws', asy
 
 test('persistEvents: opsLog is optional — missing logger does not crash', async () => {
     const prisma = makeStubPrisma({ throwOnInsert: new Error('boom') })
-    const persistEvents = _createPersistEvents(prisma)
+    const persistEvents = _createPersistEvents(writerFrom(prisma))
     // Intentionally no opsLog passed. Architect: best-effort, never throws.
     const r = await persistEvents({
         events: [{ type: 'greeting_started', seq: 1 }],
@@ -211,7 +213,7 @@ test('persistEvents: opsLog is optional — missing logger does not crash', asyn
 
 test('persistEvents: missing callId → skipped, no exception', async () => {
     const prisma = makeStubPrisma()
-    const persistEvents = _createPersistEvents(prisma)
+    const persistEvents = _createPersistEvents(writerFrom(prisma))
     const log = captureLog()
     const r = await persistEvents({
         events: [{ type: 'greeting_started', seq: 1 }],
@@ -238,7 +240,7 @@ test('persistEvents: only uses createMany — no update / upsert / delete', asyn
             createMany: async ({ data }) => ({ count: data.length }),
         },
     }
-    const persistEvents = _createPersistEvents(prisma)
+    const persistEvents = _createPersistEvents(writerFrom(prisma))
     const r = await persistEvents({
         events: [{ type: 'silence_strike', seq: 1 }],
         callId: 'c',
@@ -253,7 +255,7 @@ test('persistEvents: createMany called with skipDuplicates=true (idempotency saf
             createMany: async (o) => { opts = o; return { count: o.data.length } },
         },
     }
-    const persistEvents = _createPersistEvents(prisma)
+    const persistEvents = _createPersistEvents((data) => prisma.aiCallEvent.createMany({ data, skipDuplicates: true }))
     await persistEvents({
         events: [{ type: 'greeting_started', seq: 1 }],
         callId: 'c',
