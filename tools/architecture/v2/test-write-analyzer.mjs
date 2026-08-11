@@ -244,6 +244,30 @@ test('SQL analyzer treats common pure scalar and aggregate functions as reads', 
     assert.equal(analysis.reasons.includes('select_function_side_effect_unresolved'), false)
 })
 
+test('SQL analyzer treats FILTER and percentile aggregates as pure reads', () => {
+    const result = analyzeSqlMutation(`
+        SELECT COUNT(*) FILTER (WHERE status = 'ok'),
+               ROUND(AVG(duration_ms)),
+               PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY duration_ms)
+        FROM cron_health_log
+        WHERE logged_at > NOW() - INTERVAL '1 hour'
+        GROUP BY operation_name
+        ORDER BY MAX(duration_ms) DESC
+    `)
+    assert.equal(result.is_mutation, false)
+    assert.equal(result.ambiguous, false)
+    assert.equal(result.reasons.includes('select_function_side_effect_unresolved'), false)
+})
+
+test('SQL analyzer does not treat boolean predicate parentheses as function calls', () => {
+    const result = analyzeSqlMutation(`
+        SELECT COUNT(*) FILTER (WHERE assigned_to IS NULL AND (unread_count > 0 OR requires_response = true))
+        FROM chats
+    `)
+    assert.equal(result.is_mutation, false)
+    assert.equal(result.ambiguous, false)
+})
+
 test('SQL analyzer opens executable DO blocks and retains CALL/COPY/function ambiguity', () => {
     const procedural = analyzeSqlMutation([
         'DO $$ BEGIN INSERT INTO "Chat" (id) VALUES (1); DELETE FROM "Message"; END $$;',

@@ -1215,13 +1215,13 @@ export function analyzeSqlMutation(sql, options = {}) {
                 operations.push(mutationRecord('SELECT_INTO', target, token))
             }
             const SAFE_SELECT_FUNCTIONS = new Set([
-                'ABS', 'ARRAY_AGG', 'AVG', 'CEIL', 'COALESCE', 'CONCAT', 'COUNT',
+                'ABS', 'AND', 'ARRAY_AGG', 'AVG', 'CEIL', 'COALESCE', 'CONCAT', 'COUNT',
                 'CURRENT_DATE', 'CURRENT_TIMESTAMP', 'DATE', 'DATE_TRUNC', 'DATETIME',
-                'EXISTS', 'EXTRACT', 'FLOOR', 'GREATEST', 'JSON_AGG', 'JSON_BUILD_OBJECT',
+                'EXISTS', 'EXTRACT', 'FILTER', 'FLOOR', 'FROM', 'GROUP', 'GREATEST', 'HAVING', 'JSON_AGG', 'JSON_BUILD_OBJECT',
                 'JSONB_AGG', 'JSONB_BUILD_OBJECT', 'LEAST', 'LENGTH', 'LOWER', 'MAX',
                 'MD5', 'MIN', 'NOW', 'NULLIF', 'POSITION', 'REGEXP_REPLACE', 'REPLACE',
-                'ROUND', 'SPLIT_PART', 'STRING_AGG', 'STRPOS', 'SUBSTRING', 'SUM',
-                'TO_CHAR', 'TO_DATE', 'TO_TIMESTAMP', 'TRIM', 'UPPER',
+                'ON', 'OR', 'PERCENTILE_CONT', 'PERCENTILE_DISC', 'ROUND', 'SPLIT_PART', 'STRING_AGG', 'STRPOS', 'SUBSTRING', 'SUM',
+                'TO_CHAR', 'TO_DATE', 'TO_TIMESTAMP', 'TRIM', 'UPPER', 'WHERE',
             ])
             for (let lookahead = cursor + 1; lookahead + 1 < tokens.length; lookahead += 1) {
                 const lookaheadKeyword = upper(tokens[lookahead])
