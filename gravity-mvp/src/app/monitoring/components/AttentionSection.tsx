@@ -3,7 +3,7 @@
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/infrastructure/ui/button';
 import { RISK_LEVELS } from '@/app/monitoring/lib/constants';
 import { ActionButtons } from './ActionButtons';
 import type { AttentionItem } from '@/app/monitoring/lib/types';

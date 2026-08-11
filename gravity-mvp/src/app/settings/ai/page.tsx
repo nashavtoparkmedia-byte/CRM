@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Bot, BookOpen } from 'lucide-react'
-import { PageContainer } from '@/components/ui/PageContainer'
+import { PageContainer } from '@/infrastructure/ui/PageContainer'
 import { getCurrentUser } from '@/lib/users/user-service'
 import { requireIntegrationAdminPageAccess } from '@/modules/identity-access/public/v1'
 import AiControlCenterClient from './AiControlCenterClient'

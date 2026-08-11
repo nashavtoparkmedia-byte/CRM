@@ -2,7 +2,7 @@ import { getMaxConnections } from "../../../max-actions"
 import MaxLoginClient from "./MaxLoginClient"
 import { MessageSquare } from "lucide-react"
 import { SectionDescription } from '@/components/ui/SectionDescription'
-import { PageContainer } from '@/components/ui/PageContainer'
+import { PageContainer } from '@/infrastructure/ui/PageContainer'
 import { requireIntegrationAdminPageAccess } from '@/modules/identity-access/public/v1'
 
 export const dynamic = "force-dynamic"

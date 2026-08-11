@@ -1,5 +1,5 @@
 import { getDailySummary } from './actions'
-import { PageContainer } from '@/components/ui/PageContainer'
+import { PageContainer } from '@/infrastructure/ui/PageContainer'
 import { PageHeader } from '@/components/layout/PageHeader'
 import MyDayContent from './MyDayContent'
 

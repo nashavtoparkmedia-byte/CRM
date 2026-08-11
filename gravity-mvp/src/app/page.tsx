@@ -3,7 +3,7 @@ import { DashboardKPI } from './dashboard/components/DashboardKPI'
 import { DashboardCard } from './dashboard/components/DashboardCard'
 import { dashboardCards } from '@/lib/mock/dashboardData'
 import { SectionDescription } from '@/components/ui/SectionDescription'
-import { PageContainer } from '@/components/ui/PageContainer'
+import { PageContainer } from '@/infrastructure/ui/PageContainer'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { DashboardTabs } from '@/components/ui/DashboardTabs'
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/infrastructure/ui/button';
 import { Plus } from 'lucide-react';
 import { StatsBar } from './components/StatsBar';
 import { AttentionSection } from './components/AttentionSection';

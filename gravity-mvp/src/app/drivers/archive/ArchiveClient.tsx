@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight, Search, ActivitySquare, RefreshCw } from "lu
 import type { DriverWithCells } from "../actions"
 import { syncArchivedDrivers } from "../actions"
 
-import { Button } from "@/components/ui/button"
+import { Button } from "@/infrastructure/ui/button"
 import { Input } from "@/components/ui/input"
 import {
     Table,

@@ -1,5 +1,5 @@
 import { getTeamOverview } from './actions'
-import { PageContainer } from '@/components/ui/PageContainer'
+import { PageContainer } from '@/infrastructure/ui/PageContainer'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { DashboardTabs } from '@/components/ui/DashboardTabs'
 import TeamOverviewContent from './TeamOverviewContent'

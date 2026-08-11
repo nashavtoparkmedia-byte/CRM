@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { Button } from "@/infrastructure/ui/button"
 import { Input } from "@/components/ui/input"
 import { getUnlinkedTelegramUsers, linkTelegramUserToDriver } from '../../../tg-bot-actions'
 import { getDrivers } from '../../../actions'

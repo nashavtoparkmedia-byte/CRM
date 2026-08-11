@@ -1,6 +1,6 @@
 import { ArrowLeft, User, CreditCard, Car, AlertTriangle, Clock, Phone as PhoneIcon } from 'lucide-react'
 import Link from 'next/link'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/infrastructure/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import TelegramLinkClient from './TelegramLinkClient'

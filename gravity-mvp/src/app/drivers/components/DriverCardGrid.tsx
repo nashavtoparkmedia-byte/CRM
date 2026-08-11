@@ -4,7 +4,7 @@ import { useState } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import type { DriverCard as DriverCardType } from "../actions"
 import { DriverCard } from "./DriverCard"
-import { Button } from "@/components/ui/button"
+import { Button } from "@/infrastructure/ui/button"
 
 interface DriverCardGridProps {
     drivers: DriverCardType[]

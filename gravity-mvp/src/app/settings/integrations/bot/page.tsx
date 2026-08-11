@@ -1,4 +1,4 @@
-import { PageContainer } from '@/components/ui/PageContainer'
+import { PageContainer } from '@/infrastructure/ui/PageContainer'
 import BotPageClient from './BotPageClient'
 
 export const dynamic = 'force-dynamic'

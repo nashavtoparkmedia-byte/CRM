@@ -7,7 +7,7 @@ import { ActivityGrid } from "./ActivityGrid"
 import { SegmentBadge } from "./SegmentBadge"
 import { ScoringDot } from "./ScoringDot"
 import { DriverScoreBar } from "./DriverScoreBar"
-import { Button } from "@/components/ui/button"
+import { Button } from "@/infrastructure/ui/button"
 
 interface DriverCardProps {
     driver: DriverCardType

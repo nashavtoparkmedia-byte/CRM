@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Phone, MessageSquare } from "lucide-react"
 import type { RiskDriver } from "../actions"
 import { SegmentBadge } from "@/app/drivers/components/SegmentBadge"
-import { Button } from "@/components/ui/button"
+import { Button } from "@/infrastructure/ui/button"
 import Link from "next/link"
 
 async function recordManagerCommunication(driverId: string, activity: "call" | "message") {

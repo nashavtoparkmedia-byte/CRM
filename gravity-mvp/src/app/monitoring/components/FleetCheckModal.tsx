@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/infrastructure/ui/button';
 import { Input } from '@/components/ui/input';
 import { X } from 'lucide-react';
 

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { addApiConnection, deleteApiConnection, testApiRequest, updateApiConnectionName } from "./actions";
 import type { ApiConnectionPublicMetadata } from "@/modules/fleet-operations/public/v1/api-connection-public-metadata";
 import { Trash2, Plus, Pencil, Check, Server, RefreshCw } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/infrastructure/ui/button";
 import { Input } from "@/components/ui/input";
 
 type StatusMap = Record<string, 'checking' | 'ok' | 'error'>;

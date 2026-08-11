@@ -9,7 +9,7 @@ import {
     TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { PageContainer } from '@/components/ui/PageContainer'
+import { PageContainer } from '@/infrastructure/ui/PageContainer'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { requireIntegrationAdminPageAccess } from '@/modules/identity-access/public/v1'
 

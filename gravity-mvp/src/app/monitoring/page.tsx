@@ -25,7 +25,7 @@ async function getScraperStats(): Promise<{ checksUsedToday: number | null; chec
     }
 }
 
-import { PageContainer } from '@/components/ui/PageContainer';
+import { PageContainer } from '@/infrastructure/ui/PageContainer';
 
 export default async function MonitoringPage() {
     const [driversRaw, total, attentionRaw, attentionTotal, scraperStats] = await Promise.all([

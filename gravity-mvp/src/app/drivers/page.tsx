@@ -5,7 +5,7 @@ import { SectionDescription } from '@/components/ui/SectionDescription'
 
 export const dynamic = 'force-dynamic'
 
-import { PageContainer } from '@/components/ui/PageContainer'
+import { PageContainer } from '@/infrastructure/ui/PageContainer'
 
 export default async function DriversPage({
     searchParams,

@@ -1,6 +1,6 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
+import { Button } from '@/infrastructure/ui/button';
 
 interface ActionButtonsProps {
     driverId: string;

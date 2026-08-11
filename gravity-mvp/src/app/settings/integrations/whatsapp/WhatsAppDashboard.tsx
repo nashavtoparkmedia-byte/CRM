@@ -7,7 +7,7 @@ import { createWhatsAppConnection, getWhatsAppConnections, getWhatsAppStatus, ge
 import type { WhatsAppConnectionPublicMetadata } from '@/modules/whatsapp-channel/public/v1/whatsapp-connection-public-metadata'
 import ChannelSyncBlock from "@/components/ChannelSyncBlock"
 
-import { Button } from "@/components/ui/button"
+import { Button } from "@/infrastructure/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 
 type WaConnection = Omit<WhatsAppConnectionPublicMetadata, 'createdAt' | 'updatedAt'> & {
