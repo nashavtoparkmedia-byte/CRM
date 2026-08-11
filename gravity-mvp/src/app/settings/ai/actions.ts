@@ -568,24 +568,30 @@ export async function setActiveAiProfile(id: string | null) {
 // 'use server' file directive требует все экспорты как async-функции,
 // поэтому используем inline wrappers, а не re-export.
 
-import * as knowledgeQueries from '@/lib/ai/knowledge/queries'
+import {
+    getKnowledgeItemForControlCenterV1,
+    getKnowledgeItemSourceBadgesV1,
+    getKnowledgeStatsV1,
+    listKnowledgeExtractionJobsV1,
+    listKnowledgeItemsBySectionV1,
+    listKnowledgeSectionsV1,
+    type KnowledgeItemSourceBadgesV1,
+} from '@/modules/ai-knowledge/public/v1/knowledge-admin-read-model'
 export type {
-    KnowledgeSection,
-    KnowledgeItem,
-    KnowledgeSource,
-    KnowledgeStats,
-} from '@/lib/ai/knowledge/queries'
-export type {
-    ItemSourceBadges,
-    ItemSourceBadgeRow,
-} from '@/lib/ai/knowledge/queries'
+    KnowledgeSectionV1 as KnowledgeSection,
+    KnowledgeItemV1 as KnowledgeItem,
+    KnowledgeSourceV1 as KnowledgeSource,
+    KnowledgeStatsV1 as KnowledgeStats,
+    KnowledgeItemSourceBadgesV1 as ItemSourceBadges,
+    KnowledgeItemSourceBadgeRowV1 as ItemSourceBadgeRow,
+} from '@/modules/ai-knowledge/public/v1/knowledge-admin-read-model'
 
 export async function listKnowledgeSections() {
-    return knowledgeQueries.listKnowledgeSections()
+    return listKnowledgeSectionsV1()
 }
 
 export async function listItemsBySection(sectionId: string, opts?: { includeArchived?: boolean }) {
-    return knowledgeQueries.listItemsBySection(sectionId, opts ?? {})
+    return listKnowledgeItemsBySectionV1(sectionId, opts ?? {})
 }
 
 /** PR7.12: batch source badges для compact preview на карточке item.
@@ -593,11 +599,11 @@ export async function listItemsBySection(sectionId: string, opts?: { includeArch
  *  возвращает только агрегаты count'ов и connectionId, без PII excerpt. */
 export async function getItemSourceBadges(itemIds: string[]) {
     if (itemIds.length === 0) {
-        return {} as Record<string, knowledgeQueries.ItemSourceBadges>
+        return {} as Record<string, KnowledgeItemSourceBadgesV1>
     }
-    const map = await knowledgeQueries.getItemSourceBadges(itemIds)
+    const map = await getKnowledgeItemSourceBadgesV1(itemIds)
     // Server actions сериализуют только plain объекты, не Map.
-    const out: Record<string, knowledgeQueries.ItemSourceBadges> = {}
+    const out: Record<string, KnowledgeItemSourceBadgesV1> = {}
     for (const [k, v] of map.entries()) out[k] = v
     return out
 }
@@ -605,11 +611,11 @@ export async function getItemSourceBadges(itemIds: string[]) {
 // getItemWithSources объявлен ниже (PR2.5) с permission-фильтром sources.
 
 export async function getKnowledgeStats() {
-    return knowledgeQueries.getKnowledgeStats()
+    return getKnowledgeStatsV1()
 }
 
 export async function listExtractionJobs(limit?: number) {
-    return knowledgeQueries.listExtractionJobs(limit ?? 10)
+    return listKnowledgeExtractionJobsV1(limit ?? 10)
 }
 
 // ─── AI Knowledge Core — PR2 extraction actions ──────────────────
@@ -641,10 +647,10 @@ async function canViewKnowledgeSources(): Promise<boolean> {
 /** Полная карточка item с источниками. Sources возвращаются ТОЛЬКО
  *  Админу/Руководителю (PII risk). Manager получает sources=[]. */
 export async function getItemWithSources(itemId: string) {
-    const full = await knowledgeQueries.getItemWithSources(itemId)
     const allowed = await canViewKnowledgeSources()
-    if (allowed) return full
-    return { item: full.item, sources: [] as typeof full.sources }
+    return getKnowledgeItemForControlCenterV1(itemId, {
+        includeSourceExcerpts: allowed,
+    })
 }
 
 /** Создаёт AiExtractionJob + fire-and-forget runExtraction.
