@@ -1214,18 +1214,18 @@ export async function getKnowledgeRuntimeStateForUi(): Promise<{
 // но sources=[].
 
 import {
-    getDecisionExplainability,
-    type ExplainabilityBundle,
-} from '@/lib/ai/knowledge/explainability'
+    getKnowledgeDecisionExplainabilityV1,
+    type KnowledgeExplainabilityBundleV1,
+} from '@/modules/ai-knowledge/public/v1/knowledge-explainability-read-model'
 import { previewKnowledgeRetrievalV1 } from '@/modules/ai-knowledge/public/v1/knowledge-retrieval'
 export type {
-    ExplainabilityBundle,
-    ExplainDecisionRow,
-    ExplainMessageRow,
-    ExplainUsageRow,
-    ExplainSourceRow,
-    ExplainAuditRow,
-} from '@/lib/ai/knowledge/explainability'
+    KnowledgeExplainabilityBundleV1 as ExplainabilityBundle,
+    KnowledgeExplainDecisionRowV1 as ExplainDecisionRow,
+    KnowledgeExplainMessageRowV1 as ExplainMessageRow,
+    KnowledgeExplainUsageRowV1 as ExplainUsageRow,
+    KnowledgeExplainSourceRowV1 as ExplainSourceRow,
+    KnowledgeExplainAuditRowV1 as ExplainAuditRow,
+} from '@/modules/ai-knowledge/public/v1/knowledge-explainability-read-model'
 
 /**
  * Bundle для UI explainability модалки. Server-side фильтрует sources
@@ -1234,11 +1234,11 @@ export type {
  */
 export async function getDecisionExplainabilityForUi(
     decisionLogId: string,
-): Promise<ExplainabilityBundle> {
-    const bundle = await getDecisionExplainability(decisionLogId)
+): Promise<KnowledgeExplainabilityBundleV1> {
     const allowed = await canViewKnowledgeSources()
-    if (allowed) return bundle
-    return { ...bundle, sources: [] }
+    return getKnowledgeDecisionExplainabilityV1(decisionLogId, {
+        includeSourceExcerpts: allowed,
+    })
 }
 
 export interface RetryPreviewResult {
