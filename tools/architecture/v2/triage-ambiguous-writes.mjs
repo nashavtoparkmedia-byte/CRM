@@ -15,6 +15,10 @@ const focusedOwnershipDecisions = new Map([
   ['caa58a0bf05960a1b641812d8efa055fd89b6ae683268dfce77b9ccdc93ea32b', 'OWNER_VALID'],
   ['9889a11d1518f34196c9816f3f1269910329f7a85ecc744f6776bce4a0a46d63', 'FOREIGN'],
   ['ecda9ca05cf1f46ae206a4f23e9354efba9740023f838d202b5a9ea22b27d323', 'FOREIGN'],
+  ['1dde17910d6ede26e63fea7f13eeb237a27f299dc3c25186fa9686400b466a68', 'CONTROLLED_MIGRATION'],
+  ['c13b2ed496ae9c0a869281cd3db6f4ba560cffb50f5a10573e2702527fa49acc', 'CONTROLLED_MIGRATION'],
+  ['3496c5c9535bc1d5b0cce4adf17e8516310c3260b20407856d5fd5f2ff54c4ec', 'CONTROLLED_MIGRATION'],
+  ['94c8e6d4c7d0f3203debaf993aaa75f5127d6629d76b607f94f380494c170fd5', 'CONTROLLED_MIGRATION'],
 ])
 
 function classify(site) {
@@ -72,7 +76,7 @@ const records = source.write_sites
   .filter(site => site.classification === 'AMBIGUOUS')
   .map(site => {
     const focusedDecision = focusedOwnershipDecisions.get(site.site_signature) ?? null
-    const result = focusedDecision === 'OWNER_VALID' || focusedDecision === 'FOREIGN'
+    const result = focusedDecision === 'OWNER_VALID' || focusedDecision === 'FOREIGN' || focusedDecision === 'CONTROLLED_MIGRATION'
       ? { disposition: 'CONFIRMED_WRITE_OWNER_RESOLVED', rationale: 'Focused architecture/source review resolved writer and target ownership against current decisions.' }
       : focusedDecision === 'OWNERSHIP_MANIFEST_GAP_REVIEW'
         ? { disposition: 'CONFIRMED_WRITE_OWNER_UNRESOLVED', rationale: 'Focused review confirmed a real schema-scoped ownership gap; no manifest change is assumed.' }
@@ -110,7 +114,7 @@ const records = source.write_sites
     semantic_state: result.disposition === 'CONFIRMED_NON_WRITE'
       ? 'RESOLVED_NON_WRITE'
       : result.disposition === 'CONFIRMED_WRITE_OWNER_RESOLVED'
-        ? 'OWNER_VALID_WRITE'
+        ? (inferredOwnership === 'CONTROLLED_MIGRATION' ? 'CONTROLLED_MIGRATION_WRITE' : 'OWNER_VALID_WRITE')
         : 'MATERIAL_UNRESOLVED_WRITE_RISK',
   }
   })
@@ -138,9 +142,10 @@ const summary = {
   GENUINELY_DYNAMIC_UNRESOLVED: 0,
   RESOLVED_NON_WRITE: records.filter(record => record.semantic_state === 'RESOLVED_NON_WRITE').length,
   OWNER_VALID_WRITE: records.filter(record => record.semantic_state === 'OWNER_VALID_WRITE').length,
+  CONTROLLED_MIGRATION_WRITE: records.filter(record => record.semantic_state === 'CONTROLLED_MIGRATION_WRITE').length,
   MATERIAL_UNRESOLVED_WRITE_RISK: records.filter(record => record.semantic_state === 'MATERIAL_UNRESOLVED_WRITE_RISK').length,
 }
-summary.RECONCILIATION_TOTAL = summary.RESOLVED_NON_WRITE + summary.OWNER_VALID_WRITE + summary.MATERIAL_UNRESOLVED_WRITE_RISK
+summary.RECONCILIATION_TOTAL = summary.RESOLVED_NON_WRITE + summary.OWNER_VALID_WRITE + summary.CONTROLLED_MIGRATION_WRITE + summary.MATERIAL_UNRESOLVED_WRITE_RISK
 summary.RECONCILIATION_EXACT = summary.RECONCILIATION_TOTAL === summary.RAW_BASELINE_AMBIGUOUS
 const document = {
   schema: 'yoko.crm.ambiguous-write-triage.v1',

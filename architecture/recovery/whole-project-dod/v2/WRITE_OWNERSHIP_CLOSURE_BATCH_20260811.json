@@ -1,12 +1,12 @@
 {
   "schema": "yoko.crm.write-ownership-closure-batch.v2",
-  "generated_at": "2026-08-11T11:39:11.973Z",
+  "generated_at": "2026-08-11T11:40:40.881Z",
   "authority": "Derived evidence ledger; unresolved records remain blocked/ambiguous and are not PASS.",
   "baseline": {
     "analysis_sha256": "6efca837fe067ab538590aceee6fa64b07bbb6a0747642274dca66c97a0ac6af",
     "baseline_sha256": "c06549a6d80b90cd23da244397ed704abb4722d4b4f03ae8fecb97061e3d4acb",
     "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T121500Z.json",
-    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_WA_MERGERS.json"
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_CONTROLLED_MIGRATION.json"
   },
   "metrics": {
     "confirmed_writes_discovered": 1413,
@@ -14,7 +14,7 @@
     "closed_foreign": 52,
     "ambiguous_remaining": 88,
     "confirmed_write_owner_resolved": 7,
-    "confirmed_write_owner_unresolved": 38,
+    "confirmed_write_owner_unresolved": 34,
     "dynamic_delegate_unresolved": 6,
     "dynamic_sql_unresolved": 32,
     "query_raw_side_effect_unresolved": 1,
@@ -25,7 +25,8 @@
     "raw_baseline_ambiguous_records": 88,
     "owner_valid_writes": 7,
     "resolved_non_writes": 4,
-    "material_unresolved_write_risk": 77
+    "material_unresolved_write_risk": 73,
+    "controlled_migration_writes": 4
   },
   "foreign_write_closure": {
     "previous_closed_foreign": 47,
@@ -167,7 +168,7 @@
     "post_rescan_foreign": 0,
     "ambiguity_reduction": 4
   },
-  "next_action": "Resolve remaining 38 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
+  "next_action": "Resolve remaining 34 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
   "new_backfill_capability_batch": {
     "files": [
       "gravity-mvp/scripts/backfill_source_connection_pr7.js",
@@ -386,5 +387,12 @@
     "writes_routed": 7,
     "post_rescan_foreign": 0,
     "ambiguity_reduction": 7
+  },
+  "controlled_migration_batch": {
+    "artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_RECONCILIATION_CONTROLLED_MIGRATION.json",
+    "sha256": "c576f7c06e9170540ff5b1b09d8e95e631f278e04539a01cde344cb2c1d6a0eb",
+    "source": "gravity-mvp/scripts/cleanup-group-chats.sql",
+    "records": 4,
+    "evidence": "Tier 4 migration SQL; explicit backup prerequisite and transaction boundary; exact signatures recorded."
   }
 }

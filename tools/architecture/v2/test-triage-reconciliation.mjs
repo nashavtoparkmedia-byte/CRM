@@ -7,7 +7,7 @@ const records = document.records ?? []
 const ids = records.map(record => record.record_id)
 if (records.length !== new Set(ids).size) throw new Error('triage reconciliation has duplicate record IDs')
 if (document.summary.RAW_BASELINE_AMBIGUOUS !== records.length) throw new Error('raw ambiguous count drift')
-const states = new Set(['RESOLVED_NON_WRITE', 'OWNER_VALID_WRITE', 'MATERIAL_UNRESOLVED_WRITE_RISK'])
+const states = new Set(['RESOLVED_NON_WRITE', 'OWNER_VALID_WRITE', 'CONTROLLED_MIGRATION_WRITE', 'MATERIAL_UNRESOLVED_WRITE_RISK'])
 if (records.some(record => !states.has(record.semantic_state))) throw new Error('record missing semantic state')
 const counts = Object.fromEntries([...states].map(state => [state, records.filter(record => record.semantic_state === state).length]))
 if (Object.values(counts).reduce((sum, count) => sum + count, 0) !== records.length) throw new Error('semantic state total drift')

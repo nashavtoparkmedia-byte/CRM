@@ -1,6 +1,6 @@
 {
   "schema": "yoko.crm.write-ownership-derived-state.v1",
-  "generated_at": "2026-08-11T11:39:11.973Z",
+  "generated_at": "2026-08-11T11:40:40.881Z",
   "program": "WHOLE-PROJECT DOD RECOVERY",
   "phase": "WRITE_OWNERSHIP_CLOSURE_WA_MERGER_RESCAN",
   "verdict": "EXTERNAL_FINAL_ACCEPTANCE_FAILED",
@@ -32,8 +32,8 @@
     "operational_surfaces_unclassified": 0,
     "temporary_exceptions": 0,
     "intentional_exceptions": 0,
-    "confirmed_write_owner_unresolved": 38,
-    "material_unresolved_remaining": 77,
+    "confirmed_write_owner_unresolved": 34,
+    "material_unresolved_remaining": 73,
     "test_surfaces_classified": 32,
     "dead_historical_classified": 29,
     "operational_surfaces_reviewed_batch": 382,
@@ -42,11 +42,12 @@
     "raw_baseline_ambiguous_records": 88,
     "resolved_non_writes": 4,
     "owner_valid_writes": 7,
-    "material_unresolved_write_risk": 77,
+    "material_unresolved_write_risk": 73,
     "confirmed_foreign": 0,
     "closed_foreign": 52,
     "confirmed_write_owner_resolved": 7,
-    "active_operational_surfaces_unclassified": 0
+    "active_operational_surfaces_unclassified": 0,
+    "controlled_migration_writes": 4
   },
   "focused_ownership_review": {
     "reviewed": 10,
@@ -86,7 +87,7 @@
       "state": "CLOSED_AFTER_AUTHORITATIVE_RESCAN"
     }
   ],
-  "next_action": "Resolve remaining 38 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
+  "next_action": "Resolve remaining 34 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
   "targeted_batch": {
     "artifact": "architecture/recovery/whole-project-dod/v2/WRITE_OWNERSHIP_CLOSURE_BATCH_20260811.json",
     "triage_artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_WA_JUNK.json",
@@ -114,8 +115,8 @@
     "artifact": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T121500Z.json",
     "baseline_sha256": "c06549a6d80b90cd23da244397ed704abb4722d4b4f03ae8fecb97061e3d4acb",
     "analysis_sha256": "6efca837fe067ab538590aceee6fa64b07bbb6a0747642274dca66c97a0ac6af",
-    "triage_artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_WA_MERGERS.json",
-    "triage_sha256": "264bebf44c751e7d311753a5ecc7177d0fed2a43b16ca7e5106080935844346f",
+    "triage_artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_CONTROLLED_MIGRATION.json",
+    "triage_sha256": "a623e5fdf3e1849ce01c35d33e4ed77a2ddf8f1ff76b09b29028ded68b53053c",
     "execution": {
       "ambiguous_candidates": 88,
       "complete": true,
@@ -143,19 +144,10 @@
     "registry_entries": 443
   },
   "reconciliation": {
-    "artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_RECONCILIATION_20260811.json",
-    "sha256": "c82d5bbda22d5d75721352d9a840a75fc3457f33b5f7701de1710b66d2188cbb",
-    "triage_artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_RECONCILED_20260811.json",
-    "triage_sha256": "b02de5651ef2383064750e50662b7dee2c9f10a06279a3216fb0ea069cd62577",
-    "exact": true,
-    "missing_seven_record_ids": [
-      "45645e0b760a5827a47289517fa298c1a3bcd215068e418d7c93e887b8ad17ac",
-      "81f28083be28056e5c9be0ca8018f6ec9121a53bee49136fe9fd7e710afdb913",
-      "64934aa9a77c0de5bafd842a668fa1b1f10654ce0a3ffa06cfe7a7fd3b995046",
-      "8779aa7c9ab18d702c45db346d6e34b2262c14d2744796efbc77bd6bcf6927a2",
-      "68e7b2590b446a521037a09ba257bd2dc3e9dc5160ae46e2838bc955f203ab4d",
-      "48452c703f3878500e43002f7311f83f1a84a5d7a7c7fc02ac262672a49917b9",
-      "f2385246a9722e1692eaa96a81289d48e1bc42701ab7bbaf653642fac72b7e40"
-    ]
+    "artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_RECONCILIATION_CONTROLLED_MIGRATION.json",
+    "sha256": "c576f7c06e9170540ff5b1b09d8e95e631f278e04539a01cde344cb2c1d6a0eb",
+    "triage_artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_CONTROLLED_MIGRATION.json",
+    "triage_sha256": "a623e5fdf3e1849ce01c35d33e4ed77a2ddf8f1ff76b09b29028ded68b53053c",
+    "exact": true
   }
 }
