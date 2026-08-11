@@ -1,0 +1,2979 @@
+{
+  "schema": "yoko.crm.ambiguous-write-triage.v1",
+  "baseline": {
+    "analysis_sha256": "6efca837fe067ab538590aceee6fa64b07bbb6a0747642274dca66c97a0ac6af",
+    "baseline_sha256": "c06549a6d80b90cd23da244397ed704abb4722d4b4f03ae8fecb97061e3d4acb"
+  },
+  "policy": "No unresolved record is converted to PASS or non-write without source or analyzer evidence.",
+  "taxonomy": [
+    "CONFIRMED_WRITE_OWNER_RESOLVED",
+    "CONFIRMED_WRITE_OWNER_UNRESOLVED",
+    "DYNAMIC_DELEGATE_UNRESOLVED",
+    "DYNAMIC_SQL_UNRESOLVED",
+    "QUERY_RAW_SIDE_EFFECT_UNRESOLVED",
+    "SOURCE_FAMILY_REVIEW_REQUIRED",
+    "CONFIRMED_NON_WRITE",
+    "GENUINELY_DYNAMIC_UNRESOLVED"
+  ],
+  "summary": {
+    "RAW_BASELINE_AMBIGUOUS": 88,
+    "CONFIRMED_WRITE_OWNER_RESOLVED": 7,
+    "CONFIRMED_WRITE_OWNER_UNRESOLVED": 38,
+    "DYNAMIC_DELEGATE_UNRESOLVED": 6,
+    "DYNAMIC_SQL_UNRESOLVED": 32,
+    "QUERY_RAW_SIDE_EFFECT_UNRESOLVED": 1,
+    "SOURCE_FAMILY_REVIEW_REQUIRED": 0,
+    "CONFIRMED_NON_WRITE": 4,
+    "GENUINELY_DYNAMIC_UNRESOLVED": 0,
+    "RESOLVED_NON_WRITE": 4,
+    "OWNER_VALID_WRITE": 7,
+    "MATERIAL_UNRESOLVED_WRITE_RISK": 77,
+    "RECONCILIATION_TOTAL": 88,
+    "RECONCILIATION_EXACT": true
+  },
+  "records": [
+    {
+      "record_id": "ccbe183dfdea263e1f9faa7a83fbce2cc2a51191737f860e38c95122633ac188",
+      "site_signature": "ccbe183dfdea263e1f9faa7a83fbce2cc2a51191737f860e38c95122633ac188",
+      "file": "gravity-mvp/backfill_channels.js",
+      "line": 15,
+      "column": 25,
+      "kind": "raw",
+      "method": "$executeRawUnsafe",
+      "model": null,
+      "candidate_models": [],
+      "tables": [
+        "Message"
+      ],
+      "operations": [
+        {
+          "dynamic_target": false,
+          "index": 7,
+          "operation": "UPDATE",
+          "table": "Message"
+        }
+      ],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL text or marker is dynamic; no write/non-write claim is safe without a narrower source or analyzer proof.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "436389ff92e99fb834d923108515ee40dcf7f948d664c8d0833fb07e69a56f5f",
+      "site_signature": "436389ff92e99fb834d923108515ee40dcf7f948d664c8d0833fb07e69a56f5f",
+      "file": "gravity-mvp/run_45d_sync.js",
+      "line": 108,
+      "column": 21,
+      "kind": "model",
+      "method": "upsert",
+      "model": "driverDaySummary",
+      "candidate_models": [
+        "driverDaySummary"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "fleet_operations"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "410cd744722ae50d6a951dfbc20346feb0040668a7753fdd2c59b3f82cbaa720",
+      "site_signature": "410cd744722ae50d6a951dfbc20346feb0040668a7753fdd2c59b3f82cbaa720",
+      "file": "gravity-mvp/scripts/bulk_phantom_lid_cleanup.js",
+      "line": 102,
+      "column": 15,
+      "kind": "model",
+      "method": "update",
+      "model": "contactIdentity",
+      "candidate_models": [
+        "contactIdentity"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "contacts"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "a0ad1cd7b4e9332742275d20b888d77d6c8710421fc1ec12c7a3529c19a93fec",
+      "site_signature": "a0ad1cd7b4e9332742275d20b888d77d6c8710421fc1ec12c7a3529c19a93fec",
+      "file": "gravity-mvp/scripts/bulk_phantom_lid_cleanup.js",
+      "line": 108,
+      "column": 15,
+      "kind": "model",
+      "method": "update",
+      "model": "contactIdentity",
+      "candidate_models": [
+        "contactIdentity"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "contacts"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "287d5013ffb9e3d517e410f88cb3b7b94d97159156137aa6fce2369d58dc9477",
+      "site_signature": "287d5013ffb9e3d517e410f88cb3b7b94d97159156137aa6fce2369d58dc9477",
+      "file": "gravity-mvp/scripts/bulk_phantom_lid_cleanup.js",
+      "line": 116,
+      "column": 11,
+      "kind": "model",
+      "method": "updateMany",
+      "model": "contactIdentity",
+      "candidate_models": [
+        "contactIdentity"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "contacts"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "2302da3aaf25b89839e07b2d5721f0d9dea7d0ba40c25a20409de570287246ea",
+      "site_signature": "2302da3aaf25b89839e07b2d5721f0d9dea7d0ba40c25a20409de570287246ea",
+      "file": "gravity-mvp/scripts/bulk_phantom_lid_cleanup.js",
+      "line": 129,
+      "column": 11,
+      "kind": "model",
+      "method": "update",
+      "model": "contactIdentity",
+      "candidate_models": [
+        "contactIdentity"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "contacts"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "9b0fd6b7d9d3a32ef1d0f22df15a0e50f48a656cf6bef0ddcb48341cd62994ea",
+      "site_signature": "9b0fd6b7d9d3a32ef1d0f22df15a0e50f48a656cf6bef0ddcb48341cd62994ea",
+      "file": "gravity-mvp/scripts/bulk_phantom_lid_cleanup.js",
+      "line": 136,
+      "column": 11,
+      "kind": "model",
+      "method": "updateMany",
+      "model": "contactIdentity",
+      "candidate_models": [
+        "contactIdentity"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "contacts"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "86f57b58a6d3409af7a6a18ca3a9fb36b4dbf11d247c8df8fabde9dddc6c674a",
+      "site_signature": "86f57b58a6d3409af7a6a18ca3a9fb36b4dbf11d247c8df8fabde9dddc6c674a",
+      "file": "gravity-mvp/scripts/bulk_phantom_lid_cleanup.js",
+      "line": 149,
+      "column": 23,
+      "kind": "raw",
+      "method": "$queryRawUnsafe",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [
+        "dialect_dependent_string_escape",
+        "query_raw_intent_unresolved",
+        "select_function_side_effect_unresolved"
+      ],
+      "disposition": "QUERY_RAW_INTENT_UNRESOLVED",
+      "rationale": "A queryRaw call may invoke a side-effecting routine; it remains unresolved rather than being counted as a non-write.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "8de210261e1993d3f9c04a7fe6b5db7dadaa887e1a40b8379d34848007410576",
+      "site_signature": "8de210261e1993d3f9c04a7fe6b5db7dadaa887e1a40b8379d34848007410576",
+      "file": "gravity-mvp/scripts/cleanup_stale_ai_sessions.js",
+      "line": 111,
+      "column": 15,
+      "kind": "ambiguous_model",
+      "method": "update",
+      "model": null,
+      "candidate_models": [
+        "call"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "calling"
+      ],
+      "receiver_origin": "dependency-injected-parameter:53bb11925bea74f2",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [
+        "ambiguous_prisma_delegate",
+        "unproven_prisma_client",
+        "unproven_prisma_dependency_injection"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_OR_UNPROVEN_DELEGATE",
+      "rationale": "The receiver or delegate is not statically proven; this is not a false-positive classification.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "7c1c604365581584c6d97b52717b21cde8b2925c9c6e6b7692b3e3332ccbc358",
+      "site_signature": "7c1c604365581584c6d97b52717b21cde8b2925c9c6e6b7692b3e3332ccbc358",
+      "file": "gravity-mvp/scripts/cleanup-all-channels.js",
+      "line": 32,
+      "column": 25,
+      "kind": "model",
+      "method": "deleteMany",
+      "model": "message",
+      "candidate_models": [
+        "message"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "313378433e37cfde909294f035366eb3d113f31c4a1deca269069195ecc59f80",
+      "site_signature": "313378433e37cfde909294f035366eb3d113f31c4a1deca269069195ecc59f80",
+      "file": "gravity-mvp/scripts/cleanup-all-channels.js",
+      "line": 50,
+      "column": 15,
+      "kind": "model",
+      "method": "update",
+      "model": "message",
+      "candidate_models": [
+        "message"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "357b468d1a0c149e8378571915509b949a0b3f54edd10069a5c32e126573d8f5",
+      "site_signature": "357b468d1a0c149e8378571915509b949a0b3f54edd10069a5c32e126573d8f5",
+      "file": "gravity-mvp/scripts/cleanup-all-channels.js",
+      "line": 55,
+      "column": 28,
+      "kind": "model",
+      "method": "updateMany",
+      "model": "message",
+      "candidate_models": [
+        "message"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "32f16026e6ff7a01d27964aa52c225157fc35533cd69207c3162991f351775bd",
+      "site_signature": "32f16026e6ff7a01d27964aa52c225157fc35533cd69207c3162991f351775bd",
+      "file": "gravity-mvp/scripts/cleanup-all-channels.js",
+      "line": 73,
+      "column": 25,
+      "kind": "model",
+      "method": "deleteMany",
+      "model": "chat",
+      "candidate_models": [
+        "chat"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "1dde17910d6ede26e63fea7f13eeb237a27f299dc3c25186fa9686400b466a68",
+      "site_signature": "1dde17910d6ede26e63fea7f13eeb237a27f299dc3c25186fa9686400b466a68",
+      "file": "gravity-mvp/scripts/cleanup-group-chats.sql",
+      "line": 27,
+      "column": 1,
+      "kind": "raw",
+      "method": "sql-script",
+      "model": null,
+      "candidate_models": [],
+      "tables": [
+        "Chat"
+      ],
+      "operations": [
+        {
+          "dynamic_target": false,
+          "fragment_source": "standalone_sql",
+          "index": 932,
+          "operation": "UPDATE",
+          "table": "Chat"
+        }
+      ],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": null,
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "The SQL analyzer proved a mutating statement, but no owner context was resolved.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "c13b2ed496ae9c0a869281cd3db6f4ba560cffb50f5a10573e2702527fa49acc",
+      "site_signature": "c13b2ed496ae9c0a869281cd3db6f4ba560cffb50f5a10573e2702527fa49acc",
+      "file": "gravity-mvp/scripts/cleanup-group-chats.sql",
+      "line": 30,
+      "column": 1,
+      "kind": "raw",
+      "method": "sql-script",
+      "model": null,
+      "candidate_models": [],
+      "tables": [
+        "Chat"
+      ],
+      "operations": [
+        {
+          "dynamic_target": false,
+          "fragment_source": "standalone_sql",
+          "index": 1064,
+          "operation": "UPDATE",
+          "table": "Chat"
+        }
+      ],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": null,
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "The SQL analyzer proved a mutating statement, but no owner context was resolved.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "3496c5c9535bc1d5b0cce4adf17e8516310c3260b20407856d5fd5f2ff54c4ec",
+      "site_signature": "3496c5c9535bc1d5b0cce4adf17e8516310c3260b20407856d5fd5f2ff54c4ec",
+      "file": "gravity-mvp/scripts/cleanup-group-chats.sql",
+      "line": 34,
+      "column": 1,
+      "kind": "raw",
+      "method": "sql-script",
+      "model": null,
+      "candidate_models": [],
+      "tables": [
+        "Chat"
+      ],
+      "operations": [
+        {
+          "dynamic_target": false,
+          "fragment_source": "standalone_sql",
+          "index": 1236,
+          "operation": "UPDATE",
+          "table": "Chat"
+        }
+      ],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": null,
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "The SQL analyzer proved a mutating statement, but no owner context was resolved.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "94c8e6d4c7d0f3203debaf993aaa75f5127d6629d76b607f94f380494c170fd5",
+      "site_signature": "94c8e6d4c7d0f3203debaf993aaa75f5127d6629d76b607f94f380494c170fd5",
+      "file": "gravity-mvp/scripts/cleanup-group-chats.sql",
+      "line": 43,
+      "column": 1,
+      "kind": "raw",
+      "method": "sql-script",
+      "model": null,
+      "candidate_models": [],
+      "tables": [
+        "ContactIdentity"
+      ],
+      "operations": [
+        {
+          "dynamic_target": false,
+          "fragment_source": "standalone_sql",
+          "index": 1639,
+          "operation": "DELETE",
+          "table": "ContactIdentity"
+        }
+      ],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "contacts"
+      ],
+      "receiver_origin": null,
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "The SQL analyzer proved a mutating statement, but no owner context was resolved.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "29dd070f09a8ea2c7db3cda7c9e0efc7a63060390f7dea1f830864b3e4eea44e",
+      "site_signature": "29dd070f09a8ea2c7db3cda7c9e0efc7a63060390f7dea1f830864b3e4eea44e",
+      "file": "gravity-mvp/scripts/dedup-chats-and-attachments.js",
+      "line": 28,
+      "column": 11,
+      "kind": "model",
+      "method": "updateMany",
+      "model": "message",
+      "candidate_models": [
+        "message"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "a72fe790a42441a6dad664261c8243d07b1e4fde1e0c92e063cc4f85f2e2a6e6",
+      "site_signature": "a72fe790a42441a6dad664261c8243d07b1e4fde1e0c92e063cc4f85f2e2a6e6",
+      "file": "gravity-mvp/scripts/dedup-chats-and-attachments.js",
+      "line": 38,
+      "column": 15,
+      "kind": "model",
+      "method": "update",
+      "model": "chat",
+      "candidate_models": [
+        "chat"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [
+        "dynamic_payload_may_contain_nested_write"
+      ],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "0420271e75837903a4222bf7962b9f2fc18e492d9b619adeaf6eaae13f6d0b40",
+      "site_signature": "0420271e75837903a4222bf7962b9f2fc18e492d9b619adeaf6eaae13f6d0b40",
+      "file": "gravity-mvp/scripts/dedup-chats-and-attachments.js",
+      "line": 41,
+      "column": 11,
+      "kind": "model",
+      "method": "delete",
+      "model": "chat",
+      "candidate_models": [
+        "chat"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "a7a7f2be21283165ee4da2d622ecb2bbdc6aaaa23a9e43fd750cb29f59452916",
+      "site_signature": "a7a7f2be21283165ee4da2d622ecb2bbdc6aaaa23a9e43fd750cb29f59452916",
+      "file": "gravity-mvp/scripts/dedup-chats-and-attachments.js",
+      "line": 86,
+      "column": 23,
+      "kind": "model",
+      "method": "update",
+      "model": "chat",
+      "candidate_models": [
+        "chat"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "40f0da57111f328072c0b3aadfeda9066021e32a251f36d720f509c42da231bb",
+      "site_signature": "40f0da57111f328072c0b3aadfeda9066021e32a251f36d720f509c42da231bb",
+      "file": "gravity-mvp/scripts/dedup-chats-and-attachments.js",
+      "line": 122,
+      "column": 25,
+      "kind": "model",
+      "method": "deleteMany",
+      "model": "messageAttachment",
+      "candidate_models": [
+        "messageAttachment"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "49dea63c9a03edddd797ed2c8be9b9009727b081fb4cb5c2f3906807965a0be8",
+      "site_signature": "49dea63c9a03edddd797ed2c8be9b9009727b081fb4cb5c2f3906807965a0be8",
+      "file": "gravity-mvp/scripts/import-churn-from-excel.js",
+      "line": 104,
+      "column": 33,
+      "kind": "model",
+      "method": "deleteMany",
+      "model": "taskEvent",
+      "candidate_models": [
+        "taskEvent"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "work_management"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "da17ceecda19c6a3f80aafeda5ad42df296e8dac3dc48639f674a8f1672a279b",
+      "site_signature": "da17ceecda19c6a3f80aafeda5ad42df296e8dac3dc48639f674a8f1672a279b",
+      "file": "gravity-mvp/scripts/import-churn-from-excel.js",
+      "line": 108,
+      "column": 32,
+      "kind": "model",
+      "method": "deleteMany",
+      "model": "task",
+      "candidate_models": [
+        "task"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "work_management"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "dc49095a0efcc835dde4c575686fbc2c0395640699662726710bf5e43dabb513",
+      "site_signature": "dc49095a0efcc835dde4c575686fbc2c0395640699662726710bf5e43dabb513",
+      "file": "gravity-mvp/scripts/import-churn-from-excel.js",
+      "line": 140,
+      "column": 28,
+      "kind": "model",
+      "method": "create",
+      "model": "driver",
+      "candidate_models": [
+        "driver"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "fleet_operations"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "566c4c021303043cadf13ad5bf33309ada7f3c4b57d5c34222d472f084fbc8a6",
+      "site_signature": "566c4c021303043cadf13ad5bf33309ada7f3c4b57d5c34222d472f084fbc8a6",
+      "file": "gravity-mvp/scripts/import-churn-from-excel.js",
+      "line": 237,
+      "column": 28,
+      "kind": "model",
+      "method": "create",
+      "model": "task",
+      "candidate_models": [
+        "task"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "work_management"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "b2f729f8a976e2410d9d06f76087a064915b9fda407f7e4f18941a4ddd2cce19",
+      "site_signature": "b2f729f8a976e2410d9d06f76087a064915b9fda407f7e4f18941a4ddd2cce19",
+      "file": "gravity-mvp/scripts/import-churn-from-excel.js",
+      "line": 340,
+      "column": 19,
+      "kind": "model",
+      "method": "createMany",
+      "model": "taskEvent",
+      "candidate_models": [
+        "taskEvent"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "work_management"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [
+        "dynamic_payload_may_contain_nested_write"
+      ],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "eca94b68a389faa3dd59d2b6815caa5151a5e1d3b0599eaecb39b43b3513ca9a",
+      "site_signature": "eca94b68a389faa3dd59d2b6815caa5151a5e1d3b0599eaecb39b43b3513ca9a",
+      "file": "gravity-mvp/scripts/merge-duplicate-wa-chats.js",
+      "line": 72,
+      "column": 27,
+      "kind": "model",
+      "method": "delete",
+      "model": "message",
+      "candidate_models": [
+        "message"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "dae9315fc5de8a5f74f524d73f3291082400733b80ce4e3708315256db9fa40c",
+      "site_signature": "dae9315fc5de8a5f74f524d73f3291082400733b80ce4e3708315256db9fa40c",
+      "file": "gravity-mvp/scripts/merge-duplicate-wa-chats.js",
+      "line": 77,
+      "column": 19,
+      "kind": "model",
+      "method": "update",
+      "model": "message",
+      "candidate_models": [
+        "message"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "1a28f8831ad8c64fe89c0ac9b47ab1b09f74a69d8c73087025221f674f42c994",
+      "site_signature": "1a28f8831ad8c64fe89c0ac9b47ab1b09f74a69d8c73087025221f674f42c994",
+      "file": "gravity-mvp/scripts/merge-duplicate-wa-chats.js",
+      "line": 88,
+      "column": 19,
+      "kind": "model",
+      "method": "updateMany",
+      "model": "chatEventLog",
+      "candidate_models": [
+        "chatEventLog"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "38cda8c498b69e9794d01a93159ab9ef11832afa5e1ac93bd7d9801497c58f1b",
+      "site_signature": "38cda8c498b69e9794d01a93159ab9ef11832afa5e1ac93bd7d9801497c58f1b",
+      "file": "gravity-mvp/scripts/merge-duplicate-wa-chats.js",
+      "line": 100,
+      "column": 19,
+      "kind": "model",
+      "method": "update",
+      "model": "chat",
+      "candidate_models": [
+        "chat"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "ee43a7255341b56c616f59d9f764f8544d0c29b4e30c9f50642830cc2dee6179",
+      "site_signature": "ee43a7255341b56c616f59d9f764f8544d0c29b4e30c9f50642830cc2dee6179",
+      "file": "gravity-mvp/scripts/merge-duplicate-wa-chats.js",
+      "line": 105,
+      "column": 19,
+      "kind": "model",
+      "method": "delete",
+      "model": "chat",
+      "candidate_models": [
+        "chat"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "8c340e42d8d727b4953d3a0b00c05ffef42f9cdac4f715fc0b14ef633ecb3876",
+      "site_signature": "8c340e42d8d727b4953d3a0b00c05ffef42f9cdac4f715fc0b14ef633ecb3876",
+      "file": "gravity-mvp/scripts/merge-duplicate-wa-chats.js",
+      "line": 127,
+      "column": 11,
+      "kind": "model",
+      "method": "update",
+      "model": "chat",
+      "candidate_models": [
+        "chat"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "1c0db243b3970f74b2aba80106ee932184807e79d0202c929528fa20863d40ab",
+      "site_signature": "1c0db243b3970f74b2aba80106ee932184807e79d0202c929528fa20863d40ab",
+      "file": "gravity-mvp/scripts/merge-tg-chats.ts",
+      "line": 110,
+      "column": 35,
+      "kind": "model",
+      "method": "updateMany",
+      "model": "message",
+      "candidate_models": [
+        "message"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "new:import:@prisma/client",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "98d7e41137e869b76499783a4b8ccbc284ad7587e81535242822c35fee216bd9",
+      "site_signature": "98d7e41137e869b76499783a4b8ccbc284ad7587e81535242822c35fee216bd9",
+      "file": "gravity-mvp/scripts/merge-tg-chats.ts",
+      "line": 114,
+      "column": 19,
+      "kind": "model",
+      "method": "delete",
+      "model": "chat",
+      "candidate_models": [
+        "chat"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "new:import:@prisma/client",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "32f1fd3e6b047202f79bf923c359b748a06f50010a4113a0ded9df2e26431d20",
+      "site_signature": "32f1fd3e6b047202f79bf923c359b748a06f50010a4113a0ded9df2e26431d20",
+      "file": "gravity-mvp/scripts/rollback_knowledge_core.js",
+      "line": 154,
+      "column": 19,
+      "kind": "raw",
+      "method": "$executeRawUnsafe",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [
+        "sql_not_statically_available"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL argument is not statically available; retain it as dynamic SQL rather than a source-family ambiguity.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "39580bbf11638c64bf3325dd1f0d3f4c485d61d4e546172b09857e7c3251b50b",
+      "site_signature": "39580bbf11638c64bf3325dd1f0d3f4c485d61d4e546172b09857e7c3251b50b",
+      "file": "gravity-mvp/scripts/wipe-whatsapp-data.js",
+      "line": 33,
+      "column": 25,
+      "kind": "model",
+      "method": "deleteMany",
+      "model": "whatsAppMessage",
+      "candidate_models": [
+        "whatsAppMessage"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "whatsapp_channel"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "68267688099e29ceadb8cc941bfede81f1e5c6b968b45445d1f23c30b24d7173",
+      "site_signature": "68267688099e29ceadb8cc941bfede81f1e5c6b968b45445d1f23c30b24d7173",
+      "file": "gravity-mvp/scripts/wipe-whatsapp-data.js",
+      "line": 36,
+      "column": 23,
+      "kind": "model",
+      "method": "deleteMany",
+      "model": "message",
+      "candidate_models": [
+        "message"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "60ca8f4fc826ad12c07f60a14bef3ca674b180d41118de37c9c4500a6858e266",
+      "site_signature": "60ca8f4fc826ad12c07f60a14bef3ca674b180d41118de37c9c4500a6858e266",
+      "file": "gravity-mvp/scripts/wipe-whatsapp-data.js",
+      "line": 39,
+      "column": 26,
+      "kind": "model",
+      "method": "deleteMany",
+      "model": "whatsAppChat",
+      "candidate_models": [
+        "whatsAppChat"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "whatsapp_channel"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "95a38927d86c9293165ae3afe3e78d60e6c0b5fd48c1de0100ae36856ac86ed6",
+      "site_signature": "95a38927d86c9293165ae3afe3e78d60e6c0b5fd48c1de0100ae36856ac86ed6",
+      "file": "gravity-mvp/scripts/wipe-whatsapp-data.js",
+      "line": 42,
+      "column": 24,
+      "kind": "model",
+      "method": "deleteMany",
+      "model": "chat",
+      "candidate_models": [
+        "chat"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "2737d1ec13a8dfe5aa65eddaeab8881f93e236c8aa839ba34cbde16de0187e83",
+      "site_signature": "2737d1ec13a8dfe5aa65eddaeab8881f93e236c8aa839ba34cbde16de0187e83",
+      "file": "gravity-mvp/scripts/wipe-whatsapp-data.js",
+      "line": 45,
+      "column": 26,
+      "kind": "model",
+      "method": "deleteMany",
+      "model": "whatsAppChatRoster",
+      "candidate_models": [
+        "whatsAppChatRoster"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "whatsapp_channel"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "36c9b52b2b9c7b0d7ec8bec4120e6772b5421558fb0f591ed1ef2f9306aadce7",
+      "site_signature": "36c9b52b2b9c7b0d7ec8bec4120e6772b5421558fb0f591ed1ef2f9306aadce7",
+      "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
+      "line": 113,
+      "column": 13,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "calling",
+      "source_technical_module": "calls",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL text or marker is dynamic; no write/non-write claim is safe without a narrower source or analyzer proof.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "bd5f029e6d7e1ae7767d85e524d2a69134bd87aef53352ebeb7caf364aa54825",
+      "site_signature": "bd5f029e6d7e1ae7767d85e524d2a69134bd87aef53352ebeb7caf364aa54825",
+      "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
+      "line": 125,
+      "column": 13,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "calling",
+      "source_technical_module": "calls",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL text or marker is dynamic; no write/non-write claim is safe without a narrower source or analyzer proof.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "3331c0d6e52e665c9f373dfa9a50f8b351bfffe7678db5d300bf2c01c46996bc",
+      "site_signature": "3331c0d6e52e665c9f373dfa9a50f8b351bfffe7678db5d300bf2c01c46996bc",
+      "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
+      "line": 139,
+      "column": 13,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "calling",
+      "source_technical_module": "calls",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL text or marker is dynamic; no write/non-write claim is safe without a narrower source or analyzer proof.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "037b459fcefcde89d3f50f66e7cb3d69cf7788f5451ec7ebe9cee41e94291b91",
+      "site_signature": "037b459fcefcde89d3f50f66e7cb3d69cf7788f5451ec7ebe9cee41e94291b91",
+      "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
+      "line": 149,
+      "column": 13,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "calling",
+      "source_technical_module": "calls",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL text or marker is dynamic; no write/non-write claim is safe without a narrower source or analyzer proof.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "d7b60d9168005c4268cd46df849f684067e5994e79744e430f76ccc5b14f08bb",
+      "site_signature": "d7b60d9168005c4268cd46df849f684067e5994e79744e430f76ccc5b14f08bb",
+      "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
+      "line": 161,
+      "column": 13,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "calling",
+      "source_technical_module": "calls",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL text or marker is dynamic; no write/non-write claim is safe without a narrower source or analyzer proof.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "dd15e3ca3b8b8470797072b94d9ee74c5a0d4f66aba7c7104f566faa790e6590",
+      "site_signature": "dd15e3ca3b8b8470797072b94d9ee74c5a0d4f66aba7c7104f566faa790e6590",
+      "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
+      "line": 171,
+      "column": 13,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "calling",
+      "source_technical_module": "calls",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL text or marker is dynamic; no write/non-write claim is safe without a narrower source or analyzer proof.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "8004a8dc8d8d1183024debb2be7bf79572b663ab596b6497a2e8058cb51b46fa",
+      "site_signature": "8004a8dc8d8d1183024debb2be7bf79572b663ab596b6497a2e8058cb51b46fa",
+      "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
+      "line": 331,
+      "column": 28,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "messaging",
+      "source_technical_module": "messages",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL text or marker is dynamic; no write/non-write claim is safe without a narrower source or analyzer proof.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "b2c3ae6fc6828d9d51e85f6f01d3dff86df72a5ced9f863516a2d0276c1c61e3",
+      "site_signature": "b2c3ae6fc6828d9d51e85f6f01d3dff86df72a5ced9f863516a2d0276c1c61e3",
+      "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+      "line": 1778,
+      "column": 28,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "configuration",
+      "source_technical_module": "settings",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL text or marker is dynamic; no write/non-write claim is safe without a narrower source or analyzer proof.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "e8319859102636b4b4915c12f4c1dccaac2f97309e2fe5853109ef441b95bae6",
+      "site_signature": "e8319859102636b4b4915c12f4c1dccaac2f97309e2fe5853109ef441b95bae6",
+      "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+      "line": 2370,
+      "column": 32,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "configuration",
+      "source_technical_module": "settings",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL text or marker is dynamic; no write/non-write claim is safe without a narrower source or analyzer proof.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "69ae5095adc3a7847274305f5f6a963d449606b60094335bb37a22a0423b4f9c",
+      "site_signature": "69ae5095adc3a7847274305f5f6a963d449606b60094335bb37a22a0423b4f9c",
+      "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+      "line": 2389,
+      "column": 41,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "configuration",
+      "source_technical_module": "settings",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL text or marker is dynamic; no write/non-write claim is safe without a narrower source or analyzer proof.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "5cff329cbbb30ad80f4a934dadf91c774bdf4c1c77907e08527b8159762e554a",
+      "site_signature": "5cff329cbbb30ad80f4a934dadf91c774bdf4c1c77907e08527b8159762e554a",
+      "file": "gravity-mvp/src/app/tasks/actions.ts",
+      "line": 552,
+      "column": 36,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "work_management",
+      "source_technical_module": "tasks",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL text or marker is dynamic; no write/non-write claim is safe without a narrower source or analyzer proof.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "3ee3e1ff772ceba991f2e501083d76c3fad96f5b0fc9831a0f47c1a827f37df8",
+      "site_signature": "3ee3e1ff772ceba991f2e501083d76c3fad96f5b0fc9831a0f47c1a827f37df8",
+      "file": "gravity-mvp/src/app/team-overview/actions.ts",
+      "line": 790,
+      "column": 19,
+      "kind": "raw",
+      "method": "$queryRawUnsafe",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "analytics_reporting",
+      "source_technical_module": "analytics",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL text or marker is dynamic; no write/non-write claim is safe without a narrower source or analyzer proof.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "0c81e542c6ee55171cb049c0570617f3fa9ea12402305bfe8014d2c953c51caa",
+      "site_signature": "0c81e542c6ee55171cb049c0570617f3fa9ea12402305bfe8014d2c953c51caa",
+      "file": "gravity-mvp/src/app/tg-actions.ts",
+      "line": 1519,
+      "column": 32,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "telegram_channel",
+      "source_technical_module": "telegram_provider",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL text or marker is dynamic; no write/non-write claim is safe without a narrower source or analyzer proof.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "45645e0b760a5827a47289517fa298c1a3bcd215068e418d7c93e887b8ad17ac",
+      "site_signature": "45645e0b760a5827a47289517fa298c1a3bcd215068e418d7c93e887b8ad17ac",
+      "file": "gravity-mvp/src/infrastructure/outbox/prisma-outbox-store.ts",
+      "line": 24,
+      "column": 40,
+      "kind": "model",
+      "method": "updateMany",
+      "model": "domainOutboxEvent",
+      "candidate_models": [
+        "domainOutboxEvent"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": "platform_shell",
+      "source_technical_module": "gravity_core",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "81f28083be28056e5c9be0ca8018f6ec9121a53bee49136fe9fd7e710afdb913",
+      "site_signature": "81f28083be28056e5c9be0ca8018f6ec9121a53bee49136fe9fd7e710afdb913",
+      "file": "gravity-mvp/src/infrastructure/outbox/prisma-outbox-store.ts",
+      "line": 36,
+      "column": 38,
+      "kind": "model",
+      "method": "updateMany",
+      "model": "domainOutboxEvent",
+      "candidate_models": [
+        "domainOutboxEvent"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": "platform_shell",
+      "source_technical_module": "gravity_core",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "64934aa9a77c0de5bafd842a668fa1b1f10654ce0a3ffa06cfe7a7fd3b995046",
+      "site_signature": "64934aa9a77c0de5bafd842a668fa1b1f10654ce0a3ffa06cfe7a7fd3b995046",
+      "file": "gravity-mvp/src/infrastructure/outbox/prisma-outbox-store.ts",
+      "line": 49,
+      "column": 33,
+      "kind": "model",
+      "method": "updateMany",
+      "model": "domainOutboxEvent",
+      "candidate_models": [
+        "domainOutboxEvent"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": "platform_shell",
+      "source_technical_module": "gravity_core",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "8779aa7c9ab18d702c45db346d6e34b2262c14d2744796efbc77bd6bcf6927a2",
+      "site_signature": "8779aa7c9ab18d702c45db346d6e34b2262c14d2744796efbc77bd6bcf6927a2",
+      "file": "gravity-mvp/src/infrastructure/outbox/prisma-outbox-store.ts",
+      "line": 81,
+      "column": 34,
+      "kind": "model",
+      "method": "updateMany",
+      "model": "domainOutboxEvent",
+      "candidate_models": [
+        "domainOutboxEvent"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": "platform_shell",
+      "source_technical_module": "gravity_core",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "68e7b2590b446a521037a09ba257bd2dc3e9dc5160ae46e2838bc955f203ab4d",
+      "site_signature": "68e7b2590b446a521037a09ba257bd2dc3e9dc5160ae46e2838bc955f203ab4d",
+      "file": "gravity-mvp/src/infrastructure/outbox/prisma-outbox-store.ts",
+      "line": 102,
+      "column": 15,
+      "kind": "model",
+      "method": "updateMany",
+      "model": "domainOutboxEvent",
+      "candidate_models": [
+        "domainOutboxEvent"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": "platform_shell",
+      "source_technical_module": "gravity_core",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "48452c703f3878500e43002f7311f83f1a84a5d7a7c7fc02ac262672a49917b9",
+      "site_signature": "48452c703f3878500e43002f7311f83f1a84a5d7a7c7fc02ac262672a49917b9",
+      "file": "gravity-mvp/src/infrastructure/outbox/prisma-outbox-store.ts",
+      "line": 114,
+      "column": 15,
+      "kind": "model",
+      "method": "updateMany",
+      "model": "domainOutboxEvent",
+      "candidate_models": [
+        "domainOutboxEvent"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": "platform_shell",
+      "source_technical_module": "gravity_core",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "2f2c9864fb55ec9aff1b3b223b1f42c8693cc8c0ddd9d660fb3c1ddd907f581f",
+      "site_signature": "2f2c9864fb55ec9aff1b3b223b1f42c8693cc8c0ddd9d660fb3c1ddd907f581f",
+      "file": "gravity-mvp/src/lib/ai-call/event-emitter.js",
+      "line": 156,
+      "column": 34,
+      "kind": "ambiguous_model",
+      "method": "createMany",
+      "model": null,
+      "candidate_models": [
+        "aiCallEvent"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": "calling",
+      "source_technical_module": "ai_calls",
+      "owner_contexts": [
+        "calling"
+      ],
+      "receiver_origin": "dependency-injected-parameter:prismaClient",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "ambiguous_prisma_delegate",
+        "dynamic_payload_may_contain_nested_write",
+        "unproven_prisma_client",
+        "unproven_prisma_dependency_injection"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_OR_UNPROVEN_DELEGATE",
+      "rationale": "The receiver or delegate is not statically proven; this is not a false-positive classification.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "e1c81095a11532a1ba56e2629b9316a15d42ad5062aa52dfa190283adb26f5e1",
+      "site_signature": "e1c81095a11532a1ba56e2629b9316a15d42ad5062aa52dfa190283adb26f5e1",
+      "file": "gravity-mvp/src/lib/ai/knowledge/callTranscriptBuilder.ts",
+      "line": 82,
+      "column": 24,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "ai_knowledge",
+      "source_technical_module": "ai_knowledge",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL text or marker is dynamic; no write/non-write claim is safe without a narrower source or analyzer proof.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "040c0d8f2319e57f6b22e2e2dbc3065fe5fbf10ad306e15ff687cf87f3604057",
+      "site_signature": "040c0d8f2319e57f6b22e2e2dbc3065fe5fbf10ad306e15ff687cf87f3604057",
+      "file": "gravity-mvp/src/lib/ai/knowledge/explainability.ts",
+      "line": 227,
+      "column": 29,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "ai_knowledge",
+      "source_technical_module": "ai_knowledge",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL text or marker is dynamic; no write/non-write claim is safe without a narrower source or analyzer proof.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "ea322bd576b8b6ee4240ed4611e602b63d1cdcb2befa71a84a886a55afb4ac4f",
+      "site_signature": "ea322bd576b8b6ee4240ed4611e602b63d1cdcb2befa71a84a886a55afb4ac4f",
+      "file": "gravity-mvp/src/lib/ai/knowledge/explainability.ts",
+      "line": 245,
+      "column": 32,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "ai_knowledge",
+      "source_technical_module": "ai_knowledge",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL text or marker is dynamic; no write/non-write claim is safe without a narrower source or analyzer proof.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "3f0f0682204964ed2be82d5effe35517b5e8eaa97f73dbc4344cbc63d361907f",
+      "site_signature": "3f0f0682204964ed2be82d5effe35517b5e8eaa97f73dbc4344cbc63d361907f",
+      "file": "gravity-mvp/src/lib/ai/knowledge/pairBuilder.ts",
+      "line": 133,
+      "column": 22,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "ai_knowledge",
+      "source_technical_module": "ai_knowledge",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL text or marker is dynamic; no write/non-write claim is safe without a narrower source or analyzer proof.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "31e7ff73ab8a69a2a5f72de16d08e899a46e9cc48004c42e034335d5e622637c",
+      "site_signature": "31e7ff73ab8a69a2a5f72de16d08e899a46e9cc48004c42e034335d5e622637c",
+      "file": "gravity-mvp/src/lib/ai/knowledge/pairBuilder.ts",
+      "line": 166,
+      "column": 18,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "ai_knowledge",
+      "source_technical_module": "ai_knowledge",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL text or marker is dynamic; no write/non-write claim is safe without a narrower source or analyzer proof.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "2390d5d610646077ea1572b4ae278b721ceb44b14461dccf8e24817a7b68f541",
+      "site_signature": "2390d5d610646077ea1572b4ae278b721ceb44b14461dccf8e24817a7b68f541",
+      "file": "gravity-mvp/src/lib/ai/knowledge/queries.ts",
+      "line": 249,
+      "column": 28,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "ai_knowledge",
+      "source_technical_module": "ai_knowledge",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_intent_unresolved",
+        "select_function_side_effect_unresolved"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL text or marker is dynamic; no write/non-write claim is safe without a narrower source or analyzer proof.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "1ac9db07b55047f8f0e8b6708e294bf1e033a1e71f5348567b5fb6ee421a6858",
+      "site_signature": "1ac9db07b55047f8f0e8b6708e294bf1e033a1e71f5348567b5fb6ee421a6858",
+      "file": "gravity-mvp/src/lib/ai/knowledge/Retriever.ts",
+      "line": 184,
+      "column": 22,
+      "kind": "raw",
+      "method": "$queryRawUnsafe",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "ai_knowledge",
+      "source_technical_module": "ai_knowledge",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL text or marker is dynamic; no write/non-write claim is safe without a narrower source or analyzer proof.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "6c84c5974dc29a3cd814144d007c6669c061d6217ca8837671847aaf97206891",
+      "site_signature": "6c84c5974dc29a3cd814144d007c6669c061d6217ca8837671847aaf97206891",
+      "file": "gravity-mvp/src/lib/MessageService.ts",
+      "line": 101,
+      "column": 65,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "messaging",
+      "source_technical_module": "messages",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL text or marker is dynamic; no write/non-write claim is safe without a narrower source or analyzer proof.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "6fe3c1e8c14600a70e17a2782784bf9dbe45318c0ca596bc87d4ebcd3a1837c4",
+      "site_signature": "6fe3c1e8c14600a70e17a2782784bf9dbe45318c0ca596bc87d4ebcd3a1837c4",
+      "file": "gravity-mvp/src/lib/tasks/scenario-settings.ts",
+      "line": 62,
+      "column": 24,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "work_management",
+      "source_technical_module": "tasks",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL text or marker is dynamic; no write/non-write claim is safe without a narrower source or analyzer proof.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "490105b516a84ebfd5c94ad7544581e9628ae1f95dffee0c0940ba8b0bfa9dad",
+      "site_signature": "490105b516a84ebfd5c94ad7544581e9628ae1f95dffee0c0940ba8b0bfa9dad",
+      "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
+      "line": 2149,
+      "column": 32,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "whatsapp_channel",
+      "source_technical_module": "whatsapp_provider",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL text or marker is dynamic; no write/non-write claim is safe without a narrower source or analyzer proof.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "f2385246a9722e1692eaa96a81289d48e1bc42701ab7bbaf653642fac72b7e40",
+      "site_signature": "f2385246a9722e1692eaa96a81289d48e1bc42701ab7bbaf653642fac72b7e40",
+      "file": "gravity-mvp/src/modules/calling/internal/recording-ready-prisma-adapter.ts",
+      "line": 16,
+      "column": 23,
+      "kind": "model",
+      "method": "createMany",
+      "model": "domainOutboxEvent",
+      "candidate_models": [
+        "domainOutboxEvent"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": "calling",
+      "source_technical_module": "calling.module",
+      "owner_contexts": [],
+      "receiver_origin": "transaction-callback:import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "b00356e49038391b1ecb1efbefd7c929b2e1e15f2cc6580a32df27a68f04c982",
+      "site_signature": "b00356e49038391b1ecb1efbefd7c929b2e1e15f2cc6580a32df27a68f04c982",
+      "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
+      "line": 47,
+      "column": 35,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "contacts",
+      "source_technical_module": "contacts.module",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL text or marker is dynamic; no write/non-write claim is safe without a narrower source or analyzer proof.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "b340d44a632b98bc4560d64af31050bbc6c2c4d2c086bd2e88ad2afefe3baf42",
+      "site_signature": "b340d44a632b98bc4560d64af31050bbc6c2c4d2c086bd2e88ad2afefe3baf42",
+      "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
+      "line": 85,
+      "column": 15,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "contacts",
+      "source_technical_module": "contacts.module",
+      "owner_contexts": [],
+      "receiver_origin": "transaction-callback:import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL text or marker is dynamic; no write/non-write claim is safe without a narrower source or analyzer proof.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "e16e632122c80dfd4a9a8b4ebfbf8634892873d92f47f2aae776186ffe03182b",
+      "site_signature": "e16e632122c80dfd4a9a8b4ebfbf8634892873d92f47f2aae776186ffe03182b",
+      "file": "tg-bot/src/bot.js",
+      "line": 335,
+      "column": 31,
+      "kind": "ambiguous_model",
+      "method": "create",
+      "model": "bot",
+      "candidate_models": [
+        "bot"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": "telegram_channel",
+      "source_technical_module": "telegram_bot",
+      "owner_contexts": [
+        "telegram_channel"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "nested_relation_write_requires_schema_resolution"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_OR_UNPROVEN_DELEGATE",
+      "rationale": "The receiver or delegate is not statically proven; this is not a false-positive classification.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "d1f71ee0f4737c0242b2f72514109561a8e268e4ebd91740e0b9b6cafc343d3d",
+      "site_signature": "d1f71ee0f4737c0242b2f72514109561a8e268e4ebd91740e0b9b6cafc343d3d",
+      "file": "tg-bot/src/database.js",
+      "line": 20,
+      "column": 13,
+      "kind": "raw",
+      "method": "sql-driver:run",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "telegram_channel",
+      "source_technical_module": "telegram_bot",
+      "owner_contexts": [],
+      "receiver_origin": "sql-driver:this.db",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "sql_not_statically_available"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL argument is not statically available; retain it as dynamic SQL rather than a source-family ambiguity.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "8ad6490548c680c19149cc14d5297aa466c2eb698ff56bf54bd9c1b9ba3c03fb",
+      "site_signature": "8ad6490548c680c19149cc14d5297aa466c2eb698ff56bf54bd9c1b9ba3c03fb",
+      "file": "tg-bot/src/database.js",
+      "line": 29,
+      "column": 13,
+      "kind": "raw",
+      "method": "sql-driver:get",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "telegram_channel",
+      "source_technical_module": "telegram_bot",
+      "owner_contexts": [],
+      "receiver_origin": "sql-driver:this.db",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "sql_not_statically_available"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL argument is not statically available; retain it as dynamic SQL rather than a source-family ambiguity.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "6d10573cf2be891c64644c79cbe3a6c2621037ab6e396d33c9f528c0d169d496",
+      "site_signature": "6d10573cf2be891c64644c79cbe3a6c2621037ab6e396d33c9f528c0d169d496",
+      "file": "tg-bot/src/database.js",
+      "line": 38,
+      "column": 13,
+      "kind": "raw",
+      "method": "sql-driver:all",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "telegram_channel",
+      "source_technical_module": "telegram_bot",
+      "owner_contexts": [],
+      "receiver_origin": "sql-driver:this.db",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "sql_not_statically_available"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL argument is not statically available; retain it as dynamic SQL rather than a source-family ambiguity.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "fccb616d4468419578615c8a9950378def82d3c5108ab86155d13a6c2d9922d3",
+      "site_signature": "fccb616d4468419578615c8a9950378def82d3c5108ab86155d13a6c2d9922d3",
+      "file": "tg-bot/src/database.js",
+      "line": 85,
+      "column": 27,
+      "kind": "raw",
+      "method": "sql-driver:run",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": "telegram_channel",
+      "source_technical_module": "telegram_bot",
+      "owner_contexts": [],
+      "receiver_origin": "sql-driver:this",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "sql_not_statically_available"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL argument is not statically available; retain it as dynamic SQL rather than a source-family ambiguity.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "79133fcafc42a9a5ed39c3af25a4237841378e77816ca22816e8f95e69dc4c7a",
+      "site_signature": "79133fcafc42a9a5ed39c3af25a4237841378e77816ca22816e8f95e69dc4c7a",
+      "file": "tg-bot/src/database.js",
+      "line": 119,
+      "column": 19,
+      "kind": "raw",
+      "method": "sql-driver:run",
+      "model": null,
+      "candidate_models": [],
+      "tables": [
+        "users"
+      ],
+      "operations": [
+        {
+          "dynamic_target": false,
+          "index": 0,
+          "operation": "UPDATE",
+          "table": "users"
+        }
+      ],
+      "source_context": "telegram_channel",
+      "source_technical_module": "telegram_bot",
+      "owner_contexts": [
+        "telegram_channel"
+      ],
+      "receiver_origin": "sql-driver:this",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_SQL_UNRESOLVED",
+      "rationale": "The SQL text or marker is dynamic; no write/non-write claim is safe without a narrower source or analyzer proof.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "3afc3b30c9aa7ac08a8fb38eed14a9629ff6385fbd0a2bb18cb5d7b981835894",
+      "site_signature": "3afc3b30c9aa7ac08a8fb38eed14a9629ff6385fbd0a2bb18cb5d7b981835894",
+      "file": "tg-bot/src/handlers/dynamicSurvey.js",
+      "line": 207,
+      "column": 27,
+      "kind": "ambiguous_model",
+      "method": "create",
+      "model": "bot",
+      "candidate_models": [
+        "bot"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": "telegram_channel",
+      "source_technical_module": "telegram_bot",
+      "owner_contexts": [
+        "telegram_channel"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "nested_relation_write_requires_schema_resolution"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_OR_UNPROVEN_DELEGATE",
+      "rationale": "The receiver or delegate is not statically proven; this is not a false-positive classification.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "4975fda4b8375dd278a5eb556bef36c781698f1b512a9e7e6554c4c52f814691",
+      "site_signature": "4975fda4b8375dd278a5eb556bef36c781698f1b512a9e7e6554c4c52f814691",
+      "file": "tg-bot/src/handlers/start.js",
+      "line": 365,
+      "column": 35,
+      "kind": "ambiguous_model",
+      "method": "create",
+      "model": "bot",
+      "candidate_models": [
+        "bot"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": "telegram_channel",
+      "source_technical_module": "telegram_bot",
+      "owner_contexts": [
+        "telegram_channel"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "nested_relation_write_requires_schema_resolution"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_OR_UNPROVEN_DELEGATE",
+      "rationale": "The receiver or delegate is not statically proven; this is not a false-positive classification.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "8f9f7ebd5883fba1b12e0193a16ec216f509fe2275558cbdea186b92be30c4f0",
+      "site_signature": "8f9f7ebd5883fba1b12e0193a16ec216f509fe2275558cbdea186b92be30c4f0",
+      "file": "tg-bot/src/routes/admin/bots.js",
+      "line": 55,
+      "column": 27,
+      "kind": "ambiguous_model",
+      "method": "create",
+      "model": "bot",
+      "candidate_models": [
+        "bot"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": "telegram_channel",
+      "source_technical_module": "telegram_bot",
+      "owner_contexts": [
+        "telegram_channel"
+      ],
+      "receiver_origin": "runtime-request-prisma:identifier:req.prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "nested_relation_write_requires_schema_resolution"
+      ],
+      "disposition": "GENUINELY_DYNAMIC_OR_UNPROVEN_DELEGATE",
+      "rationale": "The receiver or delegate is not statically proven; this is not a false-positive classification.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    },
+    {
+      "record_id": "7ee7272fc8668c10514093243ec2776d4c5e12ab5cd3eb6dab9eaf3b1d7353f1",
+      "site_signature": "7ee7272fc8668c10514093243ec2776d4c5e12ab5cd3eb6dab9eaf3b1d7353f1",
+      "file": "tools/architecture/v2/analyze.mjs",
+      "line": 349,
+      "column": 21,
+      "kind": "raw",
+      "method": "mixed-script-command:psql",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [],
+      "receiver_origin": null,
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [
+        "dynamic_database_command_requires_review"
+      ],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves an in-memory Map lookup or analyzer detector literal, not a database operation.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "b2a06c12574dfb082f1a91871263fa3b9d33a9133b7cca324d58c4f79d0544c7",
+      "site_signature": "b2a06c12574dfb082f1a91871263fa3b9d33a9133b7cca324d58c4f79d0544c7",
+      "file": "tools/architecture/v2/analyze.mjs",
+      "line": 349,
+      "column": 26,
+      "kind": "raw",
+      "method": "mixed-script-command:mysql",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [],
+      "receiver_origin": null,
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [
+        "dynamic_database_command_requires_review"
+      ],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves an in-memory Map lookup or analyzer detector literal, not a database operation.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "41bf79365621047bd5bee0cfc07cdee3410e3da7346a66c3b5403ab8a47b41ab",
+      "site_signature": "41bf79365621047bd5bee0cfc07cdee3410e3da7346a66c3b5403ab8a47b41ab",
+      "file": "tools/architecture/v2/analyze.mjs",
+      "line": 349,
+      "column": 32,
+      "kind": "raw",
+      "method": "mixed-script-command:sqlite3",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [],
+      "receiver_origin": null,
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [
+        "dynamic_database_command_requires_review"
+      ],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves an in-memory Map lookup or analyzer detector literal, not a database operation.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "89301892e4f31c816db67b54000a5486e6c4ad618049c94d3185ecfb4eec16ab",
+      "site_signature": "89301892e4f31c816db67b54000a5486e6c4ad618049c94d3185ecfb4eec16ab",
+      "file": "tools/architecture/v2/analyze.mjs",
+      "line": 349,
+      "column": 40,
+      "kind": "raw",
+      "method": "mixed-script-command:sqlcmd",
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [],
+      "receiver_origin": null,
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [
+        "dynamic_database_command_requires_review"
+      ],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves an in-memory Map lookup or analyzer detector literal, not a database operation.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "fc42ea9d224e523a20a8b805ce943be13a4e01b2ccbf2336792e7ced511c255d",
+      "site_signature": "fc42ea9d224e523a20a8b805ce943be13a4e01b2ccbf2336792e7ced511c255d",
+      "file": "yandex-fleet-scraper/fix-accounts.ts",
+      "line": 5,
+      "column": 27,
+      "kind": "model",
+      "method": "updateMany",
+      "model": "account",
+      "candidate_models": [
+        "account"
+      ],
+      "tables": [],
+      "operations": [],
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "fleet_operations"
+      ],
+      "receiver_origin": "new:import:@prisma/client",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "disposition": "CONFIRMED_DB_WRITE_OWNERSHIP_UNRESOLVED",
+      "rationale": "A concrete Prisma delegate and mutating method were resolved; only source ownership is absent.",
+      "ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY_CANDIDATE",
+      "final_ownership_classification": "MAINTENANCE_MIGRATION_CAPABILITY",
+      "semantic_state": "MATERIAL_UNRESOLVED_WRITE_RISK"
+    }
+  ]
+}

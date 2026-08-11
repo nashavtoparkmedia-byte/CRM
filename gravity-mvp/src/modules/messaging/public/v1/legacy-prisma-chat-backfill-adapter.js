@@ -76,5 +76,21 @@ async function detachAndDeleteChatV1(chatId) {
   if (typeof chatId !== 'string' || !chatId) throw new TypeError('chatId required')
   const prisma = new PrismaClient(); try { await prisma.chat.update({ where: { id: chatId }, data: { contactIdentityId: null } }); return await prisma.chat.delete({ where: { id: chatId } }) } finally { await prisma.$disconnect() }
 }
+async function normalizeChatExternalIdV1(chatId, externalChatId) {
+  if (![chatId, externalChatId].every(v => typeof v === 'string' && v.length > 0 && v.length <= 512)) throw new TypeError('bounded chat identity required')
+  const prisma = new PrismaClient(); try { return await prisma.chat.update({ where: { id: chatId }, data: { externalChatId } }) } finally { await prisma.$disconnect() }
+}
+async function moveChatMessagesV1(fromChatId, toChatId) {
+  if (![fromChatId, toChatId].every(v => typeof v === 'string' && v.length > 0)) throw new TypeError('chat IDs required')
+  const prisma = new PrismaClient(); try { return await prisma.message.updateMany({ where: { chatId: fromChatId }, data: { chatId: toChatId } }) } finally { await prisma.$disconnect() }
+}
+async function deleteChatV1(chatId) {
+  if (typeof chatId !== 'string' || !chatId) throw new TypeError('chatId required')
+  const prisma = new PrismaClient(); try { return await prisma.chat.delete({ where: { id: chatId } }) } finally { await prisma.$disconnect() }
+}
+async function refreshChatLastMessageAtV1(chatId, lastMessageAt) {
+  if (typeof chatId !== 'string' || !chatId || !(lastMessageAt instanceof Date)) throw new TypeError('chatId and timestamp required')
+  const prisma = new PrismaClient(); try { return await prisma.chat.update({ where: { id: chatId }, data: { lastMessageAt } }) } finally { await prisma.$disconnect() }
+}
 
-module.exports = { backfillLastInboundAtV1, backfillUnreadCountV1, deleteUnifiedMessagesByIdsV1, markBackfilledOutboundDeliveredV1, deleteEmptyUnifiedChatsV1, rewriteLidChatV1, moveMessageToChatV1, deleteUnifiedMessageV1, detachAndDeleteChatV1 }
+module.exports = { backfillLastInboundAtV1, backfillUnreadCountV1, deleteUnifiedMessagesByIdsV1, markBackfilledOutboundDeliveredV1, deleteEmptyUnifiedChatsV1, rewriteLidChatV1, moveMessageToChatV1, deleteUnifiedMessageV1, detachAndDeleteChatV1, normalizeChatExternalIdV1, moveChatMessagesV1, deleteChatV1, refreshChatLastMessageAtV1 }

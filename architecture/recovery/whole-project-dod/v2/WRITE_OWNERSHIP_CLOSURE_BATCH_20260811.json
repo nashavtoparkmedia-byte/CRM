@@ -1,20 +1,20 @@
 {
   "schema": "yoko.crm.write-ownership-closure-batch.v2",
-  "generated_at": "2026-08-11T11:04:08.837Z",
+  "generated_at": "2026-08-11T11:39:11.973Z",
   "authority": "Derived evidence ledger; unresolved records remain blocked/ambiguous and are not PASS.",
   "baseline": {
-    "analysis_sha256": "34df36e0331f8ab5da26ae5dca22c6c6c583c608a12707d11d89daa51a20b83e",
-    "baseline_sha256": "9927c8ea74915e10ccff1f717b681341f76f0153ebd3b8d3b49f2f5fd7f79137",
-    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T113000Z.json",
-    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_RECONCILED_20260811.json"
+    "analysis_sha256": "6efca837fe067ab538590aceee6fa64b07bbb6a0747642274dca66c97a0ac6af",
+    "baseline_sha256": "c06549a6d80b90cd23da244397ed704abb4722d4b4f03ae8fecb97061e3d4acb",
+    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T121500Z.json",
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_WA_MERGERS.json"
   },
   "metrics": {
-    "confirmed_writes_discovered": 1416,
+    "confirmed_writes_discovered": 1413,
     "confirmed_foreign": 0,
     "closed_foreign": 52,
-    "ambiguous_remaining": 95,
+    "ambiguous_remaining": 88,
     "confirmed_write_owner_resolved": 7,
-    "confirmed_write_owner_unresolved": 45,
+    "confirmed_write_owner_unresolved": 38,
     "dynamic_delegate_unresolved": 6,
     "dynamic_sql_unresolved": 32,
     "query_raw_side_effect_unresolved": 1,
@@ -22,10 +22,10 @@
     "active_operational_surfaces_unclassified": 0,
     "temporary_exceptions": 0,
     "intentional_exceptions": 0,
-    "raw_baseline_ambiguous_records": 95,
+    "raw_baseline_ambiguous_records": 88,
     "owner_valid_writes": 7,
     "resolved_non_writes": 4,
-    "material_unresolved_write_risk": 84
+    "material_unresolved_write_risk": 77
   },
   "foreign_write_closure": {
     "previous_closed_foreign": 47,
@@ -167,7 +167,7 @@
     "post_rescan_foreign": 0,
     "ambiguity_reduction": 4
   },
-  "next_action": "Resolve remaining 45 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
+  "next_action": "Resolve remaining 38 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
   "new_backfill_capability_batch": {
     "files": [
       "gravity-mvp/scripts/backfill_source_connection_pr7.js",
@@ -359,7 +359,7 @@
   "reconciliation": {
     "artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_RECONCILIATION_20260811.json",
     "sha256": "c82d5bbda22d5d75721352d9a840a75fc3457f33b5f7701de1710b66d2188cbb",
-    "raw_baseline_ambiguous_records": 95,
+    "raw_baseline_ambiguous_records": 88,
     "semantic_state_counts": {
       "MATERIAL_UNRESOLVED_WRITE_RISK": 84,
       "OWNER_VALID_WRITE": 7,
@@ -374,6 +374,17 @@
       "68e7b2590b446a521037a09ba257bd2dc3e9dc5160ae46e2838bc955f203ab4d",
       "48452c703f3878500e43002f7311f83f1a84a5d7a7c7fc02ac262672a49917b9",
       "f2385246a9722e1692eaa96a81289d48e1bc42701ab7bbaf653642fac72b7e40"
-    ]
+    ],
+    "material_unresolved_write_risk": 77
+  },
+  "whatsapp_merger_capability_batch": {
+    "files": [
+      "gravity-mvp/wa-cleanup.ts",
+      "gravity-mvp/scripts/merge-wa-chats.ts",
+      "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-chat-backfill-adapter.js"
+    ],
+    "writes_routed": 7,
+    "post_rescan_foreign": 0,
+    "ambiguity_reduction": 7
   }
 }

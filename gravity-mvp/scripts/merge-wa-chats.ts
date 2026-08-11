@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import fs from 'fs'
 import path from 'path'
+import { normalizeChatExternalIdV1, moveChatMessagesV1, deleteChatV1 } from '../src/modules/messaging/public/v1/legacy-prisma-chat-backfill-adapter.js'
 
 // Manually load .env
 const envPath = path.join(process.cwd(), '.env')
@@ -78,10 +79,7 @@ async function main() {
         // Standardize primary externalChatId if needed
         const stdExternalId = `whatsapp:${phone.length === 10 ? '7' + phone : phone}`
         if (primary.externalChatId !== stdExternalId) {
-            await (prisma.chat as any).update({
-                where: { id: primary.id },
-                data: { externalChatId: stdExternalId }
-            })
+            await normalizeChatExternalIdV1(primary.id, stdExternalId)
             console.log(`  Updated primary externalChatId to: ${stdExternalId}`)
         }
 
@@ -89,14 +87,11 @@ async function main() {
             console.log(`  Merging duplicate: ${duplicate.id} (External: ${duplicate.externalChatId})`)
             
             // Move messages
-            const moveRes = await (prisma.message as any).updateMany({
-                where: { chatId: duplicate.id },
-                data: { chatId: primary.id }
-            })
+            const moveRes = await moveChatMessagesV1(duplicate.id, primary.id)
             console.log(`    Moved ${moveRes.count} messages.`)
 
             // Delete duplicate
-            await (prisma.chat as any).delete({ where: { id: duplicate.id } })
+            await deleteChatV1(duplicate.id)
             console.log(`    Deleted duplicate chat.`)
         }
     }
