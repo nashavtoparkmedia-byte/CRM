@@ -1,6 +1,7 @@
 import { loadEnvConfig } from '@next/env'
 loadEnvConfig(process.cwd())
 import { prisma } from '../src/lib/prisma'
+import { deleteCallMessagesV1 } from '../src/modules/messaging/public/v1/legacy-prisma-call-message-cleanup-adapter.js'
 import { syncCallToChat } from '../src/lib/freeswitch/EslClient'
 
 /**
@@ -16,7 +17,7 @@ async function main() {
     //    so syncCallToChat's idempotency check wouldn't recognise them as
     //    duplicates anyway. Easier to delete everything and let the backfill
     //    write fresh rows with the correct metadata and status='delivered'.
-    const deleted = await prisma.message.deleteMany({ where: { type: 'call' } })
+    const deleted = await deleteCallMessagesV1()
     console.log(`Deleted ${deleted.count} call-messages, now re-syncing from Call rows…`)
 
     // 3. Re-run backfill from Call rows.

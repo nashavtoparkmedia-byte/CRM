@@ -4,6 +4,7 @@
  */
 
 import { PrismaClient } from '@prisma/client'
+import { createCrmUserV1 } from '../src/modules/identity-access/public/v1/legacy-prisma-crm-user-seed-adapter.js'
 
 const prisma = new PrismaClient()
 
@@ -22,7 +23,7 @@ async function main() {
             console.log(`  skip: "${user.name}" already exists`)
             continue
         }
-        const created = await prisma.crmUser.create({ data: user })
+        const created = await createCrmUserV1(user.name, user.role)
         console.log(`  created: "${created.name}" (${created.id})`)
     }
 

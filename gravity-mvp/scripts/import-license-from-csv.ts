@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client'
+import { updateDriverLicenseV1 } from '../src/modules/fleet-operations/public/v1/legacy-prisma-driver-license-maintenance-adapter.js'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -44,10 +45,7 @@ async function importLicenses() {
         }
 
         try {
-            const driver = await prisma.driver.updateMany({
-                where: { yandexDriverId },
-                data: { licenseNumber }
-            })
+            const driver = await updateDriverLicenseV1(yandexDriverId, licenseNumber)
 
             if (driver.count > 0) {
                 updatedCount += driver.count
