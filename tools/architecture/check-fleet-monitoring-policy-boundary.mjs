@@ -16,8 +16,8 @@ const consumers = [
   'gravity-mvp/src/app/drivers/archive/ArchiveClient.tsx',
   'gravity-mvp/src/app/monitoring/components/AllDriversSection.tsx',
   'gravity-mvp/src/app/monitoring/components/AttentionSection.tsx',
-  'gravity-mvp/src/app/monitoring/components/DriverHoverCard.tsx',
-  'gravity-mvp/src/app/monitoring/components/HistoryIcons.tsx',
+  'gravity-mvp/src/modules/fleet-operations/public/v1/monitoring-ui/DriverHoverCard.tsx',
+  'gravity-mvp/src/modules/fleet-operations/public/v1/monitoring-ui/HistoryIcons.tsx',
 ]
 for (const consumer of consumers) {
   const source = read(consumer)

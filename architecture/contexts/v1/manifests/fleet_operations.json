@@ -249,6 +249,7 @@
     "ScheduledYandexSync.v1",
     "DriverCheckResult.v1",
     "FleetMonitoringPolicy.v1",
+    "FleetMonitoringViews.v1",
     "YandexFleetOperations.v1"
   ],
   "responsibility": "Driver/fleet state, Yandex synchronization and isolated YFS checking workflow.",

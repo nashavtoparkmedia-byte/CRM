@@ -1,8 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { DriverEventItem } from '@/app/monitoring/lib/types';
 import { EVENT_ICONS } from '@/modules/fleet-operations/public/v1/monitoring-policy';
+
+interface DriverEventItem {
+    id: string;
+    eventType: string;
+    payload: Record<string, unknown> | null;
+    createdAt: string;
+}
 
 interface DriverHoverCardProps {
     driverId: string;
