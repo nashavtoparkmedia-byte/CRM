@@ -1,6 +1,6 @@
 import { loadEnvConfig } from '@next/env'
 loadEnvConfig(process.cwd())
-import { getOpenAI } from '../src/lib/openaiClient'
+import { createCallingOpenAiChatCompletionV1 } from '../src/modules/calling/public/v1/openai-chat-completion'
 import { getObject } from '../src/lib/storage/minio'
 
 /**
@@ -17,7 +17,7 @@ async function main() {
 
     const t0 = Date.now()
     try {
-        const completion = await getOpenAI().chat.completions.create({
+        const completion = await createCallingOpenAiChatCompletionV1({
             model: 'gpt-4o-audio-preview',
             modalities: ['text'],
             messages: [{

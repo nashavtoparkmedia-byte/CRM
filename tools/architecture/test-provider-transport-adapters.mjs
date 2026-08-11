@@ -6,7 +6,7 @@ import path from 'node:path'
 const root = process.cwd()
 const read = (file) => readFileSync(path.join(root, file), 'utf8')
 const legacyConsumers = [
-  'gravity-mvp/src/lib/openaiClient.ts',
+  'gravity-mvp/src/modules/calling/public/v1/openai-chat-completion.ts',
   'yandex-fleet-scraper/src/api.ts',
   'yandex-fleet-scraper/src/worker.ts',
 ]

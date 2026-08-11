@@ -10,7 +10,7 @@ const root = process.cwd()
 const read = (relative) => readFileSync(path.join(root, relative), 'utf8')
 const sha256 = (source) => createHash('sha256').update(source).digest('hex')
 const routePath = 'gravity-mvp/src/app/api/settings/ai-call-keys/route.ts'
-const runtimePath = 'gravity-mvp/src/lib/openaiClient.ts'
+const runtimePath = 'gravity-mvp/src/modules/calling/public/v1/openai-chat-completion.ts'
 
 const facade = read('gravity-mvp/src/modules/calling/public/v1/ai-call-provider-settings.ts')
 assert.equal(sha256(facade), '342331d30f483a57ed33a17b7c49d179efd190f557b177b054276f3223566cac')
@@ -35,7 +35,7 @@ assert(route.lastIndexOf("user.role !== 'Администратор'") < route.i
 assert(route.indexOf('!isValidPair(provider, key)') < route.indexOf('deleteAiCallProviderSettingV1('))
 
 const runtime = read(runtimePath)
-assert.match(runtime, /@\/modules\/calling\/public\/v1\/ai-call-provider-settings/)
+assert.match(runtime, /\.\/ai-call-provider-settings/)
 assert.match(runtime, /getOpenAiRuntimeProviderCredentialV1\(\)/)
 assert.doesNotMatch(runtime, /@\/lib\/ai-call\/provider-settings|getValue\('openai', 'apiKey'\)/)
 

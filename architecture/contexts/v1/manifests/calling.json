@@ -277,7 +277,8 @@
     "SipClientContext.v1",
     "CallingClientUi.v1",
     "CallAlertAudio.v1",
-    "TelephonyProviderHealth.v1"
+    "TelephonyProviderHealth.v1",
+    "CallingOpenAiChatCompletion.v1"
   ],
   "responsibility": "Call lifecycle, FreeSWITCH/SIP integration, audio bridge, transcription and call analysis.",
   "schema": "yoko.crm.module-manifest.v1",

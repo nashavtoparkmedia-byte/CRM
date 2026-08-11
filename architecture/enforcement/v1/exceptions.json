@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "d652368fb6aa493910b75b6df76d9fe0a588acba0e4ae640dc67ccaf11d1e4c3",
+  "finding_digest": "2a0528d7bef6f126853306f29b3708dfbced150331ae195e1877abb6a46f1867",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -14,8 +14,8 @@
   },
   "summary": {
     "internal_module_import": 33,
-    "non_public_cross_context_import": 72,
-    "undeclared_dependency": 26
+    "non_public_cross_context_import": 70,
+    "undeclared_dependency": 24
   },
   "exceptions": [
     {
@@ -1716,42 +1716,6 @@
       ]
     },
     {
-      "fingerprint": "arch_b4be75f8b7547e788e163557",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/ai-call/devSimulator.ts",
-      "line_at_baseline": 27,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "platform_shell",
-      "subject": "ai_calls>gravity_core:gravity-mvp/src/lib/openaiClient.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_b546f507282347146fafa3d3",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/ai-call/devSimulator.ts",
-      "line_at_baseline": 27,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "platform_shell",
-      "subject": "ai_calls>gravity_core:gravity-mvp/src/lib/openaiClient.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
       "fingerprint": "arch_d60583b81518b5591ee42908",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/lib/ai/knowledge/coach.ts",
@@ -1975,42 +1939,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:platform_shell/gravity_core>ai_knowledge/ai_knowledge"
-      ]
-    },
-    {
-      "fingerprint": "arch_3eee6f70123874c710207b7e",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/queue/analyzeWorker.ts",
-      "line_at_baseline": 39,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "platform_shell",
-      "subject": "calls>gravity_core:gravity-mvp/src/lib/openaiClient.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_8ce5fb17c0d8d87750752a4c",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/queue/analyzeWorker.ts",
-      "line_at_baseline": 39,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "platform_shell",
-      "subject": "calls>gravity_core:gravity-mvp/src/lib/openaiClient.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_ui"
       ]
     },
     {
