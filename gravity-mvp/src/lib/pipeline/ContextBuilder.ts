@@ -1,7 +1,11 @@
 import { prisma } from '@/lib/prisma'
 import { getAiAgentProviderConfigV1 } from '@/modules/calling/public/v1/ai-agent-provider-capability'
 import { Message } from '@prisma/client'
-import { retrieve, type RetrievalTrace, type RetrievableItem } from '@/lib/ai/knowledge/Retriever'
+import {
+  retrieveKnowledgeForRuntimeV1,
+  type KnowledgeRetrievalTraceV1,
+  type RetrievableKnowledgeItemV1,
+} from '@/modules/ai-knowledge/public/v1/knowledge-retrieval'
 import { getKnowledgeRuntimeModeV1 as getKnowledgeRuntimeMode } from '@/modules/ai-knowledge/public/v1/knowledge-operational-status'
 
 export interface AiConfig {
@@ -38,8 +42,8 @@ export interface KbEntry {
 export interface KnowledgeRetrievalResult {
   /** 'shadow' = trace пишется, ответ из legacy. 'runtime' = ответ из retrieved facts. */
   mode:  'shadow' | 'runtime'
-  items: RetrievableItem[]
-  trace: RetrievalTrace
+  items: RetrievableKnowledgeItemV1[]
+  trace: KnowledgeRetrievalTraceV1
 }
 
 export interface MessageContext {
@@ -157,10 +161,10 @@ export class ContextBuilder {
       const query = lastInbound?.content ?? message.content ?? ''
       if (query.trim().length > 0) {
         try {
-          const result = await retrieve({
+          const result = await retrieveKnowledgeForRuntimeV1({
             query,
             recentMessages,
-            shadowMode: mode === 'shadow',
+            mode,
           })
           knowledgeRetrieval = {
             mode:  mode === 'runtime' ? 'runtime' : 'shadow',

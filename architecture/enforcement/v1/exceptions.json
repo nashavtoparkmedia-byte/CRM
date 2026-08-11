@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "866887100df9821c1a4488e6a36ab9098195c8d98fc59e9052aff6e1b79d93bb",
+  "finding_digest": "2f159ddcfd7bd6231f3e7f1f157ae677a7272274d6a64d6061702538bf3e4d31",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,8 +13,8 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "internal_module_import": 46,
-    "non_public_cross_context_import": 85,
+    "internal_module_import": 43,
+    "non_public_cross_context_import": 82,
     "undeclared_dependency": 26
   },
   "exceptions": [
@@ -1644,38 +1644,6 @@
       ]
     },
     {
-      "fingerprint": "arch_8a5200f6803a544bc039c2b4",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/settings/ai/actions.ts",
-      "line_at_baseline": 1270,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "ai_knowledge",
-      "subject": "settings>ai_knowledge:gravity-mvp/src/lib/ai/knowledge/Retriever.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>ai_knowledge/ai_knowledge"
-      ]
-    },
-    {
-      "fingerprint": "arch_70525aecd68bc14d7ea4095b",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/settings/ai/actions.ts",
-      "line_at_baseline": 1270,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "ai_knowledge",
-      "subject": "settings>ai_knowledge:gravity-mvp/src/lib/ai/knowledge/Retriever.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>ai_knowledge/ai_knowledge"
-      ]
-    },
-    {
       "fingerprint": "arch_b9dc90f86f380f41e0d34f3c",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/settings/ai/actions.ts",
@@ -2282,38 +2250,6 @@
       ]
     },
     {
-      "fingerprint": "arch_06a2c9b2ba6cca4cb9de5249",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/lib/pipeline/ContextBuilder.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "ai_knowledge",
-      "subject": "gravity_core>ai_knowledge:gravity-mvp/src/lib/ai/knowledge/Retriever.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>ai_knowledge/ai_knowledge"
-      ]
-    },
-    {
-      "fingerprint": "arch_4fa41dac5ba36ededbfd7781",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/pipeline/ContextBuilder.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "ai_knowledge",
-      "subject": "gravity_core>ai_knowledge:gravity-mvp/src/lib/ai/knowledge/Retriever.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>ai_knowledge/ai_knowledge"
-      ]
-    },
-    {
       "fingerprint": "arch_78f8e26b072dd548aac0b46a",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/lib/pipeline/PipelineWorker.ts",
@@ -2354,38 +2290,6 @@
       "owner_context": "platform_shell",
       "target_context": "ai_knowledge",
       "subject": "gravity_core>ai_knowledge:gravity-mvp/src/lib/ai/knowledge/retrievalPrompt.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>ai_knowledge/ai_knowledge"
-      ]
-    },
-    {
-      "fingerprint": "arch_83648d9821846b928daa6a0b",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/lib/pipeline/ResponseGenerator.ts",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "ai_knowledge",
-      "subject": "gravity_core>ai_knowledge:gravity-mvp/src/lib/ai/knowledge/Retriever.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>ai_knowledge/ai_knowledge"
-      ]
-    },
-    {
-      "fingerprint": "arch_c3022fb7d517ca85beefb331",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/pipeline/ResponseGenerator.ts",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "ai_knowledge",
-      "subject": "gravity_core>ai_knowledge:gravity-mvp/src/lib/ai/knowledge/Retriever.ts",
       "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
       "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
       "expires_on": "2026-12-31",

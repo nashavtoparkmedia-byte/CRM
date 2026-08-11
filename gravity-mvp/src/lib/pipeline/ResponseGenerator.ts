@@ -2,7 +2,7 @@ import { MessageContext } from './ContextBuilder'
 import { ClassificationResult } from './IntentClassifier'
 import { DecisionResult } from './DecisionEngine'
 import { channelRegistry } from './ChannelAdapterRegistry'
-import { formatRetrievedFactsForPrompt } from '@/lib/ai/knowledge/Retriever'
+import { formatKnowledgeFactsForPromptV1 } from '@/modules/ai-knowledge/public/v1/knowledge-retrieval'
 import { callForText } from './llmClient'
 
 export interface GeneratedResponse {
@@ -47,7 +47,7 @@ export class ResponseGenerator {
         '\nИспользуй ТОЛЬКО следующие подтверждённые факты компании. ' +
         'Если фактов недостаточно или они противоречат вопросу клиента — ' +
         'честно скажи, что передашь вопрос менеджеру.\n' +
-        formatRetrievedFactsForPrompt(knowledgeRetrieval!.items),
+        formatKnowledgeFactsForPromptV1(knowledgeRetrieval!.items),
       )
     } else if (matchedKb) {
       parts.push(`\nСправочная информация по теме "${matchedKb.title}":\n${matchedKb.answer}`)

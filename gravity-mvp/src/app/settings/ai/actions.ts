@@ -1217,7 +1217,7 @@ import {
     getDecisionExplainability,
     type ExplainabilityBundle,
 } from '@/lib/ai/knowledge/explainability'
-import { retrieve as runRetrieve } from '@/lib/ai/knowledge/Retriever'
+import { previewKnowledgeRetrievalV1 } from '@/modules/ai-knowledge/public/v1/knowledge-retrieval'
 export type {
     ExplainabilityBundle,
     ExplainDecisionRow,
@@ -1313,9 +1313,8 @@ export async function previewDecisionRetry(
     // 2. Retrieve (force runtime semantics)
     let retrieveOut
     try {
-        retrieveOut = await runRetrieve({
+        retrieveOut = await previewKnowledgeRetrievalV1({
             query: row.userContent,
-            shadowMode: false,
         })
     } catch (e: any) {
         console.error(`[retry-preview] retrieve failed: ${e?.message}`)
