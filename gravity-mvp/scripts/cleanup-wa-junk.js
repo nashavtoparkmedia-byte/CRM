@@ -10,6 +10,8 @@
  *   5. Their corresponding legacy WhatsAppChat / WhatsAppMessage rows.
  */
 const { PrismaClient } = require('@prisma/client')
+const { deleteUnifiedMessagesByIdsV1, markBackfilledOutboundDeliveredV1, deleteEmptyUnifiedChatsV1 } = require('../src/modules/messaging/public/v1/legacy-prisma-chat-backfill-adapter')
+const { deleteLegacyWhatsAppMessageV1, deleteEmptyLegacyWhatsAppChatsV1 } = require('../src/modules/whatsapp-channel/public/v1/legacy-prisma-whatsapp-message-timestamp-maintenance-adapter')
 const prisma = new PrismaClient()
 
 const JID_LIKE = /^[\d+]+@(c\.us|lid|g\.us|broadcast)$/i
@@ -30,7 +32,7 @@ async function main() {
         .map(m => m.id)
 
     if (junkUnifiedIds.length > 0) {
-        const r = await prisma.message.deleteMany({ where: { id: { in: junkUnifiedIds } } })
+        const r = await deleteUnifiedMessagesByIdsV1(junkUnifiedIds)
         console.log(`[CLEANUP] Deleted ${r.count} unified Messages with JID-like content`)
     } else {
         console.log(`[CLEANUP] No junk unified messages found`)
@@ -46,7 +48,7 @@ async function main() {
 
     if (junkLegacyPairs.length > 0) {
         for (const p of junkLegacyPairs) {
-            await prisma.whatsAppMessage.delete({ where: { id_chatId: { id: p.id, chatId: p.chatId } } }).catch(() => {})
+            await deleteLegacyWhatsAppMessageV1(p.id, p.chatId).catch(() => {})
         }
         console.log(`[CLEANUP] Deleted ${junkLegacyPairs.length} legacy WhatsAppMessages with JID body`)
     } else {
@@ -60,7 +62,7 @@ async function main() {
     })
     const emptyTextIds = emptyText.filter(m => !(m.content || '').trim()).map(m => m.id)
     if (emptyTextIds.length > 0) {
-        const r = await prisma.message.deleteMany({ where: { id: { in: emptyTextIds } } })
+        const r = await deleteUnifiedMessagesByIdsV1(emptyTextIds)
         console.log(`[CLEANUP] Deleted ${r.count} empty-text unified Messages`)
     } else {
         console.log(`[CLEANUP] No empty-text messages`)
@@ -73,7 +75,7 @@ async function main() {
     const emptyTextLegacyPairs = emptyTextLegacy.filter(m => !(m.body || '').trim()).map(m => ({ id: m.id, chatId: m.chatId }))
     if (emptyTextLegacyPairs.length > 0) {
         for (const p of emptyTextLegacyPairs) {
-            await prisma.whatsAppMessage.delete({ where: { id_chatId: { id: p.id, chatId: p.chatId } } }).catch(() => {})
+            await deleteLegacyWhatsAppMessageV1(p.id, p.chatId).catch(() => {})
         }
         console.log(`[CLEANUP] Deleted ${emptyTextLegacyPairs.length} empty-text legacy WhatsAppMessages`)
     } else {
@@ -85,15 +87,7 @@ async function main() {
     // older than 5min as 'failed', mistaking backfilled-from-WA-Store
     // messages for stuck-in-delivery ones. Those have externalId !== null
     // (came from WA Web, already delivered). Reset them to delivered.
-    const stuckOutbound = await prisma.message.updateMany({
-        where: {
-            channel: 'whatsapp',
-            direction: 'outbound',
-            externalId: { not: null },
-            status: { in: ['failed', 'sent', 'queued'] },
-        },
-        data: { status: 'delivered' },
-    })
+    const stuckOutbound = await markBackfilledOutboundDeliveredV1()
     console.log(`[CLEANUP] Updated ${stuckOutbound.count} backfilled outbound messages to status=delivered`)
 
     // ── PART 2 — remove empty unified Chat rows ──────────────────────
@@ -105,7 +99,7 @@ async function main() {
     const emptyExternalIds = waChats.filter(c => c._count.messages === 0).map(c => c.externalChatId)
 
     if (emptyChatIds.length > 0) {
-        const r = await prisma.chat.deleteMany({ where: { id: { in: emptyChatIds } } })
+        const r = await deleteEmptyUnifiedChatsV1(emptyChatIds)
         console.log(`[CLEANUP] Deleted ${r.count} empty unified Chat rows`)
     } else {
         console.log(`[CLEANUP] No empty unified Chat rows`)
@@ -120,10 +114,7 @@ async function main() {
 
     if (emptyLegacyIds.length > 0) {
         // Roster uses `jid` not `chatId` and isn't FK-linked, so delete is independent.
-        const rosterDel = await prisma.whatsAppChatRoster.deleteMany({
-            where: { jid: { in: emptyLegacyIds } },
-        })
-        const legacyDel = await prisma.whatsAppChat.deleteMany({ where: { id: { in: emptyLegacyIds } } })
+        const { roster: rosterDel, chats: legacyDel } = await deleteEmptyLegacyWhatsAppChatsV1(emptyLegacyIds)
         console.log(`[CLEANUP] Deleted ${legacyDel.count} empty legacy WhatsAppChat rows (+ ${rosterDel.count} roster entries)`)
     } else {
         console.log(`[CLEANUP] No empty legacy WhatsAppChat rows`)

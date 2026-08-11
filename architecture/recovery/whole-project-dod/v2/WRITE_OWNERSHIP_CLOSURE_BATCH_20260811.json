@@ -1,20 +1,20 @@
 {
   "schema": "yoko.crm.write-ownership-closure-batch.v2",
-  "generated_at": "2026-08-11T09:27:14.714Z",
+  "generated_at": "2026-08-11T09:37:42.675Z",
   "authority": "Derived evidence ledger; unresolved records remain blocked/ambiguous and are not PASS.",
   "baseline": {
-    "analysis_sha256": "dfe8269a7da39631ad3cddc8f87e3b0447ad25866a330a51e81efdc7c3ec6b8f",
-    "baseline_sha256": "7086372b5f0dcc1bb66b16704c8dc3fadcb8ecc8c3847e76483c810fe0d0ed6b",
-    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T092600Z.json",
-    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_TASK_CHAT_REPAIRS.json"
+    "analysis_sha256": "e42f43b5d78424930be5f5d0d989cae32b00d08915a95191342b0c752db385aa",
+    "baseline_sha256": "99e6c5d72bf19550abfad25245d55ce7490afb0251b3fe9907ddb889970160be",
+    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T100000Z.json",
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_WA_JUNK.json"
   },
   "metrics": {
-    "confirmed_writes_discovered": 1418,
+    "confirmed_writes_discovered": 1416,
     "confirmed_foreign": 0,
     "closed_foreign": 52,
-    "ambiguous_remaining": 128,
+    "ambiguous_remaining": 120,
     "confirmed_write_owner_resolved": 7,
-    "confirmed_write_owner_unresolved": 78,
+    "confirmed_write_owner_unresolved": 70,
     "dynamic_delegate_unresolved": 6,
     "dynamic_sql_unresolved": 32,
     "query_raw_side_effect_unresolved": 1,
@@ -163,7 +163,7 @@
     "post_rescan_foreign": 0,
     "ambiguity_reduction": 4
   },
-  "next_action": "Resolve remaining 78 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
+  "next_action": "Resolve remaining 70 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
   "new_backfill_capability_batch": {
     "files": [
       "gravity-mvp/scripts/backfill_source_connection_pr7.js",
@@ -311,6 +311,27 @@
     "targeted_validation": [
       "targeted analyzer: five scripts zero direct write sites",
       "89/89 v2 write-analyzer tests"
+    ]
+  },
+  "new_wa_junk_capability_batch": {
+    "files": [
+      "gravity-mvp/scripts/cleanup-wa-junk.js",
+      "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-chat-backfill-adapter.js",
+      "gravity-mvp/src/modules/whatsapp-channel/public/v1/legacy-prisma-whatsapp-message-timestamp-maintenance-adapter.js"
+    ],
+    "writes_routed": 8,
+    "owner_capabilities": [
+      "messaging.deleteUnifiedMessagesByIdsV1",
+      "messaging.markBackfilledOutboundDeliveredV1",
+      "messaging.deleteEmptyUnifiedChatsV1",
+      "whatsapp.deleteLegacyWhatsAppMessageV1",
+      "whatsapp.deleteEmptyLegacyWhatsAppChatsV1"
+    ],
+    "post_rescan_foreign": 0,
+    "ambiguity_reduction": 8,
+    "targeted_validation": [
+      "targeted analyzer: cleanup-wa-junk zero direct write sites",
+      "maintenance capability exact-scope policy PASS"
     ]
   }
 }

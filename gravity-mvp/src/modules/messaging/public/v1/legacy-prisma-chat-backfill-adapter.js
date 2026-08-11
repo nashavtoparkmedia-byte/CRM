@@ -49,4 +49,16 @@ async function backfillUnreadCountV1() {
   }
 }
 
-module.exports = { backfillLastInboundAtV1, backfillUnreadCountV1 }
+async function deleteUnifiedMessagesByIdsV1(ids) {
+  if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new TypeError('ids must be string[]')
+  const prisma = new PrismaClient(); try { return await prisma.message.deleteMany({ where: { id: { in: ids } } }) } finally { await prisma.$disconnect() }
+}
+async function markBackfilledOutboundDeliveredV1() {
+  const prisma = new PrismaClient(); try { return await prisma.message.updateMany({ where: { channel: 'whatsapp', direction: 'outbound', externalId: { not: null }, status: { in: ['failed', 'sent', 'queued'] } }, data: { status: 'delivered' } }) } finally { await prisma.$disconnect() }
+}
+async function deleteEmptyUnifiedChatsV1(ids) {
+  if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new TypeError('ids must be string[]')
+  const prisma = new PrismaClient(); try { return await prisma.chat.deleteMany({ where: { id: { in: ids } } }) } finally { await prisma.$disconnect() }
+}
+
+module.exports = { backfillLastInboundAtV1, backfillUnreadCountV1, deleteUnifiedMessagesByIdsV1, markBackfilledOutboundDeliveredV1, deleteEmptyUnifiedChatsV1 }

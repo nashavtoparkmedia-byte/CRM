@@ -16,4 +16,16 @@ async function repairWhatsAppMessageTimestampV1(id, chatId, timestamp) {
   try { return await prisma.whatsAppMessage.update({ where: { id_chatId: { id, chatId } }, data: { timestamp } }) }
   finally { await prisma.$disconnect() }
 }
-module.exports = { repairWhatsAppMessageTimestampV1 }
+async function deleteLegacyWhatsAppMessageV1(id, chatId) {
+  validateId(id, 'id'); validateId(chatId, 'chatId'); const prisma = new PrismaClient()
+  try { return await prisma.whatsAppMessage.delete({ where: { id_chatId: { id, chatId } } }) } finally { await prisma.$disconnect() }
+}
+async function deleteEmptyLegacyWhatsAppChatsV1(ids) {
+  if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new TypeError('ids must be string[]')
+  const prisma = new PrismaClient(); try {
+    const roster = await prisma.whatsAppChatRoster.deleteMany({ where: { jid: { in: ids } } })
+    const chats = await prisma.whatsAppChat.deleteMany({ where: { id: { in: ids } } })
+    return { roster, chats }
+  } finally { await prisma.$disconnect() }
+}
+module.exports = { repairWhatsAppMessageTimestampV1, deleteLegacyWhatsAppMessageV1, deleteEmptyLegacyWhatsAppChatsV1 }
