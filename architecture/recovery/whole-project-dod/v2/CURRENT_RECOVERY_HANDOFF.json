@@ -760,10 +760,10 @@
     "credential_inventory_summary": {
       "credential_database_accesses": 411,
       "credential_reads": 229,
-      "secret_reads": 167,
+      "secret_reads": 164,
       "ambiguous_credential_accesses": 81,
       "unresolved_database_accesses": 81,
-      "possible_public_secret_risks": 148,
+      "possible_public_secret_risks": 127,
       "unclassified_accesses": 90
     },
     "gravity_security_tests": "PASS (34)",
@@ -773,6 +773,7 @@
     "independent_critic": "PASS_WITH_OPEN_CROSS_DOMAIN_CAPABILITY_GAPS",
     "confirmed_public_secret_exposure": 0,
     "material_credential_unresolved": 0,
+    "cross_domain_capability_gaps": 10,
     "verdict": "NOT_READY_SECURITY_CROSS_DOMAIN_RECONCILIATION_REMAINS"
   }
 }
