@@ -1,20 +1,20 @@
 {
   "schema": "yoko.crm.write-ownership-closure-batch.v2",
-  "generated_at": "2026-08-11T08:54:10.436Z",
+  "generated_at": "2026-08-11T09:04:22.230Z",
   "authority": "Derived evidence ledger; unresolved records remain blocked/ambiguous and are not PASS.",
   "baseline": {
-    "analysis_sha256": "bd1533040de5039bb7f1eb26d84a5f5537eed0ba27e026aa815e239c51543a92",
-    "baseline_sha256": "ebececfd55296003438f7f0be09ad09bcf14c810c82c8c784be10bbf0c3e29df",
-    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T085341Z.json",
-    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_OWNER_SPLIT.json"
+    "analysis_sha256": "f3420cd36162f881fd8a16907db0d194e54528166dde6d4c56674b4a9652a5b7",
+    "baseline_sha256": "ee038e775096b40ff20a092f4a32f84c60bac04d1e582bd89a3f96fd69108673",
+    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T090337Z.json",
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_MEGRABYAN.json"
   },
   "metrics": {
     "confirmed_writes_discovered": 1419,
     "confirmed_foreign": 0,
     "closed_foreign": 52,
-    "ambiguous_remaining": 147,
+    "ambiguous_remaining": 141,
     "confirmed_write_owner_resolved": 7,
-    "confirmed_write_owner_unresolved": 97,
+    "confirmed_write_owner_unresolved": 91,
     "dynamic_delegate_unresolved": 6,
     "dynamic_sql_unresolved": 32,
     "query_raw_side_effect_unresolved": 1,
@@ -163,7 +163,7 @@
     "post_rescan_foreign": 0,
     "ambiguity_reduction": 4
   },
-  "next_action": "Resolve the remaining 97 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
+  "next_action": "Resolve the remaining 91 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
   "new_backfill_capability_batch": {
     "files": [
       "gravity-mvp/scripts/backfill_source_connection_pr7.js",
@@ -264,5 +264,15 @@
     "post_rescan_foreign": 0,
     "ambiguity_reduction": 5,
     "prior_foreign_rejected": 3
+  },
+  "new_megrabyan_batch": {
+    "files": [
+      "gravity-mvp/scripts/cleanup_megrabyan_phantom.js",
+      "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-megrabyan-chat-cleanup-adapter.js",
+      "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-megrabyan-identity-cleanup-adapter.js"
+    ],
+    "writes_routed": 6,
+    "post_rescan_foreign": 0,
+    "ambiguity_reduction": 6
   }
 }
