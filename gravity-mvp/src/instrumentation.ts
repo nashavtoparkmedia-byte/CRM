@@ -143,8 +143,8 @@ export async function register() {
 
         // ── Initial stuck message recovery ───────────────────────────────
         try {
-            const { MessageService } = await import('@/lib/MessageService')
-            const recovered = await MessageService.recoverStuckMessages(5)
+            const { recoverStuckMessagingDeliveriesV1 } = await import('@/modules/messaging/public/v1/delivery-recovery-operations')
+            const recovered = await recoverStuckMessagingDeliveriesV1()
             if (recovered > 0) {
                 opsLog('info', 'stuck_recovery_startup', { count: recovered })
             }
@@ -157,9 +157,9 @@ export async function register() {
 
         // Stuck recovery: every 5 minutes
         const recoveryInterval = setInterval(async () => {
-            const { MessageService } = await import('@/lib/MessageService')
+            const { recoverStuckMessagingDeliveriesV1 } = await import('@/modules/messaging/public/v1/delivery-recovery-operations')
             await OperationalJobs.run('recovery', async () => {
-                const count = await MessageService.recoverStuckMessages(5)
+                const count = await recoverStuckMessagingDeliveriesV1()
                 return { count, at: new Date().toISOString() }
             })
         }, 5 * 60 * 1000)
@@ -185,29 +185,9 @@ export async function register() {
         // Message retry: every 2 minutes
         const retryInterval = setInterval(async () => {
             await OperationalJobs.run('message_retry', async () => {
-                const { prisma } = await import('@/lib/prisma')
-                const { MessageService } = await import('@/lib/MessageService')
-
-                // Bounded query: retryable, under max retries, under 24h age, ordered by oldest first
-                const candidates = await prisma.$queryRaw<Array<{ id: string }>>`
-                    SELECT id FROM "Message"
-                    WHERE status = 'failed'
-                      AND direction = 'outbound'
-                      AND (metadata->>'retryable')::text = 'true'
-                      AND COALESCE((metadata->>'retryAttempt')::int, 0) < COALESCE((metadata->>'maxRetries')::int, 3)
-                      AND "sentAt" > NOW() - INTERVAL '24 hours'
-                    ORDER BY "sentAt" ASC
-                    LIMIT 10
-                `
-
-                let retriedCount = 0
-                for (const { id } of candidates) {
-                    const result = await MessageService.retrySend(id)
-                    if (result.error !== 'Backoff not elapsed') {
-                        retriedCount++
-                    }
-                }
-                return { retriedCount, candidatesFound: candidates.length, at: new Date().toISOString() }
+                const { retryEligibleMessagingDeliveriesV1 } = await import('@/modules/messaging/public/v1/delivery-recovery-operations')
+                const result = await retryEligibleMessagingDeliveriesV1()
+                return { ...result, at: new Date().toISOString() }
             })
         }, 2 * 60 * 1000)
         OperationalJobs.registerInterval(retryInterval)

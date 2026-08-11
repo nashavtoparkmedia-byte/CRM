@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "b2e9bfe3fbb52a352344ed66a1f32a37aff5de21461abc17c18655f5d1bec931",
+  "finding_digest": "0c164ef8820193fc7b156fac91477145bc3918f9fa2c9da88a9ede9459cfdd14",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,8 +13,8 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "internal_module_import": 52,
-    "non_public_cross_context_import": 98,
+    "internal_module_import": 49,
+    "non_public_cross_context_import": 95,
     "undeclared_dependency": 26
   },
   "exceptions": [
@@ -2114,38 +2114,6 @@
       ]
     },
     {
-      "fingerprint": "arch_62504a0431f613c6ff4cb4a0",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 124,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "messaging",
-      "subject": "gravity_core>messages:gravity-mvp/src/lib/MessageService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>messaging/messages"
-      ]
-    },
-    {
-      "fingerprint": "arch_e2f3a5b0a9c7d5a9d63a8900",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 124,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "messaging",
-      "subject": "gravity_core>messages:gravity-mvp/src/lib/MessageService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>messaging/messages"
-      ]
-    },
-    {
       "fingerprint": "arch_c3f0f1619cfe268c5465162e",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/instrumentation.ts",
@@ -2160,38 +2128,6 @@
       "migration_references": [
         "dependency:platform_shell/gravity_core>work_management/tasks",
         "dependency:platform_shell/gravity_ui>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_af9c6759238f5d26efcd17e1",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 138,
-      "ordinal": 2,
-      "owner_context": "platform_shell",
-      "target_context": "messaging",
-      "subject": "gravity_core>messages:gravity-mvp/src/lib/MessageService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>messaging/messages"
-      ]
-    },
-    {
-      "fingerprint": "arch_1321311ba4510a9f8dfdc45e",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 138,
-      "ordinal": 2,
-      "owner_context": "platform_shell",
-      "target_context": "messaging",
-      "subject": "gravity_core>messages:gravity-mvp/src/lib/MessageService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>messaging/messages"
       ]
     },
     {
@@ -2256,38 +2192,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:platform_shell/gravity_core>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_e625153808e64cfc397975c7",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 167,
-      "ordinal": 3,
-      "owner_context": "platform_shell",
-      "target_context": "messaging",
-      "subject": "gravity_core>messages:gravity-mvp/src/lib/MessageService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>messaging/messages"
-      ]
-    },
-    {
-      "fingerprint": "arch_92e0b04e826685f14b83fe8e",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 167,
-      "ordinal": 3,
-      "owner_context": "platform_shell",
-      "target_context": "messaging",
-      "subject": "gravity_core>messages:gravity-mvp/src/lib/MessageService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>messaging/messages"
       ]
     },
     {
