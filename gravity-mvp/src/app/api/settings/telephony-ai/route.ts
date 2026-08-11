@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/users/user-service'
+import { getCurrentUserIdentityV1 as getCurrentUser } from '@/modules/identity-access/public/v1/user-directory'
 import { getTelephonyAiConfig, updateTelephonyAiConfig } from '@/lib/aiCallAnalysis/config'
 import { DEFAULT_SYSTEM_PROMPT } from '@/lib/aiCallAnalysis/prompt'
 

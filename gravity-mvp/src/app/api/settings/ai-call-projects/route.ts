@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/users/user-service'
+import { getCurrentUserIdentityV1 as getCurrentUser } from '@/modules/identity-access/public/v1/user-directory'
 import { listProjects } from '@/lib/ai-call/scenarios'
 import { opsLog } from '@/lib/opsLog'
 

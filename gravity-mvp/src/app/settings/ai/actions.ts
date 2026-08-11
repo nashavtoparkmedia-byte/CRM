@@ -8,7 +8,7 @@ import { revalidatePath } from 'next/cache'
 import { importTelegramHistory } from '@/app/tg-actions'
 import { importOperationalWhatsAppHistoryV1 } from '@/infrastructure/whatsapp/operational-capabilities'
 import { getAiAgentProviderConfigV1 } from '@/modules/calling/public/v1/ai-agent-provider-capability'
-import { getUsers } from '@/lib/users/user-service'
+import { listUserIdentitiesV1 as getUsers } from '@/modules/identity-access/public/v1/user-directory'
 import {
     ARCHIVE_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
     ARCHIVE_KNOWLEDGE_CONFLICT_MEMBER_COMMAND_V1,

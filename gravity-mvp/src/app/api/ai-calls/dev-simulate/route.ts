@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- dev-only endpoint,
    plain JSON body validation rather than a full Zod schema for now. */
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/users/user-service'
+import { getCurrentUserIdentityV1 as getCurrentUser } from '@/modules/identity-access/public/v1/user-directory'
 import { getScenario, DEFAULT_PROJECT_ID, listScenarios } from '@/lib/ai-call/scenarios'
 import { simulateAiCall } from '@/lib/ai-call/devSimulator'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'

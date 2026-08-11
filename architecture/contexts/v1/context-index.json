@@ -18,7 +18,7 @@
     {
       "context": "calling",
       "path": "architecture/contexts/v1/manifests/calling.json",
-      "sha256": "3dca8da8fad4abd4e11e90b7b7d8e4e191fe34e176c7b54c17f8e373cc79b3d3"
+      "sha256": "bdd26fe1c84ad5f435eadcef350e3dd06a1cc6ae3f44e82e6fa1556d290e43aa"
     },
     {
       "context": "configuration",
@@ -43,7 +43,7 @@
     {
       "context": "identity_access",
       "path": "architecture/contexts/v1/manifests/identity_access.json",
-      "sha256": "eb44907d810d3d10aaca63c14594f1e5ab2b806eed27ad965f4759f187eb5f81"
+      "sha256": "626bdbc6d4ed214fe888c57218f0e0bff9986f6a945750636b42d897db79efa3"
     },
     {
       "context": "max_channel",

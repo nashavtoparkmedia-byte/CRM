@@ -11,7 +11,7 @@ import {
     DictionaryItem,
     DictionaryType 
 } from '@/lib/dictionaries/dictionary-service'
-import { getCurrentUser } from '@/lib/users/user-service'
+import { getCurrentUserIdentityV1 as getCurrentUser } from '@/modules/identity-access/public/v1/user-directory'
 import { Plus, Trash2, Check, X, ToggleLeft, ToggleRight } from 'lucide-react'
 
 const DICT_TITLES: Record<DictionaryType, string> = {

@@ -56,6 +56,7 @@
   "public_surface": [
     "CurrentUserQuery.v1",
     "IntegrationAdminAuthorization.v1",
+    "ListUserIdentitiesQuery.v1",
     "UserIdentity.v1"
   ],
   "responsibility": "CRM operator identity, authentication state and authorization-facing user lookup.",

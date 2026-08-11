@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getValue, recordCheck } from '@/lib/ai-call/provider-settings'
-import { getCurrentUser } from '@/lib/users/user-service'
+import { getCurrentUserIdentityV1 as getCurrentUser } from '@/modules/identity-access/public/v1/user-directory'
 import { withProxy, isProxyConfigured } from '@/lib/ai-call/proxy-fetch'
 
 export const dynamic = 'force-dynamic'

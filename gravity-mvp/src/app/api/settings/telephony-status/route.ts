@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import net from 'net'
-import { getCurrentUser } from '@/lib/users/user-service'
+import { getCurrentUserIdentityV1 as getCurrentUser } from '@/modules/identity-access/public/v1/user-directory'
 import { readMegafonTelephonyHealthV1 } from '@/modules/calling/public/v1/telephony-provider-health'
 
 /**

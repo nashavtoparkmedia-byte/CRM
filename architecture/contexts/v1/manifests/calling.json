@@ -1,6 +1,10 @@
 {
   "allowed_dependencies": [
     {
+      "context": "identity_access",
+      "surface": "identity_access.public"
+    },
+    {
       "context": "contacts",
       "surface": "contacts.public"
     },

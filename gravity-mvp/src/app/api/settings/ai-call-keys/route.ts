@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Prisma client types
    for AiProviderSetting may not be regenerated on every dev box. */
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/users/user-service'
+import { getCurrentUserIdentityV1 as getCurrentUser } from '@/modules/identity-access/public/v1/user-directory'
 import { getAiCallKeysStatus } from '@/lib/ai-call/keys-status'
 import { saveValue, deleteValue, type Provider, type Key } from '@/lib/ai-call/provider-settings'
 

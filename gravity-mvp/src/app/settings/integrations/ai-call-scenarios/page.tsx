@@ -1,5 +1,5 @@
 import { listScenarios, listProjects } from '@/lib/ai-call/scenarios'
-import { getCurrentUser } from '@/lib/users/user-service'
+import { getCurrentUserIdentityV1 as getCurrentUser } from '@/modules/identity-access/public/v1/user-directory'
 import { getAiCallKeysStatus } from '@/lib/ai-call/keys-status'
 import { getValue } from '@/lib/ai-call/provider-settings'
 import AiCallScenariosClient from './AiCallScenariosClient'
