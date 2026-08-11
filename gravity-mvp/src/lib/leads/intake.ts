@@ -19,14 +19,13 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { ContactService } from '@/lib/ContactService'
 import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
 import type { ChatChannel } from '@prisma/client'
 import type { LeadSource } from './types'
 import { ENSURE_LEAD_CONVERSATION_COMMAND_V1, RECEIVE_MESSAGE_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { ensureLeadConversationV1, receiveMessageV1 } from '@/modules/messaging/public/v1'
 import { MARK_TEMPORARY_CONTACT_PHONE_COMMAND_V1 } from '@/contracts/contacts/v1'
-import { markTemporaryContactPhoneV1 } from '@/modules/contacts/public/v1'
+import { addPhoneToContactV1, markTemporaryContactPhoneV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
 
 // LeadSource → ChatChannel. У нас сейчас полное совпадение (avito,
 // whatsapp, telegram, phone), но 'site' не имеет канала в чатах.
@@ -92,7 +91,7 @@ export async function ingestLead(input: IngestLeadInput): Promise<IngestLeadResu
     )
   }
 
-  const resolved = await ContactService.resolveContact(
+  const resolved = await resolveChannelContactOperationV1(
     channel,
     input.sourceExternalId,
     input.phone,
@@ -224,7 +223,7 @@ export async function updateLeadPhone(
   // Contact'a. Если в `expiresAt` ещё был live временный — он уйдёт в
   // isActive:false, чтобы Авито при следующей ротации временного не
   // случайно сматчился через resolveByPhone в этот же Contact.
-  const result = await ContactService.addPhoneToContact(contactId, normalized, {
+  const result = await addPhoneToContactV1(contactId, normalized, {
     isTemporary: false,
     source: input.source as 'manual' | 'avito' | 'whatsapp' | 'telegram' | 'phone',
     label: 'Личный',

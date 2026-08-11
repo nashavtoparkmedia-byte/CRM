@@ -1,10 +1,9 @@
 "use server"
 
 import { prisma } from "@/lib/prisma"
-import { ContactService } from "@/lib/ContactService"
 import { revalidatePath } from "next/cache"
 import { SET_CONTACT_DISPLAY_NAME_COMMAND_V1 } from "@/contracts/contacts/v1"
-import { setContactDisplayNameV1 } from "@/modules/contacts/public/v1"
+import { resolveChannelContactOperationV1, setContactDisplayNameV1 } from "@/modules/contacts/public/v1"
 import { ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1 } from "@/contracts/messaging/v1"
 import { ensureConversationContactLinkV1 } from "@/modules/messaging/public/v1"
 
@@ -51,7 +50,7 @@ export async function searchDriversForLinking(query: string): Promise<DriverSear
  * Привязать chat к указанному Driver. Обновляет:
  *   — chat.driverId, chat.name (driver.fullName)
  *   — Contact.displayName (если placeholder)
- *   — Создаёт ContactIdentity если нужно (через ContactService.resolveContact)
+ *   — Создаёт ContactIdentity если нужно (через публичную Contacts capability)
  */
 export async function linkChatToDriverManually(chatId: string, driverId: string): Promise<{ success: true } | { error: string }> {
     try {
@@ -78,7 +77,7 @@ export async function linkChatToDriverManually(chatId: string, driverId: string)
         const phoneDigits = (driver.phone ?? '').replace(/\D/g, '')
         if (phoneDigits.length >= 10 && (chat.channel === 'whatsapp' || chat.channel === 'max' || chat.channel === 'phone')) {
             try {
-                const contactResult = await ContactService.resolveContact(
+                const contactResult = await resolveChannelContactOperationV1(
                     chat.channel as any,
                     phoneDigits,
                     phoneDigits,

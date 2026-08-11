@@ -6,6 +6,7 @@ import { DELETE_CONVERSATIONS_BY_ID_COMMAND_V1, DELETE_LEGACY_EXTERNAL_CONVERSAT
 import { deleteConversationsByIdV1, deleteLegacyExternalConversationsV1, deleteQueuedMessagesForConnectionV1, deliverQueuedMessagesForConnectionV1 } from '@/modules/messaging/public/v1'
 import { projectMaxConnectionMetadata } from '@/modules/max-channel/public/v1/max-connection-public-metadata'
 import { requireIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
+import { cleanupDanglingContactIdentitiesV1 } from '@/modules/contacts/public/v1'
 
 // Get all saved MAX bots
 export async function getMaxConnections() {
@@ -192,8 +193,7 @@ export async function deleteMaxMessages(id: string) {
     // Cleanup dangling identities (scoped to affected contacts)
     if (contactIds.length > 0) {
         try {
-            const { ContactService } = await import('@/lib/ContactService')
-            await ContactService.cleanupDanglingIdentities(contactIds)
+            await cleanupDanglingContactIdentitiesV1(contactIds)
         } catch (e: any) {
             console.error(`[MAX-ACTIONS] Identity cleanup failed:`, e.message)
         }

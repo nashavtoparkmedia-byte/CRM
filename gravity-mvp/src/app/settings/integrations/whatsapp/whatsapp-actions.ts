@@ -8,6 +8,7 @@ import { deleteConversationsByChannelV1, deleteConversationsByIdV1, deleteHistor
 import { projectWhatsAppConnectionMetadata } from '@/modules/whatsapp-channel/public/v1/whatsapp-connection-public-metadata'
 import { readPendingWhatsAppQr } from '@/lib/whatsapp/whatsapp-qr-ceremony'
 import { requireIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
+import { cleanupDanglingContactIdentitiesV1 } from '@/modules/contacts/public/v1'
 
 const publicWhatsAppConnectionSelect = {
     id: true,
@@ -306,8 +307,7 @@ export async function deleteWhatsAppMessages(connectionId: string) {
 
         // Cleanup dangling identities
         if (contactIds.length > 0) {
-            const { ContactService } = await import('@/lib/ContactService')
-            await ContactService.cleanupDanglingIdentities(contactIds)
+            await cleanupDanglingContactIdentitiesV1(contactIds)
         }
     } else {
         console.log(`[WA-DELETE] No unified chats found for connection ${connectionId}`)

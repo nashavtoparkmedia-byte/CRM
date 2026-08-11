@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { DriverMatchService } from '@/lib/DriverMatchService'
-import { ContactService } from '@/lib/ContactService'
+import { resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import crypto from 'crypto'
 import { ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, UPSERT_EXTERNAL_MESSAGE_COMMAND_V1 } from '@/contracts/messaging/v1'
@@ -141,7 +141,7 @@ export async function POST(req: NextRequest) {
         // — displayName = bestName (реальное имя или номер)
         try {
             if (phoneDigits && phoneDigits.length >= 10) {
-                const contactResult = await ContactService.resolveContact(
+                const contactResult = await resolveChannelContactOperationV1(
                     'max',
                     phoneDigits,
                     phoneDigits,
@@ -155,7 +155,7 @@ export async function POST(req: NextRequest) {
                 })
             } else {
                 // Phone не извлекли — используем externalChatId как identity-id
-                const contactResult = await ContactService.resolveContact(
+                const contactResult = await resolveChannelContactOperationV1(
                     'max',
                     externalChatId,
                     null,

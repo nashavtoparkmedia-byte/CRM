@@ -29,7 +29,7 @@ import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
 import { broadcastCall } from '@/lib/callStreamBus'
 import { getSipExtensionForUser, getUserIdForSipExtension } from '@/lib/sip/extensions'
 import { processRecording } from '@/lib/freeswitch/recordingProcessor'
-import { ContactService } from '@/lib/ContactService'
+import { resolveContactByPhoneV1 } from '@/modules/contacts/public/v1'
 import { mapHangupCauseToStatus, callStatusLabel, type CallDirection } from '@/lib/calls/status'
 import { projectCompletedCallTimelineV1 } from '@/modules/calling/public/v1/completed-call-timeline-projection'
 
@@ -366,7 +366,7 @@ async function handleChannelCreate(evt: any): Promise<void> {
         // unifies under one card automatically.
         if (!contactId) {
             try {
-                const resolved = await ContactService.resolveByPhone(e164, displayName)
+                const resolved = await resolveContactByPhoneV1(e164, displayName)
                 if (resolved) {
                     contactId = resolved.contact.id
                     displayName = displayName ?? resolved.contact.displayName

@@ -354,7 +354,7 @@ describe('MAX ContactResolution shadow comparison', () => {
     expect(logs[0]).toMatchObject({ warnings: expect.arrayContaining(['provider_account_scope_not_persisted']) })
   })
 
-  test('canonical route starts shadow before owner-routed Chat mutation and captures legacy outcome after ContactService', () => {
+  test('canonical route starts shadow before owner-routed Chat mutation and captures legacy outcome after Contacts resolution', () => {
     const route = readFileSync(path.join(process.cwd(), 'src/app/api/webhooks/max/route.ts'), 'utf8')
     const shadowStart = route.indexOf('const maxContactResolutionShadow = await startMaxContactResolutionShadow')
     const ownerMutationIndexes = [
@@ -363,7 +363,7 @@ describe('MAX ContactResolution shadow comparison', () => {
     ].filter(index => index >= 0)
     const firstChatMutation = Math.min(...ownerMutationIndexes)
     const legacyCapture = route.indexOf('legacyContactResolution = contactResult.isNew')
-    const contactResolve = route.indexOf('ContactService.resolveContact')
+    const contactResolve = route.indexOf('resolveChannelContactOperationV1')
 
     expect(shadowStart).toBeGreaterThan(-1)
     expect(ownerMutationIndexes).toHaveLength(2)

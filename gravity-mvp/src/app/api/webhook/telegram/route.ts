@@ -3,14 +3,13 @@ import { prisma } from '@/lib/prisma'
 import { sendTelegramBotMessage } from '@/app/tg-bot-actions'
 import { changeDriverLimit } from '@/app/actions'
 import { DriverMatchService } from '@/lib/DriverMatchService'
-import { ContactService } from '@/lib/ContactService'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import {
     ATTACH_CONTACT_IDENTITY_COMMAND_V1,
     REPLACE_IDENTITY_PROFILE_V1,
 } from '@/contracts/contacts/v1'
-import { attachContactIdentityV1 } from '@/modules/contacts/public/v1'
+import { attachContactIdentityV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
 import { PROMOTE_CHANNEL_DISPLAY_NAME_V2, RESOLVE_CONTACT_COMMAND_V2 } from '@/contracts/contacts/v2'
 import { resolveContactV2 } from '@/modules/contacts/public/v2'
 import { CREATE_CHANNEL_MESSAGE_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1 } from '@/contracts/messaging/v1'
@@ -121,7 +120,7 @@ export async function POST(req: NextRequest) {
             // ── Contact Model dual write ──────────────────────────────
             try {
                 // PR-А: Contact.displayName тоже приоритет — real name > @username
-                const contactResult = await ContactService.resolveContact(
+                const contactResult = await resolveChannelContactOperationV1(
                     'telegram',
                     telegramId.toString(),
                     null,  // Bot webhook не передаёт номер телефона

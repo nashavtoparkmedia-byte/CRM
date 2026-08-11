@@ -6,11 +6,11 @@ import { prisma } from '@/lib/prisma'
 import { emitMessageReceived } from '@/lib/messageEvents'
 import { broadcastChatMessage } from '@/lib/messageStreamBus'
 import { DriverMatchService } from '@/lib/DriverMatchService'
-import { ContactService } from '@/lib/ContactService'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import { startMaxContactResolutionShadow } from '@/lib/contacts/max-contact-resolution-shadow'
 import type { LegacyContactResolutionOutcome } from '@/lib/contacts/contact-resolution-shadow.types'
 import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
+import { resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { CREATE_EXTERNAL_CONVERSATION_COMMAND_V1, DELETE_MESSAGE_COMMAND_V1, DELETE_MESSAGE_MEDIA_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_EXTERNAL_CONVERSATION_COMMAND_V1, REPLACE_EXTERNAL_MESSAGE_COMMAND_V1, UPSERT_EXTERNAL_MESSAGE_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { ATTACH_MESSAGE_MEDIA_COMMAND_V2 } from '@/contracts/messaging/v2'
@@ -573,7 +573,7 @@ export async function POST(request: Request) {
         const maxExternalId = senderIdString || externalChatId
         const maxPhone = effectiveSenderPhone
 
-        const contactResult = await ContactService.resolveContact(
+        const contactResult = await resolveChannelContactOperationV1(
           'max',
           maxExternalId,
           maxPhone,

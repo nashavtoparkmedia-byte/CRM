@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "f34f55d74cb014bb9e67bcf5f0993141b7ce28aa22aeccaf961c7a70068fff01",
+  "finding_digest": "e991e396506704aa6f2712cf6922bdcf3b78709d24919cfed8bec044cc741a86",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,8 +13,8 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "internal_module_import": 162,
-    "non_public_cross_context_import": 266,
+    "internal_module_import": 150,
+    "non_public_cross_context_import": 254,
     "undeclared_dependency": 102
   },
   "exceptions": [
@@ -280,38 +280,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:operations_observability/monitoring>work_management/tasks"
-      ]
-    },
-    {
-      "fingerprint": "arch_1d88a06c637d093d2a6d40c3",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/messages/start-chat/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "contacts",
-      "subject": "messages>contacts:gravity-mvp/src/lib/ContactService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>contacts/contacts"
-      ]
-    },
-    {
-      "fingerprint": "arch_1ab8c3a391892608f9c013d6",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/messages/start-chat/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "contacts",
-      "subject": "messages>contacts:gravity-mvp/src/lib/ContactService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>contacts/contacts"
       ]
     },
     {
@@ -929,38 +897,6 @@
       ]
     },
     {
-      "fingerprint": "arch_eafaf0acd1546b68a1ef2558",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/webhook/max/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "max_channel",
-      "target_context": "contacts",
-      "subject": "max_provider>contacts:gravity-mvp/src/lib/ContactService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:max_channel/max_provider>contacts/contacts"
-      ]
-    },
-    {
-      "fingerprint": "arch_f1a85a6d9762768da437a406",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/webhook/max/route.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "max_channel",
-      "target_context": "contacts",
-      "subject": "max_provider>contacts:gravity-mvp/src/lib/ContactService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:max_channel/max_provider>contacts/contacts"
-      ]
-    },
-    {
       "fingerprint": "arch_aae1d5539364864bbbf9a494",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/api/webhook/max/route.ts",
@@ -1043,38 +979,6 @@
       ]
     },
     {
-      "fingerprint": "arch_975fec7ea00b945033fbc67c",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/webhook/telegram/route.ts",
-      "line_at_baseline": 6,
-      "ordinal": 1,
-      "owner_context": "telegram_channel",
-      "target_context": "contacts",
-      "subject": "telegram_provider>contacts:gravity-mvp/src/lib/ContactService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:telegram_channel/telegram_provider>contacts/contacts"
-      ]
-    },
-    {
-      "fingerprint": "arch_3cd4a9497701af02df514784",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/webhook/telegram/route.ts",
-      "line_at_baseline": 6,
-      "ordinal": 1,
-      "owner_context": "telegram_channel",
-      "target_context": "contacts",
-      "subject": "telegram_provider>contacts:gravity-mvp/src/lib/ContactService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:telegram_channel/telegram_provider>contacts/contacts"
-      ]
-    },
-    {
       "fingerprint": "arch_b708edff20a106fff6dfd3e1",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/api/webhook/telegram/route.ts",
@@ -1152,38 +1056,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:max_channel/max_provider>fleet_operations/drivers"
-      ]
-    },
-    {
-      "fingerprint": "arch_7bb0664d03baaf0fa3fb232f",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
-      "line_at_baseline": 9,
-      "ordinal": 1,
-      "owner_context": "max_channel",
-      "target_context": "contacts",
-      "subject": "max_provider>contacts:gravity-mvp/src/lib/ContactService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:max_channel/max_provider>contacts/contacts"
-      ]
-    },
-    {
-      "fingerprint": "arch_6fa7e0b82b317087b9a620b7",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
-      "line_at_baseline": 9,
-      "ordinal": 1,
-      "owner_context": "max_channel",
-      "target_context": "contacts",
-      "subject": "max_provider>contacts:gravity-mvp/src/lib/ContactService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:max_channel/max_provider>contacts/contacts"
       ]
     },
     {
@@ -2229,38 +2101,6 @@
       ]
     },
     {
-      "fingerprint": "arch_67addc208c7d65fb943f8ec1",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/max-actions.ts",
-      "line_at_baseline": 158,
-      "ordinal": 1,
-      "owner_context": "max_channel",
-      "target_context": "contacts",
-      "subject": "max_provider>contacts:gravity-mvp/src/lib/ContactService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:max_channel/max_provider>contacts/contacts"
-      ]
-    },
-    {
-      "fingerprint": "arch_c754d745ea06b828d0bc7568",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/max-actions.ts",
-      "line_at_baseline": 158,
-      "ordinal": 1,
-      "owner_context": "max_channel",
-      "target_context": "contacts",
-      "subject": "max_provider>contacts:gravity-mvp/src/lib/ContactService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:max_channel/max_provider>contacts/contacts"
-      ]
-    },
-    {
       "fingerprint": "arch_ac219663ccbdb035fdf66ade",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/messages/components/AiCoachModal.tsx",
@@ -3027,38 +2867,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:messaging/messages>ai_knowledge/ai_knowledge"
-      ]
-    },
-    {
-      "fingerprint": "arch_b8e332566c892c0af0a7433e",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/messages/link-chat-actions.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "contacts",
-      "subject": "messages>contacts:gravity-mvp/src/lib/ContactService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>contacts/contacts"
-      ]
-    },
-    {
-      "fingerprint": "arch_85798df5b9e3e07b112b85c0",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/messages/link-chat-actions.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "contacts",
-      "subject": "messages>contacts:gravity-mvp/src/lib/ContactService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>contacts/contacts"
       ]
     },
     {
@@ -4233,38 +4041,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:calling/ai_calls>configuration/settings"
-      ]
-    },
-    {
-      "fingerprint": "arch_4c220d2ba4575256002548b8",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/settings/integrations/whatsapp/whatsapp-actions.ts",
-      "line_at_baseline": 247,
-      "ordinal": 1,
-      "owner_context": "whatsapp_channel",
-      "target_context": "contacts",
-      "subject": "whatsapp_provider>contacts:gravity-mvp/src/lib/ContactService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:whatsapp_channel/whatsapp_provider>contacts/contacts"
-      ]
-    },
-    {
-      "fingerprint": "arch_34b43d1036b5897b1879ad87",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/settings/integrations/whatsapp/whatsapp-actions.ts",
-      "line_at_baseline": 247,
-      "ordinal": 1,
-      "owner_context": "whatsapp_channel",
-      "target_context": "contacts",
-      "subject": "whatsapp_provider>contacts:gravity-mvp/src/lib/ContactService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:whatsapp_channel/whatsapp_provider>contacts/contacts"
       ]
     },
     {
@@ -6679,38 +6455,6 @@
       ]
     },
     {
-      "fingerprint": "arch_fa4def57bdf2fa497b600a5a",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/tg-actions.ts",
-      "line_at_baseline": 275,
-      "ordinal": 1,
-      "owner_context": "telegram_channel",
-      "target_context": "contacts",
-      "subject": "telegram_provider>contacts:gravity-mvp/src/lib/ContactService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:telegram_channel/telegram_provider>contacts/contacts"
-      ]
-    },
-    {
-      "fingerprint": "arch_5e013de3efba025fa0a2db3a",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/tg-actions.ts",
-      "line_at_baseline": 275,
-      "ordinal": 1,
-      "owner_context": "telegram_channel",
-      "target_context": "contacts",
-      "subject": "telegram_provider>contacts:gravity-mvp/src/lib/ContactService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:telegram_channel/telegram_provider>contacts/contacts"
-      ]
-    },
-    {
       "fingerprint": "arch_82faa9ceefa8892dfd77f8be",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/tg-actions.ts",
@@ -6772,38 +6516,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:telegram_channel/telegram_provider>messaging/messages"
-      ]
-    },
-    {
-      "fingerprint": "arch_7c9cd690e504d40fea42a82e",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/tg-actions.ts",
-      "line_at_baseline": 1611,
-      "ordinal": 2,
-      "owner_context": "telegram_channel",
-      "target_context": "contacts",
-      "subject": "telegram_provider>contacts:gravity-mvp/src/lib/ContactService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:telegram_channel/telegram_provider>contacts/contacts"
-      ]
-    },
-    {
-      "fingerprint": "arch_75fe204fe97ecfb986b832e1",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/tg-actions.ts",
-      "line_at_baseline": 1611,
-      "ordinal": 2,
-      "owner_context": "telegram_channel",
-      "target_context": "contacts",
-      "subject": "telegram_provider>contacts:gravity-mvp/src/lib/ContactService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:telegram_channel/telegram_provider>contacts/contacts"
       ]
     },
     {
@@ -7915,38 +7627,6 @@
       ]
     },
     {
-      "fingerprint": "arch_5d6dcd246d9efabadf177062",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
-      "line_at_baseline": 33,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "contacts",
-      "subject": "calls>contacts:gravity-mvp/src/lib/ContactService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/calls>contacts/contacts"
-      ]
-    },
-    {
-      "fingerprint": "arch_ad8629ea3b2efd15ece3fc92",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
-      "line_at_baseline": 33,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "contacts",
-      "subject": "calls>contacts:gravity-mvp/src/lib/ContactService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/calls>contacts/contacts"
-      ]
-    },
-    {
       "fingerprint": "arch_aa0b4e20c768977eecbfef41",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/lib/freeswitch/recordingProcessor.ts",
@@ -7980,38 +7660,6 @@
         "dependency:calling/ai_calls>platform_shell/gravity_core",
         "dependency:calling/calls>platform_shell/gravity_core",
         "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_e0982469d0a5673f403bab20",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/lib/leads/intake.ts",
-      "line_at_baseline": 22,
-      "ordinal": 1,
-      "owner_context": "avito_acquisition",
-      "target_context": "contacts",
-      "subject": "leads>contacts:gravity-mvp/src/lib/ContactService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:avito_acquisition/leads>contacts/contacts"
-      ]
-    },
-    {
-      "fingerprint": "arch_f913c991f56d1dbc1b0ecc97",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/leads/intake.ts",
-      "line_at_baseline": 22,
-      "ordinal": 1,
-      "owner_context": "avito_acquisition",
-      "target_context": "contacts",
-      "subject": "leads>contacts:gravity-mvp/src/lib/ContactService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:avito_acquisition/leads>contacts/contacts"
       ]
     },
     {
@@ -8480,38 +8128,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:whatsapp_channel/whatsapp_provider>fleet_operations/drivers"
-      ]
-    },
-    {
-      "fingerprint": "arch_df4cdfc083dd0d9f0f461023",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 6,
-      "ordinal": 1,
-      "owner_context": "whatsapp_channel",
-      "target_context": "contacts",
-      "subject": "whatsapp_provider>contacts:gravity-mvp/src/lib/ContactService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:whatsapp_channel/whatsapp_provider>contacts/contacts"
-      ]
-    },
-    {
-      "fingerprint": "arch_e6c0be2a7dd739ca7dc60d87",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 6,
-      "ordinal": 1,
-      "owner_context": "whatsapp_channel",
-      "target_context": "contacts",
-      "subject": "whatsapp_provider>contacts:gravity-mvp/src/lib/ContactService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:whatsapp_channel/whatsapp_provider>contacts/contacts"
       ]
     },
     {

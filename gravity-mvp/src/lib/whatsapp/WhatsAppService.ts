@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import path from 'path'
 import fs from 'fs'
 import { DriverMatchService } from '@/lib/DriverMatchService'
-import { ContactService } from '@/lib/ContactService'
+import { addPhoneToContactV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import { enrichWaChatNameFromSibling } from '@/lib/whatsapp/enrichChatName'
 import { emitMessageReceived } from '@/lib/messageEvents'
@@ -162,7 +162,7 @@ function canonicalWaExternalChatId(rawJid: string): string {
  * NOT done here (intentionally, because it's a group room, not a phone):
  *   - phone normalization / LID translation
  *   - DriverMatchService.linkChatToDriver
- *   - ContactService.resolveContact (the sender in msg.author is not
+ *   - contact resolution (the sender in msg.author is not
  *     the chat partner — a group has N members)
  *
  * Group outbound (you write to the group) arrives as msg.fromMe=true
@@ -535,7 +535,7 @@ async function syncHistory(connectionId: string, client: Client) {
                         if (isLid) {
                             // Для @lid передаём identity externalId = весь LID-JID, phone=null.
                             // НЕ цифры из @lid (это linked-device id, не phone) — иначе фабрикуем phantom phone.
-                            const contactResult = await ContactService.resolveContact('whatsapp', serialized, null, chatRaw.name)
+                            const contactResult = await resolveChannelContactOperationV1('whatsapp', serialized, null, chatRaw.name)
                             await ensureConversationContactLinkV1({
                                 contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
                                 chatId: unifiedSyncChat.id,
@@ -549,7 +549,7 @@ async function syncHistory(connectionId: string, client: Client) {
                                 null,
                             ).catch(err => console.warn(`[WA-SERVICE] enrichChatName failed: ${err.message}`))
                         } else if (rawPhone && /^\d{10,15}$/.test(rawPhone)) {
-                            const contactResult = await ContactService.resolveContact('whatsapp', rawPhone, rawPhone, chatRaw.name)
+                            const contactResult = await resolveChannelContactOperationV1('whatsapp', rawPhone, rawPhone, chatRaw.name)
                             await ensureConversationContactLinkV1({
                                 contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
                                 chatId: unifiedSyncChat.id,
@@ -1117,7 +1117,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                 //     rows that map LIDs onto real people's numbers by accident)
                 const identityExternalId = lidResolved ? normalizedPhone : rawChatId
                 const phoneForResolve   = lidResolved ? phoneDigits     : null
-                const contactResult = await ContactService.resolveContact(
+                const contactResult = await resolveChannelContactOperationV1(
                     'whatsapp',
                     identityExternalId,
                     phoneForResolve,
@@ -1135,7 +1135,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                 // addPhoneToContact is idempotent — safe to call on every message.
                 if (lidResolved && phoneDigits.length >= 10) {
                     const e164 = '+7' + phoneDigits.slice(-10)
-                    const backfill = await ContactService.addPhoneToContact(
+                    const backfill = await addPhoneToContactV1(
                         contactResult.contact.id,
                         e164,
                         { source: 'whatsapp', isPrimary: true },
@@ -2011,7 +2011,7 @@ export async function importWhatsAppHistory(
                         const rawPhone = serialized.split('@')[0]
                         if (isLid) {
                             // Для @lid: externalId = весь LID-JID, phone=null. См. live-path выше.
-                            const contactResult = await ContactService.resolveContact('whatsapp', serialized, null, chatRaw.name)
+                            const contactResult = await resolveChannelContactOperationV1('whatsapp', serialized, null, chatRaw.name)
                             await ensureConversationContactLinkV1({
                                 contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
                                 chatId: unifiedChat.id,
@@ -2026,7 +2026,7 @@ export async function importWhatsAppHistory(
                             ).catch(err => console.warn(`[WA-SERVICE] importHistory enrichChatName failed: ${err.message}`))
                             totalContacts++
                         } else if (rawPhone && /^\d{10,15}$/.test(rawPhone)) {
-                            const contactResult = await ContactService.resolveContact('whatsapp', rawPhone, rawPhone, chatRaw.name)
+                            const contactResult = await resolveChannelContactOperationV1('whatsapp', rawPhone, rawPhone, chatRaw.name)
                             await ensureConversationContactLinkV1({
                                 contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
                                 chatId: unifiedChat.id,

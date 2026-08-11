@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { ContactService } from '@/lib/ContactService'
 import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
+import { resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
 import { ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { ensureConversationContactLinkV1 } from '@/modules/messaging/public/v1'
 
@@ -74,7 +74,7 @@ export async function POST(request: Request) {
                 : normalizePhoneE164(driver?.phone)
             const displayName = chatName || null
 
-            const contactResult = await ContactService.resolveContact(
+            const contactResult = await resolveChannelContactOperationV1(
                 channel,
                 finalExternalId,
                 phone,

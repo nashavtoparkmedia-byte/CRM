@@ -13,6 +13,7 @@ import { attachBinaryMessageMediaV1, attachMessageMediaV1, createChannelMessageV
 import { ATTACH_BINARY_MESSAGE_MEDIA_COMMAND_V1, ATTACH_MESSAGE_MEDIA_COMMAND_V1, CREATE_CHANNEL_MESSAGE_COMMAND_V1, DELETE_CONVERSATIONS_BY_ID_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CHANNEL_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CONNECTION_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, PATCH_MESSAGE_DELIVERY_COMMAND_V1, PATCH_MESSAGE_METADATA_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { projectTelegramConnectionMetadata } from '@/modules/telegram-channel/public/v1/telegram-connection-public-metadata'
 import { requireIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
+import { cleanupDanglingContactIdentitiesV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
 
 // Global map to keep track of active login clients for QR
 // Note: In a production serverless environment, this would need a different approach (like a separate service or Redis)
@@ -415,7 +416,6 @@ export async function getTelegramRuntimeStatus() {
 }
 
 import { DriverMatchService } from '@/lib/DriverMatchService'
-import { ContactService } from '@/lib/ContactService'
 import { emitMessageReceived } from '@/lib/messageEvents'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 
@@ -520,7 +520,7 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
 
         // ── Contact Model dual write ──────────────────────────────
         try {
-            const contactResult = await ContactService.resolveContact(
+            const contactResult = await resolveChannelContactOperationV1(
                 'telegram',
                 senderId,
                 null,  // TG GramJS не передаёт номер телефона
@@ -1425,7 +1425,7 @@ export async function importTelegramHistory(
                 // Contact resolution
                 if (!unifiedChat.contactId) {
                     try {
-                        await ContactService.resolveContact('telegram', peerId, null, chatName)
+                        await resolveChannelContactOperationV1('telegram', peerId, null, chatName)
                         totalContacts++
                     } catch {}
                 }
@@ -1634,8 +1634,6 @@ export async function resumeTelegramConnection(id: string, catchUp?: boolean) {
 
 export async function deleteConnectionMessages(connectionId: string) {
     await requireIntegrationAdminAccess()
-    const { ContactService } = await import('@/lib/ContactService')
-
     // Find telegram chats scoped to this connection (via metadata.connectionId)
     // If connectionId is not in metadata, fall back to all telegram chats
     const allTgChats = await (prisma.chat as any).findMany({
@@ -1664,7 +1662,7 @@ export async function deleteConnectionMessages(connectionId: string) {
 
     // Cleanup dangling identities
     if (contactIds.length > 0) {
-        await ContactService.cleanupDanglingIdentities(contactIds)
+        await cleanupDanglingContactIdentitiesV1(contactIds)
     }
 
     // Clean up HistoryImportJob records so ChannelSyncBlock resets to "Не загружена"

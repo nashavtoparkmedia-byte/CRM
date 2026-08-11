@@ -84,3 +84,13 @@ export type {
     ContactMergeUnitOfWorkV1,
     ContactMergeWorkRepositoryV1,
 } from './contact-merge-handler'
+export {
+    addPhoneToContactV1,
+    cleanupDanglingContactIdentitiesV1,
+    resolveChannelContactOperationV1,
+    resolveContactByPhoneV1,
+} from './contact-identity-maintenance'
+export type {
+    AddPhoneToContactOptionsV1,
+    AddPhoneToContactResultV1,
+} from './contact-identity-maintenance'

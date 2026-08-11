@@ -222,7 +222,7 @@ export async function register() {
         // Avito temporary phone expiration: every hour mark expired temp
         // phones inactive. Avito rotates the disposable proxy numbers, so
         // a temp ContactPhone older than its expiresAt is no longer reachable
-        // and would only confuse ContactService.resolveByPhone if it stuck
+        // and would only confuse Contacts phone resolution if it stuck
         // around (Avito would reissue the same number to a different lead).
         const tempPhoneExpInterval = setInterval(async () => {
             await OperationalJobs.run('temp_phone_expire', async () => {

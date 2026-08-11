@@ -108,7 +108,8 @@
     "PhoneIdentityUtilities.v1",
     "ContactView.v1",
     "ContactLookup.v1",
-    "ContactResolution.v1"
+    "ContactResolution.v1",
+    "ContactIdentityMaintenance.v1"
   ],
   "responsibility": "Canonical people, phone/identity resolution, merges and channel-independent reachability identity.",
   "schema": "yoko.crm.module-manifest.v1",
