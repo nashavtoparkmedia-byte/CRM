@@ -3,7 +3,7 @@
     {
       "context": "ai_knowledge",
       "path": "architecture/contexts/v1/manifests/ai_knowledge.json",
-      "sha256": "b7cd353b44e65939662c69828877f37c0ca88a3d6495637c19d5ca7407508590"
+      "sha256": "a33d76a218f2142b8a2c39e7c58a869ad9aee5cf2317f560eb4db0af817aea6e"
     },
     {
       "context": "analytics_reporting",

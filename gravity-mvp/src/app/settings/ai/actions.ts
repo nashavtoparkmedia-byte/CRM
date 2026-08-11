@@ -627,9 +627,13 @@ export async function listExtractionJobs(limit?: number) {
 //   - startKnowledgeExtraction / saveExtractionQualityTier —
 //     только Admin/Lead (тратит LLM-токены)
 
-import { runExtraction } from '@/lib/ai/knowledge/Extractor'
-import type { ExtractionScope } from '@/lib/ai/knowledge/pairBuilder'
-export type { ExtractionScope } from '@/lib/ai/knowledge/pairBuilder'
+import {
+    runQueuedKnowledgeExtractionV1 as runExtraction,
+    type KnowledgeExtractionScopeV1 as ExtractionScope,
+} from '@/modules/ai-knowledge/public/v1/knowledge-extraction-execution'
+export type {
+    KnowledgeExtractionScopeV1 as ExtractionScope,
+} from '@/modules/ai-knowledge/public/v1/knowledge-extraction-execution'
 
 /** Может ли текущий пользователь видеть source excerpts (PII risk).
  *  Совпадает с assertCanEditAi, но возвращает boolean без throw —
