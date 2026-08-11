@@ -5,7 +5,7 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation"
 import { Search, MessageSquare, X, Send } from "lucide-react"
 import type { DriverCard as DriverCardType } from "../actions"
 import { sendTelegramMessage } from "../../tg-actions"
-import { sendMaxMessage } from "../../max-actions"
+import { sendMaxDriverMessageV1 } from "@/infrastructure/fleet/driver-max-messaging"
 import { DriverCardGrid } from "../components/DriverCardGrid"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -63,7 +63,7 @@ function SendMessageModal({
             if (channel === "telegram") {
                 await sendTelegramMessage(driver.phone, message, selectedConnection)
             } else {
-                await sendMaxMessage(driver.phone, message, { 
+                await sendMaxDriverMessageV1(driver.phone, message, {
                     connectionId: selectedConnection,
                     isPersonal: channel === "max",
                     name: driver.fullName

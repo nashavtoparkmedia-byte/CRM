@@ -108,7 +108,8 @@
   "public_surface": [
     "MaxDeliveryPort.v1",
     "MaxReachability.v1",
-    "MaxSessionStatus.v1"
+    "MaxSessionStatus.v1",
+    "MaxDriverMessaging.v1"
   ],
   "responsibility": "MAX provider session, scraping/mirroring and Personal MAX delivery integration.",
   "schema": "yoko.crm.module-manifest.v1",

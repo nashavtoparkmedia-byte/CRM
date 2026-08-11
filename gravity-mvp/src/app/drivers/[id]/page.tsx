@@ -11,7 +11,7 @@ import AiMockCallButton from '@/components/sip/AiMockCallButton'
 import { prisma } from '@/lib/prisma'
 import { getDriverById, getCarById } from '@/app/actions'
 import { getDriverTimeline } from './timeline-actions'
-import { getMaxConnections } from '@/app/max-actions'
+import { listMaxDriverDeliveryConnectionsV1 } from '@/infrastructure/fleet/driver-max-messaging'
 import { getTelegramConnections } from '@/app/tg-actions'
 
 export const dynamic = 'force-dynamic'
@@ -31,7 +31,7 @@ export default async function DriverDetailsPage({ params }: { params: { id: stri
         prisma.driverTelegram.findFirst({ where: { driverId: id } }),
         getDriverTimeline(id),
         getTelegramConnections(),
-        getMaxConnections(),
+        listMaxDriverDeliveryConnectionsV1(),
         // PR #64: accept either yandexDriverId OR Prisma cuid in URL.
         // Also select `phone` so the page can fall back to the local
         // value when Yandex API returns nothing (sync stale, network

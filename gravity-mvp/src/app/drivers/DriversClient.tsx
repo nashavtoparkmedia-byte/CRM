@@ -17,7 +17,7 @@ import {
 } from "lucide-react"
 import { SegmentCards } from "./components/SegmentCards"
 import { SegmentationSettings } from "./components/SegmentationSettings"
-import { sendMaxMessage } from "../max-actions"
+import { sendMaxDriverMessageV1 } from "@/infrastructure/fleet/driver-max-messaging"
 import { sendTelegramMessage } from "../tg-actions"
 import type { DriverWithCells } from "./actions"
 
@@ -121,7 +121,7 @@ function SendMessageModal({
             if (channel === "telegram") {
                 await sendTelegramMessage(phone, message, selectedConnection)
             } else {
-                await sendMaxMessage(phone, message, { 
+                await sendMaxDriverMessageV1(phone, message, {
                     connectionId: selectedConnection,
                     isPersonal: channel === "max",
                     name: driver.fullName

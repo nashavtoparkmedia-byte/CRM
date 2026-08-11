@@ -48,7 +48,7 @@
     {
       "context": "max_channel",
       "path": "architecture/contexts/v1/manifests/max_channel.json",
-      "sha256": "1fc214908432a84c84517375c25f0e2d5e0657a594f19758a257c694bd31bcca"
+      "sha256": "ac0e40db81bfcd6c1c3bedece8ffb8e8474d506c9f4118c00f3fd16379a1124f"
     },
     {
       "context": "messaging",

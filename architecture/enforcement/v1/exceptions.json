@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "71d497db5dde942ce19144d71917cc00931d5f881ea46d38838462356b8f2228",
+  "finding_digest": "de26e91541528391794a3fdc2d5eb771eac8dc3c6b7437baa0c811ab06feac24",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,10 +13,10 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "direct_provider_transport_access": 15,
-    "internal_module_import": 356,
-    "non_public_cross_context_import": 492,
-    "undeclared_dependency": 302
+    "direct_provider_transport_access": 12,
+    "internal_module_import": 353,
+    "non_public_cross_context_import": 489,
+    "undeclared_dependency": 299
   },
   "exceptions": [
     {
@@ -4692,71 +4692,6 @@
       ]
     },
     {
-      "fingerprint": "arch_9cbc47a5eb709989be363c6c",
-      "rule": "direct_provider_transport_access",
-      "file": "gravity-mvp/src/app/drivers/[id]/page.tsx",
-      "line_at_baseline": 14,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "max_channel",
-      "subject": "provider-module:max:gravity-mvp/src/app/max-actions.ts",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>max_channel/max_provider",
-        "provider-boundary:max"
-      ]
-    },
-    {
-      "fingerprint": "arch_8c98874becfce181d7915dbb",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/drivers/[id]/page.tsx",
-      "line_at_baseline": 14,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "max_channel",
-      "subject": "drivers>max_provider:gravity-mvp/src/app/max-actions.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>max_channel/max_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_17b58d42e4428a99a2d9121b",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/drivers/[id]/page.tsx",
-      "line_at_baseline": 14,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "max_channel",
-      "subject": "drivers>max_provider:gravity-mvp/src/app/max-actions.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>max_channel/max_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_a45b6cea4202ec41398fd947",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/drivers/[id]/page.tsx",
-      "line_at_baseline": 14,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "max_channel",
-      "subject": "drivers>max_provider:gravity-mvp/src/app/max-actions.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>max_channel/max_provider"
-      ]
-    },
-    {
       "fingerprint": "arch_51604dc4dfa0785bde7df392",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/drivers/[id]/page.tsx",
@@ -5735,71 +5670,6 @@
       ]
     },
     {
-      "fingerprint": "arch_20062979cb292cdaf18901a2",
-      "rule": "direct_provider_transport_access",
-      "file": "gravity-mvp/src/app/drivers/cards/CardsClient.tsx",
-      "line_at_baseline": 8,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "max_channel",
-      "subject": "provider-module:max:gravity-mvp/src/app/max-actions.ts",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>max_channel/max_provider",
-        "provider-boundary:max"
-      ]
-    },
-    {
-      "fingerprint": "arch_3e28eee38281f8f6e93bc959",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/drivers/cards/CardsClient.tsx",
-      "line_at_baseline": 8,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "max_channel",
-      "subject": "drivers>max_provider:gravity-mvp/src/app/max-actions.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>max_channel/max_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_966ccba9f3b14c3a4cfd1cd5",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/drivers/cards/CardsClient.tsx",
-      "line_at_baseline": 8,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "max_channel",
-      "subject": "drivers>max_provider:gravity-mvp/src/app/max-actions.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>max_channel/max_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_1a5311bad2962c1c477443bc",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/drivers/cards/CardsClient.tsx",
-      "line_at_baseline": 8,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "max_channel",
-      "subject": "drivers>max_provider:gravity-mvp/src/app/max-actions.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>max_channel/max_provider"
-      ]
-    },
-    {
       "fingerprint": "arch_1b926288eef26d0985d80513",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/drivers/cards/CardsClient.tsx",
@@ -6265,71 +6135,6 @@
         "dependency:fleet_operations/drivers>platform_shell/gravity_core",
         "dependency:fleet_operations/drivers>platform_shell/gravity_ui",
         "dependency:fleet_operations/yandex_fleet>platform_shell/gravity_core"
-      ]
-    },
-    {
-      "fingerprint": "arch_1d3ef562544c2a2b85c68777",
-      "rule": "direct_provider_transport_access",
-      "file": "gravity-mvp/src/app/drivers/DriversClient.tsx",
-      "line_at_baseline": 20,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "max_channel",
-      "subject": "provider-module:max:gravity-mvp/src/app/max-actions.ts",
-      "rationale": "Pre-existing provider transport access outside the provider-owning context; frozen as migration debt.",
-      "retirement": "Move transport access behind the provider-owning context public adapter, verify behavior parity, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>max_channel/max_provider",
-        "provider-boundary:max"
-      ]
-    },
-    {
-      "fingerprint": "arch_712c1a8814b8bea17dbc5275",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/drivers/DriversClient.tsx",
-      "line_at_baseline": 20,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "max_channel",
-      "subject": "drivers>max_provider:gravity-mvp/src/app/max-actions.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>max_channel/max_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_80cfa39f7b0a522fb1845e0d",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/drivers/DriversClient.tsx",
-      "line_at_baseline": 20,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "max_channel",
-      "subject": "drivers>max_provider:gravity-mvp/src/app/max-actions.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>max_channel/max_provider"
-      ]
-    },
-    {
-      "fingerprint": "arch_76b69f6827e19fb49fe18a15",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/drivers/DriversClient.tsx",
-      "line_at_baseline": 20,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "max_channel",
-      "subject": "drivers>max_provider:gravity-mvp/src/app/max-actions.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>max_channel/max_provider"
       ]
     },
     {
