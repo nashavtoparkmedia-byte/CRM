@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "66818481479b1954be044caafffae9862cf5d1f2d8240b4aad071e111291cb1b",
+  "finding_digest": "09b1bc12b51cb7cac3c6b8463ce6e11abc28fe969df224d2fd4662469c972c66",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -14,46 +14,10 @@
   },
   "summary": {
     "internal_module_import": 84,
-    "non_public_cross_context_import": 151,
-    "undeclared_dependency": 56
+    "non_public_cross_context_import": 146,
+    "undeclared_dependency": 51
   },
   "exceptions": [
-    {
-      "fingerprint": "arch_86af9c730607e0340d928c33",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/calls/stream/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "platform_shell",
-      "subject": "calls>gravity_core:gravity-mvp/src/lib/callStreamBus.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_c733a52c100d448bc53ed3ec",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/calls/stream/route.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "platform_shell",
-      "subject": "calls>gravity_core:gravity-mvp/src/lib/callStreamBus.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
     {
       "fingerprint": "arch_b30833fa328b9816f5680bb4",
       "rule": "non_public_cross_context_import",
@@ -4236,78 +4200,6 @@
       ]
     },
     {
-      "fingerprint": "arch_53af322bc338a0a039373ebf",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
-      "line_at_baseline": 29,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "platform_shell",
-      "subject": "calls>gravity_core:gravity-mvp/src/lib/callStreamBus.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_026500f1708f2dd3b39c5865",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
-      "line_at_baseline": 29,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "platform_shell",
-      "subject": "calls>gravity_core:gravity-mvp/src/lib/callStreamBus.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_aa0b4e20c768977eecbfef41",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/freeswitch/recordingProcessor.ts",
-      "line_at_baseline": 24,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "platform_shell",
-      "subject": "calls>gravity_core:gravity-mvp/src/lib/callStreamBus.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_ee64fd5a1b23c01d3c16ee0a",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/freeswitch/recordingProcessor.ts",
-      "line_at_baseline": 24,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "platform_shell",
-      "subject": "calls>gravity_core:gravity-mvp/src/lib/callStreamBus.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
       "fingerprint": "arch_2a17905b2487566e0ef2af1f",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/lib/messageEvents.ts",
@@ -4604,42 +4496,6 @@
       ]
     },
     {
-      "fingerprint": "arch_b8b67f1cc18ac417706c3700",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/queue/analyzeWorker.ts",
-      "line_at_baseline": 38,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "platform_shell",
-      "subject": "calls>gravity_core:gravity-mvp/src/lib/callStreamBus.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_509e556fa2577ae37677d172",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/queue/analyzeWorker.ts",
-      "line_at_baseline": 38,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "platform_shell",
-      "subject": "calls>gravity_core:gravity-mvp/src/lib/callStreamBus.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
       "fingerprint": "arch_3eee6f70123874c710207b7e",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/lib/queue/analyzeWorker.ts",
@@ -4666,42 +4522,6 @@
       "owner_context": "calling",
       "target_context": "platform_shell",
       "subject": "calls>gravity_core:gravity-mvp/src/lib/openaiClient.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_bc1634f30957026c1244b240",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/queue/transcribeWorker.ts",
-      "line_at_baseline": 22,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "platform_shell",
-      "subject": "calls>gravity_core:gravity-mvp/src/lib/callStreamBus.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_core",
-        "dependency:calling/calls>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_0dbb7080ca9d3b204338fd05",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/queue/transcribeWorker.ts",
-      "line_at_baseline": 22,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "platform_shell",
-      "subject": "calls>gravity_core:gravity-mvp/src/lib/callStreamBus.ts",
       "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
       "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
       "expires_on": "2026-12-31",

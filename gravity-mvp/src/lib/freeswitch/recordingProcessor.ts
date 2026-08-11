@@ -21,7 +21,7 @@ import ffmpeg from 'fluent-ffmpeg'
 import ffmpegInstaller from '@ffmpeg-installer/ffmpeg'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { uploadFile, S3_BUCKET } from '@/modules/calling/public/v1/recording-storage'
-import { broadcastCall } from '@/lib/callStreamBus'
+import { broadcastCall } from '@/modules/calling/internal/call-stream'
 import { persistRecordingReadyV1 } from '@/modules/calling/public/v1'
 // Plain CommonJS helper — pure retry policy for the MinIO upload, no
 // generic abstraction. See `./recording-upload-retry.js` for the

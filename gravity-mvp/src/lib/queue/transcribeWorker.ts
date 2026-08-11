@@ -19,7 +19,7 @@ import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operatio
 import { getRedisConnection } from '@/lib/queue/connection'
 import { TRANSCRIBE_QUEUE, type TranscribeJobData, enqueueAnalyze } from '@/lib/queue/queues'
 import { getObject } from '@/modules/calling/public/v1/recording-storage'
-import { broadcastCall } from '@/lib/callStreamBus'
+import { broadcastCall } from '@/modules/calling/internal/call-stream'
 import { ProxyAgent, fetch as undiciFetch, FormData as UndiciFormData } from 'undici'
 
 // OpenAI Whisper. Two non-obvious requirements live here:

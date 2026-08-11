@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { subscribeAllCalls, type CallStreamEvent } from '@/lib/callStreamBus'
+import { subscribeAllCalls, type CallStreamEvent } from '@/modules/calling/internal/call-stream'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
