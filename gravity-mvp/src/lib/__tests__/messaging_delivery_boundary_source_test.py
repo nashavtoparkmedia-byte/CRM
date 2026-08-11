@@ -45,6 +45,7 @@ def test_provider_capabilities_are_registered_only_at_platform_startup():
     assert "registerTelegramMessagingDeliveryCapabilityV1" in instrumentation
     assert "registerMaxMessagingDeliveryCapabilityV1" in instrumentation
     assert "channel_delivery_capabilities_registered" in instrumentation
+    assert instrumentation.index("registerWhatsAppMessagingDeliveryCapabilityV1") < instrumentation.index("setTimeout(async () =>")
 
 
 if __name__ == "__main__":

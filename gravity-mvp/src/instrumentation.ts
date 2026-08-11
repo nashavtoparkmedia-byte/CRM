@@ -31,6 +31,25 @@ export async function register() {
         opsLog('warn', 'env_vars_missing', { missing: envWarnings })
     }
 
+    // Channel contexts own their provider SDKs. Complete registration before
+    // scheduling any recovery or retry job that can invoke MessageService.
+    try {
+        const [whatsapp, telegram, max] = await Promise.all([
+            import('@/modules/whatsapp-channel/public/v1/messaging-delivery-capability'),
+            import('@/modules/telegram-channel/public/v1/messaging-delivery-capability'),
+            import('@/modules/max-channel/public/v1/messaging-delivery-capability'),
+        ])
+        whatsapp.registerWhatsAppMessagingDeliveryCapabilityV1()
+        telegram.registerTelegramMessagingDeliveryCapabilityV1()
+        max.registerMaxMessagingDeliveryCapabilityV1()
+        opsLog('info', 'channel_delivery_capabilities_registered', { operation: 'instrumentation' })
+    } catch (err: any) {
+        opsLog('error', 'channel_delivery_capabilities_registration_failed', {
+            operation: 'instrumentation',
+            error: err.message,
+        })
+    }
+
     // Delay initialization to let DB connection pool warm up
     setTimeout(async () => {
         // ── Configuration validation ────────────────────────────────────
@@ -444,22 +463,4 @@ export async function register() {
         }
     })
 
-    // Channel contexts own their provider SDKs and register only their narrow
-    // delivery capabilities with Messaging before this startup hook completes.
-    try {
-        const [whatsapp, telegram, max] = await Promise.all([
-            import('@/modules/whatsapp-channel/public/v1/messaging-delivery-capability'),
-            import('@/modules/telegram-channel/public/v1/messaging-delivery-capability'),
-            import('@/modules/max-channel/public/v1/messaging-delivery-capability'),
-        ])
-        whatsapp.registerWhatsAppMessagingDeliveryCapabilityV1()
-        telegram.registerTelegramMessagingDeliveryCapabilityV1()
-        max.registerMaxMessagingDeliveryCapabilityV1()
-        opsLog('info', 'channel_delivery_capabilities_registered', { operation: 'instrumentation' })
-    } catch (err: any) {
-        opsLog('error', 'channel_delivery_capabilities_registration_failed', {
-            operation: 'instrumentation',
-            error: err.message,
-        })
-    }
 }
