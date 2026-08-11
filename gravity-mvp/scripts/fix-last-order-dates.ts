@@ -1,5 +1,6 @@
 
 import { PrismaClient } from '@prisma/client';
+import { updateDriverLastOrderAtV1, clearDriversLastOrderAtV1 } from '../src/modules/fleet-operations/public/v1/legacy-prisma-driver-history-maintenance-adapter.js';
 
 const prisma = new PrismaClient();
 
@@ -35,18 +36,7 @@ async function main() {
         const tripDate = entry._max.date;
         if (!tripDate) continue;
 
-        const result = await prisma.driver.updateMany({
-            where: {
-                id: entry.driverId,
-                OR: [
-                    { lastOrderAt: null },
-                    { lastOrderAt: { not: tripDate } }
-                ]
-            },
-            data: {
-                lastOrderAt: tripDate
-            }
-        });
+        const result = await updateDriverLastOrderAtV1(entry.driverId, tripDate);
 
         if (result.count > 0) {
             updatedCount++;
@@ -67,15 +57,7 @@ async function main() {
     // Get all driver IDs who HAVE trips
     const activeDriverIds = latestTrips.map(t => t.driverId);
 
-    const clearResult = await prisma.driver.updateMany({
-        where: {
-            id: { notIn: activeDriverIds },
-            lastOrderAt: { not: null }
-        },
-        data: {
-            lastOrderAt: null
-        }
-    });
+    const clearResult = await clearDriversLastOrderAtV1(activeDriverIds);
 
     console.log(`Drivers with NO trip history cleared: ${clearResult.count}`);
     console.log(`--- Fix Completed ---`);
