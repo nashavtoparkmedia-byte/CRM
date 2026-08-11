@@ -21,7 +21,7 @@ import { sendMaxDriverMessageV1 } from "@/infrastructure/fleet/driver-max-messag
 import { sendOperationalTelegramTextV1 } from "@/infrastructure/telegram/operational-capabilities"
 import type { DriverWithCells } from "./actions"
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/infrastructure/ui/class-names"
 
 import {
     Table,

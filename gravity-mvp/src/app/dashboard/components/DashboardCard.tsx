@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { MoveUpRight, MoveDownRight } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/infrastructure/ui/class-names";
 
 interface DashboardCardProps {
   title: string;

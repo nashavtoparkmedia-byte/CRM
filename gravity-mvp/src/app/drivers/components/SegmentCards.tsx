@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo } from "react"
-import { cn } from "@/lib/utils"
+import { cn } from "@/infrastructure/ui/class-names"
 
 interface SegmentCount {
     profitable: number

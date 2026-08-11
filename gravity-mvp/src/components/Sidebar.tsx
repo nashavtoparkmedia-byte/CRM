@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { cn } from "@/lib/utils";
+import { cn } from "@/infrastructure/ui/class-names";
 import { DOMAINS, NavigationDomain } from "@/config/navigation-domains";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/infrastructure/ui/tooltip";
 

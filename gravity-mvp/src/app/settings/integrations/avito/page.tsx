@@ -59,7 +59,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/infrastructure/ui/tooltip';
-import { cn } from '@/lib/utils';
+import { cn } from '@/infrastructure/ui/class-names';
 import { api } from './_api-client';
 import {
   accountAction,

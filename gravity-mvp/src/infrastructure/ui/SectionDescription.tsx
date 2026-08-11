@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { ChevronDown, ChevronUp, Info } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@/infrastructure/ui/class-names";
 import { SECTIONS } from "@/config/sections";
 
 export function SectionDescription({ sectionKey, className }: { sectionKey: string; className?: string }) {
