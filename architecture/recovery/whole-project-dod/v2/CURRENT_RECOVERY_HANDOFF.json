@@ -625,6 +625,7 @@
   "live_architecture_debt_recompute": {
     "artifact": "architecture/recovery/whole-project-dod/v2/LIVE_ARCHITECTURE_DEBT_RECOMPUTE_20260811.json",
     "summary": "architecture/recovery/whole-project-dod/v2/LIVE_ARCHITECTURE_DEBT_SUMMARY_20260811.json",
+    "remediation_plan": "architecture/recovery/whole-project-dod/v2/LIVE_ARCHITECTURE_DEBT_REMEDIATION_PLAN_20260811.json",
     "scanned_files": 1092,
     "contexts": 16,
     "findings": 1294,
