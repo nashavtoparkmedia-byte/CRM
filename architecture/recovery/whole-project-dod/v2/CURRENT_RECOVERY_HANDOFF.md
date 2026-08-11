@@ -260,6 +260,4 @@ This task made zero production source mutations, database mutations, service res
 
 ## Exact next action
 
-`Instrument and restructure write-analyzer execution into bounded isolated workers sized for the 4-CPU host while preserving existing AST semantics; run the 77 write-analyzer fixtures and the four companion suites, then execute exactly one instrumented authoritative whole-repository scan and materialize the current baseline.`
-
-Do not begin any other recovery milestone before that action produces truthful current evidence.
+Credential boundary classification and public serialization remediation are now materially closed for this batch. The current credential inventory is `427` accesses with `81` statically ambiguous records fully classified, `0` material unresolved, and the 150 public-secret candidates reconciled to `0` confirmed exposure after remediation. Continue cross-domain credential capability reconciliation, then proceed automatically to `LIVE ARCHITECTURE DEBT RECOMPUTE`; preserve Messages and AI Calls behavior.
