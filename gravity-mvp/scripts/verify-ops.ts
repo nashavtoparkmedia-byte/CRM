@@ -63,17 +63,21 @@ async function testOpsLog() {
 async function testOperationalJobs() {
   console.log('\n══ Test 2: OperationalJobs ══')
 
-  const { OperationalJobs } = await import('../src/lib/OperationalJobs')
+  const {
+    getOperationalJobStateV1,
+    listOperationalJobStatesV1,
+    runOperationalJobV1,
+  } = await import('../src/modules/operations-observability/public/v1/operational-job-registry')
 
   // 2a. Basic run
-  const result = await OperationalJobs.run('test_job', async () => {
+  const result = await runOperationalJobV1('test_job', async () => {
     return { count: 42 }
   })
   assert(result !== null, 'Job returns result')
   assert((result as any)?.count === 42, 'Job result is correct')
 
   // 2b. Job state tracking
-  const state = OperationalJobs.getJobState('test_job')
+  const state = getOperationalJobStateV1('test_job')
   assert(state !== null, 'Job state exists')
   assert(state!.isRunning === false, 'Job is not running after completion')
   assert(state!.lastRunAt !== null, 'lastRunAt is set')
@@ -82,12 +86,12 @@ async function testOperationalJobs() {
 
   // 2c. Overlap guard
   let overlapBlocked = false
-  const longJob = OperationalJobs.run('overlap_test', async () => {
+  const longJob = runOperationalJobV1('overlap_test', async () => {
     await new Promise(r => setTimeout(r, 200))
     return 'done'
   })
   // Immediately try to run same job
-  const skipResult = await OperationalJobs.run('overlap_test', async () => {
+  const skipResult = await runOperationalJobV1('overlap_test', async () => {
     overlapBlocked = true
     return 'should not run'
   })
@@ -95,15 +99,15 @@ async function testOperationalJobs() {
   assert(skipResult === null, 'Overlapping job returns null (skipped)')
 
   // 2d. Error handling
-  await OperationalJobs.run('error_test', async () => {
+  await runOperationalJobV1('error_test', async () => {
     throw new Error('test error')
   })
-  const errorState = OperationalJobs.getJobState('error_test')
+  const errorState = getOperationalJobStateV1('error_test')
   assert(errorState!.lastError === 'test error', 'lastError captured on failure')
   assert(errorState!.isRunning === false, 'isRunning reset after error (try/finally)')
 
   // 2e. Get all states
-  const allStates = OperationalJobs.getAllJobStates()
+  const allStates = listOperationalJobStatesV1()
   assert(Object.keys(allStates).length >= 3, `getAllJobStates returns ${Object.keys(allStates).length} jobs`)
 }
 
@@ -136,8 +140,8 @@ async function testHealthEndpoint() {
   const entries = getAllEntries()
   assert(Array.isArray(entries), `TransportRegistry returns array (${entries.length} entries)`)
 
-  const { OperationalJobs } = await import('../src/lib/OperationalJobs')
-  const allStates = OperationalJobs.getAllJobStates()
+  const { listOperationalJobStatesV1 } = await import('../src/modules/operations-observability/public/v1/operational-job-registry')
+  const allStates = listOperationalJobStatesV1()
   assert(typeof allStates === 'object', 'Job states are available for health endpoint')
 
   // Test the health endpoint via HTTP if server is running

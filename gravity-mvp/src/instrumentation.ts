@@ -153,54 +153,57 @@ export async function register() {
         }
 
         // ── Periodic jobs ────────────────────────────────────────────────
-        const { OperationalJobs } = await import('@/lib/OperationalJobs')
+        const {
+            registerOperationalIntervalV1,
+            runOperationalJobV1,
+        } = await import('@/modules/operations-observability/public/v1/operational-job-registry')
 
         // Stuck recovery: every 5 minutes
         const recoveryInterval = setInterval(async () => {
             const { recoverStuckMessagingDeliveriesV1 } = await import('@/modules/messaging/public/v1/delivery-recovery-operations')
-            await OperationalJobs.run('recovery', async () => {
+            await runOperationalJobV1('recovery', async () => {
                 const count = await recoverStuckMessagingDeliveriesV1()
                 return { count, at: new Date().toISOString() }
             })
         }, 5 * 60 * 1000)
-        OperationalJobs.registerInterval(recoveryInterval)
+        registerOperationalIntervalV1(recoveryInterval)
 
         // Integrity checks: every 30 minutes
         const integrityInterval = setInterval(async () => {
             const { runOperationalIntegrityCheckV1 } = await import('@/modules/operations-observability/public/v1/scheduled-maintenance-operations')
-            await OperationalJobs.run('integrity', async () => {
+            await runOperationalJobV1('integrity', async () => {
                 return await runOperationalIntegrityCheckV1()
             })
         }, 30 * 60 * 1000)
-        OperationalJobs.registerInterval(integrityInterval)
+        registerOperationalIntervalV1(integrityInterval)
 
         // Run integrity check once at startup (after 30s delay)
         setTimeout(async () => {
             const { runOperationalIntegrityCheckV1 } = await import('@/modules/operations-observability/public/v1/scheduled-maintenance-operations')
-            await OperationalJobs.run('integrity', async () => {
+            await runOperationalJobV1('integrity', async () => {
                 return await runOperationalIntegrityCheckV1()
             })
         }, 30000)
 
         // Message retry: every 2 minutes
         const retryInterval = setInterval(async () => {
-            await OperationalJobs.run('message_retry', async () => {
+            await runOperationalJobV1('message_retry', async () => {
                 const { retryEligibleMessagingDeliveriesV1 } = await import('@/modules/messaging/public/v1/delivery-recovery-operations')
                 const result = await retryEligibleMessagingDeliveriesV1()
                 return { ...result, at: new Date().toISOString() }
             })
         }, 2 * 60 * 1000)
-        OperationalJobs.registerInterval(retryInterval)
+        registerOperationalIntervalV1(retryInterval)
 
         // WA watchdog: every 60 seconds
         const watchdogInterval = setInterval(async () => {
-            await OperationalJobs.run('wa_watchdog', async () => {
+            await runOperationalJobV1('wa_watchdog', async () => {
                 const { checkWhatsAppRuntimeHealthV1 } = await import('@/modules/whatsapp-channel/public/v1/runtime-operations')
                 const results = await checkWhatsAppRuntimeHealthV1()
                 return results
             })
         }, 60 * 1000)
-        OperationalJobs.registerInterval(watchdogInterval)
+        registerOperationalIntervalV1(watchdogInterval)
 
         // Avito temporary phone expiration: every hour mark expired temp
         // phones inactive. Avito rotates the disposable proxy numbers, so
@@ -208,7 +211,7 @@ export async function register() {
         // and would only confuse Contacts phone resolution if it stuck
         // around (Avito would reissue the same number to a different lead).
         const tempPhoneExpInterval = setInterval(async () => {
-            await OperationalJobs.run('temp_phone_expire', async () => {
+            await runOperationalJobV1('temp_phone_expire', async () => {
                 const { prisma } = await import('@/lib/prisma')
                 const { deactivateContactPhoneV1 } = await import('@/modules/contacts/public/v1')
                 const { DEACTIVATE_CONTACT_PHONE_COMMAND_V1 } = await import('@/contracts/contacts/v1')
@@ -224,29 +227,29 @@ export async function register() {
                 return { deactivated: expired.length, at: new Date().toISOString() }
             })
         }, 60 * 60 * 1000)  // every hour
-        OperationalJobs.registerInterval(tempPhoneExpInterval)
+        registerOperationalIntervalV1(tempPhoneExpInterval)
 
         // Retention cleanup: every 24 hours
         const cleanupInterval = setInterval(async () => {
-            await OperationalJobs.run('retention_cleanup', async () => {
+            await runOperationalJobV1('retention_cleanup', async () => {
                 const { runScheduledRetentionCleanupV1 } = await import('@/modules/operations-observability/public/v1/scheduled-maintenance-operations')
                 return await runScheduledRetentionCleanupV1()
             })
         }, 24 * 60 * 60 * 1000)
-        OperationalJobs.registerInterval(cleanupInterval)
+        registerOperationalIntervalV1(cleanupInterval)
 
         // Daily stability check: every 24 hours (offset 1 hour after cleanup)
         const stabilityInterval = setInterval(async () => {
-            await OperationalJobs.run('stability_check', async () => {
+            await runOperationalJobV1('stability_check', async () => {
                 const { runDailyOperationalStabilityCheckV1 } = await import('@/modules/operations-observability/public/v1/scheduled-maintenance-operations')
                 return await runDailyOperationalStabilityCheckV1()
             })
         }, 24 * 60 * 60 * 1000)
-        OperationalJobs.registerInterval(stabilityInterval)
+        registerOperationalIntervalV1(stabilityInterval)
 
         // Run initial stability check 60s after startup
         setTimeout(async () => {
-            await OperationalJobs.run('stability_check', async () => {
+            await runOperationalJobV1('stability_check', async () => {
                 const { runDailyOperationalStabilityCheckV1 } = await import('@/modules/operations-observability/public/v1/scheduled-maintenance-operations')
                 return await runDailyOperationalStabilityCheckV1()
             })
@@ -283,7 +286,7 @@ export async function register() {
         try {
             const { startDomainOutboxPublisherV1 } = await import('@/modules/platform-shell/public/v1')
             const outboxInterval = startDomainOutboxPublisherV1()
-            OperationalJobs.registerInterval(outboxInterval)
+            registerOperationalIntervalV1(outboxInterval)
             opsLog('info', 'domain_outbox_publisher_started', { operation: 'startup' })
         } catch (err: any) {
             opsLog('error', 'domain_outbox_publisher_start_failed', { operation: 'startup', error: err.message })
@@ -302,7 +305,7 @@ export async function register() {
             if (now.getHours() !== YANDEX_SYNC_HOUR) return
             if (lastYandexSyncDay === today) return  // already ran today
 
-            await OperationalJobs.run('yandex_fleet_sync', async () => {
+            await runOperationalJobV1('yandex_fleet_sync', async () => {
                 const { runScheduledYandexSyncV1 } = await import('@/modules/fleet-operations/public/v1/yandex-sync-runtime')
                 const result = await runScheduledYandexSyncV1()
                 if (result.ok) {
@@ -311,7 +314,7 @@ export async function register() {
                 return result
             })
         }, 60 * 60 * 1000)  // every hour
-        OperationalJobs.registerInterval(yandexSyncInterval)
+        registerOperationalIntervalV1(yandexSyncInterval)
 
         opsLog('info', 'periodic_jobs_registered', { jobs: ['recovery:5m', 'integrity:30m', 'message_retry:2m', 'wa_watchdog:60s', 'retention_cleanup:24h', 'stability_check:24h', 'yandex_fleet_sync:24h@03:00'] })
 
@@ -337,8 +340,8 @@ export async function register() {
 
         try {
             // 1. Stop intervals / background jobs
-            const { OperationalJobs: ops } = await import('@/lib/OperationalJobs')
-            ops.clearAllIntervals()
+            const { clearOperationalIntervalsV1 } = await import('@/modules/operations-observability/public/v1/operational-job-registry')
+            clearOperationalIntervalsV1()
             log('info', 'shutdown_intervals_cleared')
 
             // 2. Close WA clients

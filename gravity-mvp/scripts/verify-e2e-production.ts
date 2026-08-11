@@ -54,15 +54,18 @@ async function test1_healthSnapshot() {
 
 async function test2_stuckRecovery() {
   console.log('\n══ 2. Stuck recovery reports via OperationalJobs ══')
-  const { OperationalJobs } = await import('../src/lib/OperationalJobs')
+  const {
+    getOperationalJobStateV1,
+    runOperationalJobV1,
+  } = await import('../src/modules/operations-observability/public/v1/operational-job-registry')
   const { MessageService } = await import('../src/lib/MessageService')
 
-  await OperationalJobs.run('recovery', async () => {
+  await runOperationalJobV1('recovery', async () => {
     const count = await MessageService.recoverStuckMessages(5)
     return { count }
   })
 
-  const state = OperationalJobs.getJobState('recovery')
+  const state = getOperationalJobStateV1('recovery')
   assert(state !== null, 'Recovery job state exists')
   assert(state!.lastRunAt !== null, 'lastRunAt set')
   assert(state!.isRunning === false, 'Not running after completion')
@@ -240,15 +243,15 @@ async function test10_integrityBounded() {
 
 async function test11_overlapGuard() {
   console.log('\n══ 11. Overlap guard prevents concurrent jobs ══')
-  const { OperationalJobs } = await import('../src/lib/OperationalJobs')
+  const { runOperationalJobV1 } = await import('../src/modules/operations-observability/public/v1/operational-job-registry')
 
   const jobs = ['recovery', 'integrity', 'message_retry', 'wa_watchdog']
   for (const name of jobs) {
-    const slow = OperationalJobs.run(`e2e_overlap_${name}`, async () => {
+    const slow = runOperationalJobV1(`e2e_overlap_${name}`, async () => {
       await new Promise(r => setTimeout(r, 100))
       return 'done'
     })
-    const skip = await OperationalJobs.run(`e2e_overlap_${name}`, async () => 'should not run')
+    const skip = await runOperationalJobV1(`e2e_overlap_${name}`, async () => 'should not run')
     assert(skip === null, `${name}: overlap blocked`)
     await slow
   }
@@ -349,16 +352,19 @@ async function test14_markReadGroup() {
 
 async function test15_restartSafety() {
   console.log('\n══ 15. Restart safety: jobs recover, state consistent ══')
-  const { OperationalJobs } = await import('../src/lib/OperationalJobs')
+  const {
+    getOperationalJobStateV1,
+    runOperationalJobV1,
+  } = await import('../src/modules/operations-observability/public/v1/operational-job-registry')
 
   // Simulate "restart" by clearing all states and re-running
   // After restart, job states are fresh (null) — this is expected
-  const freshState = OperationalJobs.getJobState('nonexistent_job')
+  const freshState = getOperationalJobStateV1('nonexistent_job')
   assert(freshState === null, 'Fresh state is null for unknown job')
 
   // Re-run recovery to simulate post-restart behavior
   const { MessageService } = await import('../src/lib/MessageService')
-  const result = await OperationalJobs.run('recovery_restart_test', async () => {
+  const result = await runOperationalJobV1('recovery_restart_test', async () => {
     const count = await MessageService.recoverStuckMessages(5)
     return { count }
   })

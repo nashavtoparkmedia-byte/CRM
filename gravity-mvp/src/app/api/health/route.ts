@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getAllEntries, getDegradedDuration, type ConnectionEntry } from '@/lib/TransportRegistry'
-import { OperationalJobs } from '@/lib/OperationalJobs'
+import { getOperationalJobStateV1 } from '@/modules/operations-observability/public/v1/operational-job-registry'
 import { getCumulativeCounters } from '@/lib/RetentionCleanup'
 
 const startedAt = Date.now()
@@ -129,7 +129,7 @@ export async function GET() {
   }
 
   // ── Recovery job state ─────────────────────────────────────────────────
-  const recoveryState = OperationalJobs.getJobState('recovery')
+  const recoveryState = getOperationalJobStateV1('recovery')
   const recoverySection = {
     lastRunAt: recoveryState?.lastRunAt?.toISOString() || null,
     lastCompletedAt: recoveryState?.lastCompletedAt?.toISOString() || null,
@@ -144,7 +144,7 @@ export async function GET() {
   }
 
   // ── Integrity check state ──────────────────────────────────────────────
-  const integrityState = OperationalJobs.getJobState('integrity')
+  const integrityState = getOperationalJobStateV1('integrity')
   const integrityReport = integrityState?.lastResult as any
   const integritySection = {
     lastRunAt: integrityState?.lastRunAt?.toISOString() || null,
@@ -159,7 +159,7 @@ export async function GET() {
   }
 
   // ── Retry job state ─────────────────────────────────────────────────────
-  const retryState = OperationalJobs.getJobState('message_retry')
+  const retryState = getOperationalJobStateV1('message_retry')
   const retryResult = retryState?.lastResult as any
   let pendingRetryable = 0
   try {
@@ -182,7 +182,7 @@ export async function GET() {
   }
 
   // ── Watchdog state ─────────────────────────────────────────────────────
-  const watchdogState = OperationalJobs.getJobState('wa_watchdog')
+  const watchdogState = getOperationalJobStateV1('wa_watchdog')
   const watchdogResult = watchdogState?.lastResult as any
   const watchdogSection = {
     lastRunAt: watchdogState?.lastRunAt?.toISOString() || null,
@@ -192,7 +192,7 @@ export async function GET() {
   }
 
   // ── Lifecycle / cleanup state ────────────────────────────────────────────
-  const cleanupState = OperationalJobs.getJobState('retention_cleanup')
+  const cleanupState = getOperationalJobStateV1('retention_cleanup')
   const cleanupResult = cleanupState?.lastResult as any
   const cumulative = getCumulativeCounters()
 

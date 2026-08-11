@@ -152,8 +152,8 @@ async function test5_configurationValues() {
   const { default: TransportRegistryModule } = await import('../src/lib/TransportRegistry') as any
 
   // Check OperationalJobs has correct structure
-  const { OperationalJobs } = await import('../src/lib/OperationalJobs')
-  const states = OperationalJobs.getAllJobStates()
+  const { listOperationalJobStatesV1 } = await import('../src/modules/operations-observability/public/v1/operational-job-registry')
+  const states = listOperationalJobStatesV1()
   assert(typeof states === 'object', 'OperationalJobs returns job states')
 
   // Verify RetentionCleanup exports

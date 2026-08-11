@@ -101,7 +101,7 @@ assertCheck(
 assertCheck(
     'publisher is registered at the application composition root',
     instrumentation.includes('startDomainOutboxPublisherV1')
-        && instrumentation.includes('OperationalJobs.registerInterval(outboxInterval)')
+        && instrumentation.includes('registerOperationalIntervalV1(outboxInterval)')
         && composition.includes('callingOutboxPublishersV1')
         && composition.includes('prismaOutboxStoreV1'),
     'runtime publisher registration missing',

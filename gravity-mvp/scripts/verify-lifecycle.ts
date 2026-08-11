@@ -132,13 +132,13 @@ async function test4_archivedContactSafety() {
 async function test5_overlapGuard() {
   console.log('\n══ 5. Overlap guard ══')
 
-  const { OperationalJobs } = await import('../src/lib/OperationalJobs')
+  const { runOperationalJobV1 } = await import('../src/modules/operations-observability/public/v1/operational-job-registry')
 
-  const slow = OperationalJobs.run('retention_cleanup_test', async () => {
+  const slow = runOperationalJobV1('retention_cleanup_test', async () => {
     await new Promise(r => setTimeout(r, 200))
     return 'done'
   })
-  const skip = await OperationalJobs.run('retention_cleanup_test', async () => 'should not run')
+  const skip = await runOperationalJobV1('retention_cleanup_test', async () => 'should not run')
   assert(skip === null, 'Overlapping cleanup job skipped')
   await slow
 }
@@ -212,10 +212,10 @@ async function test8_utcConsistency() {
 async function test9_restartSafety() {
   console.log('\n══ 9. Restart safety ══')
 
-  const { OperationalJobs } = await import('../src/lib/OperationalJobs')
+  const { getOperationalJobStateV1 } = await import('../src/modules/operations-observability/public/v1/operational-job-registry')
 
   // After restart, job state is fresh (null)
-  const fresh = OperationalJobs.getJobState('nonexistent_lifecycle_job')
+  const fresh = getOperationalJobStateV1('nonexistent_lifecycle_job')
   assert(fresh === null, 'Fresh state is null after restart')
 
   // Cumulative counters reset to 0 on restart (by design)

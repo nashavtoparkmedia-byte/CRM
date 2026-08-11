@@ -15,7 +15,7 @@ import {
     type OperationalCronScheduleValidationV1,
 } from '@/modules/configuration/public/v1/operational-configuration-health'
 import { checkRuntimeGuardrails, type GuardrailCheckResult } from '@/lib/runtime-guardrails'
-import { OperationalJobs } from '@/lib/OperationalJobs'
+import { listOperationalJobStatesV1 } from '@/modules/operations-observability/public/v1/operational-job-registry'
 
 export interface SystemHealthData {
     cronSummary: CronHealthSummaryEntry[]
@@ -74,7 +74,7 @@ export async function getSystemHealthData(): Promise<SystemHealthData> {
     ])
 
     // Background jobs state (in-memory, synchronous)
-    const rawJobs = OperationalJobs.getAllJobStates()
+    const rawJobs = listOperationalJobStatesV1()
     const backgroundJobs: SystemHealthData['backgroundJobs'] = {}
     for (const [name, state] of Object.entries(rawJobs)) {
         backgroundJobs[name] = {

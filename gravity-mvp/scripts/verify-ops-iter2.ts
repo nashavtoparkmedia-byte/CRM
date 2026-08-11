@@ -214,14 +214,14 @@ async function testHealthEndpoint() {
 async function testOverlapGuard() {
   console.log('\n══ Test 6: Retry job overlap guard ══')
 
-  const { OperationalJobs } = await import('../src/lib/OperationalJobs')
+  const { runOperationalJobV1 } = await import('../src/modules/operations-observability/public/v1/operational-job-registry')
 
   // Run a slow job and verify overlap is blocked
-  const slow = OperationalJobs.run('overlap_retry_test', async () => {
+  const slow = runOperationalJobV1('overlap_retry_test', async () => {
     await new Promise(r => setTimeout(r, 200))
     return 'done'
   })
-  const skip = await OperationalJobs.run('overlap_retry_test', async () => 'should not run')
+  const skip = await runOperationalJobV1('overlap_retry_test', async () => 'should not run')
   assert(skip === null, 'Overlapping retry job skipped')
   await slow
 }
