@@ -214,7 +214,8 @@
     "ChannelSyncClient.v1",
     "ChannelSyncOperations.v1",
     "CompletedCallTimelineProjector.v1",
-    "DeliveryRecoveryOperations.v1"
+    "DeliveryRecoveryOperations.v1",
+    "DraftImprovement.v1"
   ],
   "responsibility": "Channel-neutral conversations, messages, attachments, communication triggers and history import state.",
   "schema": "yoko.crm.module-manifest.v1",

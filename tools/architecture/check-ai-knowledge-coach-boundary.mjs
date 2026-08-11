@@ -16,7 +16,8 @@ const actionPath = 'gravity-mvp/src/app/messages/proposed-reply-actions.ts'
 const componentPath = 'gravity-mvp/src/app/messages/components/AiCoachModal.tsx'
 const exactFunctions = ['runKnowledgeCoachV1']
 
-assert.equal(sha256(read(implementationPath)), '43958810ce06b730d79c15e17239b5c587e6e0aee77e48803b93191dcd471dae')
+assert.equal(sha256(read(implementationPath)), '98126626456a640efd38a942ea04c02f02f5ac6e98d4828d2e091c3be73424f9')
+assert.match(read(implementationPath), /callProviderJsonV1 as callForJson/)
 
 function exportedFunctions(source) {
     return [...source.matchAll(/export\s+async\s+function\s+(\w+)/g)].map((match) => match[1]).sort()

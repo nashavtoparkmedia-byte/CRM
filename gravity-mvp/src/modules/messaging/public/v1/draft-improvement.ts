@@ -1,29 +1,15 @@
-/**
- * PR-Т: «Улучшить с ИИ» — улучшает черновик оператора в input.
- *
- * Используется server action улучшить текст перед отправкой клиенту.
- * Цель — помочь оператору написать грамотно, не меняя смысла.
- *
- * Пресеты:
- *   - 'improve'  — исправить опечатки, грамматику, тон. Объём примерно тот же.
- *   - 'expand'   — подробнее, добавить контекст. 1.5–2 раза длиннее.
- *
- * Использует тот же llmClient.ts что и Generator (multi-provider).
- */
-import { callForText } from '@/lib/pipeline/llmClient'
+import { callProviderTextV1 as callForText } from '@/infrastructure/providers/multi-provider-llm'
 
-export type ImprovePreset = 'improve' | 'expand'
+export type MessageDraftImprovePresetV1 = 'improve' | 'expand'
 
-interface ImproveOpts {
-    provider:     string
-    model:        string
-    apiKey:       string
-    draft:        string
-    preset:       ImprovePreset
-    /** Последние сообщения чата для контекста (по 200 chars max). */
+interface ImproveMessageDraftOptionsV1 {
+    provider: string
+    model: string
+    apiKey: string
+    draft: string
+    preset: MessageDraftImprovePresetV1
     recentMessages?: Array<{ direction: 'inbound' | 'outbound'; content: string }>
-    /** Стиль общения из Ядра (правила тона). */
-    styleGuide?:  string | null
+    styleGuide?: string | null
 }
 
 const SYSTEM_BASE = `Ты — помощник менеджера парка такси «Наш Автопарк».
@@ -42,7 +28,7 @@ const SYSTEM_BASE = `Ты — помощник менеджера парка т�
 6. Не оборачивай ответ в кавычки, не пиши пояснений — только текст
    улучшенного черновика. Без markdown.`
 
-const PRESET_INSTRUCTIONS: Record<ImprovePreset, string> = {
+const PRESET_INSTRUCTIONS: Record<MessageDraftImprovePresetV1, string> = {
     improve: `РЕЖИМ: «Просто улучшить»
 — Исправь опечатки и грамматические ошибки
 — Сделай формулировки более вежливыми и профессиональными
@@ -53,20 +39,20 @@ const PRESET_INSTRUCTIONS: Record<ImprovePreset, string> = {
 — Объём в 1.5–2 раза больше черновика`,
 }
 
-export async function improveDraft(opts: ImproveOpts): Promise<string> {
-    const draft = opts.draft.trim()
+export async function improveMessageDraftV1(options: ImproveMessageDraftOptionsV1): Promise<string> {
+    const draft = options.draft.trim()
     if (!draft) throw new Error('Черновик пустой')
 
     const systemPrompt = [
         SYSTEM_BASE,
         '',
-        PRESET_INSTRUCTIONS[opts.preset],
-        opts.styleGuide ? `\nСТИЛЬ ОБЩЕНИЯ ПАРКА:\n${opts.styleGuide}` : '',
+        PRESET_INSTRUCTIONS[options.preset],
+        options.styleGuide ? `\nСТИЛЬ ОБЩЕНИЯ ПАРКА:\n${options.styleGuide}` : '',
     ].filter(Boolean).join('\n')
 
-    const contextText = (opts.recentMessages ?? [])
-        .slice(-6) // последние 6
-        .map(m => `[${m.direction === 'inbound' ? 'клиент' : 'менеджер'}]: ${m.content.slice(0, 200)}`)
+    const contextText = (options.recentMessages ?? [])
+        .slice(-6)
+        .map(message => `[${message.direction === 'inbound' ? 'клиент' : 'менеджер'}]: ${message.content.slice(0, 200)}`)
         .join('\n')
 
     const userMessage = [
@@ -77,15 +63,14 @@ export async function improveDraft(opts: ImproveOpts): Promise<string> {
     ].filter(Boolean).join('\n')
 
     const text = await callForText({
-        provider:     opts.provider,
-        model:        opts.model,
-        apiKey:       opts.apiKey,
+        provider: options.provider,
+        model: options.model,
+        apiKey: options.apiKey,
         systemPrompt,
         userMessage,
-        maxTokens:    600,
-        temperature:  0.4,
+        maxTokens: 600,
+        temperature: 0.4,
     })
 
-    // Очистка от случайных кавычек/маркеров
     return text.trim().replace(/^["«]|["»]$/g, '').trim()
 }

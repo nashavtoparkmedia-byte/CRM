@@ -4,7 +4,10 @@
  * PR-Т: Server action для кнопки «Улучшить с ИИ» в input.
  */
 import { prisma } from '@/lib/prisma'
-import { improveDraft, ImprovePreset } from '@/lib/ai/improveDraft'
+import {
+    improveMessageDraftV1 as improveDraft,
+    type MessageDraftImprovePresetV1 as ImprovePreset,
+} from '@/modules/messaging/public/v1/draft-improvement'
 import { getAiAgentProviderConfigV1 } from '@/modules/calling/public/v1/ai-agent-provider-capability'
 
 export type ImproveResult =
