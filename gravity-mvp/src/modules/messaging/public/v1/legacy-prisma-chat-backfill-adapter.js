@@ -95,5 +95,9 @@ async function refreshChatLastMessageAtV1(chatId, lastMessageAt) {
 async function wipeWhatsappUnifiedDataV1() {
   const prisma = new PrismaClient(); try { const messages = await prisma.message.deleteMany({ where: { channel: 'whatsapp' } }); const chats = await prisma.chat.deleteMany({ where: { channel: 'whatsapp' } }); return { messages, chats } } finally { await prisma.$disconnect() }
 }
+async function backfillMessageChannelV1(messageId, channel) {
+  if (typeof messageId !== 'string' || !messageId || !['whatsapp', 'telegram', 'max', 'phone'].includes(channel)) throw new TypeError('bounded message channel input required')
+  const prisma = new PrismaClient(); try { return await prisma.message.update({ where: { id: messageId }, data: { channel } }) } finally { await prisma.$disconnect() }
+}
 
-module.exports = { backfillLastInboundAtV1, backfillUnreadCountV1, deleteUnifiedMessagesByIdsV1, markBackfilledOutboundDeliveredV1, deleteEmptyUnifiedChatsV1, rewriteLidChatV1, moveMessageToChatV1, deleteUnifiedMessageV1, detachAndDeleteChatV1, normalizeChatExternalIdV1, moveChatMessagesV1, deleteChatV1, refreshChatLastMessageAtV1, wipeWhatsappUnifiedDataV1 }
+module.exports = { backfillLastInboundAtV1, backfillUnreadCountV1, deleteUnifiedMessagesByIdsV1, markBackfilledOutboundDeliveredV1, deleteEmptyUnifiedChatsV1, rewriteLidChatV1, moveMessageToChatV1, deleteUnifiedMessageV1, detachAndDeleteChatV1, normalizeChatExternalIdV1, moveChatMessagesV1, deleteChatV1, refreshChatLastMessageAtV1, wipeWhatsappUnifiedDataV1, backfillMessageChannelV1 }
