@@ -1,0 +1,18 @@
+{
+  "schema": "yoko.crm.lifecycle-test-reclassification.v1",
+  "generated_at": "2026-08-11T09:47:28.901Z",
+  "authority": "Lifecycle evidence only; TEST_SUPPORT does not authorize writes.",
+  "records": [
+    {
+      "path": "gravity-mvp/scripts/seed-cells.ts",
+      "lifecycle": "TEST",
+      "evidence": "Header: Seed script generates demo DriverDaySummary data for testing cell visualization."
+    },
+    {
+      "path": "gravity-mvp/scripts/seed-team-overview-demo.js",
+      "lifecycle": "TEST",
+      "evidence": "Header: Seed script populates team-overview dashboard with realistic demo data."
+    }
+  ],
+  "result": "2 surfaces reclassified TEST_SUPPORT; ownership writes remain visible and fail-closed."
+}

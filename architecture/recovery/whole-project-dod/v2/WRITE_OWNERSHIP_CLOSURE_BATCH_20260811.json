@@ -1,20 +1,20 @@
 {
   "schema": "yoko.crm.write-ownership-closure-batch.v2",
-  "generated_at": "2026-08-11T09:46:19.765Z",
+  "generated_at": "2026-08-11T09:56:03.900Z",
   "authority": "Derived evidence ledger; unresolved records remain blocked/ambiguous and are not PASS.",
   "baseline": {
-    "analysis_sha256": "468808b89b9b60bdd3d86d8f46ad33ffd0f7ebb4c02f057bbb711186e83cbd39",
-    "baseline_sha256": "bf99dc455028ddbc80a48d22ba6a3b16376581d88033e8bd55bdeec220eec629",
-    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T104500Z.json",
-    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_LID_CLEANUP.json"
+    "analysis_sha256": "34df36e0331f8ab5da26ae5dca22c6c6c583c608a12707d11d89daa51a20b83e",
+    "baseline_sha256": "9927c8ea74915e10ccff1f717b681341f76f0153ebd3b8d3b49f2f5fd7f79137",
+    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T113000Z.json",
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_TEST_RECLASS.json"
   },
   "metrics": {
     "confirmed_writes_discovered": 1416,
     "confirmed_foreign": 0,
     "closed_foreign": 52,
-    "ambiguous_remaining": 111,
+    "ambiguous_remaining": 95,
     "confirmed_write_owner_resolved": 7,
-    "confirmed_write_owner_unresolved": 61,
+    "confirmed_write_owner_unresolved": 45,
     "dynamic_delegate_unresolved": 6,
     "dynamic_sql_unresolved": 32,
     "query_raw_side_effect_unresolved": 1,
@@ -163,7 +163,7 @@
     "post_rescan_foreign": 0,
     "ambiguity_reduction": 4
   },
-  "next_action": "Resolve remaining 61 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
+  "next_action": "Resolve remaining 45 ownership-blocked, 6 delegate, 32 dynamic SQL and 1 queryRaw ambiguity records; unresolved records remain fail-closed.",
   "new_backfill_capability_batch": {
     "files": [
       "gravity-mvp/scripts/backfill_source_connection_pr7.js",
@@ -344,5 +344,12 @@
     "writes_routed": 9,
     "post_rescan_foreign": 0,
     "ambiguity_reduction": 9
+  },
+  "lifecycle_test_reclassification": {
+    "artifact": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_TEST_RECLASSIFICATION_20260811.json",
+    "sha256": "0015cc9b8134b897d7eb0a358e750af8f28870b3e584c61ba6069867d0b92ac4",
+    "surfaces": 2,
+    "ambiguity_reduction": 16,
+    "evidence": "Explicit file headers establish TEST_SUPPORT lifecycle; ownership remains fail-closed."
   }
 }
