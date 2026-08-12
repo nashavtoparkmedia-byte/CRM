@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "c98cb180afbabdc1ffce127c19968266c2811e7b5edb8762576b1d19f7969ad4",
+  "finding_digest": "768419c6dc8f8c28a0331acf7c928fd338c14e96c24371265c82dd242a079bc7",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,9 +13,9 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "internal_module_import": 8,
-    "non_public_cross_context_import": 28,
-    "undeclared_dependency": 14
+    "internal_module_import": 7,
+    "non_public_cross_context_import": 27,
+    "undeclared_dependency": 13
   },
   "exceptions": [
     {
@@ -472,54 +472,6 @@
       "migration_references": [
         "dependency:configuration/settings>platform_shell/gravity_core",
         "dependency:configuration/settings>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_b3c7cce62b59ac1a8857061d",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/settings/integrations/telephony-ai/TelephonyAiClient.tsx",
-      "line_at_baseline": 8,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "configuration",
-      "subject": "ai_calls>settings:gravity-mvp/src/app/settings/integrations/_components/TelephonyTabs.tsx",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>configuration/settings"
-      ]
-    },
-    {
-      "fingerprint": "arch_913f9e3274bf944967d5df48",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/settings/integrations/telephony-ai/TelephonyAiClient.tsx",
-      "line_at_baseline": 8,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "configuration",
-      "subject": "ai_calls>settings:gravity-mvp/src/app/settings/integrations/_components/TelephonyTabs.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>configuration/settings"
-      ]
-    },
-    {
-      "fingerprint": "arch_c6114d7ff2c29bed6b78fd58",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/settings/integrations/telephony-ai/TelephonyAiClient.tsx",
-      "line_at_baseline": 8,
-      "ordinal": 1,
-      "owner_context": "calling",
-      "target_context": "configuration",
-      "subject": "ai_calls>settings:gravity-mvp/src/app/settings/integrations/_components/TelephonyTabs.tsx",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:calling/ai_calls>configuration/settings"
       ]
     },
     {

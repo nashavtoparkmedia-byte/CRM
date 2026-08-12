@@ -17,6 +17,8 @@ const callingConsumers = new Map([
   ['gravity-mvp/src/app/messages/components/ContactProfileDrawer.tsx', 'client-ui/CallButton'],
   ['gravity-mvp/src/app/layout.tsx', 'client-ui/IncomingCallPopup'],
   ['gravity-mvp/src/components/layout/TopBar.tsx', 'client-ui/CallToolbar'],
+  ['gravity-mvp/src/app/settings/integrations/telephony/TelephonyConnectionClient.tsx', 'client-ui/TelephonyTabs'],
+  ['gravity-mvp/src/app/settings/integrations/telephony-ai/TelephonyAiClient.tsx', 'client-ui/TelephonyTabs'],
 ])
 
 for (const [consumer, capability] of callingConsumers) {
@@ -47,6 +49,17 @@ for (const [name, expected] of Object.entries(callingUi)) {
   assert.match(shim, new RegExp(`@/modules/calling/public/v1/client-ui/${name}`))
   assert.doesNotMatch(shim, /export \*/)
 }
+
+const telephonyTabs = read('gravity-mvp/src/modules/calling/public/v1/client-ui/TelephonyTabs.tsx')
+assert.equal(sha256(telephonyTabs), '1fa174a67b8763590b1ec2059076a5e290cd53e6dd60646abf9715bbd5faedc8')
+assert.match(telephonyTabs, /export type TelephonyTabKey = 'connection' \| 'ai'/)
+assert.match(telephonyTabs, /export default function TelephonyTabs/)
+assert.doesNotMatch(telephonyTabs, /export \*|@\/lib\/prisma|fetch\(/)
+const unrelatedTabProbe = `${telephonyTabs}\nexport function ProviderCredentialsTab() { return null }\n`
+assert.notEqual(
+  [...unrelatedTabProbe.matchAll(/export\s+(?:default\s+)?function\s+(\w+)/g)].map((match) => match[1]).join(','),
+  'TelephonyTabs',
+)
 
 const audio = read('gravity-mvp/src/modules/calling/public/v1/call-alert-audio.ts')
 assert.equal(sha256(audio), '8b6cd6047ac4853f5317cc60bcf5b7d7a61aa9910cebabdc4eb0f69118758d97')

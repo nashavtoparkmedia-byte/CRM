@@ -5,7 +5,7 @@ import {
     Save, RotateCcw, AlertCircle, CheckCircle2, Loader2,
     Plus, Trash2, ArrowUp, ArrowDown, ChevronDown, Info,
 } from "lucide-react"
-import TelephonyTabs from "../_components/TelephonyTabs"
+import TelephonyTabs from '@/modules/calling/public/v1/client-ui/TelephonyTabs'
 
 interface CriterionConfig {
     key: string
