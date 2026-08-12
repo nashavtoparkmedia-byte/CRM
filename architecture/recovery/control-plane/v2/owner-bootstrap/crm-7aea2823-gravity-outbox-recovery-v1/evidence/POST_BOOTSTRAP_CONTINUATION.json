@@ -1,0 +1,36 @@
+{
+  "expected_profiles": [
+    "database-status",
+    "release-preflight",
+    "database-migrate",
+    "release-activate",
+    "rollback"
+  ],
+  "expected_runtime_abi": "2.0.0",
+  "expected_runtime_package": "2.0.0-8",
+  "next_actions": [
+    "verify Runtime package version 2.0.0-8",
+    "verify Runtime ABI 2.0.0",
+    "verify exactly five enabled activation profiles",
+    "run Runtime self-check",
+    "verify installed hashes, root ownership and modes",
+    "verify audit state",
+    "recover and close the exact Runtime 2.0.0-7 rollback intent",
+    "reverify the existing backup and already-applied exact outbox migration",
+    "reseal the exact corrected Gravity candidate without another database mutation",
+    "activate only the sealed Gravity release",
+    "run health validation",
+    "automatically roll back on reversible failure",
+    "complete protected Messages deployed-runtime acceptance",
+    "observe only the approved outbox activation",
+    "verify AI Calls preservation",
+    "update production and release ledgers",
+    "run the final production critic",
+    "recompute whole-project evidence",
+    "run the final internal critic"
+  ],
+  "production_activation_before_owner_success": false,
+  "required_success_marker": "YOKO_ACTIVATION_BOOTSTRAP_OK",
+  "schema": "yoko.crm.post-bootstrap-continuation.v1",
+  "status": "WAITING_FOR_OWNER_BOOTSTRAP_SUCCESS"
+}

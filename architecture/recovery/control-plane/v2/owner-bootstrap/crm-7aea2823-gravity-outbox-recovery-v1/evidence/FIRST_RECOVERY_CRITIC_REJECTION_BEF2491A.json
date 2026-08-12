@@ -1,0 +1,10 @@
+{
+  "artifact_sha256": "bef2491aa6095ba9743daae8fde343f13e4380c0cf86304d409be6244bc35a45",
+  "critic": "fresh_independent_runtime_v8_recovery_critic",
+  "deb_sha256": "ea31c2ab13e7cb418c7ac9a74f968e90e8052271ca14dbaae84bacf6abc509b1",
+  "finding": "The recovery artifact did not explicitly bind and classify the known v7 rollback Compose config-hash transition from 6db5dbf0f52f8d8e4fd30c1fcaf658c04a72c7f8ec034c3b38436792b8939014 to 4c1adad9993cb54c5723a202df6a3d3786709e0a01e42fff24d2230a83a411da for recovered container f2604662889815d31e449ab52b14e053da9b4fb9598cd72e209b4ccd5014b700.",
+  "remediation_required": "Bind the actual old/new hash pair and recovered container, preserve every other runtime semantic exactly, add positive and negative regression coverage, rebuild and obtain a new exact-artifact critic decision.",
+  "schema": "yoko.crm.independent-critic-rejection.v1",
+  "superseded_and_unauthorized": true,
+  "verdict": "REJECT"
+}
