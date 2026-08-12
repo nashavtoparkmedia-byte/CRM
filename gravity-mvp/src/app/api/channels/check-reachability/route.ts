@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
-import { findIdentityByPhoneAndChannel, updateReachability } from '@/lib/ReachabilityService'
-import { prisma } from '@/lib/prisma'
+import { contactReachabilityV1 } from '@/modules/contacts/public/v1/contact-reachability'
 
 type CheckChannel = 'telegram' | 'whatsapp' | 'max'
 type ReachabilityState = 'confirmed' | 'unreachable' | 'checking'
@@ -63,21 +62,17 @@ export async function POST(req: NextRequest) {
     // Persist only definitive outcomes. "checking" means CRM failed to get
     // a reliable answer and must retry instead of pretending green success.
     if (result.status === 'confirmed' || result.status === 'unreachable') {
-      const identityId = await findIdentityByPhoneAndChannel(normalized, channel)
+      const identityId = await contactReachabilityV1.findIdentityByPhoneAndChannel(normalized, channel)
       if (identityId) {
         if (result.status === 'unreachable') {
           // Protect confirmed identities: a single negative live check can be
           // caused by provider limits/privacy/UI flakiness and must not erase
           // an account proven by a real conversation or delivery confirmation.
-          const existing = await prisma.contactIdentity.findUnique({
-            where: { id: identityId },
-            select: { reachabilityStatus: true },
-          })
-          if (existing?.reachabilityStatus === 'confirmed') {
+          if (await contactReachabilityV1.isReachabilityConfirmed(identityId)) {
             return NextResponse.json(confirmed(channel, { source: 'persisted' }))
           }
         }
-        await updateReachability(identityId, result.status)
+        await contactReachabilityV1.updateReachability(identityId, result.status)
       }
     }
 

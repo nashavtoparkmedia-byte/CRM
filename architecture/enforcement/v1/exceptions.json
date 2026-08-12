@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "20a5a18bc30d88e04961fbfe9438d690826f833e8f70c34d1fb2af5a9ead36c3",
+  "finding_digest": "2fc391e40f90d46f5e9c296cb8c39e6e793ee03f11facf0f3e8741e86c30642b",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -14,26 +14,10 @@
   },
   "summary": {
     "internal_module_import": 6,
-    "non_public_cross_context_import": 25,
+    "non_public_cross_context_import": 23,
     "undeclared_dependency": 12
   },
   "exceptions": [
-    {
-      "fingerprint": "arch_b30833fa328b9816f5680bb4",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/channels/check-reachability/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "contacts",
-      "subject": "messages>contacts:gravity-mvp/src/lib/ReachabilityService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>contacts/contacts"
-      ]
-    },
     {
       "fingerprint": "arch_c66851146670aa3673b24ce3",
       "rule": "non_public_cross_context_import",
@@ -202,7 +186,7 @@
       "fingerprint": "arch_4dd81675ab7215838e881879",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
-      "line_at_baseline": 11,
+      "line_at_baseline": 10,
       "ordinal": 1,
       "owner_context": "max_channel",
       "target_context": "contacts",
@@ -218,7 +202,7 @@
       "fingerprint": "arch_87cb2c401e0bea25dce75358",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
-      "line_at_baseline": 11,
+      "line_at_baseline": 10,
       "ordinal": 1,
       "owner_context": "max_channel",
       "target_context": "contacts",
@@ -234,7 +218,7 @@
       "fingerprint": "arch_3455cce820a34a30f19921dd",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
-      "line_at_baseline": 12,
+      "line_at_baseline": 11,
       "ordinal": 1,
       "owner_context": "max_channel",
       "target_context": "contacts",
@@ -250,7 +234,7 @@
       "fingerprint": "arch_c42fa451a9622dcbc2aa8a17",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
-      "line_at_baseline": 12,
+      "line_at_baseline": 11,
       "ordinal": 1,
       "owner_context": "max_channel",
       "target_context": "contacts",
@@ -410,7 +394,7 @@
       "fingerprint": "arch_9daa018eb64f54fe275bfcc8",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
-      "line_at_baseline": 22,
+      "line_at_baseline": 23,
       "ordinal": 1,
       "owner_context": "messaging",
       "target_context": "platform_shell",
@@ -427,7 +411,7 @@
       "fingerprint": "arch_8852478eb7347ff4a95e9bd6",
       "rule": "undeclared_dependency",
       "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
-      "line_at_baseline": 22,
+      "line_at_baseline": 23,
       "ordinal": 1,
       "owner_context": "messaging",
       "target_context": "platform_shell",
@@ -492,7 +476,7 @@
       "fingerprint": "arch_43d2124b380ea760fc5b6089",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/tg-actions.ts",
-      "line_at_baseline": 10,
+      "line_at_baseline": 11,
       "ordinal": 1,
       "owner_context": "telegram_channel",
       "target_context": "messaging",
@@ -508,7 +492,7 @@
       "fingerprint": "arch_82faa9ceefa8892dfd77f8be",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/tg-actions.ts",
-      "line_at_baseline": 276,
+      "line_at_baseline": 419,
       "ordinal": 1,
       "owner_context": "telegram_channel",
       "target_context": "messaging",
@@ -616,22 +600,6 @@
       "migration_references": [
         "dependency:messaging/messages>platform_shell/gravity_core",
         "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_820caca0f6d68b002bc821f7",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/MessageService.ts",
-      "line_at_baseline": 828,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "contacts",
-      "subject": "messages>contacts:gravity-mvp/src/lib/ReachabilityService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>contacts/contacts"
       ]
     },
     {

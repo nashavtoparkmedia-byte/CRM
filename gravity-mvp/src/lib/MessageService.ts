@@ -823,11 +823,11 @@ export class MessageService {
 
         // 4. Update reachability status based on delivery outcome
         try {
-            const { updateReachabilityByChatId } = await import('@/lib/ReachabilityService')
+            const { contactReachabilityV1 } = await import('@/modules/contacts/public/v1/contact-reachability')
             if (deliveryStatus === 'failed') {
-                await updateReachabilityByChatId(currentChatId, 'unreachable')
+                await contactReachabilityV1.updateReachabilityByChatId(currentChatId, 'unreachable')
             } else if (deliveryStatus === 'delivered') {
-                await updateReachabilityByChatId(currentChatId, 'confirmed')
+                await contactReachabilityV1.updateReachabilityByChatId(currentChatId, 'confirmed')
             }
         } catch (reachErr: any) {
             // Non-critical — don't break send flow

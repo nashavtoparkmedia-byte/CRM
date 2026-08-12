@@ -107,6 +107,7 @@
   "public_surface": [
     "PhoneIdentityUtilities.v1",
     "ContactDisplayPolicy.v1",
+    "ContactReachability.v1",
     "ContactView.v1",
     "ContactLookup.v1",
     "ContactResolution.v1",
