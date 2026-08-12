@@ -1,20 +1,32 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { scanArchitecture } from './enforce-architecture.mjs'
 
 const root = process.cwd()
 const read = (relative) => readFileSync(path.join(root, relative), 'utf8')
+const sha256 = (source) => createHash('sha256').update(source).digest('hex')
 const consumers = [
-  'gravity-mvp/src/app/ApiListClient.tsx',
+  'gravity-mvp/src/modules/fleet-operations/public/v1/client-ui/ApiListClient.tsx',
   'gravity-mvp/src/app/api/webhook/telegram/route.ts',
   'gravity-mvp/src/app/drivers/[id]/page.tsx',
   'gravity-mvp/src/app/logs/page.tsx',
   'gravity-mvp/src/app/settings/api/page.tsx',
   'gravity-mvp/src/app/settings/integrations/telegram/TelegramManualLinkClient.tsx',
 ]
+
+const apiSettingsPage = read('gravity-mvp/src/app/settings/api/page.tsx')
+assert.match(apiSettingsPage, /@\/modules\/fleet-operations\/public\/v1\/client-ui\/ApiListClient/)
+assert.doesNotMatch(apiSettingsPage, /\.\.\/\.\.\/ApiListClient/)
+const apiClient = read(consumers[0])
+assert.equal(sha256(apiClient), '160bd1468acf4712d90f9b9f6f4bbef3ef3de0b670f0b1c668858874cf90309c')
+assert.deepEqual([...apiClient.matchAll(/export\s+default\s+function\s+(\w+)/g)].map((match) => match[1]), ['ApiListClient'])
+assert.doesNotMatch(apiClient, /conn\.apiKey\b|from ["']@prisma\/client["']|export \*/)
+const unrelatedClientProbe = `${apiClient}\nexport function RawApiCredentialEditor() { return null }\n`
+assert.notEqual([...unrelatedClientProbe.matchAll(/export\s+(?:default\s+)?function\s+(\w+)/g)].map((match) => match[1]).join(','), 'ApiListClient')
 
 for (const consumer of consumers) {
   const source = read(consumer)
@@ -34,6 +46,7 @@ assert.doesNotMatch(capability, /prisma\.apiConnection\.(?:create|update|delete)
 
 const manifest = JSON.parse(read('architecture/contexts/v1/manifests/fleet_operations.json'))
 assert(manifest.public_surface.includes('YandexFleetOperations.v1'))
+assert(manifest.public_surface.includes('ApiConnectionClientUi.v1'))
 
 const scan = await scanArchitecture(root)
 assert.deepEqual(scan.findings.filter((finding) =>

@@ -38,7 +38,7 @@
     {
       "context": "fleet_operations",
       "path": "architecture/contexts/v1/manifests/fleet_operations.json",
-      "sha256": "3733bf7593e2a47a57df3d43293bbaa05dfed504abab9c902e69cbd19ed0215a"
+      "sha256": "34a2c548aac0fdf71696f0ed64c664baf87be8afea3b72294d9263c41762c114"
     },
     {
       "context": "identity_access",

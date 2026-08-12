@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "fe845db48e8ac5dd90501e2237710061034b4a1d644c84e382fae3e472e881d8",
+  "finding_digest": "20a5a18bc30d88e04961fbfe9438d690826f833e8f70c34d1fb2af5a9ead36c3",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -14,8 +14,8 @@
   },
   "summary": {
     "internal_module_import": 6,
-    "non_public_cross_context_import": 26,
-    "undeclared_dependency": 13
+    "non_public_cross_context_import": 25,
+    "undeclared_dependency": 12
   },
   "exceptions": [
     {
@@ -438,40 +438,6 @@
       "migration_references": [
         "dependency:messaging/messages>platform_shell/gravity_core",
         "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_c93f9589afcdfbcefe2153cd",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/settings/api/page.tsx",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "platform_shell",
-      "subject": "settings>gravity_core:gravity-mvp/src/app/ApiListClient.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>platform_shell/gravity_core",
-        "dependency:configuration/settings>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_5e03f815e087240e3e83f90e",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/settings/api/page.tsx",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "platform_shell",
-      "subject": "settings>gravity_core:gravity-mvp/src/app/ApiListClient.tsx",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>platform_shell/gravity_core",
-        "dependency:configuration/settings>platform_shell/gravity_ui"
       ]
     },
     {

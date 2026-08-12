@@ -1,5 +1,5 @@
 import { getApiConnections } from '@/modules/fleet-operations/public/v1/yandex-fleet-operations'
-import ApiListClient from '../../ApiListClient'
+import ApiListClient from '@/modules/fleet-operations/public/v1/client-ui/ApiListClient'
 import {
     Table,
     TableBody,

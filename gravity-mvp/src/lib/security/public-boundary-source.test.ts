@@ -23,7 +23,7 @@ describe('browser-facing credential boundaries', () => {
     })
 
     test('client components cannot read persistence credential properties', () => {
-        const apiClient = read('src/app/ApiListClient.tsx')
+        const apiClient = read('src/modules/fleet-operations/public/v1/client-ui/ApiListClient.tsx')
         const telegramClient = read('src/app/settings/integrations/telegram/TelegramLoginClient.tsx')
         const maxClient = read('src/app/settings/integrations/max/MaxLoginClient.tsx')
         const whatsappClient = read('src/app/settings/integrations/whatsapp/WhatsAppDashboard.tsx')

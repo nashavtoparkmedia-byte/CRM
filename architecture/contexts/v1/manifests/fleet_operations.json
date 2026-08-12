@@ -244,6 +244,7 @@
     }
   ],
   "public_surface": [
+    "ApiConnectionClientUi.v1",
     "DriverView.v1",
     "FleetSyncStatus.v1",
     "ScheduledYandexSync.v1",
