@@ -29,6 +29,18 @@ export type {
 } from './assign-task-command'
 
 export {
+    REASSIGN_TASKS_COMMAND_V1,
+    REASSIGN_TASKS_RESULT_V1,
+    ReassignTasksContractValidationError,
+    parseReassignTasksCommandV1,
+} from './reassign-tasks-command'
+
+export type {
+    ReassignTasksCommandV1,
+    ReassignTasksResultV1,
+} from './reassign-tasks-command'
+
+export {
     COMPLETE_TASK_COMMAND_V1,
     COMPLETE_TASK_RESULT_V1,
     CompleteTaskContractValidationError,

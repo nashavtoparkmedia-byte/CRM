@@ -27,3 +27,16 @@ export type {
     UserRoleV1,
     UserStatusV1,
 } from './identity-access'
+
+export {
+    CRM_USER_QUERY_V1,
+    CRM_USER_RESULT_V1,
+    CrmUserQueryValidationError,
+    parseCrmUserQueryV1,
+} from './crm-user-query'
+
+export type {
+    CrmUserProjectionV1,
+    CrmUserQueryV1,
+    CrmUserResultV1,
+} from './crm-user-query'

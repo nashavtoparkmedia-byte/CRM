@@ -13,8 +13,10 @@ const output = mkdtempSync(path.join(tmpdir(), 'yoko-work-management-assignment-
 const sources = [
     'gravity-mvp/src/contracts/work-management/v1/create-task-command.ts',
     'gravity-mvp/src/contracts/work-management/v1/assign-task-command.ts',
+    'gravity-mvp/src/contracts/work-management/v1/reassign-tasks-command.ts',
     'gravity-mvp/src/contracts/work-management/v1/index.ts',
     'gravity-mvp/src/modules/work-management/public/v1/assign-task-handler.ts',
+    'gravity-mvp/src/modules/work-management/public/v1/reassign-tasks-handler.ts',
 ].map((value) => path.join(root, value))
 
 const compile = spawnSync(process.execPath, [
@@ -41,6 +43,10 @@ const contracts = require(path.join(output, 'contracts/work-management/v1/index.
 const { createAssignTaskHandlerV1 } = require(path.join(
     output,
     'modules/work-management/public/v1/assign-task-handler.js',
+))
+const { createReassignTasksHandlerV1 } = require(path.join(
+    output,
+    'modules/work-management/public/v1/reassign-tasks-handler.js',
 ))
 const checks = []
 const check = (name, body) => {
@@ -116,6 +122,77 @@ try {
     await checkAsync('owner persistence failure remains visible', async () => {
         const failing = createAssignTaskHandlerV1({ async assign() { throw new Error('owner unavailable') } })
         await assert.rejects(failing(command), /owner unavailable/)
+    })
+
+    const reassignCommand = {
+        contract: contracts.REASSIGN_TASKS_COMMAND_V1,
+        taskIds: ['task-1', 'task-2', 'task-3'],
+        newAssigneeId: 'manager-2',
+    }
+    check('batch reassignment contract is explicit v1', () => {
+        assert.equal(
+            contracts.REASSIGN_TASKS_COMMAND_V1,
+            'work_management.ReassignTasksCommand.v1',
+        )
+        assert.equal(
+            contracts.REASSIGN_TASKS_RESULT_V1,
+            'work_management.ReassignTasksResult.v1',
+        )
+    })
+    check('batch contract permits the legacy empty-input no-op', () => {
+        assert.deepEqual(
+            contracts.parseReassignTasksCommandV1({ ...reassignCommand, taskIds: [] }).taskIds,
+            [],
+        )
+    })
+    check('unrelated batch write operation fails closed', () => {
+        assert.throws(
+            () => contracts.parseReassignTasksCommandV1({ ...reassignCommand, deleteTasks: true }),
+            (error) => error.code === 'INVALID_CONTRACT',
+        )
+    })
+    check('invalid batch task identity fails closed', () => {
+        assert.throws(
+            () => contracts.parseReassignTasksCommandV1({ ...reassignCommand, taskIds: ['task-1', ' '] }),
+            (error) => error.code === 'INVALID_CONTRACT',
+        )
+    })
+
+    const batchCalls = []
+    let lookupCount = 0
+    const batchHandler = createReassignTasksHandlerV1({
+        async findTargetUser(userId) {
+            lookupCount++
+            assert.equal(userId, 'manager-2')
+            return { id: userId, name: 'Анна' }
+        },
+        async assign(input) {
+            batchCalls.push(input)
+            return ['reassigned', 'unchanged', 'not_found'][batchCalls.length - 1]
+        },
+    })
+    await checkAsync('empty batch returns before identity lookup', async () => {
+        const result = await batchHandler({ ...reassignCommand, taskIds: [] })
+        assert.deepEqual(result, { contract: contracts.REASSIGN_TASKS_RESULT_V1, reassigned: 0 })
+        assert.equal(lookupCount, 0)
+        assert.deepEqual(batchCalls, [])
+    })
+    await checkAsync('batch preserves sequential assignment and completed-only count', async () => {
+        const result = await batchHandler(reassignCommand)
+        assert.deepEqual(result, { contract: contracts.REASSIGN_TASKS_RESULT_V1, reassigned: 1 })
+        assert.equal(lookupCount, 1)
+        assert.deepEqual(batchCalls, [
+            { taskId: 'task-1', assigneeId: 'manager-2', assigneeName: 'Анна' },
+            { taskId: 'task-2', assigneeId: 'manager-2', assigneeName: 'Анна' },
+            { taskId: 'task-3', assigneeId: 'manager-2', assigneeName: 'Анна' },
+        ])
+    })
+    await checkAsync('missing target preserves the exact legacy error', async () => {
+        const missing = createReassignTasksHandlerV1({
+            async findTargetUser() { return null },
+            async assign() { throw new Error('must not assign') },
+        })
+        await assert.rejects(missing(reassignCommand), /^Error: Target user not found$/)
     })
 } finally {
     rmSync(output, { recursive: true, force: true })

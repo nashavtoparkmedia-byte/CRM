@@ -43,7 +43,7 @@
     {
       "context": "identity_access",
       "path": "architecture/contexts/v1/manifests/identity_access.json",
-      "sha256": "626bdbc6d4ed214fe888c57218f0e0bff9986f6a945750636b42d897db79efa3"
+      "sha256": "e5c8c8a9140d131c8561413b82bc82c292c3c80cfabbe55b5cb99d3860119e74"
     },
     {
       "context": "max_channel",
@@ -78,7 +78,7 @@
     {
       "context": "work_management",
       "path": "architecture/contexts/v1/manifests/work_management.json",
-      "sha256": "9adae3ffcdc6ebde1b55819aecf0843f7aee1c6bd4804431d520e5620932e59b"
+      "sha256": "d44d2fb343f8db07b83a1c8db4e580df7e04e1d861cb924ee35424802bfad2f2"
     }
   ],
   "controls": {

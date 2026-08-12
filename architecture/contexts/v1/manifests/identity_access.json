@@ -54,6 +54,7 @@
   "protected": true,
   "provider_relationships": [],
   "public_surface": [
+    "CrmUserQuery.v1",
     "CurrentUserQuery.v1",
     "IntegrationAdminAuthorization.v1",
     "ListUserIdentitiesQuery.v1",

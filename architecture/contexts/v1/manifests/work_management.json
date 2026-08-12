@@ -17,6 +17,7 @@
     "CreateTaskCommand.v1",
     "AssignTaskCommand.v1",
     "CompleteTaskCommand.v1",
+    "ReassignTasksCommand.v1",
     "RecordTaskUsageCommand.v1"
   ],
   "compatibility_strategy": "Preserve current server actions as adapters and migrate callers command-by-command with task-event parity checks.",
@@ -121,6 +122,7 @@
   "provider_relationships": [],
   "public_surface": [
     "ScenarioCatalog.v1",
+    "TaskReassignment.v1",
     "TaskView.v1",
     "TaskQuery.v1",
     "TaskUsageSummary.v1",

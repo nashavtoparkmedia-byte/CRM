@@ -1,8 +1,6 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
-import { ASSIGN_TASK_COMMAND_V1 } from '@/contracts/work-management/v1'
-import { assignTaskV1 } from '@/modules/work-management/public/v1'
 import {
     CONTACT_EVENT_TYPES,
     HEALTH_HISTORY_CONFIG,
@@ -745,38 +743,6 @@ export async function getTeamOverview(): Promise<TeamOverview> {
     const operationalVolatility = computeOperationalVolatility(volatilityInput)
 
     return { totals, topRootCauses, patternAlerts, interventionQueue, effectivenessStats, healthHistory, teamStability, persistentRootCauses, teamCapacity, processReliability, interventionAging, outcomeTiming, teamRiskProfile, operationalVolatility, managers }
-}
-
-/**
- * Reassign tasks from one manager to another.
- * Logs a 'reassigned' event for each task.
- */
-export async function reassignTasks(
-    taskIds: string[],
-    newAssigneeId: string
-): Promise<{ reassigned: number }> {
-    if (taskIds.length === 0) return { reassigned: 0 }
-
-    // Verify target user exists
-    const targetUser = await prisma.crmUser.findUnique({
-        where: { id: newAssigneeId },
-        select: { id: true, name: true },
-    })
-    if (!targetUser) throw new Error('Target user not found')
-
-    let reassigned = 0
-
-    for (const taskId of taskIds) {
-        const result = await assignTaskV1({
-            contract: ASSIGN_TASK_COMMAND_V1,
-            taskId,
-            assigneeId: newAssigneeId,
-            assigneeName: targetUser.name,
-        })
-        if (result.status === 'reassigned') reassigned++
-    }
-
-    return { reassigned }
 }
 
 /**

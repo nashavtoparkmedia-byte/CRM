@@ -16,7 +16,8 @@ const assertCheck = (name, condition, detail) => {
 const contract = read('gravity-mvp/src/contracts/work-management/v1/assign-task-command.ts')
 const handler = read('gravity-mvp/src/modules/work-management/public/v1/assign-task-handler.ts')
 const adapter = read('gravity-mvp/src/modules/work-management/public/v1/legacy-prisma-assignment-adapter.ts')
-const consumer = read('gravity-mvp/src/app/team-overview/actions.ts')
+const consumer = read('gravity-mvp/src/app/api/tasks/reassign/route.ts')
+const batchHandler = read('gravity-mvp/src/modules/work-management/public/v1/reassign-tasks-handler.ts')
 const manifest = JSON.parse(read('architecture/contexts/v1/manifests/work_management.json'))
 
 assertCheck(
@@ -41,14 +42,14 @@ assertCheck(
     'representative consumer invokes the public versioned command',
     consumer.includes("from '@/contracts/work-management/v1'")
         && consumer.includes("from '@/modules/work-management/public/v1'")
-        && consumer.includes('ASSIGN_TASK_COMMAND_V1')
-        && consumer.includes('assignTaskV1({'),
-    'Analytics consumer does not use the Work Management public v1 surface',
+        && consumer.includes('REASSIGN_TASKS_COMMAND_V1')
+        && consumer.includes('taskReassignmentV1.reassignTasks({'),
+    'reassignment route does not use the Work Management public v1 surface',
 )
 assertCheck(
     'foreign Task mutation is removed from the representative consumer',
     !/prisma\.task\.(?:create|update|updateMany|upsert|delete|deleteMany)\s*\(/.test(consumer),
-    'Analytics consumer retains a direct Task mutation',
+    'reassignment route retains a direct Task mutation',
 )
 assertCheck(
     'owner adapter preserves lookup before mutation',
@@ -75,8 +76,8 @@ assertCheck(
 )
 assertCheck(
     'consumer increments only completed reassignments',
-    consumer.includes("if (result.status === 'reassigned') reassigned++"),
-    'consumer result-count semantics changed',
+    batchHandler.includes("if (status === 'reassigned') reassigned++"),
+    'batch handler result-count semantics changed',
 )
 assertCheck(
     'context manifest already declares AssignTaskCommand.v1',

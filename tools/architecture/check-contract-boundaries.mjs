@@ -63,20 +63,20 @@ for (const file of consumerFiles) {
     )
 }
 
-const reassignmentConsumer = source('gravity-mvp/src/app/team-overview/actions.ts')
+const reassignmentConsumer = source('gravity-mvp/src/app/api/tasks/reassign/route.ts')
 assertCheck(
-    'representative Analytics consumer uses AssignTaskCommand.v1',
-    reassignmentConsumer.includes('ASSIGN_TASK_COMMAND_V1')
-        && reassignmentConsumer.includes('assignTaskV1({'),
-    'versioned assignment command invocation is absent',
+    'representative reassignment route uses ReassignTasksCommand.v1',
+    reassignmentConsumer.includes('REASSIGN_TASKS_COMMAND_V1')
+        && reassignmentConsumer.includes('taskReassignmentV1.reassignTasks({'),
+    'versioned batch assignment command invocation is absent',
 )
 assertCheck(
-    'foreign Task update removed from Analytics consumer',
+    'foreign Task update removed from reassignment route',
     !/prisma\.task\.update\s*\(/.test(reassignmentConsumer),
     'direct foreign Prisma Task update remains',
 )
 assertCheck(
-    'Analytics consumer no longer imports owner-internal task event service',
+    'reassignment route does not import owner-internal task event service',
     !reassignmentConsumer.includes("from '@/lib/tasks/task-event-service'"),
     'owner-internal task event import remains',
 )
