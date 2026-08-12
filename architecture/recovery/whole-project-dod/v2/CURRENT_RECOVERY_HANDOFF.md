@@ -1,10 +1,10 @@
 # Current recovery handoff
 
-Captured: `2026-08-11T23:32:21Z`
+Captured: `2026-08-12T02:16:00Z`
 
 This is the authoritative continuation checkpoint for the current task. It is a handoff, not an acceptance artifact. The whole-project state remains `EXTERNAL_FINAL_ACCEPTANCE_FAILED`; the current program remains `WHOLE-PROJECT DOD RECOVERY`; the project is **not READY**.
 
-Latest live-debt checkpoint (implementation HEAD `d0993b26`): strict architecture enforcement scans 1,216 files across 16 contexts with 117 findings, all 117 still temporary exception-covered debt, zero uncovered findings, zero stale exceptions, zero dependency cycles, and zero detector/digest errors. The rule counts are 31 internal imports, 63 non-public cross-context imports, 23 undeclared dependencies, zero provider-transport accesses, and zero direct foreign Prisma writes. Exactly 1,171 findings have been actually closed since the 1,288-finding opening denominator. Since the previous durable checkpoint, eight AI Knowledge/Calling/Operations semantic batches closed 40 findings without adding exceptions, including controlled migration, extraction execution, provider transport and operational-script consumers. The next bounded cluster is the four-finding AI Knowledge coach capability; no whole-repository write scan is warranted.
+Latest live-debt checkpoint (implementation HEAD `3c808731`): strict architecture enforcement scans 1,270 files across 16 contexts with zero findings and zero exceptions. All 1,288 findings in the opening denominator are actually closed; uncovered findings, temporary exceptions, intentional-exception candidates, internal imports, non-public cross-context imports, undeclared dependencies, provider-transport accesses, contract/manifest violations, dependency cycles, and detector/digest errors are zero. The final four findings were closed by moving Fleet cron orchestration and health telemetry behind exact Operations and Fleet capabilities; the negative probe rejects an unrelated capability. No whole-repository write scan was warranted because this closing batch did not materially change write architecture. The active cluster is now `AUTHORITATIVE CI AFTER DEBT CLOSURE`.
 
 The machine-readable companion, `CURRENT_RECOVERY_HANDOFF.json`, contains the exhaustive every-path status/purpose inventory, exact commands/results, identities, worktree records, and next action. Read both files before changing code.
 
@@ -28,11 +28,11 @@ Historical derived-classification checkpoint: `CURRENT_WRITE_OWNERSHIP_DERIVED_S
 - Branch: `codex/crm-architecture-dod-recovery`
 - Upstream: none; no remote-tracking ref contains the implementation HEAD
 - Recovery base: `0b61ba296ba2734738d4a21b9d00ce8b110d63cf`, tree `56c452397df4bb7cb05bef3e0d9afd1de9d785a5`
-- Implementation HEAD before this checkpoint: `d0993b261498c0179449e4ba0be1f8062ef45822`, tree `95d79b40f19959b24079c8e0d2d846753c33feda`
+- Implementation HEAD before this checkpoint: `3c8087311caab7912708a1746b2bb5ca3e2c088b`, tree `60900235f4183400e24d40442df9dd4b5b955483`
 - Checkpoint commit: the commit containing this file; resolve exactly with `git log -1 -- architecture/recovery/whole-project-dod/v2/CURRENT_RECOVERY_HANDOFF.md`
 - Task range before checkpoint: `0b61ba29..d0993b26`, 150 commits, 873 paths, 1,859,407 insertions and 30,235 deletions
 
-The original recovery checkpoint recorded 0 staged, 67 unstaged tracked paths (65 modified, two deleted), and 36 untracked paths. Those values are retained as historical attribution evidence only. Before this live-debt checkpoint update, all implementation batches through `d0993b26` were committed and the worktree was clean.
+The original recovery checkpoint recorded 0 staged, 67 unstaged tracked paths (65 modified, two deleted), and 36 untracked paths. Those values are retained as historical attribution evidence only. All implementation batches through `3c808731` were committed before this handoff refresh.
 
 This checkpoint update contains only the live-debt recompute, summary, remediation plan, current handoff companions, and their targeted v2 checksums. The implementation and internally accepted security/credential work are already preserved in the recovery branch. Do not reset, clean, discard, or remove this worktree.
 
@@ -105,7 +105,7 @@ Authoritative current values:
 - State: `EXTERNAL_FINAL_ACCEPTANCE_FAILED`
 - Current milestone/program: `WHOLE-PROJECT DOD RECOVERY IN PROGRESS`
 - Gate: `IN_PROGRESS_AFTER_EXTERNAL_FINAL_ACCEPTANCE_FAILED`
-- Gap ledger: 19 total, 17 `CONFIRMED`, two `CLOSED`, zero blocked
+- Gap ledger: 19 total, 10 `CONFIRMED`, nine `CLOSED`, zero blocked
 - Production change ledger: zero production source changes, database mutations, restarts/reloads, deployments, and rollbacks
 
 ## What this task actually completed
@@ -243,7 +243,7 @@ The last completed mirror pair in `/tmp` is from superseded `5a4211a4`: write ou
 
 ## Current identities
 
-- Recovery source: reconciled. Repository/worktree/branch/base are above; truth evidence commit/tree are `df91833a3f473b3827e39e1a48f1576f36435989` / `39541d7326ee3a308834ac19c0b9448055be61cc`.
+- Recovery source: reconciled. Repository/worktree/branch/base are above; truth evidence commit/tree are `3c8087311caab7912708a1746b2bb5ca3e2c088b` / `60900235f4183400e24d40442df9dd4b5b955483`.
 - Production source/artifact identity: `NOT RECONCILED IN THIS TASK`.
 - Messages authoritative production source identity: `NOT RECONCILED IN THIS TASK`.
 - Installed YOKO Privileged Runtime V2: reconciled as package `yoko-privileged-runtime 2.0.0-5`; runtime SHA-256 `0cdeeb4ba43abe50f80fed1580ad7b0729bf83358932ece2974b3faedafed57a`; policy `e67159bf95b583a17073ccf34b95f17fb885321df10b742be970168331d64e38`; registry `6e0ac1bdf7bbf95b5ae984dc266050a86425aac1bd884f3ab2f1b6f377291016`; sudoers `6e6b7cb2a088cc92fa7aee747adca46c64b4b96d1224be21117be5adef488c06`; self-check true; 24-command finite ABI; activation profiles disabled fail-closed.
@@ -254,14 +254,14 @@ This task made zero production source mutations, database mutations, service res
 
 ## Genuine blockers
 
-- 117 temporary exact architecture exceptions remain live debt.
-- Authoritative final CI, protected Messages reconciliation, and production source/artifact acceptance remain incomplete.
+- Authoritative final CI has not yet been proven to invoke every final control and its negative probe.
+- Protected Messages reconciliation and production source/artifact acceptance remain incomplete.
 - Recovery lineage is local-only with no upstream/remote tracking ref.
 
 ## Exact next action
 
-Write ownership and credential/security closure remain internally accepted. The current credential inventory is `403` accesses with `81` statically ambiguous records fully classified, `0` material unresolved, `0` confirmed public exposure, and `0` cross-domain capability gaps. Continue automatically with the four-finding `AI KNOWLEDGE COACH CAPABILITY` cluster: expose only the exact coach operation and result DTOs required by protected Messages, preserve item-id filtering and error containment, and expose no generic LLM client, prompt or knowledge writer capability. Preserve Messages and AI Calls behavior and do not repeat the whole-repository write scan.
+Write ownership, credential/security, and live-architecture closure remain internally accepted. The current credential inventory is `401` accesses with `81` raw analyzer ambiguities already record-classified, `0` material unresolved, `0` confirmed public exposure, and `0` cross-domain capability gaps. Reconcile the architecture CI workflow against the final detector inventory, add missing final controls and fail-closed negative probes, validate the workflow locally where possible, then continue automatically to protected Messages production reconciliation and AI Calls lineage preservation. Do not repeat the whole-repository write scan without material write-architecture change or a final-gate requirement.
 
 ### Live architecture debt recompute
 
-The bounded recompute scanned 1,216 files across 16 contexts. Current live debt is: 31 internal imports, 63 non-public cross-context imports, 23 undeclared dependencies, 0 provider-transport accesses, 0 direct foreign Prisma writes, 0 uncovered findings, and 0 stale exceptions (117 findings / 117 exception-covered). Temporary exceptions are 117; intentional exceptions are 0; 1,171 findings are actually closed from the opening denominator. Detector parse and finding-digest health are clean. This is `NOT_READY_LIVE_DEBT_REMAINS`; evidence is in `LIVE_ARCHITECTURE_DEBT_RECOMPUTE_20260811.json` and `LIVE_ARCHITECTURE_DEBT_SUMMARY_20260811.json`.
+The bounded recompute scanned 1,270 files across 16 contexts. Current live debt is zero across internal imports, non-public cross-context imports, undeclared dependencies, provider-transport accesses, direct foreign Prisma writes, contract/manifest violations, uncovered findings, stale exceptions, and temporary or intentional exceptions. Exactly 1,288 findings are actually closed from the opening denominator. Detector parse and finding-digest health are clean. This is `LIVE_DEBT_INTERNALLY_CLOSED; WHOLE_PROJECT_NOT_READY`; evidence is in `LIVE_ARCHITECTURE_DEBT_CLOSURE_20260812.json` and `architecture/isolation/operations-observability/scheduled-fleet-crons-v1/verification.json`.

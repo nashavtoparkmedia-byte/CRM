@@ -39,7 +39,7 @@
       "id": "FINAL-DOD-001",
       "category": "WRITE_ENFORCEMENT",
       "severity": "CRITICAL",
-      "status": "CONFIRMED",
+      "status": "CLOSED",
       "title": "Delegate-cast and structurally equivalent writes are missed",
       "source": "external review technical gap 1",
       "evidence": [
@@ -47,13 +47,14 @@
         "gravity-mvp/src/app/tg-actions.ts:357",
         "gravity-mvp/src/app/api/webhook/max/route.ts:131"
       ],
-      "closure": "A structural analyzer detects direct, cast, parenthesized, optional, aliased, destructured, transaction-contained and raw mutation forms and has negative fixtures for each."
+      "closure": "A structural analyzer detects direct, cast, parenthesized, optional, aliased, destructured, transaction-contained and raw mutation forms and has negative fixtures for each.",
+      "closure_evidence": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T131500Z.json and the preserved 77 write fixtures plus four companion suites"
     },
     {
       "id": "FINAL-DOD-002",
       "category": "REPOSITORY_COVERAGE",
       "severity": "CRITICAL",
-      "status": "CONFIRMED",
+      "status": "CLOSED",
       "title": "Operational and other tracked executable surfaces are outside scan roots",
       "source": "external review technical gap 2",
       "evidence": [
@@ -61,13 +62,14 @@
         "gravity-mvp/scripts/import-churn-from-excel.js:102",
         "external review found 166 direct Prisma-write call lines across 47 excluded scripts"
       ],
-      "closure": "All tracked executable and mutation-capable SQL surfaces are inventoried, lifecycle-classified and governed; active operational scripts cannot bypass ownership."
+      "closure": "All tracked executable and mutation-capable SQL surfaces are inventoried, lifecycle-classified and governed; active operational scripts cannot bypass ownership.",
+      "closure_evidence": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json and AUTHORITATIVE_WRITE_SCAN_20260811T131500Z.json"
     },
     {
       "id": "FINAL-DOD-003",
       "category": "WRITE_AUTHORIZATION",
       "severity": "CRITICAL",
-      "status": "CONFIRMED",
+      "status": "CLOSED",
       "title": "Approved writer authorization is overly broad at file plus model scope",
       "source": "external review technical gap 3",
       "evidence": [
@@ -75,26 +77,28 @@
         "tools/architecture/enforce-architecture.mjs:1060",
         "isolated Chat.deleteMany negative probe passed unexpectedly"
       ],
-      "closure": "Authorization is bound to a dedicated capability or exact structural model-operation responsibility; an unrelated write in an approved file fails."
+      "closure": "Authorization is bound to a dedicated capability or exact structural model-operation responsibility; an unrelated write in an approved file fails.",
+      "closure_evidence": "tools/architecture/v2/test-maintenance-capability-policy.mjs, test-scoped-data-ownership.mjs, and owner-capability unrelated-operation probes"
     },
     {
       "id": "FINAL-DOD-004",
       "category": "CREDENTIAL_BOUNDARY",
       "severity": "CRITICAL",
-      "status": "CONFIRMED",
+      "status": "CLOSED",
       "title": "Credential enforcement omits credential-model and database reads",
       "source": "external review technical gap 4",
       "evidence": [
         "tools/architecture/enforce-architecture.mjs:1049",
         "gravity-mvp/src/app/messages/improve-draft-actions.ts:22"
       ],
-      "closure": "Credential entities and sensitive fields have declared owners, consumers use a credential broker or provider capability, and unauthorized database reads fail enforcement."
+      "closure": "Credential entities and sensitive fields have declared owners, consumers use a credential broker or provider capability, and unauthorized database reads fail enforcement.",
+      "closure_evidence": "architecture/recovery/whole-project-dod/v2/CREDENTIAL_DATABASE_ACCESS_ARCHITECTURE_RECONCILIATION_20260812.json; 401 accesses, 0 material unresolved, 0 public exposure, 0 capability gaps"
     },
     {
       "id": "FINAL-DOD-005",
       "category": "SECURITY",
       "severity": "CRITICAL",
-      "status": "CONFIRMED",
+      "status": "CLOSED",
       "title": "Debug endpoint can expose complete WhatsApp connection rows",
       "source": "external review technical gap 4",
       "evidence": [
@@ -160,7 +164,7 @@
       "id": "FINAL-DOD-010",
       "category": "ARCHITECTURE_DEBT",
       "severity": "CRITICAL",
-      "status": "CONFIRMED",
+      "status": "CLOSED",
       "title": "The 1,295 PASS count is live exception-covered boundary debt",
       "source": "external review architecture gap 1",
       "evidence": [
@@ -169,19 +173,21 @@
         "353 undeclared dependencies",
         "38 direct provider-transport accesses"
       ],
-      "closure": "Critical boundary debt and broad temporary exceptions are eliminated context by context; residual exceptions are narrow, intentional and permanent-design only."
+      "closure": "Critical boundary debt and broad temporary exceptions are eliminated context by context; residual exceptions are narrow, intentional and permanent-design only.",
+      "closure_evidence": "architecture/recovery/whole-project-dod/v2/LIVE_ARCHITECTURE_DEBT_CLOSURE_20260812.json; 0 findings and 0 exceptions from the 1,288 opening denominator"
     },
     {
       "id": "FINAL-DOD-011",
       "category": "PROVIDER_ISOLATION",
       "severity": "CRITICAL",
-      "status": "CONFIRMED",
+      "status": "CLOSED",
       "title": "Domain and application code directly loads provider transports",
       "source": "external review architecture gap 2",
       "evidence": [
         "gravity-mvp/src/lib/MessageService.ts:623"
       ],
-      "closure": "All provider transport use is behind provider gateways/adapters and representative direct leakage fails a negative architecture test."
+      "closure": "All provider transport use is behind provider gateways/adapters and representative direct leakage fails a negative architecture test.",
+      "closure_evidence": "architecture/recovery/whole-project-dod/v2/LIVE_ARCHITECTURE_DEBT_CLOSURE_20260812.json; direct provider transport findings 0 and negative architecture controls PASS"
     },
     {
       "id": "FINAL-DOD-012",
@@ -290,9 +296,9 @@
   ],
   "summary": {
     "total": 19,
-    "confirmed": 17,
+    "confirmed": 10,
     "disproven_with_evidence": 0,
-    "closed": 2,
+    "closed": 9,
     "blocked_business": 0,
     "blocked_irreversible": 0,
     "blocked_external_auth": 0

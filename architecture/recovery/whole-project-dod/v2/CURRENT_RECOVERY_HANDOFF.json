@@ -1,16 +1,16 @@
 {
   "schema": "yoko.crm.current-recovery-handoff.v1",
-  "generated_at": "2026-08-11T23:32:21Z",
+  "generated_at": "2026-08-12T02:16:00Z",
   "authority": "Continuation checkpoint; supersedes conversational status claims but does not supersede durable gap ledger or external NOT READY verdict.",
   "program_state": {
     "whole_project_state": "EXTERNAL_FINAL_ACCEPTANCE_FAILED",
     "current_program": "WHOLE-PROJECT DOD RECOVERY",
-    "milestone_status": "LIVE_ARCHITECTURE_DEBT_REMEDIATION_117_REMAINING",
+    "milestone_status": "LIVE_ARCHITECTURE_DEBT_CLOSED; AUTHORITATIVE_CI_IN_PROGRESS",
     "ready": false,
     "finding_summary": {
       "total": 19,
-      "confirmed": 17,
-      "closed": 2,
+      "confirmed": 10,
+      "closed": 9,
       "blocked": 0
     }
   },
@@ -23,19 +23,13 @@
     "remote_tracking_ref_contains_implementation_head": false,
     "base_commit": "0b61ba296ba2734738d4a21b9d00ce8b110d63cf",
     "base_tree": "56c452397df4bb7cb05bef3e0d9afd1de9d785a5",
-    "implementation_head_before_checkpoint": "d0993b261498c0179449e4ba0be1f8062ef45822",
-    "implementation_tree_before_checkpoint": "95d79b40f19959b24079c8e0d2d846753c33feda",
+    "implementation_head_before_checkpoint": "3c8087311caab7912708a1746b2bb5ca3e2c088b",
+    "implementation_tree_before_checkpoint": "60900235f4183400e24d40442df9dd4b5b955483",
     "checkpoint_commit": "SELF_RESOLVE_WITH_GIT_LOG",
     "task_commit_range": {
-      "range": "0b61ba296ba2734738d4a21b9d00ce8b110d63cf..d0993b261498c0179449e4ba0be1f8062ef45822",
-      "commits": 150,
-      "paths": 873,
-      "added_paths": 424,
-      "modified_paths": 442,
-      "deleted_paths": 6,
-      "renamed_paths": 1,
-      "insertions": 1859407,
-      "deletions": 30235
+      "range": "0b61ba296ba2734738d4a21b9d00ce8b110d63cf..3c8087311caab7912708a1746b2bb5ca3e2c088b",
+      "commits": 190,
+      "classification": "Resolve exact counts with Git when required; source identity above is authoritative."
     },
     "frozen_pre_checkpoint_worktree_state": {
       "captured_at": "2026-08-10T20:11:52Z",
@@ -345,7 +339,7 @@
     "implemented_but_not_accepted": [
       "Write ownership remains internally accepted: 1,404 confirmed writes discovered, 0 confirmed foreign, 53 closed foreign, 0 material ambiguity, and 0 unclassified active operational surfaces.",
       "Credential/security closure remains internally accepted: Gravity 34/34, tg-bot 15/15, 0 material credential unresolved, 0 public secret exposure, and independent critic PASS.",
-      "Live architecture debt is 117 temporary exact exceptions: 31 internal imports, 63 non-public cross-context imports, 23 undeclared dependencies, 0 provider transport accesses, and 1,171 findings actually closed from the 1,288 opening denominator."
+      "Live architecture debt is internally closed: 0 findings, 0 uncovered, 0 exception-covered, 0 temporary exceptions, and all 1,288 opening findings actually closed. Whole-project acceptance remains open."
     ],
     "investigated": [
       "Current full-repository analyzer performance: two mirrored 4ec scans were CPU-active for more than 3h20 and aborted; no output exists.",
@@ -354,7 +348,6 @@
       "Recovery Git/worktree, durable-state, artifact and process identities reconciled for continuation."
     ],
     "not_started": [
-      "Remaining 117 live architecture findings and temporary exceptions.",
       "Authoritative final CI after debt closure.",
       "Protected Messages production reconciliation and AI Calls lineage acceptance.",
       "Production source/artifact identity reconciliation, preview/backup/rollback gates, deployment or runtime activation.",
@@ -550,6 +543,12 @@
       "command": "cd gravity-mvp && npx tsc --noEmit --pretty false",
       "scope": "Whole Gravity static type check after eight post-157 architecture batches",
       "result": "30 inherited diagnostics; zero diagnostics in changed paths"
+    },
+    {
+      "category": "live_architecture_debt_closure_zero",
+      "command": "node tools/architecture/enforce-architecture.mjs --format json; node tools/architecture/check-operations-scheduled-fleet-cron-boundary.mjs; node tools/architecture/validate-context-manifests.mjs; npm run test:security-boundaries; targeted cron Vitest; architecture negative suite; contract, credential-registry and static-SQL controls",
+      "scope": "Final Fleet cron semantic batch and whole live-architecture denominator",
+      "result": "PASS: 0 findings, 0 exceptions, 0 uncovered, 0 stale, 0 cycles, 0 provider accesses; 1,288 actually closed; cron 11/11; architecture negatives 29/29; security 34/34; credential registry 14 policies; TypeScript 30 inherited with zero changed-path diagnostics"
     }
   ],
   "artifacts": {
@@ -640,8 +639,8 @@
       "branch": "codex/crm-architecture-dod-recovery",
       "base_commit": "0b61ba296ba2734738d4a21b9d00ce8b110d63cf",
       "base_tree": "56c452397df4bb7cb05bef3e0d9afd1de9d785a5",
-      "truth_evidence_commit": "df91833a3f473b3827e39e1a48f1576f36435989",
-      "truth_evidence_tree": "39541d7326ee3a308834ac19c0b9448055be61cc"
+      "truth_evidence_commit": "3c8087311caab7912708a1746b2bb5ca3e2c088b",
+      "truth_evidence_tree": "60900235f4183400e24d40442df9dd4b5b955483"
     },
     "production_source_artifact": "NOT RECONCILED IN THIS TASK",
     "messages_authoritative_production_source": "NOT RECONCILED IN THIS TASK",
@@ -667,11 +666,11 @@
     "ai_calls_mutated": false
   },
   "genuine_blockers": [
-    "117 temporary exception-covered live architecture findings remain; exception coverage is debt, not closure.",
+    "Authoritative CI has not yet been proven to invoke every final control and its negative probe.",
     "Protected Messages/AI Calls production authority and final integration acceptance remain unreconciled.",
     "No upstream/remote ref protects the local recovery lineage."
   ],
-  "exact_next_action": "Publish only the exact AI Knowledge coach operation and result DTOs needed by protected Messages, preserve item-id filtering, current-value handling and error containment, expose no generic LLM client, prompt or knowledge writer capability, and retire only the four current coach.ts findings; do not run another whole-repository write scan.",
+  "exact_next_action": "Reconcile the architecture CI workflow against the final detector inventory, add missing final controls and fail-closed negative probes, validate the workflow locally where possible, then continue automatically to protected Messages production reconciliation and AI Calls lineage preservation.",
   "current_write_ownership": {
     "baseline": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T131500Z.json",
     "baseline_sha256": "7c6eb03e1249d9dbd2230390a72471caefe1fb01c992ec608775e1f2a0e41292",
@@ -697,15 +696,17 @@
     "triage_sha256": "ce3e297f1fe736815fd310094a066717a53d8e4631cbae85f99046963f3c9f70"
   },
   "security_continuation": {
-    "credential_inventory": "architecture/recovery/whole-project-dod/v2/CREDENTIAL_DATABASE_ACCESS_CLOSURE_20260811.json",
+    "credential_inventory": "architecture/recovery/whole-project-dod/v2/CREDENTIAL_DATABASE_ACCESS_ARCHITECTURE_CHECKPOINT_20260811.json",
+    "credential_reconciliation": "architecture/recovery/whole-project-dod/v2/CREDENTIAL_DATABASE_ACCESS_ARCHITECTURE_RECONCILIATION_20260812.json",
     "credential_unknown_resolution": "architecture/recovery/whole-project-dod/v2/credential-unknown-access-resolution.json",
     "public_secret_closure": "architecture/recovery/whole-project-dod/v2/PUBLIC_SECRET_RISK_CLOSURE_20260811.json",
     "dynamic_migration_boundary": "architecture/recovery/whole-project-dod/v2/CREDENTIAL_DYNAMIC_MIGRATION_BOUNDARY_20260811.json",
     "cross_domain_review": "architecture/recovery/whole-project-dod/v2/CROSS_DOMAIN_CREDENTIAL_REVIEW_20260811.json",
     "credential_inventory_summary": {
-      "credential_database_accesses": 403,
-      "credential_reads": 221,
+      "credential_database_accesses": 401,
+      "credential_reads": 219,
       "secret_reads": 155,
+      "metadata_only_reads": 64,
       "ambiguous_credential_accesses": 81,
       "unresolved_database_accesses": 81,
       "possible_public_secret_risks": 121,
@@ -722,46 +723,47 @@
     "verdict": "CREDENTIAL_BOUNDARY_CLOSED_INTERNAL; WHOLE_PROJECT_NOT_READY"
   },
   "live_architecture_debt_recompute": {
-    "artifact": "architecture/recovery/whole-project-dod/v2/LIVE_ARCHITECTURE_DEBT_RECOMPUTE_20260811.json",
-    "summary": "architecture/recovery/whole-project-dod/v2/LIVE_ARCHITECTURE_DEBT_SUMMARY_20260811.json",
-    "remediation_plan": "architecture/recovery/whole-project-dod/v2/LIVE_ARCHITECTURE_DEBT_REMEDIATION_PLAN_20260811.json",
-    "scanned_files": 1216,
+    "artifact": "architecture/recovery/whole-project-dod/v2/LIVE_ARCHITECTURE_DEBT_CLOSURE_20260812.json",
+    "closing_batch_evidence": "architecture/isolation/operations-observability/scheduled-fleet-crons-v1/verification.json",
+    "scanned_files": 1270,
     "contexts": 16,
-    "findings": 117,
-    "exception_covered": 117,
+    "findings": 0,
+    "exception_covered": 0,
     "open_findings": 0,
     "stale_exceptions": 0,
-    "exception_debt": 117,
-    "internal_module_imports": 31,
-    "non_public_cross_context_imports": 63,
-    "undeclared_dependencies": 23,
+    "exception_debt": 0,
+    "actually_closed_from_opening_denominator": 1288,
+    "internal_module_imports": 0,
+    "non_public_cross_context_imports": 0,
+    "undeclared_dependencies": 0,
     "provider_transport_accesses": 0,
     "direct_foreign_prisma_writes": 0,
     "contract_gaps": 0,
     "manifest_gaps": 0,
     "detector_parse_errors": 0,
     "detector_finding_digest_mismatch": 0,
-    "verdict": "LIVE_DEBT_REMAINS"
+    "verdict": "LIVE_DEBT_INTERNALLY_CLOSED; WHOLE_PROJECT_NOT_READY"
   },
   "live_architecture_debt": {
-    "artifact": "architecture/recovery/whole-project-dod/v2/LIVE_ARCHITECTURE_DEBT_RECOMPUTE_20260811.json",
-    "summary": "architecture/recovery/whole-project-dod/v2/LIVE_ARCHITECTURE_DEBT_SUMMARY_20260811.json",
-    "scanned_files": 1216,
+    "artifact": "architecture/recovery/whole-project-dod/v2/LIVE_ARCHITECTURE_DEBT_CLOSURE_20260812.json",
+    "closing_batch_evidence": "architecture/isolation/operations-observability/scheduled-fleet-crons-v1/verification.json",
+    "scanned_files": 1270,
     "contexts": 16,
-    "findings": 117,
-    "exception_covered": 117,
+    "findings": 0,
+    "exception_covered": 0,
     "open_findings": 0,
     "stale_exceptions": 0,
-    "exception_debt": 117,
-    "internal_module_imports": 31,
-    "non_public_cross_context_imports": 63,
-    "undeclared_dependencies": 23,
+    "exception_debt": 0,
+    "actually_closed_from_opening_denominator": 1288,
+    "internal_module_imports": 0,
+    "non_public_cross_context_imports": 0,
+    "undeclared_dependencies": 0,
     "provider_transport_accesses": 0,
     "direct_foreign_prisma_writes": 0,
     "contract_gaps": 0,
     "manifest_gaps": 0,
     "detector_parse_errors": 0,
     "detector_finding_digest_mismatch": 0,
-    "verdict": "LIVE_DEBT_REMAINS"
+    "verdict": "LIVE_DEBT_INTERNALLY_CLOSED; WHOLE_PROJECT_NOT_READY"
   }
 }
