@@ -1,4 +1,4 @@
-8202b4d9d180665ed0a558bdd11c234141882c7d83c996744006bf3397c88de7  architecture/enforcement/v1/exceptions.json
+7066f160ba619f80ff7c12800baa70d89bb636d2454d148ea17cbc4689105a67  architecture/enforcement/v1/exceptions.json
 5e47a3d604fc033e9e8c4af92931f30267ac96f3468233df16585b3720ea6ac0  architecture/enforcement/v1/policy.json
 b7fe192589a9e4154f8c704338c8ac4fe4572cd9bcdfb5ed9285dbf4bf201a5e  architecture/isolation/operations-observability/event-retention-v1/BEHAVIOR-FREEZE.json
 338071018d76487a9affc7f913a6306ead6db5b9e20587bc8345105b1bc701ed  architecture/isolation/operations-observability/event-retention-v1/CRM-ARCH-007R-EVENT-RETENTION-GATE.md
@@ -15,7 +15,7 @@ ec31b7bd30a91e25f60bd4259e277d518467a0720cae133e2faaa71367377f32  gravity-mvp/sr
 6577aeb51d45ead3ca533c70d8c92d84a46bdd01b757a39354847a00767e1450  gravity-mvp/src/contracts/messaging/v1/index.ts
 102f3df2b78ee14bc8125bdf9a1e8fc0bfdf8e54968ac428dc6cfe965afd2384  gravity-mvp/src/lib/RetentionCleanup.ts
 fc74d6c318cff145f97d306cff8a4f35a29cc35ec557eb152733bd520495d95a  gravity-mvp/src/modules/fleet-operations/public/v1/event-retention-handler.ts
-576da78ea1bfc9c7c05ae2e66a3f45507451329325e79f12f829e0721d4fbe97  gravity-mvp/src/modules/fleet-operations/public/v1/index.ts
+68c7dccf3507b9d3fc4fc1691ff68741fe8df2b22286a026c5ad8fddaff1ddf0  gravity-mvp/src/modules/fleet-operations/public/v1/index.ts
 2765dcc601cd609a7a1347382a3840e34fff62641bcb68efaa6fc5d092a6a0cf  gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-event-retention-adapter.ts
 2a5f070dbd6eeb09f48ebf9fe0e123d5f32f4f0a99464379860248893fe95479  gravity-mvp/src/modules/fleet-operations/public/v1/communication-event-retention-handler.ts
 d73258315cbd3656b79867ea5270f5746ef6a5e15e3fb9f2a8eafbe2480fd36c  gravity-mvp/src/modules/messaging/public/v1/index.ts

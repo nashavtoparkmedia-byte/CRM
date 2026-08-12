@@ -266,6 +266,7 @@
     "DriverCommunicationEvent.v1",
     "ManagerDriverCommunication.v1",
     "CommunicationEventRetention.v1",
+    "ScheduledScraperCheckDispatch.v1",
     "YandexFleetOperations.v1"
   ],
   "responsibility": "Driver/fleet state and communication history, Yandex synchronization and isolated YFS checking workflow.",

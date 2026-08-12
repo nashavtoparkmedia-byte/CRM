@@ -18,7 +18,7 @@ cb87ce851aa4f84857115f6d46928d4f0a87ad5b6802b293ba7da157d0a2c583  gravity-mvp/sr
 58931ef529031ca72e104b315cf8a296547a9196963f5f05490f77b72771ef5f  gravity-mvp/src/lib/tasks/manager-health-config.ts
 9337571c404d88f3c7d8a1b073020c2d37912312038d19471f5cc968cf1ff840  gravity-mvp/src/modules/operations-observability/index.ts
 1bd4a70006366219f10b42239e2fe266634b9b125a90b1433642b86b58d5248e  gravity-mvp/src/modules/operations-observability/public/index.ts
-8097e26a69d85bbd508c3f26741607c774ada5397867557681b449784ee097ff  gravity-mvp/src/modules/operations-observability/public/v1/index.ts
+5b40456555f7c24a9b87075ee23e1e78606d0fa7182b3fdf82ab47de2e56b100  gravity-mvp/src/modules/operations-observability/public/v1/index.ts
 e6b5ebaf8f72c86c0919077a14c7ca3bdee8f81144a16d3d08fe4a680c6da4dc  gravity-mvp/src/modules/operations-observability/public/v1/manager-health-repository-handler.ts
 da396dd089b8581eb04c8259090fa34f2d58f5fae1d034ce8e167e468fc6cda5  gravity-mvp/src/modules/operations-observability/public/v1/legacy-prisma-manager-health-repository.ts
 e076ac8ace57d61159dfff5fb51143a57aed5f1a7d43613c3af277640da46454  tools/architecture/check-operations-intervention-actions-boundary.mjs

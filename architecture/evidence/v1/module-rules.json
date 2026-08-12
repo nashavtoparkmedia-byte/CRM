@@ -29,7 +29,7 @@
     {"id":"telegram_provider","context":"messages","match":"^gravity-mvp/src/(lib/telegram/|app/tg-|app/api/(webhook/telegram|tg-media)/|app/settings/integrations/telegram/)"},
     {"id":"max_provider","context":"messages","match":"^gravity-mvp/src/(lib/providers/max-personal/|app/max-actions|app/api/(webhook/max|webhooks/max|max-scraper)/|app/settings/integrations/max/)"},
     {"id":"avito","context":"avito","match":"^gravity-mvp/src/(lib/avito/|app/api/(avito|webhooks/avito)/|app/settings/(avito-access|integrations/avito)/)"},
-    {"id":"yandex_fleet","context":"yandex_fleet","match":"^gravity-mvp/src/(lib/(YandexFleetService|yandexSync)|app/api/(cron/sync-trips|cron/sync-scraper|monitoring/fleet-check|monitoring/sync|drivers-search|test-car|test-driver)/)"},
+    {"id":"yandex_fleet","context":"yandex_fleet","match":"^gravity-mvp/src/(lib/(YandexFleetService|yandexSync)|app/api/(monitoring/fleet-check|monitoring/sync|drivers-search|test-car|test-driver)/)"},
     {"id":"ai_knowledge","context":"ai","match":"^gravity-mvp/src/(lib/ai/knowledge/|app/settings/integrations/ai-knowledge-help/)"},
     {"id":"ai_calls","context":"calls","match":"^gravity-mvp/src/(lib/(ai-call|aiCallAnalysis)/|app/api/ai-calls/|app/settings/integrations/(ai-call-help|ai-call-keys|ai-call-scenarios|telephony-ai)/|app/api/(internal/ai-call-keys|settings/ai-call|settings/telephony-ai)/)"},
     {"id":"calls","context":"calls","match":"^gravity-mvp/src/(lib/(calls|freeswitch|sip|queue)/|app/(calls|api/calls)/)"},

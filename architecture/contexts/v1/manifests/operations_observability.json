@@ -34,6 +34,7 @@
     ],
     "environment_names": [
       "APP_VERSION",
+      "CRON_SECRET",
       "FLEET_DAILY_LIMIT",
       "FS_ESL_HOST",
       "FS_ESL_PORT",
@@ -169,7 +170,8 @@
     "IntegrityReport.v1",
     "OperationalAlert.v1",
     "ScheduledMaintenanceOperations.v1",
-    "OperationalJobRegistry.v1"
+    "OperationalJobRegistry.v1",
+    "ScheduledFleetCronRoutes.v1"
   ],
   "responsibility": "Health, integrity, retention, stability, execution locks and operational telemetry.",
   "schema": "yoko.crm.module-manifest.v1",

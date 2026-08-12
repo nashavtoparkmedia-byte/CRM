@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "fd134594adca5d72f3902146458dd3a9f6598fc66cc6b4d2222b542faf381fb5",
+  "finding_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -12,78 +12,6 @@
     "uncovered_violations_fail": true,
     "deadline": "2026-12-31"
   },
-  "summary": {
-    "non_public_cross_context_import": 2,
-    "undeclared_dependency": 2
-  },
-  "exceptions": [
-    {
-      "fingerprint": "arch_c66851146670aa3673b24ce3",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/cron/sync-scraper/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "operations_observability",
-      "subject": "yandex_fleet>monitoring:gravity-mvp/src/lib/cron-health.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>operations_observability/monitoring",
-        "dependency:fleet_operations/yandex_fleet>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_570ad8bae27278ed0035d4cb",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/cron/sync-scraper/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "operations_observability",
-      "subject": "yandex_fleet>monitoring:gravity-mvp/src/lib/cron-health.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>operations_observability/monitoring",
-        "dependency:fleet_operations/yandex_fleet>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_8356c8945b194461fb2e02b7",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/cron/sync-trips/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "operations_observability",
-      "subject": "yandex_fleet>monitoring:gravity-mvp/src/lib/cron-health.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>operations_observability/monitoring",
-        "dependency:fleet_operations/yandex_fleet>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_198c48ccd25c8544272cd62f",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/api/cron/sync-trips/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "operations_observability",
-      "subject": "yandex_fleet>monitoring:gravity-mvp/src/lib/cron-health.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>operations_observability/monitoring",
-        "dependency:fleet_operations/yandex_fleet>operations_observability/monitoring"
-      ]
-    }
-  ]
+  "summary": {},
+  "exceptions": []
 }

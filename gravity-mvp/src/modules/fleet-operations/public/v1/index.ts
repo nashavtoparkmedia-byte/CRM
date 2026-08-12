@@ -86,3 +86,7 @@ export type { CommunicationEventRetentionPersistencePortV1 } from './communicati
 export const runCommunicationEventRetentionV1 = createRunCommunicationEventRetentionHandlerV1(
     legacyPrismaCommunicationEventRetentionPortV1,
 )
+export { runScheduledYandexSyncV1 } from './yandex-sync-runtime'
+export type { ScheduledYandexSyncResultV1 } from './yandex-sync-runtime'
+export { dispatchScheduledScraperChecksV1 } from './scheduled-scraper-check-dispatch'
+export type { ScheduledScraperCheckDispatchResultV1 } from './scheduled-scraper-check-dispatch'

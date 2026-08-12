@@ -57,3 +57,7 @@ export const saveManagerHealthScoresV1 =
     createSaveManagerHealthScoresHandlerV1(legacyPrismaManagerHealthRepositoryPortV1)
 export const listManagerHealthHistoryV1 =
     createListManagerHealthHistoryHandlerV1(legacyPrismaManagerHealthRepositoryPortV1)
+export {
+    runScheduledScraperDispatchCronV1,
+    runScheduledYandexSyncCronV1,
+} from './scheduled-fleet-cron-routes'
