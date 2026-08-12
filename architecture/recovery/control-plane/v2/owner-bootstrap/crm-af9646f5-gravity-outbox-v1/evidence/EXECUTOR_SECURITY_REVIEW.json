@@ -1,0 +1,51 @@
+{
+  "schema": "yoko.crm.owner-bootstrap-executor-security-review.v1",
+  "captured_at": "2026-08-12T12:30:00Z",
+  "artifact_sha256": "88a30f4fdf74c1f86d47f47c31edec824a887c172a69585c45eddceb85fb755e",
+  "package_sha256": "597f58d813f7a0f3631b9d1778588db880c00e7df97d92a51cef385f8f4d8ba0",
+  "scope": "FINAL_SEALED_BOOTSTRAP_PRE_INDEPENDENT_CRITIC",
+  "verdict": "PASS_EXECUTOR_REVIEW_CRITIC_STILL_REQUIRED",
+  "checks": {
+    "generic_root_escape": "ABSENT; no generic command, shell, package or Docker capability is delegated",
+    "sudoers_widening": "ABSENT; successor sudoers SHA256 equals predecessor 6e6b7cb2a088cc92fa7aee747adca46c64b4b96d1224be21117be5adef488c06",
+    "arbitrary_path_or_argument": "ABSENT; profiles are zero-argument and all persistent paths and targets are constants",
+    "command_injection": "REJECTED by argv-only shell=False execution, fixed executables, clean child environment and negative fixtures",
+    "owner_environment_inheritance": "REMOVED by sudo env -i with a fixed PATH and bash privileged mode",
+    "mutable_root_artifact": "CLOSED; the one command copies into a new root-only path and hashes that copy before extraction",
+    "symlink_and_path_replacement": "CLOSED; sealed tar has no links/special entries, root stage is unique mode-0700, installer rejects links, unexpected names, link counts, owners and modes",
+    "toctou": "CLOSED for the material bootstrap boundary by checksum verification after the mutable-source copy and before root-only extraction",
+    "docker_and_service_widening": "ABSENT; fixed names, fixed labels, fixed images, fixed network, fixed compose service, and successor policy removes service-restart",
+    "database_widening": "ABSENT; exact Postgres container/image/system identity plus decoded URL user/database binding and fixed SQL",
+    "migration_widening": "ABSENT; accepted source ledger permits only 20260809140000_add_domain_outbox with SHA256 433b0d503f054ed6a8161a059e2650d5e401829dabe8c9d992a1d1763eef0016",
+    "release_widening": "ABSENT; accepted commit/archive/build inputs and target tag are immutable profile constants",
+    "rollback_widening": "ABSENT; only the pinned predecessor image is allowed and original command/runtime semantics must be restored",
+    "interrupted_install": "RECOVERABLE by exact successor reconciliation, exact/repairable root store, predecessor reinstall and bootstrap guard",
+    "interrupted_migration": "RECOVERABLE from durable DATABASE_PRODUCTION_INTENT and DATABASE_RUNNER_RETIRE_INTENT: both fixed production runners are created and identity-sealed before production intent; recovery fail-closed quiesces the exact existing objects and freshly rehashes the secure exact backup before the first database read; retirement intent is durably audited before the first removal, tolerates only exact absence for an already removed object, verifies any survivor against the full sealed identity, rechecks the applied database ledger, and then writes the exact terminal state",
+    "interrupted_activation": "RECOVERABLE from durable RELEASE_ACTIVATION_INTENT, RELEASE_ACTIVATION_ROLLBACK_INTENT and ROLLBACK_INTENT with sealed Compose/environment revalidation before every Docker Compose mutation, exact postcheck, and resumable pinned automatic or explicit rollback",
+    "production_profiles_during_install": "DENIED by the exact root-owned bootstrap guard",
+    "audit_serialization": "CLOSED; every profile mutation uses the profile lock, terminal states carry an idempotently reconciled exact audit receipt across post-state/pre-audit crashes, and no core service-restart mutation remains allowed",
+    "checksum_coverage": "COMPLETE; all eight tar payload files are payload-manifest-bound and all ten installed files are source/destination/hash/uid/gid/mode/role/previous-state bound",
+    "unprivileged_post_install_mutability": "DENIED by root ownership and non-group/non-world-writable installed artifacts and ancestors",
+    "bootstrap_production_effect": "NONE; package installation invokes no activation profile and before/after Docker/audit identities must match"
+  },
+  "validation": {
+    "offline_unittest": "65/65 PASS",
+    "python_compile": "PASS",
+    "bash_syntax": "PASS",
+    "shellcheck": "PASS",
+    "visudo": "PASS",
+    "json_parse": "PASS",
+    "deterministic_package_rebuild": "PASS 597f58d813f7a0f3631b9d1778588db880c00e7df97d92a51cef385f8f4d8ba0",
+    "deterministic_bundle_rebuild": "PASS 88a30f4fdf74c1f86d47f47c31edec824a887c172a69585c45eddceb85fb755e",
+    "adversarial_static_review": "EXECUTOR_ADVERSARIAL_STATIC_REVIEW_PASS"
+  },
+  "host_prerequisite": {
+    "installed_package": "2.0.0-5",
+    "runtime_abi": "2.0.0",
+    "self_check": "PASS",
+    "audit_state": "EMPTY",
+    "audit_records": 0,
+    "production_mutation": false
+  },
+  "independent_critic_required": true
+}

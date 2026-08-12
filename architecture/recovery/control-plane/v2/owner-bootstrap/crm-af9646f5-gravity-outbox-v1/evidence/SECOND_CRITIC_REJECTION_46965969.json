@@ -1,0 +1,21 @@
+{
+  "schema": "yoko.crm.owner-bootstrap-critic.v1",
+  "artifact_sha256": "4696596903c433d2e85fe942d237dc5e411dcfcf2df3ff1b48830f1f8de0cf10",
+  "status": "REJECTED_SUPERSEDED_NEVER_EXECUTE",
+  "verdict": "REJECT",
+  "repository_mutation_by_critic": false,
+  "production_mutation_by_critic": false,
+  "findings": [
+    {
+      "id": "SECOND-CRITIC-001",
+      "finding": "A client interruption between the accepted migration's separate PostgreSQL DDL statements could leave an unfinished Prisma row plus partial outbox objects, but database-status rejected the unfinished row before the durable recovery path could reconcile it.",
+      "required_remediation": "Recognize only one exact unfinished target migration, clean only its fixed additive footprint when empty and dependency-free, mark that exact failed migration rolled back through a fixed named Prisma resolve runner, prove the pending baseline, then retry through the existing fixed migration runner."
+    },
+    {
+      "id": "SECOND-CRITIC-002",
+      "finding": "Application health accepted any HTTP status from 200 through 499 and ignored the JSON body even though the route returns HTTP 200 for body status degraded or error.",
+      "required_remediation": "Require HTTP 200, bounded valid JSON and exact body status ok before release acceptance."
+    }
+  ],
+  "owner_command_authorized": false
+}

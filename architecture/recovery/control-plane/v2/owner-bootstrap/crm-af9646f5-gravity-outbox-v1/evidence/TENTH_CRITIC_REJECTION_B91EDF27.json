@@ -1,0 +1,17 @@
+{
+  "schema": "yoko.crm.owner-bootstrap-critic.v1",
+  "artifact_sha256": "b91edf27ed60f02464c11d4f6540233b3e5b55bf4b2b7fd31192ae2c6080fc3e",
+  "package_sha256": "3ef8f6e68ecc46978d16de31549a2c79b6d5a770a83a65c874ec76d27be58701",
+  "status": "REJECTED_SUPERSEDED_NEVER_EXECUTE",
+  "verdict": "REJECT",
+  "repository_mutation_by_critic": false,
+  "production_mutation_by_critic": false,
+  "findings": [
+    {
+      "id": "TENTH-CRITIC-001",
+      "finding": "Although each local production start path quiesced before its own read, public database-status took neither the profile transaction lock nor state-aware runner quiescence. It could read concurrently during a runner or after a failed quiesce left a daemon runner alive.",
+      "required_remediation": "Make public database-status participate in the same transaction lock and, whenever durable state records production runner identities, quiesce those exact sealed runners before any DB read."
+    }
+  ],
+  "owner_command_authorized": false
+}

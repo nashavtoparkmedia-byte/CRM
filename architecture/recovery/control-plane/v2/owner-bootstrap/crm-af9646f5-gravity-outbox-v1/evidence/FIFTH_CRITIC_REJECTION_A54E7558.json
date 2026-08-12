@@ -1,0 +1,22 @@
+{
+  "schema": "yoko.crm.owner-bootstrap-critic.v1",
+  "artifact_sha256": "a54e75585db71a315eeec9e3caa71248731f9ee399ebd75774fc31bdf6b8951e",
+  "package_sha256": "3876bc6f1b80ef886218beb621a52c517ed58e944c29a1973300845ebe74204c",
+  "status": "REJECTED_SUPERSEDED_NEVER_EXECUTE",
+  "verdict": "REJECT",
+  "repository_mutation_by_critic": false,
+  "production_mutation_by_critic": false,
+  "findings": [
+    {
+      "id": "FIFTH-CRITIC-001",
+      "finding": "The production runner seal omitted Docker container Id, so an exact-config replacement object had the same digest and could be quiesced, started or retired as though it were the object created before durable intent.",
+      "required_remediation": "Bind the seal to the exact Docker object identity and bounded execution configuration, and dynamically prove an exact-config replacement object is rejected."
+    },
+    {
+      "id": "FIFTH-CRITIC-002",
+      "finding": "Terminal MIGRATED, ACTIVATED and ROLLED_BACK states were written before their terminal audit append, while ALREADY paths did not reconcile a crash between those operations.",
+      "required_remediation": "Persist a deterministic terminal audit receipt with terminal state, reconcile its exact audit record idempotently at every relevant entry, reject duplicates or drift, and cover the exact post-state/pre-audit crash window."
+    }
+  ],
+  "owner_command_authorized": false
+}

@@ -1,0 +1,19 @@
+{
+  "schema": "yoko.crm.owner-bootstrap-remediation-map.v1",
+  "rejected_artifact_sha256": "a143baa6a6df24621e5ef92f1c1b5a2ad822d996cd0ede43e1e11394c8230af5",
+  "rejected_artifact_status": "REJECTED_SUPERSEDED_NEVER_EXECUTE",
+  "current_source_status": "REMEDIATION_PRESENT_EXACT_SHA_CRITIC_PASS",
+  "findings": [
+    {
+      "id": "TWELFTH-CRITIC-001",
+      "remediation": "Normal fresh/recovery success retires both exact runners first, removes the identity map from the prospective terminal poststate, then writes the exact terminal state/audit receipt. Database-status never retires or clears terminal state; it reports CLEANUP_REQUIRED. The mutating database-migrate ALREADY path emits cleanup intent, retires exact/absent runners, and completes a separate runner_cleanup_ok terminal audit for the cleaned state.",
+      "evidence": [
+        "src/crm-activation-profile.py::_database_status_profile",
+        "src/crm-activation-profile.py::_database_migrate",
+        "src/crm-activation-profile.py::_write_terminal_state",
+        "tests/test_package_and_runtime.py::test_terminal_state_excludes_retired_runner_map_before_terminal_audit",
+        "tests/test_package_and_runtime.py::test_terminal_crash_cleanup_is_audited_and_status_never_mutates"
+      ]
+    }
+  ]
+}

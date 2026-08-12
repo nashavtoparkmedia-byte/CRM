@@ -1,0 +1,18 @@
+{
+  "schema": "yoko.crm.owner-bootstrap-remediation-map.v1",
+  "rejected_artifact_sha256": "907731e631864f10836122e8ffd7e1fdc019cc72fda3822a6e0dab73de34047f",
+  "rejected_artifact_status": "REJECTED_SUPERSEDED_NEVER_EXECUTE",
+  "current_source_status": "REMEDIATION_PRESENT_EXACT_SHA_CRITIC_PASS",
+  "findings": [
+    {
+      "id": "EIGHTH-CRITIC-001",
+      "remediation": "Both the fresh and recovery production start paths now unconditionally quiesce both exact identity-sealed production runners after success, nonzero or timeout and before their first post-start database status read. The terminal ALREADY path quiesces and retires the recorded exact runners before reading DB status. Static ordering regression covers all three paths; the inherited flock still prevents Runtime-parent orphan-client overlap until the direct child exits.",
+      "evidence": [
+        "src/crm-activation-profile.py::_database_migrate",
+        "src/crm-activation-profile.py::_quiesce_production_runners",
+        "tests/test_package_and_runtime.py::test_every_production_start_outcome_is_quiesced_before_database_status",
+        "tests/test_package_and_runtime.py::test_spawned_fixed_child_inherits_transaction_lock_until_it_exits"
+      ]
+    }
+  ]
+}

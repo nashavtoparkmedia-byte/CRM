@@ -1,0 +1,30 @@
+{
+  "schema": "yoko.crm.owner-bootstrap-remediation-map.v1",
+  "rejected_artifact_sha256": "a54e75585db71a315eeec9e3caa71248731f9ee399ebd75774fc31bdf6b8951e",
+  "rejected_artifact_status": "REJECTED_SUPERSEDED_NEVER_EXECUTE",
+  "current_source_status": "TWO_REMEDIATIONS_PRESENT_EXACT_SHA_CRITIC_PASS",
+  "findings": [
+    {
+      "id": "FIFTH-CRITIC-001",
+      "remediation": "The production-runner seal now includes exact Docker container Id and Created identity plus image, entrypoint, command, network, labels, hashed environment and bounded privilege/mount/capability/device/PID/rootfs/security configuration. Quiesce, start and retirement compare this seal; a dynamic exact-config replacement with a different Id is rejected.",
+      "evidence": [
+        "src/crm-activation-profile.py::_production_runner_observation",
+        "src/crm-activation-profile.py::_quiesce_production_runners",
+        "src/crm-activation-profile.py::_start_prepared_production_runner",
+        "src/crm-activation-profile.py::_retire_production_runners",
+        "tests/test_package_and_runtime.py::test_production_runner_seal_rejects_exact_config_object_replacement"
+      ]
+    },
+    {
+      "id": "FIFTH-CRITIC-002",
+      "remediation": "Every terminal state write now embeds a deterministic receipt binding primitive, request digest, pre-state digest, terminal result and terminal post-state digest. Every relevant entry reconciles the receipt: exactly one matching record passes, none appends exactly once through the audit core, and duplicates/drift fail closed. A dynamic test simulates the crash after durable terminal state and proves two resumptions leave one record.",
+      "evidence": [
+        "src/crm-activation-profile.py::_write_terminal_state",
+        "src/crm-activation-profile.py::_reconcile_terminal_audit",
+        "src/crm-activation-profile.py::_terminal_audit_matches",
+        "tests/test_package_and_runtime.py::test_terminal_audit_receipt_reconciles_exactly_once_after_crash_window",
+        "tests/test_package_and_runtime.py::test_every_terminal_state_write_uses_reconcilable_receipt"
+      ]
+    }
+  ]
+}

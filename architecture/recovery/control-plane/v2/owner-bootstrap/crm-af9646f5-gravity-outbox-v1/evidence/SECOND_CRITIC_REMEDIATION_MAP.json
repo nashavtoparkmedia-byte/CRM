@@ -1,0 +1,28 @@
+{
+  "schema": "yoko.crm.owner-bootstrap-remediation-map.v1",
+  "rejected_artifact_sha256": "4696596903c433d2e85fe942d237dc5e411dcfcf2df3ff1b48830f1f8de0cf10",
+  "rejected_artifact_status": "REJECTED_SUPERSEDED_NEVER_EXECUTE",
+  "current_source_status": "TWO_REMEDIATIONS_PRESENT_EXACT_SHA_CRITIC_PASS",
+  "findings": [
+    {
+      "id": "SECOND-CRITIC-001",
+      "remediation": "The ledger parser now distinguishes exactly one unfinished record only when both migration name and checksum equal the approved target. DATABASE_PRODUCTION_INTENT recovery removes only the fixed outbox table/type, refuses nonempty table data, omits CASCADE, verifies absence, runs fixed-name label-bound Prisma migrate resolve --rolled-back for only the approved name, proves the baseline and retries the fixed migration. Each repair phase is audited.",
+      "evidence": [
+        "src/crm-activation-profile.py::_migration_ledger_observation",
+        "src/crm-activation-profile.py::_repair_interrupted_outbox_migration",
+        "src/crm-activation-profile.py::_resolve_interrupted_target",
+        "tests/test_package_and_runtime.py::test_ledger_observation_accepts_only_one_exact_unfinished_target",
+        "tests/test_package_and_runtime.py::test_interrupted_migration_repair_is_fixed_empty_cleanup_then_resolve",
+        "tests/test_package_and_runtime.py::test_database_status_exposes_exact_interrupted_target_without_false_drift"
+      ]
+    },
+    {
+      "id": "SECOND-CRITIC-002",
+      "remediation": "The in-container bounded health probe now requires HTTP 200, parses the response as JSON, and accepts only exact body status ok; degraded, error, invalid JSON and oversized/failed responses fail activation and enter automatic rollback.",
+      "evidence": [
+        "src/crm-activation-profile.py::_application_health",
+        "tests/test_package_and_runtime.py::test_application_health_requires_http_200_and_json_status_ok"
+      ]
+    }
+  ]
+}

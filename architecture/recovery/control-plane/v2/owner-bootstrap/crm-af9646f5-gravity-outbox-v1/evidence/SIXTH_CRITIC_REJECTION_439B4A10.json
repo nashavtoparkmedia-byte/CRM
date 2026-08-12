@@ -1,0 +1,17 @@
+{
+  "schema": "yoko.crm.owner-bootstrap-critic.v1",
+  "artifact_sha256": "439b4a104c950b4e6d59895a727eb2adf800143c06a4a77b2bc8a70d8f089047",
+  "package_sha256": "eb732cba11dd3034040e9c71c27b8f34b5fc5c3ffdec7e48587f6852c535f63f",
+  "status": "REJECTED_SUPERSEDED_NEVER_EXECUTE",
+  "verdict": "REJECT",
+  "repository_mutation_by_critic": false,
+  "production_mutation_by_critic": false,
+  "findings": [
+    {
+      "id": "SIXTH-CRITIC-001",
+      "finding": "A reconciled terminal receipt remained embedded in state and was inherited by later lifecycle transitions. That blocked the next terminal write and could append the old terminal result against a later intermediate post-state after a crash.",
+      "required_remediation": "Bind the receipt to the exact terminal post-state without the receipt, reject phase/post drift before audit append, and atomically consume the receipt from durable state after exactly-one audit reconciliation so later transitions cannot inherit it."
+    }
+  ],
+  "owner_command_authorized": false
+}

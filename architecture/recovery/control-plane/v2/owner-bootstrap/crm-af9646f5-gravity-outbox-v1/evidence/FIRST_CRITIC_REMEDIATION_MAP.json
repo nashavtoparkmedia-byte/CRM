@@ -1,0 +1,80 @@
+{
+  "schema": "yoko.crm.owner-bootstrap-remediation-map.v1",
+  "rejected_artifact_sha256": "d4c91a5ee2d05850b6e1d6360e9ac2d359ce7c428391d3246f0a037132bf081d",
+  "rejected_artifact_status": "REJECTED_STALE_NEVER_EXECUTE",
+  "current_source_status": "ALL_TWELVE_REMEDIATIONS_PRESENT_EXACT_SHA_CRITIC_PASS",
+  "findings": [
+    {
+      "id": 1,
+      "finding": "The sealed tar was stale relative to reviewed source.",
+      "remediation": "The rejected tar is preserved only under an unmistakable .REJECTED.d4c91a5e name. Final package and tar are rebuilt from the current checked source, and a new critic verdict must bind the new tar SHA256.",
+      "evidence": ["packaging/build-package.sh", "packaging/build-bootstrap-bundle.sh", "evidence/rejected-d4c91a5e/REJECTION.json"]
+    },
+    {
+      "id": 2,
+      "finding": "Rollback assertions could be ignored because rollback_previous ran as a Bash if condition.",
+      "remediation": "Every mutation and validation in old_identity and rollback_previous has an explicit || return 1 failure edge; the failure marker reports rollback_restored only after the entire proof succeeds.",
+      "evidence": ["bundle/payload/install.sh", "tests/test_bootstrap_contract.py::test_failure_path_reinstalls_and_proves_exact_predecessor"]
+    },
+    {
+      "id": 3,
+      "finding": "Bootstrap was not interruption-idempotent.",
+      "remediation": "Exact successor ALREADY_INSTALLED reconciliation, exact or repairable root store reconciliation, partial successor rollback, and a root-owned bootstrap guard make reruns deterministic after interruption.",
+      "evidence": ["bundle/payload/install.sh", "src/yoko-privileged-runtime", "tests/test_bootstrap_contract.py::test_interrupted_bootstrap_is_exactly_reconcilable", "tests/test_package_and_runtime.py::test_bootstrap_guard_blocks_every_activation_profile_but_not_validation"]
+    },
+    {
+      "id": 4,
+      "finding": "Required manifests and procedures were outside the sealed artifact.",
+      "remediation": "The payload contains and integrity-checks review/human-manifest.md, review/package-manifest.json, review/installation-procedure.md and review/rollback-analysis.md.",
+      "evidence": ["bundle/payload/payload-manifest.json", "packaging/build-bootstrap-bundle.sh", "tests/test_bootstrap_contract.py"]
+    },
+    {
+      "id": 5,
+      "finding": "Anonymous Docker migration runners could survive client timeout.",
+      "remediation": "Preview, rollback-proof, production-migration and backup-list runners have fixed names plus exact profile/runner labels and collision-safe inspect, kill and remove cleanup.",
+      "evidence": ["src/crm-activation-profile.py::_cleanup_runner", "src/crm-activation-profile.py::_run_candidate_migration", "tests/test_package_and_runtime.py::test_fixed_runner_collision_is_not_killed_or_deleted", "tests/test_package_and_runtime.py::test_backup_is_recreated_and_every_transient_runner_is_named"]
+    },
+    {
+      "id": 6,
+      "finding": "Production migration interruption recovery was absent.",
+      "remediation": "DATABASE_PRODUCTION_INTENT is durably persisted before production mutation; retries reconcile exact pending/applied states and fixed-runner cleanup before continuing.",
+      "evidence": ["src/crm-activation-profile.py::_database_migrate", "tests/test_package_and_runtime.py::test_interrupted_database_mutation_has_a_recoverable_state"]
+    },
+    {
+      "id": 7,
+      "finding": "Production DATABASE_URL was not bound to the inspected database.",
+      "remediation": "The URL must use the fixed postgres host and port and its decoded username and database path must exactly equal the inspected POSTGRES_USER and POSTGRES_DB; query and fragment are forbidden.",
+      "evidence": ["src/crm-activation-profile.py::_production_database_url", "tests/test_package_and_runtime.py::test_production_database_url_is_bound_to_inspected_user_and_database"]
+    },
+    {
+      "id": 8,
+      "finding": "A stale backup could be reused across attempts.",
+      "remediation": "A prior exact root-only backup is removed and a new O_EXCL custom dump is created on every fresh migration attempt; its SHA256, byte count and restore proof are persisted in the production intent state.",
+      "evidence": ["src/crm-activation-profile.py::_create_backup", "src/crm-activation-profile.py::_database_migrate", "tests/test_package_and_runtime.py::test_backup_is_recreated_and_every_transient_runner_is_named"]
+    },
+    {
+      "id": 9,
+      "finding": "Outbox schema EXACT did not prove the complete definition.",
+      "remediation": "Catalog comparison now pins enum order, all columns in ordinal order, types, nullability, defaults, primary-key constraint and complete normalized index definitions.",
+      "evidence": ["src/crm-activation-profile.py::_outbox_catalog", "tests/test_package_and_runtime.py::test_outbox_catalog_requires_full_exact_definition"]
+    },
+    {
+      "id": 10,
+      "finding": "Activation interruption recovery was incomplete.",
+      "remediation": "RELEASE_ACTIVATION_INTENT is persisted before Compose mutation. Retry reconciles old or target identity, proves full target health, and automatically restores the pinned predecessor if a recovered target fails postcheck. Explicit rollback accepts the intent phase.",
+      "evidence": ["src/crm-activation-profile.py::_release_activate", "src/crm-activation-profile.py::_rollback", "tests/test_package_and_runtime.py::test_interrupted_activation_has_recovery_and_rollback_phases"]
+    },
+    {
+      "id": 11,
+      "finding": "Activation postcheck did not pin the safety-critical process contract.",
+      "remediation": "Both fresh and ALREADY_ACTIVATED postchecks require exact image, npm run start command, app user, /app workdir, tini entrypoint, health, schema and unrelated-container identities.",
+      "evidence": ["src/crm-activation-profile.py::_activation_postcheck", "tests/test_package_and_runtime.py::test_activation_postcheck_pins_command_user_workdir_and_entrypoint"]
+    },
+    {
+      "id": 12,
+      "finding": "Concurrent service-restart could fork audit mutation state.",
+      "remediation": "The successor policy removes service-restart from every container resource while preserving sudoers bytes, so only profile-lock-serialized activation mutations remain available.",
+      "evidence": ["src/policy.v2.base.json", "tests/test_package_and_runtime.py::test_profile_package_disables_all_concurrent_service_restart_mutations", "tests/test_package_and_runtime.py::test_sudoers_is_byte_identical_and_not_widened"]
+    }
+  ]
+}

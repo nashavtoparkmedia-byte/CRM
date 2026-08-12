@@ -1,0 +1,17 @@
+{
+  "schema": "yoko.crm.owner-bootstrap-critic.v1",
+  "artifact_sha256": "a143baa6a6df24621e5ef92f1c1b5a2ad822d996cd0ede43e1e11394c8230af5",
+  "package_sha256": "ab4f15d08809b3725abde5eac8ac6cf0e23673d0f2bc9e2b87ad23ae4a89351f",
+  "status": "REJECTED_SUPERSEDED_NEVER_EXECUTE",
+  "verdict": "REJECT",
+  "repository_mutation_by_critic": false,
+  "production_mutation_by_critic": false,
+  "findings": [
+    {
+      "id": "TWELFTH-CRITIC-001",
+      "finding": "Runner retirement and state clearing occurred after terminal audit, and crash reconciliation could perform the same privileged mutation from nominal database-status without an audit result. Current state then diverged from the terminal audit post digest.",
+      "required_remediation": "Retire exact runners before constructing the normal terminal state and exclude runner identities from its audited poststate. If a crash leaves terminal state with runner identities, make status fail closed and require a mutating audited cleanup transaction."
+    }
+  ],
+  "owner_command_authorized": false
+}

@@ -1,0 +1,29 @@
+{
+  "schema": "yoko.crm.owner-bootstrap-remediation-map.v1",
+  "rejected_artifact_sha256": "b4313a588b269fec2fa5728cf312ae65da6cdd395f13f48e0316901450abd703",
+  "rejected_artifact_status": "REJECTED_SUPERSEDED_NEVER_EXECUTE",
+  "current_source_status": "TWO_REMEDIATIONS_PRESENT_EXACT_SHA_CRITIC_PASS",
+  "findings": [
+    {
+      "id": "FIFTEENTH-CRITIC-001",
+      "remediation": "The single Compose executor now requires state, verifies root ownership/mode/link constraints for production Compose and environment inputs, checks exact profile Compose SHA256 plus preflight-sealed environment SHA256 before Docker config, and repeats the validation immediately before Docker up. Release recovery, automatic rollback, explicit rollback and ALREADY terminal paths all use or call the same validator.",
+      "evidence": [
+        "src/crm-activation-profile.py::_validate_production_compose_inputs",
+        "src/crm-activation-profile.py::_compose_up",
+        "tests/test_package_and_runtime.py::test_every_compose_activation_and_rollback_revalidates_sealed_inputs",
+        "tests/test_package_and_runtime.py::test_compose_rejects_sealed_environment_drift_before_any_docker_call"
+      ]
+    },
+    {
+      "id": "FIFTEENTH-CRITIC-002",
+      "remediation": "Explicit rollback writes and reconciles an audited ROLLBACK_INTENT before any rollback mutation, accepts that phase on retry, and reruns the sealed rollback when the exact old image exists but is stopped or unhealthy. Automatic rollback also has a separate durable RELEASE_ACTIVATION_ROLLBACK_INTENT so a crash during fallback cannot re-enter target activation.",
+      "evidence": [
+        "src/crm-activation-profile.py::_rollback",
+        "src/crm-activation-profile.py::_complete_activation_rollback",
+        "tests/test_package_and_runtime.py::test_explicit_rollback_recovers_durable_intent_after_partial_old_image_restore",
+        "tests/test_package_and_runtime.py::test_fresh_explicit_rollback_persists_audited_intent_before_compose",
+        "tests/test_package_and_runtime.py::test_automatic_rollback_persists_and_recovers_its_own_intent"
+      ]
+    }
+  ]
+}

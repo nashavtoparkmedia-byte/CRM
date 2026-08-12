@@ -1,0 +1,17 @@
+{
+  "schema": "yoko.crm.owner-bootstrap-remediation-map.v1",
+  "rejected_artifact_sha256": "b91edf27ed60f02464c11d4f6540233b3e5b55bf4b2b7fd31192ae2c6080fc3e",
+  "rejected_artifact_status": "REJECTED_SUPERSEDED_NEVER_EXECUTE",
+  "current_source_status": "REMEDIATION_PRESENT_EXACT_SHA_CRITIC_PASS",
+  "findings": [
+    {
+      "id": "TENTH-CRITIC-001",
+      "remediation": "The database-status public dispatch now enters _database_status_profile, which acquires the same exclusive transaction flock, reads and reconciles durable state, validates any recorded production runner identity map, quiesces both exact sealed runners fail-closed, and only then reads database identity, ledger and catalog. It therefore cannot overlap a normal runner or bypass a prior quiesce failure.",
+      "evidence": [
+        "src/crm-activation-profile.py::_database_status_profile",
+        "src/crm-activation-profile.py::dispatch",
+        "tests/test_package_and_runtime.py::test_public_database_status_holds_transaction_lock_and_quiesces_recorded_runners"
+      ]
+    }
+  ]
+}
