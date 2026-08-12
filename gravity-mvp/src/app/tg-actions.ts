@@ -415,7 +415,7 @@ export async function getTelegramRuntimeStatus() {
     return registry.getAllEntries().filter(e => e.channel === 'telegram')
 }
 
-import { DriverMatchService } from '@/lib/DriverMatchService'
+import { channelDriverMatchV1 as DriverMatchService } from '@/modules/fleet-operations/public/v1/channel-driver-match'
 import { emitMessageReceived } from '@/lib/messageEvents'
 import { channelConversationWorkflowV1 as ConversationWorkflowService } from '@/modules/messaging/public/v1/channel-conversation-workflow'
 

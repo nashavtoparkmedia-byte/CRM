@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "9ab5df4b5e4c14d3fc4d04534d6631dc2feeead7eec852e71ef3cb97d3539a17",
+  "finding_digest": "c98cb180afbabdc1ffce127c19968266c2811e7b5edb8762576b1d19f7969ad4",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -14,8 +14,8 @@
   },
   "summary": {
     "internal_module_import": 8,
-    "non_public_cross_context_import": 33,
-    "undeclared_dependency": 15
+    "non_public_cross_context_import": 28,
+    "undeclared_dependency": 14
   },
   "exceptions": [
     {
@@ -183,38 +183,6 @@
       ]
     },
     {
-      "fingerprint": "arch_59d154a0eb5bd392ba11ae48",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/webhook/max/route.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "max_channel",
-      "target_context": "fleet_operations",
-      "subject": "max_provider>drivers:gravity-mvp/src/lib/DriverMatchService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:max_channel/max_provider>fleet_operations/drivers"
-      ]
-    },
-    {
-      "fingerprint": "arch_05cc755d2a970ff80e79f34d",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/webhook/telegram/route.ts",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "telegram_channel",
-      "target_context": "fleet_operations",
-      "subject": "telegram_provider>drivers:gravity-mvp/src/lib/DriverMatchService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:telegram_channel/telegram_provider>fleet_operations/drivers"
-      ]
-    },
-    {
       "fingerprint": "arch_ac35a921b9c5542e636b0402",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
@@ -228,22 +196,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:max_channel/max_provider>messaging/messages"
-      ]
-    },
-    {
-      "fingerprint": "arch_1e8cf05f015d461fbacd2510",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
-      "line_at_baseline": 8,
-      "ordinal": 1,
-      "owner_context": "max_channel",
-      "target_context": "fleet_operations",
-      "subject": "max_provider>drivers:gravity-mvp/src/lib/DriverMatchService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:max_channel/max_provider>fleet_operations/drivers"
       ]
     },
     {
@@ -635,22 +587,6 @@
       ]
     },
     {
-      "fingerprint": "arch_a80575cab328bb1cb39bc46c",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/tg-actions.ts",
-      "line_at_baseline": 274,
-      "ordinal": 1,
-      "owner_context": "telegram_channel",
-      "target_context": "fleet_operations",
-      "subject": "telegram_provider>drivers:gravity-mvp/src/lib/DriverMatchService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:telegram_channel/telegram_provider>fleet_operations/drivers"
-      ]
-    },
-    {
       "fingerprint": "arch_82faa9ceefa8892dfd77f8be",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/tg-actions.ts",
@@ -862,38 +798,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:work_management/tasks>messaging/messages"
-      ]
-    },
-    {
-      "fingerprint": "arch_90408a045497d7da4f78f7b3",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "whatsapp_channel",
-      "target_context": "fleet_operations",
-      "subject": "whatsapp_provider>drivers:gravity-mvp/src/lib/DriverMatchService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:whatsapp_channel/whatsapp_provider>fleet_operations/drivers"
-      ]
-    },
-    {
-      "fingerprint": "arch_e93ed7b18c263c736aff8120",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "whatsapp_channel",
-      "target_context": "fleet_operations",
-      "subject": "whatsapp_provider>drivers:gravity-mvp/src/lib/DriverMatchService.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:whatsapp_channel/whatsapp_provider>fleet_operations/drivers"
       ]
     },
     {

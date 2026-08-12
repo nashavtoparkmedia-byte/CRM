@@ -38,7 +38,7 @@
     {
       "context": "fleet_operations",
       "path": "architecture/contexts/v1/manifests/fleet_operations.json",
-      "sha256": "afcccb1bd1b09ac6feffb6cd231d98a32f8be92580f64082a38fb3a2ab1d2995"
+      "sha256": "3733bf7593e2a47a57df3d43293bbaa05dfed504abab9c902e69cbd19ed0215a"
     },
     {
       "context": "identity_access",
@@ -73,7 +73,7 @@
     {
       "context": "whatsapp_channel",
       "path": "architecture/contexts/v1/manifests/whatsapp_channel.json",
-      "sha256": "083f460290a58aad62ccc7558ce83a46f6463372c353f5430d2032ea95a7a64a"
+      "sha256": "1c66892ca20505cfe20f4808217bc6b64903d372357e2e9df66d1f119401e771"
     },
     {
       "context": "work_management",

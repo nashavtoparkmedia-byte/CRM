@@ -248,6 +248,7 @@
     "FleetSyncStatus.v1",
     "ScheduledYandexSync.v1",
     "DriverCheckResult.v1",
+    "DriverMatch.v1",
     "FleetMonitoringPolicy.v1",
     "FleetMonitoringViews.v1",
     "YandexFleetOperations.v1"
