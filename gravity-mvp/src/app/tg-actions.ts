@@ -417,7 +417,7 @@ export async function getTelegramRuntimeStatus() {
 
 import { DriverMatchService } from '@/lib/DriverMatchService'
 import { emitMessageReceived } from '@/lib/messageEvents'
-import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
+import { channelConversationWorkflowV1 as ConversationWorkflowService } from '@/modules/messaging/public/v1/channel-conversation-workflow'
 
 /**
  * Скачивание медиа из Telegram падает transient-ошибкой, если соединение

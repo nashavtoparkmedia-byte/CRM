@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { sendTelegramBotMessage } from '@/app/tg-bot-actions'
 import { changeDriverLimit } from '@/modules/fleet-operations/public/v1/yandex-fleet-operations'
 import { DriverMatchService } from '@/lib/DriverMatchService'
-import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
+import { channelConversationWorkflowV1 as ConversationWorkflowService } from '@/modules/messaging/public/v1/channel-conversation-workflow'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import {
     ATTACH_CONTACT_IDENTITY_COMMAND_V1,

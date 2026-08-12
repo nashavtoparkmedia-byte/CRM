@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "ebc7e093c0ecd3381881ce2550ff9c311f14ee3cfb7ac8eb0faebda581936731",
+  "finding_digest": "9ab5df4b5e4c14d3fc4d04534d6631dc2feeead7eec852e71ef3cb97d3539a17",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,8 +13,8 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "internal_module_import": 13,
-    "non_public_cross_context_import": 38,
+    "internal_module_import": 8,
+    "non_public_cross_context_import": 33,
     "undeclared_dependency": 15
   },
   "exceptions": [
@@ -199,38 +199,6 @@
       ]
     },
     {
-      "fingerprint": "arch_aae1d5539364864bbbf9a494",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/webhook/max/route.ts",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "max_channel",
-      "target_context": "messaging",
-      "subject": "max_provider>messages:gravity-mvp/src/lib/ConversationWorkflowService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:max_channel/max_provider>messaging/messages"
-      ]
-    },
-    {
-      "fingerprint": "arch_609f9908464559f307e100e8",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/webhook/max/route.ts",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "max_channel",
-      "target_context": "messaging",
-      "subject": "max_provider>messages:gravity-mvp/src/lib/ConversationWorkflowService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:max_channel/max_provider>messaging/messages"
-      ]
-    },
-    {
       "fingerprint": "arch_05cc755d2a970ff80e79f34d",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/api/webhook/telegram/route.ts",
@@ -244,38 +212,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:telegram_channel/telegram_provider>fleet_operations/drivers"
-      ]
-    },
-    {
-      "fingerprint": "arch_b708edff20a106fff6dfd3e1",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/webhook/telegram/route.ts",
-      "line_at_baseline": 7,
-      "ordinal": 1,
-      "owner_context": "telegram_channel",
-      "target_context": "messaging",
-      "subject": "telegram_provider>messages:gravity-mvp/src/lib/ConversationWorkflowService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:telegram_channel/telegram_provider>messaging/messages"
-      ]
-    },
-    {
-      "fingerprint": "arch_f0cb32f9b84cb6148a76ed84",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/webhook/telegram/route.ts",
-      "line_at_baseline": 7,
-      "ordinal": 1,
-      "owner_context": "telegram_channel",
-      "target_context": "messaging",
-      "subject": "telegram_provider>messages:gravity-mvp/src/lib/ConversationWorkflowService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:telegram_channel/telegram_provider>messaging/messages"
       ]
     },
     {
@@ -308,38 +244,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:max_channel/max_provider>fleet_operations/drivers"
-      ]
-    },
-    {
-      "fingerprint": "arch_0288864d57f22cf48fe3a253",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
-      "line_at_baseline": 10,
-      "ordinal": 1,
-      "owner_context": "max_channel",
-      "target_context": "messaging",
-      "subject": "max_provider>messages:gravity-mvp/src/lib/ConversationWorkflowService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:max_channel/max_provider>messaging/messages"
-      ]
-    },
-    {
-      "fingerprint": "arch_982df3bcd7b98668a22350c8",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
-      "line_at_baseline": 10,
-      "ordinal": 1,
-      "owner_context": "max_channel",
-      "target_context": "messaging",
-      "subject": "max_provider>messages:gravity-mvp/src/lib/ConversationWorkflowService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:max_channel/max_provider>messaging/messages"
       ]
     },
     {
@@ -763,38 +667,6 @@
       ]
     },
     {
-      "fingerprint": "arch_f46e3f576aaac74fe7f19e65",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/tg-actions.ts",
-      "line_at_baseline": 277,
-      "ordinal": 1,
-      "owner_context": "telegram_channel",
-      "target_context": "messaging",
-      "subject": "telegram_provider>messages:gravity-mvp/src/lib/ConversationWorkflowService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:telegram_channel/telegram_provider>messaging/messages"
-      ]
-    },
-    {
-      "fingerprint": "arch_149557e58b900c921991300f",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/tg-actions.ts",
-      "line_at_baseline": 277,
-      "ordinal": 1,
-      "owner_context": "telegram_channel",
-      "target_context": "messaging",
-      "subject": "telegram_provider>messages:gravity-mvp/src/lib/ConversationWorkflowService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:telegram_channel/telegram_provider>messaging/messages"
-      ]
-    },
-    {
       "fingerprint": "arch_0bd470a1ae3ab934a847b6ec",
       "rule": "internal_module_import",
       "file": "gravity-mvp/src/instrumentation.ts",
@@ -1022,38 +894,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:whatsapp_channel/whatsapp_provider>fleet_operations/drivers"
-      ]
-    },
-    {
-      "fingerprint": "arch_9b83eda037a03d565e911880",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 7,
-      "ordinal": 1,
-      "owner_context": "whatsapp_channel",
-      "target_context": "messaging",
-      "subject": "whatsapp_provider>messages:gravity-mvp/src/lib/ConversationWorkflowService.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:whatsapp_channel/whatsapp_provider>messaging/messages"
-      ]
-    },
-    {
-      "fingerprint": "arch_56b3889874c7b3d22893d867",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line_at_baseline": 7,
-      "ordinal": 1,
-      "owner_context": "whatsapp_channel",
-      "target_context": "messaging",
-      "subject": "whatsapp_provider>messages:gravity-mvp/src/lib/ConversationWorkflowService.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:whatsapp_channel/whatsapp_provider>messaging/messages"
       ]
     },
     {
