@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "c36e76ebc21370f5565f0394cff3aba6a1b81b64bdfa3cae7074595dc2ea0849",
+  "finding_digest": "a56e54a8c53865390a42f310a86702f6580f4a3dd9af635523f6d0c735deeb2d",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,8 +13,8 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "internal_module_import": 17,
-    "non_public_cross_context_import": 42,
+    "internal_module_import": 14,
+    "non_public_cross_context_import": 39,
     "undeclared_dependency": 15
   },
   "exceptions": [
@@ -614,102 +614,6 @@
       "migration_references": [
         "dependency:messaging/messages>platform_shell/gravity_core",
         "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_5bebcf24be9457d513e29f42",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/page.tsx",
-      "line_at_baseline": 1,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "analytics_reporting",
-      "subject": "gravity_core>analytics:gravity-mvp/src/app/dashboard/actions.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>analytics_reporting/analytics"
-      ]
-    },
-    {
-      "fingerprint": "arch_ad83499154328363701b9057",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/page.tsx",
-      "line_at_baseline": 1,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "analytics_reporting",
-      "subject": "gravity_core>analytics:gravity-mvp/src/app/dashboard/actions.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>analytics_reporting/analytics"
-      ]
-    },
-    {
-      "fingerprint": "arch_2876dcf35ac880830b9f5b81",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/page.tsx",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "analytics_reporting",
-      "subject": "gravity_core>analytics:gravity-mvp/src/app/dashboard/components/DashboardKPI.tsx",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>analytics_reporting/analytics"
-      ]
-    },
-    {
-      "fingerprint": "arch_9107aa8d0b8449df96a68e71",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/page.tsx",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "analytics_reporting",
-      "subject": "gravity_core>analytics:gravity-mvp/src/app/dashboard/components/DashboardKPI.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>analytics_reporting/analytics"
-      ]
-    },
-    {
-      "fingerprint": "arch_f1219b568368d9063a7e383f",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/page.tsx",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "analytics_reporting",
-      "subject": "gravity_core>analytics:gravity-mvp/src/app/dashboard/components/DashboardCard.tsx",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>analytics_reporting/analytics"
-      ]
-    },
-    {
-      "fingerprint": "arch_2814ebc7566aa19b5f651d00",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/page.tsx",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "analytics_reporting",
-      "subject": "gravity_core>analytics:gravity-mvp/src/app/dashboard/components/DashboardCard.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>analytics_reporting/analytics"
       ]
     },
     {
