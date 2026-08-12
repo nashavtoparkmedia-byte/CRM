@@ -6,7 +6,7 @@ import { channelDriverMatchV1 as DriverMatchService } from '@/modules/fleet-oper
 import { addPhoneToContactV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
 import { channelConversationWorkflowV1 as ConversationWorkflowService } from '@/modules/messaging/public/v1/channel-conversation-workflow'
 import { enrichWaChatNameFromSibling } from '@/lib/whatsapp/enrichChatName'
-import { emitMessageReceived } from '@/lib/messageEvents'
+import { publishPersistedMessageV1 as emitMessageReceived } from '@/modules/messaging/public/v1/persisted-message-ingress'
 import { broadcastChatMessageV1 as broadcastChatMessage } from '@/modules/messaging/public/v1/message-stream'
 import { transportRegistryLifecycleV1 as registry } from '@/modules/messaging/public/v1/transport-registry-lifecycle'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'

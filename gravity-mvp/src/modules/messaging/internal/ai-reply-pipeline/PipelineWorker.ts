@@ -1,4 +1,4 @@
-import type { Message } from '@prisma/client'
+import type { ExternalMessageRecordV1 } from '@/contracts/messaging/v1'
 import { setAiStatus } from '@/lib/messageEvents'
 import { contextBuilder } from './ContextBuilder'
 import { intentClassifier } from './IntentClassifier'
@@ -23,7 +23,7 @@ import { claimMessageEventV1, completeMessageEventV1, failMessageEventV1 } from 
  */
 export class PipelineWorker {
 
-  async process(message: Message): Promise<void> {
+  async process(message: ExternalMessageRecordV1): Promise<void> {
     // Только входящие сообщения идут в AI-ветку
     if (message.direction !== 'inbound') {
       await setAiStatus(message.id, 'skipped')
@@ -63,7 +63,7 @@ export class PipelineWorker {
     }
   }
 
-  private async _runSteps(message: Message): Promise<void> {
+  private async _runSteps(message: ExternalMessageRecordV1): Promise<void> {
     // Step 1: Build context (loads config, chat, driver, KB)
     const ctx = await contextBuilder.build(message)
 

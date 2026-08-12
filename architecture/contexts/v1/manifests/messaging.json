@@ -214,6 +214,7 @@
     "ConversationView.v1",
     "MessageView.v1",
     "MessageStream.v1",
+    "PersistedMessageIngress.v1",
     "ChannelSyncClient.v1",
     "ChannelSyncOperations.v1",
     "ChannelConversationWorkflow.v1",

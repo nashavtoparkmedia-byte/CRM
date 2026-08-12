@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { getAiAgentProviderConfigV1 } from '@/modules/calling/public/v1/ai-agent-provider-capability'
-import type { Message } from '@prisma/client'
+import type { ExternalMessageRecordV1 } from '@/contracts/messaging/v1'
 import {
   retrieveKnowledgeForRuntimeV1,
   type KnowledgeRetrievalTraceV1,
@@ -69,7 +69,7 @@ export class ContextBuilder {
    *   Проверка `enabled=false` сохраняется (это полный disable, без него
    *   не настроено даже AI-юзеры).
    */
-  async build(message: Message, opts?: { ignoreModeOff?: boolean }): Promise<MessageContext | null> {
+  async build(message: ExternalMessageRecordV1, opts?: { ignoreModeOff?: boolean }): Promise<MessageContext | null> {
     // Load AI config
     const raw = await getAiAgentProviderConfigV1()
     if (!raw) return null

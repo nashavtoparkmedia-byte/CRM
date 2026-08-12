@@ -3,7 +3,7 @@
 import { NextResponse } from 'next/server'
 import type { Chat, Message, MessageType } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { emitMessageReceived } from '@/lib/messageEvents'
+import { publishPersistedMessageV1 as emitMessageReceived } from '@/modules/messaging/public/v1/persisted-message-ingress'
 import { broadcastChatMessageV1 as broadcastChatMessage } from '@/modules/messaging/public/v1/message-stream'
 import { channelDriverMatchV1 as DriverMatchService } from '@/modules/fleet-operations/public/v1/channel-driver-match'
 import { channelConversationWorkflowV1 as ConversationWorkflowService } from '@/modules/messaging/public/v1/channel-conversation-workflow'

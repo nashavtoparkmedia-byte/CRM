@@ -416,7 +416,7 @@ export async function getTelegramRuntimeStatus() {
 }
 
 import { channelDriverMatchV1 as DriverMatchService } from '@/modules/fleet-operations/public/v1/channel-driver-match'
-import { emitMessageReceived } from '@/lib/messageEvents'
+import { publishPersistedMessageV1 as emitMessageReceived } from '@/modules/messaging/public/v1/persisted-message-ingress'
 import { channelConversationWorkflowV1 as ConversationWorkflowService } from '@/modules/messaging/public/v1/channel-conversation-workflow'
 
 /**
