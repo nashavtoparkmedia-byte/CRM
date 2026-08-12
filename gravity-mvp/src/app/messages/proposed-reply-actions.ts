@@ -20,7 +20,7 @@
 import { prisma } from '@/lib/prisma'
 import { getAiAgentProviderConfigV1 } from '@/modules/calling/public/v1/ai-agent-provider-capability'
 import { cookies } from 'next/headers'
-import { generateShadowReplyForChat } from '@/lib/pipeline/shadowReply'
+import { generateShadowReplyForChat } from '@/modules/messaging/internal/ai-reply-pipeline/shadowReply'
 import { appendKnowledgeGovernanceAuditV1 as writeAuditEntry } from '@/modules/ai-knowledge/public/v1/knowledge-governance-audit'
 import {
     runKnowledgeCoachV1 as runCoach,

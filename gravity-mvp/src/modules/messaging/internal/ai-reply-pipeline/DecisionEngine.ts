@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma'
-import { MessageContext } from './ContextBuilder'
-import { ClassificationResult } from './IntentClassifier'
+import type { MessageContext } from './ContextBuilder'
+import type { ClassificationResult } from './IntentClassifier'
 
 export type AiDecision = 'auto_reply' | 'escalate' | 'skip'
 

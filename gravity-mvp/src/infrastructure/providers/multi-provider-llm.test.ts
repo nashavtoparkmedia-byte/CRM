@@ -5,7 +5,7 @@ const operations = vi.hoisted(() => ({
     callForText: vi.fn(),
 }))
 
-vi.mock('@/lib/pipeline/llmClient', () => operations)
+vi.mock('./multi-provider-llm-transport', () => operations)
 
 import {
     callProviderJsonV1,

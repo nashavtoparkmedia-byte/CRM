@@ -1,5 +1,5 @@
 /**
- * PR9.52 — multi-provider LLM client для runtime pipeline.
+ * PR9.52 — shared-infrastructure multi-provider LLM transport.
  *
  * До этого PR `IntentClassifier` и `ResponseGenerator` жёстко ходили
  * в `api.anthropic.com`, игнорируя `config.provider`. Если у пользователя

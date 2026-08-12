@@ -100,7 +100,8 @@
   "internal_surface": [
     "gravity-mvp/src/lib/MessageService.ts",
     "gravity-mvp/src/lib/ConversationWorkflowService.ts",
-    "gravity-mvp/src/app/messages"
+    "gravity-mvp/src/app/messages",
+    "gravity-mvp/src/modules/messaging/internal/ai-reply-pipeline"
   ],
   "owned_data": [
     {
@@ -220,7 +221,7 @@
     "DeliveryRecoveryOperations.v1",
     "DraftImprovement.v1"
   ],
-  "responsibility": "Channel-neutral conversations, messages, attachments, communication triggers and history import state.",
+  "responsibility": "Channel-neutral conversations, messages, attachments, communication triggers, history import state, and inbound AI reply/draft orchestration.",
   "schema": "yoko.crm.module-manifest.v1",
   "technical_modules": [
     "messages"

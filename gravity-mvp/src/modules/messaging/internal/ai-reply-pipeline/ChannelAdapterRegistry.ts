@@ -61,6 +61,7 @@ class WhatsAppAdapter implements ChannelAdapter {
 
 // ─── Registry ─────────────────────────────────────────────────────────────────
 
+/** Messaging-owned routing from channel-neutral replies to provider delivery ports. */
 class ChannelAdapterRegistry {
   private adapters = new Map<string, ChannelAdapter>([
     ['max',       new MaxAdapter()],

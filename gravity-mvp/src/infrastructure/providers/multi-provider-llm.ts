@@ -1,7 +1,7 @@
 import {
     callForJson,
     callForText,
-} from '@/lib/pipeline/llmClient'
+} from './multi-provider-llm-transport'
 
 export interface ProviderLlmCallOptionsV1 {
     provider: string

@@ -1,9 +1,9 @@
-import { MessageContext } from './ContextBuilder'
-import { ClassificationResult } from './IntentClassifier'
-import { DecisionResult } from './DecisionEngine'
+import type { MessageContext } from './ContextBuilder'
+import type { ClassificationResult } from './IntentClassifier'
+import type { DecisionResult } from './DecisionEngine'
 import { channelRegistry } from './ChannelAdapterRegistry'
 import { formatKnowledgeFactsForPromptV1 } from '@/modules/ai-knowledge/public/v1/knowledge-retrieval'
-import { callForText } from './llmClient'
+import { callProviderTextV1 as callForText } from '@/infrastructure/providers/multi-provider-llm'
 
 export interface GeneratedResponse {
   reply: string | null
@@ -55,7 +55,7 @@ export class ResponseGenerator {
 
     const systemPrompt = parts.join(' ')
 
-    // PR9.52: multi-provider routing через llmClient. Раньше всегда
+    // PR9.52: multi-provider routing через shared provider infrastructure. Раньше всегда
     // шёл в Anthropic — для OpenAI пользователей возвращало
     // «invalid x-api-key».
     const reply = await callForText({

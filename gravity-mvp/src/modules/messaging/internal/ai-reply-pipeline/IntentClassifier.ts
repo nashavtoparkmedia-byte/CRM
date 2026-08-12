@@ -1,5 +1,5 @@
-import { MessageContext } from './ContextBuilder'
-import { callForJson } from './llmClient'
+import type { MessageContext } from './ContextBuilder'
+import { callProviderJsonV1 as callForJson } from '@/infrastructure/providers/multi-provider-llm'
 
 export interface ClassificationResult {
   intent: string
@@ -31,7 +31,7 @@ ${kbText}
 Отвечай ТОЛЬКО валидным JSON без markdown-блоков:
 {"intent":"краткое_описание","confidence":0.0,"matchedKbEntryId":"id_или_null"}`
 
-    // PR9.52: multi-provider routing через llmClient. Раньше всегда
+    // PR9.52: multi-provider routing через shared provider infrastructure. Раньше всегда
     // шёл в Anthropic — отсюда «invalid x-api-key» при OpenAI provider.
     const text = await callForJson({
       provider:     config.provider,

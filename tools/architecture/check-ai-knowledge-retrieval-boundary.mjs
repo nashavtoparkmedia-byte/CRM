@@ -14,8 +14,8 @@ const implementationPath = 'gravity-mvp/src/lib/ai/knowledge/Retriever.ts'
 const publicPath = 'gravity-mvp/src/modules/ai-knowledge/public/v1/knowledge-retrieval.ts'
 const consumers = [
     'gravity-mvp/src/app/settings/ai/actions.ts',
-    'gravity-mvp/src/lib/pipeline/ContextBuilder.ts',
-    'gravity-mvp/src/lib/pipeline/ResponseGenerator.ts',
+    'gravity-mvp/src/modules/messaging/internal/ai-reply-pipeline/ContextBuilder.ts',
+    'gravity-mvp/src/modules/messaging/internal/ai-reply-pipeline/ResponseGenerator.ts',
 ]
 const exactFunctions = [
     'formatKnowledgeFactsForPromptV1',

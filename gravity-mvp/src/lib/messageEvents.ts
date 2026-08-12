@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { Message, AiStatus } from '@prisma/client'
-import { pipelineWorker } from '@/lib/pipeline/PipelineWorker'
+import { pipelineWorker } from '@/modules/messaging/internal/ai-reply-pipeline/PipelineWorker'
 import { broadcastChatMessage } from '@/lib/messageStreamBus'
 
 /**

@@ -15,7 +15,7 @@ const versionImplementationPath = 'gravity-mvp/src/lib/ai/knowledge/retrievalPro
 const similarityPublicPath = 'gravity-mvp/src/modules/ai-knowledge/public/v1/knowledge-text-similarity.ts'
 const versionPublicPath = 'gravity-mvp/src/modules/ai-knowledge/public/v1/knowledge-retrieval-version.ts'
 const messageConsumerPath = 'gravity-mvp/src/app/messages/learn-from-outbound-actions.ts'
-const pipelineConsumerPath = 'gravity-mvp/src/lib/pipeline/PipelineWorker.ts'
+const pipelineConsumerPath = 'gravity-mvp/src/modules/messaging/internal/ai-reply-pipeline/PipelineWorker.ts'
 
 assert.equal(sha256(read(textImplementationPath)), '4fe66e585b9bdc1b05b15a99bec0fbb46e9d1a825bf3a33dce0746356379a7ed')
 assert.equal(sha256(read(versionImplementationPath)), '999bd03279b367d6ae9e324f9f51a97465a6d66795453f4dd88d021f5c7200b5')

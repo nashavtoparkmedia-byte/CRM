@@ -15,7 +15,7 @@ const readinessPath = 'gravity-mvp/src/lib/ai/knowledge/readiness.ts'
 const publicPath = 'gravity-mvp/src/modules/ai-knowledge/public/v1/knowledge-operational-status.ts'
 const consumers = [
     'gravity-mvp/src/app/settings/ai/actions.ts',
-    'gravity-mvp/src/lib/pipeline/ContextBuilder.ts',
+    'gravity-mvp/src/modules/messaging/internal/ai-reply-pipeline/ContextBuilder.ts',
 ]
 
 assert.equal(sha256(read(flagPath)), '638ba5a51793ff6ecd7cd4e049b8fb83d006c6cf6b4e0c6f8b3b5c33ee204f82')

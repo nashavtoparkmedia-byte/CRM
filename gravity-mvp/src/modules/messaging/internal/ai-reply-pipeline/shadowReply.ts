@@ -1,5 +1,5 @@
 /**
- * PR9.44 «AI стажёр» — shadow reply generator.
+ * PR9.44 «AI стажёр» — Messaging-owned shadow reply generator.
  *
  * On-demand генерация черновика ответа для UI в чатах. В отличие от
  * PipelineWorker, который вызывается асинхронно из очереди при каждом

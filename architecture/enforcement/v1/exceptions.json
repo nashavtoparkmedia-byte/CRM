@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "960dbed20d446dab3ad229fe6f6ca44a86cc5748a47b65257c2c8b9016f76a47",
+  "finding_digest": "2b1b88e731c1e2ed7a88e95cf7f2be0332f11831f259e6cbe43260a54fae5b62",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,8 +13,8 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "non_public_cross_context_import": 11,
-    "undeclared_dependency": 7
+    "non_public_cross_context_import": 8,
+    "undeclared_dependency": 5
   },
   "exceptions": [
     {
@@ -166,40 +166,6 @@
       ]
     },
     {
-      "fingerprint": "arch_9daa018eb64f54fe275bfcc8",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
-      "line_at_baseline": 23,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "platform_shell",
-      "subject": "messages>gravity_core:gravity-mvp/src/lib/pipeline/shadowReply.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>platform_shell/gravity_core",
-        "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_8852478eb7347ff4a95e9bd6",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
-      "line_at_baseline": 23,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "platform_shell",
-      "subject": "messages>gravity_core:gravity-mvp/src/lib/pipeline/shadowReply.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>platform_shell/gravity_core",
-        "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
       "fingerprint": "arch_82faa9ceefa8892dfd77f8be",
       "rule": "non_public_cross_context_import",
       "file": "gravity-mvp/src/app/tg-actions.ts",
@@ -213,56 +179,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:telegram_channel/telegram_provider>messaging/messages"
-      ]
-    },
-    {
-      "fingerprint": "arch_2a17905b2487566e0ef2af1f",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/messageEvents.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "platform_shell",
-      "subject": "messages>gravity_core:gravity-mvp/src/lib/pipeline/PipelineWorker.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>platform_shell/gravity_core",
-        "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_4ab4a4481d4a8fb5d0071404",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/messageEvents.ts",
-      "line_at_baseline": 3,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "platform_shell",
-      "subject": "messages>gravity_core:gravity-mvp/src/lib/pipeline/PipelineWorker.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>platform_shell/gravity_core",
-        "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_78f8e26b072dd548aac0b46a",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/pipeline/PipelineWorker.ts",
-      "line_at_baseline": 2,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "messaging",
-      "subject": "gravity_core>messages:gravity-mvp/src/lib/messageEvents.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>messaging/messages"
       ]
     },
     {

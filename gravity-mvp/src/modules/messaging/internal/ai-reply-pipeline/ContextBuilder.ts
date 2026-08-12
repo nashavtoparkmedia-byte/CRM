@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { getAiAgentProviderConfigV1 } from '@/modules/calling/public/v1/ai-agent-provider-capability'
-import { Message } from '@prisma/client'
+import type { Message } from '@prisma/client'
 import {
   retrieveKnowledgeForRuntimeV1,
   type KnowledgeRetrievalTraceV1,

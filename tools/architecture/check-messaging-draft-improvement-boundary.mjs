@@ -10,7 +10,7 @@ import { scanArchitecture } from './enforce-architecture.mjs'
 const root = process.cwd()
 const read = (relative) => readFileSync(path.join(root, relative), 'utf8')
 const sha256 = (source) => createHash('sha256').update(source).digest('hex')
-const llmImplementationPath = 'gravity-mvp/src/lib/pipeline/llmClient.ts'
+const llmImplementationPath = 'gravity-mvp/src/infrastructure/providers/multi-provider-llm-transport.ts'
 const providerPath = 'gravity-mvp/src/infrastructure/providers/multi-provider-llm.ts'
 const publicPath = 'gravity-mvp/src/modules/messaging/public/v1/draft-improvement.ts'
 const actionPath = 'gravity-mvp/src/app/messages/improve-draft-actions.ts'
@@ -19,7 +19,7 @@ const coachPath = 'gravity-mvp/src/lib/ai/knowledge/coach.ts'
 const exactProviderFunctions = ['callProviderJsonV1', 'callProviderTextV1'].sort()
 const exactMessagingFunctions = ['improveMessageDraftV1']
 
-assert.equal(sha256(read(llmImplementationPath)), 'f277bb169caef3adea16d90c471d4f0e126a8516a7047b26936a6cae16865280')
+assert.equal(sha256(read(llmImplementationPath)), '87eb799ddf7aa4691191cfdf011a6cc3f7ff3f5782c3bc98d27ab9518fd66e3d')
 
 function exportedFunctions(source) {
     return [...source.matchAll(/export\s+async\s+function\s+(\w+)/g)].map((match) => match[1]).sort()
