@@ -1,16 +1,16 @@
 # Current recovery handoff
 
-Captured: `2026-08-12T02:16:00Z`
+Captured: `2026-08-12T02:55:38Z`
 
 This is the authoritative continuation checkpoint for the current task. It is a handoff, not an acceptance artifact. The whole-project state remains `EXTERNAL_FINAL_ACCEPTANCE_FAILED`; the current program remains `WHOLE-PROJECT DOD RECOVERY`; the project is **not READY**.
 
-Latest live-debt checkpoint (implementation HEAD `3c808731`): strict architecture enforcement scans 1,270 files across 16 contexts with zero findings and zero exceptions. All 1,288 findings in the opening denominator are actually closed; uncovered findings, temporary exceptions, intentional-exception candidates, internal imports, non-public cross-context imports, undeclared dependencies, provider-transport accesses, contract/manifest violations, dependency cycles, and detector/digest errors are zero. The final four findings were closed by moving Fleet cron orchestration and health telemetry behind exact Operations and Fleet capabilities; the negative probe rejects an unrelated capability. No whole-repository write scan was warranted because this closing batch did not materially change write architecture. The active cluster is now `AUTHORITATIVE CI AFTER DEBT CLOSURE`.
+Latest source checkpoint (implementation HEAD `21b17f08`): live architecture debt remains at zero findings and zero exceptions, and authoritative architecture CI is internally closed. The workflow configures 35 current controls; the local targeted source proof passed 31/31, including all 112/112 active boundary controls, independent critic, TypeScript inherited-baseline and blast-radius negative gates, Gravity 34/34, and tg-bot 15/15. The four configured fresh-inventory controls remain intentionally delegated to bounded pull-request/main CI because this source-only batch did not materially change write or credential architecture. Evidence is `architecture/isolation/architecture-enforcement/authoritative-ci-v1/verification.json`. The active cluster is now `MODULE MANIFEST AND CONTRACT COVERAGE`, followed automatically by protected Messages reconciliation.
 
 The machine-readable companion, `CURRENT_RECOVERY_HANDOFF.json`, contains the exhaustive every-path status/purpose inventory, exact commands/results, identities, worktree records, and next action. Read both files before changing code.
 
 ## Bounded analyzer and current baseline update
 
-Ownership closure is internally accepted after the final bounded scan: `1,725/1,725` surfaces, zero worker failures/timeouts, `1,404` confirmed writes discovered, `0` confirmed foreign, `53` closed foreign, `46` raw ambiguous records reconciled exactly (`30` resolved non-writes, `11` owner-valid writes, `5` controlled migrations), zero material unresolved, zero dynamic delegate/SQL/queryRaw ambiguity, and zero unclassified operational surfaces. Current artifacts are `AUTHORITATIVE_WRITE_SCAN_20260811T131500Z.json`, `CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json`, `CURRENT_WHOLE_REPOSITORY_WRITE_PROGRESS.jsonl`, and `AMBIGUOUS_WRITE_TRIAGE_FINAL_CLOSURE.json`. Security/credential closure and its independent critic pass are also internally accepted; the program remains **not READY** because live architecture debt and final CI/production acceptance remain open.
+Ownership closure is internally accepted after the final bounded scan: `1,725/1,725` surfaces, zero worker failures/timeouts, `1,404` confirmed writes discovered, `0` confirmed foreign, `53` closed foreign, `46` raw ambiguous records reconciled exactly (`30` resolved non-writes, `11` owner-valid writes, `5` controlled migrations), zero material unresolved, zero dynamic delegate/SQL/queryRaw ambiguity, and zero unclassified operational surfaces. Current artifacts are `AUTHORITATIVE_WRITE_SCAN_20260811T131500Z.json`, `CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json`, `CURRENT_WHOLE_REPOSITORY_WRITE_PROGRESS.jsonl`, and `AMBIGUOUS_WRITE_TRIAGE_FINAL_CLOSURE.json`. Security/credential closure and its independent critic pass are also internally accepted; the program remains **not READY** because manifest/contract coverage, protected Messages, release lineage, outbox activation, and production acceptance remain open.
 
 The analyzer execution recovery is complete, but it is not an acceptance. Commits `a1c0d20e` and `3ab9ad96` add fresh-process JavaScript workers capped at four, a 120-second per-surface deadline, structured progress, and atomic output; all 77 write fixtures and four companion suites passed before the scan.
 
@@ -254,13 +254,13 @@ This task made zero production source mutations, database mutations, service res
 
 ## Genuine blockers
 
-- Authoritative final CI has not yet been proven to invoke every final control and its negative probe.
+- Module manifests and the central contract registry do not yet carry complete current build/test/check/blast-radius mappings.
 - Protected Messages reconciliation and production source/artifact acceptance remain incomplete.
 - Recovery lineage is local-only with no upstream/remote tracking ref.
 
 ## Exact next action
 
-Write ownership, credential/security, and live-architecture closure remain internally accepted. The current credential inventory is `401` accesses with `81` raw analyzer ambiguities already record-classified, `0` material unresolved, `0` confirmed public exposure, and `0` cross-domain capability gaps. Reconcile the architecture CI workflow against the final detector inventory, add missing final controls and fail-closed negative probes, validate the workflow locally where possible, then continue automatically to protected Messages production reconciliation and AI Calls lineage preservation. Do not repeat the whole-repository write scan without material write-architecture change or a final-gate requirement.
+Write ownership, credential/security, live-architecture debt, and authoritative CI closure remain internally accepted. The current credential inventory is `401` accesses with `81` raw analyzer ambiguities already record-classified, `0` material unresolved, `0` confirmed public exposure, and `0` cross-domain capability gaps. Complete schema-validated module verification/blast-radius profiles and reconcile the central contract registry with the real versioned public surfaces, then continue automatically to protected Messages production reconciliation and AI Calls lineage preservation. Do not repeat the whole-repository write scan without material write-architecture change or a final-gate requirement.
 
 ### Live architecture debt recompute
 

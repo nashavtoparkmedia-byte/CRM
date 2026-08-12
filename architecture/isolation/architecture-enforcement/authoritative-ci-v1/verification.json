@@ -1,0 +1,90 @@
+{
+  "schema": "yoko.crm.authoritative-architecture-ci-verification.v1",
+  "captured_at": "2026-08-12T02:55:38Z",
+  "status": "PASS_CONTINUE_WHOLE_PROJECT_DOD_RECOVERY",
+  "source": {
+    "commit": "21b17f08607905a24f4a9e882091d5c1cab94160",
+    "tree": "756bed74651a40b0bb3f63eddaa2dcc7420b3393",
+    "branch": "codex/crm-architecture-dod-recovery"
+  },
+  "workflow": {
+    "path": ".github/workflows/architecture-enforcement.yml",
+    "pull_request_gate": true,
+    "main_push_gate": true,
+    "permissions": "contents:read",
+    "timeout_minutes": 20,
+    "checkout_fetch_depth": 0,
+    "authoritative_runner": "node tools/architecture/run-authoritative-ci.mjs",
+    "configured_controls": 35,
+    "targeted_controls": 31,
+    "fresh_inventory_controls": 4,
+    "skip_full_scans_in_workflow": false,
+    "github_hosted_execution_observed_in_this_slice": false
+  },
+  "fresh_inventory_configuration": {
+    "write_scan": {
+      "enabled": true,
+      "strict": true,
+      "workers": 4,
+      "worker_timeout_ms": 120000,
+      "structured_progress": true,
+      "verifier_negative_properties": 6
+    },
+    "credential_inventory": {
+      "enabled": true,
+      "sensitive_field_policies": 14,
+      "verifier_negative_properties": 5
+    },
+    "local_full_inventory_rerun": false,
+    "local_rerun_reason": "The batch changes the CI/control plane only and does not materially change write or credential architecture."
+  },
+  "boundary_control_lifecycle": {
+    "checker_files": 118,
+    "active": 112,
+    "superseded": 6,
+    "active_passed": 112,
+    "active_failed": 0,
+    "lifecycle_negative_probes": 2
+  },
+  "local_targeted_acceptance": {
+    "command": "node tools/architecture/run-authoritative-ci.mjs --skip-full-scans",
+    "passed": 31,
+    "failed": 0,
+    "architecture_findings": 0,
+    "architecture_exceptions": 0,
+    "typescript_diagnostics": 30,
+    "typescript_maximum": 30,
+    "changed_path_diagnostics": 0,
+    "gravity_security": "34/34 PASS",
+    "tg_bot_security": "15/15 PASS",
+    "independent_source_critic": "PASS",
+    "diff_check": "PASS"
+  },
+  "write_ownership": {
+    "confirmed_writes_discovered": 1404,
+    "confirmed_foreign": 0,
+    "closed_foreign": 53,
+    "raw_ambiguous_records": 46,
+    "material_ambiguous_remaining": 0,
+    "active_operational_surfaces_unclassified": 0,
+    "temporary_exceptions": 0,
+    "intentional_exceptions": 0
+  },
+  "credential_security": {
+    "credential_database_accesses": 401,
+    "secret_reads": 155,
+    "metadata_only_reads": 64,
+    "raw_ambiguous_accesses": 81,
+    "material_unresolved": 0,
+    "public_exposure": 0,
+    "cross_domain_capability_gaps": 0
+  },
+  "protected_state": {
+    "messages_behavior_changed": false,
+    "ai_calls_worktree_mutated": false,
+    "production_mutated": false
+  },
+  "closed_gap": "FINAL-DOD-012B",
+  "next_cluster": "MODULE_MANIFEST_AND_CONTRACT_COVERAGE_THEN_PROTECTED_MESSAGES",
+  "whole_project_verdict": "NOT_READY"
+}

@@ -3,7 +3,7 @@
   "project": "YOKO CRM MODULAR ARCHITECTURE TRANSFORMATION",
   "phase": "WHOLE_PROJECT_DOD_RECOVERY",
   "status": "IN_PROGRESS",
-  "updated_at": "2026-08-10T11:17:39Z",
+  "updated_at": "2026-08-12T02:55:38Z",
   "external_verdict": "YOKO CRM MODULAR ARCHITECTURE TRANSFORMATION NOT READY",
   "external_review": {
     "task_id": "019feb29-bac2-7a51-84ff-df013bed1a93",
@@ -218,13 +218,14 @@
       "id": "FINAL-DOD-012B",
       "category": "CI_COVERAGE",
       "severity": "HIGH",
-      "status": "CONFIRMED",
+      "status": "CLOSED",
       "title": "CI omits later and current architecture controls",
       "source": "external review architecture gap 3",
       "evidence": [
         ".github/workflows/architecture-enforcement.yml:44"
       ],
-      "closure": "CI executes the current context, write, import, dependency, provider, credential, contract, outbox, exception, blast-radius and critical negative controls."
+      "closure": "CI executes the current context, write, import, dependency, provider, credential, contract, outbox, exception, blast-radius and critical negative controls.",
+      "closure_evidence": "architecture/isolation/architecture-enforcement/authoritative-ci-v1/verification.json; commit 21b17f08607905a24f4a9e882091d5c1cab94160; 35 configured controls and 31/31 targeted local acceptance"
     },
     {
       "id": "FINAL-DOD-013",
@@ -296,9 +297,9 @@
   ],
   "summary": {
     "total": 19,
-    "confirmed": 10,
+    "confirmed": 9,
     "disproven_with_evidence": 0,
-    "closed": 9,
+    "closed": 10,
     "blocked_business": 0,
     "blocked_irreversible": 0,
     "blocked_external_auth": 0

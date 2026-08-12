@@ -1,16 +1,16 @@
 {
   "schema": "yoko.crm.current-recovery-handoff.v1",
-  "generated_at": "2026-08-12T02:16:00Z",
+  "generated_at": "2026-08-12T02:55:38Z",
   "authority": "Continuation checkpoint; supersedes conversational status claims but does not supersede durable gap ledger or external NOT READY verdict.",
   "program_state": {
     "whole_project_state": "EXTERNAL_FINAL_ACCEPTANCE_FAILED",
     "current_program": "WHOLE-PROJECT DOD RECOVERY",
-    "milestone_status": "LIVE_ARCHITECTURE_DEBT_CLOSED; AUTHORITATIVE_CI_IN_PROGRESS",
+    "milestone_status": "LIVE_ARCHITECTURE_DEBT_AND_AUTHORITATIVE_CI_CLOSED; MANIFEST_CONTRACT_COVERAGE_IN_PROGRESS",
     "ready": false,
     "finding_summary": {
       "total": 19,
-      "confirmed": 10,
-      "closed": 9,
+      "confirmed": 9,
+      "closed": 10,
       "blocked": 0
     }
   },
@@ -23,8 +23,8 @@
     "remote_tracking_ref_contains_implementation_head": false,
     "base_commit": "0b61ba296ba2734738d4a21b9d00ce8b110d63cf",
     "base_tree": "56c452397df4bb7cb05bef3e0d9afd1de9d785a5",
-    "implementation_head_before_checkpoint": "3c8087311caab7912708a1746b2bb5ca3e2c088b",
-    "implementation_tree_before_checkpoint": "60900235f4183400e24d40442df9dd4b5b955483",
+    "implementation_head_before_checkpoint": "21b17f08607905a24f4a9e882091d5c1cab94160",
+    "implementation_tree_before_checkpoint": "756bed74651a40b0bb3f63eddaa2dcc7420b3393",
     "checkpoint_commit": "SELF_RESOLVE_WITH_GIT_LOG",
     "task_commit_range": {
       "range": "0b61ba296ba2734738d4a21b9d00ce8b110d63cf..3c8087311caab7912708a1746b2bb5ca3e2c088b",
@@ -334,12 +334,18 @@
         "id": "FINAL-DOD-017",
         "title": "Original whole-project Definition of Done retained by Architecture Lead",
         "evidence": "/opt/codex-work/crm-architecture-state/FINAL_DOD_GAP_LEDGER.json"
+      },
+      {
+        "id": "FINAL-DOD-012B",
+        "title": "Authoritative CI invokes the current control plane and fresh bounded inventory gates",
+        "evidence": "architecture/isolation/architecture-enforcement/authoritative-ci-v1/verification.json"
       }
     ],
     "implemented_but_not_accepted": [
       "Write ownership remains internally accepted: 1,404 confirmed writes discovered, 0 confirmed foreign, 53 closed foreign, 0 material ambiguity, and 0 unclassified active operational surfaces.",
       "Credential/security closure remains internally accepted: Gravity 34/34, tg-bot 15/15, 0 material credential unresolved, 0 public secret exposure, and independent critic PASS.",
-      "Live architecture debt is internally closed: 0 findings, 0 uncovered, 0 exception-covered, 0 temporary exceptions, and all 1,288 opening findings actually closed. Whole-project acceptance remains open."
+      "Live architecture debt is internally closed: 0 findings, 0 uncovered, 0 exception-covered, 0 temporary exceptions, and all 1,288 opening findings actually closed. Whole-project acceptance remains open.",
+      "Authoritative CI is internally closed: 35 configured controls, 31/31 targeted local acceptance, 112/112 active boundary controls, and fresh bounded write/credential inventory gates enabled for pull requests and main pushes."
     ],
     "investigated": [
       "Current full-repository analyzer performance: two mirrored 4ec scans were CPU-active for more than 3h20 and aborted; no output exists.",
@@ -348,7 +354,7 @@
       "Recovery Git/worktree, durable-state, artifact and process identities reconciled for continuation."
     ],
     "not_started": [
-      "Authoritative final CI after debt closure.",
+      "Module-manifest verification profiles and central contract registry reconciliation.",
       "Protected Messages production reconciliation and AI Calls lineage acceptance.",
       "Production source/artifact identity reconciliation, preview/backup/rollback gates, deployment or runtime activation.",
       "Final external re-review after all live debt and production gates close."
@@ -666,11 +672,11 @@
     "ai_calls_mutated": false
   },
   "genuine_blockers": [
-    "Authoritative CI has not yet been proven to invoke every final control and its negative probe.",
+    "Module manifests and the central contract registry do not yet carry complete current verification and interaction mappings.",
     "Protected Messages/AI Calls production authority and final integration acceptance remain unreconciled.",
     "No upstream/remote ref protects the local recovery lineage."
   ],
-  "exact_next_action": "Reconcile the architecture CI workflow against the final detector inventory, add missing final controls and fail-closed negative probes, validate the workflow locally where possible, then continue automatically to protected Messages production reconciliation and AI Calls lineage preservation.",
+  "exact_next_action": "Complete schema-validated module verification and blast-radius profiles, reconcile the central contract registry with the real versioned public surfaces, then continue automatically to protected Messages production reconciliation and AI Calls lineage preservation.",
   "current_write_ownership": {
     "baseline": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T131500Z.json",
     "baseline_sha256": "7c6eb03e1249d9dbd2230390a72471caefe1fb01c992ec608775e1f2a0e41292",
