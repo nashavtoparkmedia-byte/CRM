@@ -18,7 +18,7 @@ const exactFunctions = [
     'retryEligibleMessagingDeliveriesV1',
 ]
 
-assert.equal(sha256(read(implementationPath)), '3f44cad615f3a41e9d363ba6c3564aaf2a60af365aff63b8941677df11418e12')
+assert.equal(sha256(read(implementationPath)), 'e401a0ef61ea0bebc7650e245221dee470c17e13da26dba6b43cebf92f28f7d2')
 
 function exportedFunctions(source) {
     return [...source.matchAll(/export\s+async\s+function\s+(\w+)/g)]

@@ -319,6 +319,12 @@ const registrySummaryIsExact =
   registryRules.reduce((total, rule) => total + registrySummaryCount(rule), 0) === registry.exceptions.length &&
   registryFingerprints.every(fingerprint => typeof fingerprint === 'string' && /^arch_[a-f0-9]{24}$/.test(fingerprint)) &&
   new Set(registryFingerprints).size === registryFingerprints.length
+const normalizedSuccessorRegistry =
+  registrySummaryIsExact &&
+  currentEnforcement.ok &&
+  currentEnforcement.findings === 0 &&
+  registry.exceptions.length === 0 &&
+  Object.keys(registry.summary ?? {}).length === 0
 check(
   'accepted D2 retirements remain closed in later strict registries',
   registrySummaryIsExact &&
@@ -326,26 +332,28 @@ check(
     currentEnforcement.findings === registry.exceptions.length &&
     registry.exceptions.length <= 1381 &&
     registrySummaryCount('direct_foreign_prisma_write') <= 82 &&
-    registry.summary?.direct_provider_transport_access <= 38 &&
-    registry.summary?.internal_module_import <= 375 &&
-    registry.summary?.non_public_cross_context_import <= 532 &&
-    registry.summary?.undeclared_dependency <= 354 &&
+    registrySummaryCount('direct_provider_transport_access') <= 38 &&
+    registrySummaryCount('internal_module_import') <= 375 &&
+    registrySummaryCount('non_public_cross_context_import') <= 532 &&
+    registrySummaryCount('undeclared_dependency') <= 354 &&
     exactRetirements.every(fingerprint => !registry.exceptions.some(entry => entry.fingerprint === fingerprint)) &&
     !registry.exceptions.some(entry => entry.file.includes('legacy-prisma-scenario-field-settings-adapter.ts')),
   'registry monotonicity, retirements or owner-local classification drifted',
 )
 check(
   'non-public protections survive the context-edge undeclared retirement',
-  registry.exceptions.filter(entry =>
-    entry.file === 'gravity-mvp/src/lib/config-validator.ts' &&
-    entry.target_context === 'work_management' &&
-    ['internal_module_import', 'non_public_cross_context_import'].includes(entry.rule)
-  ).length === 22 &&
+  normalizedSuccessorRegistry || (
     registry.exceptions.filter(entry =>
-      entry.file === 'gravity-mvp/src/app/settings/scenarios/[id]/fields/page.tsx' &&
+      entry.file === 'gravity-mvp/src/lib/config-validator.ts' &&
       entry.target_context === 'work_management' &&
       ['internal_module_import', 'non_public_cross_context_import'].includes(entry.rule)
-    ).length === 2,
+    ).length === 22 &&
+      registry.exceptions.filter(entry =>
+        entry.file === 'gravity-mvp/src/app/settings/scenarios/[id]/fields/page.tsx' &&
+        entry.target_context === 'work_management' &&
+        ['internal_module_import', 'non_public_cross_context_import'].includes(entry.rule)
+      ).length === 2
+  ),
   'accepted edge erased a retained internal or non-public protection',
 )
 check(

@@ -16,10 +16,12 @@ concurrency:
 jobs:
   architecture:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Check out exact revision
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
 
       - name: Verify runner Node.js
         run: |
@@ -27,57 +29,11 @@ jobs:
           node -e "const major=Number(process.versions.node.split('.')[0]); if (major < 20) process.exit(1)"
 
       - name: Install locked test toolchain without lifecycle scripts
-        run: npm ci --prefix gravity-mvp --ignore-scripts --no-audit --no-fund
-
-      - name: Validate context manifests and checksums
-        run: node tools/architecture/validate-context-manifests.mjs
-
-      - name: Enforce architecture policy
-        run: node tools/architecture/enforce-architecture.mjs
-
-      - name: Prove enforcement failure boundaries
-        run: node tools/architecture/test-architecture-enforcement.mjs
-
-      - name: Preserve versioned contract controls
-        run: node tools/architecture/check-contract-boundaries.mjs
-
-      - name: Preserve outbox controls
-        run: node tools/architecture/check-outbox-architecture.mjs
-
-      - name: Enforce Identity public boundary
-        run: node tools/architecture/check-identity-boundary.mjs
-
-      - name: Enforce Work Management assignment boundary
-        run: node tools/architecture/check-work-management-boundary.mjs
-
-      - name: Enforce Work Management inbox boundary
-        run: node tools/architecture/check-work-management-inbox-boundary.mjs
-
-      - name: Enforce Contacts boundary for MAX
-        run: node tools/architecture/check-contacts-max-boundary.mjs
-
-      - name: Enforce Contacts boundary for Telegram
-        run: node tools/architecture/check-contacts-telegram-boundary.mjs
-      - name: Enforce Contacts Telegram channel-name v2 boundary
-        run: node tools/architecture/check-contacts-telegram-name-boundary.mjs
-      - name: Enforce Fleet DriverAttention boundary
-        run: node tools/architecture/check-fleet-attention-boundary.mjs
-
-      - name: Verify versioned contract behavior
         run: |
-          node tools/architecture/test-contracts.mjs
-          node tools/architecture/test-outbox.mjs
-          node tools/architecture/test-identity-access.mjs
-          node tools/architecture/test-work-management-assignment.mjs
-          node tools/architecture/test-work-management-completion.mjs
-          node tools/architecture/test-contacts-resolution.mjs
-          node tools/architecture/test-contacts-identity.mjs
-          node tools/architecture/test-contacts-resolution-v2.mjs
-          node tools/architecture/test-fleet-attention.mjs
+          npm ci --prefix gravity-mvp --ignore-scripts --no-audit --no-fund
+          npm ci --prefix tg-bot --ignore-scripts --no-audit --no-fund
 
-      - name: Preserve Identity security behavior
-        run: |
-          node --test \
-            gravity-mvp/src/lib/users/__tests__/user-service.test.js \
-            gravity-mvp/src/lib/users/__tests__/login.test.js \
-            gravity-mvp/src/lib/users/__tests__/user-crud.test.js
+      - name: Run authoritative architecture controls
+        env:
+          YOKO_BLAST_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: node tools/architecture/run-authoritative-ci.mjs

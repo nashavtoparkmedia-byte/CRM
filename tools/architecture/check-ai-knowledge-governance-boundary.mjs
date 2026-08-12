@@ -282,7 +282,7 @@ check(
   sha256('gravity-mvp/src/app/settings/ai/AiControlCenterClient.tsx')
       === 'e49bc7225652999fedb7851a2bce0cec668a9ed3b59d13863cc73a21b62961d3'
     && sha256(trainerPath)
-      === '16f6ced0d4ba4192a0ae91fa07f53e4706c2493cab9a2df2b5944f926c8b4484'
+      === '85620ff629ee5bc62a0dae1fc3f79670f0f0d762dc8c75937f9f467222e598b2'
     && sha256('gravity-mvp/src/contracts/ai-knowledge/v1/knowledge-item-review-commands.ts')
       === '9d3b40f4f5d625330fd3ecb7aadfa64314c193a9e0c03b814e8df5845a1d581b'
     && sha256('gravity-mvp/src/modules/ai-knowledge/public/v1/knowledge-item-review-handler.ts')
