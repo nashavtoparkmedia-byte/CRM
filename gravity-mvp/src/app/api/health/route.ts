@@ -89,7 +89,7 @@ export async function GET() {
         (SELECT count(*)::int FROM "Message") as "totalMessages",
         (SELECT count(*)::int FROM "Message" WHERE direction = 'outbound' AND status = 'sent' AND "sentAt" > ${cutoff24h}) as "sentLast24h",
         (SELECT count(*)::int FROM "Message" WHERE status = 'failed' AND "sentAt" > ${cutoff24h}) as "failedLast24h",
-        (SELECT count(*)::int FROM "Message" WHERE direction = 'outbound' AND status = 'sent' AND "sentAt" < ${cutoffStuck}) as "stuckCount"
+        (SELECT count(*)::int FROM "Message" WHERE direction = 'outbound' AND status = 'sent' AND "externalId" IS NULL AND type <> 'call' AND "sentAt" < ${cutoffStuck}) as "stuckCount"
     `
     pipelineSection = stats[0]
 
