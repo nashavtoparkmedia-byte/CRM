@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "b59e0165fea8144ab67a069da898ae565e6058438ce7d9368763a9e717f98cde",
+  "finding_digest": "960dbed20d446dab3ad229fe6f6ca44a86cc5748a47b65257c2c8b9016f76a47",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,9 +13,8 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "internal_module_import": 1,
-    "non_public_cross_context_import": 12,
-    "undeclared_dependency": 8
+    "non_public_cross_context_import": 11,
+    "undeclared_dependency": 7
   },
   "exceptions": [
     {
@@ -164,54 +163,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:fleet_operations/drivers>messaging/messages"
-      ]
-    },
-    {
-      "fingerprint": "arch_d888f9243e881f344e64ffed",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/messages/components/AiInternToggle.tsx",
-      "line_at_baseline": 15,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "configuration",
-      "subject": "messages>settings:gravity-mvp/src/app/settings/ai/actions.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>configuration/settings"
-      ]
-    },
-    {
-      "fingerprint": "arch_e6f3b86c76fbaf5e2f375030",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/messages/components/AiInternToggle.tsx",
-      "line_at_baseline": 15,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "configuration",
-      "subject": "messages>settings:gravity-mvp/src/app/settings/ai/actions.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>configuration/settings"
-      ]
-    },
-    {
-      "fingerprint": "arch_a297d19ec91b6c11389cef2d",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/messages/components/AiInternToggle.tsx",
-      "line_at_baseline": 15,
-      "ordinal": 1,
-      "owner_context": "messaging",
-      "target_context": "configuration",
-      "subject": "messages>settings:gravity-mvp/src/app/settings/ai/actions.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:messaging/messages>configuration/settings"
       ]
     },
     {
