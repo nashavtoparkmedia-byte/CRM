@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server'
-import { getAllEntries, type ConnectionEntry } from '@/lib/TransportRegistry'
+import {
+  transportRegistryHealthV1,
+  type TransportConnectionEntryV1,
+} from '@/modules/messaging/public/v1/transport-registry-health'
 
 /**
  * GET /api/transport/health
@@ -9,10 +12,10 @@ import { getAllEntries, type ConnectionEntry } from '@/lib/TransportRegistry'
  */
 export async function GET() {
   try {
-    const entries = getAllEntries()
+    const entries = transportRegistryHealthV1.getAllEntries()
     const now = Date.now()
 
-    const format = (e: ConnectionEntry) => ({
+    const format = (e: TransportConnectionEntryV1) => ({
       id: e.connectionId,
       channel: e.channel,
       instanceId: e.instanceId ? e.instanceId.substring(0, 8) : null,

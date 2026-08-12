@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getAllEntries, getDegradedDuration, type ConnectionEntry } from '@/lib/TransportRegistry'
+import {
+  transportRegistryHealthV1,
+  type TransportConnectionEntryV1,
+} from '@/modules/messaging/public/v1/transport-registry-health'
 import { getOperationalJobStateV1 } from '@/modules/operations-observability/public/v1/operational-job-registry'
 import { getCumulativeCounters } from '@/lib/RetentionCleanup'
 
@@ -20,8 +23,8 @@ export async function GET() {
   // ── Transport ──────────────────────────────────────────────────────────
   let transportSection: any = { whatsapp: { connections: [], readyCount: 0, totalCount: 0 }, telegram: { connections: [], readyCount: 0, totalCount: 0 } }
   try {
-    const entries = getAllEntries()
-    const format = (e: ConnectionEntry) => ({
+    const entries = transportRegistryHealthV1.getAllEntries()
+    const format = (e: TransportConnectionEntryV1) => ({
       id: e.connectionId,
       channel: e.channel,
       instanceId: e.instanceId ? e.instanceId.substring(0, 8) : null,
@@ -37,7 +40,9 @@ export async function GET() {
 
     // Compute degradation metrics
     const degradedConnections = entries.filter(e => e.state !== 'ready' && e.state !== 'stopped')
-    const degradedDurations = degradedConnections.map(e => getDegradedDuration(e.connectionId) || 0)
+    const degradedDurations = degradedConnections.map(e => (
+      transportRegistryHealthV1.getDegradedDuration(e.connectionId) || 0
+    ))
     const maxDegradedMs = degradedDurations.length > 0 ? Math.max(...degradedDurations) : 0
 
     transportSection = {

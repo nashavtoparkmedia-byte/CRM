@@ -208,6 +208,8 @@
     }
   ],
   "public_surface": [
+    "TransportRegistryHealth.v1",
+    "TransportRegistryLifecycle.v1",
     "ConversationView.v1",
     "MessageView.v1",
     "MessageStream.v1",
