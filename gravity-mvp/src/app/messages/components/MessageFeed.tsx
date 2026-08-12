@@ -315,8 +315,11 @@ export default function MessageFeed({
                         requestAnimationFrame(() => { requestAnimationFrame(() => { if (el) el.scrollTop = el.scrollHeight }) })
                     }
                 } else {
-                    if (atBottom && el) {
-                        el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+                    const isNearBottom = el
+                        ? el.scrollHeight - el.scrollTop - el.clientHeight < 700
+                        : false
+                    if ((atBottom || isNearBottom) && el) {
+                        runSnapToBottom(el)
                         setNewMsgCount(0)
                     } else {
                         setNewMsgCount(prev => prev + 1)

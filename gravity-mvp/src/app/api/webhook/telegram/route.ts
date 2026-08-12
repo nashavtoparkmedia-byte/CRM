@@ -14,6 +14,8 @@ import { PROMOTE_CHANNEL_DISPLAY_NAME_V2, RESOLVE_CONTACT_COMMAND_V2 } from '@/c
 import { resolveContactV2 } from '@/modules/contacts/public/v2'
 import { CREATE_CHANNEL_MESSAGE_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { createChannelMessageV1, ensureConversationContactLinkV1, linkMatchedDriverToConversationCapabilityV1, patchChannelConversationV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
+import { RECORD_BOT_USER_PROFILE_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
+import { recordBotUserProfileV1 } from '@/modules/telegram-channel/public/v1'
 
 export async function POST(req: NextRequest) {
     try {
@@ -57,6 +59,15 @@ export async function POST(req: NextRequest) {
         // ── END GROUP BRANCH ──
 
         const tgIdBigInt = BigInt(telegramId)
+
+        await recordBotUserProfileV1({
+            contract: RECORD_BOT_USER_PROFILE_COMMAND_V1,
+            telegramId: tgIdBigInt,
+            username: username || null,
+            firstName: firstName || null,
+            lastName: lastName || null,
+            observedAt: new Date(),
+        })
 
         // Add the message to the DB for the CRM history
         const message = await prisma.botChatMessage.create({

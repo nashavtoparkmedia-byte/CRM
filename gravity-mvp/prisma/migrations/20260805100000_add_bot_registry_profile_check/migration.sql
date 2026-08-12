@@ -1,0 +1,2 @@
+ALTER TABLE "BotUserRegistry"
+ADD COLUMN IF NOT EXISTS "profileCheckedAt" TIMESTAMP(3);

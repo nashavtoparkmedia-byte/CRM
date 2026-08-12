@@ -244,7 +244,10 @@ function ChatWorkspaceInner({
     }
 
     const handleRetry = (msg: Message) => {
-        sendMessage(msg.content, msg.channel)
+        const quotedMsgId = typeof msg.metadata?.quotedMsgId === 'string'
+            ? msg.metadata.quotedMsgId
+            : undefined
+        sendMessage(msg.content, msg.channel, quotedMsgId)
     }
 
     const handleReply = (msg: Message) => {

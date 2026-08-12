@@ -33,6 +33,7 @@ export const legacyPrismaContactConversationPortV1: ContactConversationPersisten
                     contactId: input.contactId,
                     channel: input.channel,
                     isActive: true,
+                    ...(input.phoneId ? { phoneId: input.phoneId } : {}),
                 },
             })
             if (!identity) return { status: 'identity_not_found' }
@@ -42,6 +43,7 @@ export const legacyPrismaContactConversationPortV1: ContactConversationPersisten
                     contactId: input.contactId,
                     channel: input.channel,
                     isActive: true,
+                    ...(input.phoneId ? { phoneId: input.phoneId } : {}),
                 },
                 orderBy: { createdAt: 'asc' },
             })
@@ -49,10 +51,14 @@ export const legacyPrismaContactConversationPortV1: ContactConversationPersisten
 
         if (!identity) {
             const phone = await prisma.contactPhone.findFirst({
-                where: { contactId: input.contactId, isActive: true },
+                where: {
+                    contactId: input.contactId,
+                    isActive: true,
+                    ...(input.phoneId ? { id: input.phoneId } : {}),
+                },
                 orderBy: { isPrimary: 'desc' },
             })
-            if (!phone) return { status: 'no_identity' }
+            if (!phone) return { status: input.phoneId ? 'phone_not_found' : 'no_identity' }
 
             identity = await prisma.contactIdentity.create({
                 data: {
@@ -77,9 +83,9 @@ export const legacyPrismaContactConversationPortV1: ContactConversationPersisten
         }
     },
 
-    async getPreferredActiveContactPhone(contactId) {
+    async getPreferredActiveContactPhone(contactId, phoneId) {
         const phone = await prisma.contactPhone.findFirst({
-            where: { contactId, isActive: true },
+            where: { contactId, isActive: true, ...(phoneId ? { id: phoneId } : {}) },
             orderBy: { isPrimary: 'desc' },
         })
         return phone?.phone ?? null

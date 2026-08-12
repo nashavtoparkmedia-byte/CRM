@@ -29,6 +29,31 @@ type LiveReachabilityEntry = {
     error?: string
 }
 
+type ParkCheckProfile = {
+    id: string
+    fullName: string
+    phones: string[]
+    matchedPhones: string[]
+    workStatus: string | null
+    currentStatus: string | null
+}
+
+type ParkCheckResult = {
+    checkedAt: string
+    checkedPhones: string[]
+    checkedParks: number
+    foundProfiles: number
+    results: Array<{ parkId: string; parkName: string; profiles: ParkCheckProfile[] }>
+    errors: Array<{ parkId: string; parkName: string; message: string }>
+    driverLink: {
+        status: 'not_found' | 'ambiguous' | 'linked' | 'already_linked' | 'merged' | 'error'
+        contactId: string | null
+        driverId: string | null
+        displayName: string | null
+        message: string | null
+    }
+}
+
 const defaultCustomFields: CustomField[] = [
     { id: 'park', label: 'Парк', type: 'select', value: 'Яндекс', options: ['Яндекс', 'Uber', 'Сити Мобил', 'Максим'] },
     { id: 'role', label: 'Роль', type: 'select', value: 'Водитель', options: ['Водитель', 'Курьер', 'Партнёр', 'Стажёр'] },
@@ -152,6 +177,16 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     const [aiStatus, setAiStatus] = useState<'active' | 'paused' | 'inactive'>('inactive')
     const [isTaskModalOpen, setIsTaskModalOpen] = useState(false)
     const [writingIdentityId, setWritingIdentityId] = useState<string | null>(null)
+    const [parkCheckLoading, setParkCheckLoading] = useState(false)
+    const [parkCheckResult, setParkCheckResult] = useState<ParkCheckResult | null>(null)
+    const [parkCheckError, setParkCheckError] = useState<string | null>(null)
+
+    useEffect(() => {
+        const saved = contact?.customFields?.parkCheckResult
+        setParkCheckResult(saved && typeof saved === 'object' ? saved as ParkCheckResult : null)
+        setParkCheckError(null)
+        setParkCheckLoading(false)
+    }, [contact?.id, contact?.customFields?.parkCheckResult?.checkedAt])
 
     // TG Bot link state
     const [tgIdCopied, setTgIdCopied] = useState(false)
@@ -178,22 +213,23 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     // Reachability: merge persisted status from DB with optional live-check override.
     // "checking" is an operational state, not a green confirmation.
     const [liveReachability, setLiveReachability] = useState<Record<string, LiveReachabilityEntry>>({})
+    const reachabilityPhoneSignature = contact?.phones.map(phone => `${phone.id}:${phone.phone}`).join('|') || ''
+    const reachabilityKey = (phoneId: string, channel: string) => `${phoneId}:${channel}`
 
     useEffect(() => {
-        if (!contact) return
-        const primaryPhone = contact.phones.find(p => p.isPrimary)?.phone || contact.phones[0]?.phone
-        if (!primaryPhone) return
+        if (!contact || contact.phones.length === 0) return
 
         let cancelled = false
-        const retryTimers: ReturnType<typeof setTimeout>[] = []
         const checkChannels = ['telegram', 'whatsapp', 'max'] as const
+        setLiveReachability({})
 
-        const runCheck = (channel: typeof checkChannels[number]) => {
-            setLiveReachability(prev => prev[channel] ? prev : { ...prev, [channel]: { status: 'checking', retryable: true } })
+        const runCheck = (phoneId: string, phone: string, channel: typeof checkChannels[number]) => {
+            const key = reachabilityKey(phoneId, channel)
+            setLiveReachability(prev => prev[key] ? prev : { ...prev, [key]: { status: 'checking', retryable: true } })
             fetch('/api/channels/check-reachability', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone: primaryPhone, channel }),
+                body: JSON.stringify({ phone, channel }),
             })
                 .then(r => r.json())
                 .then(data => {
@@ -209,28 +245,31 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                         retryable: data.retryable !== false,
                         error: data.error,
                     }
-                    setLiveReachability(prev => ({ ...prev, [channel]: nextEntry }))
-                    if (nextStatus === 'checking') {
-                        const retryDelayMs = data.retryable === false ? 30_000 : 5_000
-                        retryTimers.push(setTimeout(() => { if (!cancelled) runCheck(channel) }, retryDelayMs))
-                    }
+                    setLiveReachability(prev => ({ ...prev, [key]: nextEntry }))
                 })
                 .catch(() => {
                     if (cancelled) return
-                    setLiveReachability(prev => ({ ...prev, [channel]: { status: 'checking', retryable: true, error: 'Ошибка сети' } }))
-                    retryTimers.push(setTimeout(() => { if (!cancelled) runCheck(channel) }, 5_000))
+                    setLiveReachability(prev => ({ ...prev, [key]: { status: 'checking', retryable: true, error: 'Ошибка сети' } }))
                 })
         }
 
-        for (const channel of checkChannels) {
-            runCheck(channel)
+        for (const phone of contact.phones) {
+            for (const channel of checkChannels) {
+                const identity = contact.identities.find(item => item.phoneId === phone.id && item.channel === channel)
+                const hasLinkedChat = identity && contact.chats.some(chat => chat.contactIdentityId === identity.id)
+                if (hasLinkedChat) {
+                    const key = reachabilityKey(phone.id, channel)
+                    setLiveReachability(prev => ({ ...prev, [key]: { status: 'confirmed', retryable: false } }))
+                } else {
+                    runCheck(phone.id, phone.phone, channel)
+                }
+            }
         }
 
         return () => {
             cancelled = true
-            retryTimers.forEach(clearTimeout)
         }
-    }, [contact?.id])
+    }, [contact?.id, reachabilityPhoneSignature])
 
     // Load bot link status when a TG identity is present
     const tgIdentity = contact?.identities.find(i => i.channel === 'telegram') ?? null
@@ -269,7 +308,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
         const hasChat = contact?.chats?.some(c => c.contactIdentityId === identity.id)
         if (hasChat) return true
         // Live check result takes priority (if definitive)
-        const live = liveReachability[identity.channel]
+        const live = identity.phoneId ? liveReachability[reachabilityKey(identity.phoneId, identity.channel)] : undefined
         if (live !== undefined) {
             if (live.status === 'confirmed') return true
             if (live.status === 'unreachable') return false
@@ -305,6 +344,36 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
 
     const identityHasChat = (identity: ContactIdentity): boolean =>
         !!contact?.chats?.some(c => c.contactIdentityId === identity.id)
+    const hasParkCheckPhone = Boolean(contact?.phones.length || contact?.driver?.phone)
+
+    const handleCheckParks = async () => {
+        if (!contact?.id || parkCheckLoading) return
+        setParkCheckLoading(true)
+        setParkCheckError(null)
+        try {
+            const response = await fetch(`/api/contacts/${contact.id}/parks`, { method: 'POST' })
+            const body = await response.json()
+            if (!response.ok) throw new Error(body.message || 'Не удалось проверить парки')
+            setParkCheckResult(body)
+            if (['linked', 'already_linked', 'merged'].includes(body.driverLink?.status)) {
+                await refreshConversations()
+                if (body.driverLink.contactId === contact.id) await refetchContact()
+            }
+        } catch (error: any) {
+            setParkCheckResult(null)
+            setParkCheckError(error?.message || 'Не удалось проверить парки')
+        } finally {
+            setParkCheckLoading(false)
+        }
+    }
+
+    const parkStatus = (profile: ParkCheckProfile) => {
+        const status = String(profile.workStatus || profile.currentStatus || '').toLowerCase()
+        if (status === 'fired') return { label: 'Уволен', cls: 'bg-red-50 text-red-600' }
+        if (status === 'working') return { label: 'Работает', cls: 'bg-emerald-50 text-emerald-700' }
+        if (status === 'blocked') return { label: 'Заблокирован', cls: 'bg-amber-50 text-amber-700' }
+        return { label: status || 'Статус неизвестен', cls: 'bg-gray-100 text-gray-600' }
+    }
 
     if (!chat) return null
 
@@ -353,7 +422,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     const CHANNEL_SHORT: Record<string, string> = { whatsapp: 'wa', telegram: 'tg', max: 'max' }
 
     // ── Handle "Написать" — works with identity OR phone+channel ──
-    const handleWrite = async (channel: string, identityId?: string) => {
+    const handleWrite = async (channel: string, identityId?: string, phoneId?: string) => {
         if (!contact) return
 
         // If identityId provided, check for existing chat
@@ -366,7 +435,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
         }
 
         // Create chat via API (will also create identity if needed)
-        setWritingIdentityId(identityId || `phone_${channel}`)
+        setWritingIdentityId(identityId || `phone_${phoneId || 'default'}_${channel}`)
         try {
             const res = await fetch(`/api/contacts/${contact.id}/chats`, {
                 method: 'POST',
@@ -374,6 +443,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                 body: JSON.stringify({
                     channel,
                     ...(identityId ? { identityId } : {}),
+                    ...(phoneId ? { phoneId } : {}),
                 }),
             })
             const data = await res.json()
@@ -392,17 +462,19 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     }
 
     // ── Group identities by phone ─────────────────────────────
-    const phonesWithIdentities = contact ? contact.phones.map(phone => ({
-        phone,
-        identities: contact.identities.filter(i => i.phoneId === phone.id),
-    })) : []
+    const selectedIdentityId = contact?.chats.find(item => item.id === chatId)?.contactIdentityId || null
+    const phonesWithIdentities = contact ? contact.phones.map(phone => {
+        const preferredByChannel = new Map<string, { identity: ContactIdentity; rank: number }>()
+        for (const identity of contact.identities.filter(item => item.phoneId === phone.id)) {
+            const rank = (identity.id === selectedIdentityId ? 100 : 0)
+                + (identityHasChat(identity) ? 10 : 0)
+                + (identity.reachabilityStatus === 'confirmed' ? 1 : 0)
+            const current = preferredByChannel.get(identity.channel)
+            if (!current || rank >= current.rank) preferredByChannel.set(identity.channel, { identity, rank })
+        }
+        return { phone, identities: [...preferredByChannel.values()].map(item => item.identity) }
+    }) : []
     const orphanIdentities = contact ? contact.identities.filter(i => !i.phoneId) : []
-    // Каналы, в которых у contact есть ХОТЯ БЫ ОДИН confirmed identity (включая orphan).
-    // Используется в missing-channels блоке: для MAX live-check phone-reachability не делается,
-    // но если orphan MAX identity confirmed (auto-link через scraper) — статус должен быть "есть".
-    const confirmedChannelsAny = contact
-        ? new Set(contact.identities.filter(i => i.reachabilityStatus === 'confirmed').map(i => i.channel))
-        : new Set<string>()
 
     return (
         <div className="w-[280px] bg-white border-l border-[#E8E8E8] shrink-0 h-full flex flex-col animate-in slide-in-from-right-4 duration-200">
@@ -663,8 +735,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                         {/* Phones with their identities + available channels */}
                         {phonesWithIdentities.map(({ phone, identities }) => {
                             // Channels that have identity for this phone
-                            const allContactChannels = new Set(contact.identities.map(i => i.channel))
-                            const existingChannels = new Set([...identities.map(i => i.channel), ...allContactChannels])
+                            const existingChannels = new Set(identities.map(i => i.channel))
                             // Channels available via phone but without identity yet
                             const phoneChannels: string[] = ['whatsapp', 'telegram', 'max']
                             const missingChannels = phoneChannels.filter(ch => !existingChannels.has(ch))
@@ -744,7 +815,9 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                             // All 3 text channels are checkable. Green is only for confirmed account.
                                             const isCheckable = identity.channel === 'telegram' || identity.channel === 'whatsapp' || identity.channel === 'max'
                                             const reachable = getReachability(identity)
-                                            const liveEntry = liveReachability[identity.channel]
+                                            const liveEntry = identity.phoneId
+                                                ? liveReachability[reachabilityKey(identity.phoneId, identity.channel)]
+                                                : undefined
                                             const linkedToCurrentContact = identityHasChat(identity)
                                             const reachBadge = linkedToCurrentContact
                                                 ? { label: 'связан', cls: 'text-emerald-700 bg-emerald-50', title: 'Identity текущего чата уже принадлежит этому контакту' }
@@ -807,15 +880,15 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                         {/* Available channels without identity (can write via phone) */}
                                         {missingChannels.map(ch => {
                                             const cfg = CHANNEL_CONFIG[ch]
-                                            const isWriting = writingIdentityId === `phone_${ch}`
+                                            const isWriting = writingIdentityId === `phone_${phone.id}_${ch}`
                                             const isMissingCheckable = ch === 'telegram' || ch === 'whatsapp' || ch === 'max'
-                                            const liveEntry = liveReachability[ch]
+                                            const liveEntry = liveReachability[reachabilityKey(phone.id, ch)]
                                             const missingReachable =
                                                 liveEntry?.status === 'confirmed'
                                                     ? true
                                                     : liveEntry?.status === 'unreachable'
                                                         ? false
-                                                        : (confirmedChannelsAny.has(ch) ? true : null)
+                                                        : null
                                             const reachBadge = reachabilityBadge(missingReachable, liveEntry)
                                             const isOperationallyBlocked = isMissingCheckable && missingReachable === null && liveEntry?.status === 'checking' && liveEntry.retryable === false
                                             return (
@@ -841,7 +914,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                                         )}
                                                     </div>
                                                     <button
-                                                        onClick={() => handleWrite(ch)}
+                                                        onClick={() => handleWrite(ch, undefined, phone.id)}
                                                         disabled={isWriting}
                                                         className="text-[10px] text-[#3390EC] font-semibold px-[2px] py-0.5 rounded bg-[#3390EC]/5 hover:bg-[#3390EC]/15 transition-colors disabled:opacity-50 flex items-center gap-1"
                                                     >
@@ -1005,7 +1078,80 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
 
                 {/* Custom Fields */}
                 <div className="px-[4px] py-2.5">
-                    <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-[2px]">Поля</h4>
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Поля</h4>
+                        <button
+                            type="button"
+                            onClick={handleCheckParks}
+                            disabled={!contact || !hasParkCheckPhone || parkCheckLoading}
+                            title={hasParkCheckPhone ? 'Найти профили по всем телефонам во всех подключённых парках' : 'Добавьте телефон для проверки'}
+                            className="h-[24px] inline-flex items-center gap-1 rounded-md border border-[#3390EC]/30 bg-[#3390EC]/5 px-2 text-[10px] font-semibold text-[#3390EC] hover:bg-[#3390EC]/10 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                            {parkCheckLoading ? <Loader2 size={10} className="animate-spin" /> : <Search size={10} />}
+                            {parkCheckLoading ? 'Проверяем...' : 'Проверить парки'}
+                        </button>
+                    </div>
+
+                    {parkCheckError && (
+                        <div className="mb-2 rounded-md bg-red-50 px-2 py-1.5 text-[10px] text-red-600">
+                            {parkCheckError}
+                        </div>
+                    )}
+
+                    {parkCheckResult && (
+                        <div className="mb-2 rounded-lg border border-[#E8E8E8] bg-[#F8F9FA] p-2">
+                            <div className="mb-1.5 flex items-center justify-between text-[10px] text-gray-500">
+                                <span>Проверено парков: {parkCheckResult.checkedParks}</span>
+                                <span>Найдено: {parkCheckResult.foundProfiles}</span>
+                            </div>
+                            {parkCheckResult.results.length === 0 ? (
+                                <div className="text-[11px] text-gray-500">Профили по этим телефонам не найдены</div>
+                            ) : (
+                                <div className="space-y-1.5">
+                                    {parkCheckResult.results.map(park => (
+                                        <div key={park.parkId} className="rounded-md bg-white px-2 py-1.5">
+                                            <div className="text-[11px] font-semibold text-[#111]">{park.parkName}</div>
+                                            {park.profiles.map(profile => {
+                                                const status = parkStatus(profile)
+                                                return (
+                                                    <div key={profile.id} className="mt-1">
+                                                        <div className="flex items-start justify-between gap-1.5">
+                                                            <span className="min-w-0 truncate text-[10px] text-gray-600" title={profile.fullName}>
+                                                                {profile.fullName}
+                                                            </span>
+                                                            <span className={`shrink-0 rounded px-1 py-0.5 text-[9px] font-semibold ${status.cls}`}>
+                                                                {status.label}
+                                                            </span>
+                                                        </div>
+                                                        {profile.matchedPhones.length > 0 && (
+                                                            <div className="mt-0.5 text-[9px] text-gray-400">
+                                                                Найден по {profile.matchedPhones.map(formatPhone).join(', ')}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            {['linked', 'already_linked', 'merged'].includes(parkCheckResult.driverLink?.status) && (
+                                <div className="mt-1.5 rounded-md bg-emerald-50 px-2 py-1 text-[10px] text-emerald-700">
+                                    Карточка водителя: {parkCheckResult.driverLink.displayName}
+                                </div>
+                            )}
+                            {parkCheckResult.driverLink?.message && (
+                                <div className="mt-1.5 rounded-md bg-amber-50 px-2 py-1 text-[10px] text-amber-700">
+                                    {parkCheckResult.driverLink.message}
+                                </div>
+                            )}
+                            {parkCheckResult.errors.length > 0 && (
+                                <div className="mt-1.5 text-[9px] text-amber-700">
+                                    Не удалось проверить парков: {parkCheckResult.errors.length}
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* Driver-specific fields from Contact */}
                     {contact?.driver && (

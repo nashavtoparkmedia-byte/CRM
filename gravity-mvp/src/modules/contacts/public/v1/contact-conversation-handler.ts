@@ -22,7 +22,7 @@ export type PrepareContactConversationIdentityPersistenceResultV1 =
         contact: ContactConversationContactV1
         identity: ContactConversationIdentityV1
     }
-    | { status: 'contact_not_found' | 'identity_not_found' | 'no_identity' }
+    | { status: 'contact_not_found' | 'identity_not_found' | 'phone_not_found' | 'no_identity' }
 
 export interface ContactConversationPersistencePortV1 {
     resolveChannelContact(input: {
@@ -39,8 +39,9 @@ export interface ContactConversationPersistencePortV1 {
         contactId: string
         channel: ContactConversationChannelV1
         identityId: string | null
+        phoneId: string | null
     }): Promise<PrepareContactConversationIdentityPersistenceResultV1>
-    getPreferredActiveContactPhone(contactId: string): Promise<string | null>
+    getPreferredActiveContactPhone(contactId: string, phoneId: string | null): Promise<string | null>
 }
 
 export function createResolveChannelContactHandlerV1(port: ContactConversationPersistencePortV1) {
@@ -72,6 +73,7 @@ export function createPrepareContactConversationIdentityHandlerV1(port: ContactC
             contactId: parsed.contactId,
             channel: parsed.channel,
             identityId: parsed.identityId,
+            phoneId: parsed.phoneId,
         })
 
         if (prepared.status !== 'ready') {
@@ -97,7 +99,7 @@ export function createGetPreferredActiveContactPhoneHandlerV1(port: ContactConve
         const parsed = parseGetPreferredActiveContactPhoneQueryV1(query)
         return {
             contract: GET_PREFERRED_ACTIVE_CONTACT_PHONE_RESULT_V1,
-            phone: await port.getPreferredActiveContactPhone(parsed.contactId),
+            phone: await port.getPreferredActiveContactPhone(parsed.contactId, parsed.phoneId),
         }
     }
 }

@@ -68,7 +68,7 @@
     {
       "context": "telegram_channel",
       "path": "architecture/contexts/v1/manifests/telegram_channel.json",
-      "sha256": "bc0fc50bc9afc074a0ad1eaf5a98f775d0bea1e9b235b617889b60c341ea0d2d"
+      "sha256": "95656843814821e33924557bf21e9f880b5539b43f440cca83cba67f4de5e6f3"
     },
     {
       "context": "whatsapp_channel",
@@ -88,7 +88,7 @@
     },
     "contract_registry": {
       "path": "architecture/contracts/v1/registry.json",
-      "sha256": "6115a3de83dc86543170ba0bdd99da629cd7a3de3ec8777587dc31b78565c343"
+      "sha256": "048538080b314d99d280878b2ce5dfb3f8b5827a5a2cb314f0fcc1d78ff2009e"
     },
     "contract_registry_negative_tests": {
       "path": "tools/architecture/test-contract-registry.mjs",
@@ -124,7 +124,7 @@
     },
     "ownership_candidates": {
       "path": "architecture/evidence/v1/data-ownership-candidates.json",
-      "sha256": "2e77497773b597933383a1b0d77dfdb09393e33a9d011cdd87dde1bb6543696e"
+      "sha256": "feaf5ab63375a88755d6747547a6107e9ce836876e29d03cbc9fe88dc2acb561"
     },
     "raw_write_owner_overrides": {
       "path": "architecture/contexts/v1/raw-write-owner-overrides.json",

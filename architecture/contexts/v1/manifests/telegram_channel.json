@@ -20,7 +20,8 @@
   "commands": [
     "SendTelegramMessageCommand.v1",
     "LinkTelegramDriverCommand.v1",
-    "PublishTelegramSurveyCommand.v1"
+    "PublishTelegramSurveyCommand.v1",
+    "RecordBotUserProfileCommand.v1"
   ],
   "compatibility_strategy": "Preserve current bot/webhook/frontend behavior and database shape; add channel adapters before removing direct Chat/Contact writes.",
   "context": {
@@ -118,6 +119,15 @@
       "id": "gravity-mvp/prisma/schema.prisma:BotChatMessage",
       "mapped_table": null,
       "model": "BotChatMessage",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "telegram_provider"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:BotUserRegistry",
+      "mapped_table": null,
+      "model": "BotUserRegistry",
       "schema": "gravity-mvp/prisma/schema.prisma"
     },
     {
@@ -269,7 +279,8 @@
     "TelegramReachability.v1",
     "TelegramRuntimeOperations.v1",
     "TelegramConnectionMetadataQuery.v1",
-    "BotSurveyApi.v1"
+    "BotSurveyApi.v1",
+    "BotUserProfileCommands.v1"
   ],
   "responsibility": "Telegram provider sessions, driver identities, bot survey product and its frontend.",
   "schema": "yoko.crm.module-manifest.v1",

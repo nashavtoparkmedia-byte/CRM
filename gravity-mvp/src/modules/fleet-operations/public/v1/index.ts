@@ -90,3 +90,10 @@ export { runScheduledYandexSyncV1 } from './yandex-sync-runtime'
 export type { ScheduledYandexSyncResultV1 } from './yandex-sync-runtime'
 export { dispatchScheduledScraperChecksV1 } from './scheduled-scraper-check-dispatch'
 export type { ScheduledScraperCheckDispatchResultV1 } from './scheduled-scraper-check-dispatch'
+export {
+    getParkLinkedDriverPhoneV1,
+    normalizeParkPhoneDigitsV1,
+    searchYandexParksByPhonesV1,
+    upsertParkMatchedDriverV1,
+} from './park-phone-search'
+export type { ParkPhoneProfileV1, ParkPhoneSearchResultV1 } from './park-phone-search'

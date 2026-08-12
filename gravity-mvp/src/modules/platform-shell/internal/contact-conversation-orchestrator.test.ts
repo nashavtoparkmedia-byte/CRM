@@ -32,7 +32,7 @@ function ownerApis(
         linked?: ContactConversationV1 | null
         phone?: string | null
         driverId?: string | null
-        prepareStatus?: 'ready' | 'contact_not_found' | 'identity_not_found' | 'no_identity'
+        prepareStatus?: 'ready' | 'contact_not_found' | 'identity_not_found' | 'phone_not_found' | 'no_identity'
         fallbackIsNew?: boolean
     } = {},
 ) {
@@ -139,6 +139,7 @@ describe('Platform contact-conversation orchestration', () => {
             contactId: 'contact-1',
             channel: 'telegram',
             identityId: null,
+            phoneId: null,
         })
 
         expect(calls).toEqual([
@@ -159,6 +160,7 @@ describe('Platform contact-conversation orchestration', () => {
             contactId: 'contact-1',
             channel: 'telegram',
             identityId: null,
+            phoneId: null,
         })
 
         expect(calls).toEqual(['prepare-identity', 'find-contact-conversation', 'get-phone', 'open-fallback'])
@@ -176,7 +178,34 @@ describe('Platform contact-conversation orchestration', () => {
             contactId: 'contact-1',
             channel: 'telegram',
             identityId: 'missing',
+            phoneId: null,
         })).resolves.toEqual({ status: 'identity_not_found' })
         expect(calls).toEqual(['prepare-identity'])
+    })
+
+    test('a selected phone disables contact-wide and legacy-driver fallbacks', async () => {
+        const calls: string[] = []
+        const owners = ownerApis(calls)
+        const orchestrator = createContactConversationOrchestratorV1(owners)
+
+        await orchestrator.openContactConversationForContactV1({
+            contactId: 'contact-1',
+            channel: 'telegram',
+            identityId: null,
+            phoneId: 'phone-2',
+        })
+
+        expect(owners.prepareContactConversationIdentityV1).toHaveBeenCalledWith(
+            expect.objectContaining({ phoneId: 'phone-2' }),
+        )
+        expect(owners.findAndBackfillContactConversationV1).toHaveBeenCalledWith(
+            expect.objectContaining({ allowContactFallback: false }),
+        )
+        expect(owners.getPreferredActiveContactPhoneV1).toHaveBeenCalledWith(
+            expect.objectContaining({ phoneId: 'phone-2' }),
+        )
+        expect(owners.openFallbackContactConversationV1).toHaveBeenCalledWith(
+            expect.objectContaining({ legacyDriverId: null }),
+        )
     })
 })

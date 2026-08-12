@@ -25,6 +25,7 @@ export interface FindAndBackfillContactConversationCommandV1 {
   contactId: string
   contactIdentityId: string
   channel: ContactConversationChannelV1
+  allowContactFallback: boolean
 }
 
 export interface FindAndBackfillContactConversationResultV1 {
@@ -109,11 +110,12 @@ export function parseFindAndBackfillContactConversationCommandV1(
     input,
     FIND_AND_BACKFILL_CONTACT_CONVERSATION_COMMAND_V1,
     'messaging.FindAndBackfillContactConversationCommand.',
-    ['contract', 'contactId', 'contactIdentityId', 'channel'],
+    ['contract', 'contactId', 'contactIdentityId', 'channel', 'allowContactFallback'],
   )
   requireString(value.contactId, 'contactId')
   requireString(value.contactIdentityId, 'contactIdentityId')
   requireChannel(value.channel)
+  if (typeof value.allowContactFallback !== 'boolean') invalid('allowContactFallback must be a boolean')
   return value as unknown as FindAndBackfillContactConversationCommandV1
 }
 

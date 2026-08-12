@@ -22,7 +22,7 @@ def assert_contains(needle: str, text: str) -> None:
 def test_backend_exposes_canonical_summary() -> None:
     contact_route = read(app_root / "api" / "contacts" / "[id]" / "route.ts")
     message_service = read(src_root / "lib" / "MessageService.ts")
-    helper = read(src_root / "lib" / "contactDisplay.ts")
+    helper = read(src_root / "modules" / "contacts" / "public" / "v1" / "contact-display-policy.ts")
 
     assert_contains("buildCanonicalContactSummary", contact_route)
     assert_contains("canonicalSummary", message_service)
@@ -49,8 +49,10 @@ def test_profile_keeps_current_max_identity_linked() -> None:
 
     assert_contains("identityHasChat", drawer)
     assert_contains("label: 'связан'", drawer)
-    assert_match(r"const allContactChannels = new Set\(contact\.identities\.map\(i => i\.channel\)\)", drawer)
-    assert_match(r"new Set\(\[\.\.\.identities\.map\(i => i\.channel\), \.\.\.allContactChannels\]\)", drawer)
+    assert_contains("reachabilityKey", drawer)
+    assert_match(r"const existingChannels = new Set\(identities\.map\(i => i\.channel\)\)", drawer)
+    assert_contains("handleWrite(ch, undefined, phone.id)", drawer)
+    assert_contains("handleCheckParks", drawer)
     assert_contains("getSegmentLabel(contact.driver.segment)", drawer)
 
 

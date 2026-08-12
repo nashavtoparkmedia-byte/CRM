@@ -86,11 +86,15 @@ export type {
 } from './contact-merge-handler'
 export {
     addPhoneToContactV1,
+    attachPhoneToIdentityV1,
     cleanupDanglingContactIdentitiesV1,
     resolveChannelContactOperationV1,
     resolveContactByPhoneV1,
 } from './contact-identity-maintenance'
+export { getContactParkCheckContextV1, persistContactParkCheckResultV1 } from './contact-park-check'
+export type { ContactParkCheckContextV1 } from './contact-park-check'
 export type {
     AddPhoneToContactOptionsV1,
     AddPhoneToContactResultV1,
+    AttachPhoneToIdentityResultV1,
 } from './contact-identity-maintenance'

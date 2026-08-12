@@ -28,6 +28,7 @@ export interface Message {
     origin?: 'operator' | 'ai' | 'auto' | 'system'
     account?: string
     externalId?: string
+    clientMessageId?: string
     metadata?: Record<string, any>
     attachments?: MessageAttachment[]
 }
@@ -86,6 +87,10 @@ export function useMessages(chatId: string | null) {
     const [hasMoreHistory, setHasMoreHistory] = useState(true)
 
     const lastFetchTime = useRef(0)
+    const loadInFlight = useRef(false)
+    const loadMessagesRef = useRef<(opts?: { silent?: boolean; force?: boolean }) => Promise<void>>(
+        async () => {},
+    )
 
     // Prepare UI items (grouping, separators, etc.)
     const uiItems = useMemo(() => prepareMessagesForUI(messages), [messages]);
@@ -112,11 +117,13 @@ export function useMessages(chatId: string | null) {
         // - We dropped the `_t=${now}` cache buster so the browser HTTP
         //   cache + any future ETag/Last-Modified can de-duplicate
         //   identical responses.
-        const loadMessages = async (opts: { silent?: boolean } = {}) => {
+        const loadMessages = async (opts: { silent?: boolean; force?: boolean } = {}) => {
             // Avoid overlapping requests
             const now = Date.now()
-            if (now - lastFetchTime.current < 2000) return
+            if (loadInFlight.current) return
+            if (!opts.force && now - lastFetchTime.current < 2000) return
             lastFetchTime.current = now
+            loadInFlight.current = true
 
             // Defer the spinner: only show it if the fetch takes >300ms.
             // For most opens the API responds in 20-50ms, well below the
@@ -164,10 +171,12 @@ export function useMessages(chatId: string | null) {
             } catch (error) {
                 console.error("Failed to load messages", error)
             } finally {
+                loadInFlight.current = false
                 if (spinnerTimer) clearTimeout(spinnerTimer)
                 if (isMounted && shouldShowSpinner) setIsLoading(false)
             }
         }
+        loadMessagesRef.current = loadMessages
 
         // First load: silent=true if we already have cache (instant render),
         // otherwise spinner while we fetch the very first batch.
@@ -250,10 +259,23 @@ export function useMessages(chatId: string | null) {
         // Polling stays as a slow fallback (was 3s, now 30s) — covers
         // anything SSE missed during reconnects, or environments where
         // SSE is blocked by a corporate proxy.
-        const interval = setInterval(() => loadMessages({ silent: true }), 30000)
+        const refreshActiveChat = () => {
+            void loadMessages({ silent: true, force: true })
+        }
+        const refreshOnVisibility = () => {
+            if (document.visibilityState === 'visible') refreshActiveChat()
+        }
+
+        window.addEventListener('focus', refreshActiveChat)
+        document.addEventListener('visibilitychange', refreshOnVisibility)
+
+        const interval = setInterval(refreshActiveChat, 30000)
         return () => {
             isMounted = false
             clearInterval(interval)
+            window.removeEventListener('focus', refreshActiveChat)
+            document.removeEventListener('visibilitychange', refreshOnVisibility)
+            loadMessagesRef.current = async () => {}
             if (eventSource) eventSource.close()
         }
     }, [chatId])
@@ -286,7 +308,9 @@ export function useMessages(chatId: string | null) {
             sentAt: new Date().toISOString(),
             status: 'sent', // Single ✓ — sending
             channel: apiChannel,
-            origin: 'operator'
+            origin: 'operator',
+            clientMessageId,
+            metadata: quotedMsgId ? { quotedMsgId } : undefined,
         }
 
         const currentMsgs = messageCache.get(chatId) || []
@@ -314,10 +338,13 @@ export function useMessages(chatId: string | null) {
             if (res.ok) {
                 const result = await res.json()
                 // Update optimistic message with server ID and final status
-                const finalStatus = result.success === false ? 'failed' as const : 'delivered' as const
+                const allowedStatuses = new Set<Message['status']>(['queued', 'sent', 'delivered', 'read', 'failed'])
+                const finalStatus = result.success === false
+                    ? 'failed' as const
+                    : (allowedStatuses.has(result.status) ? result.status : 'sent') as Message['status']
                 const updatedMsgs = (messageCache.get(chatId) || []).map(m =>
                     m.id === clientMessageId
-                        ? { ...m, id: result.id || m.id, status: finalStatus, ...(result.error ? { metadata: { error: result.error } } : {}) }
+                        ? { ...m, id: result.id || m.id, status: finalStatus, ...(result.error ? { metadata: { ...m.metadata, error: result.error } } : {}) }
                         : m
                 )
                 messageCache.set(chatId, updatedMsgs)
@@ -328,7 +355,7 @@ export function useMessages(chatId: string | null) {
                 const errorText = err.error || err.message || 'Ошибка отправки'
                 const failedMsgs = (messageCache.get(chatId) || []).map(m =>
                     m.id === clientMessageId
-                        ? { ...m, status: 'failed' as const, metadata: { error: errorText } }
+                        ? { ...m, status: 'failed' as const, metadata: { ...m.metadata, error: errorText } }
                         : m
                 )
                 messageCache.set(chatId, failedMsgs)
@@ -339,7 +366,7 @@ export function useMessages(chatId: string | null) {
             const errorText = err instanceof Error ? err.message : 'Ошибка сети'
             const failedMsgs = (messageCache.get(chatId) || []).map(m =>
                 m.id === clientMessageId
-                    ? { ...m, status: 'failed' as const, metadata: { error: errorText } }
+                    ? { ...m, status: 'failed' as const, metadata: { ...m.metadata, error: errorText } }
                     : m
             )
             messageCache.set(chatId, failedMsgs)
@@ -370,6 +397,7 @@ export function useMessages(chatId: string | null) {
             status: 'sent',
             channel,
             origin: 'operator',
+            clientMessageId,
         }
 
         const currentMsgs = messageCache.get(chatId) || []
@@ -397,8 +425,21 @@ export function useMessages(chatId: string | null) {
                 )
                 messageCache.set(chatId, failedMsgs)
                 setMessages(failedMsgs)
+            } else {
+                const result = await res.json().catch(() => null)
+                const allowedStatuses = new Set<Message['status']>(['queued', 'sent', 'delivered', 'read', 'failed'])
+                const finalStatus = result?.success === false
+                    ? 'failed' as const
+                    : (allowedStatuses.has(result?.status) ? result.status : 'sent') as Message['status']
+                const updatedMsgs = (messageCache.get(chatId) || []).map(m =>
+                    m.id === `cmid-${clientMessageId}`
+                        ? { ...m, id: result?.messageId || m.id, clientMessageId, status: finalStatus }
+                        : m
+                )
+                messageCache.set(chatId, updatedMsgs)
+                setMessages(updatedMsgs)
+                await loadMessagesRef.current({ silent: true, force: true })
             }
-            // On success: broadcastChatMessage in send-media route fires SSE → replaces optimistic msg
         } catch {
             const failedMsgs = (messageCache.get(chatId) || []).map(m =>
                 m.id === `cmid-${clientMessageId}` ? { ...m, status: 'failed' as const } : m

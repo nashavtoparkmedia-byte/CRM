@@ -42,12 +42,14 @@ export interface PrepareContactConversationIdentityCommandV1 {
     contactId: string
     channel: ContactConversationChannelV1
     identityId: string | null
+    phoneId: string | null
 }
 
 export type PrepareContactConversationIdentityStatusV1 =
     | 'ready'
     | 'contact_not_found'
     | 'identity_not_found'
+    | 'phone_not_found'
     | 'no_identity'
 
 export type PrepareContactConversationIdentityResultV1 =
@@ -59,12 +61,13 @@ export type PrepareContactConversationIdentityResultV1 =
     }
     | {
         contract: typeof PREPARE_CONTACT_CONVERSATION_IDENTITY_RESULT_V1
-        status: 'contact_not_found' | 'identity_not_found' | 'no_identity'
+        status: 'contact_not_found' | 'identity_not_found' | 'phone_not_found' | 'no_identity'
     }
 
 export interface GetPreferredActiveContactPhoneQueryV1 {
     contract: typeof GET_PREFERRED_ACTIVE_CONTACT_PHONE_QUERY_V1
     contactId: string
+    phoneId: string | null
 }
 
 export interface GetPreferredActiveContactPhoneResultV1 {
@@ -159,11 +162,12 @@ export function parsePrepareContactConversationIdentityCommandV1(
         input,
         PREPARE_CONTACT_CONVERSATION_IDENTITY_COMMAND_V1,
         'contacts.PrepareContactConversationIdentityCommand.',
-        ['contract', 'contactId', 'channel', 'identityId'],
+        ['contract', 'contactId', 'channel', 'identityId', 'phoneId'],
     )
     requireLegacyIdentifier(value.contactId, 'contactId')
     requireChannel(value.channel)
     requireNullableLegacyIdentifier(value.identityId, 'identityId')
+    requireNullableLegacyIdentifier(value.phoneId, 'phoneId')
     return value as unknown as PrepareContactConversationIdentityCommandV1
 }
 
@@ -174,8 +178,9 @@ export function parseGetPreferredActiveContactPhoneQueryV1(
         input,
         GET_PREFERRED_ACTIVE_CONTACT_PHONE_QUERY_V1,
         'contacts.GetPreferredActiveContactPhoneQuery.',
-        ['contract', 'contactId'],
+        ['contract', 'contactId', 'phoneId'],
     )
     requireNonEmptyString(value.contactId, 'contactId')
+    requireNullableLegacyIdentifier(value.phoneId, 'phoneId')
     return value as unknown as GetPreferredActiveContactPhoneQueryV1
 }

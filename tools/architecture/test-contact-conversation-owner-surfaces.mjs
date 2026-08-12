@@ -78,6 +78,7 @@ const findCommand = {
   contactId: 'contact-1',
   contactIdentityId: 'identity-1',
   channel: 'telegram',
+  allowContactFallback: true,
 }
 const fallbackCommand = {
   contract: messagingContracts.OPEN_FALLBACK_CONTACT_CONVERSATION_COMMAND_V1,
@@ -151,7 +152,7 @@ try {
     assert.equal((await messagingHandlers.createFindAndBackfillContactConversationHandlerV1(port)(findCommand)).conversation.id, 'chat-1')
     assert.equal((await messagingHandlers.createOpenFallbackContactConversationHandlerV1(port)(fallbackCommand)).isNew, false)
     assert.deepEqual(calls, [
-      ['find', { contactId: 'contact-1', contactIdentityId: 'identity-1', channel: 'telegram' }],
+      ['find', { contactId: 'contact-1', contactIdentityId: 'identity-1', channel: 'telegram', allowContactFallback: true }],
       ['fallback', { legacyDriverId: 'driver-1', channel: 'telegram', externalChatId: 'telegram:79990001122', name: 'Contact One', contactId: 'contact-1', contactIdentityId: 'identity-1' }],
     ])
     await assert.rejects(messagingHandlers.createFindAndBackfillContactConversationHandlerV1({
@@ -175,11 +176,11 @@ try {
       async update(input) { calls.push(['update', input]); return {} },
     } }
     const port = loadAdapter(messagingAdapterOutput, 'legacyPrismaContactConversationPortV1', prisma)
-    assert.deepEqual(plain(await port.findAndBackfill({ contactId: 'contact-1', contactIdentityId: 'identity-1', channel: 'telegram' })), {
+    assert.deepEqual(plain(await port.findAndBackfill({ contactId: 'contact-1', contactIdentityId: 'identity-1', channel: 'telegram', allowContactFallback: true })), {
       ...conversation, contactId: 'contact-1', contactIdentityId: 'identity-1',
     })
     assert.deepEqual(plain(calls), [
-      ['findFirst', { where: { contactId: 'contact-1', channel: 'telegram' }, orderBy, select }],
+      ['findFirst', { where: { contactIdentityId: 'identity-1', channel: 'telegram' }, orderBy, select }],
       ['update', { where: { id: 'chat-1' }, data: { contactIdentityId: 'identity-1' } }],
     ])
   })

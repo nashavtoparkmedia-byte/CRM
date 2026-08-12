@@ -3,6 +3,7 @@ import {
     registerMaxChannelDeliveryV1,
     type MaxChannelDeliveryV1,
 } from '@/modules/messaging/public/v1/channel-delivery-runtime'
+import { sendMaxReactionDeliveryV1 } from './reaction-delivery'
 
 const scraperUrl = () => process.env.MAX_SCRAPER_URL || 'http://localhost:3005'
 
@@ -26,7 +27,7 @@ const capability: MaxChannelDeliveryV1 = {
         return { externalId: typeof payload.externalId === 'string' ? payload.externalId : undefined }
     },
     async sendReaction(input) {
-        await post('/send-reaction', input)
+        return sendMaxReactionDeliveryV1(input)
     },
 }
 

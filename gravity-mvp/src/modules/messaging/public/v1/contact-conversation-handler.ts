@@ -30,6 +30,7 @@ export function createFindAndBackfillContactConversationHandlerV1(
       contactId: parsed.contactId,
       contactIdentityId: parsed.contactIdentityId,
       channel: parsed.channel,
+      allowContactFallback: parsed.allowContactFallback,
     })
     return {
       contract: FIND_AND_BACKFILL_CONTACT_CONVERSATION_RESULT_V1,

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { broadcastChatMessage } from '@/lib/messageStreamBus'
 import { getMaxChannelDeliveryV1, getTelegramChannelDeliveryV1, getWhatsAppChannelDeliveryV1 } from '@/modules/messaging/public/v1/channel-delivery-runtime'
+import { PATCH_MESSAGE_METADATA_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { patchMessageMetadataV1 } from '@/modules/messaging/public/v1'
 
 /**
  * POST /api/messages/reaction
@@ -52,19 +54,58 @@ export async function POST(req: NextRequest) {
 
         const updatedMetadata = { ...metadata, reactions }
 
-        const updated = await prisma.message.update({
-            where: { id: messageId },
-            data: { metadata: updatedMetadata }
+        // A MAX frame acknowledgement is not a provider echo. Persist only
+        // after the channel capability confirms the reaction reached MAX.
+        if (msg.channel === 'max') {
+            try {
+                const result = await sendReactionToChannel(
+                    msg.channel,
+                    msg.externalId,
+                    msg.chat?.externalChatId || '',
+                    emoji,
+                    isRemoving,
+                    msg.chat?.metadata,
+                )
+                if (!result.reactionConfirmed) {
+                    console.log('[MAX_DELIVERY]', JSON.stringify({
+                        ts: new Date().toISOString(),
+                        operation: 'reaction',
+                        status: result.status || 'send_requested',
+                        crmMessageId: msg.id,
+                        maxMessageId: msg.externalId,
+                        conversationId: msg.chat?.externalChatId || '',
+                        error: null,
+                    }))
+                    return NextResponse.json({
+                        success: false,
+                        pending: true,
+                        status: result.status || 'send_requested',
+                        message: 'MAX reaction sent; waiting for provider confirmation',
+                    }, { status: 202 })
+                }
+            } catch (error: any) {
+                console.warn('[API/reaction] MAX delivery failed:', error.message)
+                return NextResponse.json({ error: error.message || 'MAX reaction failed' }, { status: 502 })
+            }
+        }
+
+        await patchMessageMetadataV1({
+            contract: PATCH_MESSAGE_METADATA_COMMAND_V1,
+            messageId,
+            metadata: updatedMetadata,
         })
+        const updated = { ...msg, metadata: updatedMetadata }
 
         // Broadcast immediately so all open chat tabs refresh without waiting for channel round-trip
         try { broadcastChatMessage(updated.chatId, updated) } catch {}
 
         // Send reaction to messenger channel (best-effort, don't fail on error)
-        try {
-            await sendReactionToChannel(msg.channel || '', msg.externalId, msg.chat?.externalChatId || '', emoji, isRemoving, msg.chat?.metadata)
-        } catch (err: any) {
-            console.warn(`[API/reaction] Failed to send reaction to ${msg.channel}:`, err.message)
+        if (msg.channel !== 'max') {
+            try {
+                await sendReactionToChannel(msg.channel || '', msg.externalId, msg.chat?.externalChatId || '', emoji, isRemoving, msg.chat?.metadata)
+            } catch (err: any) {
+                console.warn(`[API/reaction] Failed to send reaction to ${msg.channel}:`, err.message)
+            }
         }
 
         return NextResponse.json({ reactions })
@@ -81,10 +122,10 @@ async function sendReactionToChannel(
     emoji: string,
     isRemoving: boolean,
     chatMetadata: any
-) {
+): Promise<{ reactionConfirmed: boolean; status?: string }> {
     if (!externalMsgId) {
         console.log(`[reaction] No externalId for message, skipping channel delivery`)
-        return
+        return { reactionConfirmed: false }
     }
 
     switch (channel) {
@@ -96,7 +137,7 @@ async function sendReactionToChannel(
                 emoji,
                 remove: isRemoving,
             })
-            break
+            return { reactionConfirmed: true }
         case 'telegram':
             await getTelegramChannelDeliveryV1().sendReaction({
                 connectionId: chatMetadata?.connectionId,
@@ -105,16 +146,16 @@ async function sendReactionToChannel(
                 emoji,
                 remove: isRemoving,
             })
-            break
+            return { reactionConfirmed: true }
         case 'max':
-            await getMaxChannelDeliveryV1().sendReaction({
+            return getMaxChannelDeliveryV1().sendReaction({
                 chatId: externalChatId.replace(/^max:/, ''),
                 messageId: externalMsgId,
                 emoji,
                 remove: isRemoving,
             })
-            break
         default:
             console.log(`[reaction] Channel ${channel} not supported for reactions`)
+            return { reactionConfirmed: false }
     }
 }

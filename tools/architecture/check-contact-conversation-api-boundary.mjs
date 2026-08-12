@@ -14,6 +14,7 @@ const assertCheck = (name, condition, detail) => {
 const routes = [
     'gravity-mvp/src/app/api/contacts/start-conversation/route.ts',
     'gravity-mvp/src/app/api/contacts/[id]/chats/route.ts',
+    'gravity-mvp/src/app/api/contacts/[id]/parks/route.ts',
 ]
 const moduleRules = JSON.parse(read('architecture/evidence/v1/module-rules.json'))
 const compiledRules = moduleRules.modules.map((rule) => ({ ...rule, regex: new RegExp(rule.match) }))
@@ -24,12 +25,12 @@ const exactOverride = compiledRules.find((rule, index) =>
     && routes.every((file) => rule.regex.test(file)))
 
 assertCheck(
-    'both contact-conversation routes classify as Platform Shell gravity_core',
+    'all contact composition routes classify as Platform Shell gravity_core',
     classifications.every((classification) => classification === 'gravity_core'),
     `classifications were ${JSON.stringify(classifications)}`,
 )
 assertCheck(
-    'the high-priority override is exact to the two route files',
+    'the high-priority override is exact to the three composition route files',
     Boolean(exactOverride)
         && [
             'gravity-mvp/src/app/api/contacts/route.ts',
@@ -44,9 +45,39 @@ for (const route of routes) {
     const source = read(route)
     assertCheck(
         `${route} is a Prisma-free Platform adapter`,
+        !/@\/lib\/prisma|\bprisma\s*\./.test(source),
+        'route retains direct persistence',
+    )
+}
+
+const parkRoute = read(routes[2])
+assertCheck(
+    'park check composes only Contacts, Fleet and Platform merge capabilities',
+    parkRoute.includes("from '@/modules/contacts/public/v1'")
+        && parkRoute.includes("from '@/modules/fleet-operations/public/v1'")
+        && parkRoute.includes("from '@/modules/platform-shell/internal/contact-park-merge-orchestrator'")
+        && !/@\/modules\/(?:contacts|fleet-operations)\/(?:internal|infrastructure)|legacy-prisma/.test(parkRoute),
+    'park route bypasses an owner boundary or imports an owner implementation adapter',
+)
+
+const parkMergeOrchestrator = read('gravity-mvp/src/modules/platform-shell/internal/contact-park-merge-orchestrator.ts')
+assertCheck(
+    'park merge capability is exact and delegates the versioned Contacts command',
+    parkMergeOrchestrator.includes("from '@/contracts/contacts/v1'")
+        && parkMergeOrchestrator.includes("from '@/infrastructure/contact-merge-composition'")
+        && parkMergeOrchestrator.includes("operation: 'contact_to_driver'")
+        && parkMergeOrchestrator.includes("mergedBy: 'park_check'")
+        && !/@\/lib\/ContactMergeService|@\/lib\/prisma|\bprisma\s*\./.test(parkMergeOrchestrator),
+    'park merge composition is broad, unversioned, or bypasses the established transaction capability',
+)
+
+for (const route of routes.slice(0, 2)) {
+    const source = read(route)
+    assertCheck(
+        `${route} delegates conversation composition to Platform Shell`,
         source.includes('@/modules/platform-shell/internal/contact-conversation-orchestrator')
-            && !/@\/lib\/prisma|\bContactService\b|\bprisma\s*\./.test(source),
-        'route bypasses Platform orchestration or retains owner persistence',
+            && !/\bContactService\b/.test(source),
+        'contact-conversation route bypasses Platform orchestration',
     )
 }
 

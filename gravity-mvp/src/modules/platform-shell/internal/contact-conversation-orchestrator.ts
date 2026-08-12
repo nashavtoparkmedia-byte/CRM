@@ -71,10 +71,11 @@ export interface OpenContactConversationForContactInputV1 {
     contactId: string
     channel: PlatformContactConversationChannelV1
     identityId: string | null
+    phoneId: string | null
 }
 
 export type OpenContactConversationForContactResultV1 =
-    | { status: 'contact_not_found' | 'identity_not_found' | 'no_identity' }
+    | { status: 'contact_not_found' | 'identity_not_found' | 'phone_not_found' | 'no_identity' }
     | ({ status: 'ready' } & ReadyContactConversationV1)
 
 const defaultOwnerApisV1: ContactConversationOwnerApisV1 = {
@@ -104,6 +105,7 @@ export function createContactConversationOrchestratorV1(owners: ContactConversat
             contactId: resolved.contact.id,
             contactIdentityId: resolved.identity.id,
             channel: input.channel,
+            allowContactFallback: true,
         })
         if (linked.conversation) {
             return {
@@ -145,6 +147,7 @@ export function createContactConversationOrchestratorV1(owners: ContactConversat
             contactId: input.contactId,
             channel: input.channel,
             identityId: input.identityId,
+            phoneId: input.phoneId,
         })
         if (prepared.status !== 'ready') return { status: prepared.status }
 
@@ -153,6 +156,7 @@ export function createContactConversationOrchestratorV1(owners: ContactConversat
             contactId: input.contactId,
             contactIdentityId: prepared.identity.id,
             channel: input.channel,
+            allowContactFallback: input.phoneId === null,
         })
         if (linked.conversation) {
             return {
@@ -168,6 +172,7 @@ export function createContactConversationOrchestratorV1(owners: ContactConversat
         const phone = await owners.getPreferredActiveContactPhoneV1({
             contract: GET_PREFERRED_ACTIVE_CONTACT_PHONE_QUERY_V1,
             contactId: input.contactId,
+            phoneId: input.phoneId,
         })
         let legacyDriverId: string | null = null
         if (phone.phone) {
@@ -180,7 +185,7 @@ export function createContactConversationOrchestratorV1(owners: ContactConversat
 
         const opened = await owners.openFallbackContactConversationV1({
             contract: OPEN_FALLBACK_CONTACT_CONVERSATION_COMMAND_V1,
-            legacyDriverId,
+            legacyDriverId: input.phoneId === null ? legacyDriverId : null,
             channel: input.channel,
             externalChatId: `${input.channel}:${prepared.identity.externalId}`,
             name: prepared.contact.displayName,

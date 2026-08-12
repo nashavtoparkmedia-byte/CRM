@@ -12,6 +12,7 @@ import { transportRegistryLifecycleV1 as registry } from '@/modules/messaging/pu
 import { attachBinaryMessageMediaV1, attachMessageMediaV1, createChannelMessageV1, deleteConversationsByIdV1, deleteHistoryImportJobsForChannelV1, deleteHistoryImportJobsForConnectionV1, ensureConversationContactLinkV1, linkMatchedDriverToConversationCapabilityV1, patchChannelConversationV1, patchHistoryImportJobV1, patchMessageDeliveryV1, patchMessageMetadataV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
 import { ATTACH_BINARY_MESSAGE_MEDIA_COMMAND_V1, ATTACH_MESSAGE_MEDIA_COMMAND_V1, CREATE_CHANNEL_MESSAGE_COMMAND_V1, DELETE_CONVERSATIONS_BY_ID_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CHANNEL_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CONNECTION_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, PATCH_MESSAGE_DELIVERY_COMMAND_V1, PATCH_MESSAGE_METADATA_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { projectTelegramConnectionMetadata } from '@/modules/telegram-channel/public/v1/telegram-connection-public-metadata'
+import { getTelegramTransportOptionsV1 } from '@/modules/telegram-channel/public/v1'
 import { requireIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
 import { cleanupDanglingContactIdentitiesV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
 
@@ -86,8 +87,10 @@ export async function getTelegramAuthQR(apiId: number, apiHash: string) {
     await requireIntegrationAdminAccess()
     console.log(`[TG-AUTH] Starting QR generation for API ID: ${apiId}`)
     const stringSession = new StringSession('')
+    const transport = getTelegramTransportOptionsV1()
     const client = new TelegramClient(stringSession, apiId, apiHash, {
         connectionRetries: 5,
+        ...transport.options,
     })
 
     try {
@@ -646,8 +649,59 @@ async function processOutboundMirrorMessage(message: any, connectionId: string, 
     if (!validated) return
     const sentAt = validated
 
-    const chat = await (prisma.chat as any).findUnique({ where: { externalChatId } })
-    if (!chat) return  // unknown recipient — skip
+    let chat = await (prisma.chat as any).findUnique({ where: { externalChatId } })
+    if (!chat) {
+        let recipient: any = message.chat ?? null
+        if (!recipient && typeof message.getChat === 'function') {
+            try { recipient = await message.getChat() } catch { /* fallback below */ }
+        }
+        const recipientName = (() => {
+            const firstName = (recipient?.firstName ?? '').trim()
+            const lastName = (recipient?.lastName ?? '').trim()
+            const fullName = [firstName, lastName].filter(Boolean).join(' ').trim()
+            if (fullName) return fullName
+            if (recipient?.username) return `@${recipient.username}`
+            return `TG ${recipientId}`
+        })()
+
+        const created = await upsertChannelConversationV1({
+            contract: UPSERT_CHANNEL_CONVERSATION_COMMAND_V1,
+            externalChatId,
+            channel: 'telegram',
+            name: recipientName,
+            chatType: 'private',
+            metadata: { connectionId },
+        })
+        chat = created.conversation as any
+        await patchChannelConversationV1({
+            contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1,
+            selector: { chatId: chat.id },
+            patch: { lastMessageAt: sentAt },
+        })
+
+        try {
+            const contactResult = await resolveChannelContactOperationV1(
+                'telegram', recipientId, null, recipientName,
+            )
+            await ensureConversationContactLinkV1({
+                contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
+                chatId: chat.id,
+                contactId: contactResult.contact.id,
+                contactIdentityId: contactResult.identity.id,
+            })
+        } catch (contactErr: any) {
+            console.error(`[${loggerPrefix}] ContactService error (non-blocking): ${contactErr.message}`)
+        }
+        try {
+            await DriverMatchService.linkChatToDriver(
+                chat.id,
+                { telegramId: recipientId },
+                linkMatchedDriverToConversationCapabilityV1,
+            )
+        } catch { /* an unlinked outbound chat is still valid */ }
+
+        console.log(`[${loggerPrefix}] AUTO-CREATED outbound chat=${chat.id} for externalChatId=${externalChatId}`)
+    }
 
     const msgType = mediaInfo?.type || 'text'
     const contentForDedup = text
@@ -674,6 +728,7 @@ async function processOutboundMirrorMessage(message: any, connectionId: string, 
         if (!existing.externalId && externalMsgId) {
             await patchMessageDeliveryV1({ contract: PATCH_MESSAGE_DELIVERY_COMMAND_V1, messageId: existing.id, externalId: externalMsgId, status: 'delivered' })
         }
+        await ensureOutboundTelegramAttachment(message, existing.id, msgType, loggerPrefix)
         console.log(`[${loggerPrefix}] DEDUP: skipped msgId=${externalMsgId} (existing=${existing.id})`)
         return
     }
@@ -682,26 +737,7 @@ async function processOutboundMirrorMessage(message: any, connectionId: string, 
     const savedResult = await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: chat.id, direction: 'outbound', content: text, channel: 'telegram', type: msgType as any, sentAt, status: 'delivered', externalId: externalMsgId || `telegram:${chat.id}:${sentAt.getTime()}` })
     const saved = savedResult.message as any
 
-    // Download media if present
-    if (mediaInfo && msgType !== 'text' && message.downloadMedia) {
-        try {
-            const buffer = await downloadTgMediaWithRetry(() => message.downloadMedia({ progressCallback: null }))
-            if (buffer) {
-                const mimeType = message.media?.document?.mimeType || (msgType === 'image' ? 'image/jpeg' : 'application/octet-stream')
-                const fileName = message.media?.document?.attributes?.find((a: any) => a.fileName)?.fileName || null
-                await attachBinaryMessageMediaV1({
-                    contract: ATTACH_BINARY_MESSAGE_MEDIA_COMMAND_V1,
-                    messageId: saved.id,
-                    mediaType: msgType,
-                    mimeType,
-                    fileName,
-                    data: buffer,
-                })
-            }
-        } catch (mediaErr: any) {
-            console.error(`[${loggerPrefix}] Media download failed:`, mediaErr.message)
-        }
-    }
+    await ensureOutboundTelegramAttachment(message, saved.id, msgType, loggerPrefix)
 
     // Update chat's lastMessageAt
     await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: chat.id }, patch: { lastMessageAt: sentAt } })
@@ -713,6 +749,43 @@ async function processOutboundMirrorMessage(message: any, connectionId: string, 
     )
 }
 
+async function ensureOutboundTelegramAttachment(
+    message: any,
+    messageId: string,
+    msgType: string,
+    loggerPrefix: string,
+): Promise<void> {
+    if (msgType === 'text' || !message.downloadMedia) return
+
+    try {
+        const existingAttachment = await (prisma.messageAttachment as any).findFirst({
+            where: { messageId },
+            select: { id: true },
+        })
+        if (existingAttachment) return
+
+        const buffer = await downloadTgMediaWithRetry(() =>
+            message.downloadMedia({ progressCallback: null }),
+        )
+        if (!buffer) return
+
+        const mimeType = message.media?.document?.mimeType
+            || (msgType === 'image' ? 'image/jpeg' : 'application/octet-stream')
+        const fileName = message.media?.document?.attributes
+            ?.find((attribute: any) => attribute.fileName)?.fileName || null
+        await attachBinaryMessageMediaV1({
+            contract: ATTACH_BINARY_MESSAGE_MEDIA_COMMAND_V1,
+            messageId,
+            mediaType: msgType,
+            mimeType,
+            fileName,
+            data: buffer,
+        })
+    } catch (mediaErr: any) {
+        console.error(`[${loggerPrefix}] Media download failed:`, mediaErr.message)
+    }
+}
+
 async function catchUpMissedMessages(client: TelegramClient, connectionId: string) {
     try {
         console.log(`[TG-CATCHUP] Fetching recent dialogs for connectionId=${connectionId}`)
@@ -720,12 +793,15 @@ async function catchUpMissedMessages(client: TelegramClient, connectionId: strin
         let processedCount = 0
         for (const dialog of dialogs) {
             if (!dialog.isUser) continue
-            const total = (dialog.unreadCount || 0) + 5 // also grab a few sent to catch our outbounds
-            const messages = await client.getMessages(dialog.entity, { limit: Math.min(total, 20) })
+            // Telegram Web may mark a message read before CRM reconnects. Replay
+            // a bounded recent window in both directions; processors dedupe by
+            // stable provider message id.
+            const total = Math.min(Math.max((dialog.unreadCount || 0) + 10, 20), 50)
+            const messages = await client.getMessages(dialog.entity, { limit: total })
             for (const msg of messages.reverse()) {
                 if (msg?.out) {
                     await processOutboundMirrorMessage(msg, connectionId, 'TG-CATCHUP-OUT')
-                } else if (dialog.unreadCount > 0) {
+                } else {
                     await processInboundTelegramMessage(msg, connectionId, 'TG-CATCHUP')
                 }
                 processedCount++
@@ -993,11 +1069,7 @@ async function getTelegramClient(connection: any) {
     const instanceId = registry.beginNewInstance(connection.id)
     tgInstanceIds.set(connection.id, instanceId)
 
-    const proxyHost = process.env.TG_PROXY_HOST
-    const proxyPort = process.env.TG_PROXY_PORT ? parseInt(process.env.TG_PROXY_PORT, 10) : undefined
-    const proxyConfig = proxyHost && proxyPort
-        ? { ip: proxyHost, port: proxyPort, socksType: 5 as const }
-        : undefined
+    const transport = getTelegramTransportOptionsV1()
 
     const client = new TelegramClient(
         new StringSession(connection.sessionString),
@@ -1005,12 +1077,12 @@ async function getTelegramClient(connection: any) {
         connection.apiHash,
         {
             connectionRetries: 5,
-            ...(proxyConfig ? { proxy: proxyConfig } : {}),
+            ...transport.options,
         }
     )
 
-    if (proxyConfig) {
-        console.log(`[TG-CLIENT] Using SOCKS5 proxy ${proxyHost}:${proxyPort}`)
+    if (transport.label) {
+        console.log(`[TG-CLIENT] Using ${transport.label}`)
     }
 
     await client.connect()
@@ -1481,10 +1553,22 @@ export async function importTelegramHistory(
                             try {
                                 const buffer = await client.downloadMedia(msg, {})
                                 if (buffer && Buffer.isBuffer(buffer)) {
-                                    const mimeType = msg.media?.document?.mimeType ||
+                                    const documentMedia = msg.media && 'document' in msg.media
+                                        ? msg.media.document
+                                        : undefined
+                                    const documentMimeType = documentMedia && 'mimeType' in documentMedia
+                                        ? documentMedia.mimeType
+                                        : undefined
+                                    const documentAttributes = documentMedia && 'attributes' in documentMedia
+                                        ? documentMedia.attributes
+                                        : undefined
+                                    const mimeType = documentMimeType ||
                                         (histMsgType === 'image' ? 'image/jpeg' : 'application/octet-stream')
                                     const dataUrl = `data:${mimeType};base64,${buffer.toString('base64')}`
-                                    const fileName = msg.media?.document?.attributes?.find((a: any) => a.fileName)?.fileName || null
+                                    const fileNameAttribute = documentAttributes?.find(attribute => 'fileName' in attribute)
+                                    const fileName = fileNameAttribute && 'fileName' in fileNameAttribute
+                                        ? fileNameAttribute.fileName
+                                        : null
                                     await attachMessageMediaV1({ contract: ATTACH_MESSAGE_MEDIA_COMMAND_V1, messageId: savedHistMsg.id, mediaType: histMsgType, url: dataUrl, fileName, fileSize: buffer.length, mimeType })
                                 }
                             } catch (mediaErr: any) {

@@ -150,8 +150,8 @@ check(
   'Contacts wrapper or Contacts-to-Messaging import remains',
 )
 check(
-  'exactly twelve calls exist across the seven accepted consumers',
-  (consumerSource.match(/await ensureConversationContactLinkV1\(\{/g) || []).length === 12 &&
+  'exactly thirteen calls exist across the seven accepted consumers',
+  (consumerSource.match(/await ensureConversationContactLinkV1\(\{/g) || []).length === 13 &&
     consumers.every(file => sources.get(file).includes('ensureConversationContactLinkV1')) &&
     [...sources.entries()]
       .filter(([file, source]) => source.includes('ensureConversationContactLinkV1') && !file.includes('/modules/messaging/public/v1/'))
@@ -160,7 +160,7 @@ check(
 )
 check(
   'all consumer commands use the exact mapping with no generic fields',
-  commandBodies.length === 12 &&
+  commandBodies.length === 13 &&
     commandBodies.every(body => (body.match(/contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1/g) || []).length === 1) &&
     commandBodies.every(body => (body.match(/contactId: contactResult\.contact\.id/g) || []).length === 1) &&
     commandBodies.every(body => (body.match(/contactIdentityId: contactResult\.identity\.id/g) || []).length === 1) &&

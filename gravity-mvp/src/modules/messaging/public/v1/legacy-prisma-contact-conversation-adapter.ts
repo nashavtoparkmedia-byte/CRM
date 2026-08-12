@@ -40,11 +40,18 @@ async function backfillMissingLinks(
 
 export const legacyPrismaContactConversationPortV1: ContactConversationPersistencePortV1 = {
   async findAndBackfill(input) {
-    const conversation = await prisma.chat.findFirst({
-      where: { contactId: input.contactId, channel: input.channel },
+    let conversation = await prisma.chat.findFirst({
+      where: { contactIdentityId: input.contactIdentityId, channel: input.channel },
       orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }],
       select: CONVERSATION_SELECT,
     })
+    if (!conversation && input.allowContactFallback) {
+      conversation = await prisma.chat.findFirst({
+        where: { contactId: input.contactId, channel: input.channel },
+        orderBy: [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }],
+        select: CONVERSATION_SELECT,
+      })
+    }
     if (!conversation) return null
     return backfillMissingLinks(conversation, input)
   },

@@ -23,7 +23,7 @@ export async function POST(
   try {
     const { id } = await params
     const body = await req.json()
-    const { channel, identityId, profileId } = body
+    const { channel, identityId, phoneId, profileId } = body
     void profileId
 
     if (!channel) {
@@ -39,6 +39,7 @@ export async function POST(
       contactId: id,
       channel,
       identityId: identityId ? identityId : null,
+      phoneId: phoneId ? phoneId : null,
     })
     if (result.status !== 'ready') {
       if (result.status === 'contact_not_found') {
@@ -48,6 +49,12 @@ export async function POST(
         return NextResponse.json(
           { error: 'Identity not found or does not match contact/channel' },
           { status: 404 }
+        )
+      }
+      if (result.status === 'phone_not_found') {
+        return NextResponse.json(
+          { error: 'Phone not found or does not belong to contact' },
+          { status: 404 },
         )
       }
       return NextResponse.json(

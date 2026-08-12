@@ -172,6 +172,23 @@ model BotChatMessage {
   createdAt  DateTime @default(now())
 }
 
+/// Telegram accounts proven to have opened the driver bot. This remains
+/// independent from DriverTelegram, which exists only after driver linkage.
+model BotUserRegistry {
+  id               String   @id @default(cuid())
+  telegramId       BigInt   @unique
+  username         String?
+  firstName        String?
+  lastName         String?
+  phone            String?
+  phoneVerified    Boolean  @default(false)
+  profileCheckedAt DateTime?
+  firstSeenAt      DateTime @default(now())
+  lastSeenAt       DateTime @default(now())
+
+  @@index([lastSeenAt(sort: Desc)])
+}
+
 model Bot {
   id              String           @id @default(uuid())
   token           String           @unique

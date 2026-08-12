@@ -4,7 +4,7 @@ import type { ChatChannel } from '@prisma/client'
 export type AddPhoneToContactOptionsV1 = {
   isTemporary?: boolean
   expiresAt?: Date | null
-  source?: 'manual' | 'avito' | 'whatsapp' | 'telegram' | 'phone' | 'yandex'
+  source?: 'manual' | 'avito' | 'whatsapp' | 'telegram' | 'max' | 'phone' | 'yandex'
   label?: string | null
   makePrimary?: boolean
   deactivateTemporaries?: boolean
@@ -13,6 +13,10 @@ export type AddPhoneToContactOptionsV1 = {
 export type AddPhoneToContactResultV1 =
   | { kind: 'added'; phoneId: string; contactId: string }
   | { kind: 'exists_same_contact'; phoneId: string; contactId: string }
+  | { kind: 'conflict'; otherContactId: string; otherContactName: string }
+
+export type AttachPhoneToIdentityResultV1 =
+  | { kind: 'added' | 'exists_same_contact'; phoneId: string; contactId: string }
   | { kind: 'conflict'; otherContactId: string; otherContactName: string }
 
 /** Resolve any persisted conversation channel through Contacts-owned identity policy. */
@@ -37,6 +41,19 @@ export function addPhoneToContactV1(
   options?: AddPhoneToContactOptionsV1,
 ): Promise<AddPhoneToContactResultV1> {
   return ContactService.addPhoneToContact(contactId, phone, options)
+}
+
+/** Attach one canonical phone to one exact identity with conflict preservation. */
+export function attachPhoneToIdentityV1(
+  contactId: string,
+  identityId: string,
+  phone: string,
+  options?: {
+    source?: 'manual' | 'avito' | 'whatsapp' | 'telegram' | 'max' | 'phone' | 'yandex'
+    confirmed?: boolean
+  },
+): Promise<AttachPhoneToIdentityResultV1> {
+  return ContactService.attachPhoneToIdentity(contactId, identityId, phone, options)
 }
 
 /** Owner-scoped maintenance after provider conversation deletion. */

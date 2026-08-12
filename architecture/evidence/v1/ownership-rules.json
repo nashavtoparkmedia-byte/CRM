@@ -4,7 +4,7 @@
     "ApiConnection":"yandex_fleet", "ApiLog":"yandex_fleet", "SyncStatus":"yandex_fleet",
     "TelegramConnection":"telegram_provider", "MaxConnection":"max_provider", "DriverMax":"max_provider", "MaxPersonalSession":"max_provider",
     "WhatsAppConnection":"whatsapp_provider", "WhatsAppChat":"whatsapp_provider", "WhatsAppMessage":"whatsapp_provider", "WhatsAppChatRoster":"whatsapp_provider",
-    "DriverTelegram":"telegram_provider", "BotChatMessage":"telegram_provider",
+    "DriverTelegram":"telegram_provider", "BotChatMessage":"telegram_provider", "BotUserRegistry":"telegram_provider",
     "Bot":"telegram_bot", "Survey":"telegram_bot", "Question":"telegram_bot", "User":"telegram_bot", "Answer":"telegram_bot", "AnalyticsEvent":"telegram_bot", "Broadcast":"telegram_bot", "BroadcastStat":"telegram_bot",
     "Driver":"drivers", "DriverAction":"drivers", "DriverEvent":"drivers", "DriverAttention":"drivers", "DriverDaySummary":"drivers", "DailyParkStats":"drivers", "ScoringThreshold":"drivers",
     "Chat":"messages", "Message":"messages", "MessageAttachment":"messages", "MessageEventLog":"messages", "CommunicationEvent":"messages", "CommunicationTrigger":"messages",

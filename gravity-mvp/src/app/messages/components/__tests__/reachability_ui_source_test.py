@@ -27,8 +27,11 @@ def test_contact_profile_no_connection_is_not_not_found() -> None:
     assert_match(r"Канал проверен: аккаунт у провайдера не найден", src)
     assert_match(r"CRM сейчас не может проверить канал\. Это не ответ провайдера и не означает, что аккаунта нет", src)
     assert_match(r"live\?\.status === 'checking' && live\.retryable === false", src)
-    assert_match(r"if \(nextStatus === 'checking'\)", src)
-    assert_match(r"const retryDelayMs = data\.retryable === false \? 30_000 : 5_000", src)
+    assert_match(r"const reachabilityKey = \(phoneId: string, channel: string\)", src)
+    assert_match(r"const runCheck = \(phoneId: string, phone: string, channel:", src)
+    assert_match(r"body: JSON\.stringify\(\{ phone, channel \}\)", src)
+    assert_match(r"for \(const phone of contact\.phones\)", src)
+    assert_no_match(r"retryTimers", src)
     assert_no_match(r"reachable === false[\s\S]{0,120}нет связи", src)
 
 

@@ -19,6 +19,36 @@ import { ATTACH_MESSAGE_MEDIA_COMMAND_V2 } from '@/contracts/messaging/v2'
 import { createExternalConversationV1, deleteMessageMediaV1, deleteMessageV1, ensureConversationContactLinkV1, linkMatchedDriverToConversationCapabilityV1, patchExternalConversationV1, replaceExternalMessageV1, upsertExternalMessageV1 } from '@/modules/messaging/public/v1'
 import { attachMessageMediaV2 } from '@/modules/messaging/public/v2'
 
+const MAX_RUNTIME_TRACE_PREFIX = '[MAX_RUNTIME_TRACE]'
+let maxRuntimeTraceSeq = 0
+
+function maxRuntimeTrace(stage: string, fields: Record<string, unknown> = {}): void {
+  try {
+    const providerMessageId = fields.providerMessageId || fields.externalId
+    const chatId = fields.chatId
+    const entry: Record<string, unknown> = {
+      ts: new Date().toISOString(),
+      eventId: `webhook:${++maxRuntimeTraceSeq}`,
+      traceId: fields.traceId || (providerMessageId ? `max:${providerMessageId}` : (chatId ? `max-chat:${chatId}` : 'max-webhook')),
+      stage,
+    }
+    for (const [key, value] of Object.entries(fields)) {
+      if (/phone|token|cookie|secret|authorization|password|base64|url/i.test(key)) {
+        entry[key] = '[redacted]'
+      } else if (key === 'text') {
+        // Preserve correlation/size diagnostics without logging message PII.
+        entry.textPreview = '[redacted]'
+        entry.textLength = value == null ? 0 : String(value).length
+      } else {
+        entry[key] = value
+      }
+    }
+    process.stdout.write(`${MAX_RUNTIME_TRACE_PREFIX} ${JSON.stringify(entry)}\n`)
+  } catch {
+    // Instrumentation must never affect webhook behavior.
+  }
+}
+
 function metadataRecord(metadata: unknown): Record<string, unknown> {
   return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
     ? metadata as Record<string, unknown>
@@ -136,6 +166,17 @@ export async function POST(request: Request) {
   try {
     const body = sanitizeMaxValue(await request.json()) as MaxWebhookBody
     const { externalId, chatId, rawChatId, senderId, senderName, senderPhone, phone, text, timestamp, messageType, attachments, isOutgoing, deleted, forwardedFrom, source, replyToExternalId, chatKind } = body
+    maxRuntimeTrace('webhook.received', {
+      providerMessageId: externalId ? String(externalId) : null,
+      chatId: chatId ? String(chatId) : null,
+      rawChatId: rawChatId ? String(rawChatId) : null,
+      text,
+      messageType: messageType || 'text',
+      source: source || null,
+      isOutgoing: Boolean(isOutgoing),
+      attachmentCount: Array.isArray(attachments) ? attachments.length : 0,
+      deleted: Boolean(deleted),
+    })
 
     // MAX server confirmed a message was deleted — remove from CRM DB
     if (deleted && externalId) {
@@ -154,6 +195,7 @@ export async function POST(request: Request) {
     }
 
     if (!chatId) {
+      maxRuntimeTrace('webhook.skipped', { providerMessageId: externalId ? String(externalId) : null, reason: 'missing_chat_id' })
       return NextResponse.json({ error: 'chatId is required' }, { status: 400 })
     }
 
@@ -162,6 +204,7 @@ export async function POST(request: Request) {
     const trimmedText = typeof text === 'string' ? text.trim() : ''
     const isTextType = !messageType || messageType === 'text'
     if (isTextType && !trimmedText && (!attachments || attachments.length === 0)) {
+      maxRuntimeTrace('webhook.skipped', { providerMessageId: externalId ? String(externalId) : null, chatId: String(chatId), reason: 'empty_text' })
       return NextResponse.json({ ok: true, skipped: 'empty_text' })
     }
     const usableAttachments = Array.isArray(attachments)
@@ -175,6 +218,7 @@ export async function POST(request: Request) {
         externalId: externalId ? String(externalId) : null,
         attachmentCount: Array.isArray(attachments) ? attachments.length : 0,
       })
+      maxRuntimeTrace('webhook.skipped', { providerMessageId: externalId ? String(externalId) : null, chatId: String(chatId), reason: 'image_without_attachment' })
       return NextResponse.json({ ok: true, skipped: 'image_without_attachment' })
     }
 
@@ -189,6 +233,7 @@ export async function POST(request: Request) {
       const ts = typeof timestamp === 'number' ? timestamp : Date.parse(String(timestamp))
       if (!Number.isFinite(ts) || ts < MIN_TS_MS || ts > nowMs + FUTURE_TOLERANCE_MS) {
         // Corrupted timestamp — skip rather than file under wrong date.
+        maxRuntimeTrace('webhook.skipped', { providerMessageId: externalId ? String(externalId) : null, chatId: String(chatId), reason: 'bad_timestamp' })
         return NextResponse.json({ ok: true, skipped: 'bad_timestamp', value: timestamp })
       }
       sentAt = new Date(ts)
@@ -214,6 +259,7 @@ export async function POST(request: Request) {
     )
 
     if (isTextProviderEvent && (!externalIdString || isPlaceholderTextId) && !allowLiveDomTextRecovery) {
+      maxRuntimeTrace('webhook.skipped', { providerMessageId: externalIdString, chatId: String(chatId), text, reason: 'text_without_provider_identity' })
       return NextResponse.json({
         ok: true,
         skipped: 'text_without_provider_identity',
@@ -227,6 +273,13 @@ export async function POST(request: Request) {
         select: { id: true, chatId: true },
       })
       if (existingText) {
+        maxRuntimeTrace('webhook.duplicate', {
+          providerMessageId: externalIdString,
+          chatId: String(chatId),
+          text,
+          chatInternalId: existingText.chatId,
+          messageId: existingText.id,
+        })
         return NextResponse.json({
           success: true,
           chatInternalId: existingText.chatId,
@@ -402,14 +455,14 @@ export async function POST(request: Request) {
         effectiveMessageType = 'sticker'
       }
     }
-    const msgType = typeMap[effectiveMessageType] || 'text'
+    const msgType = typeMap[effectiveMessageType || 'text'] || 'text'
 
     // For non-text messages without text, use a readable placeholder
     const contentFallbacks: Record<string, string> = {
       image: '[Фото]', video: '[Видео]', voice: '[Голосовое]',
       audio: '[Аудио]', document: '[Документ]',
     }
-    const content = text || contentFallbacks[messageType] || ''
+    const content = text || contentFallbacks[messageType || 'text'] || ''
 
     let message: Message | null = null
     const shouldUpgradeDomMessage =
@@ -506,7 +559,7 @@ export async function POST(request: Request) {
     // Workflow: update status/unread/requiresResponse via centralized service
     if (!isOutgoing && !isHistoryReplay) {
       await ConversationWorkflowService.onInboundMessage(chat.id, sentAt)
-    } else if (isOutgoing) {
+    } else if (isOutgoing && !isHistoryReplay) {
       await ConversationWorkflowService.onOutboundMessage(chat.id, sentAt)
     }
 
@@ -525,6 +578,15 @@ export async function POST(request: Request) {
         metadata: { senderId, maxChatId: externalChatId, maxRawChatId: rawExternalChatId, attachments: attachments || [], ...(source ? { source } : {}), ...(replyToExternalIdString ? { replyToExternalId: replyToExternalIdString } : {}), ...(forwardedFrom ? { forwardedFrom } : {}) },
       })).message as Message
     }
+    maxRuntimeTrace('webhook.stored', {
+      providerMessageId: externalIdString,
+      chatId: String(chatId),
+      text,
+      chatInternalId: chat.id,
+      messageId: message.id,
+      source: source || null,
+      isOutgoing: Boolean(isOutgoing),
+    })
 
     // Save attachments. Dedup by url first — MAX scraper sometimes sends
     // the same sticker/image twice (preview + full, or two frames of a
@@ -609,9 +671,17 @@ export async function POST(request: Request) {
       )
     }
 
+    maxRuntimeTrace('webhook.accepted', {
+      providerMessageId: externalIdString,
+      chatId: String(chatId),
+      text,
+      chatInternalId: chat.id,
+      messageId: message.id,
+    })
     return NextResponse.json({ success: true, chatInternalId: chat.id, messageId: message.id })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
+    maxRuntimeTrace('webhook.error', { error: message })
     opsLog('error', 'webhook_max_error', { channel: 'max', error: message })
     return NextResponse.json({ error: 'Internal Server Error', details: message }, { status: 500 })
   }

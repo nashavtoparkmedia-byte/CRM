@@ -35,9 +35,9 @@ const consumers = {
     catchProfiles: { '[WEBHOOK-TG] ContactService error (non-blocking)': 1 },
   },
   'gravity-mvp/src/app/tg-actions.ts': {
-    count: 1,
-    chatIds: ['unifiedChat.id'],
-    catchProfiles: { 'ContactService error (non-blocking)': 1 },
+    count: 2,
+    chatIds: ['chat.id', 'unifiedChat.id'],
+    catchProfiles: { 'ContactService error (non-blocking)': 2 },
   },
   'gravity-mvp/src/app/api/webhook/max/route.ts': {
     count: 2,
@@ -103,7 +103,7 @@ function enclosingTryBody(node) {
     && candidate.tryBlock.end >= node.end)
 }
 
-function precedingLegacyResolve(node, ast) {
+function precedingAcceptedResolve(node, ast) {
   for (let current = node.parent; current; current = current.parent) {
     if (!ts.isBlock(current)) continue
     const matches = []
@@ -111,7 +111,10 @@ function precedingLegacyResolve(node, ast) {
       if (
         candidate.end < node.pos
         && ts.isCallExpression(candidate)
-        && normalize(candidate.expression.getText(ast)) === 'ContactService.resolveContact'
+        && [
+          'ContactService.resolveContact',
+          'resolveChannelContactOperationV1',
+        ].includes(normalize(candidate.expression.getText(ast)))
       ) matches.push(candidate)
     })
     if (matches.length > 0) return matches.at(-1)
@@ -165,13 +168,13 @@ check('the exact seven accepted consumers import both public symbols once', () =
   }
 })
 
-check('there are exactly twelve public calls with the frozen per-consumer distribution', () => {
+check('there are exactly thirteen public calls with the accepted per-consumer distribution', () => {
   let total = 0
   for (const [relative, { calls, expected }] of analyses) {
     assert.equal(calls.length, expected.count, `${relative}: call count`)
     total += calls.length
   }
-  assert.equal(total, 12)
+  assert.equal(total, 13)
 })
 
 check('every call is awaited and its result remains intentionally unused', () => {
@@ -183,7 +186,7 @@ check('every call is awaited and its result remains intentionally unused', () =>
   }
 })
 
-check('all twelve payloads have exactly the frozen public fields and owner mappings', () => {
+check('all thirteen payloads have exactly the accepted public fields and owner mappings', () => {
   for (const [relative, { ast, calls, expected }] of analyses) {
     const observedChatIds = []
     for (const call of calls) {
@@ -209,7 +212,7 @@ check('all twelve payloads have exactly the frozen public fields and owner mappi
 check('every link remains after ContactService.resolveContact in the same lexical flow', () => {
   for (const [relative, { ast, calls }] of analyses) {
     for (const call of calls) {
-      const resolve = precedingLegacyResolve(call, ast)
+      const resolve = precedingAcceptedResolve(call, ast)
       assert.ok(resolve, `${relative}:${ast.getLineAndCharacterOfPosition(call.pos).line + 1}: resolve missing`)
       assert.ok(resolve.end < call.pos, `${relative}: resolve/link order`)
       const resolveTry = enclosingTryBody(resolve)

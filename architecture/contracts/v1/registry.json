@@ -468,6 +468,7 @@
     {
       "capabilities": [
         "BotSurveyApi.v1",
+        "BotUserProfileCommands.v1",
         "TelegramConnectionMetadataQuery.v1",
         "TelegramDeliveryPort.v1",
         "TelegramReachability.v1",
@@ -476,6 +477,7 @@
       "commands": [
         "LinkTelegramDriverCommand.v1",
         "PublishTelegramSurveyCommand.v1",
+        "RecordBotUserProfileCommand.v1",
         "SendTelegramMessageCommand.v1"
       ],
       "consumer_contexts": [

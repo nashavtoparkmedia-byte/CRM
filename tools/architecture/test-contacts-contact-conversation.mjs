@@ -64,10 +64,12 @@ const prepareCommand = {
   contactId: 'contact-1',
   channel: 'telegram',
   identityId: null,
+  phoneId: null,
 }
 const phoneQuery = {
   contract: contracts.GET_PREFERRED_ACTIVE_CONTACT_PHONE_QUERY_V1,
   contactId: 'contact-1',
+  phoneId: null,
 }
 
 function loadAdapter(prisma, contactService, consoleOverride = console) {
@@ -265,8 +267,8 @@ try {
           identity: { id: 'identity-1', channel: 'telegram', externalId: '79991234567' },
         }
       },
-      async getPreferredActiveContactPhone(contactId) {
-        calls.push(['phone', contactId])
+      async getPreferredActiveContactPhone(contactId, phoneId) {
+        calls.push(['phone', contactId, phoneId])
         return '+79991234567'
       },
     }
@@ -299,8 +301,8 @@ try {
         phone: '+79991234567',
         displayName: null,
       }],
-      ['prepare', { contactId: 'contact-1', channel: 'telegram', identityId: null }],
-      ['phone', 'contact-1'],
+      ['prepare', { contactId: 'contact-1', channel: 'telegram', identityId: null, phoneId: null }],
+      ['phone', 'contact-1', null],
     ])
 
     const before = calls.length
@@ -320,7 +322,7 @@ try {
   })
 
   await checkAsync('prepare handler exposes each expected non-ready status without synthetic fields', async () => {
-    for (const status of ['contact_not_found', 'identity_not_found', 'no_identity']) {
+    for (const status of ['contact_not_found', 'identity_not_found', 'phone_not_found', 'no_identity']) {
       const port = {
         async resolveChannelContact() { throw new Error('unexpected resolve') },
         async prepareContactConversationIdentity() { return { status } },
@@ -483,6 +485,28 @@ try {
       }],
       ['contactPhone.findFirst', {
         where: { contactId: 'contact-1', isActive: true },
+        orderBy: { isPrimary: 'desc' },
+      }],
+    ])
+  })
+
+  await checkAsync('selected missing phone returns phone_not_found without broad fallback', async () => {
+    const { prisma, calls } = makePrisma()
+    assert.deepEqual(
+      plain(await loadAdapter(prisma, unexpectedContactService)
+        .prepareContactConversationIdentity({
+          contactId: 'contact-1', channel: 'telegram', identityId: null, phoneId: 'phone-missing',
+        })),
+      { status: 'phone_not_found' },
+    )
+    assert.deepEqual(plain(calls), [
+      ['contact.findUnique', { where: { id: 'contact-1' } }],
+      ['contactIdentity.findFirst', {
+        where: { contactId: 'contact-1', channel: 'telegram', isActive: true, phoneId: 'phone-missing' },
+        orderBy: { createdAt: 'asc' },
+      }],
+      ['contactPhone.findFirst', {
+        where: { contactId: 'contact-1', isActive: true, id: 'phone-missing' },
         orderBy: { isPrimary: 'desc' },
       }],
     ])

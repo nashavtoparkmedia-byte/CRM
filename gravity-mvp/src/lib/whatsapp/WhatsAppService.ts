@@ -1,11 +1,13 @@
 import { Client, LocalAuth, Message, MessageMedia } from 'whatsapp-web.js'
+import * as WhatsAppWebRuntime from 'whatsapp-web.js'
 import { prisma } from '@/lib/prisma'
 import path from 'path'
 import fs from 'fs'
+import { createHash } from 'node:crypto'
 import { channelDriverMatchV1 as DriverMatchService } from '@/modules/fleet-operations/public/v1/channel-driver-match'
-import { addPhoneToContactV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
+import { attachPhoneToIdentityV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
 import { channelConversationWorkflowV1 as ConversationWorkflowService } from '@/modules/messaging/public/v1/channel-conversation-workflow'
-import { enrichWaChatNameFromSibling } from '@/lib/whatsapp/enrichChatName'
+import { attachVisibleWaPhone, enrichWaChatNameFromSibling } from '@/lib/whatsapp/enrichChatName'
 import { publishPersistedMessageV1 as emitMessageReceived } from '@/modules/messaging/public/v1/persisted-message-ingress'
 import { broadcastChatMessageV1 as broadcastChatMessage } from '@/modules/messaging/public/v1/message-stream'
 import { transportRegistryLifecycleV1 as registry } from '@/modules/messaging/public/v1/transport-registry-lifecycle'
@@ -25,28 +27,30 @@ const HISTORY_MONTHS = 3
 // Global singleton map: connectionId -> Client instance
 const globalForWA = global as unknown as { waClients: Map<string, Client> }
 const clients = globalForWA.waClients || new Map<string, Client>()
-if (process.env.NODE_ENV !== 'production') globalForWA.waClients = clients
+// Next.js can load Server Actions and API routes as separate production
+// modules. The global map is the process-wide runtime authority in every mode.
+globalForWA.waClients = clients
 
 // instanceId per connection — links client to registry entry (survive hot reload)
 const globalForWAIds = global as unknown as { _waInstanceIds?: Map<string, string> }
 const instanceIds = globalForWAIds._waInstanceIds || new Map<string, string>()
-if (process.env.NODE_ENV !== 'production') globalForWAIds._waInstanceIds = instanceIds
+globalForWAIds._waInstanceIds = instanceIds
 
 // Guard: track which connections already had auto-sync (prevent re-sync on reconnect)
 const globalSyncDone = global as unknown as { _waSyncDone?: Set<string> }
 const syncDoneSet = globalSyncDone._waSyncDone || new Set<string>()
-if (process.env.NODE_ENV !== 'production') globalSyncDone._waSyncDone = syncDoneSet
+globalSyncDone._waSyncDone = syncDoneSet
 
 // FIX 1: In-flight guard — prevent overlapping initializeClient for same connectionId.
 // Parallel callers get the same Promise; resolved on finally.
 const globalForInitPromises = global as unknown as { _waInitPromises?: Map<string, Promise<void>> }
 const initPromises: Map<string, Promise<void>> = globalForInitPromises._waInitPromises || new Map()
-if (process.env.NODE_ENV !== 'production') globalForInitPromises._waInitPromises = initPromises
+globalForInitPromises._waInitPromises = initPromises
 
 // FIX 7: Serialize forceResetSession per connectionId.
 const globalForResetLocks = global as unknown as { _waResetLocks?: Map<string, Promise<void>> }
 const forceResetLocks: Map<string, Promise<void>> = globalForResetLocks._waResetLocks || new Map()
-if (process.env.NODE_ENV !== 'production') globalForResetLocks._waResetLocks = forceResetLocks
+globalForResetLocks._waResetLocks = forceResetLocks
 
 /**
  * Validate a WA timestamp (epoch seconds).
@@ -80,6 +84,48 @@ function validateMessageTs(rawSeconds: unknown): Date | null {
  * that can't skip (live client.on handler where we want to always process). */
 function clampMessageTs(rawSeconds: unknown): Date {
     return validateMessageTs(rawSeconds) ?? new Date()
+}
+
+/** Reconstruct a stable history id when whatsapp-web.js omits `_serialized`. */
+function serializeHistoryMessageId(
+    rawId: unknown,
+    chatJid: string,
+    message: { body?: string; timestamp?: number; fromMe?: boolean; type?: string },
+    ordinal: number,
+): string {
+    if (typeof rawId === 'string' && rawId.trim()) return rawId
+
+    const id = rawId && typeof rawId === 'object' ? rawId as Record<string, any> : null
+    const serialized = typeof id?._serialized === 'string' ? id._serialized.trim() : ''
+    if (serialized) return serialized
+
+    const serializeWid = (wid: unknown): string => {
+        if (typeof wid === 'string') return wid
+        if (!wid || typeof wid !== 'object') return ''
+        const value = wid as Record<string, any>
+        if (typeof value._serialized === 'string') return value._serialized
+        if (value.user && value.server) return `${value.user}@${value.server}`
+        return ''
+    }
+
+    const localId = typeof id?.id === 'string' ? id.id.trim() : ''
+    if (localId) {
+        const remote = serializeWid(id?.remote) || chatJid
+        const participant = serializeWid(id?.participant)
+        return [id?.fromMe ? 'true' : 'false', remote, localId, participant]
+            .filter(Boolean)
+            .join('_')
+    }
+
+    const seed = JSON.stringify([
+        chatJid,
+        message.timestamp || 0,
+        !!message.fromMe,
+        message.type || 'chat',
+        message.body || '',
+        ordinal,
+    ])
+    return `history_${createHash('sha256').update(seed).digest('hex')}`
 }
 
 /**
@@ -334,7 +380,28 @@ async function downloadAndSaveMedia(
  */
 function isCdpContextDestroyed(err: unknown): boolean {
     const msg = err instanceof Error ? err.message : String(err)
-    return /Execution context was destroyed|Protocol error \(Runtime\.|Target closed/i.test(msg)
+    return /Execution context was destroyed|Protocol error \(Runtime\.|Target closed|detached Frame|frame was detached|Session closed/i.test(msg)
+}
+
+/** Validate the Puppeteer runtime rather than trusting stale `client.info`. */
+function getClientRuntimeIssue(client: Client | undefined): string | null {
+    if (!client) return 'client_missing'
+    if (!client.info) return 'client_info_null'
+
+    const page = (client as any).pupPage
+    if (!page) return 'page_missing'
+    try {
+        if (typeof page.isClosed === 'function' && page.isClosed()) return 'page_closed'
+        const frame = typeof page.mainFrame === 'function' ? page.mainFrame() : null
+        if (frame && (
+            (typeof frame.isDetached === 'function' && frame.isDetached())
+            || frame.detached === true
+            || frame._detached === true
+        )) return 'frame_detached'
+    } catch {
+        return 'page_unavailable'
+    }
+    return null
 }
 
 async function retryOnCdpError<T>(
@@ -364,19 +431,129 @@ async function retryOnCdpError<T>(
     throw lastErr
 }
 
+/** Recover usable chat models even when one stale WA Web model rejects. */
+async function getChatsResilient(client: Client, connectionId: string, op: string) {
+    try {
+        return await retryOnCdpError(
+            () => client.getChats(),
+            { retries: 2, delayMs: 3000, op },
+            connectionId,
+        )
+    } catch (error) {
+        if (isCdpContextDestroyed(error)) throw error
+
+        const page = (client as any).pupPage
+        if (!page) throw error
+        const serialized = await page.evaluate(async () => {
+            const collection = (window as any).require?.('WAWebCollections')?.Chat
+            if (!collection) return { total: 0, chats: [] as any[] }
+            const models = collection.getModelsArray ? collection.getModelsArray() : []
+            const settled = await Promise.allSettled(
+                models.map((chat: any) => (window as any).WWebJS.getChatModel(chat)),
+            )
+            return {
+                total: models.length,
+                chats: settled.map((result: any, index: number) => {
+                    if (result.status === 'fulfilled' && result.value) return result.value
+                    const chat = models[index]
+                    const jid = chat?.id?._serialized || ''
+                    if (!jid) return null
+                    const at = jid.lastIndexOf('@')
+                    return {
+                        id: {
+                            _serialized: jid,
+                            user: at > 0 ? jid.slice(0, at) : jid,
+                            server: at > 0 ? jid.slice(at + 1) : '',
+                        },
+                        formattedTitle: chat?.formattedTitle || jid,
+                        isGroup: jid.endsWith('@g.us') || !!chat?.groupMetadata,
+                        isChannel: jid.endsWith('@newsletter'),
+                        groupMetadata: null,
+                        lastMessage: null,
+                    }
+                }).filter(Boolean),
+            }
+        })
+        if (serialized.chats.length === 0) throw error
+
+        const chats: any[] = []
+        let constructorFailures = 0
+        const runtime = WhatsAppWebRuntime as any
+        for (const model of serialized.chats) {
+            try {
+                const ChatConstructor = model.isGroup
+                    ? runtime.GroupChat
+                    : model.isChannel
+                        ? runtime.Channel
+                        : runtime.PrivateChat
+                chats.push(new ChatConstructor(client, model))
+            } catch {
+                constructorFailures++
+            }
+        }
+        const skipped = serialized.total - serialized.chats.length + constructorFailures
+        if (chats.length === 0) throw error
+
+        opsLog('warn', 'wa_get_chats_partial_fallback', {
+            connectionId,
+            op,
+            totalIds: serialized.total,
+            recoveredChats: chats.length,
+            skippedChats: skipped,
+            originalError: error instanceof Error ? error.message : String(error),
+        })
+        return chats
+    }
+}
+
+/** Recreate a client whose page/frame died without a disconnect event. */
+async function recoverClientForHistoryImport(connectionId: string, reason: string): Promise<Client> {
+    opsLog('warn', 'wa_import_runtime_recovery_start', { connectionId, reason })
+
+    const staleClient = clients.get(connectionId)
+    const staleInstanceId = instanceIds.get(connectionId)
+    if (staleInstanceId) registry.setFailed(connectionId, staleInstanceId, `history import: ${reason}`)
+    if (staleClient) {
+        try { staleClient.removeAllListeners() } catch { /* ignore */ }
+        try {
+            await Promise.race([
+                staleClient.destroy(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Destroy timeout')), 10_000)),
+            ])
+        } catch { /* cleanup below handles a zombie Chromium */ }
+    }
+    clients.delete(connectionId)
+    instanceIds.delete(connectionId)
+
+    const { cleanupStaleWhatsAppSessions } = await import('./WhatsAppCleanup')
+    await cleanupStaleWhatsAppSessions(connectionId)
+    syncDoneSet.add(connectionId)
+    await initializeClient(connectionId)
+
+    const recovered = clients.get(connectionId)
+    const runtimeIssue = getClientRuntimeIssue(recovered)
+    const entry = registry.getEntry(connectionId)
+    if (!recovered || runtimeIssue || entry?.state !== 'ready') {
+        throw new Error(`WhatsApp runtime recovery failed: ${runtimeIssue ?? entry?.state ?? 'not_ready'}`)
+    }
+
+    opsLog('info', 'wa_import_runtime_recovery_complete', { connectionId })
+    return recovered
+}
+
 // Pause flag + message buffer (pause/resume with flush/drop)
 const globalForPaused = global as unknown as { _waPaused?: Set<string> }
 const pausedSet: Set<string> = globalForPaused._waPaused || new Set()
-if (process.env.NODE_ENV !== 'production') globalForPaused._waPaused = pausedSet
+globalForPaused._waPaused = pausedSet
 
 const globalForBuffer = global as unknown as { _waBuffer?: Map<string, Message[]> }
 const messageBuffers: Map<string, Message[]> = globalForBuffer._waBuffer || new Map()
-if (process.env.NODE_ENV !== 'production') globalForBuffer._waBuffer = messageBuffers
+globalForBuffer._waBuffer = messageBuffers
 
 // Per-connection cutoff for "last N days" mode — applied in message handler
 const globalForCutoffs = global as unknown as { _waSyncCutoffs?: Map<string, Date> }
 const connectionSyncCutoffs: Map<string, Date> = globalForCutoffs._waSyncCutoffs || new Map()
-if (process.env.NODE_ENV !== 'production') globalForCutoffs._waSyncCutoffs = connectionSyncCutoffs
+globalForCutoffs._waSyncCutoffs = connectionSyncCutoffs
 
 async function safeUpdateConnection(connectionId: string, data: any) {
     try {
@@ -429,7 +606,7 @@ async function syncHistory(connectionId: string, client: Client) {
     const cutoff = getHistoryCutoff()
 
     try {
-        const chatsRaw = await client.getChats()
+        const chatsRaw = await getChatsResilient(client, connectionId, 'background_sync_getChats')
         for (const chatRaw of chatsRaw) {
             try {
                 // Skip only status broadcasts — groups go through with
@@ -446,8 +623,18 @@ async function syncHistory(connectionId: string, client: Client) {
                 let usedFallback = false
                 try {
                     const fetched = await chatRaw.fetchMessages({ limit: 1000 })
-                    for (const m of fetched) fetchedByJid.set(m.id._serialized, m)
-                    rawMsgs = fetched.map(m => ({ id: m.id._serialized, body: m.body || '', timestamp: m.timestamp, fromMe: m.fromMe, type: m.type, hasMedia: !!m.hasMedia }))
+                    rawMsgs = fetched.map((message: Message, index: number) => {
+                        const id = serializeHistoryMessageId((message as any).id, chatJid, message, index)
+                        fetchedByJid.set(id, message)
+                        return {
+                            id,
+                            body: message.body || '',
+                            timestamp: message.timestamp,
+                            fromMe: message.fromMe,
+                            type: message.type,
+                            hasMedia: !!message.hasMedia,
+                        }
+                    })
                 } catch {
                     usedFallback = true
                     const page = (client as any).pupPage
@@ -470,6 +657,11 @@ async function syncHistory(connectionId: string, client: Client) {
                         } catch {}
                     }
                 }
+
+                rawMsgs = rawMsgs.map((message, index) => ({
+                    ...message,
+                    id: serializeHistoryMessageId(message.id, chatJid, message, index),
+                }))
 
                 // If we came through Store-fallback (@lid), try to recover
                 // Message objects for media types so downloadMedia works.
@@ -570,6 +762,10 @@ async function syncHistory(connectionId: string, client: Client) {
                         // Non-blocking — don't break sync
                         console.warn(`[WA-SERVICE] syncHistory contact resolve failed for ${chatRaw.id._serialized}: ${contactErr.message}`)
                     }
+                }
+                if (!isGroupChat) {
+                    await attachVisibleWaPhone(unifiedSyncChat.id)
+                        .catch(error => console.warn(`[WA-SERVICE] syncHistory phone backfill failed: ${error.message}`))
                 }
 
                 let maxTimestamp: Date | null = null
@@ -759,6 +955,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
 
     const instanceId = registry.beginNewInstance(connectionId)
     instanceIds.set(connectionId, instanceId)
+    const chromiumProxyServer = process.env.WA_CHROMIUM_PROXY_SERVER?.trim()
 
     const client = new Client({
         authStrategy: new LocalAuth({
@@ -778,6 +975,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                 '--disable-blink-features=AutomationControlled',
                 '--disable-features=IsolateOrigins,site-per-process',
                 '--disable-site-isolation-trials',
+                ...(chromiumProxyServer ? [`--proxy-server=${chromiumProxyServer}`] : []),
             ],
             ignoreDefaultArgs: ['--enable-automation'],
         },
@@ -1132,18 +1330,21 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                 // Backfill phone onto contact when LID resolved to a real number.
                 // resolveContact may have returned an existing contact (found via old
                 // @lid identity) that was created before phone resolution was available.
-                // addPhoneToContact is idempotent — safe to call on every message.
+                // The identity attachment also preserves conflict and primary-phone truth.
                 if (lidResolved && phoneDigits.length >= 10) {
                     const e164 = '+7' + phoneDigits.slice(-10)
-                    const backfill = await addPhoneToContactV1(
+                    const backfill = await attachPhoneToIdentityV1(
                         contactResult.contact.id,
+                        contactResult.identity.id,
                         e164,
-                        { source: 'whatsapp', isPrimary: true },
+                        { source: 'whatsapp', confirmed: true },
                     )
-                    if (backfill.kind === 'added') {
+                    if (backfill.kind !== 'conflict') {
                         console.log(`[WA-SERVICE] Backfilled phone ${e164} → contact ${contactResult.contact.id}`)
                     }
                 }
+                await attachVisibleWaPhone(unifiedChat.id)
+                    .catch(error => console.warn(`[WA-SERVICE] live phone backfill failed: ${error.message}`))
             } catch (contactErr: any) {
                 console.error(`[WA-SERVICE] ContactService error (non-blocking): ${contactErr.message}`)
             }
@@ -1327,7 +1528,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
         clearPendingWhatsAppQr(connectionId, instanceId)
         const msg = err?.message ?? String(err)
         const errorClass =
-            /browser is already running/i.test(msg) ? 'browser_already_running' :
+            /browser is already running|profile appears to be in use|process_singleton/i.test(msg) ? 'browser_already_running' :
             /Execution context was destroyed/i.test(msg) ? 'cdp_context_destroyed' :
             /Navigation timeout/i.test(msg) ? 'navigation_timeout' :
             /Target closed/i.test(msg) ? 'browser_closed' :
@@ -1350,13 +1551,15 @@ async function doInitializeClient(connectionId: string): Promise<void> {
             return
         }
 
-        // Critical: write error status to DB so UI doesn't show stale "ready" from previous session
+        // Keep UI status honest, then schedule the retry explicitly because
+        // initializeClient swallows per-account warmup failures by design.
         await safeUpdateConnection(connectionId, { status: 'error' })
-        registry.setFailed(connectionId, instanceId, `init_failed: ${errorClass}`)
         try { await client.destroy() } catch { /* zombie process may not respond */ }
         clients.delete(connectionId)
         instanceIds.delete(connectionId)
-        // NO throw — warmup continues with other connections
+        registry.setReconnecting(connectionId, instanceId)
+        registry.scheduleReconnect(connectionId, instanceId, () => initializeClient(connectionId))
+        // NO throw — warmup continues with other connections while this one retries.
     }
 }
 
@@ -1500,26 +1703,26 @@ export async function checkAllClientsHealth(): Promise<{ checkedCount: number; u
             continue
         }
 
-        if (!client.info) {
-            // Puppeteer dead — client.info is null
+        const runtimeIssue = getClientRuntimeIssue(client)
+        if (runtimeIssue) {
             const lastAction = watchdogLastAction.get(entry.connectionId) || 0
             if (Date.now() - lastAction < WATCHDOG_COOLDOWN_MS) {
-                details.push({ connectionId: entry.connectionId, healthy: false, reason: 'stale_info_cooldown' })
+                details.push({ connectionId: entry.connectionId, healthy: false, reason: `${runtimeIssue}_cooldown` })
                 continue
             }
             watchdogLastAction.set(entry.connectionId, Date.now())
-            opsLog('warn', 'wa_watchdog_stale', { connectionId: entry.connectionId, reason: 'client_info_null' })
+            opsLog('warn', 'wa_watchdog_stale', { connectionId: entry.connectionId, reason: runtimeIssue })
             const curInstanceId = registry.getInstanceId(entry.connectionId)
             if (curInstanceId) {
-                registry.setFailed(entry.connectionId, curInstanceId, 'watchdog: puppeteer dead (client.info null)')
+                registry.setFailed(entry.connectionId, curInstanceId, `watchdog: ${runtimeIssue}`)
             }
             try { client.removeAllListeners() } catch { /* ignore */ } // FIX 4 extension: drop listeners on dead client
             clients.delete(entry.connectionId)
             instanceIds.delete(entry.connectionId) // FIX 5: drop stale instanceId
             // Stage 1 addition: attempt automatic recovery
-            scheduleHardRestart(entry.connectionId, 'client_info_null').catch(() => {})
+            scheduleHardRestart(entry.connectionId, runtimeIssue).catch(() => {})
             unhealthyCount++
-            details.push({ connectionId: entry.connectionId, healthy: false, reason: 'client_info_null' })
+            details.push({ connectionId: entry.connectionId, healthy: false, reason: runtimeIssue })
             continue
         }
 
@@ -1842,16 +2045,22 @@ export async function importWhatsAppHistory(
         const conns = await prisma.whatsAppConnection.findMany({ where: { status: 'ready' } })
         if (conns.length === 0) {
             console.error('[WA-IMPORT] No ready WhatsApp connections')
-            await updateImportJob(jobId, { status: 'failed', resultType: 'failed', finishedAt: new Date() })
+            await updateImportJob(jobId, {
+                status: 'failed', resultType: 'failed', finishedAt: new Date(),
+                detailsJson: { reason: 'no_ready_connection' },
+            })
             return
         }
         connId = conns[0].id
     }
 
-    const client = clients.get(connId)
+    let client = clients.get(connId)
     if (!client) {
         console.error(`[WA-IMPORT] Client not found for connection ${connId}`)
-        await updateImportJob(jobId, { status: 'failed', resultType: 'failed', finishedAt: new Date() })
+        await updateImportJob(jobId, {
+            status: 'failed', resultType: 'failed', finishedAt: new Date(),
+            detailsJson: { reason: 'client_not_connected' },
+        })
         return
     }
 
@@ -1868,10 +2077,12 @@ export async function importWhatsAppHistory(
         cutoff = new Date() // only new messages from now
         connectionSyncCutoffs.set(connId!, cutoff)
     } else {
-        // available_history — no cutoff, allow everything the library delivers
-        cutoff = getHistoryCutoff()
+        // available_history — accept every valid protocol timestamp exposed
+        // by the current WhatsApp Web session.
+        cutoff = new Date(MIN_TS_MS)
         connectionSyncCutoffs.delete(connId!)
     }
+    const historyMessageLimit = mode === 'available_history' ? Infinity : 1000
     opsLog('info', 'wa_sync_cutoff_set', {
         connectionId: connId, mode, cutoffISO: cutoff.toISOString(),
     })
@@ -1884,14 +2095,28 @@ export async function importWhatsAppHistory(
     let maxDate: Date | null = null
 
     try {
+        // client.info can outlive Puppeteer's page/frame. Recreate the runtime
+        // before the first CDP call when the process-global client is stale.
+        const initialRuntimeIssue = getClientRuntimeIssue(client)
+        if (initialRuntimeIssue) {
+            client = await recoverClientForHistoryImport(connId!, initialRuntimeIssue)
+        }
+
         // Retry getChats() on "Execution context was destroyed" — WA Web
         // occasionally navigates internally right after ready, invalidating
-        // puppeteer's evaluate context. Give it a few seconds to stabilize.
-        const chatsRaw = await retryOnCdpError(
-            () => client.getChats(),
-            { retries: 4, delayMs: 5000, op: 'getChats' },
-            connId!,
-        )
+        // puppeteer's evaluate context. A detached main frame is permanent for
+        // the current Client, so recreate it once and continue the same job.
+        let chatsRaw
+        try {
+            chatsRaw = await getChatsResilient(client, connId!, 'getChats')
+        } catch (getChatsErr) {
+            if (!isCdpContextDestroyed(getChatsErr)) throw getChatsErr
+            client = await recoverClientForHistoryImport(
+                connId!,
+                getChatsErr instanceof Error ? getChatsErr.message : String(getChatsErr),
+            )
+            chatsRaw = await getChatsResilient(client, connId!, 'getChats_after_recovery')
+        }
 
         for (const chatRaw of chatsRaw) {
             try {
@@ -1912,16 +2137,19 @@ export async function importWhatsAppHistory(
                 const fetchedByJid = new Map<string, Message>()
                 let usedFallback = false
                 try {
-                    const fetched = await chatRaw.fetchMessages({ limit: 1000 })
-                    for (const m of fetched) fetchedByJid.set(m.id._serialized, m)
-                    rawMessages = fetched.map(m => ({
-                        id: m.id._serialized,
-                        body: m.body || '',
-                        timestamp: m.timestamp,
-                        fromMe: m.fromMe,
-                        type: m.type,
-                        hasMedia: !!m.hasMedia,
-                    }))
+                    const fetched = await chatRaw.fetchMessages({ limit: historyMessageLimit })
+                    rawMessages = fetched.map((message: Message, index: number) => {
+                        const id = serializeHistoryMessageId((message as any).id, chatJid, message, index)
+                        fetchedByJid.set(id, message)
+                        return {
+                            id,
+                            body: message.body || '',
+                            timestamp: message.timestamp,
+                            fromMe: message.fromMe,
+                            type: message.type,
+                            hasMedia: !!message.hasMedia,
+                        }
+                    })
                 } catch {
                     usedFallback = true
                     // fetchMessages fails for @lid chats — use Puppeteer Store directly
@@ -1948,6 +2176,13 @@ export async function importWhatsAppHistory(
                         } catch {}
                     }
                 }
+
+                // Store fallback can expose malformed legacy keys. Give every
+                // history row a deterministic id before deduplication.
+                rawMessages = rawMessages.map((message, index) => ({
+                    ...message,
+                    id: serializeHistoryMessageId(message.id, chatJid, message, index),
+                }))
 
                 // @lid chats arrive via Store-fallback with no Message objects,
                 // which meant media was lost. Try getMessageById for each
@@ -2045,6 +2280,10 @@ export async function importWhatsAppHistory(
                             totalContacts++
                         }
                     } catch {}
+                }
+                if (!isGroupChat) {
+                    await attachVisibleWaPhone(unifiedChat.id)
+                        .catch(err => console.warn(`[WA-SERVICE] importHistory phone backfill failed: ${err.message}`))
                 }
 
                 let chatMaxTs: Date | null = null
@@ -2182,6 +2421,7 @@ export async function importWhatsAppHistory(
         console.log(`[WA-IMPORT] Completed job=${jobId}: ${finalMessages} msgs (${newMessages} new, ${finalMessages - newMessages} existing), ${finalChats} chats, ${finalContacts} contacts`)
     } catch (err: any) {
         console.error(`[WA-IMPORT] Fatal error job=${jobId}: ${err.message}`)
+        const runtimeFailure = isCdpContextDestroyed(err) || /runtime recovery failed/i.test(String(err?.message ?? err))
         await updateImportJob(jobId, {
             status: 'failed',
             resultType: 'failed',
@@ -2189,6 +2429,10 @@ export async function importWhatsAppHistory(
             chatsScanned: totalChats,
             contactsFound: totalContacts,
             finishedAt: new Date(),
+            detailsJson: {
+                reason: runtimeFailure ? 'whatsapp_runtime_unavailable' : 'import_failed',
+                error: String(err?.message ?? err).slice(0, 500),
+            },
         })
     }
 }
@@ -2247,7 +2491,7 @@ export async function checkReachability(
         // Prefer the same runtime truth used by the WhatsApp settings screen:
         // registry ready + live client.info. DB status can lag behind runtime
         // (for example remain "qr" while the in-memory session is ready).
-        let connId = connectionId
+        let connId: string | null = connectionId ?? null
         if (!connId) {
             connId = getLiveReachabilityConnectionId()
         }
