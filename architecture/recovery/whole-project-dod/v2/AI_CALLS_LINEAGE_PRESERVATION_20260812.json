@@ -1,0 +1,56 @@
+{
+  "schema": "yoko.crm.ai-calls-lineage-preservation.v1",
+  "status": "INTERNALLY_ACCEPTED_SOURCE_LINEAGE_PRESERVED_WHOLE_PROJECT_NOT_READY",
+  "protected_worktree": {
+    "path": "/opt/codex-work/crm-ai-calls",
+    "branch": "dev/ai-calls-product-preview-v2",
+    "head": "b38b22d3e00b3fb43d05417131709b3d2c535b2b",
+    "branch_and_head_unchanged_from_prior_handoff": true,
+    "fresh_dirty_count": "INDETERMINATE_PERMISSION_DENIED_ROOT_OWNED_GIT_INDEX",
+    "prior_durable_dirty_count": {
+      "staged": 0,
+      "unstaged": 8,
+      "untracked": 157,
+      "source": "architecture/recovery/whole-project-dod/v2/CURRENT_RECOVERY_HANDOFF.json"
+    },
+    "mutation_by_this_recovery_step": false
+  },
+  "recovery_lineage": {
+    "pre_messages_checkpoint": "68ee29e7",
+    "accepted_write_checkpoint": "ce874223",
+    "protected_runtime_paths": [
+      "gravity-mvp/src/app/api/ai-calls",
+      "gravity-mvp/src/lib/ai-call"
+    ],
+    "changed_paths_between_checkpoints": 0,
+    "git_ls_tree_inventory_sha256_before": "6d7614d5b5a23ee0d1e915d7cb11d5a9bd6ee3c1",
+    "git_ls_tree_inventory_sha256_after": "6d7614d5b5a23ee0d1e915d7cb11d5a9bd6ee3c1",
+    "request_and_tool_semantics": "BYTE_IDENTICAL_ACROSS_PROTECTED_MESSAGES_AND_WRITE_BASELINE_BATCHES"
+  },
+  "independent_product_branch_policy": {
+    "product_preview_branch_was_not_merged": true,
+    "product_preview_branch_was_not_reset_or_cleaned": true,
+    "product_preview_only_files_are_allowed_to_remain_outside_the_recovery_candidate": true,
+    "reason": "AI Calls product/STT roadmap completion is explicitly outside the modular-architecture recovery; compatibility and an intact development lineage are required, not forced feature integration."
+  },
+  "validation": {
+    "legacy_ai_call_node_tests": {
+      "files": 4,
+      "passed": 76,
+      "failed": 0
+    },
+    "calling_module_vitest": {
+      "files": 7,
+      "passed": 24,
+      "failed": 0
+    },
+    "authoritative_source_ci": "PASS (33/33)",
+    "calling_boundary_controls": "PASS in 112/112 active boundary control run",
+    "typescript_gate": "PASS (21 inherited diagnostics; 0 changed-path diagnostics)"
+  },
+  "limitations": [
+    "The protected dirty worktree itself was not built or tested because its root-owned Git index is unreadable to codexbot and the recovery must not mutate that protected workspace.",
+    "This is source-lineage and compatibility evidence, not production AI Calls runtime acceptance."
+  ],
+  "verdict": "AI_CALLS_ACTIVE_DEVELOPMENT_LINEAGE_PRESERVED; NO_PRODUCT_ROADMAP_COMPLETION_CLAIM; WHOLE_PROJECT_NOT_READY"
+}
