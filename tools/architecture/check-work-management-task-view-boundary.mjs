@@ -28,25 +28,27 @@ assert.equal(sha256(read(typeImplementationPath)), 'cf8f93c0e2145962c45141f227a2
 assert.equal(sha256(read(cardImplementationPath)), 'd4f64fc476c94d3b4a1275025b18559124c74f3b101a50abb0f43c06703daa78')
 assert.equal(sha256(read(modalImplementationPath)), 'b169fbaa6ffd14bf5a15fec74edf8f311b03d44bf0dc5bda70d2607eb9925cea')
 
-function exportedAliases(source) {
-    return [...source.matchAll(/export\s+(?:type\s+)?\{([\s\S]*?)\}\s+from/g)]
+function exportedPublicNames(source) {
+    const aliases = [...source.matchAll(/export\s+(?:type\s+)?\{([\s\S]*?)\}\s+from/g)]
         .flatMap((match) => match[1].split(','))
         .map((entry) => entry.trim())
         .filter(Boolean)
         .map((entry) => entry.match(/\bas\s+(\w+)$/)?.[1] ?? entry)
-        .sort()
+    const functions = [...source.matchAll(/export\s+async\s+function\s+(\w+)/g)].map((match) => match[1])
+    return [...aliases, ...functions].sort()
 }
 
 const queryPublic = read(queryPublicPath)
 const viewPublic = read(viewPublicPath)
-assert.deepEqual(exportedAliases(queryPublic), ['getDriverActiveTasksV1'])
-assert.deepEqual(exportedAliases(viewPublic), ['WorkTaskCardV1', 'WorkTaskCreateModalV1', 'WorkTaskViewV1'])
+assert.deepEqual(exportedPublicNames(queryPublic), ['getDriverActiveTasksV1'])
+assert.deepEqual(exportedPublicNames(viewPublic), ['WorkTaskCardV1', 'WorkTaskCreateModalV1', 'WorkTaskViewV1'])
+assert.match(queryPublic, /export\s+async\s+function\s+getDriverActiveTasksV1\s*\(/)
 assert.doesNotMatch(queryPublic, /create|update|delete|resolve|assign|export \*/i)
 assert.doesNotMatch(viewPublic, /TaskDetails|TaskBoard|export \*/)
 const unrelatedQueryProbe = `${queryPublic}\nexport { updateTask as updateTaskV1 } from '@/app/tasks/actions'\n`
-assert.notDeepEqual(exportedAliases(unrelatedQueryProbe), ['getDriverActiveTasksV1'])
+assert.notDeepEqual(exportedPublicNames(unrelatedQueryProbe), ['getDriverActiveTasksV1'])
 const unrelatedViewProbe = `${viewPublic}\nexport { default as TaskDetailsPaneV1 } from '@/app/tasks/components/TaskDetailsPane'\n`
-assert.notDeepEqual(exportedAliases(unrelatedViewProbe), ['WorkTaskCardV1', 'WorkTaskCreateModalV1', 'WorkTaskViewV1'])
+assert.notDeepEqual(exportedPublicNames(unrelatedViewProbe), ['WorkTaskCardV1', 'WorkTaskCreateModalV1', 'WorkTaskViewV1'])
 
 for (const consumerPath of consumers.slice(0, 2)) {
     const consumer = read(consumerPath)

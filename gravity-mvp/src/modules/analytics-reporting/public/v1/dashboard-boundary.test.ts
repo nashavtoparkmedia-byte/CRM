@@ -15,8 +15,12 @@ import { DashboardCardV1 } from './dashboard-card-view'
 import { DashboardKpiV1 } from './dashboard-kpi-view'
 
 describe('Analytics public dashboard boundary', () => {
-    it('exposes only the reviewed query and projections', () => {
-        expect(getDashboardStatsV1).toBe(capabilities.getDashboardStats)
+    it('exposes only the reviewed query and projections', async () => {
+        const result = { activeDriversToday: 1 }
+        capabilities.getDashboardStats.mockResolvedValue(result)
+
+        await expect(getDashboardStatsV1()).resolves.toBe(result)
+        expect(capabilities.getDashboardStats).toHaveBeenCalledOnce()
         expect(DashboardCardV1).toBe(capabilities.DashboardCard)
         expect(DashboardKpiV1).toBe(capabilities.DashboardKPI)
     })
