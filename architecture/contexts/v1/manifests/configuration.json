@@ -129,6 +129,7 @@
   "public_surface": [
     "ConfigurationView.v1",
     "OperationalConfigurationHealth.v1",
+    "OperationsMonitoringPolicy.v1",
     "ScenarioConfiguration.v1"
   ],
   "responsibility": "Operational settings, dictionaries, provider configuration metadata and scenario configuration workflows.",

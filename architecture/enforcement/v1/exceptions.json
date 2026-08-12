@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "e3e32a211af5115d62f028377cd63c1ed17c190122e941a4e17428cce5c076c2",
+  "finding_digest": "abf933263ce0545c7bf7cfcced7a1e37f86231b3eadc72f4d7cc2f29a523d6c3",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -14,8 +14,8 @@
   },
   "summary": {
     "internal_module_import": 3,
-    "non_public_cross_context_import": 16,
-    "undeclared_dependency": 12
+    "non_public_cross_context_import": 14,
+    "undeclared_dependency": 10
   },
   "exceptions": [
     {
@@ -358,70 +358,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:telegram_channel/telegram_provider>messaging/messages"
-      ]
-    },
-    {
-      "fingerprint": "arch_eb6d05f350b5f0587661ea7e",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/config-validator.ts",
-      "line_at_baseline": 140,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "operations_observability",
-      "subject": "settings>monitoring:gravity-mvp/src/lib/failure-detection.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_1c8e588625b2495f88f3a787",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/config-validator.ts",
-      "line_at_baseline": 140,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "operations_observability",
-      "subject": "settings>monitoring:gravity-mvp/src/lib/failure-detection.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_2589749c709388f044a54b73",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/config-validator.ts",
-      "line_at_baseline": 147,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "operations_observability",
-      "subject": "settings>monitoring:gravity-mvp/src/lib/perf-monitor.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_abd34a425d303685ad87e04a",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/config-validator.ts",
-      "line_at_baseline": 147,
-      "ordinal": 1,
-      "owner_context": "configuration",
-      "target_context": "operations_observability",
-      "subject": "settings>monitoring:gravity-mvp/src/lib/perf-monitor.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:configuration/settings>operations_observability/monitoring"
       ]
     },
     {

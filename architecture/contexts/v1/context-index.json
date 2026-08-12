@@ -23,7 +23,7 @@
     {
       "context": "configuration",
       "path": "architecture/contexts/v1/manifests/configuration.json",
-      "sha256": "4facdbe984bcc46fd28b1a862b2032254426bd0b36206a458f0d43d5a89e987a"
+      "sha256": "bb0791625cc0d181df4eae60d27bcbdd275c2d7ac1681637e044640385a115f4"
     },
     {
       "context": "contacts",

@@ -137,19 +137,19 @@ export function registerAllConfigs(): void {
     } catch { /* module may not exist */ }
 
     try {
-        const { FAILURE_DETECTION_CONFIG } = require('@/lib/failure-detection')
-        registerConfigRule(positiveInt('failureDetection.windowHours', () => FAILURE_DETECTION_CONFIG.windowHours))
-        registerConfigRule(positiveInt('failureDetection.criticalConsecutiveErrors', () => FAILURE_DETECTION_CONFIG.criticalConsecutiveErrors))
-        registerConfigRule(rangeInt('failureDetection.criticalErrorRatePct', () => FAILURE_DETECTION_CONFIG.criticalErrorRatePct, 1, 100))
+        const { FAILURE_DETECTION_CONFIG_V1 } = require('@/modules/configuration/public/v1/operations-monitoring-policy')
+        registerConfigRule(positiveInt('failureDetection.windowHours', () => FAILURE_DETECTION_CONFIG_V1.windowHours))
+        registerConfigRule(positiveInt('failureDetection.criticalConsecutiveErrors', () => FAILURE_DETECTION_CONFIG_V1.criticalConsecutiveErrors))
+        registerConfigRule(rangeInt('failureDetection.criticalErrorRatePct', () => FAILURE_DETECTION_CONFIG_V1.criticalErrorRatePct, 1, 100))
     } catch { /* module may not exist */ }
 
     try {
-        const { PERF_CONFIG } = require('@/lib/perf-monitor')
-        registerConfigRule(positiveInt('perf.defaultSlowThresholdMs', () => PERF_CONFIG.defaultSlowThresholdMs))
-        registerConfigRule(positiveInt('perf.cronSlowThresholdMs', () => PERF_CONFIG.cronSlowThresholdMs))
-        registerConfigRule(positiveInt('perf.apiSlowThresholdMs', () => PERF_CONFIG.apiSlowThresholdMs))
-        registerConfigRule(positiveInt('perf.querySlowThresholdMs', () => PERF_CONFIG.querySlowThresholdMs))
-        registerConfigRule(positiveInt('perf.retentionDays', () => PERF_CONFIG.retentionDays))
+        const { PERFORMANCE_MONITORING_CONFIG_V1 } = require('@/modules/configuration/public/v1/operations-monitoring-policy')
+        registerConfigRule(positiveInt('perf.defaultSlowThresholdMs', () => PERFORMANCE_MONITORING_CONFIG_V1.defaultSlowThresholdMs))
+        registerConfigRule(positiveInt('perf.cronSlowThresholdMs', () => PERFORMANCE_MONITORING_CONFIG_V1.cronSlowThresholdMs))
+        registerConfigRule(positiveInt('perf.apiSlowThresholdMs', () => PERFORMANCE_MONITORING_CONFIG_V1.apiSlowThresholdMs))
+        registerConfigRule(positiveInt('perf.querySlowThresholdMs', () => PERFORMANCE_MONITORING_CONFIG_V1.querySlowThresholdMs))
+        registerConfigRule(positiveInt('perf.retentionDays', () => PERFORMANCE_MONITORING_CONFIG_V1.retentionDays))
     } catch { /* module may not exist */ }
 
     try {
