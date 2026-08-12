@@ -16,8 +16,8 @@
 //   4. No new SDKs / monitoring deps. Postgres uses the existing
 //      `prisma` singleton; MinIO is probed through Calling's narrow
 //      recording-storage public capability; Redis + FS-ESL use Node's
-//      built-in `net` with a raw TCP probe (Redis also speaks the
-//      one-line `PING` RESP command — server replies `+PONG\r\n`).
+//      built-in `net` with a raw TCP probe (Redis uses length-delimited
+//      RESP `AUTH` when configured, then requires `+PONG\r\n`).
 //   5. `ms` is mandatory on every Check, success or failure, including
 //      the timeout path (= wall-clock spent waiting).
 //
@@ -28,6 +28,7 @@ import net from 'node:net'
 import { prisma } from '@/lib/prisma'
 import { probeRecordingStorageV1 } from '@/modules/calling/public/v1/recording-storage'
 import { composeHealthResponse, withCheckTimeout } from './health-helpers'
+import { encodeRespCommand, redisHealthTarget } from './health-redis-helpers'
 
 type Check = { name: string; ok: boolean; ms: number; error?: string }
 
@@ -53,12 +54,18 @@ async function pingPostgres(): Promise<Check> {
 
 // ─── Redis ────────────────────────────────────────────────────────────
 async function pingRedis(): Promise<Check> {
+    let target: ReturnType<typeof redisHealthTarget>
+    try {
+        target = redisHealthTarget(process.env)
+    } catch {
+        return { name: 'redis', ok: false, ms: 0, error: 'configuration_invalid' }
+    }
     return new Promise<Check>((resolve) => {
         const start = Date.now()
-        const host = process.env.REDIS_HOST ?? '127.0.0.1'
-        const port = Number(process.env.REDIS_PORT ?? 6379)
-        const sock = net.createConnection({ host, port })
+        const sock = net.createConnection({ host: target.host, port: target.port })
         let settled = false
+        let phase: 'auth' | 'ping' = target.authParts ? 'auth' : 'ping'
+        let buffered = ''
         const finish = (ok: boolean, error?: string) => {
             if (settled) return
             settled = true
@@ -66,18 +73,27 @@ async function pingRedis(): Promise<Check> {
             resolve({ name: 'redis', ok, ms: Date.now() - start, ...(error ? { error } : {}) })
         }
         sock.once('connect', () => {
-            // RESP inline command. A healthy redis replies `+PONG\r\n`.
-            // We don't bother to parse RESP — substring match is enough
-            // to differentiate «port is open and redis answers» from
-            // «port is open but it's some other TCP service».
-            sock.write('PING\r\n')
+            sock.write(encodeRespCommand(target.authParts ?? ['PING']))
         })
-        sock.once('data', (buf) => {
-            const text = buf.toString('utf8')
-            if (text.includes('PONG')) finish(true)
-            else finish(false, `unexpected_response: ${text.slice(0, 60).replace(/\s+/g, ' ')}`)
+        sock.on('data', (buf) => {
+            if (settled) return
+            buffered += buf.toString('utf8')
+            if (buffered.length > 4096) return finish(false, 'response_too_large')
+            const lineEnd = buffered.indexOf('\r\n')
+            if (lineEnd < 0) return
+            const line = buffered.slice(0, lineEnd)
+            buffered = buffered.slice(lineEnd + 2)
+            if (phase === 'auth') {
+                if (line !== '+OK') return finish(false, 'authentication_failed')
+                phase = 'ping'
+                sock.write(encodeRespCommand(['PING']))
+                return
+            }
+            if (line === '+PONG') finish(true)
+            else finish(false, 'unexpected_response')
         })
         sock.once('error', (err) => finish(false, err.message))
+        sock.once('close', () => finish(false, 'connection_closed'))
     })
 }
 
