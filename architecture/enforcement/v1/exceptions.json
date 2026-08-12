@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "2fc391e40f90d46f5e9c296cb8c39e6e793ee03f11facf0f3e8741e86c30642b",
+  "finding_digest": "77510ebf5c99fa80fe95fa40a12ceec583a9b07350a68fc06889b71784bd94fe",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,8 +13,8 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "internal_module_import": 6,
-    "non_public_cross_context_import": 23,
+    "internal_module_import": 5,
+    "non_public_cross_context_import": 22,
     "undeclared_dependency": 12
   },
   "exceptions": [
@@ -308,38 +308,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:fleet_operations/drivers>messaging/messages"
-      ]
-    },
-    {
-      "fingerprint": "arch_72562ca9c550cb625d47f822",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/drivers/actions.ts",
-      "line_at_baseline": 6,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "contacts",
-      "subject": "drivers>contacts:gravity-mvp/src/lib/contacts/yandex-link.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>contacts/contacts"
-      ]
-    },
-    {
-      "fingerprint": "arch_60fe75ada35e98f95d638ea8",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/drivers/actions.ts",
-      "line_at_baseline": 6,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "contacts",
-      "subject": "drivers>contacts:gravity-mvp/src/lib/contacts/yandex-link.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>contacts/contacts"
       ]
     },
     {
