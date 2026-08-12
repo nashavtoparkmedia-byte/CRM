@@ -124,9 +124,10 @@ assertCheck('foreign manual-link Contact update removed',!/prisma\.contact\.upda
 const contactMergeFacade=source('gravity-mvp/src/lib/ContactMergeService.ts')
 assertCheck('Contacts merge facade uses MergeContactsCommand.v1',contactMergeFacade.includes('MERGE_CONTACTS_COMMAND_V1')&&contactMergeFacade.includes('mergeContactsV1({'),'Contacts merge owner command absent')
 assertCheck('foreign Chat and Task writes removed from Contacts merge facade',!/(?:prisma|transaction)\.(?:chat|task)\.(?:create|createMany|update|updateMany|upsert|delete|deleteMany)/.test(contactMergeFacade),'direct foreign merge write remains')
-const communicationConsumer=source('gravity-mvp/src/lib/communications.ts')
-assertCheck('Messaging communication consumer uses RecordDriverDailyActivityCommand.v1',communicationConsumer.includes('RECORD_DRIVER_DAILY_ACTIVITY_COMMAND_V1')&&communicationConsumer.includes('recordDriverDailyActivityV1({'),'Fleet daily-activity command absent')
-assertCheck('foreign DriverDaySummary upsert removed',!/prisma\.driverDaySummary\.upsert/.test(communicationConsumer),'direct DriverDaySummary upsert remains')
+const communicationConsumer=source('gravity-mvp/src/app/drivers/[id]/timeline-actions.ts')
+assertCheck('Fleet timeline consumer uses RecordDriverDailyActivityCommand.v1',communicationConsumer.includes('RECORD_DRIVER_DAILY_ACTIVITY_COMMAND_V1')&&communicationConsumer.includes('recordDriverDailyActivityV1({'),'Fleet daily-activity command absent')
+assertCheck('direct DriverDaySummary upsert remains absent',!/prisma\.driverDaySummary\.upsert/.test(communicationConsumer),'direct DriverDaySummary upsert remains')
+assertCheck('driver communication history stays inside Fleet public capabilities',communicationConsumer.includes('recordDriverCommunicationEventV1({')&&!communicationConsumer.includes('@/modules/messaging'),'communication history owner drift')
 const inboxFleetConsumer=source('gravity-mvp/src/app/inbox/InboxClient.tsx')
 const managerCommunicationRoutePath='gravity-mvp/src/app/api/platform/drivers/[id]/manager-communication/route.ts'
 if(fs.existsSync(path.join(root,managerCommunicationRoutePath))){

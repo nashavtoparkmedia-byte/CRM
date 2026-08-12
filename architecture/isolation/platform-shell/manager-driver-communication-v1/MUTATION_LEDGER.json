@@ -7,9 +7,9 @@
   "verified_at": "2026-08-10T07:20:25Z",
   "source": [
     "one same-origin JSON-only Platform Shell mutation route",
-    "one strict Messaging v1 owner command with closed result",
-    "one Messaging owner handler and narrow legacy Prisma adapter",
-    "one internal Platform Shell orchestrator composing existing Fleet and new Messaging owner commands sequentially",
+    "one strict Fleet Operations v1 communication-history command with closed result",
+    "one Fleet Operations owner handler and narrow legacy Prisma adapter",
+    "one internal Platform Shell orchestrator composing Fleet summary and history owner commands sequentially",
     "four browser consumers and five live invocations migrated to a relative URL",
     "two legacy action functions and one obsolete compatibility runtime facade retired while pure historical surfaces remain",
     "route, orchestration, repository and successor-aware historical controls",

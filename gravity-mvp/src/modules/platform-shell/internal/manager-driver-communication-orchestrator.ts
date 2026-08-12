@@ -1,17 +1,17 @@
 import {
     RECORD_DRIVER_DAILY_ACTIVITY_COMMAND_V1,
+    RECORD_MANAGER_DRIVER_COMMUNICATION_COMMAND_V1,
     type DriverDailyActivityV1,
+    type ManagerDriverCommunicationActivityV1,
     type RecordDriverDailyActivityCommandV1,
     type RecordDriverDailyActivityResultV1,
-} from '@/contracts/fleet-operations/v1'
-import {
-    RECORD_MANAGER_DRIVER_COMMUNICATION_COMMAND_V1,
-    type ManagerDriverCommunicationActivityV1,
     type RecordManagerDriverCommunicationCommandV1,
     type RecordManagerDriverCommunicationResultV1,
-} from '@/contracts/messaging/v1'
-import { recordDriverDailyActivityV1 } from '@/modules/fleet-operations/public/v1'
-import { recordManagerDriverCommunicationV1 } from '@/modules/messaging/public/v1'
+} from '@/contracts/fleet-operations/v1'
+import {
+    recordDriverDailyActivityV1,
+    recordManagerDriverCommunicationV1,
+} from '@/modules/fleet-operations/public/v1'
 
 export interface ManagerDriverCommunicationOwnerApiV1 {
     recordDriverDailyActivityV1(

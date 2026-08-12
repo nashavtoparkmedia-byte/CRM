@@ -8,11 +8,11 @@ import vm from 'node:vm'
 
 const root = process.cwd()
 const paths = {
-  contract: 'gravity-mvp/src/contracts/messaging/v1/record-manager-driver-communication-command.ts',
-  contractIndex: 'gravity-mvp/src/contracts/messaging/v1/index.ts',
-  handler: 'gravity-mvp/src/modules/messaging/public/v1/record-manager-driver-communication-handler.ts',
-  adapter: 'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-record-manager-driver-communication-adapter.ts',
-  publicIndex: 'gravity-mvp/src/modules/messaging/public/v1/index.ts',
+  contract: 'gravity-mvp/src/contracts/fleet-operations/v1/record-manager-driver-communication-command.ts',
+  contractIndex: 'gravity-mvp/src/contracts/fleet-operations/v1/index.ts',
+  handler: 'gravity-mvp/src/modules/fleet-operations/public/v1/record-manager-driver-communication-handler.ts',
+  adapter: 'gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-record-manager-driver-communication-adapter.ts',
+  publicIndex: 'gravity-mvp/src/modules/fleet-operations/public/v1/index.ts',
   orchestrator: 'gravity-mvp/src/modules/platform-shell/internal/manager-driver-communication-orchestrator.ts',
   route: 'gravity-mvp/src/app/api/platform/drivers/[id]/manager-communication/route.ts',
   legacyActions: 'gravity-mvp/src/app/drivers/actions.ts',
@@ -62,7 +62,7 @@ function evaluate(relative, imports) {
 
 const contracts = evaluate(paths.contract, {})
 const handler = evaluate(paths.handler, {
-  '../../../../contracts/messaging/v1': contracts,
+  '../../../../contracts/fleet-operations/v1': contracts,
 })
 
 const command = {
@@ -71,14 +71,14 @@ const command = {
   activity: 'call',
 }
 
-check('exact Messaging contract and closed parser', () => {
+check('exact Fleet history contract and closed parser', () => {
   assert.equal(
     contracts.RECORD_MANAGER_DRIVER_COMMUNICATION_COMMAND_V1,
-    'messaging.RecordManagerDriverCommunicationCommand.v1',
+    'fleet_operations.RecordManagerDriverCommunicationCommand.v1',
   )
   assert.equal(
     contracts.RECORD_MANAGER_DRIVER_COMMUNICATION_RESULT_V1,
-    'messaging.RecordManagerDriverCommunicationResult.v1',
+    'fleet_operations.RecordManagerDriverCommunicationResult.v1',
   )
   assert.deepEqual(contracts.parseRecordManagerDriverCommunicationCommandV1(command), command)
   assert.deepEqual(
@@ -91,7 +91,7 @@ check('exact Messaging contract and closed parser', () => {
   assert.throws(
     () => contracts.parseRecordManagerDriverCommunicationCommandV1({
       ...command,
-      contract: 'messaging.RecordManagerDriverCommunicationCommand.v2',
+      contract: 'fleet_operations.RecordManagerDriverCommunicationCommand.v2',
     }),
     (error) => error.code === 'UNSUPPORTED_CONTRACT_VERSION',
   )
@@ -116,7 +116,7 @@ await checkAsync('owner handler validates and maps only exact persistence input'
   await assert.rejects(failing(command), /persistence down/)
 })
 
-await checkAsync('Messaging adapter preserves exact call and message event rows', async () => {
+await checkAsync('Fleet history adapter preserves exact call and message event rows', async () => {
   const calls = []
   const adapter = evaluate(paths.adapter, {
     '@/lib/prisma': {
@@ -139,26 +139,26 @@ await checkAsync('Messaging adapter preserves exact call and message event rows'
   assert.doesNotMatch(source, /driverDaySummary|\$transaction|Promise\.all|\bretry\b/)
 })
 
-await checkAsync('Platform composes Fleet then Messaging owners and exposes no provider path', async () => {
+await checkAsync('Platform composes exact Fleet summary then history capabilities and exposes no provider path', async () => {
   const ownerCalls = []
   const orchestratorModule = evaluate(paths.orchestrator, {
     '@/contracts/fleet-operations/v1': {
       RECORD_DRIVER_DAILY_ACTIVITY_COMMAND_V1: 'fleet_operations.RecordDriverDailyActivityCommand.v1',
-    },
-    '@/contracts/messaging/v1': {
       RECORD_MANAGER_DRIVER_COMMUNICATION_COMMAND_V1:
         contracts.RECORD_MANAGER_DRIVER_COMMUNICATION_COMMAND_V1,
     },
-    '@/modules/fleet-operations/public/v1': { recordDriverDailyActivityV1() {} },
-    '@/modules/messaging/public/v1': { recordManagerDriverCommunicationV1() {} },
+    '@/modules/fleet-operations/public/v1': {
+      recordDriverDailyActivityV1() {},
+      recordManagerDriverCommunicationV1() {},
+    },
   })
   const fixedTime = new Date(2026, 7, 10, 13, 42, 17, 900).getTime()
   const orchestrate = orchestratorModule.createManagerDriverCommunicationOrchestratorV1({
-    async recordDriverDailyActivityV1(input) { ownerCalls.push(['fleet', input]) },
-    async recordManagerDriverCommunicationV1(input) { ownerCalls.push(['messaging', input]) },
+    async recordDriverDailyActivityV1(input) { ownerCalls.push(['fleet_summary', input]) },
+    async recordManagerDriverCommunicationV1(input) { ownerCalls.push(['fleet_history', input]) },
   }, { now: () => fixedTime })
   await orchestrate('driver-1', 'call')
-  assert.deepEqual(ownerCalls.map(([owner]) => owner), ['fleet', 'messaging'])
+  assert.deepEqual(ownerCalls.map(([owner]) => owner), ['fleet_summary', 'fleet_history'])
   assert.equal(ownerCalls[0][1].driverId, 'driver-1')
   assert.equal(ownerCalls[0][1].activity, 'manager_call')
   assert.equal(ownerCalls[0][1].dayStart, new Date(2026, 7, 10).toISOString())
@@ -171,6 +171,7 @@ await checkAsync('Platform composes Fleet then Messaging owners and exposes no p
 
   const source = read(paths.orchestrator)
   assert.doesNotMatch(source, /@\/lib\/prisma|\bprisma\.|\bfetch\s*\(|BOT_API_URL|Promise\.all|\$transaction|\bretry\b/)
+  assert.doesNotMatch(source, /@\/contracts\/messaging|@\/modules\/messaging/)
   assert.ok(source.indexOf('recordDriverDailyActivityV1({') < source.indexOf('recordManagerDriverCommunicationV1({'))
   assert.match(read(paths.publicIndex), /recordManagerDriverCommunicationV1\s*=\s*createRecordManagerDriverCommunicationHandlerV1/)
 })

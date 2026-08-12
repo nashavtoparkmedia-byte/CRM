@@ -20,6 +20,15 @@ import { createFindDriverByExactPhoneHandlerV1 } from './find-driver-by-exact-ph
 import { legacyPrismaFindDriverByExactPhonePortV1 } from './legacy-prisma-find-driver-by-exact-phone-adapter'
 import { createReconcileDriverProfileHandlerV1 } from './reconcile-driver-profile-handler'
 import { legacyPrismaReconcileDriverProfilePortV1 } from './legacy-prisma-reconcile-driver-profile-adapter'
+import {
+    createGetDriverCommunicationTimelineHandlerV1,
+    createRecordDriverCommunicationEventHandlerV1,
+} from './driver-communication-event-handler'
+import { legacyPrismaDriverCommunicationEventPortV1 } from './legacy-prisma-driver-communication-event-adapter'
+import { createRecordManagerDriverCommunicationHandlerV1 } from './record-manager-driver-communication-handler'
+import { legacyPrismaRecordManagerDriverCommunicationPortV1 } from './legacy-prisma-record-manager-driver-communication-adapter'
+import { createRunCommunicationEventRetentionHandlerV1 } from './communication-event-retention-handler'
+import { legacyPrismaCommunicationEventRetentionPortV1 } from './legacy-prisma-communication-event-retention-adapter'
 export { createUpdateDriverStateHandlerV1 } from './update-driver-state-handler'
 export type { UpdateDriverStatePersistencePortV1 } from './update-driver-state-handler'
 export const updateDriverStateV1=createUpdateDriverStateHandlerV1(legacyPrismaUpdateDriverStatePortV1)
@@ -58,3 +67,22 @@ export const findDriverByExactPhoneV1=createFindDriverByExactPhoneHandlerV1(lega
 export { createReconcileDriverProfileHandlerV1 } from './reconcile-driver-profile-handler'
 export type { ReconcileDriverProfilePersistencePortV1 } from './reconcile-driver-profile-handler'
 export const reconcileDriverProfileV1=createReconcileDriverProfileHandlerV1(legacyPrismaReconcileDriverProfilePortV1)
+export {
+    createGetDriverCommunicationTimelineHandlerV1,
+    createRecordDriverCommunicationEventHandlerV1,
+} from './driver-communication-event-handler'
+export type { DriverCommunicationEventPersistencePortV1 } from './driver-communication-event-handler'
+export {
+    getDriverCommunicationTimelineV1,
+    recordDriverCommunicationEventV1,
+} from './driver-communication-event'
+export { createRecordManagerDriverCommunicationHandlerV1 } from './record-manager-driver-communication-handler'
+export type { RecordManagerDriverCommunicationPersistencePortV1 } from './record-manager-driver-communication-handler'
+export const recordManagerDriverCommunicationV1 = createRecordManagerDriverCommunicationHandlerV1(
+    legacyPrismaRecordManagerDriverCommunicationPortV1,
+)
+export { createRunCommunicationEventRetentionHandlerV1 } from './communication-event-retention-handler'
+export type { CommunicationEventRetentionPersistencePortV1 } from './communication-event-retention-handler'
+export const runCommunicationEventRetentionV1 = createRunCommunicationEventRetentionHandlerV1(
+    legacyPrismaCommunicationEventRetentionPortV1,
+)

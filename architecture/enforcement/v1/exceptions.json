@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "cfc88365df23b0307a125c0b873cb4afd20b5aa209227827fdaa56adb0f48d5a",
+  "finding_digest": "fd134594adca5d72f3902146458dd3a9f6598fc66cc6b4d2222b542faf381fb5",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,8 +13,8 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "non_public_cross_context_import": 5,
-    "undeclared_dependency": 5
+    "non_public_cross_context_import": 2,
+    "undeclared_dependency": 2
   },
   "exceptions": [
     {
@@ -83,102 +83,6 @@
       "migration_references": [
         "dependency:fleet_operations/drivers>operations_observability/monitoring",
         "dependency:fleet_operations/yandex_fleet>operations_observability/monitoring"
-      ]
-    },
-    {
-      "fingerprint": "arch_7d9a0a408eae2dbec21c2d8e",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/drivers/[id]/timeline-actions.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "messaging",
-      "subject": "drivers>messages:gravity-mvp/src/lib/communications.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>messaging/messages"
-      ]
-    },
-    {
-      "fingerprint": "arch_45fc960162185731960f40f0",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/drivers/[id]/timeline-actions.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "fleet_operations",
-      "target_context": "messaging",
-      "subject": "drivers>messages:gravity-mvp/src/lib/communications.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>messaging/messages"
-      ]
-    },
-    {
-      "fingerprint": "arch_3765f777b2a7aa8dbf63de8e",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/drivers/[id]/timeline-actions.ts",
-      "line_at_baseline": 7,
-      "ordinal": 2,
-      "owner_context": "fleet_operations",
-      "target_context": "messaging",
-      "subject": "drivers>messages:gravity-mvp/src/lib/communications.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>messaging/messages"
-      ]
-    },
-    {
-      "fingerprint": "arch_a0d22f70b704a8b1b7fa9895",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/drivers/[id]/timeline-actions.ts",
-      "line_at_baseline": 7,
-      "ordinal": 2,
-      "owner_context": "fleet_operations",
-      "target_context": "messaging",
-      "subject": "drivers>messages:gravity-mvp/src/lib/communications.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:fleet_operations/drivers>messaging/messages"
-      ]
-    },
-    {
-      "fingerprint": "arch_004b1de0c7b79e2ec284c311",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/lib/triggers.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "work_management",
-      "target_context": "messaging",
-      "subject": "tasks>messages:gravity-mvp/src/lib/communications.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:work_management/tasks>messaging/messages"
-      ]
-    },
-    {
-      "fingerprint": "arch_a4c9c417ba8c19bf885a08f8",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/lib/triggers.ts",
-      "line_at_baseline": 4,
-      "ordinal": 1,
-      "owner_context": "work_management",
-      "target_context": "messaging",
-      "subject": "tasks>messages:gravity-mvp/src/lib/communications.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:work_management/tasks>messaging/messages"
       ]
     }
   ]

@@ -1,5 +1,5 @@
-export const RUN_COMMUNICATION_EVENT_RETENTION_COMMAND_V1 = 'messaging.RunCommunicationEventRetentionCommand.v1' as const
-export const RUN_COMMUNICATION_EVENT_RETENTION_RESULT_V1 = 'messaging.RunCommunicationEventRetentionResult.v1' as const
+export const RUN_COMMUNICATION_EVENT_RETENTION_COMMAND_V1 = 'fleet_operations.RunCommunicationEventRetentionCommand.v1' as const
+export const RUN_COMMUNICATION_EVENT_RETENTION_RESULT_V1 = 'fleet_operations.RunCommunicationEventRetentionResult.v1' as const
 
 export interface RunCommunicationEventRetentionCommandV1 {
   contract: typeof RUN_COMMUNICATION_EVENT_RETENTION_COMMAND_V1
@@ -39,7 +39,7 @@ export function parseRunCommunicationEventRetentionCommandV1(
   if (input.contract !== RUN_COMMUNICATION_EVENT_RETENTION_COMMAND_V1) {
     if (
       typeof input.contract === 'string' &&
-      input.contract.startsWith('messaging.RunCommunicationEventRetentionCommand.')
+      input.contract.startsWith('fleet_operations.RunCommunicationEventRetentionCommand.')
     ) {
       throw new CommunicationEventRetentionCommandValidationError(
         'UNSUPPORTED_CONTRACT_VERSION',

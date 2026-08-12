@@ -4,11 +4,11 @@
   "milestone": "CRM-ARCH-007R-MANAGER-DRIVER-COMMUNICATION",
   "amendments": [
     {
-      "context": "messaging",
+      "context": "fleet_operations",
       "add_commands": [
         "RecordManagerDriverCommunicationCommand.v1"
       ],
-      "reason": "Expose only the manager-to-driver communication event operation required by Platform Shell orchestration."
+      "reason": "Expose only the manager-to-driver communication history operation required by Platform Shell orchestration."
     }
   ]
 }

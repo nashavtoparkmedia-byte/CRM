@@ -8,11 +8,11 @@ import path from 'node:path'
 import vm from 'node:vm'
 
 const root = process.cwd()
-const out = mkdtempSync(path.join(tmpdir(), 'yoko-communication-event-retention-'))
+const out = mkdtempSync(path.join(tmpdir(), 'yoko-fleet-communication-event-retention-'))
 const sources = [
-  'gravity-mvp/src/contracts/messaging/v1/communication-event-retention-command.ts',
-  'gravity-mvp/src/contracts/messaging/v1/index.ts',
-  'gravity-mvp/src/modules/messaging/public/v1/communication-event-retention-handler.ts',
+  'gravity-mvp/src/contracts/fleet-operations/v1/communication-event-retention-command.ts',
+  'gravity-mvp/src/contracts/fleet-operations/v1/index.ts',
+  'gravity-mvp/src/modules/fleet-operations/public/v1/communication-event-retention-handler.ts',
 ].map(value => path.join(root, value))
 const compiled = spawnSync(
   process.execPath,
@@ -36,9 +36,9 @@ if (compiled.status !== 0) {
 }
 
 const require = createRequire(import.meta.url)
-const contracts = require(path.join(out, 'contracts/messaging/v1/index.js'))
+const contracts = require(path.join(out, 'contracts/fleet-operations/v1/index.js'))
 const { createRunCommunicationEventRetentionHandlerV1 } = require(
-  path.join(out, 'modules/messaging/public/v1/communication-event-retention-handler.js'),
+  path.join(out, 'modules/fleet-operations/public/v1/communication-event-retention-handler.js'),
 )
 const checks = []
 const check = (name, fn) => {
@@ -59,11 +59,11 @@ try {
   check('identifier explicit', () => {
     assert.equal(
       contracts.RUN_COMMUNICATION_EVENT_RETENTION_COMMAND_V1,
-      'messaging.RunCommunicationEventRetentionCommand.v1',
+      'fleet_operations.RunCommunicationEventRetentionCommand.v1',
     )
     assert.equal(
       contracts.RUN_COMMUNICATION_EVENT_RETENTION_RESULT_V1,
-      'messaging.RunCommunicationEventRetentionResult.v1',
+      'fleet_operations.RunCommunicationEventRetentionResult.v1',
     )
   })
   check('command parses exactly', () => {
@@ -73,7 +73,7 @@ try {
     assert.throws(
       () => contracts.parseRunCommunicationEventRetentionCommandV1({
         ...command,
-        contract: 'messaging.RunCommunicationEventRetentionCommand.v2',
+        contract: 'fleet_operations.RunCommunicationEventRetentionCommand.v2',
       }),
       error => error.code === 'UNSUPPORTED_CONTRACT_VERSION',
     )
@@ -135,7 +135,7 @@ try {
       /communication retention down/,
     )
   })
-  await checkAsync('typed messaging adapter preserves DB-clock selection and exact selected-id deletion', async () => {
+  await checkAsync('typed Fleet adapter preserves DB-clock selection and exact selected-id deletion', async () => {
     const queryCalls = []
     const deleteCalls = []
     const selections = [[{ id: 'communication-2' }, { id: 'communication-1' }], []]
@@ -151,7 +151,7 @@ try {
     }
     const typescript = require(path.join(root, 'gravity-mvp/node_modules/typescript/lib/typescript.js'))
     const adapterSource = readFileSync(
-      path.join(root, 'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-communication-event-retention-adapter.ts'),
+      path.join(root, 'gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-communication-event-retention-adapter.ts'),
       'utf8',
     )
     const output = typescript.transpileModule(adapterSource, {

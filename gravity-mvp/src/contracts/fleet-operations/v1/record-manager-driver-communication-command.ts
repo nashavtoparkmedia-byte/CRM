@@ -1,7 +1,7 @@
 export const RECORD_MANAGER_DRIVER_COMMUNICATION_COMMAND_V1 =
-    'messaging.RecordManagerDriverCommunicationCommand.v1' as const
+    'fleet_operations.RecordManagerDriverCommunicationCommand.v1' as const
 export const RECORD_MANAGER_DRIVER_COMMUNICATION_RESULT_V1 =
-    'messaging.RecordManagerDriverCommunicationResult.v1' as const
+    'fleet_operations.RecordManagerDriverCommunicationResult.v1' as const
 
 export const MANAGER_DRIVER_COMMUNICATION_ACTIVITIES_V1 = ['call', 'message'] as const
 export type ManagerDriverCommunicationActivityV1 =
@@ -48,7 +48,7 @@ export function parseRecordManagerDriverCommunicationCommandV1(
     if (input.contract !== RECORD_MANAGER_DRIVER_COMMUNICATION_COMMAND_V1) {
         if (
             typeof input.contract === 'string'
-            && input.contract.startsWith('messaging.RecordManagerDriverCommunicationCommand.')
+            && input.contract.startsWith('fleet_operations.RecordManagerDriverCommunicationCommand.')
         ) {
             throw new RecordManagerDriverCommunicationValidationError(
                 'UNSUPPORTED_CONTRACT_VERSION',

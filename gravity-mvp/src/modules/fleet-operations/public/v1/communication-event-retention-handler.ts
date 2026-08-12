@@ -3,7 +3,7 @@ import {
   parseRunCommunicationEventRetentionCommandV1,
   type RunCommunicationEventRetentionCommandV1,
   type RunCommunicationEventRetentionResultV1,
-} from '../../../../contracts/messaging/v1'
+} from '../../../../contracts/fleet-operations/v1'
 
 export interface CommunicationEventRetentionPersistencePortV1 {
   runCommunicationEventRetention(input: { dryRun: boolean }): Promise<{ selectedCount: number }>

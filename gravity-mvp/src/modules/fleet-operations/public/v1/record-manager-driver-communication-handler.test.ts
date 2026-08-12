@@ -17,7 +17,7 @@ import {
     RECORD_MANAGER_DRIVER_COMMUNICATION_RESULT_V1,
     RecordManagerDriverCommunicationValidationError,
     parseRecordManagerDriverCommunicationCommandV1,
-} from '@/contracts/messaging/v1'
+} from '@/contracts/fleet-operations/v1'
 
 import { legacyPrismaRecordManagerDriverCommunicationPortV1 } from './legacy-prisma-record-manager-driver-communication-adapter'
 import { createRecordManagerDriverCommunicationHandlerV1 } from './record-manager-driver-communication-handler'
@@ -66,7 +66,7 @@ describe('RecordManagerDriverCommunicationCommand.v1', () => {
         expect.assertions(2)
         try {
             parseRecordManagerDriverCommunicationCommandV1({
-                contract: 'messaging.RecordManagerDriverCommunicationCommand.v2',
+                contract: 'fleet_operations.RecordManagerDriverCommunicationCommand.v2',
                 driverId: 'driver-1',
                 activity: 'call',
             })

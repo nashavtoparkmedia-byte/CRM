@@ -11,18 +11,18 @@ const check = (name, value, detail) => value
 const fleetContract = read('gravity-mvp/src/contracts/fleet-operations/v1/event-retention-commands.ts')
 const fleetHandler = read('gravity-mvp/src/modules/fleet-operations/public/v1/event-retention-handler.ts')
 const fleetAdapter = read('gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-event-retention-adapter.ts')
-const messagingContract = read('gravity-mvp/src/contracts/messaging/v1/communication-event-retention-command.ts')
-const messagingHandler = read('gravity-mvp/src/modules/messaging/public/v1/communication-event-retention-handler.ts')
-const messagingAdapter = read('gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-communication-event-retention-adapter.ts')
+const communicationContract = read('gravity-mvp/src/contracts/fleet-operations/v1/communication-event-retention-command.ts')
+const communicationHandler = read('gravity-mvp/src/modules/fleet-operations/public/v1/communication-event-retention-handler.ts')
+const communicationAdapter = read('gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-communication-event-retention-adapter.ts')
 const consumer = read('gravity-mvp/src/lib/RetentionCleanup.ts')
 const amendmentPath = 'architecture/isolation/operations-observability/event-retention-v1/module-manifest-amendments.json'
 const amendment = JSON.parse(read(amendmentPath))
 const migration = JSON.parse(read('architecture/isolation/operations-observability/event-retention-v1/migration-manifest.json'))
 const policy = JSON.parse(read('architecture/enforcement/v1/policy.json'))
 const registry = JSON.parse(read('architecture/enforcement/v1/exceptions.json'))
-const contracts = fleetContract + messagingContract
-const handlers = fleetHandler + messagingHandler
-const adapters = fleetAdapter + messagingAdapter
+const contracts = fleetContract + communicationContract
+const handlers = fleetHandler + communicationHandler
+const adapters = fleetAdapter + communicationAdapter
 const sliceBetween = (source, startMarker, endMarker) => {
   const start = source.indexOf(startMarker)
   if (start < 0) return ''
@@ -40,7 +40,7 @@ const apiLogHandlerBody = sliceBetween(
   null,
 )
 const communicationHandlerBody = sliceBetween(
-  messagingHandler,
+  communicationHandler,
   'return async function runCommunicationEventRetentionV1',
   null,
 )
@@ -88,7 +88,7 @@ check(
   'contract versions exact',
   fleetContract.includes('fleet_operations.RunDriverEventRetentionCommand.v1') &&
     fleetContract.includes('fleet_operations.RunApiLogRetentionCommand.v1') &&
-    messagingContract.includes('messaging.RunCommunicationEventRetentionCommand.v1'),
+    communicationContract.includes('fleet_operations.RunCommunicationEventRetentionCommand.v1'),
   'contract identifier drift',
 )
 check(
@@ -101,7 +101,7 @@ check(
   'named ports exact',
   fleetHandler.includes('runDriverEventRetention(input: { dryRun: boolean })') &&
     fleetHandler.includes('runApiLogRetention(input: { dryRun: boolean })') &&
-    messagingHandler.includes('runCommunicationEventRetention(input: { dryRun: boolean })'),
+    communicationHandler.includes('runCommunicationEventRetention(input: { dryRun: boolean })'),
   'owner port mapping drift',
 )
 check(
@@ -153,9 +153,9 @@ check(
 )
 check(
   'CommunicationEvent policy exact',
-  messagingAdapter.includes('SELECT id FROM "CommunicationEvent"') &&
-    messagingAdapter.includes("INTERVAL '180 days'") &&
-    messagingAdapter.includes('prisma.communicationEvent.deleteMany({ where: { id: { in: ids } } })'),
+  communicationAdapter.includes('SELECT id FROM "CommunicationEvent"') &&
+    communicationAdapter.includes("INTERVAL '180 days'") &&
+    communicationAdapter.includes('prisma.communicationEvent.deleteMany({ where: { id: { in: ids } } })'),
   'CommunicationEvent policy drift',
 )
 check(
@@ -233,14 +233,11 @@ check(
 )
 check(
   'owner manifest commands exact',
-  amendment.amendments?.length === 2 &&
+  amendment.amendments?.length === 1 &&
     amendment.amendments[0].context === 'fleet_operations' &&
     JSON.stringify(amendment.amendments[0].add_commands) === JSON.stringify([
       'RunDriverEventRetentionCommand.v1',
       'RunApiLogRetentionCommand.v1',
-    ]) &&
-    amendment.amendments[1].context === 'messaging' &&
-    JSON.stringify(amendment.amendments[1].add_commands) === JSON.stringify([
       'RunCommunicationEventRetentionCommand.v1',
     ]),
   'owner manifest command amendment drift',
@@ -262,7 +259,7 @@ check(
     !registry.exceptions.some((entry) => entry.fingerprint === 'arch_d6b0723094e2555809f66a51') &&
     !registry.exceptions.some((entry) => [
       'gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-event-retention-adapter.ts',
-      'gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-communication-event-retention-adapter.ts',
+      'gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-communication-event-retention-adapter.ts',
     ].includes(entry.file)),
   'strict exception retirement or owner-local classification drift',
 )

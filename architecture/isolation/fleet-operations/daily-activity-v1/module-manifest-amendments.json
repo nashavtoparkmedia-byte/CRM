@@ -9,16 +9,6 @@
         "RecordDriverDailyActivityCommand.v1"
       ],
       "reason": "Expose Fleet-owned DriverDaySummary activity persistence as a provider-neutral command."
-    },
-    {
-      "context": "messaging",
-      "add_allowed_dependencies": [
-        {
-          "context": "fleet_operations",
-          "surface": "fleet_operations.public"
-        }
-      ],
-      "reason": "Route the one planned communication activity summary upsert through Fleet Operations."
     }
   ]
 }

@@ -22,13 +22,13 @@ const constants = {
   },
   fleet: {
     RUN_API_LOG_RETENTION_COMMAND_V1: 'fleet_operations.RunApiLogRetentionCommand.v1',
+    RUN_COMMUNICATION_EVENT_RETENTION_COMMAND_V1: 'fleet_operations.RunCommunicationEventRetentionCommand.v1',
     RUN_DRIVER_EVENT_RETENTION_COMMAND_V1: 'fleet_operations.RunDriverEventRetentionCommand.v1',
   },
   messaging: {
     DELETE_RETAINED_MESSAGES_COMMAND_V1: 'messaging.DeleteRetainedMessagesCommand.v1',
     DETACH_CONTACT_CONVERSATIONS_COMMAND_V1: 'messaging.DetachContactConversationsCommand.v1',
     PURGE_MESSAGE_RETRY_METADATA_COMMAND_V1: 'messaging.PurgeMessageRetryMetadataCommand.v1',
-    RUN_COMMUNICATION_EVENT_RETENTION_COMMAND_V1: 'messaging.RunCommunicationEventRetentionCommand.v1',
   },
   work: {
     DETACH_CONTACT_TASKS_COMMAND_V1: 'work_management.DetachContactTasksCommand.v1',
@@ -68,12 +68,12 @@ function loadCleanup({ candidates, dependencies, failStage = null, failContactId
   }
   const fleetModule = {
     async runApiLogRetentionV1() { return { selectedCount: 0 } },
+    async runCommunicationEventRetentionV1() { return { selectedCount: 0 } },
     async runDriverEventRetentionV1() { return { selectedCount: 0 } },
   }
   const messagingModule = {
     async deleteRetainedMessagesV1() { throw new Error('empty fixture must not delete messages') },
     async purgeMessageRetryMetadataV1() { throw new Error('empty fixture must not purge metadata') },
-    async runCommunicationEventRetentionV1() { return { selectedCount: 0 } },
     async detachContactConversationsV1(command) {
       ownerCalls.push(['messaging', command.contactId, command.contract])
       maybeFail('messaging', command.contactId)
@@ -94,7 +94,9 @@ function loadCleanup({ candidates, dependencies, failStage = null, failContactId
     require(specifier) {
       const modules = {
         '@/lib/prisma': { prisma },
-        '@/lib/opsLog': { opsLog(level, event, context) { logs.push([level, event, plain(context)]) } },
+        '@/infrastructure/operations/operational-log': {
+          operationalLogV1(level, event, context) { logs.push([level, event, plain(context)]) },
+        },
         '@/contracts/contacts/v1': constants.contacts,
         '@/contracts/fleet-operations/v1': constants.fleet,
         '@/contracts/messaging/v1': constants.messaging,

@@ -19,6 +19,10 @@
     {
       "context": "calling",
       "surface": "calling.public"
+    },
+    {
+      "context": "fleet_operations",
+      "surface": "fleet_operations.public"
     }
   ],
   "commands": [
@@ -119,16 +123,6 @@
       "id": "gravity-mvp/prisma/schema.prisma:Chat",
       "mapped_table": null,
       "model": "Chat",
-      "schema": "gravity-mvp/prisma/schema.prisma"
-    },
-    {
-      "current_writer_modules": [
-        "drivers",
-        "messages"
-      ],
-      "id": "gravity-mvp/prisma/schema.prisma:CommunicationEvent",
-      "mapped_table": null,
-      "model": "CommunicationEvent",
       "schema": "gravity-mvp/prisma/schema.prisma"
     },
     {

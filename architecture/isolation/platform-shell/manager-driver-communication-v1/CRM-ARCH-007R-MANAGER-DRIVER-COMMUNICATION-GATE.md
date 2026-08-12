@@ -9,7 +9,7 @@ implements the accepted low-risk Platform Shell topology slice on base
 Four existing browser consumers with five manager call/message logging
 invocations now cross a fail-closed same-origin Platform endpoint. Platform
 sequentially composes the existing Fleet daily-activity command and one strict
-Messaging v1 event command. Both persistence operations remain in their owner
+Fleet Operations v1 event-history command. Both persistence operations remain in their owner
 adapters, and the effective graph contains 106 observed relationships, no
 newly approved edge and zero cycles.
 

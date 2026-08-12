@@ -1,7 +1,8 @@
 import { prisma } from '@/lib/prisma'
 import type { CommunicationEventRetentionPersistencePortV1 } from './communication-event-retention-handler'
 
-export const legacyPrismaCommunicationEventRetentionPortV1: CommunicationEventRetentionPersistencePortV1 = {
+export const legacyPrismaCommunicationEventRetentionPortV1:
+  CommunicationEventRetentionPersistencePortV1 = {
   async runCommunicationEventRetention({ dryRun }) {
     const rows = await prisma.$queryRaw<Array<{ id: string }>>`
       SELECT id FROM "CommunicationEvent"

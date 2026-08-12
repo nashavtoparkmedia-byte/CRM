@@ -4,7 +4,7 @@ import {
     type ManagerDriverCommunicationActivityV1,
     type RecordManagerDriverCommunicationCommandV1,
     type RecordManagerDriverCommunicationResultV1,
-} from '../../../../contracts/messaging/v1'
+} from '../../../../contracts/fleet-operations/v1'
 
 export interface RecordManagerDriverCommunicationPersistencePortV1 {
     recordManagerDriverCommunication(input: {

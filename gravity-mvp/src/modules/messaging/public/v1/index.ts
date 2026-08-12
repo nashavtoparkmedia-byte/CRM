@@ -34,16 +34,12 @@ import { createAttachBinaryMessageMediaHandlerV1 } from './attach-binary-message
 import { legacyPrismaAttachBinaryMessageMediaPortV1 } from './legacy-prisma-attach-binary-message-media-adapter'
 import { createDeleteConversationsByIdHandlerV1,createDeleteLegacyExternalConversationsHandlerV1,createDeleteQueuedMessagesForConnectionHandlerV1,createDeliverQueuedMessagesForConnectionHandlerV1 } from './channel-maintenance-handler'
 import { legacyPrismaChannelMaintenancePortV1 } from './legacy-prisma-channel-maintenance-adapter'
-import { createRunCommunicationEventRetentionHandlerV1 } from './communication-event-retention-handler'
-import { legacyPrismaCommunicationEventRetentionPortV1 } from './legacy-prisma-communication-event-retention-adapter'
 import { createDetachContactConversationsHandlerV1 } from './contact-retention-handler'
 import { legacyPrismaContactConversationRetentionPortV1 } from './legacy-prisma-contact-retention-adapter'
 import { createEnsureConversationContactLinkHandlerV1 } from './conversation-contact-link-handler'
 import { legacyPrismaConversationContactLinkPortV1 } from './legacy-prisma-conversation-contact-link-adapter'
 import { createFindAndBackfillContactConversationHandlerV1, createOpenFallbackContactConversationHandlerV1 } from './contact-conversation-handler'
 import { legacyPrismaContactConversationPortV1 } from './legacy-prisma-contact-conversation-adapter'
-import { createRecordManagerDriverCommunicationHandlerV1 } from './record-manager-driver-communication-handler'
-import { legacyPrismaRecordManagerDriverCommunicationPortV1 } from './legacy-prisma-record-manager-driver-communication-adapter'
 import { createPatchMessageMetadataHandlerV1 } from './patch-message-metadata-handler'
 import { legacyPrismaPatchMessageMetadataPortV1 } from './legacy-prisma-patch-message-metadata-adapter'
 import { createDeleteConversationsByChannelHandlerV1 } from './delete-conversations-by-channel-handler'
@@ -130,9 +126,6 @@ export const deliverQueuedMessagesForConnectionV1=createDeliverQueuedMessagesFor
 export const deleteQueuedMessagesForConnectionV1=createDeleteQueuedMessagesForConnectionHandlerV1(legacyPrismaChannelMaintenancePortV1)
 export const deleteLegacyExternalConversationsV1=createDeleteLegacyExternalConversationsHandlerV1(legacyPrismaChannelMaintenancePortV1)
 export const deleteConversationsByIdV1=createDeleteConversationsByIdHandlerV1(legacyPrismaChannelMaintenancePortV1)
-export { createRunCommunicationEventRetentionHandlerV1 } from './communication-event-retention-handler'
-export type { CommunicationEventRetentionPersistencePortV1 } from './communication-event-retention-handler'
-export const runCommunicationEventRetentionV1=createRunCommunicationEventRetentionHandlerV1(legacyPrismaCommunicationEventRetentionPortV1)
 export { createDetachContactConversationsHandlerV1 } from './contact-retention-handler'
 export type { ContactConversationRetentionPersistencePortV1 } from './contact-retention-handler'
 export const detachContactConversationsV1=createDetachContactConversationsHandlerV1(legacyPrismaContactConversationRetentionPortV1)
@@ -143,11 +136,6 @@ export { createFindAndBackfillContactConversationHandlerV1, createOpenFallbackCo
 export type { ContactConversationPersistencePortV1 } from './contact-conversation-handler'
 export const findAndBackfillContactConversationV1=createFindAndBackfillContactConversationHandlerV1(legacyPrismaContactConversationPortV1)
 export const openFallbackContactConversationV1=createOpenFallbackContactConversationHandlerV1(legacyPrismaContactConversationPortV1)
-export { createRecordManagerDriverCommunicationHandlerV1 } from './record-manager-driver-communication-handler'
-export type { RecordManagerDriverCommunicationPersistencePortV1 } from './record-manager-driver-communication-handler'
-export const recordManagerDriverCommunicationV1 = createRecordManagerDriverCommunicationHandlerV1(
-    legacyPrismaRecordManagerDriverCommunicationPortV1,
-)
 export { createPatchMessageMetadataHandlerV1 } from './patch-message-metadata-handler'
 export const patchMessageMetadataV1 = createPatchMessageMetadataHandlerV1(
     legacyPrismaPatchMessageMetadataPortV1,

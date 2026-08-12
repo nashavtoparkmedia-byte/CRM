@@ -8,7 +8,7 @@
     "b817a5f522c7c8ffde7bc083e33c1ae426fe6e34"
   ],
   "context": "platform_shell",
-  "owner_contexts": ["fleet_operations", "messaging"],
+  "owner_contexts": ["fleet_operations"],
   "plan": {
     "id": "manager-driver-communication-v1",
     "route": "gravity-mvp/src/app/api/platform/drivers/[id]/manager-communication/route.ts",
@@ -19,12 +19,11 @@
   },
   "contracts": [
     "fleet_operations.RecordDriverDailyActivityCommand.v1",
-    "messaging.RecordManagerDriverCommunicationCommand.v1"
+    "fleet_operations.RecordManagerDriverCommunicationCommand.v1"
   ],
   "ownership": {
     "platform_shell": "same-origin HTTP delivery and exact sequential owner orchestration",
-    "fleet_operations": "existing local-day DriverDaySummary persistence",
-    "messaging": "manager CommunicationEvent persistence",
+    "fleet_operations": "local-day DriverDaySummary and manager CommunicationEvent persistence",
     "browser_consumers": "four existing UI files with five call or message logging invocations",
     "generic_persistence_capabilities": 0
   },

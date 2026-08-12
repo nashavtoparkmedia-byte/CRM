@@ -29,7 +29,12 @@ const mappings = {
 }
 const exactFunctions = Object.keys(mappings).sort()
 
-assert.equal(sha256(read(implementationPath)), '9e6b8a8fe41415ea411343daeee2f0f7fd56cb8d62ddc75e2aa8760c3fb676f8')
+const implementationSource = read(implementationPath)
+assert.equal(sha256(implementationSource), 'b8cb9d74b5cb3b1f1a602311a5a96e64f143a490ef5bf6d5d8564bdb8804ba31')
+assert.doesNotMatch(
+    implementationSource,
+    /evaluateAllTriggers|executeAutoMessage|createScenarioTask|createManagerTask|@\/lib\/communications|\.\/communications/,
+)
 
 function exportedFunctions(source) {
     return [...source.matchAll(/export\s+async\s+function\s+(\w+)\s*\(([^)]*)\)/g)]

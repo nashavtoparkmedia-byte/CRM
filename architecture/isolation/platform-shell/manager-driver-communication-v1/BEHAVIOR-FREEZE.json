@@ -53,16 +53,16 @@
   ],
   "source_hashes_after": {
     "gravity-mvp/src/app/api/platform/drivers/[id]/manager-communication/route.ts": "8ae8d2950eae98f6f65cec20cbd038a990dd6e0249d6dca999bd4be50597f5f4",
-    "gravity-mvp/src/contracts/messaging/v1/record-manager-driver-communication-command.ts": "f9167138d12a97b6e94de8ca0422fbdc7c95664b329cbf2d8b4d301cfc55c733",
-    "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-record-manager-driver-communication-adapter.ts": "6fc1e98dc627718a8b9bf85f7c15a6fc52c57ef921a324061a2d4d6cf2208847",
-    "gravity-mvp/src/modules/messaging/public/v1/record-manager-driver-communication-handler.ts": "e032e543d5b41d31edc91c63607b2af0145f30f37b88668abae664a6d5f335da",
-    "gravity-mvp/src/modules/platform-shell/internal/manager-driver-communication-orchestrator.ts": "9e7d8eafc7fb049cf441e7ba3badff268b438b6123ac5cd6167b2c0fbb92dac9"
+    "gravity-mvp/src/contracts/fleet-operations/v1/record-manager-driver-communication-command.ts": "a505a211830c30f5a07a566455e49586b9681f95517d6735fbf02fea7619b1b7",
+    "gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-record-manager-driver-communication-adapter.ts": "6fc1e98dc627718a8b9bf85f7c15a6fc52c57ef921a324061a2d4d6cf2208847",
+    "gravity-mvp/src/modules/fleet-operations/public/v1/record-manager-driver-communication-handler.ts": "5a92d03b22a6856c492214c5f6c755e329d8ff3de89bb46395ea1939fc0dd6db",
+    "gravity-mvp/src/modules/platform-shell/internal/manager-driver-communication-orchestrator.ts": "c8a1a60ffe4c841f3bf4034d963c7c589937cb2a2fa24df81203cc3dbaa235b6"
   },
   "behavior": [
     "call logging retains the exact local-day DriverDaySummary upsert followed by the exact phone outbound CommunicationEvent row and Russian content",
     "message logging retains the exact local-day DriverDaySummary upsert followed by the exact Telegram outbound CommunicationEvent row and Russian content",
-    "Platform preserves Fleet-before-Messaging sequential order, local setHours midnight construction, no transaction, no retry and no parallelism",
-    "a Fleet failure still prevents the event insert, while a later Messaging failure leaves the completed day-summary mutation intact and remains visible",
+    "Platform preserves Fleet-summary-before-Fleet-history sequential order, local setHours midnight construction, no transaction, no retry and no parallelism",
+    "a Fleet summary failure still prevents the event insert, while a later Fleet history failure leaves the completed day-summary mutation intact and remains visible",
     "the four browser consumers retain five invocations: four call activities and one message activity, with no provider send",
     "DriverCard and DriversClient retain event stopPropagation ordering; DriverCard, RiskDriversTable and Inbox success state follows successful delivery",
     "non-success HTTP responses throw before UI success state, and uncaught owner failures remain non-success route responses",
@@ -73,7 +73,7 @@
     "the live mutation crossing changes from imported Server Actions or direct action calls to a relative same-origin Platform HTTP endpoint",
     "POST is explicitly JSON-only and fails closed on missing or mismatched Origin, Host or protocol and on a contradictory forwarded host",
     "the route accepts only the exact body shape with activity call or message and rejects malformed, extra-field and unknown activity input",
-    "strict Messaging v1 envelopes reject malformed, extra-field, empty and unsupported-version commands before persistence",
+    "strict Fleet Operations v1 envelopes reject malformed, extra-field, empty and unsupported-version commands before persistence",
     "public handlers, HTTP delivery and Platform orchestration add in-process frames and may change stack traces without changing persisted values or UI success ordering"
   ],
   "out_of_scope": [

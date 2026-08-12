@@ -3,7 +3,7 @@
 Status: `PASS_CONTINUE_SOURCE_GATE`
 
 An independent read-only review confirmed all five live invocations, the exact
-call and message persistence mappings, Fleet-before-Messaging ordering, local
+call and message persistence mappings, Fleet-summary-before-history ordering, local
 midnight construction and the inherited partial-success/error semantics. It
 also confirmed the exact Origin/Host/protocol guard, fail-closed contradictory
 forwarded-host behavior, JSON-only closed request body and UI success state

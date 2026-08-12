@@ -12,7 +12,10 @@
   "commands": [
     "SynchronizeFleetCommand.v1",
     "UpdateDriverStateCommand.v1",
-    "RunDriverCheckCommand.v1"
+    "RunDriverCheckCommand.v1",
+    "RecordDriverCommunicationEventCommand.v1",
+    "RecordManagerDriverCommunicationCommand.v1",
+    "RunCommunicationEventRetentionCommand.v1"
   ],
   "compatibility_strategy": "Keep YFS API/worker and current Gravity sync entry points stable; introduce owner commands before redirecting cross-module writes.",
   "context": {
@@ -115,6 +118,15 @@
       "schema": "gravity-mvp/prisma/schema.prisma"
     },
     {
+      "current_writer_modules": [
+        "drivers"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:CommunicationEvent",
+      "mapped_table": null,
+      "model": "CommunicationEvent",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
       "current_writer_modules": [],
       "id": "gravity-mvp/prisma/schema.prisma:DailyParkStats",
       "mapped_table": null,
@@ -155,7 +167,6 @@
     {
       "current_writer_modules": [
         "drivers",
-        "messages",
         "yandex_fleet"
       ],
       "id": "gravity-mvp/prisma/schema.prisma:DriverDaySummary",
@@ -252,9 +263,12 @@
     "DriverMatch.v1",
     "FleetMonitoringPolicy.v1",
     "FleetMonitoringViews.v1",
+    "DriverCommunicationEvent.v1",
+    "ManagerDriverCommunication.v1",
+    "CommunicationEventRetention.v1",
     "YandexFleetOperations.v1"
   ],
-  "responsibility": "Driver/fleet state, Yandex synchronization and isolated YFS checking workflow.",
+  "responsibility": "Driver/fleet state and communication history, Yandex synchronization and isolated YFS checking workflow.",
   "schema": "yoko.crm.module-manifest.v1",
   "technical_modules": [
     "drivers",

@@ -4,7 +4,7 @@ Status: `PASS_WITH_SCOPE_CONFIRMED`
 
 Source tip `b817a5f522c7c8ffde7bc083e33c1ae426fe6e34` moves the
 accepted manager call/message logging delivery into Platform Shell. Platform
-calls only strict Fleet Operations and Messaging public commands; both Prisma
+calls only strict Fleet Operations public commands; both Prisma
 writes remain in owner adapters. Exact daily-summary and communication-event
 shapes, local midnight construction, sequential partial-failure semantics,
 four UI consumers, five activity invocations and success ordering are frozen

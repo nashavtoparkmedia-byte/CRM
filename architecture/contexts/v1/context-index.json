@@ -38,7 +38,7 @@
     {
       "context": "fleet_operations",
       "path": "architecture/contexts/v1/manifests/fleet_operations.json",
-      "sha256": "34a2c548aac0fdf71696f0ed64c664baf87be8afea3b72294d9263c41762c114"
+      "sha256": "c1751f3c6d9e0008adbf51ccd3b21b139f2ebaab3c43f0540a4d7eae356e6279"
     },
     {
       "context": "identity_access",
@@ -53,7 +53,7 @@
     {
       "context": "messaging",
       "path": "architecture/contexts/v1/manifests/messaging.json",
-      "sha256": "1e556111e2342bcc6abca8d336d407abe04b75ea4ea9f7c20b4c93dd47774ae4"
+      "sha256": "31a6d535027f029f333c8d3868cbb76d22c862ccdcba6a75faed1b9637c80213"
     },
     {
       "context": "operations_observability",
