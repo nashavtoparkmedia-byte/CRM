@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useTasksStore } from '@/modules/work-management/public/v1/client-state/task-store'
-import { getDictionaries } from '@/lib/dictionaries/dictionary-service'
+import { getTaskDictionariesV1 } from '@/modules/work-management/public/v1/task-dictionary-catalog'
 import { useRouter } from 'next/navigation'
 import { listUserIdentitiesV1 as getUsers } from '@/modules/identity-access/public/v1/user-directory'
 import { useSelectedTask } from '@/modules/work-management/public/v1/client-state/task-selectors'
@@ -97,7 +97,7 @@ export default function TaskDetailsPane() {
     const [isClosing, setIsClosing] = useState(false)
 
     useEffect(() => {
-        getDictionaries().then(setDicts)
+        getTaskDictionariesV1().then(setDicts)
         getUsers().then(setUsers)
     }, [])
 
@@ -392,4 +392,3 @@ export default function TaskDetailsPane() {
         </div>
     )
 }
-

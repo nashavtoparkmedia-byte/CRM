@@ -102,8 +102,7 @@
   ],
   "internal_surface": [
     "gravity-mvp/src/app/settings",
-    "gravity-mvp/src/lib/config-validator.ts",
-    "gravity-mvp/src/lib/dictionaries"
+    "gravity-mvp/src/lib/config-validator.ts"
   ],
   "owned_data": [
     {
@@ -132,7 +131,7 @@
     "OperationsMonitoringPolicy.v1",
     "ScenarioConfiguration.v1"
   ],
-  "responsibility": "Operational settings, dictionaries, provider configuration metadata and scenario configuration workflows.",
+  "responsibility": "Operational settings, provider configuration metadata and scenario configuration workflows.",
   "schema": "yoko.crm.module-manifest.v1",
   "technical_modules": [
     "settings"

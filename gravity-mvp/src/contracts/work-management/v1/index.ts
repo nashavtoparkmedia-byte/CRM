@@ -40,6 +40,12 @@ export type {
     ReassignTasksResultV1,
 } from './reassign-tasks-command'
 
+export type {
+    TaskDictionariesV1,
+    TaskDictionaryItemV1,
+    TaskDictionaryTypeV1,
+} from './task-dictionary-catalog'
+
 export {
     COMPLETE_TASK_COMMAND_V1,
     COMPLETE_TASK_RESULT_V1,

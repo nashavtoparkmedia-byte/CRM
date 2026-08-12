@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "192cd6ca7f96c8b20584bf56e782e3b03bd904df4aab0e8d9f9405d8d44febc5",
+  "finding_digest": "b59e0165fea8144ab67a069da898ae565e6058438ce7d9368763a9e717f98cde",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,9 +13,9 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "internal_module_import": 2,
-    "non_public_cross_context_import": 13,
-    "undeclared_dependency": 9
+    "internal_module_import": 1,
+    "non_public_cross_context_import": 12,
+    "undeclared_dependency": 8
   },
   "exceptions": [
     {
@@ -246,54 +246,6 @@
       "migration_references": [
         "dependency:messaging/messages>platform_shell/gravity_core",
         "dependency:messaging/messages>platform_shell/gravity_ui"
-      ]
-    },
-    {
-      "fingerprint": "arch_a825f3a2f2c8c6401181adea",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/tasks/components/TaskDetailsPane.tsx",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "work_management",
-      "target_context": "configuration",
-      "subject": "tasks>settings:gravity-mvp/src/lib/dictionaries/dictionary-service.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:work_management/tasks>configuration/settings"
-      ]
-    },
-    {
-      "fingerprint": "arch_d84cceacf35673ca76472353",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/tasks/components/TaskDetailsPane.tsx",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "work_management",
-      "target_context": "configuration",
-      "subject": "tasks>settings:gravity-mvp/src/lib/dictionaries/dictionary-service.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:work_management/tasks>configuration/settings"
-      ]
-    },
-    {
-      "fingerprint": "arch_e18e9cdeeda184d7de4571b1",
-      "rule": "undeclared_dependency",
-      "file": "gravity-mvp/src/app/tasks/components/TaskDetailsPane.tsx",
-      "line_at_baseline": 5,
-      "ordinal": 1,
-      "owner_context": "work_management",
-      "target_context": "configuration",
-      "subject": "tasks>settings:gravity-mvp/src/lib/dictionaries/dictionary-service.ts",
-      "rationale": "Pre-existing dependency not authorized by the source context manifest; frozen pending architectural transition.",
-      "retirement": "Remove the dependency or approve a versioned public dependency through manifest review, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:work_management/tasks>configuration/settings"
       ]
     },
     {

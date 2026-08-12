@@ -64,7 +64,8 @@
   "internal_surface": [
     "gravity-mvp/src/lib/tasks",
     "gravity-mvp/src/app/tasks",
-    "gravity-mvp/src/app/my-day"
+    "gravity-mvp/src/app/my-day",
+    "gravity-mvp/src/modules/work-management/internal"
   ],
   "owned_data": [
     {
@@ -122,6 +123,7 @@
   "provider_relationships": [],
   "public_surface": [
     "ScenarioCatalog.v1",
+    "TaskDictionaryCatalog.v1",
     "TaskReassignment.v1",
     "TaskView.v1",
     "TaskQuery.v1",
@@ -130,7 +132,7 @@
     "WorkManagementClientState.v1",
     "OperationalTriggerEvaluations.v1"
   ],
-  "responsibility": "Tasks, manager work queues, task events and usage observation for work-management flows.",
+  "responsibility": "Tasks, manager work queues, task events, task dictionaries and usage observation for work-management flows.",
   "schema": "yoko.crm.module-manifest.v1",
   "technical_modules": [
     "tasks"

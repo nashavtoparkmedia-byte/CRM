@@ -23,7 +23,7 @@
     {
       "context": "configuration",
       "path": "architecture/contexts/v1/manifests/configuration.json",
-      "sha256": "bb0791625cc0d181df4eae60d27bcbdd275c2d7ac1681637e044640385a115f4"
+      "sha256": "926ca64baa9864b1c95e3d87df8b836cc51c0d77de92a08f64dc40665223b23a"
     },
     {
       "context": "contacts",
@@ -78,7 +78,7 @@
     {
       "context": "work_management",
       "path": "architecture/contexts/v1/manifests/work_management.json",
-      "sha256": "d44d2fb343f8db07b83a1c8db4e580df7e04e1d861cb924ee35424802bfad2f2"
+      "sha256": "b7706745b39d8123b3846c12f034918344f612b46918a81d131cf90ca0929984"
     }
   ],
   "controls": {
