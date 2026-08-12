@@ -1,0 +1,75 @@
+{
+  "schema": "yoko.crm.outbox-production-activation-reconciliation.v1",
+  "status": "SOURCE_ACCEPTED_PRODUCTION_ACTIVATION_BLOCKED",
+  "selected_flow": "Calling recording persistence -> calling.RecordingReady.v1 -> transcription queue",
+  "source_evidence": {
+    "migration": "gravity-mvp/prisma/migrations/20260809140000_add_domain_outbox/migration.sql",
+    "migration_sha256": "433b0d503f054ed6a8161a059e2650d5e401829dabe8c9d992a1d1763eef0016",
+    "migration_policy": "EXPAND_ONLY",
+    "outbox_behavior_tests": "PASS (16/16)",
+    "outbox_architecture_controls": "PASS (14/14)",
+    "atomic_producer": true,
+    "idempotent_publisher_and_consumer": true,
+    "bounded_retries_and_dead_letter": true,
+    "observable_failure_state": true,
+    "runtime_registration_present": true
+  },
+  "activation_prerequisites": {
+    "exact_migration_identity": "PASS",
+    "source_contract_and_architecture_tests": "PASS",
+    "isolated_postgresql_preview_execution": "PENDING",
+    "production_database_identity": "PENDING",
+    "verified_recoverable_backup": "PENDING",
+    "immutable_release_and_rollback_profile": "PENDING",
+    "post_deploy_health_and_behavior_regression": "PENDING"
+  },
+  "bounded_environment_probe": {
+    "local_postgresql_server_binaries": "ABSENT",
+    "docker_client": "PRESENT",
+    "docker_server_access": "DENIED_AS_DESIGNED",
+    "docker_socket_delegated_to_codexbot": false,
+    "production_or_preview_database_access_attempted": false
+  },
+  "privileged_runtime_v2": {
+    "probed_at": "2026-08-12T05:01:36Z",
+    "runtime_version": "2.0.0",
+    "package_version_from_durable_identity": "2.0.0-5",
+    "self_check": "PASS",
+    "runtime_sha256": "0cdeeb4ba43abe50f80fed1580ad7b0729bf83358932ece2974b3faedafed57a",
+    "policy_sha256": "e67159bf95b583a17073ccf34b95f17fb885321df10b742be970168331d64e38",
+    "registry_sha256": "6e0ac1bdf7bbf95b5ae984dc266050a86425aac1bd884f3ab2f1b6f377291016",
+    "release_preflight": "PROFILE_DISABLED",
+    "database_status": "PROFILE_DISABLED",
+    "release_activation": "PROFILE_DISABLED",
+    "database_migration": "PROFILE_DISABLED",
+    "rollback": "PROFILE_DISABLED",
+    "generic_command_execution": false,
+    "arbitrary_paths": false,
+    "docker_socket_delegated": false
+  },
+  "required_privileged_change": {
+    "type": "ROOT_OWNED_DECLARATIVE_PROFILE_INSTALLATION",
+    "scope": [
+      "exact release artifact and service set",
+      "exact expand-only migration artifact",
+      "database identity/status and verified backup",
+      "immutable rollback target",
+      "bounded health checks"
+    ],
+    "generic_root_or_docker_access_acceptable": false,
+    "existing_installed_abi_can_install_profile": false
+  },
+  "production_mutations": {
+    "source": 0,
+    "database": 0,
+    "deployments": 0,
+    "service_restarts_or_reloads": 0,
+    "rollbacks": 0
+  },
+  "gap_effect": {
+    "FINAL-DOD-008": "REMAINS_OPEN_INACTIVE_OUTBOX",
+    "FINAL-DOD-009": "REMAINS_OPEN_PROFILES_DISABLED",
+    "FINAL-DOD-007": "REMAINS_OPEN_UNDEPLOYED"
+  },
+  "verdict": "NO_SAFE_PRODUCTION_ACTIVATION_PATH_EXISTS_INSIDE_INSTALLED_FINITE_ABI; WHOLE_PROJECT_NOT_READY"
+}
