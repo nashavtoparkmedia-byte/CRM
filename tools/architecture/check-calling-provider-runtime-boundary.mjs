@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { scanArchitecture } from './enforce-architecture.mjs'
 
 const root = process.cwd()
 const read = (relative) => readFileSync(path.join(root, relative), 'utf8')
+const sha256 = (source) => createHash('sha256').update(source).digest('hex')
 const consumers = [
   'gravity-mvp/src/app/api/admin/reprocess-recordings/route.ts',
   'gravity-mvp/src/app/api/settings/telephony-status/route.ts',
@@ -19,6 +21,16 @@ for (const consumer of consumers) {
 assert.match(read(consumers[0]), /@\/modules\/calling\/public\/v1\/recording-recovery/)
 assert.match(read(consumers[1]), /@\/modules\/calling\/public\/v1\/telephony-provider-health/)
 assert.match(read(consumers[2]), /@\/modules\/calling\/public\/v1\/runtime-startup/)
+assert.match(read(consumers[2]), /@\/infrastructure\/providers\/process-proxy/)
+assert.doesNotMatch(read(consumers[2]), /@\/lib\/ai-call\/init-proxy/)
+
+const proxy = read('gravity-mvp/src/infrastructure/providers/process-proxy.ts')
+assert.equal(sha256(proxy), '89e2e6bb6948ceff88eb9e5bec575a6f4bd1d716512408228097897dcd4ad152')
+assert.deepEqual([...proxy.matchAll(/export\s+function\s+(\w+)/g)].map((match) => match[1]), ['initProxy'])
+assert.match(proxy, /function redactProxy/)
+assert.doesNotMatch(proxy, /export\s+(?:async\s+)?function\s+(?:redactProxy|getProxy|createProxyAgent)|export \*/)
+const unrelatedProxyProbe = `${proxy}\nexport function getProxyCredentials() { return null }\n`
+assert.notDeepEqual([...unrelatedProxyProbe.matchAll(/export\s+function\s+(\w+)/g)].map((match) => match[1]), ['initProxy'])
 
 const health = read('gravity-mvp/src/modules/calling/public/v1/telephony-provider-health.ts')
 assert.match(health, /sofia status gateway megafon/)
@@ -28,13 +40,11 @@ assert.doesNotMatch(runtime, /export \*|getEslConnection|originate|cancel/)
 
 const registry = JSON.parse(read('architecture/enforcement/v1/exceptions.json'))
 assert.equal(registry.exceptions.filter((entry) =>
-  consumers.includes(entry.file) && entry.target_context === 'calling' &&
-  !entry.subject.includes('init-proxy')).length, 0)
+  consumers.includes(entry.file) && entry.target_context === 'calling').length, 0)
 
 const scan = await scanArchitecture(root)
 const boundaryFindings = scan.findings.filter((finding) =>
-  consumers.includes(finding.file) && finding.target_context === 'calling' &&
-  !finding.subject.includes('init-proxy'))
+  consumers.includes(finding.file) && finding.target_context === 'calling')
 assert.deepEqual(boundaryFindings, [])
 process.stdout.write(`${JSON.stringify({
   status: 'PASS',

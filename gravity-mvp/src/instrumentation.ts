@@ -13,7 +13,7 @@ export async function register() {
     // Это ДОЛЖНО быть первым — до любого dynamic import'а, который может
     // сделать сетевой запрос на старте.
     try {
-        const { initProxy } = await import('@/lib/ai-call/init-proxy')
+        const { initProxy } = await import('@/infrastructure/providers/process-proxy')
         initProxy()
     } catch (err: any) {
         console.error('[instrumentation] initProxy failed:', err?.message)

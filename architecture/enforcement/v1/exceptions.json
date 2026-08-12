@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "768419c6dc8f8c28a0331acf7c928fd338c14e96c24371265c82dd242a079bc7",
+  "finding_digest": "fe845db48e8ac5dd90501e2237710061034b4a1d644c84e382fae3e472e881d8",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,8 +13,8 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "internal_module_import": 7,
-    "non_public_cross_context_import": 27,
+    "internal_module_import": 6,
+    "non_public_cross_context_import": 26,
     "undeclared_dependency": 13
   },
   "exceptions": [
@@ -552,42 +552,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:telegram_channel/telegram_provider>messaging/messages"
-      ]
-    },
-    {
-      "fingerprint": "arch_0bd470a1ae3ab934a847b6ec",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 16,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "calling",
-      "subject": "gravity_core>ai_calls:gravity-mvp/src/lib/ai-call/init-proxy.ts",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>calling/ai_calls",
-        "dependency:platform_shell/gravity_core>calling/calls",
-        "dependency:platform_shell/gravity_ui>calling/calls"
-      ]
-    },
-    {
-      "fingerprint": "arch_65057cc96dcc7a948adaf133",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/instrumentation.ts",
-      "line_at_baseline": 16,
-      "ordinal": 1,
-      "owner_context": "platform_shell",
-      "target_context": "calling",
-      "subject": "gravity_core>ai_calls:gravity-mvp/src/lib/ai-call/init-proxy.ts",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:platform_shell/gravity_core>calling/ai_calls",
-        "dependency:platform_shell/gravity_core>calling/calls",
-        "dependency:platform_shell/gravity_ui>calling/calls"
       ]
     },
     {
