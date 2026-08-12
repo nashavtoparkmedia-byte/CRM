@@ -43,6 +43,13 @@
     "deploy/nginx"
   ],
   "owned_data": [],
+  "owned_paths": [
+    "deploy/nginx"
+  ],
+  "owner": {
+    "accountability": "Edge Delivery bounded-context owner",
+    "context": "edge_delivery"
+  },
   "protected": true,
   "provider_relationships": [],
   "public_surface": [
@@ -53,5 +60,28 @@
   "technical_modules": [
     "nginx"
   ],
+  "verification": {
+    "architecture_checks": [
+      "node tools/architecture/validate-context-manifests.mjs",
+      "node tools/architecture/enforce-architecture.mjs",
+      "node tools/architecture/test-architecture-enforcement.mjs"
+    ],
+    "blast_radius": {
+      "consumer_contexts": [],
+      "owner_context": "edge_delivery",
+      "provider_scope": "NOT_APPLICABLE",
+      "provider_siblings": []
+    },
+    "build_checks": [
+      "node tools/architecture/check-typescript-baseline.mjs"
+    ],
+    "contract_tests": [
+      "node tools/architecture/validate-contract-registry.mjs",
+      "node tools/architecture/check-contract-boundaries.mjs"
+    ],
+    "module_tests": [
+      "node tools/architecture/check-calling-client-ui-boundary.mjs"
+    ]
+  },
   "version": 1
 }

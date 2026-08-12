@@ -242,6 +242,17 @@
       "schema": "tg-bot/prisma/schema.prisma"
     }
   ],
+  "owned_paths": [
+    "gravity-mvp/src/app/tg-actions.ts",
+    "gravity-mvp/src/contracts/telegram-channel",
+    "gravity-mvp/src/modules/telegram-channel",
+    "tg-bot/src",
+    "tg-bot/tg-bot-frontend"
+  ],
+  "owner": {
+    "accountability": "Telegram Channel bounded-context owner",
+    "context": "telegram_channel"
+  },
   "protected": true,
   "provider_relationships": [
     {
@@ -267,5 +278,33 @@
     "telegram_bot",
     "telegram_frontend"
   ],
+  "verification": {
+    "architecture_checks": [
+      "node tools/architecture/validate-context-manifests.mjs",
+      "node tools/architecture/enforce-architecture.mjs",
+      "node tools/architecture/test-architecture-enforcement.mjs"
+    ],
+    "blast_radius": {
+      "consumer_contexts": [
+        "configuration",
+        "edge_delivery"
+      ],
+      "owner_context": "telegram_channel",
+      "provider_scope": "PROVIDER_SPECIFIC",
+      "provider_siblings": []
+    },
+    "build_checks": [
+      "node tools/architecture/check-typescript-baseline.mjs"
+    ],
+    "contract_tests": [
+      "node tools/architecture/validate-contract-registry.mjs",
+      "node tools/architecture/check-contract-boundaries.mjs"
+    ],
+    "module_tests": [
+      "node tools/architecture/check-telegram-runtime-provider-boundary.mjs",
+      "node tools/architecture/check-telegram-driver-link-boundary.mjs",
+      "node tools/architecture/check-messaging-telegram-binary-media-boundary.mjs"
+    ]
+  },
   "version": 1
 }

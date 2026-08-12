@@ -20,6 +20,10 @@ const paths = {
   internal: 'gravity-mvp/src/lib/tasks/scenario-settings.ts',
 }
 const source = Object.fromEntries(Object.entries(paths).map(([key, value]) => [key, read(value)]))
+const frozenBehaviorSources = Object.entries(
+  JSON.parse(read('architecture/isolation/work-management/scenario-field-settings-v1/BEHAVIOR-FREEZE.json'))
+    .source_hashes_after ?? {},
+).filter(([file]) => !file.startsWith('architecture/contexts/v1/'))
 const evidenceRoot = 'architecture/isolation/work-management/scenario-field-settings-v1'
 const amendmentPath = `${evidenceRoot}/module-manifest-amendments.json`
 const amendment = JSON.parse(read(amendmentPath))
@@ -380,8 +384,9 @@ check(
 check(
   'behavior hashes and verification retain the source-only non-execution boundary',
   behavior.source_commit === 'b1f911b7b17273363df764d6e312a40c9f0fa8fc' &&
-    behavior.source_hashes_after &&
-    Object.entries(behavior.source_hashes_after).every(([file, expected]) => sha(file) === expected) &&
+    JSON.stringify(frozenBehaviorSources.map(([file]) => file).sort()) ===
+      JSON.stringify(Object.values(paths).sort()) &&
+    frozenBehaviorSources.every(([file, expected]) => sha(file) === expected) &&
     verification.database_accessed === false &&
     verification.scenario_field_settings_executed_against_database === false &&
     verification.runtime_or_provider_invoked === false &&

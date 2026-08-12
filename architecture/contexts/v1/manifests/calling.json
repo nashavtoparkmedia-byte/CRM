@@ -228,6 +228,19 @@
       "schema": "gravity-mvp/prisma/schema.prisma"
     }
   ],
+  "owned_paths": [
+    "gravity-mvp/src/contracts/calling",
+    "gravity-mvp/src/lib/ai-call",
+    "gravity-mvp/src/lib/calls",
+    "gravity-mvp/src/lib/freeswitch",
+    "gravity-mvp/src/modules/calling",
+    "telephony",
+    "tools/audio-bridge-day1"
+  ],
+  "owner": {
+    "accountability": "Calling and Telephony bounded-context owner",
+    "context": "calling"
+  },
   "protected": true,
   "provider_relationships": [
     {
@@ -290,5 +303,38 @@
     "audio_bridge",
     "telephony_config"
   ],
+  "verification": {
+    "architecture_checks": [
+      "node tools/architecture/validate-context-manifests.mjs",
+      "node tools/architecture/enforce-architecture.mjs",
+      "node tools/architecture/test-architecture-enforcement.mjs"
+    ],
+    "blast_radius": {
+      "consumer_contexts": [
+        "ai_knowledge",
+        "analytics_reporting",
+        "configuration",
+        "edge_delivery",
+        "messaging",
+        "operations_observability",
+        "platform_shell"
+      ],
+      "owner_context": "calling",
+      "provider_scope": "NOT_APPLICABLE",
+      "provider_siblings": []
+    },
+    "build_checks": [
+      "node tools/architecture/check-typescript-baseline.mjs"
+    ],
+    "contract_tests": [
+      "node tools/architecture/validate-contract-registry.mjs",
+      "node tools/architecture/check-contract-boundaries.mjs"
+    ],
+    "module_tests": [
+      "node tools/architecture/check-calling-provider-runtime-boundary.mjs",
+      "node tools/architecture/check-calling-ai-intern-control-boundary.mjs",
+      "node tools/architecture/check-calling-messaging-timeline-boundary.mjs"
+    ]
+  },
   "version": 1
 }

@@ -65,6 +65,16 @@
     "gravity-mvp/src/app/team-overview"
   ],
   "owned_data": [],
+  "owned_paths": [
+    "gravity-mvp/src/app/analytics",
+    "gravity-mvp/src/app/dashboard",
+    "gravity-mvp/src/app/team-overview",
+    "gravity-mvp/src/modules/analytics-reporting"
+  ],
+  "owner": {
+    "accountability": "Analytics and Reporting bounded-context owner",
+    "context": "analytics_reporting"
+  },
   "protected": true,
   "provider_relationships": [],
   "public_surface": [
@@ -76,5 +86,30 @@
   "technical_modules": [
     "analytics"
   ],
+  "verification": {
+    "architecture_checks": [
+      "node tools/architecture/validate-context-manifests.mjs",
+      "node tools/architecture/enforce-architecture.mjs",
+      "node tools/architecture/test-architecture-enforcement.mjs"
+    ],
+    "blast_radius": {
+      "consumer_contexts": [
+        "platform_shell"
+      ],
+      "owner_context": "analytics_reporting",
+      "provider_scope": "NOT_APPLICABLE",
+      "provider_siblings": []
+    },
+    "build_checks": [
+      "node tools/architecture/check-typescript-baseline.mjs"
+    ],
+    "contract_tests": [
+      "node tools/architecture/validate-contract-registry.mjs",
+      "node tools/architecture/check-contract-boundaries.mjs"
+    ],
+    "module_tests": [
+      "node tools/architecture/check-analytics-dashboard-boundary.mjs"
+    ]
+  },
   "version": 1
 }

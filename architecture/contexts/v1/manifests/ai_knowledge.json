@@ -154,6 +154,15 @@
       "schema": "gravity-mvp/prisma/schema.prisma"
     }
   ],
+  "owned_paths": [
+    "gravity-mvp/src/contracts/ai-knowledge",
+    "gravity-mvp/src/lib/ai/knowledge",
+    "gravity-mvp/src/modules/ai-knowledge"
+  ],
+  "owner": {
+    "accountability": "AI Knowledge bounded-context owner",
+    "context": "ai_knowledge"
+  },
   "protected": true,
   "provider_relationships": [
     {
@@ -187,5 +196,34 @@
   "technical_modules": [
     "ai_knowledge"
   ],
+  "verification": {
+    "architecture_checks": [
+      "node tools/architecture/validate-context-manifests.mjs",
+      "node tools/architecture/enforce-architecture.mjs",
+      "node tools/architecture/test-architecture-enforcement.mjs"
+    ],
+    "blast_radius": {
+      "consumer_contexts": [
+        "configuration",
+        "messaging",
+        "platform_shell"
+      ],
+      "owner_context": "ai_knowledge",
+      "provider_scope": "NOT_APPLICABLE",
+      "provider_siblings": []
+    },
+    "build_checks": [
+      "node tools/architecture/check-typescript-baseline.mjs"
+    ],
+    "contract_tests": [
+      "node tools/architecture/validate-contract-registry.mjs",
+      "node tools/architecture/check-contract-boundaries.mjs"
+    ],
+    "module_tests": [
+      "node tools/architecture/check-ai-knowledge-governance-boundary.mjs",
+      "node tools/architecture/check-ai-knowledge-retrieval-boundary.mjs",
+      "node tools/architecture/check-ai-decision-boundary.mjs"
+    ]
+  },
   "version": 1
 }

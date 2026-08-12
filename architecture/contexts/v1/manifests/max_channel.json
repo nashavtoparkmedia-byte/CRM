@@ -94,6 +94,16 @@
       "schema": "gravity-mvp/prisma/schema.prisma"
     }
   ],
+  "owned_paths": [
+    "gravity-mvp/src/app/max-actions.ts",
+    "gravity-mvp/src/lib/providers/max-personal",
+    "gravity-mvp/src/modules/max-channel",
+    "max-web-scraper"
+  ],
+  "owner": {
+    "accountability": "MAX Channel bounded-context owner",
+    "context": "max_channel"
+  },
   "protected": true,
   "provider_relationships": [
     {
@@ -117,5 +127,32 @@
     "max_provider",
     "max_scraper"
   ],
+  "verification": {
+    "architecture_checks": [
+      "node tools/architecture/validate-context-manifests.mjs",
+      "node tools/architecture/enforce-architecture.mjs",
+      "node tools/architecture/test-architecture-enforcement.mjs"
+    ],
+    "blast_radius": {
+      "consumer_contexts": [
+        "configuration"
+      ],
+      "owner_context": "max_channel",
+      "provider_scope": "PROVIDER_SPECIFIC",
+      "provider_siblings": []
+    },
+    "build_checks": [
+      "node tools/architecture/check-typescript-baseline.mjs"
+    ],
+    "contract_tests": [
+      "node tools/architecture/validate-contract-registry.mjs",
+      "node tools/architecture/check-contract-boundaries.mjs"
+    ],
+    "module_tests": [
+      "node tools/architecture/check-driver-max-messaging-boundary.mjs",
+      "node tools/architecture/check-messaging-max-message-boundary.mjs",
+      "node tools/architecture/check-messaging-max-attachments-boundary.mjs"
+    ]
+  },
   "version": 1
 }

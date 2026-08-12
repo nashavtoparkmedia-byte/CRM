@@ -18,6 +18,8 @@ for (const required of [
   'credential-boundary-negatives',
   'whole-repository-credential-inventory',
   'fresh-credential-verification',
+  'contract-registry-policy',
+  'contract-registry-negatives',
   'contract-policy',
   'outbox-behavior-negatives',
   'typescript-baseline-negatives',

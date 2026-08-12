@@ -163,6 +163,18 @@
       "schema": "gravity-mvp/prisma/schema.prisma"
     }
   ],
+  "owned_paths": [
+    "gravity-mvp/src/app/monitoring",
+    "gravity-mvp/src/contracts/operations-observability",
+    "gravity-mvp/src/lib/IntegrityChecker.ts",
+    "gravity-mvp/src/lib/RetentionCleanup.ts",
+    "gravity-mvp/src/lib/health.ts",
+    "gravity-mvp/src/modules/operations-observability"
+  ],
+  "owner": {
+    "accountability": "Operations and Observability bounded-context owner",
+    "context": "operations_observability"
+  },
   "protected": true,
   "provider_relationships": [],
   "public_surface": [
@@ -178,5 +190,32 @@
   "technical_modules": [
     "monitoring"
   ],
+  "verification": {
+    "architecture_checks": [
+      "node tools/architecture/validate-context-manifests.mjs",
+      "node tools/architecture/enforce-architecture.mjs",
+      "node tools/architecture/test-architecture-enforcement.mjs"
+    ],
+    "blast_radius": {
+      "consumer_contexts": [
+        "platform_shell"
+      ],
+      "owner_context": "operations_observability",
+      "provider_scope": "NOT_APPLICABLE",
+      "provider_siblings": []
+    },
+    "build_checks": [
+      "node tools/architecture/check-typescript-baseline.mjs"
+    ],
+    "contract_tests": [
+      "node tools/architecture/validate-contract-registry.mjs",
+      "node tools/architecture/check-contract-boundaries.mjs"
+    ],
+    "module_tests": [
+      "node tools/architecture/check-operations-operational-job-registry-boundary.mjs",
+      "node tools/architecture/check-operations-scheduled-maintenance-boundary.mjs",
+      "node tools/architecture/check-operations-scheduled-fleet-cron-boundary.mjs"
+    ]
+  },
   "version": 1
 }

@@ -148,6 +148,15 @@
       "schema": "gravity-mvp/prisma/schema.prisma"
     }
   ],
+  "owned_paths": [
+    "avito-worker/src",
+    "gravity-mvp/src/app/leads",
+    "gravity-mvp/src/lib/avito"
+  ],
+  "owner": {
+    "accountability": "Avito Acquisition bounded-context owner",
+    "context": "avito_acquisition"
+  },
   "protected": true,
   "provider_relationships": [
     {
@@ -171,5 +180,30 @@
     "avito_worker",
     "leads"
   ],
+  "verification": {
+    "architecture_checks": [
+      "node tools/architecture/validate-context-manifests.mjs",
+      "node tools/architecture/enforce-architecture.mjs",
+      "node tools/architecture/test-architecture-enforcement.mjs"
+    ],
+    "blast_radius": {
+      "consumer_contexts": [
+        "configuration"
+      ],
+      "owner_context": "avito_acquisition",
+      "provider_scope": "NOT_APPLICABLE",
+      "provider_siblings": []
+    },
+    "build_checks": [
+      "node tools/architecture/check-typescript-baseline.mjs"
+    ],
+    "contract_tests": [
+      "node tools/architecture/validate-contract-registry.mjs",
+      "node tools/architecture/check-contract-boundaries.mjs"
+    ],
+    "module_tests": [
+      "node tools/architecture/check-messaging-avito-chat-boundary.mjs"
+    ]
+  },
   "version": 1
 }

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const SHA256 = /^[0-9a-f]{64}$/;
 const WRITE_MIGRATION_CLASSES = new Set(['FOREIGN', 'LEGACY', 'SHARED_AMBIGUOUS']);
+const VERIFICATION_COMMAND = /^node tools\/architecture\/[a-z0-9./-]+\.mjs$/;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -83,6 +84,7 @@ export function validateContexts(bundle) {
   for (const manifest of manifests) {
     assert(manifest.schema === 'yoko.crm.module-manifest.v1' && manifest.version === 1, 'module manifest identity mismatch');
     assert(contextIds.has(manifest.context.id), `unknown manifest context: ${manifest.context.id}`);
+    assert(manifest.owner?.context === manifest.context.id && typeof manifest.owner?.accountability === 'string' && manifest.owner.accountability.length > 0, `functional owner missing: ${manifest.context.id}`);
     assert(typeof manifest.responsibility === 'string' && manifest.responsibility.length > 0, `responsibility missing: ${manifest.context.id}`);
     assert(manifest.technical_modules.length > 0, `technical modules missing: ${manifest.context.id}`);
     for (const module of manifest.technical_modules) {
@@ -91,6 +93,9 @@ export function validateContexts(bundle) {
       assignedModules.set(module, manifest.context.id);
     }
     assert(Array.isArray(manifest.public_surface) && Array.isArray(manifest.internal_surface) && manifest.internal_surface.length > 0, `surface missing: ${manifest.context.id}`);
+    assert(Array.isArray(manifest.owned_paths) && manifest.owned_paths.length > 0, `owned paths missing: ${manifest.context.id}`);
+    assert(manifest.internal_surface.every((ownedPath) => manifest.owned_paths.includes(ownedPath)), `internal surface absent from owned paths: ${manifest.context.id}`);
+    assert(manifest.owned_paths.every((ownedPath) => !path.isAbsolute(ownedPath) && !ownedPath.split('/').includes('..')), `unsafe owned path: ${manifest.context.id}`);
     assert(manifest.public_surface.every((contract) => /\.v[1-9][0-9]*$/.test(contract)), `unversioned public surface: ${manifest.context.id}`);
     assert(manifest.protected === true, `context compatibility protection missing: ${manifest.context.id}`);
     assert(typeof manifest.compatibility_strategy === 'string' && manifest.compatibility_strategy.length > 0, `compatibility strategy missing: ${manifest.context.id}`);
@@ -101,9 +106,26 @@ export function validateContexts(bundle) {
     }
     assertNoValues(manifest.credential_relationships, `manifest.${manifest.context.id}.credential_relationships`);
     assert(manifest.credential_relationships.policy.includes('Values stay inside'), `credential policy missing: ${manifest.context.id}`);
+    const verification = manifest.verification;
+    assert(verification && ['module_tests', 'contract_tests', 'architecture_checks', 'build_checks'].every((key) => Array.isArray(verification[key]) && verification[key].length > 0), `verification profile missing: ${manifest.context.id}`);
+    assert(['module_tests', 'contract_tests', 'architecture_checks', 'build_checks'].flatMap((key) => verification[key]).every((entry) => VERIFICATION_COMMAND.test(entry)), `invalid verification command: ${manifest.context.id}`);
+    assert(verification.architecture_checks.includes('node tools/architecture/validate-context-manifests.mjs') && verification.architecture_checks.includes('node tools/architecture/enforce-architecture.mjs'), `architecture entrypoint missing: ${manifest.context.id}`);
+    assert(verification.contract_tests.includes('node tools/architecture/validate-contract-registry.mjs'), `contract entrypoint missing: ${manifest.context.id}`);
+    assert(verification.build_checks.includes('node tools/architecture/check-typescript-baseline.mjs'), `build entrypoint missing: ${manifest.context.id}`);
+    assert(verification.blast_radius?.owner_context === manifest.context.id, `blast-radius owner mismatch: ${manifest.context.id}`);
   }
   assert(assignedModules.size === expectedModules.size, 'not every technical module is assigned');
   assert(dependencyCycles(manifests).length === 0, 'target allowed-dependency graph must be acyclic');
+  for (const manifest of manifests) {
+    const expectedConsumers = manifests.filter((candidate) => candidate.allowed_dependencies.some((dependency) => dependency.context === manifest.context.id)).map((candidate) => candidate.context.id).sort();
+    assert(JSON.stringify(manifest.verification.blast_radius.consumer_contexts) === JSON.stringify(expectedConsumers), `blast-radius consumer drift: ${manifest.context.id}`);
+    const provider = manifest.verification.blast_radius;
+    if (manifest.context.id === 'messaging') {
+      assert(provider.provider_scope === 'SHARED_PROVIDER_CONTRACT' && JSON.stringify(provider.provider_siblings) === JSON.stringify(['max_channel', 'telegram_channel', 'whatsapp_channel']), 'shared provider blast radius missing: messaging');
+    } else if (['max_channel', 'telegram_channel', 'whatsapp_channel'].includes(manifest.context.id)) {
+      assert(provider.provider_scope === 'PROVIDER_SPECIFIC' && provider.provider_siblings.length === 0, `provider-specific blast radius widened: ${manifest.context.id}`);
+    } else assert(provider.provider_scope === 'NOT_APPLICABLE' && provider.provider_siblings.length === 0, `unexpected provider blast radius: ${manifest.context.id}`);
+  }
 
   const expectedOwnedData = new Set(ownership.models.map((model) => model.id));
   const assignedOwnedData = new Map();
@@ -161,9 +183,16 @@ export async function verifyContextIndex(index, repositoryRoot) {
     controls += 1;
   }
   let manifests = 0;
+  const entrypoints = new Set();
   for (const entry of index.contexts) {
     const bytes = await readFile(path.join(repositoryRoot, entry.path));
     assert(SHA256.test(entry.sha256) && digest(bytes) === entry.sha256, `manifest hash mismatch: ${entry.path}`);
+    const manifest = JSON.parse(bytes);
+    for (const command of ['module_tests', 'contract_tests', 'architecture_checks', 'build_checks'].flatMap((key) => manifest.verification[key])) {
+      const relative = command.replace(/^node /, '');
+      await readFile(path.join(repositoryRoot, relative));
+      entrypoints.add(relative);
+    }
     manifests += 1;
   }
   let outputs = 0;
@@ -172,7 +201,7 @@ export async function verifyContextIndex(index, repositoryRoot) {
     assert(SHA256.test(output.sha256) && digest(bytes) === output.sha256, `output hash mismatch: ${output.path}`);
     outputs += 1;
   }
-  return { verifiedControls: controls, verifiedManifests: manifests, verifiedOutputs: outputs };
+  return { verifiedControls: controls, verifiedEntrypoints: entrypoints.size, verifiedManifests: manifests, verifiedOutputs: outputs };
 }
 
 async function loadJson(repositoryRoot, relative) {

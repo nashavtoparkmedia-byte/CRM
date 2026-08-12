@@ -51,6 +51,17 @@
       "schema": "gravity-mvp/prisma/schema.prisma"
     }
   ],
+  "owned_paths": [
+    "gravity-mvp/src/app/login",
+    "gravity-mvp/src/app/users",
+    "gravity-mvp/src/contracts/identity-access",
+    "gravity-mvp/src/lib/users",
+    "gravity-mvp/src/modules/identity-access"
+  ],
+  "owner": {
+    "accountability": "Identity and Access bounded-context owner",
+    "context": "identity_access"
+  },
   "protected": true,
   "provider_relationships": [],
   "public_surface": [
@@ -65,5 +76,43 @@
   "technical_modules": [
     "users"
   ],
+  "verification": {
+    "architecture_checks": [
+      "node tools/architecture/validate-context-manifests.mjs",
+      "node tools/architecture/enforce-architecture.mjs",
+      "node tools/architecture/test-architecture-enforcement.mjs"
+    ],
+    "blast_radius": {
+      "consumer_contexts": [
+        "analytics_reporting",
+        "avito_acquisition",
+        "calling",
+        "configuration",
+        "contacts",
+        "fleet_operations",
+        "max_channel",
+        "messaging",
+        "operations_observability",
+        "platform_shell",
+        "telegram_channel",
+        "whatsapp_channel",
+        "work_management"
+      ],
+      "owner_context": "identity_access",
+      "provider_scope": "NOT_APPLICABLE",
+      "provider_siblings": []
+    },
+    "build_checks": [
+      "node tools/architecture/check-typescript-baseline.mjs"
+    ],
+    "contract_tests": [
+      "node tools/architecture/validate-contract-registry.mjs",
+      "node tools/architecture/check-contract-boundaries.mjs"
+    ],
+    "module_tests": [
+      "node tools/architecture/check-identity-boundary.mjs",
+      "node tools/architecture/check-identity-user-directory-boundary.mjs"
+    ]
+  },
   "version": 1
 }

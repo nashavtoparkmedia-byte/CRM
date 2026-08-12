@@ -5,30 +5,11 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { boundaryControlInventory } from './run-boundary-controls.mjs'
 import { gitChangedPaths } from './git-change-set.mjs'
 
 const ARCHITECTURE_CONTROL_PLANE = 'architecture_control_plane'
-const aliases = {
-  ai_knowledge: ['ai-knowledge', 'ai-'],
-  analytics_reporting: ['analytics', 'dashboard'],
-  avito_acquisition: ['avito'],
-  calling: ['calling'],
-  configuration: ['configuration'],
-  contacts: ['contact'],
-  edge_delivery: ['edge'],
-  fleet_operations: ['fleet', 'driver', 'yandex'],
-  identity_access: ['identity'],
-  max_channel: ['max-'],
-  messaging: ['messaging'],
-  operations_observability: ['operations', 'operational', 'retention', 'archived'],
-  platform_shell: ['platform'],
-  telegram_channel: ['telegram'],
-  whatsapp_channel: ['whatsapp'],
-  work_management: ['work-', 'task'],
-}
 
-export function compileBlastRadiusMetadata(moduleRules, manifests, activeBoundaryControls = []) {
+export function compileBlastRadiusMetadata(moduleRules, manifests) {
   const contextIds = new Set(manifests.map((manifest) => manifest.context.id))
   const technicalToContext = new Map()
   for (const manifest of manifests) {
@@ -37,7 +18,6 @@ export function compileBlastRadiusMetadata(moduleRules, manifests, activeBoundar
   return {
     contextIds,
     manifests,
-    activeBoundaryControls,
     rules: moduleRules.modules.map((rule) => ({
       ...rule,
       context_id: technicalToContext.get(rule.id) ?? rule.context,
@@ -82,24 +62,20 @@ export function computeBlastRadius(changedPaths, metadata) {
   const controlPlaneChanged = pathMappings.some((mapping) => mapping.context === ARCHITECTURE_CONTROL_PLANE)
   if (controlPlaneChanged) metadata.contextIds.forEach((context) => affected.add(context))
 
-  const selectedBoundaryControls = metadata.activeBoundaryControls.filter((control) => {
-    const name = path.basename(control)
-    return [...affected].some((context) => (aliases[context] ?? []).some((alias) => name.includes(alias)))
-  })
+  const affectedManifests = metadata.manifests.filter((manifest) => affected.has(manifest.context.id))
+  const requiredChecks = [...new Set(affectedManifests.flatMap((manifest) => [
+    ...manifest.verification.architecture_checks,
+    ...manifest.verification.module_tests,
+    ...manifest.verification.contract_tests,
+    ...manifest.verification.build_checks,
+  ]))]
   return {
     schema: 'yoko.crm.blast-radius.v1',
     changed_paths: pathMappings,
     owner_contexts: [...owners].sort(),
     consumer_contexts: [...consumers].sort(),
     affected_contexts: [...affected].sort(),
-    required_checks: [
-      'node tools/architecture/validate-context-manifests.mjs',
-      'node tools/architecture/enforce-architecture.mjs',
-      'node tools/architecture/test-architecture-enforcement.mjs',
-      'node tools/architecture/check-contract-boundaries.mjs',
-      'node tools/architecture/check-typescript-baseline.mjs',
-      ...selectedBoundaryControls.map((control) => `node ${control}`),
-    ],
+    required_checks: requiredChecks,
     unclassified_production_paths: 0,
   }
 }
@@ -109,11 +85,9 @@ function main() {
   const readJson = (relative) => JSON.parse(readFileSync(path.join(root, relative), 'utf8'))
   const index = readJson('architecture/contexts/v1/context-index.json')
   const manifests = index.contexts.map((entry) => readJson(entry.path))
-  const activeControls = boundaryControlInventory(root).active
   const metadata = compileBlastRadiusMetadata(
     readJson('architecture/evidence/v1/module-rules.json'),
     manifests,
-    activeControls,
   )
   const explicit = process.argv.slice(2).filter((argument) => !argument.startsWith('--'))
   const result = computeBlastRadius(explicit.length > 0 ? explicit : gitChangedPaths(root), metadata)

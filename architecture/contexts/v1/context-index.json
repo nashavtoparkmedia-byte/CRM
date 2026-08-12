@@ -3,88 +3,104 @@
     {
       "context": "ai_knowledge",
       "path": "architecture/contexts/v1/manifests/ai_knowledge.json",
-      "sha256": "7ea6e2d31b777a3fcfddf4a0d6a536aa6eb2f160641e5f9e31c5f84046764b70"
+      "sha256": "9f358237c7a5cf77bf5471be1181776128f7c41616a19727bbad68ae7cf8ce5d"
     },
     {
       "context": "analytics_reporting",
       "path": "architecture/contexts/v1/manifests/analytics_reporting.json",
-      "sha256": "a607e88b0e89ac8f3836769b79ec54ebd84adc66c21389f33a1a4ec6a08bd5d5"
+      "sha256": "7babebc4d49039a86a9d344a5abaf0f7a38c47c329388f8d8a84e8c80bc4ad6d"
     },
     {
       "context": "avito_acquisition",
       "path": "architecture/contexts/v1/manifests/avito_acquisition.json",
-      "sha256": "4b0cdcd2ee3cf31bc235eac616c74d250778a9d1f835c61fde96ef092de822ea"
+      "sha256": "70fc90fbbeb03ef49f8c85f4ad941929436d42455b016eec3f342f3a220e08db"
     },
     {
       "context": "calling",
       "path": "architecture/contexts/v1/manifests/calling.json",
-      "sha256": "1ffd9dce59067cecb631cfa462d5c2e24bba5211e340a2ea4807f5a0dc4fc971"
+      "sha256": "e8339cd7bcaeb2eb8536ea2b0166f659ba21a593638ee31e764404bb985c7b14"
     },
     {
       "context": "configuration",
       "path": "architecture/contexts/v1/manifests/configuration.json",
-      "sha256": "926ca64baa9864b1c95e3d87df8b836cc51c0d77de92a08f64dc40665223b23a"
+      "sha256": "95d603759216638327729b939bcc7cac1fe73372ec420dc5f8fbe4bc621373c0"
     },
     {
       "context": "contacts",
       "path": "architecture/contexts/v1/manifests/contacts.json",
-      "sha256": "ba5fcec244061869f9def1d61748a2e06a020910124cc121361c7a2d61801798"
+      "sha256": "bf66f3ad13d6ae06561d912174753abdcb727f5c89e6457f33314273ce5dfec8"
     },
     {
       "context": "edge_delivery",
       "path": "architecture/contexts/v1/manifests/edge_delivery.json",
-      "sha256": "1dc7974922660a719fdf3f727bb5dcbb51d91a84fb07f0c47a5fdee5cad21779"
+      "sha256": "1063d60ce75df24efda3c9239c7de325b49b228cdbc34e2e6d03f856d32c5ecd"
     },
     {
       "context": "fleet_operations",
       "path": "architecture/contexts/v1/manifests/fleet_operations.json",
-      "sha256": "13d3e5f666193b11ca7c946daaa9bb43ca28ee0c079fc35d719b90f2f9949a29"
+      "sha256": "9dea3e90f2b10661de7c77347b4f301fc6d3b9dfb2ec4b263936923ef91b6dae"
     },
     {
       "context": "identity_access",
       "path": "architecture/contexts/v1/manifests/identity_access.json",
-      "sha256": "e5c8c8a9140d131c8561413b82bc82c292c3c80cfabbe55b5cb99d3860119e74"
+      "sha256": "989930203de88184310dfd679c5bc401ac0e7de11c3f92eba8ebaa6153e3142a"
     },
     {
       "context": "max_channel",
       "path": "architecture/contexts/v1/manifests/max_channel.json",
-      "sha256": "ac0e40db81bfcd6c1c3bedece8ffb8e8474d506c9f4118c00f3fd16379a1124f"
+      "sha256": "3bc82cbee62905688ebb8cac98e9b38ebfe67d1740f15e35acd3efd683745d23"
     },
     {
       "context": "messaging",
       "path": "architecture/contexts/v1/manifests/messaging.json",
-      "sha256": "31a6d535027f029f333c8d3868cbb76d22c862ccdcba6a75faed1b9637c80213"
+      "sha256": "0b86561ad28a88d8b4e20925128bfb51003dfb77ac5f8cf65ce8727e7cb1132e"
     },
     {
       "context": "operations_observability",
       "path": "architecture/contexts/v1/manifests/operations_observability.json",
-      "sha256": "163d2d2b1d2f03578421bc1274c6be926b05c01b97ab6d0f638ce5b348bc3ddb"
+      "sha256": "c1f28273a07602a14ef1bc893a0fc75c6212f43d2d396a3134e582fc1e1ffb93"
     },
     {
       "context": "platform_shell",
       "path": "architecture/contexts/v1/manifests/platform_shell.json",
-      "sha256": "0e37e625a38577b4a265333d947773c40225d6328a90de334e03c2e7f02a5fbe"
+      "sha256": "46c3f74bf9a6104283f88ef583ac249c39e96a99e2d0795028d37280351a1500"
     },
     {
       "context": "telegram_channel",
       "path": "architecture/contexts/v1/manifests/telegram_channel.json",
-      "sha256": "15e501efe7c875186f09964188b42d3f54643343555f6763fc03c0ffdf09fe82"
+      "sha256": "bc0fc50bc9afc074a0ad1eaf5a98f775d0bea1e9b235b617889b60c341ea0d2d"
     },
     {
       "context": "whatsapp_channel",
       "path": "architecture/contexts/v1/manifests/whatsapp_channel.json",
-      "sha256": "1c66892ca20505cfe20f4808217bc6b64903d372357e2e9df66d1f119401e771"
+      "sha256": "c3c453553e19fb9ee5a119538651034cfdb2ab54115e8833e9c221da2e918c0a"
     },
     {
       "context": "work_management",
       "path": "architecture/contexts/v1/manifests/work_management.json",
-      "sha256": "b7706745b39d8123b3846c12f034918344f612b46918a81d131cf90ca0929984"
+      "sha256": "9b87bd3c6b32d3265b743061ba900876089490cc0bbf851c5b3cdfa00b9f11f0"
     }
   ],
   "controls": {
     "context_decisions": {
       "path": "architecture/contexts/v1/context-decisions.json",
       "sha256": "f08bbd7a278b9174fb4b9138c27509e6da3f7fa3e1b85fd2fd86ca3304b28ea8"
+    },
+    "contract_registry": {
+      "path": "architecture/contracts/v1/registry.json",
+      "sha256": "6115a3de83dc86543170ba0bdd99da629cd7a3de3ec8777587dc31b78565c343"
+    },
+    "contract_registry_negative_tests": {
+      "path": "tools/architecture/test-contract-registry.mjs",
+      "sha256": "d17eb17b0339befe7fd9bfd27245ba223c57b04ba3b4d053fc1a5c894c379cb6"
+    },
+    "contract_registry_reconciler": {
+      "path": "tools/architecture/reconcile-contract-registry.mjs",
+      "sha256": "906f71c3593cda56ff3dcb7182821ec978c455bc59af372e1678c04acf45b66e"
+    },
+    "contract_registry_validator": {
+      "path": "tools/architecture/validate-contract-registry.mjs",
+      "sha256": "a9420dd71c96138591ba18ac88b80083b8c210127d31b9f272f09dc5ae154392"
     },
     "credential_access": {
       "path": "architecture/evidence/v1/credential-access.json",
@@ -102,6 +118,10 @@
       "path": "architecture/evidence/v1/module-inventory.json",
       "sha256": "d56f88b821e23ec7066c311ca26cb3574e79c96abc82a587959a7dbd5e9787a7"
     },
+    "module_manifest_schema": {
+      "path": "architecture/contexts/v1/module-manifest.schema.json",
+      "sha256": "f43f6759594409f3d9a08fad77d495cd83d9cf410d20641c2190589e2841768e"
+    },
     "ownership_candidates": {
       "path": "architecture/evidence/v1/data-ownership-candidates.json",
       "sha256": "2e77497773b597933383a1b0d77dfdb09393e33a9d011cdd87dde1bb6543696e"
@@ -109,6 +129,10 @@
     "raw_write_owner_overrides": {
       "path": "architecture/contexts/v1/raw-write-owner-overrides.json",
       "sha256": "4d3bc537cf366228d3f11b99dd397311945fc42079a9324907a33c25e6fa933a"
+    },
+    "verification_profile_enricher": {
+      "path": "tools/architecture/enrich-context-manifests.mjs",
+      "sha256": "31e035bb51c6521baa63179aa0d4da0abcb42a13742b423273aa6d9126d808b2"
     },
     "write_sites": {
       "path": "architecture/evidence/v1/write-sites.json",

@@ -238,10 +238,23 @@
       "schema": "yandex-fleet-scraper/prisma/schema.prisma"
     }
   ],
+  "owned_paths": [
+    "gravity-mvp/src/app/drivers",
+    "gravity-mvp/src/contracts/fleet-operations",
+    "gravity-mvp/src/lib/YandexFleetService.ts",
+    "gravity-mvp/src/modules/fleet-operations",
+    "yandex-fleet-scraper/src"
+  ],
+  "owner": {
+    "accountability": "Fleet Operations bounded-context owner",
+    "context": "fleet_operations"
+  },
   "protected": true,
   "provider_relationships": [
     {
-      "adapter_modules": ["yandex-fleet-scraper/src/infrastructure/bullmq"],
+      "adapter_modules": [
+        "yandex-fleet-scraper/src/infrastructure/bullmq"
+      ],
       "name": "bullmq",
       "role": "fleet check queue and Redis coordination"
     },
@@ -276,5 +289,39 @@
     "yandex_fleet",
     "yfs"
   ],
+  "verification": {
+    "architecture_checks": [
+      "node tools/architecture/validate-context-manifests.mjs",
+      "node tools/architecture/enforce-architecture.mjs",
+      "node tools/architecture/test-architecture-enforcement.mjs"
+    ],
+    "blast_radius": {
+      "consumer_contexts": [
+        "analytics_reporting",
+        "max_channel",
+        "messaging",
+        "operations_observability",
+        "platform_shell",
+        "telegram_channel",
+        "whatsapp_channel",
+        "work_management"
+      ],
+      "owner_context": "fleet_operations",
+      "provider_scope": "NOT_APPLICABLE",
+      "provider_siblings": []
+    },
+    "build_checks": [
+      "node tools/architecture/check-typescript-baseline.mjs"
+    ],
+    "contract_tests": [
+      "node tools/architecture/validate-contract-registry.mjs",
+      "node tools/architecture/check-contract-boundaries.mjs"
+    ],
+    "module_tests": [
+      "node tools/architecture/check-fleet-driver-action-boundary.mjs",
+      "node tools/architecture/check-fleet-monitoring-policy-boundary.mjs",
+      "node tools/architecture/check-yandex-fleet-operations-boundary.mjs"
+    ]
+  },
   "version": 1
 }

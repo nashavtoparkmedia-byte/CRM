@@ -28,7 +28,7 @@ test('bounded contexts cover modules, owned data, dependencies and foreign write
     ownedData: 96,
     technicalModules: 27,
   });
-  assert.deepEqual(await verifyContextIndex(index, repositoryRoot.pathname), { verifiedControls: 8, verifiedManifests: 16, verifiedOutputs: 2 });
+  assert.deepEqual(await verifyContextIndex(index, repositoryRoot.pathname), { verifiedControls: 14, verifiedEntrypoints: 45, verifiedManifests: 16, verifiedOutputs: 2 });
 });
 
 test('duplicate technical-module assignment fails closed', () => {
@@ -74,4 +74,23 @@ test('cyclic target dependency policy fails closed', () => {
   const second = invalid.manifests.find((manifest) => manifest.context.id === 'identity_access');
   second.allowed_dependencies.push({ context: first.context.id, surface: `${first.context.id}.public` });
   assert.throws(() => validateContexts(invalid), /target allowed-dependency graph must be acyclic/);
+});
+
+test('missing module verification profile fails closed', () => {
+  const invalid = structuredClone(bundle);
+  delete invalid.manifests[0].verification;
+  assert.throws(() => validateContexts(invalid), /verification profile missing/);
+});
+
+test('blast-radius consumer drift fails closed', () => {
+  const invalid = structuredClone(bundle);
+  invalid.manifests.find((manifest) => manifest.context.id === 'contacts').verification.blast_radius.consumer_contexts = [];
+  assert.throws(() => validateContexts(invalid), /blast-radius consumer drift/);
+});
+
+test('provider-specific verification cannot widen to sibling providers', () => {
+  const invalid = structuredClone(bundle);
+  const max = invalid.manifests.find((manifest) => manifest.context.id === 'max_channel');
+  max.verification.blast_radius.provider_siblings = ['telegram_channel'];
+  assert.throws(() => validateContexts(invalid), /provider-specific blast radius widened/);
 });

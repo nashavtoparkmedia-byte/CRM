@@ -115,6 +115,15 @@
       "schema": "gravity-mvp/prisma/schema.prisma"
     }
   ],
+  "owned_paths": [
+    "gravity-mvp/src/app/settings",
+    "gravity-mvp/src/lib/config-validator.ts",
+    "gravity-mvp/src/modules/configuration"
+  ],
+  "owner": {
+    "accountability": "Configuration bounded-context owner",
+    "context": "configuration"
+  },
   "protected": true,
   "provider_relationships": [
     {
@@ -136,5 +145,32 @@
   "technical_modules": [
     "settings"
   ],
+  "verification": {
+    "architecture_checks": [
+      "node tools/architecture/validate-context-manifests.mjs",
+      "node tools/architecture/enforce-architecture.mjs",
+      "node tools/architecture/test-architecture-enforcement.mjs"
+    ],
+    "blast_radius": {
+      "consumer_contexts": [
+        "operations_observability",
+        "platform_shell"
+      ],
+      "owner_context": "configuration",
+      "provider_scope": "NOT_APPLICABLE",
+      "provider_siblings": []
+    },
+    "build_checks": [
+      "node tools/architecture/check-typescript-baseline.mjs"
+    ],
+    "contract_tests": [
+      "node tools/architecture/validate-contract-registry.mjs",
+      "node tools/architecture/check-contract-boundaries.mjs"
+    ],
+    "module_tests": [
+      "node tools/architecture/check-configuration-operational-health-boundary.mjs",
+      "node tools/architecture/check-configuration-operations-monitoring-policy-boundary.mjs"
+    ]
+  },
   "version": 1
 }

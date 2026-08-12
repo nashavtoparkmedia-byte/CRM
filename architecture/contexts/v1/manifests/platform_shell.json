@@ -111,10 +111,22 @@
     "gravity-mvp/src/instrumentation.ts"
   ],
   "owned_data": [],
+  "owned_paths": [
+    "gravity-mvp/src/app/layout.tsx",
+    "gravity-mvp/src/components",
+    "gravity-mvp/src/instrumentation.ts",
+    "gravity-mvp/src/modules/platform-shell"
+  ],
+  "owner": {
+    "accountability": "Platform Shell bounded-context owner",
+    "context": "platform_shell"
+  },
   "protected": true,
   "provider_relationships": [
     {
-      "adapter_modules": ["infrastructure/providers/openai-client"],
+      "adapter_modules": [
+        "infrastructure/providers/openai-client"
+      ],
       "name": "openai",
       "role": "OpenAI SDK client construction"
     }
@@ -129,5 +141,31 @@
     "gravity_core",
     "gravity_ui"
   ],
+  "verification": {
+    "architecture_checks": [
+      "node tools/architecture/validate-context-manifests.mjs",
+      "node tools/architecture/enforce-architecture.mjs",
+      "node tools/architecture/test-architecture-enforcement.mjs"
+    ],
+    "blast_radius": {
+      "consumer_contexts": [
+        "edge_delivery"
+      ],
+      "owner_context": "platform_shell",
+      "provider_scope": "NOT_APPLICABLE",
+      "provider_siblings": []
+    },
+    "build_checks": [
+      "node tools/architecture/check-typescript-baseline.mjs"
+    ],
+    "contract_tests": [
+      "node tools/architecture/validate-contract-registry.mjs",
+      "node tools/architecture/check-contract-boundaries.mjs"
+    ],
+    "module_tests": [
+      "node tools/architecture/check-contact-conversation-api-boundary.mjs",
+      "node tools/architecture/check-messaging-bot-system-send-boundary.mjs"
+    ]
+  },
   "version": 1
 }

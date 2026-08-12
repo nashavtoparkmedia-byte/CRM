@@ -26,6 +26,8 @@ export const targetedControls = [
   ['credential-boundary-negatives', 'node', ['tools/architecture/v2/test-credential-boundary-negative.mjs']],
   ['credential-gate-negatives', 'node', ['tools/architecture/v2/test-authoritative-credential-inventory.mjs']],
   ['credential-migration-boundary', 'node', ['tools/architecture/v2/check-credential-migration-boundary.mjs']],
+  ['contract-registry-policy', 'node', ['tools/architecture/validate-contract-registry.mjs']],
+  ['contract-registry-negatives', 'node', ['tools/architecture/test-contract-registry.mjs']],
   ['contract-policy', 'node', ['tools/architecture/check-contract-boundaries.mjs']],
   ['contract-behavior', 'node', ['tools/architecture/test-contracts.mjs']],
   ['outbox-policy', 'node', ['tools/architecture/check-outbox-architecture.mjs']],

@@ -102,6 +102,17 @@
       "schema": "gravity-mvp/prisma/schema.prisma"
     }
   ],
+  "owned_paths": [
+    "gravity-mvp/src/contracts/contacts",
+    "gravity-mvp/src/lib/ContactMergeService.ts",
+    "gravity-mvp/src/lib/ContactService.ts",
+    "gravity-mvp/src/lib/contacts",
+    "gravity-mvp/src/modules/contacts"
+  ],
+  "owner": {
+    "accountability": "Contacts bounded-context owner",
+    "context": "contacts"
+  },
   "protected": true,
   "provider_relationships": [],
   "public_surface": [
@@ -120,5 +131,41 @@
   "technical_modules": [
     "contacts"
   ],
+  "verification": {
+    "architecture_checks": [
+      "node tools/architecture/validate-context-manifests.mjs",
+      "node tools/architecture/enforce-architecture.mjs",
+      "node tools/architecture/test-architecture-enforcement.mjs"
+    ],
+    "blast_radius": {
+      "consumer_contexts": [
+        "analytics_reporting",
+        "avito_acquisition",
+        "calling",
+        "fleet_operations",
+        "max_channel",
+        "messaging",
+        "platform_shell",
+        "telegram_channel",
+        "whatsapp_channel",
+        "work_management"
+      ],
+      "owner_context": "contacts",
+      "provider_scope": "NOT_APPLICABLE",
+      "provider_siblings": []
+    },
+    "build_checks": [
+      "node tools/architecture/check-typescript-baseline.mjs"
+    ],
+    "contract_tests": [
+      "node tools/architecture/validate-contract-registry.mjs",
+      "node tools/architecture/check-contract-boundaries.mjs"
+    ],
+    "module_tests": [
+      "node tools/architecture/check-contact-service-public-boundary.mjs",
+      "node tools/architecture/check-contacts-reachability-boundary.mjs",
+      "node tools/architecture/check-contact-conversation-api-boundary.mjs"
+    ]
+  },
   "version": 1
 }
