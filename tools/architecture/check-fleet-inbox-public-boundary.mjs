@@ -14,6 +14,7 @@ const action = fs.existsSync(actionPath) ? read(actionPath) : null
 const badge = read('gravity-mvp/src/modules/fleet-operations/public/v1/segment-badge.tsx')
 const oldBadge = read('gravity-mvp/src/app/drivers/components/SegmentBadge.tsx')
 const consumer = read('gravity-mvp/src/app/inbox/InboxClient.tsx')
+const riskConsumer = read('gravity-mvp/src/app/dashboard/components/RiskDriversTable.tsx')
 const legacyActions = read('gravity-mvp/src/app/drivers/actions.ts')
 const successorRoutePath = 'gravity-mvp/src/app/api/platform/drivers/[id]/manager-communication/route.ts'
 const successorRoute = fs.existsSync(successorRoutePath) ? read(successorRoutePath) : null
@@ -50,10 +51,13 @@ check('Inbox call completion order retained', (
         : consumer.indexOf('await recordManagerCommunication') < consumer.indexOf('setCallLogged(true)')
 ), 'UI order drifted')
 check('Inbox uses public badge', consumer.includes('@/modules/fleet-operations/public/v1/segment-badge') && !consumer.includes('../drivers/'), 'internal Fleet import remains')
+check('Analytics risk view uses public badge', riskConsumer.includes('@/modules/fleet-operations/public/v1/segment-badge') && !riskConsumer.includes('@/app/drivers/components/SegmentBadge'), 'Analytics internal Fleet import remains')
 check('badge behavior retained', ['Прибыльный', 'Средний', 'Малый', 'Спящий', '—', 'SEGMENT_CONFIG[segment] || SEGMENT_CONFIG.unknown'].every((value) => badge.includes(value)), 'badge behavior drifted')
+check('badge exposes one exact component', [...badge.matchAll(/export\s+function\s+(\w+)/g)].map((match) => match[1]).join(',') === 'SegmentBadge', 'badge surface widened')
 check('legacy badge delegates to canonical public component', oldBadge.includes("export { SegmentBadge } from '@/modules/fleet-operations/public/v1/segment-badge'"), 'legacy component diverges')
 check('exact command amendment', amendment.amendments[0].context === 'fleet_operations' && amendment.amendments[0].add_commands?.length === 1 && amendment.amendments[0].add_commands[0] === 'LogManagerCallCommand.v1', 'command amendment drifted')
 check('all Inbox Fleet import exceptions retired', registry.exceptions.every((item) => !(item.file === 'gravity-mvp/src/app/inbox/InboxClient.tsx' && item.target_context === 'fleet_operations')), 'Inbox Fleet exception remains')
+check('all Analytics badge exceptions retired', registry.exceptions.every((item) => !(item.file === 'gravity-mvp/src/app/dashboard/components/RiskDriversTable.tsx' && item.target_context === 'fleet_operations')), 'Analytics Fleet badge exception remains')
 
 process.stdout.write(`${JSON.stringify({ status: failures.length ? 'FAIL' : 'PASS', checks, failures }, null, 2)}\n`)
 if (failures.length) process.exitCode = 1

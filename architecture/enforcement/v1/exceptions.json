@@ -4,7 +4,7 @@
   "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
   "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
   "generated_from": "current source tree bound by finding_digest",
-  "finding_digest": "a56e54a8c53865390a42f310a86702f6580f4a3dd9af635523f6d0c735deeb2d",
+  "finding_digest": "ebc7e093c0ecd3381881ce2550ff9c311f14ee3cfb7ac8eb0faebda581936731",
   "policy": {
     "exact_fingerprint_only": true,
     "stale_exceptions_fail": true,
@@ -13,8 +13,8 @@
     "deadline": "2026-12-31"
   },
   "summary": {
-    "internal_module_import": 14,
-    "non_public_cross_context_import": 39,
+    "internal_module_import": 13,
+    "non_public_cross_context_import": 38,
     "undeclared_dependency": 15
   },
   "exceptions": [
@@ -404,38 +404,6 @@
       "expires_on": "2026-12-31",
       "migration_references": [
         "dependency:max_channel/max_provider>contacts/contacts"
-      ]
-    },
-    {
-      "fingerprint": "arch_f2829e60cbf73feeaa722a43",
-      "rule": "internal_module_import",
-      "file": "gravity-mvp/src/app/dashboard/components/RiskDriversTable.tsx",
-      "line_at_baseline": 6,
-      "ordinal": 1,
-      "owner_context": "analytics_reporting",
-      "target_context": "fleet_operations",
-      "subject": "analytics>drivers:gravity-mvp/src/app/drivers/components/SegmentBadge.tsx",
-      "rationale": "Pre-existing cross-context import of owner-internal implementation; frozen as migration debt.",
-      "retirement": "Replace this exact import with a versioned owner public surface or relocate orchestration, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:analytics_reporting/analytics>fleet_operations/drivers"
-      ]
-    },
-    {
-      "fingerprint": "arch_84fff69b185c3391d81ef185",
-      "rule": "non_public_cross_context_import",
-      "file": "gravity-mvp/src/app/dashboard/components/RiskDriversTable.tsx",
-      "line_at_baseline": 6,
-      "ordinal": 1,
-      "owner_context": "analytics_reporting",
-      "target_context": "fleet_operations",
-      "subject": "analytics>drivers:gravity-mvp/src/app/drivers/components/SegmentBadge.tsx",
-      "rationale": "Pre-existing cross-context import that bypasses a versioned public surface; frozen as migration debt.",
-      "retirement": "Route this exact dependency through a versioned target-context public surface, then delete this exception.",
-      "expires_on": "2026-12-31",
-      "migration_references": [
-        "dependency:analytics_reporting/analytics>fleet_operations/drivers"
       ]
     },
     {

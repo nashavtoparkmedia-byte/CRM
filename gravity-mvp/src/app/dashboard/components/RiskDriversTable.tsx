@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Phone, MessageSquare } from "lucide-react"
 import type { RiskDriver } from "../actions"
-import { SegmentBadge } from "@/app/drivers/components/SegmentBadge"
+import { SegmentBadge } from '@/modules/fleet-operations/public/v1/segment-badge'
 import { Button } from "@/infrastructure/ui/button"
 import Link from "next/link"
 
