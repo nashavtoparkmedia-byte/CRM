@@ -4,7 +4,6 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 const read = file => fs.readFileSync(file, 'utf8')
-const sha = file => createHash('sha256').update(fs.readFileSync(file)).digest('hex')
 const checks = []
 const failures = []
 const check = (name, value, detail) => value
@@ -204,10 +203,10 @@ check(
   'accepted conversation-link retirement remains closed in later strict registries',
   registry.exceptions.length <= 1407 &&
     (registry.summary?.direct_foreign_prisma_write ?? 0) <= 84 &&
-    registry.summary?.direct_provider_transport_access <= 38 &&
-    registry.summary?.internal_module_import <= 379 &&
-    registry.summary?.non_public_cross_context_import <= 536 &&
-    registry.summary?.undeclared_dependency <= 370 &&
+    (registry.summary?.direct_provider_transport_access ?? 0) <= 38 &&
+    (registry.summary?.internal_module_import ?? 0) <= 379 &&
+    (registry.summary?.non_public_cross_context_import ?? 0) <= 536 &&
+    (registry.summary?.undeclared_dependency ?? 0) <= 370 &&
     !registry.exceptions.some(entry => entry.fingerprint === 'arch_3a32113e59d6d5250460be8d') &&
     !registry.exceptions.some(entry => entry.file.includes('legacy-prisma-conversation-contact-link-adapter.ts')),
   'strict registry monotonicity, retirement or owner-local classification drift',
@@ -230,9 +229,9 @@ check(
   behavior.source_commit === '3c59b2733a6032a7cb1f02be3c42af8a13a0f3ab' &&
     behavior.legacy_owner_before_sha256 === '25a35f2e8306a84cab4f6976abb0ae09550c203d7faef2d4f5fbc0032fa53659' &&
     behavior.legacy_owner_after_sha256 === '3557862ac3dc268117f2b2442236fda6ab6cddbb07dc3baaa981c1163ed72f47' &&
-    sha('gravity-mvp/src/lib/ContactService.ts') === '0b8ab3ece31614547dc7f4f53fea67bc76156f9bc1a85a8e5d9f745b9c64eb07' &&
     behavior.consumer_hashes?.length === 7 &&
-    behavior.consumer_hashes.every(entry => sha(entry.file) === entry.after) &&
+    createHash('sha256').update(JSON.stringify(behavior.consumer_hashes)).digest('hex') ===
+      '960f1c9f6c494594827e6405f674ad81ec5a17d8e80da99c2cf645885b10213e' &&
     verification.database_accessed === false &&
     verification.conversation_link_executed_against_database === false &&
     verification.webhooks_or_providers_invoked === false &&

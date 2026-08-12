@@ -356,7 +356,7 @@ describe('MAX ContactResolution shadow comparison', () => {
 
   test('canonical route starts shadow before owner-routed Chat mutation and captures legacy outcome after Contacts resolution', () => {
     const route = readFileSync(path.join(process.cwd(), 'src/app/api/webhooks/max/route.ts'), 'utf8')
-    const shadowStart = route.indexOf('const maxContactResolutionShadow = await startMaxContactResolutionShadow')
+    const shadowStart = route.indexOf('const maxContactResolutionShadow = await maxContactResolutionShadowV1.start')
     const ownerMutationIndexes = [
       route.indexOf('await patchExternalConversationV1'),
       route.indexOf('await createExternalConversationV1'),
