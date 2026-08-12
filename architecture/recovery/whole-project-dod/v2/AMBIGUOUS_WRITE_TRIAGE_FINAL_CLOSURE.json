@@ -1,8 +1,8 @@
 {
   "schema": "yoko.crm.ambiguous-write-triage.v1",
   "baseline": {
-    "analysis_sha256": "04be6be94cc58bcab13fe2426ce6be6a588829db7b03eb8736f67af7da62f8e0",
-    "baseline_sha256": "7c6eb03e1249d9dbd2230390a72471caefe1fb01c992ec608775e1f2a0e41292"
+    "analysis_sha256": "edd40f56543ad1798f2e26c5e9af260021a93eda9aa609a07de98626ce0344f7",
+    "baseline_sha256": "1ed65f5f744ab1da38fb6faad1948466e536b6d084cf577a14fc619391e34278"
   },
   "policy": "No unresolved record is converted to PASS or non-write without source or analyzer evidence.",
   "taxonomy": [
@@ -16,8 +16,8 @@
     "GENUINELY_DYNAMIC_UNRESOLVED"
   ],
   "summary": {
-    "RAW_BASELINE_AMBIGUOUS": 46,
-    "CONFIRMED_WRITE_OWNER_RESOLVED": 16,
+    "RAW_BASELINE_AMBIGUOUS": 45,
+    "CONFIRMED_WRITE_OWNER_RESOLVED": 15,
     "CONFIRMED_WRITE_OWNER_UNRESOLVED": 0,
     "DYNAMIC_DELEGATE_UNRESOLVED": 0,
     "DYNAMIC_SQL_UNRESOLVED": 0,
@@ -26,10 +26,10 @@
     "CONFIRMED_NON_WRITE": 30,
     "GENUINELY_DYNAMIC_UNRESOLVED": 0,
     "RESOLVED_NON_WRITE": 30,
-    "OWNER_VALID_WRITE": 11,
+    "OWNER_VALID_WRITE": 10,
     "CONTROLLED_MIGRATION_WRITE": 5,
     "MATERIAL_UNRESOLVED_WRITE_RISK": 0,
-    "RECONCILIATION_TOTAL": 46,
+    "RECONCILIATION_TOTAL": 45,
     "RECONCILIATION_EXACT": true
   },
   "records": [
@@ -463,7 +463,7 @@
       "record_id": "8004a8dc8d8d1183024debb2be7bf79572b663ab596b6497a2e8058cb51b46fa",
       "site_signature": "8004a8dc8d8d1183024debb2be7bf79572b663ab596b6497a2e8058cb51b46fa",
       "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
-      "line": 331,
+      "line": 330,
       "column": 28,
       "kind": "raw",
       "method": "$queryRaw",
@@ -496,7 +496,7 @@
       "record_id": "b2c3ae6fc6828d9d51e85f6f01d3dff86df72a5ced9f863516a2d0276c1c61e3",
       "site_signature": "b2c3ae6fc6828d9d51e85f6f01d3dff86df72a5ced9f863516a2d0276c1c61e3",
       "file": "gravity-mvp/src/app/settings/ai/actions.ts",
-      "line": 1778,
+      "line": 1707,
       "column": 28,
       "kind": "raw",
       "method": "$queryRaw",
@@ -529,7 +529,7 @@
       "record_id": "e8319859102636b4b4915c12f4c1dccaac2f97309e2fe5853109ef441b95bae6",
       "site_signature": "e8319859102636b4b4915c12f4c1dccaac2f97309e2fe5853109ef441b95bae6",
       "file": "gravity-mvp/src/app/settings/ai/actions.ts",
-      "line": 2370,
+      "line": 2253,
       "column": 32,
       "kind": "raw",
       "method": "$queryRaw",
@@ -562,7 +562,7 @@
       "record_id": "69ae5095adc3a7847274305f5f6a963d449606b60094335bb37a22a0423b4f9c",
       "site_signature": "69ae5095adc3a7847274305f5f6a963d449606b60094335bb37a22a0423b4f9c",
       "file": "gravity-mvp/src/app/settings/ai/actions.ts",
-      "line": 2389,
+      "line": 2272,
       "column": 41,
       "kind": "raw",
       "method": "$queryRaw",
@@ -628,7 +628,7 @@
       "record_id": "3ee3e1ff772ceba991f2e501083d76c3fad96f5b0fc9831a0f47c1a827f37df8",
       "site_signature": "3ee3e1ff772ceba991f2e501083d76c3fad96f5b0fc9831a0f47c1a827f37df8",
       "file": "gravity-mvp/src/app/team-overview/actions.ts",
-      "line": 790,
+      "line": 786,
       "column": 19,
       "kind": "raw",
       "method": "$queryRawUnsafe",
@@ -661,7 +661,7 @@
       "record_id": "0c81e542c6ee55171cb049c0570617f3fa9ea12402305bfe8014d2c953c51caa",
       "site_signature": "0c81e542c6ee55171cb049c0570617f3fa9ea12402305bfe8014d2c953c51caa",
       "file": "gravity-mvp/src/app/tg-actions.ts",
-      "line": 1519,
+      "line": 1603,
       "column": 32,
       "kind": "raw",
       "method": "$queryRaw",
@@ -1178,7 +1178,7 @@
       "record_id": "490105b516a84ebfd5c94ad7544581e9628ae1f95dffee0c0940ba8b0bfa9dad",
       "site_signature": "490105b516a84ebfd5c94ad7544581e9628ae1f95dffee0c0940ba8b0bfa9dad",
       "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line": 2149,
+      "line": 2388,
       "column": 32,
       "kind": "raw",
       "method": "$queryRaw",
@@ -1242,7 +1242,7 @@
       "record_id": "b00356e49038391b1ecb1efbefd7c929b2e1e15f2cc6580a32df27a68f04c982",
       "site_signature": "b00356e49038391b1ecb1efbefd7c929b2e1e15f2cc6580a32df27a68f04c982",
       "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
-      "line": 47,
+      "line": 43,
       "column": 35,
       "kind": "raw",
       "method": "$queryRaw",
@@ -1272,10 +1272,10 @@
       "semantic_state": "RESOLVED_NON_WRITE"
     },
     {
-      "record_id": "b340d44a632b98bc4560d64af31050bbc6c2c4d2c086bd2e88ad2afefe3baf42",
-      "site_signature": "b340d44a632b98bc4560d64af31050bbc6c2c4d2c086bd2e88ad2afefe3baf42",
+      "record_id": "d0c82d56b1ebc1290af28a4c3add0047a2da0f9ab7cf0643ae9ac5ccd3920fc9",
+      "site_signature": "d0c82d56b1ebc1290af28a4c3add0047a2da0f9ab7cf0643ae9ac5ccd3920fc9",
       "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
-      "line": 85,
+      "line": 74,
       "column": 15,
       "kind": "raw",
       "method": "$queryRaw",
@@ -1286,7 +1286,7 @@
       "source_context": "contacts",
       "source_technical_module": "contacts.module",
       "owner_contexts": [],
-      "receiver_origin": "transaction-callback:import:@/lib/prisma",
+      "receiver_origin": "typed-parameter:transaction",
       "surface": {
         "disposition": null,
         "lifecycle": "APPLICATION_RUNTIME",
@@ -1303,37 +1303,6 @@
       "ownership_classification": null,
       "final_ownership_classification": null,
       "semantic_state": "RESOLVED_NON_WRITE"
-    },
-    {
-      "record_id": "f19471d76bbf4826e61406ca70875a7f35094165c332b35ea4f2d30858ff8599",
-      "site_signature": "f19471d76bbf4826e61406ca70875a7f35094165c332b35ea4f2d30858ff8599",
-      "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-chat-backfill-adapter.js",
-      "line": 118,
-      "column": 57,
-      "kind": "model",
-      "method": "updateMany",
-      "model": "chatEventLog",
-      "candidate_models": [
-        "chatEventLog"
-      ],
-      "tables": [],
-      "operations": [],
-      "source_context": "messaging",
-      "source_technical_module": "messaging.module",
-      "owner_contexts": [],
-      "receiver_origin": "new:module:@prisma/client:PrismaClient",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "APPLICATION_RUNTIME",
-        "production_capability": "POSSIBLE",
-        "registry_classified": false
-      },
-      "ambiguity_reasons": [],
-      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
-      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
-      "ownership_classification": "OWNER_VALID",
-      "final_ownership_classification": "OWNER_VALID",
-      "semantic_state": "OWNER_VALID_WRITE"
     },
     {
       "record_id": "8ab08160d1b248fd01499e5a9a1c10aed80a83a90444baf0bd46e7c85e2877dd",
@@ -1441,10 +1410,10 @@
       "semantic_state": "OWNER_VALID_WRITE"
     },
     {
-      "record_id": "7ee7272fc8668c10514093243ec2776d4c5e12ab5cd3eb6dab9eaf3b1d7353f1",
-      "site_signature": "7ee7272fc8668c10514093243ec2776d4c5e12ab5cd3eb6dab9eaf3b1d7353f1",
+      "record_id": "84792b1c321f0e86ab1c0f4a40d6c963f09495533e9fffcc8ae76f9dd25f51bf",
+      "site_signature": "84792b1c321f0e86ab1c0f4a40d6c963f09495533e9fffcc8ae76f9dd25f51bf",
       "file": "tools/architecture/v2/analyze.mjs",
-      "line": 349,
+      "line": 350,
       "column": 21,
       "kind": "raw",
       "method": "mixed-script-command:psql",
@@ -1472,10 +1441,10 @@
       "semantic_state": "RESOLVED_NON_WRITE"
     },
     {
-      "record_id": "b2a06c12574dfb082f1a91871263fa3b9d33a9133b7cca324d58c4f79d0544c7",
-      "site_signature": "b2a06c12574dfb082f1a91871263fa3b9d33a9133b7cca324d58c4f79d0544c7",
+      "record_id": "ed8548d9dedfd57c177bc315368854d3016893de08ba9ae13b52941f421e4b8c",
+      "site_signature": "ed8548d9dedfd57c177bc315368854d3016893de08ba9ae13b52941f421e4b8c",
       "file": "tools/architecture/v2/analyze.mjs",
-      "line": 349,
+      "line": 350,
       "column": 26,
       "kind": "raw",
       "method": "mixed-script-command:mysql",
@@ -1503,10 +1472,10 @@
       "semantic_state": "RESOLVED_NON_WRITE"
     },
     {
-      "record_id": "41bf79365621047bd5bee0cfc07cdee3410e3da7346a66c3b5403ab8a47b41ab",
-      "site_signature": "41bf79365621047bd5bee0cfc07cdee3410e3da7346a66c3b5403ab8a47b41ab",
+      "record_id": "4f538c9b2f8fb823df9c4d628c0c0fcf24cd2153d72c9fdc908444727df74ddb",
+      "site_signature": "4f538c9b2f8fb823df9c4d628c0c0fcf24cd2153d72c9fdc908444727df74ddb",
       "file": "tools/architecture/v2/analyze.mjs",
-      "line": 349,
+      "line": 350,
       "column": 32,
       "kind": "raw",
       "method": "mixed-script-command:sqlite3",
@@ -1534,10 +1503,10 @@
       "semantic_state": "RESOLVED_NON_WRITE"
     },
     {
-      "record_id": "89301892e4f31c816db67b54000a5486e6c4ad618049c94d3185ecfb4eec16ab",
-      "site_signature": "89301892e4f31c816db67b54000a5486e6c4ad618049c94d3185ecfb4eec16ab",
+      "record_id": "2c2df07c1c304b4d9f29ca6eddc3d668df9d42c1a429921eb2897613d43cd999",
+      "site_signature": "2c2df07c1c304b4d9f29ca6eddc3d668df9d42c1a429921eb2897613d43cd999",
       "file": "tools/architecture/v2/analyze.mjs",
-      "line": 349,
+      "line": 350,
       "column": 40,
       "kind": "raw",
       "method": "mixed-script-command:sqlcmd",

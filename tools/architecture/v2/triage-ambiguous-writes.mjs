@@ -30,6 +30,11 @@ const confirmedReadOnlyDecisions = new Set([
   '6fe3c1e8c14600a70e17a2782784bf9dbe45318c0ca596bc87d4ebcd3a1837c4', '490105b516a84ebfd5c94ad7544581e9628ae1f95dffee0c0940ba8b0bfa9dad', 'b00356e49038391b1ecb1efbefd7c929b2e1e15f2cc6580a32df27a68f04c982', 'b340d44a632b98bc4560d64af31050bbc6c2c4d2c086bd2e88ad2afefe3baf42',
   '2390d5d610646077ea1572b4ae278b721ceb44b14461dccf8e24817a7b68f541', '1ac9db07b55047f8f0e8b6708e294bf1e033a1e71f5348567b5fb6ee421a6858',
   '86f57b58a6d3409af7a6a18ca3a9fb36b4dbf11d247c8df8fabde9dddc6c674a',
+  // Contacts' transaction-scoped pair lock is the same fixed SELECT ... FOR
+  // UPDATE statement previously reviewed under b340d44... (identical
+  // sql_sha256 89d1cf16...).  The public adapter split changed only the
+  // containing scope, and therefore the site signature.
+  'd0c82d56b1ebc1290af28a4c3add0047a2da0f9ab7cf0643ae9ac5ccd3920fc9',
 ])
 
 function classify(site) {

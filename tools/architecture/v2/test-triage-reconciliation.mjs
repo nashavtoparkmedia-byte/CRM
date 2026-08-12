@@ -15,7 +15,11 @@ if (document.summary.RECONCILIATION_TOTAL !== records.length || document.summary
 if (document.summary.RESOLVED_NON_WRITE !== counts.RESOLVED_NON_WRITE) throw new Error('resolved non-write count drift')
 if (document.summary.MATERIAL_UNRESOLVED_WRITE_RISK !== counts.MATERIAL_UNRESOLVED_WRITE_RISK) throw new Error('material ambiguity count drift')
 if (counts.RESOLVED_NON_WRITE < 27) throw new Error('static SELECT reclassification regression')
-for (const id of ['36c9b52b2b9c7b0d7ec8bec4120e6772b5421558fb0f591ed1ef2f9306aadce7', 'e1c81095a11532a1ba56e2629b9316a15d42ad5062aa52dfa190283adb26f5e1']) {
+for (const id of [
+  '36c9b52b2b9c7b0d7ec8bec4120e6772b5421558fb0f591ed1ef2f9306aadce7',
+  'e1c81095a11532a1ba56e2629b9316a15d42ad5062aa52dfa190283adb26f5e1',
+  'd0c82d56b1ebc1290af28a4c3add0047a2da0f9ab7cf0643ae9ac5ccd3920fc9',
+]) {
   if (records.find(record => record.record_id === id)?.semantic_state !== 'RESOLVED_NON_WRITE') throw new Error(`read-only SQL regression for ${id}`)
 }
 console.log(`triage reconciliation: PASS (${records.length} records; ${counts.RESOLVED_NON_WRITE} non-writes resolved; ${counts.OWNER_VALID_WRITE} owner-valid; ${counts.MATERIAL_UNRESOLVED_WRITE_RISK} material unresolved)`)
