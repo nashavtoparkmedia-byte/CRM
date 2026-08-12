@@ -1,16 +1,16 @@
 # Current recovery handoff
 
-Captured: `2026-08-12T02:55:38Z`
+Captured: `2026-08-12T03:19:10Z`
 
 This is the authoritative continuation checkpoint for the current task. It is a handoff, not an acceptance artifact. The whole-project state remains `EXTERNAL_FINAL_ACCEPTANCE_FAILED`; the current program remains `WHOLE-PROJECT DOD RECOVERY`; the project is **not READY**.
 
-Latest source checkpoint (implementation HEAD `21b17f08`): live architecture debt remains at zero findings and zero exceptions, and authoritative architecture CI is internally closed. The workflow configures 35 current controls; the local targeted source proof passed 31/31, including all 112/112 active boundary controls, independent critic, TypeScript inherited-baseline and blast-radius negative gates, Gravity 34/34, and tg-bot 15/15. The four configured fresh-inventory controls remain intentionally delegated to bounded pull-request/main CI because this source-only batch did not materially change write or credential architecture. Evidence is `architecture/isolation/architecture-enforcement/authoritative-ci-v1/verification.json`. The active cluster is now `MODULE MANIFEST AND CONTRACT COVERAGE`, followed automatically by protected Messages reconciliation.
+Latest source checkpoint (evidence HEAD `d8ea50d2`): live architecture debt remains at zero findings and zero exceptions; authoritative architecture CI, module verification, blast-radius mapping, and context-level contract coverage are internally closed. The workflow configures 37 current controls; the local targeted source proof passed 33/33, including all 112/112 active boundary controls, independent critic, TypeScript inherited-baseline and blast-radius negative gates, Gravity 34/34, and tg-bot 15/15. All 16 contexts have executable verification profiles (45 entrypoints and 14 hashed controls), while the registry covers 16 context public surfaces and 61 allowed interactions. The four configured fresh-inventory controls remain delegated to bounded pull-request/main CI because this source-only batch did not materially change write or credential architecture. Evidence is `architecture/isolation/architecture-enforcement/module-verification-contract-registry-v1/verification.json`. The active cluster is now `PROTECTED MESSAGES RECONCILIATION`, with AI Calls lineage preservation.
 
-The machine-readable companion, `CURRENT_RECOVERY_HANDOFF.json`, contains the exhaustive every-path status/purpose inventory, exact commands/results, identities, worktree records, and next action. Read both files before changing code.
+The machine-readable companion, `CURRENT_RECOVERY_HANDOFF.json`, preserves the historical path inventory and records the current closure commits, exact commands/results, identities, worktree records, and next action. Read both files before changing code.
 
 ## Bounded analyzer and current baseline update
 
-Ownership closure is internally accepted after the final bounded scan: `1,725/1,725` surfaces, zero worker failures/timeouts, `1,404` confirmed writes discovered, `0` confirmed foreign, `53` closed foreign, `46` raw ambiguous records reconciled exactly (`30` resolved non-writes, `11` owner-valid writes, `5` controlled migrations), zero material unresolved, zero dynamic delegate/SQL/queryRaw ambiguity, and zero unclassified operational surfaces. Current artifacts are `AUTHORITATIVE_WRITE_SCAN_20260811T131500Z.json`, `CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json`, `CURRENT_WHOLE_REPOSITORY_WRITE_PROGRESS.jsonl`, and `AMBIGUOUS_WRITE_TRIAGE_FINAL_CLOSURE.json`. Security/credential closure and its independent critic pass are also internally accepted; the program remains **not READY** because manifest/contract coverage, protected Messages, release lineage, outbox activation, and production acceptance remain open.
+Ownership closure is internally accepted after the final bounded scan: `1,725/1,725` surfaces, zero worker failures/timeouts, `1,404` confirmed writes discovered, `0` confirmed foreign, `53` closed foreign, `46` raw ambiguous records reconciled exactly (`30` resolved non-writes, `11` owner-valid writes, `5` controlled migrations), zero material unresolved, zero dynamic delegate/SQL/queryRaw ambiguity, and zero unclassified operational surfaces. Current artifacts are `AUTHORITATIVE_WRITE_SCAN_20260811T131500Z.json`, `CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json`, `CURRENT_WHOLE_REPOSITORY_WRITE_PROGRESS.jsonl`, and `AMBIGUOUS_WRITE_TRIAGE_FINAL_CLOSURE.json`. Security/credential closure and its independent critic pass are also internally accepted; the program remains **not READY** because protected Messages, release lineage, outbox activation, source identity and production acceptance remain open.
 
 The analyzer execution recovery is complete, but it is not an acceptance. Commits `a1c0d20e` and `3ab9ad96` add fresh-process JavaScript workers capped at four, a 120-second per-surface deadline, structured progress, and atomic output; all 77 write fixtures and four companion suites passed before the scan.
 
@@ -28,7 +28,7 @@ Historical derived-classification checkpoint: `CURRENT_WRITE_OWNERSHIP_DERIVED_S
 - Branch: `codex/crm-architecture-dod-recovery`
 - Upstream: none; no remote-tracking ref contains the implementation HEAD
 - Recovery base: `0b61ba296ba2734738d4a21b9d00ce8b110d63cf`, tree `56c452397df4bb7cb05bef3e0d9afd1de9d785a5`
-- Implementation HEAD before this checkpoint: `3c8087311caab7912708a1746b2bb5ca3e2c088b`, tree `60900235f4183400e24d40442df9dd4b5b955483`
+- Evidence HEAD before this checkpoint: `d8ea50d294f0f90cc1c03f3297fe4f97d205b65a`, tree `354cafd8818659094e3e3e3013096d48d9b13302`
 - Checkpoint commit: the commit containing this file; resolve exactly with `git log -1 -- architecture/recovery/whole-project-dod/v2/CURRENT_RECOVERY_HANDOFF.md`
 - Task range before checkpoint: `0b61ba29..d0993b26`, 150 commits, 873 paths, 1,859,407 insertions and 30,235 deletions
 
@@ -105,7 +105,7 @@ Authoritative current values:
 - State: `EXTERNAL_FINAL_ACCEPTANCE_FAILED`
 - Current milestone/program: `WHOLE-PROJECT DOD RECOVERY IN PROGRESS`
 - Gate: `IN_PROGRESS_AFTER_EXTERNAL_FINAL_ACCEPTANCE_FAILED`
-- Gap ledger: 19 total, 10 `CONFIRMED`, nine `CLOSED`, zero blocked
+- Gap ledger: 19 total, seven `CONFIRMED`, 12 `CLOSED`, zero blocked
 - Production change ledger: zero production source changes, database mutations, restarts/reloads, deployments, and rollbacks
 
 ## What this task actually completed
@@ -114,14 +114,14 @@ Authoritative current values:
 
 - `FINAL-DOD-016`: installed Privileged Runtime `2.0.0-5` identity and finite 24-command ABI independently reconciled; evidence is `architecture/recovery/control-plane/v2/CONTROL_PLANE_RECONCILIATION.json`.
 - `FINAL-DOD-017`: the Architecture Lead retained the original whole-project Definition of Done; evidence is the durable gap ledger.
-
-No other `FINAL-DOD-*` finding is closed by this checkpoint.
+- `FINAL-DOD-012B`: authoritative CI executes the current control plane and bounded fresh-inventory gates.
+- `FINAL-DOD-012A`: all 16 contexts have schema-validated executable verification and blast-radius profiles.
+- `FINAL-DOD-012`: the context-level registry covers 16 public surfaces and all 61 allowed interactions, while preserving the two detailed contract records.
 
 ### IMPLEMENTED BUT NOT YET ACCEPTED
 
-- Analyzer v2 hardening through `4ec52730` exists and targeted tests pass, but there is no bounded current whole-repository baseline, current determinism result, or final critic PASS.
-- Gravity/tg-bot credential, auth, session, redaction, webhook, QR/login, public DTO and debug-boundary hardening exists in the worktree. Delegated targeted tests and builds pass, but independent critic/final integration/production gates are absent.
-- The context/enforcement slice removes 11 stale Identity exceptions and locally reports `1284 findings / 1284 exact exceptions`; this does not close the remaining whole-program architecture debt.
+- Write ownership, credential/security, live architecture debt, CI, module verification and context-level contract coverage are internally accepted with durable evidence. Whole-project acceptance remains open.
+- Production Messages equivalence, release/source lineage, outbox activation and production gates are not yet accepted.
 
 ### INVESTIGATED
 
@@ -131,12 +131,9 @@ No other `FINAL-DOD-*` finding is closed by this checkpoint.
 
 ### NOT STARTED
 
-- Bounded worker/progress-instrumented analyzer execution and a current authoritative full scan.
-- Current authoritative credential inventory after performance closure.
-- Independent final critic/integration acceptance of analyzer and security work.
 - Protected Messages authoritative production-source reconciliation.
 - Production source/artifact identity reconciliation, preview/backup/rollback, deploy, runtime activation, or enabling Runtime V2 activation profiles.
-- Transactional outbox activation and remaining architecture contract/manifest/CI/debt recovery.
+- Transactional outbox activation and final production acceptance.
 
 ## Write analyzer state
 
@@ -243,7 +240,7 @@ The last completed mirror pair in `/tmp` is from superseded `5a4211a4`: write ou
 
 ## Current identities
 
-- Recovery source: reconciled. Repository/worktree/branch/base are above; truth evidence commit/tree are `3c8087311caab7912708a1746b2bb5ca3e2c088b` / `60900235f4183400e24d40442df9dd4b5b955483`.
+- Recovery source: reconciled. Repository/worktree/branch/base are above; current truth evidence commit/tree are `d8ea50d294f0f90cc1c03f3297fe4f97d205b65a` / `354cafd8818659094e3e3e3013096d48d9b13302`.
 - Production source/artifact identity: `NOT RECONCILED IN THIS TASK`.
 - Messages authoritative production source identity: `NOT RECONCILED IN THIS TASK`.
 - Installed YOKO Privileged Runtime V2: reconciled as package `yoko-privileged-runtime 2.0.0-5`; runtime SHA-256 `0cdeeb4ba43abe50f80fed1580ad7b0729bf83358932ece2974b3faedafed57a`; policy `e67159bf95b583a17073ccf34b95f17fb885321df10b742be970168331d64e38`; registry `6e0ac1bdf7bbf95b5ae984dc266050a86425aac1bd884f3ab2f1b6f377291016`; sudoers `6e6b7cb2a088cc92fa7aee747adca46c64b4b96d1224be21117be5adef488c06`; self-check true; 24-command finite ABI; activation profiles disabled fail-closed.
@@ -254,13 +251,12 @@ This task made zero production source mutations, database mutations, service res
 
 ## Genuine blockers
 
-- Module manifests and the central contract registry do not yet carry complete current build/test/check/blast-radius mappings.
 - Protected Messages reconciliation and production source/artifact acceptance remain incomplete.
 - Recovery lineage is local-only with no upstream/remote tracking ref.
 
 ## Exact next action
 
-Write ownership, credential/security, live-architecture debt, and authoritative CI closure remain internally accepted. The current credential inventory is `401` accesses with `81` raw analyzer ambiguities already record-classified, `0` material unresolved, `0` confirmed public exposure, and `0` cross-domain capability gaps. Complete schema-validated module verification/blast-radius profiles and reconcile the central contract registry with the real versioned public surfaces, then continue automatically to protected Messages production reconciliation and AI Calls lineage preservation. Do not repeat the whole-repository write scan without material write-architecture change or a final-gate requirement.
+Write ownership, credential/security, live-architecture debt, authoritative CI, module verification and context-level contract coverage remain internally accepted. The current credential inventory is `401` accesses with `81` raw analyzer ambiguities already record-classified, `0` material unresolved, `0` confirmed public exposure, and `0` cross-domain capability gaps. Reconcile the recovery candidate against the authoritative protected Messages source and behavior corpus, classify every production delta, preserve AI Calls request/tool semantics, and produce independent regression evidence before release-lineage work. Do not repeat the whole-repository write scan without material write-architecture change or a final-gate requirement.
 
 ### Live architecture debt recompute
 

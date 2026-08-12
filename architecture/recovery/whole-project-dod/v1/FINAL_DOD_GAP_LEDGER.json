@@ -3,7 +3,7 @@
   "project": "YOKO CRM MODULAR ARCHITECTURE TRANSFORMATION",
   "phase": "WHOLE_PROJECT_DOD_RECOVERY",
   "status": "IN_PROGRESS",
-  "updated_at": "2026-08-12T02:55:38Z",
+  "updated_at": "2026-08-12T03:19:10Z",
   "external_verdict": "YOKO CRM MODULAR ARCHITECTURE TRANSFORMATION NOT READY",
   "external_review": {
     "task_id": "019feb29-bac2-7a51-84ff-df013bed1a93",
@@ -193,26 +193,28 @@
       "id": "FINAL-DOD-012",
       "category": "CONTRACT_COVERAGE",
       "severity": "HIGH",
-      "status": "CONFIRMED",
+      "status": "CLOSED",
       "title": "Central contract coverage is incomplete",
       "source": "external review architecture gap 3",
       "evidence": [
         "architecture/contracts/v1/registry.json:10",
         "central registry contains only two Work Management entries"
       ],
-      "closure": "Every meaningful cross-context interaction has the appropriate versioned public API, command, query, event or technical interface without ceremony for internal calls."
+      "closure": "Every meaningful cross-context interaction has the appropriate versioned public API, command, query, event or technical interface without ceremony for internal calls.",
+      "closure_evidence": "architecture/isolation/architecture-enforcement/module-verification-contract-registry-v1/verification.json; 16 context public surfaces, 61 exact allowed interactions, 2 preserved detailed contract records, and 4/4 negative registry properties"
     },
     {
       "id": "FINAL-DOD-012A",
       "category": "MODULE_MANIFESTS_BLAST_RADIUS",
       "severity": "HIGH",
-      "status": "CONFIRMED",
+      "status": "CLOSED",
       "title": "Module manifests lack build, test and blast-radius mappings",
       "source": "external review architecture gap 3",
       "evidence": [
         "architecture/contexts/v1/module-manifest.schema.json:6"
       ],
-      "closure": "Each major module has schema-validated owned paths, public contracts, dependency and provider/credential relations, module tests, contract tests, build checks and architecture controls."
+      "closure": "Each major module has schema-validated owned paths, public contracts, dependency and provider/credential relations, module tests, contract tests, build checks and architecture controls.",
+      "closure_evidence": "architecture/isolation/architecture-enforcement/module-verification-contract-registry-v1/verification.json; 16/16 verification profiles, 45 executable entrypoints, 14 hashed controls, 11/11 negative manifest properties, and provider-specific/shared blast-radius proofs"
     },
     {
       "id": "FINAL-DOD-012B",

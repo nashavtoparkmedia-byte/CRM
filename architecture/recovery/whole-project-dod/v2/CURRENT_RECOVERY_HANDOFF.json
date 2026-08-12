@@ -1,16 +1,16 @@
 {
   "schema": "yoko.crm.current-recovery-handoff.v1",
-  "generated_at": "2026-08-12T02:55:38Z",
+  "generated_at": "2026-08-12T03:19:10Z",
   "authority": "Continuation checkpoint; supersedes conversational status claims but does not supersede durable gap ledger or external NOT READY verdict.",
   "program_state": {
     "whole_project_state": "EXTERNAL_FINAL_ACCEPTANCE_FAILED",
     "current_program": "WHOLE-PROJECT DOD RECOVERY",
-    "milestone_status": "LIVE_ARCHITECTURE_DEBT_AND_AUTHORITATIVE_CI_CLOSED; MANIFEST_CONTRACT_COVERAGE_IN_PROGRESS",
+    "milestone_status": "LIVE_ARCHITECTURE_DEBT_CI_MANIFEST_AND_CONTRACT_COVERAGE_CLOSED; PROTECTED_MESSAGES_RECONCILIATION_IN_PROGRESS",
     "ready": false,
     "finding_summary": {
       "total": 19,
-      "confirmed": 9,
-      "closed": 10,
+      "confirmed": 7,
+      "closed": 12,
       "blocked": 0
     }
   },
@@ -23,12 +23,12 @@
     "remote_tracking_ref_contains_implementation_head": false,
     "base_commit": "0b61ba296ba2734738d4a21b9d00ce8b110d63cf",
     "base_tree": "56c452397df4bb7cb05bef3e0d9afd1de9d785a5",
-    "implementation_head_before_checkpoint": "21b17f08607905a24f4a9e882091d5c1cab94160",
-    "implementation_tree_before_checkpoint": "756bed74651a40b0bb3f63eddaa2dcc7420b3393",
+    "implementation_head_before_checkpoint": "d8ea50d294f0f90cc1c03f3297fe4f97d205b65a",
+    "implementation_tree_before_checkpoint": "354cafd8818659094e3e3e3013096d48d9b13302",
     "checkpoint_commit": "SELF_RESOLVE_WITH_GIT_LOG",
     "task_commit_range": {
-      "range": "0b61ba296ba2734738d4a21b9d00ce8b110d63cf..3c8087311caab7912708a1746b2bb5ca3e2c088b",
-      "commits": 190,
+      "range": "0b61ba296ba2734738d4a21b9d00ce8b110d63cf..d8ea50d294f0f90cc1c03f3297fe4f97d205b65a",
+      "commits": 183,
       "classification": "Resolve exact counts with Git when required; source identity above is authoritative."
     },
     "frozen_pre_checkpoint_worktree_state": {
@@ -169,6 +169,24 @@
       "paths": [
         "gravity-mvp/debug-drivers.js"
       ]
+    },
+    {
+      "purpose": "Executable module verification profiles, context-level contract registry, manifest-driven blast radius and durable closure evidence",
+      "paths": [
+        "architecture/contexts/v1/",
+        "architecture/contracts/v1/registry.json",
+        "architecture/isolation/architecture-enforcement/module-verification-contract-registry-v1/",
+        "tools/architecture/enrich-context-manifests.mjs",
+        "tools/architecture/reconcile-contract-registry.mjs",
+        "tools/architecture/validate-context-manifests.mjs",
+        "tools/architecture/validate-contract-registry.mjs",
+        "tools/architecture/test-contract-registry.mjs",
+        "tools/architecture/check-blast-radius.mjs",
+        "tools/architecture/test-blast-radius.mjs",
+        "tools/architecture/run-authoritative-ci.mjs"
+      ],
+      "source_commit": "18c249d2d486a79886dade325d013d49df73312d",
+      "evidence_head": "d8ea50d294f0f90cc1c03f3297fe4f97d205b65a"
     }
   ],
   "uncommitted_file_purpose_groups": [],
@@ -339,13 +357,24 @@
         "id": "FINAL-DOD-012B",
         "title": "Authoritative CI invokes the current control plane and fresh bounded inventory gates",
         "evidence": "architecture/isolation/architecture-enforcement/authoritative-ci-v1/verification.json"
+      },
+      {
+        "id": "FINAL-DOD-012",
+        "title": "Context-level public API registry covers all allowed cross-context interactions",
+        "evidence": "architecture/isolation/architecture-enforcement/module-verification-contract-registry-v1/verification.json"
+      },
+      {
+        "id": "FINAL-DOD-012A",
+        "title": "All bounded contexts have executable verification and blast-radius profiles",
+        "evidence": "architecture/isolation/architecture-enforcement/module-verification-contract-registry-v1/verification.json"
       }
     ],
     "implemented_but_not_accepted": [
       "Write ownership remains internally accepted: 1,404 confirmed writes discovered, 0 confirmed foreign, 53 closed foreign, 0 material ambiguity, and 0 unclassified active operational surfaces.",
       "Credential/security closure remains internally accepted: Gravity 34/34, tg-bot 15/15, 0 material credential unresolved, 0 public secret exposure, and independent critic PASS.",
       "Live architecture debt is internally closed: 0 findings, 0 uncovered, 0 exception-covered, 0 temporary exceptions, and all 1,288 opening findings actually closed. Whole-project acceptance remains open.",
-      "Authoritative CI is internally closed: 35 configured controls, 31/31 targeted local acceptance, 112/112 active boundary controls, and fresh bounded write/credential inventory gates enabled for pull requests and main pushes."
+      "Authoritative CI is internally closed: 37 configured controls, 33/33 targeted local acceptance, 112/112 active boundary controls, and fresh bounded write/credential inventory gates enabled for pull requests and main pushes.",
+      "Module verification and context-level contract coverage are internally closed: 16/16 manifests, 45 executable verification entrypoints, 14 hashed controls, 16 public context surfaces, 61 allowed interactions, and provider-specific/shared blast-radius negatives PASS."
     ],
     "investigated": [
       "Current full-repository analyzer performance: two mirrored 4ec scans were CPU-active for more than 3h20 and aborted; no output exists.",
@@ -354,7 +383,6 @@
       "Recovery Git/worktree, durable-state, artifact and process identities reconciled for continuation."
     ],
     "not_started": [
-      "Module-manifest verification profiles and central contract registry reconciliation.",
       "Protected Messages production reconciliation and AI Calls lineage acceptance.",
       "Production source/artifact identity reconciliation, preview/backup/rollback gates, deployment or runtime activation.",
       "Final external re-review after all live debt and production gates close."
@@ -555,12 +583,19 @@
       "command": "node tools/architecture/enforce-architecture.mjs --format json; node tools/architecture/check-operations-scheduled-fleet-cron-boundary.mjs; node tools/architecture/validate-context-manifests.mjs; npm run test:security-boundaries; targeted cron Vitest; architecture negative suite; contract, credential-registry and static-SQL controls",
       "scope": "Final Fleet cron semantic batch and whole live-architecture denominator",
       "result": "PASS: 0 findings, 0 exceptions, 0 uncovered, 0 stale, 0 cycles, 0 provider accesses; 1,288 actually closed; cron 11/11; architecture negatives 29/29; security 34/34; credential registry 14 policies; TypeScript 30 inherited with zero changed-path diagnostics"
+    },
+    {
+      "category": "module_verification_and_contract_registry_closure",
+      "command": "node tools/architecture/run-authoritative-ci.mjs --skip-full-scans; sha256sum -c architecture/isolation/architecture-enforcement/module-verification-contract-registry-v1/SHA256SUMS",
+      "scope": "All 16 context verification profiles, exact context-level contract registry, blast-radius mapping and current targeted architecture control plane",
+      "result": "PASS: 33/33 targeted controls; 112/112 active boundaries; 16/16 manifests; 45 entrypoints; 14 hashed controls; 11 manifest negatives; 16 context surfaces; 61 interactions; 4 registry negatives; Gravity 34/34; tg-bot 15/15; TypeScript 30 inherited and 0 changed-path diagnostics; no full inventory scan"
     }
   ],
   "artifacts": {
     "write_ownership_derived_state": "architecture/recovery/whole-project-dod/v2/CURRENT_WRITE_OWNERSHIP_DERIVED_STATE.json",
     "maintenance_capability_registry": "architecture/recovery/whole-project-dod/v2/MAINTENANCE_MIGRATION_CAPABILITY_REGISTRY.json",
     "ownership_gap_review": "architecture/recovery/whole-project-dod/v2/OWNERSHIP_GAP_FOCUSED_REVIEW.json",
+    "module_verification_contract_registry": "architecture/isolation/architecture-enforcement/module-verification-contract-registry-v1/verification.json",
     "current_4ec_outputs": "Historical 4ec outputs remain absent. They are superseded by the bounded current 3ab9ad96 baseline below.",
     "current_authoritative_write_baseline": {
       "record": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T184500Z.json",
@@ -645,8 +680,8 @@
       "branch": "codex/crm-architecture-dod-recovery",
       "base_commit": "0b61ba296ba2734738d4a21b9d00ce8b110d63cf",
       "base_tree": "56c452397df4bb7cb05bef3e0d9afd1de9d785a5",
-      "truth_evidence_commit": "3c8087311caab7912708a1746b2bb5ca3e2c088b",
-      "truth_evidence_tree": "60900235f4183400e24d40442df9dd4b5b955483"
+      "truth_evidence_commit": "d8ea50d294f0f90cc1c03f3297fe4f97d205b65a",
+      "truth_evidence_tree": "354cafd8818659094e3e3e3013096d48d9b13302"
     },
     "production_source_artifact": "NOT RECONCILED IN THIS TASK",
     "messages_authoritative_production_source": "NOT RECONCILED IN THIS TASK",
@@ -676,7 +711,7 @@
     "Protected Messages/AI Calls production authority and final integration acceptance remain unreconciled.",
     "No upstream/remote ref protects the local recovery lineage."
   ],
-  "exact_next_action": "Complete schema-validated module verification and blast-radius profiles, reconcile the central contract registry with the real versioned public surfaces, then continue automatically to protected Messages production reconciliation and AI Calls lineage preservation.",
+  "exact_next_action": "Reconcile the recovery candidate against the authoritative protected Messages source and behavior corpus, classify every production delta, preserve AI Calls request/tool semantics, and produce independent regression evidence before release-lineage work.",
   "current_write_ownership": {
     "baseline": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T131500Z.json",
     "baseline_sha256": "7c6eb03e1249d9dbd2230390a72471caefe1fb01c992ec608775e1f2a0e41292",
