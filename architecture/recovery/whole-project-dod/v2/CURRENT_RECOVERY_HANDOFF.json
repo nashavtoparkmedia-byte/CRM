@@ -1,17 +1,92 @@
 {
   "schema": "yoko.crm.current-recovery-handoff.v1",
-  "generated_at": "2026-08-12T03:19:10Z",
-  "authority": "Continuation checkpoint; supersedes conversational status claims but does not supersede durable gap ledger or external NOT READY verdict.",
+  "generated_at": "2026-08-12T05:18:00Z",
+  "authority": "Continuation checkpoint; latest_checkpoint supersedes older fields retained below as historical lineage, but does not supersede the durable gap ledger or external NOT READY verdict.",
+  "latest_checkpoint": {
+    "status": "PRODUCTION_ACTIVATION_BLOCKED_ON_ROOT_OWNED_V2_PROFILES",
+    "project_ready": false,
+    "evidence_head_before_checkpoint": "88b7624c77e7f91a131139c993247df11b86156c",
+    "evidence_tree_before_checkpoint": "43027f413e2e7dd1fc4fc8fa9ab5205eb765bb03",
+    "accepted_source_commit": "af9646f51c1274d718d83eb4c78faf92f214a184",
+    "accepted_source_tree": "f900a2bbae3a63f02ff85bf70821df9aab7ff1df",
+    "accepted_source_archive_sha256": "c43d6e6ea0735b7a5dad9117822df24b7ec0133685c69b8c13b50effc7c9f808",
+    "write_ownership": {
+      "tracked_executable_surfaces": 2016,
+      "analyzer_write_candidates": 1418,
+      "confirmed_writes_discovered": 1388,
+      "confirmed_foreign": 0,
+      "closed_foreign_cumulative": 53,
+      "raw_ambiguous_records": 45,
+      "resolved_non_writes": 30,
+      "owner_valid_writes": 10,
+      "controlled_migration_writes": 5,
+      "material_ambiguous_remaining": 0,
+      "active_operational_surfaces_unclassified": 0,
+      "temporary_exceptions": 0,
+      "intentional_exceptions": 0
+    },
+    "architecture_debt": {
+      "findings": 0,
+      "exceptions": 0,
+      "actually_closed": 1288
+    },
+    "credential_security": {
+      "credential_database_accesses": 403,
+      "previously_ambiguous": 81,
+      "material_unresolved": 0,
+      "public_exposure": 0,
+      "capability_gaps": 0,
+      "gravity_tests": "34/34 PASS",
+      "tg_bot_tests": "15/15 PASS",
+      "independent_critic": "PASS"
+    },
+    "protected_messages": "SOURCE_AND_BEHAVIOR_CORPUS_RECONCILED_NOT_DEPLOYED",
+    "ai_calls": "PROTECTED_LINEAGE_PRESERVED",
+    "source_release_lineage": "FULL_TRACKED_TREE_REPRODUCIBLY_SEALED_NOT_DEPLOYED",
+    "gap_summary": {
+      "total": 19,
+      "confirmed": 3,
+      "closed": 15,
+      "blocked_external_auth": 1
+    },
+    "open_gaps": [
+      "FINAL-DOD-007",
+      "FINAL-DOD-008",
+      "FINAL-DOD-015"
+    ],
+    "blocked_gap": "FINAL-DOD-009",
+    "installed_v2": {
+      "runtime": "2.0.0",
+      "package": "2.0.0-5",
+      "self_check": "PASS",
+      "release_preflight": "PROFILE_DISABLED",
+      "database_status": "PROFILE_DISABLED",
+      "database_migrate": "PROFILE_DISABLED",
+      "release_activate": "PROFILE_DISABLED",
+      "rollback": "PROFILE_DISABLED"
+    },
+    "production_mutations": {
+      "source": 0,
+      "database": 0,
+      "deployments": 0,
+      "service_restarts_or_reloads": 0,
+      "rollbacks": 0
+    },
+    "checkpoint_artifact": "architecture/recovery/whole-project-dod/v2/PRODUCTION_ACTIVATION_BLOCKED_CHECKPOINT_20260812.json",
+    "profile_request": "architecture/recovery/control-plane/v2/ROOT_OWNED_ACTIVATION_PROFILE_REQUEST_20260812.json",
+    "exact_next_action": "Root-authorized installation of the exact checksummed finite profiles, then isolated PostgreSQL preview, DB identity, verified backup/restore, expand-only migration, immutable Gravity activation, health and protected behavior validation, with automatic rollback on failure.",
+    "stop_condition": "OWNER_STOP_CONDITION_4_GENUINELY_NEW_ROOT_PRIMITIVE_OUTSIDE_INSTALLED_V2_FINITE_ABI"
+  },
   "program_state": {
     "whole_project_state": "EXTERNAL_FINAL_ACCEPTANCE_FAILED",
     "current_program": "WHOLE-PROJECT DOD RECOVERY",
-    "milestone_status": "LIVE_ARCHITECTURE_DEBT_CI_MANIFEST_AND_CONTRACT_COVERAGE_CLOSED; PROTECTED_MESSAGES_RECONCILIATION_IN_PROGRESS",
+    "milestone_status": "SOURCE_LEVEL_DOD_RECOVERY_INTERNALLY_ACCEPTED; PRODUCTION_ACTIVATION_BLOCKED_ON_ROOT_OWNED_V2_PROFILES",
     "ready": false,
     "finding_summary": {
       "total": 19,
-      "confirmed": 7,
-      "closed": 12,
-      "blocked": 0
+      "confirmed": 3,
+      "closed": 15,
+      "blocked": 1
     }
   },
   "repository": {
@@ -23,8 +98,8 @@
     "remote_tracking_ref_contains_implementation_head": false,
     "base_commit": "0b61ba296ba2734738d4a21b9d00ce8b110d63cf",
     "base_tree": "56c452397df4bb7cb05bef3e0d9afd1de9d785a5",
-    "implementation_head_before_checkpoint": "d8ea50d294f0f90cc1c03f3297fe4f97d205b65a",
-    "implementation_tree_before_checkpoint": "354cafd8818659094e3e3e3013096d48d9b13302",
+    "implementation_head_before_checkpoint": "88b7624c77e7f91a131139c993247df11b86156c",
+    "implementation_tree_before_checkpoint": "43027f413e2e7dd1fc4fc8fa9ab5205eb765bb03",
     "checkpoint_commit": "SELF_RESOLVE_WITH_GIT_LOG",
     "task_commit_range": {
       "range": "0b61ba296ba2734738d4a21b9d00ce8b110d63cf..d8ea50d294f0f90cc1c03f3297fe4f97d205b65a",
@@ -44,7 +119,7 @@
       "sorted_untracked_sha256_manifest_aggregate": "fa9acbe1e68aecefbe48ef9621b243f6f1db3c1def6b997c44f6b305463eb3ae",
       "attribution": "Strongly attributable to this task from clean worktree creation and 2026-08-10 mtimes; Git has no pre-edit porcelain snapshot, so not a mathematical proof."
     },
-    "checkpoint_commit_scope": "Current live-debt recompute, summary, remediation plan and handoff companions with targeted v2 checksums.",
+    "checkpoint_commit_scope": "Production activation blocker, exact root-owned finite profile request, targeted independent critic and durable handoff reconciliation.",
     "do_not": [
       "Do not reset, clean, discard, or remove the recovery worktree.",
       "Do not treat the checkpoint commit as analyzer/security acceptance.",
@@ -598,14 +673,14 @@
     "module_verification_contract_registry": "architecture/isolation/architecture-enforcement/module-verification-contract-registry-v1/verification.json",
     "current_4ec_outputs": "Historical 4ec outputs remain absent. They are superseded by the bounded current 3ab9ad96 baseline below.",
     "current_authoritative_write_baseline": {
-      "record": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T184500Z.json",
+      "record": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_POST_MESSAGES_20260811T0450Z.json",
       "baseline": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json",
-      "baseline_sha256": "16280f85077b00e20670d5934f57035adaac5c0c3129df7e63b499ba4bb61625",
+      "baseline_sha256": "1ed65f5f744ab1da38fb6faad1948466e536b6d084cf577a14fc619391e34278",
       "progress": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_PROGRESS.jsonl",
-      "progress_sha256": "5ea2a8cde5ed1bcc9c8ccfa7985d7b79f5452ccb48980fc6dc5a3990b5d94bc1",
-      "analysis_sha256": "4a110b2b6936287540a9f33476943304aab815535adaecd4444fd642be21292b",
-      "result": "1721/1721 surfaces; 0 failures/timeouts; 0 FOREIGN; 56 RAW AMBIGUOUS; 14 MATERIAL UNRESOLVED; 0 unreviewed operational surfaces",
-      "classification": "CURRENT_BASELINE_NOT_ACCEPTANCE"
+      "progress_sha256": "c2b05665c23a9f3fc144d4423a3a481a4c01c7606f6cef3a6562c0e306f14c8c",
+      "analysis_sha256": "1ed65f5f744ab1da38fb6faad1948466e536b6d084cf577a14fc619391e34278",
+      "result": "2016/2016 surfaces; 0 failures/timeouts; 1418 analyzer candidates; 1388 confirmed writes; 0 FOREIGN; 45 RAW AMBIGUOUS; 0 MATERIAL UNRESOLVED; 0 unclassified active operational surfaces",
+      "classification": "CURRENT_BOUNDED_BASELINE_WRITE_OWNERSHIP_INTERNALLY_ACCEPTED_NOT_WHOLE_PROJECT_ACCEPTANCE"
     },
     "durably_preserved": [
       "architecture/recovery/whole-project-dod/v2/CURRENT_RECOVERY_HANDOFF.md",
@@ -680,11 +755,13 @@
       "branch": "codex/crm-architecture-dod-recovery",
       "base_commit": "0b61ba296ba2734738d4a21b9d00ce8b110d63cf",
       "base_tree": "56c452397df4bb7cb05bef3e0d9afd1de9d785a5",
-      "truth_evidence_commit": "d8ea50d294f0f90cc1c03f3297fe4f97d205b65a",
-      "truth_evidence_tree": "354cafd8818659094e3e3e3013096d48d9b13302"
+      "truth_evidence_commit": "88b7624c77e7f91a131139c993247df11b86156c",
+      "truth_evidence_tree": "43027f413e2e7dd1fc4fc8fa9ab5205eb765bb03",
+      "accepted_source_commit": "af9646f51c1274d718d83eb4c78faf92f214a184",
+      "accepted_source_tree": "f900a2bbae3a63f02ff85bf70821df9aab7ff1df"
     },
-    "production_source_artifact": "NOT RECONCILED IN THIS TASK",
-    "messages_authoritative_production_source": "NOT RECONCILED IN THIS TASK",
+    "production_source_artifact": "RECONCILED_AS_CURRENT_PER_FILE_COMPOSITE_AT_/opt/crm; ACCEPTED_CANDIDATE_NOT_DEPLOYED",
+    "messages_authoritative_production_source": "RECONCILED_26_RECORD_SOURCE_AND_BEHAVIOR_CORPUS; DEPLOYED_RUNTIME_NOT_ACCEPTED",
     "installed_privileged_runtime_v2": {
       "status": "RECONCILED",
       "package": "yoko-privileged-runtime 2.0.0-5",
@@ -694,7 +771,7 @@
       "sudoers_sha256": "6e6b7cb2a088cc92fa7aee747adca46c64b4b96d1224be21117be5adef488c06",
       "self_check": true,
       "effective_abi_commands": 24,
-      "activation_profiles": "DISABLED_FAIL_CLOSED"
+      "activation_profiles": "DISABLED_FAIL_CLOSED_ROOT_OWNED_INSTALLATION_REQUIRED"
     }
   },
   "production_mutations": {
@@ -707,24 +784,24 @@
     "ai_calls_mutated": false
   },
   "genuine_blockers": [
-    "Module manifests and the central contract registry do not yet carry complete current verification and interaction mappings.",
-    "Protected Messages/AI Calls production authority and final integration acceptance remain unreconciled.",
-    "No upstream/remote ref protects the local recovery lineage."
+    "FINAL-DOD-009 requires Owner/root authorization to install the exact checksummed root-owned finite activation profiles outside the installed V2 ABI.",
+    "FINAL-DOD-007, FINAL-DOD-008 and FINAL-DOD-015 remain open until incremental deployment, outbox activation and deployed Messages behavior acceptance complete."
   ],
-  "exact_next_action": "Reconcile the recovery candidate against the authoritative protected Messages source and behavior corpus, classify every production delta, preserve AI Calls request/tool semantics, and produce independent regression evidence before release-lineage work.",
+  "exact_next_action": "Owner/root installs the exact checksummed finite profiles in architecture/recovery/control-plane/v2/ROOT_OWNED_ACTIVATION_PROFILE_REQUEST_20260812.json; then resume with isolated PostgreSQL preview, production DB identity, verified backup/restore, expand-only migration, immutable Gravity activation, health/behavior validation and automatic rollback on failure.",
   "current_write_ownership": {
-    "baseline": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T131500Z.json",
-    "baseline_sha256": "7c6eb03e1249d9dbd2230390a72471caefe1fb01c992ec608775e1f2a0e41292",
-    "analysis_sha256": "7d76d6432e7f57d74e6280b1b4cef1b2d81b9239cfd08061c40b6a7baed9c089",
-    "surfaces": "1725/1725",
+    "baseline": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_POST_MESSAGES_20260811T0450Z.json",
+    "baseline_sha256": "1ed65f5f744ab1da38fb6faad1948466e536b6d084cf577a14fc619391e34278",
+    "analysis_sha256": "1ed65f5f744ab1da38fb6faad1948466e536b6d084cf577a14fc619391e34278",
+    "surfaces": "2016/2016",
     "failures": 0,
     "timeouts": 0,
-    "confirmed_writes_discovered": 1404,
+    "analyzer_write_candidates": 1418,
+    "confirmed_writes_discovered": 1388,
     "confirmed_foreign": 0,
     "closed_foreign": 53,
-    "ambiguous_raw": 46,
+    "ambiguous_raw": 45,
     "resolved_non_writes": 30,
-    "owner_valid_writes": 11,
+    "owner_valid_writes": 10,
     "controlled_migration_writes": 5,
     "material_unresolved": 0,
     "dynamic_delegate_unresolved": 0,
@@ -734,7 +811,7 @@
     "temporary_exceptions": 0,
     "intentional_exceptions": 0,
     "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_FINAL_CLOSURE.json",
-    "triage_sha256": "ce3e297f1fe736815fd310094a066717a53d8e4631cbae85f99046963f3c9f70"
+    "triage_sha256": "5fc875510bae732bf0bcaa3bb8d05710ffb3e9186ff8830e6a79b8973b041892"
   },
   "security_continuation": {
     "credential_inventory": "architecture/recovery/whole-project-dod/v2/CREDENTIAL_DATABASE_ACCESS_ARCHITECTURE_CHECKPOINT_20260811.json",
@@ -744,7 +821,7 @@
     "dynamic_migration_boundary": "architecture/recovery/whole-project-dod/v2/CREDENTIAL_DYNAMIC_MIGRATION_BOUNDARY_20260811.json",
     "cross_domain_review": "architecture/recovery/whole-project-dod/v2/CROSS_DOMAIN_CREDENTIAL_REVIEW_20260811.json",
     "credential_inventory_summary": {
-      "credential_database_accesses": 401,
+      "credential_database_accesses": 403,
       "credential_reads": 219,
       "secret_reads": 155,
       "metadata_only_reads": 64,

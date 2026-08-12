@@ -12,6 +12,9 @@
   "reproducible_archive": {
     "path": "/opt/codex-work/crm-architecture-state/release-candidates/af9646f51c1274d718d83eb4c78faf92f214a184/source.tar.gz",
     "sha256": "c43d6e6ea0735b7a5dad9117822df24b7ec0133685c69b8c13b50effc7c9f808",
+    "git_archive_prefix": "yoko-crm-af9646f51c1274d718d83eb4c78faf92f214a184/",
+    "gzip_options": "-n -6",
+    "reproduction_command": "git archive --format=tar --prefix=yoko-crm-af9646f51c1274d718d83eb4c78faf92f214a184/ af9646f51c1274d718d83eb4c78faf92f214a184 | gzip -n -6",
     "archive_entries": 3901,
     "gzip_integrity": "PASS",
     "second_independent_git_archive_sha256": "c43d6e6ea0735b7a5dad9117822df24b7ec0133685c69b8c13b50effc7c9f808",

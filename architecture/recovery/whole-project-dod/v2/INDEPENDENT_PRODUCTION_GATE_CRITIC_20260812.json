@@ -1,0 +1,125 @@
+{
+  "schema": "yoko.crm.independent-production-gate-critic.v1",
+  "captured_at": "2026-08-12T05:18:00Z",
+  "critic_independence": {
+    "executor": "separate read-only agent",
+    "repository_edits_by_critic": 0,
+    "whole_repository_scans": 0,
+    "production_mutations": 0
+  },
+  "accepted_source_reproduction": {
+    "commit": "af9646f51c1274d718d83eb4c78faf92f214a184",
+    "tree": "f900a2bbae3a63f02ff85bf70821df9aab7ff1df",
+    "command": "git archive --format=tar --prefix=yoko-crm-af9646f51c1274d718d83eb4c78faf92f214a184/ af9646f51c1274d718d83eb4c78faf92f214a184 | gzip -n -6 | sha256sum",
+    "expected_sha256": "c43d6e6ea0735b7a5dad9117822df24b7ec0133685c69b8c13b50effc7c9f808",
+    "actual_sha256": "c43d6e6ea0735b7a5dad9117822df24b7ec0133685c69b8c13b50effc7c9f808",
+    "gzip_integrity": "PASS",
+    "decompressed_tar_cmp": "IDENTICAL",
+    "archive_entries": 3901,
+    "release_log_hashes": "ALL_MATCH_ACCEPTED_SOURCE_RELEASE_LINEAGE_ARTIFACT"
+  },
+  "protected_messages": {
+    "reconciliation_records": 26,
+    "required_behavior_records": 14,
+    "unknown_records": 0,
+    "production_drift": 0,
+    "accepted_source_drift": 0,
+    "negative_unknown_probe": "PASS_REJECTED",
+    "owner_boundary_controls": "PASS",
+    "independent_messages_critic": "PASS",
+    "conclusion": "FINAL-DOD-006_SOURCE_AND_BEHAVIOR_RECONCILIATION_CLOSURE_SUPPORTED; DEPLOYED_RUNTIME_REMAINS_FINAL-DOD-015"
+  },
+  "ai_calls": {
+    "paths": [
+      "gravity-mvp/src/app/api/ai-calls",
+      "gravity-mvp/src/lib/ai-call"
+    ],
+    "changed_paths_68ee29e7_to_ce874223": 0,
+    "tree_listings_equal": true,
+    "tree_inventory_git_blob_sha1": "6d7614d5b5a23ee0d1e915d7cb11d5a9bd6ee3c1",
+    "tree_inventory_sha256": "2448dcdaf4016a7a45f9779183cb448e22b465a42714168c42e4478a9bc20032",
+    "protected_worktree_head": "b38b22d3e00b3fb43d05417131709b3d2c535b2b",
+    "conclusion": "LINEAGE_PRESERVATION_SUPPORTED"
+  },
+  "write_ownership": {
+    "artifact_hashes_match": true,
+    "tracked_executable_surfaces": 2016,
+    "completed_surfaces": 2016,
+    "analyzer_write_candidates": 1418,
+    "confirmed_writes_discovered": 1388,
+    "confirmed_foreign": 0,
+    "closed_foreign_cumulative": 53,
+    "raw_ambiguous_records": 45,
+    "material_ambiguous_remaining": 0,
+    "active_operational_surfaces_unclassified": 0
+  },
+  "production_non_activation": {
+    "production_git_identity": "e6a0a833f",
+    "accepted_identity": "af9646f51c1274d718d83eb4c78faf92f214a184",
+    "identities_differ": true,
+    "outbox_migration_absent_from_production_source": true,
+    "isolated_postgresql_preview": "PENDING",
+    "verified_backup_restore": "PENDING",
+    "deployment": "PENDING",
+    "deployed_regression": "PENDING",
+    "production_change_ledger_entries": 0,
+    "production_mutation_counters": {
+      "source": 0,
+      "database": 0,
+      "deployments": 0,
+      "service_restarts_or_reloads": 0,
+      "rollbacks": 0
+    }
+  },
+  "installed_privileged_runtime": {
+    "runtime_version": "2.0.0",
+    "package_version": "2.0.0-5",
+    "self_check": "PASS",
+    "audit_state": "EMPTY",
+    "audit_records": 0,
+    "generic_command_execution": false,
+    "arbitrary_paths": false,
+    "docker_socket_delegated": false,
+    "disabled_profile_probes": {
+      "release-preflight": "PROFILE_DISABLED_EXIT_77",
+      "database-status": "PROFILE_DISABLED_EXIT_77",
+      "release-activate": "PROFILE_DISABLED_EXIT_77",
+      "database-migrate": "PROFILE_DISABLED_EXIT_77",
+      "rollback": "PROFILE_DISABLED_EXIT_77"
+    },
+    "conclusion": "ROOT_OWNED_PROFILE_INSTALLATION_IS_A_GENUINE_EXTERNAL_AUTHORITY_BLOCKER"
+  },
+  "documentation_defects_found_and_resolved": [
+    {
+      "defect": "FINAL_DOD_GAP_LEDGER retained stale statuses for FINAL-DOD-006, FINAL-DOD-013 and FINAL-DOD-014",
+      "resolution": "Durable ledger updated to CLOSED with exact current evidence; FINAL-DOD-009 reclassified BLOCKED_EXTERNAL_AUTH"
+    },
+    {
+      "defect": "CURRENT_RECOVERY_HANDOFF retained d8ea/1725-era status",
+      "resolution": "Latest checkpoint section/object added with 88b7624c and 2016-surface truth"
+    },
+    {
+      "defect": "AI Calls Git blob SHA-1 values were mislabeled SHA-256",
+      "resolution": "Fields renamed to Git blob SHA-1 and independently computed 64-character SHA-256 fields added"
+    },
+    {
+      "defect": "Production change ledger timestamp predated the latest recovery",
+      "resolution": "Timestamp and note refreshed without adding a mutation entry; counters remain zero"
+    },
+    {
+      "defect": "Archive evidence omitted the exact prefix and gzip level",
+      "resolution": "Accepted source lineage now records prefix, gzip options and exact reproduction command"
+    }
+  ],
+  "gap_conclusions": {
+    "FINAL-DOD-006": "CLOSURE_SUPPORTED",
+    "FINAL-DOD-007": "CONFIRMED_UNDEPLOYED",
+    "FINAL-DOD-008": "CONFIRMED_OUTBOX_INACTIVE",
+    "FINAL-DOD-009": "BLOCKED_EXTERNAL_AUTH",
+    "FINAL-DOD-013": "CLOSURE_SUPPORTED",
+    "FINAL-DOD-014": "CLOSURE_SUPPORTED",
+    "FINAL-DOD-015": "CONFIRMED_DEPLOYED_MESSAGES_EVIDENCE_ABSENT"
+  },
+  "ready": false,
+  "verdict": "PASS_NOT_READY_BLOCKER_CONFIRMED"
+}

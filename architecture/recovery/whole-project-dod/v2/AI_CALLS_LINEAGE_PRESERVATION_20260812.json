@@ -23,8 +23,10 @@
       "gravity-mvp/src/lib/ai-call"
     ],
     "changed_paths_between_checkpoints": 0,
-    "git_ls_tree_inventory_sha256_before": "6d7614d5b5a23ee0d1e915d7cb11d5a9bd6ee3c1",
-    "git_ls_tree_inventory_sha256_after": "6d7614d5b5a23ee0d1e915d7cb11d5a9bd6ee3c1",
+    "git_ls_tree_inventory_git_blob_sha1_before": "6d7614d5b5a23ee0d1e915d7cb11d5a9bd6ee3c1",
+    "git_ls_tree_inventory_git_blob_sha1_after": "6d7614d5b5a23ee0d1e915d7cb11d5a9bd6ee3c1",
+    "git_ls_tree_inventory_sha256_before": "2448dcdaf4016a7a45f9779183cb448e22b465a42714168c42e4478a9bc20032",
+    "git_ls_tree_inventory_sha256_after": "2448dcdaf4016a7a45f9779183cb448e22b465a42714168c42e4478a9bc20032",
     "request_and_tool_semantics": "BYTE_IDENTICAL_ACROSS_PROTECTED_MESSAGES_AND_WRITE_BASELINE_BATCHES"
   },
   "independent_product_branch_policy": {

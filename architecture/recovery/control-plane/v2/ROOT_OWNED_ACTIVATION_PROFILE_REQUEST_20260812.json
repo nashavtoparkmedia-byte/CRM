@@ -1,0 +1,157 @@
+{
+  "schema": "yoko.crm.root-owned-activation-profile-request.v1",
+  "request_id": "crm-af9646f5-gravity-outbox-v1",
+  "status": "DECLARATIVE_REQUEST_ONLY_NOT_INSTALLED_NOT_AUTHORIZED",
+  "purpose": "Enable one finite, rollback-safe production slice for the accepted Gravity source and the selected Calling recording outbox flow.",
+  "accepted_source": {
+    "commit": "af9646f51c1274d718d83eb4c78faf92f214a184",
+    "tree": "f900a2bbae3a63f02ff85bf70821df9aab7ff1df",
+    "archive": "/opt/codex-work/crm-architecture-state/release-candidates/af9646f51c1274d718d83eb4c78faf92f214a184/source.tar.gz",
+    "archive_sha256": "c43d6e6ea0735b7a5dad9117822df24b7ec0133685c69b8c13b50effc7c9f808",
+    "archive_entries": 3901,
+    "archive_scope": "FULL_TRACKED_TREE",
+    "build_context": "gravity-mvp",
+    "deployment_metadata": "deploy/docker-compose.production.yml"
+  },
+  "current_production_identity": {
+    "source_resource": "crm.repo.production",
+    "source_manifest_sha256": "ecfb0a8b6dc24121fb5c9efb58af28eb1f1626711ef1a6d977b0db29d05bdda3",
+    "service_resource": "crm.container.gravity_mvp",
+    "container_id": "37ce24fdaf2421e3a8e655746c47e0f4faf920488097b65bd53317283ef692ee",
+    "image_id": "sha256:b36751e5a6d2b52e7a7676ee5babcd70f496111e9715e5056f6338d04b028f68",
+    "image_revision": "f97532cb6903f033c070856b4a8c207df8e35026",
+    "observed_health": "healthy",
+    "restart_count": 0
+  },
+  "database_change": {
+    "resource": "crm.container.postgres",
+    "migration_path": "gravity-mvp/prisma/migrations/20260809140000_add_domain_outbox/migration.sql",
+    "migration_sha256": "433b0d503f054ed6a8161a059e2650d5e401829dabe8c9d992a1d1763eef0016",
+    "policy": "EXPAND_ONLY",
+    "selected_flow": "Calling recording persistence -> calling.RecordingReady.v1 -> transcription queue",
+    "database_identity": "MUST_BE_BOUND_BY_DATABASE_STATUS_BEFORE_PREVIEW_OR_MUTATION",
+    "backup": "REQUIRED_AND_MUST_BE_RESTORE-VERIFIED_BEFORE_DATABASE_MIGRATE",
+    "application_rollback_database_policy": "LEAVE_ADDITIVE_OUTBOX_OBJECTS_IN_PLACE; DO_NOT DROP DURING APPLICATION ROLLBACK"
+  },
+  "requested_profiles": {
+    "release_preflight": {
+      "profile_id": "crm-af9646f5-gravity-preflight-v1",
+      "inputs": "NONE; all identities are root-owned immutable policy data",
+      "must_verify": [
+        "accepted archive SHA-256 and gzip integrity",
+        "accepted commit/tree metadata",
+        "current production source manifest identity",
+        "current Gravity image identity and healthy state",
+        "isolated PostgreSQL migration preview PASS",
+        "production database identity PASS",
+        "restore-verified backup PASS",
+        "immutable rollback image and source identities",
+        "minimum storage guard PASS"
+      ]
+    },
+    "database_status": {
+      "profile_id": "crm-domain-outbox-database-status-v1",
+      "resource": "crm.container.postgres",
+      "read_only": true,
+      "must_report_without_secrets": [
+        "database server identity",
+        "database name digest",
+        "Prisma migration history status",
+        "presence or absence of the exact outbox migration",
+        "backup target readiness"
+      ]
+    },
+    "database_migrate": {
+      "profile_id": "crm-domain-outbox-20260809140000-v1",
+      "resource": "crm.container.postgres",
+      "only_approved_artifact_sha256": "433b0d503f054ed6a8161a059e2650d5e401829dabe8c9d992a1d1763eef0016",
+      "preconditions": [
+        "isolated PostgreSQL preview PASS",
+        "database identity equals preflight identity",
+        "verified recoverable backup exists",
+        "migration is not already applied",
+        "release and rollback artifacts remain immutable and available"
+      ],
+      "postconditions": [
+        "exact migration is recorded once",
+        "outbox enum, table and three indexes exist with expected definitions",
+        "no pre-existing object was altered or removed"
+      ]
+    },
+    "release_activate": {
+      "profile_id": "crm-af9646f5-gravity-activate-v1",
+      "service_set": [
+        "crm.container.gravity_mvp"
+      ],
+      "artifact_sha256": "c43d6e6ea0735b7a5dad9117822df24b7ec0133685c69b8c13b50effc7c9f808",
+      "expected_current_image_id": "sha256:b36751e5a6d2b52e7a7676ee5babcd70f496111e9715e5056f6338d04b028f68",
+      "target_image": "MUST_BE_BUILT_FROM_THE_ACCEPTED_ARCHIVE_AND_RECORDED_BY_IMMUTABLE_DIGEST",
+      "activation_scope": "GRAVITY SERVICE ONLY",
+      "must_preserve": [
+        "crm_gravity_recordings volume",
+        "crm_freeswitch_recordings read-only volume",
+        "crm_gravity_whatsapp volume",
+        "current environment injection without emitting secret values"
+      ]
+    },
+    "health": {
+      "profile_id": "crm-af9646f5-gravity-health-v1",
+      "required_checks": [
+        "crm.container.gravity_mvp running and healthy",
+        "restart count stable",
+        "Gravity /api/health PASS through the configured ingress",
+        "outbox publisher registration observed",
+        "protected MAX, Telegram and WhatsApp behavior regression PASS",
+        "Calling recording-to-transcription outbox behavior PASS",
+        "no new public credential/debug exposure"
+      ],
+      "observation_window": "BOUNDED_AND_RECORDED_BY_PROFILE"
+    },
+    "rollback": {
+      "profile_id": "crm-af9646f5-gravity-rollback-v1",
+      "service_set": [
+        "crm.container.gravity_mvp"
+      ],
+      "immutable_target_image_id": "sha256:b36751e5a6d2b52e7a7676ee5babcd70f496111e9715e5056f6338d04b028f68",
+      "trigger": "ANY_FAILED_ACTIVATION_OR_HEALTH_POSTCONDITION",
+      "database_policy": "KEEP_EXPAND_ONLY_OUTBOX_SCHEMA; DO NOT RUN DESTRUCTIVE DOWN MIGRATION",
+      "terminal_checks": [
+        "previous image restored",
+        "service running and healthy",
+        "restart count and failure reason recorded",
+        "production change ledger records rollback"
+      ]
+    }
+  },
+  "required_execution_order": [
+    "database-status",
+    "isolated PostgreSQL preview outside production",
+    "release-preflight",
+    "verified backup and restore proof",
+    "database-migrate",
+    "release-activate",
+    "health and protected behavior regression",
+    "accept or automatic rollback"
+  ],
+  "negative_security_properties": {
+    "generic_command_execution": false,
+    "arbitrary_paths": false,
+    "arbitrary_artifact_or_migration_selection": false,
+    "arbitrary_service_selection": false,
+    "package_install_capability": false,
+    "docker_socket_delegation": false,
+    "environment_override": false,
+    "secret_value_output": false,
+    "destructive_database_rollback": false
+  },
+  "installation_contract": {
+    "owner": "root:root",
+    "policy_and_registry_mode": "0444_OR_STRONGER_IMMUTABLE_ROOT_OWNED",
+    "package_or_profile_identity": "MUST_BE_SHA256_RECORDED_AND_SELF_CHECKED",
+    "current_installed_abi_can_install_this_profile": false,
+    "current_codexbot_authority_can_install_this_profile": false,
+    "owner_stop_condition": "4: genuinely new root primitive outside the installed V2 finite ABI"
+  },
+  "production_mutation_authorized_by_this_document": false,
+  "verdict": "EXACT_DECLARATIVE_PROFILE_REQUEST_MATERIALIZED; ROOT_OWNED_INSTALLATION_REQUIRED; WHOLE_PROJECT_NOT_READY"
+}

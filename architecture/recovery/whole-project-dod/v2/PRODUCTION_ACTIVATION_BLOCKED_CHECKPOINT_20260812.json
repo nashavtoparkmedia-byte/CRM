@@ -1,0 +1,112 @@
+{
+  "schema": "yoko.crm.production-activation-blocked-checkpoint.v1",
+  "captured_at": "2026-08-12T05:18:00Z",
+  "project_status": "YOKO CRM MODULAR ARCHITECTURE TRANSFORMATION NOT READY",
+  "current_cluster": "PRODUCTION_ACTIVATION_BLOCKED_ON_ROOT_OWNED_V2_PROFILES",
+  "recovery_worktree": {
+    "path": "/opt/codex-work/crm-architecture-dod-recovery",
+    "branch": "codex/crm-architecture-dod-recovery",
+    "evidence_head_before_checkpoint": "88b7624c77e7f91a131139c993247df11b86156c",
+    "evidence_tree_before_checkpoint": "43027f413e2e7dd1fc4fc8fa9ab5205eb765bb03",
+    "accepted_source_commit": "af9646f51c1274d718d83eb4c78faf92f214a184",
+    "accepted_source_tree": "f900a2bbae3a63f02ff85bf70821df9aab7ff1df"
+  },
+  "internally_closed": {
+    "live_architecture_debt": {
+      "findings": 0,
+      "exceptions": 0,
+      "actually_closed_from_opening_denominator": 1288
+    },
+    "write_ownership": {
+      "tracked_executable_surfaces": 2016,
+      "analyzer_write_candidates": 1418,
+      "confirmed_writes_discovered": 1388,
+      "confirmed_foreign": 0,
+      "closed_foreign_cumulative": 53,
+      "raw_ambiguous_records": 45,
+      "resolved_non_writes": 30,
+      "owner_valid_writes": 10,
+      "controlled_migration_writes": 5,
+      "material_ambiguous_remaining": 0,
+      "active_operational_surfaces_unclassified": 0,
+      "temporary_exceptions": 0,
+      "intentional_exceptions": 0,
+      "artifact": "architecture/recovery/whole-project-dod/v2/WRITE_OWNERSHIP_POST_MESSAGES_ACCEPTANCE_20260811.json"
+    },
+    "credential_security": {
+      "credential_database_accesses": 403,
+      "previously_ambiguous": 81,
+      "material_unresolved": 0,
+      "public_exposure": 0,
+      "capability_gaps": 0,
+      "gravity_security_suite": "34/34 PASS",
+      "tg_bot_security_suite": "15/15 PASS",
+      "independent_critic": "PASS"
+    },
+    "protected_messages_source_reconciliation": {
+      "status": "INTERNALLY_ACCEPTED_SOURCE_AND_BEHAVIOR_CORPUS",
+      "production_authority": "/opt/crm per-file current production composite",
+      "records": 26,
+      "registry": "architecture/recovery/whole-project-dod/v2/protected-messages-reconciliation-v1/registry.json",
+      "implementation_commit": "8b319446",
+      "deployed_runtime_acceptance": false
+    },
+    "ai_calls_lineage": {
+      "status": "PRESERVED",
+      "artifact": "architecture/recovery/whole-project-dod/v2/AI_CALLS_LINEAGE_PRESERVATION_20260812.json",
+      "protected_worktree_head": "b38b22d3e00b3fb43d05417131709b3d2c535b2b",
+      "mutation_by_recovery": false
+    },
+    "source_release_lineage": {
+      "status": "INTERNALLY_ACCEPTED_NOT_DEPLOYED",
+      "artifact": "architecture/recovery/whole-project-dod/v2/ACCEPTED_SOURCE_RELEASE_LINEAGE_20260812.json",
+      "archive_sha256": "c43d6e6ea0735b7a5dad9117822df24b7ec0133685c69b8c13b50effc7c9f808",
+      "application_and_enforcement_single_commit": true
+    }
+  },
+  "open_dod_gaps": {
+    "confirmed": [
+      "FINAL-DOD-007: accepted candidate remains undeployed",
+      "FINAL-DOD-008: selected transactional outbox remains inactive in production",
+      "FINAL-DOD-015: deployed Messages transport, webhook, database and runtime evidence remains absent"
+    ],
+    "blocked_external_auth": [
+      "FINAL-DOD-009: root-owned release/database/rollback profiles are disabled and the installed finite ABI cannot install them"
+    ],
+    "closed_by_latest_evidence": [
+      "FINAL-DOD-006: authoritative production Messages source and behavior deltas reconciled",
+      "FINAL-DOD-013: full tracked source archive reproducibly sealed",
+      "FINAL-DOD-014: application and enforcement identities unified in one commit/tree"
+    ]
+  },
+  "production_observation": {
+    "source_manifest_sha256": "ecfb0a8b6dc24121fb5c9efb58af28eb1f1626711ef1a6d977b0db29d05bdda3",
+    "gravity_service": "running and healthy",
+    "gravity_image_id": "sha256:b36751e5a6d2b52e7a7676ee5babcd70f496111e9715e5056f6338d04b028f68",
+    "postgres_service": "running and healthy by bounded Docker inspection",
+    "production_source_mutations": 0,
+    "database_mutations": 0,
+    "deployments": 0,
+    "service_restarts_or_reloads": 0,
+    "rollbacks": 0
+  },
+  "installed_runtime_v2": {
+    "runtime_version": "2.0.0",
+    "package_version": "2.0.0-5",
+    "self_check": "PASS",
+    "audit": "EMPTY",
+    "storage_admissible": true,
+    "release_preflight": "PROFILE_DISABLED",
+    "database_status": "PROFILE_DISABLED",
+    "database_migrate": "PROFILE_DISABLED",
+    "release_activate": "PROFILE_DISABLED",
+    "rollback": "PROFILE_DISABLED",
+    "generic_command_execution": false,
+    "arbitrary_paths": false,
+    "docker_socket_delegated": false
+  },
+  "declarative_profile_request": "architecture/recovery/control-plane/v2/ROOT_OWNED_ACTIVATION_PROFILE_REQUEST_20260812.json",
+  "exact_next_action": "A root-authorized operator installs the exact checksummed finite profile request; then recovery resumes with isolated PostgreSQL preview, production database identity, verified backup/restore, expand-only migration, immutable Gravity activation, health/behavior validation and automatic rollback on failure.",
+  "stop_condition": "OWNER_STOP_CONDITION_4_GENUINELY_NEW_ROOT_PRIMITIVE_OUTSIDE_INSTALLED_V2_FINITE_ABI",
+  "normal_success_phrase_emitted": false
+}

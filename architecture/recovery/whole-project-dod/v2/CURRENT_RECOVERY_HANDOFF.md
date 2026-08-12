@@ -1,16 +1,28 @@
 # Current recovery handoff
 
-Captured: `2026-08-12T03:19:10Z`
+Captured: `2026-08-12T05:18:00Z`
 
 This is the authoritative continuation checkpoint for the current task. It is a handoff, not an acceptance artifact. The whole-project state remains `EXTERNAL_FINAL_ACCEPTANCE_FAILED`; the current program remains `WHOLE-PROJECT DOD RECOVERY`; the project is **not READY**.
 
-Latest source checkpoint (evidence HEAD `d8ea50d2`): live architecture debt remains at zero findings and zero exceptions; authoritative architecture CI, module verification, blast-radius mapping, and context-level contract coverage are internally closed. The workflow configures 37 current controls; the local targeted source proof passed 33/33, including all 112/112 active boundary controls, independent critic, TypeScript inherited-baseline and blast-radius negative gates, Gravity 34/34, and tg-bot 15/15. All 16 contexts have executable verification profiles (45 entrypoints and 14 hashed controls), while the registry covers 16 context public surfaces and 61 allowed interactions. The four configured fresh-inventory controls remain delegated to bounded pull-request/main CI because this source-only batch did not materially change write or credential architecture. Evidence is `architecture/isolation/architecture-enforcement/module-verification-contract-registry-v1/verification.json`. The active cluster is now `PROTECTED MESSAGES RECONCILIATION`, with AI Calls lineage preservation.
+## Latest checkpoint — production activation blocked
+
+The source-level recovery is internally accepted. Live architecture debt is `0`, architecture exceptions are `0`, protected Messages production-source/behavior reconciliation is complete, AI Calls lineage is preserved, and the full tracked application/enforcement source is reproducibly sealed at commit `af9646f51c1274d718d83eb4c78faf92f214a184`, tree `f900a2bbae3a63f02ff85bf70821df9aab7ff1df`, archive SHA-256 `c43d6e6ea0735b7a5dad9117822df24b7ec0133685c69b8c13b50effc7c9f808`.
+
+The current post-Messages write baseline is `2,016/2,016` surfaces with `1,418` analyzer candidates, `1,388` confirmed DB writes, `0` confirmed foreign, `53` cumulatively closed foreign, `45` raw ambiguous records exactly reconciled (`30` non-writes, `10` owner-valid writes and `5` controlled migrations), `0` material ambiguity and `0` active operational surfaces unclassified. Temporary and intentional write exceptions are both `0`.
+
+The gap ledger now has 19 total findings: 15 closed, three confirmed and one `BLOCKED_EXTERNAL_AUTH`. The confirmed gaps are the undeployed candidate (`FINAL-DOD-007`), inactive production outbox (`FINAL-DOD-008`) and absent deployed Messages transport/webhook/database/runtime evidence (`FINAL-DOD-015`). `FINAL-DOD-009` is blocked because installed Privileged Runtime V2 `2.0.0-5` fails closed for `release-preflight`, `database-status`, `database-migrate`, `release-activate` and `rollback`; its finite ABI has no profile-install capability.
+
+No production source, database, deployment, service restart/reload or rollback mutation occurred. The exact finite request is `architecture/recovery/control-plane/v2/ROOT_OWNED_ACTIVATION_PROFILE_REQUEST_20260812.json`; the blocker checkpoint is `architecture/recovery/whole-project-dod/v2/PRODUCTION_ACTIVATION_BLOCKED_CHECKPOINT_20260812.json`. The next action requires Owner/root authorization to install those checksummed root-owned profiles. Recovery can then resume autonomously with isolated PostgreSQL preview, production DB identity, verified backup/restore, expand-only outbox migration, immutable Gravity activation, health and protected behavior validation, and automatic rollback on failure.
+
+The sections below preserve earlier checkpoint lineage. Where they conflict, this latest checkpoint and the machine-readable companion's `latest_checkpoint` object win.
+
+Latest evidence checkpoint before this handoff is `88b7624c`: live architecture debt remains at zero findings and zero exceptions; authoritative architecture CI, module verification, blast-radius mapping, context-level contract coverage, protected Messages source reconciliation, AI Calls lineage preservation and full source/release identity are internally closed. The workflow configures 37 current controls; the local targeted source proof passed 33/33, including all 112/112 active boundary controls, independent critic, TypeScript inherited-baseline and blast-radius negative gates, Gravity 34/34, and tg-bot 15/15. All 16 contexts have executable verification profiles (45 entrypoints and 14 hashed controls), while the registry covers 16 context public surfaces and 61 allowed interactions. The active cluster is `PRODUCTION ACTIVATION BLOCKED ON ROOT-OWNED V2 PROFILES`.
 
 The machine-readable companion, `CURRENT_RECOVERY_HANDOFF.json`, preserves the historical path inventory and records the current closure commits, exact commands/results, identities, worktree records, and next action. Read both files before changing code.
 
 ## Bounded analyzer and current baseline update
 
-Ownership closure is internally accepted after the final bounded scan: `1,725/1,725` surfaces, zero worker failures/timeouts, `1,404` confirmed writes discovered, `0` confirmed foreign, `53` closed foreign, `46` raw ambiguous records reconciled exactly (`30` resolved non-writes, `11` owner-valid writes, `5` controlled migrations), zero material unresolved, zero dynamic delegate/SQL/queryRaw ambiguity, and zero unclassified operational surfaces. Current artifacts are `AUTHORITATIVE_WRITE_SCAN_20260811T131500Z.json`, `CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json`, `CURRENT_WHOLE_REPOSITORY_WRITE_PROGRESS.jsonl`, and `AMBIGUOUS_WRITE_TRIAGE_FINAL_CLOSURE.json`. Security/credential closure and its independent critic pass are also internally accepted; the program remains **not READY** because protected Messages, release lineage, outbox activation, source identity and production acceptance remain open.
+Ownership closure is internally accepted after the post-Messages bounded scan: `2,016/2,016` surfaces, zero worker failures/timeouts, `1,418` analyzer candidates, `1,388` confirmed writes discovered, `0` confirmed foreign, `53` cumulatively closed foreign, and `45` raw ambiguous records reconciled exactly (`30` resolved non-writes, `10` owner-valid writes, `5` controlled migrations), with zero material unresolved and zero unclassified active operational surfaces. Current artifacts are `AUTHORITATIVE_WRITE_SCAN_POST_MESSAGES_20260811T0450Z.json`, `CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json`, `CURRENT_WHOLE_REPOSITORY_WRITE_PROGRESS.jsonl`, `AMBIGUOUS_WRITE_TRIAGE_FINAL_CLOSURE.json` and `WRITE_OWNERSHIP_POST_MESSAGES_ACCEPTANCE_20260811.json`. Security/credential closure and its independent critic pass are also internally accepted; the program remains **not READY** because deployment, outbox activation and deployed Messages production acceptance remain open.
 
 The analyzer execution recovery is complete, but it is not an acceptance. Commits `a1c0d20e` and `3ab9ad96` add fresh-process JavaScript workers capped at four, a 120-second per-surface deadline, structured progress, and atomic output; all 77 write fixtures and four companion suites passed before the scan.
 
@@ -18,7 +30,7 @@ Exactly one authoritative whole-repository scan was run after the final fix. It 
 
 Historical superseded checkpoint: `1,578` write sites included `47 FOREIGN`, `640 AMBIGUOUS`, and `438` unreviewed operational surfaces. The old `WHOLE_REPOSITORY_WRITE_BASELINE.json` remains historical, from `3339325f`, and must not be used as the current baseline. This paragraph is retained only as recovery lineage; the accepted current write metrics are in the first paragraph of this section.
 
-Historical derived-classification checkpoint: `CURRENT_WRITE_OWNERSHIP_DERIVED_STATE.json` once recorded 1,213 confirmed writes, 49 raw confirmed foreign records and unresolved dynamic classes. It is preserved as lineage and is superseded by the accepted 1,404/0/53 ownership metrics above.
+Historical derived-classification checkpoint: `CURRENT_WRITE_OWNERSHIP_DERIVED_STATE.json` once recorded 1,213 confirmed writes, 49 raw confirmed foreign records and unresolved dynamic classes. It is preserved as lineage and is superseded by the accepted 1,388/0/53 ownership metrics above.
 
 ## Source and Git state
 
@@ -28,7 +40,7 @@ Historical derived-classification checkpoint: `CURRENT_WRITE_OWNERSHIP_DERIVED_S
 - Branch: `codex/crm-architecture-dod-recovery`
 - Upstream: none; no remote-tracking ref contains the implementation HEAD
 - Recovery base: `0b61ba296ba2734738d4a21b9d00ce8b110d63cf`, tree `56c452397df4bb7cb05bef3e0d9afd1de9d785a5`
-- Evidence HEAD before this checkpoint: `d8ea50d294f0f90cc1c03f3297fe4f97d205b65a`, tree `354cafd8818659094e3e3e3013096d48d9b13302`
+- Evidence HEAD before this checkpoint: `88b7624c77e7f91a131139c993247df11b86156c`, tree `43027f413e2e7dd1fc4fc8fa9ab5205eb765bb03`
 - Checkpoint commit: the commit containing this file; resolve exactly with `git log -1 -- architecture/recovery/whole-project-dod/v2/CURRENT_RECOVERY_HANDOFF.md`
 - Task range before checkpoint: `0b61ba29..d0993b26`, 150 commits, 873 paths, 1,859,407 insertions and 30,235 deletions
 
@@ -105,7 +117,7 @@ Authoritative current values:
 - State: `EXTERNAL_FINAL_ACCEPTANCE_FAILED`
 - Current milestone/program: `WHOLE-PROJECT DOD RECOVERY IN PROGRESS`
 - Gate: `IN_PROGRESS_AFTER_EXTERNAL_FINAL_ACCEPTANCE_FAILED`
-- Gap ledger: 19 total, seven `CONFIRMED`, 12 `CLOSED`, zero blocked
+- Gap ledger: 19 total, three `CONFIRMED`, 15 `CLOSED`, one `BLOCKED_EXTERNAL_AUTH`
 - Production change ledger: zero production source changes, database mutations, restarts/reloads, deployments, and rollbacks
 
 ## What this task actually completed
@@ -121,7 +133,7 @@ Authoritative current values:
 ### IMPLEMENTED BUT NOT YET ACCEPTED
 
 - Write ownership, credential/security, live architecture debt, CI, module verification and context-level contract coverage are internally accepted with durable evidence. Whole-project acceptance remains open.
-- Production Messages equivalence, release/source lineage, outbox activation and production gates are not yet accepted.
+- Protected Messages source equivalence and release/source lineage are internally accepted; deployed Messages equivalence, outbox activation and production gates remain open.
 
 ### INVESTIGATED
 
@@ -129,11 +141,11 @@ Authoritative current values:
 - Per-file localization and a production-option probe narrowed the performance issue but did not prove a dominant root cause.
 - Git/worktree, process/artifact, durable-state and Runtime V2 identities were reconciled for continuation.
 
-### NOT STARTED
+### REMAINING OPEN OR BLOCKED
 
-- Protected Messages authoritative production-source reconciliation.
-- Production source/artifact identity reconciliation, preview/backup/rollback, deploy, runtime activation, or enabling Runtime V2 activation profiles.
-- Transactional outbox activation and final production acceptance.
+- Root-owned installation of the exact finite Runtime V2 activation profiles.
+- Isolated PostgreSQL preview, production DB identity, verified backup/restore, deploy, runtime activation and health/behavior validation.
+- Transactional outbox production activation, deployed protected Messages acceptance and final external re-review.
 
 ## Write analyzer state
 
@@ -240,10 +252,10 @@ The last completed mirror pair in `/tmp` is from superseded `5a4211a4`: write ou
 
 ## Current identities
 
-- Recovery source: reconciled. Repository/worktree/branch/base are above; current truth evidence commit/tree are `d8ea50d294f0f90cc1c03f3297fe4f97d205b65a` / `354cafd8818659094e3e3e3013096d48d9b13302`.
-- Production source/artifact identity: `NOT RECONCILED IN THIS TASK`.
-- Messages authoritative production source identity: `NOT RECONCILED IN THIS TASK`.
-- Installed YOKO Privileged Runtime V2: reconciled as package `yoko-privileged-runtime 2.0.0-5`; runtime SHA-256 `0cdeeb4ba43abe50f80fed1580ad7b0729bf83358932ece2974b3faedafed57a`; policy `e67159bf95b583a17073ccf34b95f17fb885321df10b742be970168331d64e38`; registry `6e0ac1bdf7bbf95b5ae984dc266050a86425aac1bd884f3ab2f1b6f377291016`; sudoers `6e6b7cb2a088cc92fa7aee747adca46c64b4b96d1224be21117be5adef488c06`; self-check true; 24-command finite ABI; activation profiles disabled fail-closed.
+- Recovery source: reconciled. Repository/worktree/branch/base are above; accepted source commit/tree are `af9646f51c1274d718d83eb4c78faf92f214a184` / `f900a2bbae3a63f02ff85bf70821df9aab7ff1df`; evidence HEAD before this checkpoint is `88b7624c77e7f91a131139c993247df11b86156c`.
+- Production source/artifact identity: current per-file composite at `/opt/crm` reconciled; accepted candidate archive sealed and not deployed.
+- Messages authoritative production source identity: reconciled through the 26-record source/behavior corpus; deployed runtime acceptance remains open.
+- Installed YOKO Privileged Runtime V2: reconciled as package `yoko-privileged-runtime 2.0.0-5`; runtime SHA-256 `0cdeeb4ba43abe50f80fed1580ad7b0729bf83358932ece2974b3faedafed57a`; policy `e67159bf95b583a17073ccf34b95f17fb885321df10b742be970168331d64e38`; registry `6e0ac1bdf7bbf95b5ae984dc266050a86425aac1bd884f3ab2f1b6f377291016`; sudoers `6e6b7cb2a088cc92fa7aee747adca46c64b4b96d1224be21117be5adef488c06`; self-check true; 24-command finite ABI; activation profiles disabled fail-closed pending exact root-owned installation.
 
 ## Production mutation truth
 
