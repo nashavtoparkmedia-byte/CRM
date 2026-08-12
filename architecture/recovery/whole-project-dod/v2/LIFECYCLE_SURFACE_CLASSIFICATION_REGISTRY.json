@@ -4,11 +4,11 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 443,
+    "total_entries": 521,
     "test": 34,
     "dead_historical": 35,
     "migration_only": 13,
-    "active_operational": 361,
+    "active_operational": 439,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
   "surfaces": [
@@ -3811,6 +3811,708 @@
       "functional_owner": "telegram_bot_operations",
       "owner_context": "telegram_channel",
       "rationale": "Telegram-bot-owned exact bootstrap capabilities for Bot and Survey writes."
+    },
+    {
+      "path": "tools/architecture/check-ai-knowledge-admin-read-model-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-ai-knowledge-coach-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-ai-knowledge-explainability-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-ai-knowledge-extraction-execution-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-ai-knowledge-governance-audit-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-ai-knowledge-legacy-migration-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-ai-knowledge-operational-status-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-ai-knowledge-pure-runtime-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-ai-knowledge-retrieval-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-analytics-dashboard-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-blast-radius.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-calling-ai-call-provider-settings-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-calling-ai-call-provider-status-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-calling-ai-call-scenario-management-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-calling-ai-intern-control-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-calling-call-status-policy-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-calling-client-ui-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-calling-internal-stream-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-calling-messaging-timeline-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-calling-openai-chat-completion-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-calling-operational-log-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-calling-provider-runtime-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-calling-sip-client-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-configuration-operational-health-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-configuration-operations-monitoring-policy-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-contact-display-policy-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-contact-service-public-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-contacts-max-resolution-shadow-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-contacts-reachability-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-contacts-yandex-driver-link-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-driver-max-messaging-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-fleet-channel-driver-match-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-fleet-driver-communication-event-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-fleet-monitoring-policy-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-fleet-monitoring-views-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-identity-user-directory-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-messaging-ai-reply-pipeline-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-messaging-channel-conversation-workflow-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-messaging-channel-sync-client-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-messaging-delivery-recovery-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-messaging-draft-improvement-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-messaging-message-stream-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-messaging-persisted-message-ingress-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-messaging-transport-registry-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-operations-operational-job-registry-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-operations-scheduled-fleet-cron-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-operations-scheduled-maintenance-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-protected-messages-independent-critic.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-protected-messages-owner-boundaries.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-protected-messages-reconciliation.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-shared-class-name-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-shared-technical-utilities-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-shared-ui-infrastructure-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-telegram-runtime-provider-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-typescript-baseline.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-whatsapp-runtime-provider-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-work-management-client-state-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-work-management-policy-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-work-management-task-view-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-work-operational-trigger-evaluations-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-work-task-dictionary-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-work-task-reassignment-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-yandex-fleet-operations-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/enrich-context-manifests.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/git-change-set.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/reconcile-contract-registry.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/run-authoritative-ci.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/run-boundary-controls.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/v2/check-credential-field-registry.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/v2/check-credential-migration-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/v2/classify-cross-domain-credentials.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/v2/independent-critic-final-gate.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/v2/materialize-live-debt-baseline.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/v2/reconcile-credential-closure.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/v2/summarize-live-architecture-debt.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/v2/verify-authoritative-credential-inventory.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/v2/verify-authoritative-write-analysis.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/validate-contract-registry.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
+      "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
     }
   ]
 }

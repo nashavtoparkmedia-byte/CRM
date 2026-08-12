@@ -52,6 +52,7 @@ export function fullScanControlsFor(temporary) {
   ['whole-repository-write-scan', 'node', [
     'tools/architecture/v2/analyze.mjs', '--root', '.', '--strict', '--workers', '4',
     '--worker-timeout-ms', '120000', '--progress-every', '25',
+    '--surface-registry', 'architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json',
     '--progress-jsonl', progressOutput, '--output', writeOutput,
   ]],
   ['fresh-write-verification', 'node', [

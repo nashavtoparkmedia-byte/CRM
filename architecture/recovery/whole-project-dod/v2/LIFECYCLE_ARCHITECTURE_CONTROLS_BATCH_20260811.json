@@ -1,0 +1,1184 @@
+{
+  "schema": "yoko.crm.operational-surface-classification-batch.v1",
+  "authority": "Exact classification of newly tracked architecture control-plane surfaces discovered after the prior lifecycle closure.",
+  "summary": {
+    "total": 78,
+    "classified": 78,
+    "unclassified": 0,
+    "active_operational": 78,
+    "functional_owner": "architecture_recovery"
+  },
+  "policy": "Lifecycle classification does not grant data ownership or arbitrary database-write capability.",
+  "surfaces": [
+    {
+      "path": "tools/architecture/check-ai-knowledge-admin-read-model-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-ai-knowledge-coach-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-ai-knowledge-explainability-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-ai-knowledge-extraction-execution-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-ai-knowledge-governance-audit-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-ai-knowledge-legacy-migration-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-ai-knowledge-operational-status-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-ai-knowledge-pure-runtime-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-ai-knowledge-retrieval-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-analytics-dashboard-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-blast-radius.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-calling-ai-call-provider-settings-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-calling-ai-call-provider-status-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-calling-ai-call-scenario-management-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-calling-ai-intern-control-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-calling-call-status-policy-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-calling-client-ui-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-calling-internal-stream-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-calling-messaging-timeline-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-calling-openai-chat-completion-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-calling-operational-log-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-calling-provider-runtime-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-calling-sip-client-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-configuration-operational-health-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-configuration-operations-monitoring-policy-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-contact-display-policy-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-contact-service-public-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-contacts-max-resolution-shadow-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-contacts-reachability-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-contacts-yandex-driver-link-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-driver-max-messaging-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-fleet-channel-driver-match-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-fleet-driver-communication-event-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-fleet-monitoring-policy-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-fleet-monitoring-views-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-identity-user-directory-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-messaging-ai-reply-pipeline-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-messaging-channel-conversation-workflow-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-messaging-channel-sync-client-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-messaging-delivery-recovery-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-messaging-draft-improvement-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-messaging-message-stream-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-messaging-persisted-message-ingress-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-messaging-transport-registry-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-operations-operational-job-registry-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-operations-scheduled-fleet-cron-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-operations-scheduled-maintenance-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-protected-messages-independent-critic.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-protected-messages-owner-boundaries.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-protected-messages-reconciliation.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-shared-class-name-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-shared-technical-utilities-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-shared-ui-infrastructure-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-telegram-runtime-provider-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-typescript-baseline.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-whatsapp-runtime-provider-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-work-management-client-state-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-work-management-policy-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-work-management-task-view-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-work-operational-trigger-evaluations-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-work-task-dictionary-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-work-task-reassignment-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/check-yandex-fleet-operations-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/enrich-context-manifests.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/git-change-set.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/reconcile-contract-registry.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/run-authoritative-ci.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/run-boundary-controls.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/v2/check-credential-field-registry.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/v2/check-credential-migration-boundary.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/v2/classify-cross-domain-credentials.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/v2/independent-critic-final-gate.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/v2/materialize-live-debt-baseline.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/v2/reconcile-credential-closure.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/v2/summarize-live-architecture-debt.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/v2/verify-authoritative-credential-inventory.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/v2/verify-authoritative-write-analysis.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    },
+    {
+      "path": "tools/architecture/validate-contract-registry.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "repository architecture evidence and CI artifacts only; no business-domain data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded analyzer, verifier, critic, or enforcement capability under tools/architecture",
+      "production_capability": "POSSIBLE",
+      "evidence": "Tracked architecture control source; exact path is executed by an active verification profile, boundary-control catalog, or recovery workflow."
+    }
+  ]
+}

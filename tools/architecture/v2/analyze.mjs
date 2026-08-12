@@ -201,13 +201,14 @@ export function compileArchitecture(moduleRules, manifests, ownershipRules, scop
   }
   for (const manifest of manifests) {
     for (const owned of manifest.owned_data ?? []) {
-      if (!modelOwners.has(owned.model.toLowerCase())) {
-        modelOwners.set(owned.model.toLowerCase(), {
-          model: owned.model,
-          context: manifest.context.id,
-          technical_owner: null,
-        })
-      }
+      // Context manifests are the reviewed ownership decision. Historical
+      // technical ownership candidates seed the map above, but they must not
+      // override a later explicit bounded-context assignment.
+      modelOwners.set(owned.model.toLowerCase(), {
+        model: owned.model,
+        context: manifest.context.id,
+        technical_owner: null,
+      })
       if (owned.mapped_table) modelOwners.set(owned.mapped_table.toLowerCase(), modelOwners.get(owned.model.toLowerCase()))
     }
   }

@@ -40,5 +40,11 @@ const writeCommand = fullScanControls.find(([id]) => id === 'whole-repository-wr
 assert(writeCommand[2].includes('--strict'))
 assert(writeCommand[2].includes('--progress-jsonl'))
 assert(writeCommand[2].includes('--output'))
+const registryFlag = writeCommand[2].indexOf('--surface-registry')
+assert(registryFlag >= 0, 'fresh write scan must load the accepted lifecycle registry')
+assert.equal(
+  writeCommand[2][registryFlag + 1],
+  'architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json',
+)
 
 process.stdout.write(`authoritative CI inventory: PASS (${ids.size} controls; fresh write and credential scans enabled)\n`)
