@@ -1,0 +1,10 @@
+Package: yoko-privileged-runtime
+Version: 2.0.0-9
+Section: admin
+Priority: optional
+Architecture: all
+Depends: python3 (>= 3.10), sudo (>= 1.9.9), util-linux, docker-ce-cli
+Maintainer: YOKO Control Plane <noreply@example.invalid>
+Description: Finite privileged capability runtime for YOKO CRM activation stabilization
+ This successor preserves the Runtime V2 ABI and installs one immutable,
+ zero-argument, rollback-bound Gravity and outbox stabilization profile.
