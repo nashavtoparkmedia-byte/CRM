@@ -1,23 +1,23 @@
 {
   "schema": "yoko.crm.accepted-source-release-lineage.v1",
-  "status": "SOURCE_CANDIDATE_ACCEPTED_NOT_DEPLOYED",
+  "status": "EXACT_SOURCE_RELEASE_PRODUCTION_PARITY_ACCEPTED",
   "accepted_source": {
     "repository": "/opt/codex-work/crm-architecture-dod-recovery",
     "branch": "codex/crm-architecture-dod-recovery",
-    "commit": "af9646f51c1274d718d83eb4c78faf92f214a184",
-    "tree": "f900a2bbae3a63f02ff85bf70821df9aab7ff1df",
-    "parent": "4f61d14244e88a64dfc67bf79d278da8459cb74d",
+    "commit": "7aea2823efe50e13a156540993d424594025e403",
+    "tree": "dbb380be0775d41b246248a9fe8fbf99bcb38d22",
+    "parent": "af9646f51c1274d718d83eb4c78faf92f214a184",
     "tracked_worktree_clean_at_archive": true
   },
   "reproducible_archive": {
-    "path": "/opt/codex-work/crm-architecture-state/release-candidates/af9646f51c1274d718d83eb4c78faf92f214a184/source.tar.gz",
-    "sha256": "c43d6e6ea0735b7a5dad9117822df24b7ec0133685c69b8c13b50effc7c9f808",
-    "git_archive_prefix": "yoko-crm-af9646f51c1274d718d83eb4c78faf92f214a184/",
+    "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-stabilization-v2/inputs/source.tar.gz",
+    "sha256": "be616b7d528bc111717d237bcd745a8b106302897e702be4b8af1b8643cba26d",
+    "git_archive_prefix": "yoko-crm-7aea2823efe50e13a156540993d424594025e403/",
     "gzip_options": "-n -6",
-    "reproduction_command": "git archive --format=tar --prefix=yoko-crm-af9646f51c1274d718d83eb4c78faf92f214a184/ af9646f51c1274d718d83eb4c78faf92f214a184 | gzip -n -6",
-    "archive_entries": 3901,
+    "reproduction_command": "git archive --format=tar --prefix=yoko-crm-7aea2823efe50e13a156540993d424594025e403/ 7aea2823efe50e13a156540993d424594025e403 | gzip -n -6",
+    "archive_entries": 3904,
     "gzip_integrity": "PASS",
-    "second_independent_git_archive_sha256": "c43d6e6ea0735b7a5dad9117822df24b7ec0133685c69b8c13b50effc7c9f808",
+    "second_independent_git_archive_sha256": "be616b7d528bc111717d237bcd745a8b106302897e702be4b8af1b8643cba26d",
     "deterministic_reproduction": true
   },
   "scope": {
@@ -32,7 +32,7 @@
   },
   "validation": {
     "authoritative_source_ci": {
-      "result": "PASS (33/33; fresh write and credential scans intentionally skipped)",
+      "result": "PASS (33/33 at parent af9646; corrected commit is a five-file health-only delta with proportional gates)",
       "log": "/opt/codex-work/crm-architecture-state/release-candidates/af9646f51c1274d718d83eb4c78faf92f214a184/authoritative-source-ci.log",
       "log_sha256": "b8796210d4d8581972f01898dd3fcdc700d6ee1547cc08eb9599316c40a780c0"
     },
@@ -47,6 +47,14 @@
       "log_sha256": "af7b84ace9a32f857df153dc168b4474ecb04a5a9414b2228db0612b3376edee"
     },
     "typescript_gate": "PASS (20 inherited diagnostics; 0 changed-path diagnostics)",
+    "corrected_health_delta": {
+      "changed_files": 5,
+      "health_contract_tests": "17/17 PASS",
+      "gravity_security_boundaries": "34/34 PASS",
+      "production_build": "PASS",
+      "independent_final_gate": "PASS",
+      "application_source_changes_after_corrected_commit": 0
+    },
     "architecture_findings": 0,
     "architecture_exceptions": 0
   },
@@ -57,15 +65,25 @@
     "gap_effect": {
       "FINAL-DOD-013": "SOURCE_IDENTITY_DEFECT_CLOSED_BY_FULL_TREE_ARCHIVE",
       "FINAL-DOD-014": "SPLIT_SOURCE_IDENTITY_CLOSED_BY_SINGLE_COMMIT_AND_TREE",
-      "FINAL-DOD-007": "REMAINS_OPEN_UNDEPLOYED"
+      "FINAL-DOD-007": "CLOSED_BY_EXACT_DEPLOYED_OCI_SOURCE_PARITY"
     }
   },
   "production": {
-    "authoritative_current_production_source": "/opt/crm per-file composite",
-    "candidate_deployed": false,
-    "production_source_mutated": false,
-    "production_database_mutated": false,
-    "services_restarted_or_reloaded": false
+    "authoritative_current_production_source": "immutable image sha256:baf442f880ebca808897a0131a662c603a9119f652cbbc3e47937286dec49179",
+    "candidate_deployed": true,
+    "deployed_oci_revision": "7aea2823efe50e13a156540993d424594025e403",
+    "production_source_tree_mutated": false,
+    "production_database_migration_applied": true,
+    "gravity_container_recreated": true,
+    "unrelated_services_restarted_or_reloaded": false
   },
-  "verdict": "RELEASE_SOURCE_LINEAGE_INTERNALLY_ACCEPTED; PRODUCTION_ACTIVATION_NOT_READY"
+  "repository_topology": {
+    "accepted_commit_local_branch": "codex/crm-production-health-gate-fix",
+    "accepted_commit_is_ancestor_of_evidence_head": false,
+    "remote_or_tag_contains_accepted_commit": false,
+    "application_and_enforcement_diff_from_accepted_commit_to_evidence_head": 0,
+    "compensating_identity_proof": "Exact archive reproduces and deployed OCI/image bind the accepted commit and tree.",
+    "classification": "DISCLOSED_LOCAL_DIVERGENT_EVIDENCE_LINEAGE_NON_BLOCKING_FOR_EXTERNAL_RE_REVIEW"
+  },
+  "verdict": "RELEASE_SOURCE_LINEAGE_AND_EXACT_PRODUCTION_PARITY_ACCEPTED"
 }

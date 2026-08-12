@@ -1,0 +1,39 @@
+{
+  "schema": "yoko.crm.independent-production-acceptance-critic.v1",
+  "reviewed_at": "2026-08-12T20:11:00Z",
+  "review_mode": "INDEPENDENT_READ_ONLY_BOUNDED",
+  "reviewed_executor_acceptance_artifact_sha256": "c286db26765575136af86b9af0f9cf7f90bb13374ccaf6da0cd623118c67142a",
+  "current_acceptance_artifact_adds_only_critic_link_and_later_steady_state": true,
+  "verdict": "PASS",
+  "material_findings": [],
+  "independently_verified": {
+    "runtime": "2.0.0-9 exact package contents, self-check and five finite zero-argument capabilities",
+    "audit": "VALID; 19 records; digest 95668295b49045f430f19512d7cd60c81c88ae6e3586f26dd39fcf12a09f0c81",
+    "database": "identity ed88dfea; 62 migrations; ledger a50f1a89; exact outbox catalog",
+    "outbox": "one published; zero pending, retry, poison, over-limit or stale claims",
+    "gravity": "container 86f18322; image baf442f8; OCI 7aea2823; healthy; restart 0",
+    "protected_services": "running and healthy",
+    "public_boundaries": "health/infra/transport success; debug/auth/credential/AI boundaries matched",
+    "source_archive": "be616b7d reproduced exactly",
+    "ai_calls": "protected deployed inventory 2448dcd unchanged from pre-Messages source"
+  },
+  "disclosed_non_gate_defect": {
+    "route": "/api/calls/stats",
+    "result": "HTTP_500_INVALID_POSTGRES_FILTER_PLACEMENT",
+    "independent_reproduction": true,
+    "route_blob_sha1": "0e7d8f",
+    "byte_identical_at": ["68ee pre-Messages checkpoint", "af9646 accepted source", "7aea parent", "7aea deployed source", "evidence HEAD"],
+    "activation_regression": false,
+    "blocks_calls_analytics_product_completeness": true,
+    "blocks_original_modular_architecture_dod": false,
+    "blocks_ai_calls_lineage_preservation": false
+  },
+  "residual_limitations": [
+    "Rollback was inspected but not invoked because that would mutate healthy production.",
+    "The root-only backup was not rehashed by this read-only critic; exact verification remains bound to the valid activation audit and executor evidence.",
+    "No destructive real-user Messages or AI Calls tests were performed.",
+    "The protected AI Calls worktree retains its pre-existing dirty/root-index-inaccessible state; branch HEAD and durable source inventory remain preserved."
+  ],
+  "production_mutation_by_critic": false,
+  "conclusion": "NO_MATERIAL_REJECTION_FINDING"
+}

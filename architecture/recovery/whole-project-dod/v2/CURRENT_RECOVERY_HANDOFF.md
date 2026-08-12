@@ -1,5 +1,28 @@
 # Current recovery handoff
 
+## Final acceptance checkpoint (supersedes every continuation checkpoint below)
+
+Captured: `2026-08-12T20:12:00Z`. All 19 original DoD findings are closed and
+the final internal adversarial critic returned PASS. Runtime `2.0.0-9` and the exact finite
+`crm-af9646f5-gravity-outbox-v1` profile were independently verified. Production
+runs commit `7aea2823efe50e13a156540993d424594025e403`, tree `dbb380be`, exact
+archive `be616b7d…`, image `baf442f8…`, container `86f18322…`; it is healthy
+with zero restarts after two consecutive strict stabilization successes.
+
+The database has 62 exact migrations and the exact outbox catalog. One real
+event is published with zero pending, retry, poison, over-limit or stale
+records. Protected Messages deployed acceptance, source/production parity and
+AI Calls lineage preservation passed. The independent production critic
+returned PASS with no material finding. The disclosed `/api/calls/stats` SQL
+defect is pre-existing and byte-identical across pre-activation and deployed
+source; it limits Calls analytics product completeness but is outside the
+original modular-architecture DoD and protected AI Calls paths.
+
+Current evidence is `PRODUCTION_ACTIVATION_ACCEPTANCE_20260812.json`,
+`ORIGINAL_DOD_RECOMPUTE_20260812.json` and `FINAL_INTERNAL_CRITIC_20260812.json`.
+No Owner SSH action is pending. All
+older sections below are historical lineage only.
+
 Captured: `2026-08-12T17:26:25Z`
 
 This is the authoritative continuation checkpoint for the current task. It is a handoff, not an acceptance artifact. The whole-project state remains `EXTERNAL_FINAL_ACCEPTANCE_FAILED`; the current program remains `WHOLE-PROJECT DOD RECOVERY`; the project is **not READY**.

@@ -1,0 +1,44 @@
+{
+  "schema": "yoko.crm.final-internal-critic.v1",
+  "reviewed_at": "2026-08-12T20:27:00Z",
+  "model": "GPT-5.6 Sol",
+  "reasoning_effort": "XHigh",
+  "mode": "INDEPENDENT_READ_ONLY_ADVERSARIAL",
+  "verdict": "PASS",
+  "material_rejection_findings": 0,
+  "required_final_phrase": "YOKO CRM MODULAR ARCHITECTURE TRANSFORMATION READY FOR INDEPENDENT EXTERNAL RE-REVIEW",
+  "verified": [
+    "All scoped JSON is valid.",
+    "Both gap ledgers contain exactly 19 CLOSED and zero open or blocked findings.",
+    "Runtime 2.0.0-9, five finite profiles, exact installed identities and valid 19-record audit are live.",
+    "Database has 62 exact migrations; outbox has one published event and zero backlog, retry, dead or stale records.",
+    "Gravity runs the exact 7aea2823 OCI/image, healthy with zero restarts; protected services and public security boundaries match acceptance.",
+    "Archive be616b7d independently reproduces; application and enforcement source differs zero from 7aea2823.",
+    "AI Calls protected path inventory remains 2448dcd; protected branch and HEAD are unchanged.",
+    "Production ledger counts and current production identity agree with live state.",
+    "Durable ledger and index hashes verify exactly.",
+    "Git has only the final evidence materialization pending and no application edits."
+  ],
+  "defects_found_and_repaired_before_pass": [
+    "Durable gap-ledger canonical detail hash was stale and now binds the current detailed ledger.",
+    "Runtime wrapper hash was mislabeled as the core hash; wrapper and core identities are now separately exact.",
+    "The parallel durable EVIDENCE_INDEX current checkpoint and hashes were stale and are now reconciled."
+  ],
+  "calls_stats_reassessment": {
+    "route": "/api/calls/stats",
+    "result": "HTTP_500_INVALID_POSTGRES_FILTER_PLACEMENT",
+    "blocks_calls_analytics_product_completeness": true,
+    "activation_regression": false,
+    "blocks_original_architecture_dod": false,
+    "blocks_ai_calls_preservation": false,
+    "reason": "The route blob is byte-identical across pre-recovery, accepted, deployed and evidence states and is outside protected AI Calls paths and all original 19 closure criteria."
+  },
+  "residual_limitations": [
+    "Rollback was inspected rather than invoked against healthy production.",
+    "The root-only backup was not rehashed by the final read-only critic.",
+    "No destructive real-user Messages or AI Calls tests were performed.",
+    "The protected AI Calls worktree remains pre-existing dirty and index-inaccessible; HEAD and immutable blob inventory were verified.",
+    "Accepted commit 7aea2823 is retained on a separate local branch and is not an ancestor of evidence HEAD or reachable by remote/tag; exact tree/archive/deployed-image parity supplies the review identity and this topology is explicitly disclosed."
+  ],
+  "production_mutation_by_critic": false
+}

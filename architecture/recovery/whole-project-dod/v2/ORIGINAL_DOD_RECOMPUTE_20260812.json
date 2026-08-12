@@ -1,0 +1,55 @@
+{
+  "schema": "yoko.crm.original-dod-recompute.v1",
+  "recomputed_at": "2026-08-12T20:12:00Z",
+  "original_external_verdict": "YOKO CRM MODULAR ARCHITECTURE TRANSFORMATION NOT READY",
+  "status": "ALL_ORIGINAL_DOD_FINDINGS_CLOSED_FINAL_INTERNAL_CRITIC_PASS",
+  "findings": [
+    {"id":"FINAL-DOD-001","status":"CLOSED","evidence":"structural write analyzer; preserved 77 fixtures plus four companion suites; authoritative 2016/2016 scan"},
+    {"id":"FINAL-DOD-002","status":"CLOSED","evidence":"all tracked executable surfaces lifecycle-classified; zero active operational surfaces unclassified"},
+    {"id":"FINAL-DOD-003","status":"CLOSED","evidence":"exact writer capabilities and unrelated-write negative probe REJECTED"},
+    {"id":"FINAL-DOD-004","status":"CLOSED","evidence":"credential DB-read inventory; zero material unresolved/public exposure/capability gaps"},
+    {"id":"FINAL-DOD-005","status":"CLOSED","evidence":"debug routes removed/denied; live /api/debug-db probes 404; security tests PASS"},
+    {"id":"FINAL-DOD-006","status":"CLOSED","evidence":"26/26 protected Messages records reconciled; zero unknown; owner-boundary and independent critic PASS"},
+    {"id":"FINAL-DOD-007","status":"CLOSED","evidence":"immutable production image baf442f8 runs exact OCI revision 7aea2823; source archive be616b7d reproduced exactly"},
+    {"id":"FINAL-DOD-008","status":"CLOSED","evidence":"outbox migration/catalog exact; one real production event published; zero backlog/retry/dead/stale; 16/16 behavior and 14/14 architecture tests PASS"},
+    {"id":"FINAL-DOD-009","status":"CLOSED","evidence":"Runtime 2.0.0-9 exact finite profile installed and used for preview/migration/activation; rollback available; no generic root capability"},
+    {"id":"FINAL-DOD-010","status":"CLOSED","evidence":"live architecture debt zero findings/exceptions; 1288 opening findings actually closed"},
+    {"id":"FINAL-DOD-011","status":"CLOSED","evidence":"zero provider transport boundary findings; negative controls PASS"},
+    {"id":"FINAL-DOD-012","status":"CLOSED","evidence":"16 public context surfaces and 61 allowed interactions covered"},
+    {"id":"FINAL-DOD-012A","status":"CLOSED","evidence":"16/16 verification profiles, 45 entrypoints and 14 hashed controls"},
+    {"id":"FINAL-DOD-012B","status":"CLOSED","evidence":"authoritative CI inventory and all targeted boundary controls PASS"},
+    {"id":"FINAL-DOD-013","status":"CLOSED","evidence":"full tracked source archive be616b7d independently reproducible and deployed"},
+    {"id":"FINAL-DOD-014","status":"CLOSED","evidence":"one exact commit 7aea2823/tree dbb380be binds source, enforcement archive, image and production OCI revision"},
+    {"id":"FINAL-DOD-015","status":"CLOSED","evidence":"deployed Gravity and provider services healthy; WhatsApp and Telegram ready; zero degraded/stuck/retry errors; safe behavior suites PASS"},
+    {"id":"FINAL-DOD-016","status":"CLOSED","evidence":"live Runtime 2.0.0-9 package/profile/hash/capability/audit identity independently reconciled"},
+    {"id":"FINAL-DOD-017","status":"CLOSED","evidence":"original whole-project Definition of Done retained and recomputed without scope narrowing"}
+  ],
+  "summary": {
+    "total": 19,
+    "closed": 19,
+    "confirmed": 0,
+    "blocked": 0,
+    "temporary_exceptions": 0,
+    "intentional_exceptions": 0
+  },
+  "write_ownership_metrics": {
+    "confirmed_writes_discovered": 1388,
+    "confirmed_foreign": 0,
+    "closed_foreign": 53,
+    "raw_ambiguous_records": 45,
+    "ambiguous_remaining": 0,
+    "active_operational_surfaces_unclassified": 0,
+    "temporary_exceptions": 0,
+    "intentional_exceptions": 0
+  },
+  "production_acceptance": "architecture/recovery/whole-project-dod/v2/PRODUCTION_ACTIVATION_ACCEPTANCE_20260812.json",
+  "production_critic": {
+    "verdict": "PASS",
+    "reviewed_executor_acceptance_artifact_sha256": "c286db26765575136af86b9af0f9cf7f90bb13374ccaf6da0cd623118c67142a",
+    "material_findings": 0,
+    "disclosed_non_gate_product_defect": "/api/calls/stats HTTP 500 from pre-existing invalid FILTER syntax; byte-identical before and after activation; outside original architecture DoD and protected AI Calls paths"
+  },
+  "known_scope_limit": "This closes the original modular-architecture DoD and AI Calls preservation requirement; it does not claim completion of the separately scoped AI Calls/Calls analytics product roadmap.",
+  "final_internal_critic": "PASS",
+  "verdict": "YOKO CRM MODULAR ARCHITECTURE TRANSFORMATION READY FOR INDEPENDENT EXTERNAL RE-REVIEW"
+}

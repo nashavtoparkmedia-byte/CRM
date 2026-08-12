@@ -1,0 +1,294 @@
+{
+  "schema": "yoko.crm.production-activation-acceptance.v1",
+  "captured_at": "2026-08-12T20:06:44Z",
+  "status": "INDEPENDENT_PRODUCTION_CRITIC_PASS",
+  "runtime": {
+    "package": "yoko-privileged-runtime",
+    "package_version": "2.0.0-9",
+    "runtime_abi": "2.0.0",
+    "dpkg_state": "ii",
+    "profile_id": "crm-af9646f5-gravity-outbox-v1",
+    "bootstrap_tar_sha256": "c7823d66ebabc57df7da4bb54c40ee8d78a05964cb7ac7f63bcf04941f7fc048",
+    "package_sha256": "0c259741b4b58992acb830806e42db79ec87730f1b568a21e2879483d739be83",
+    "profile_manifest_sha256": "6bb075ed5592c7d8aeb2ec6ce5c962eb50be5d1b82ae062e0314a17811e2859b",
+    "self_check": "PASS",
+    "installed_exact_hashes": "PASS",
+    "audit_state": "VALID",
+    "audit_records_after_activation": 19,
+    "audit_last_digest": "95668295b49045f430f19512d7cd60c81c88ae6e3586f26dd39fcf12a09f0c81",
+    "enabled_zero_argument_profiles": [
+      "database-status",
+      "release-preflight",
+      "database-migrate",
+      "release-activate",
+      "rollback"
+    ],
+    "config_activate": "DISABLED",
+    "sudoers_widening": false,
+    "generic_command_execution": false,
+    "arbitrary_paths": false,
+    "arbitrary_package_install": false,
+    "docker_socket_delegated": false
+  },
+  "preflight": {
+    "first_attempt": {
+      "result": "FAILED_CLOSED_BEFORE_PRODUCTION_MUTATION",
+      "code": "ACTIVATION_STORAGE_GUARD_FAILED",
+      "available_bytes": 11432595456,
+      "required_reserve_bytes": 8589934592,
+      "required_working_bytes": 3221225472
+    },
+    "bounded_storage_remediation": {
+      "classification": "COMPLETED_CODEXBOT_OWNED_CRITIC_SCRATCH_ONLY",
+      "removed_paths": [
+        "/tmp/yoko-v9-critic.rHehdcaz",
+        "/tmp/yoko-rebuild-critic.p7kZbv",
+        "/tmp/yoko-v8-critic.bHM4iM",
+        "/tmp/yoko-v8-inspect"
+      ],
+      "removed_approximate_bytes": 625000000,
+      "running_processes_using_paths": 0,
+      "durable_or_committed_artifacts_removed": false,
+      "recoverable": false
+    },
+    "second_attempt": {
+      "result": "PREFLIGHT_READY_DATABASE_ALREADY_MIGRATED",
+      "available_bytes": 12025131008,
+      "source_archive_entries": 3904,
+      "source_archive_regular_files": 3266,
+      "source_archive_directories": 638,
+      "source_archive_uncompressed_bytes": 108431360,
+      "verified_backup_sha256": "31bc226112ba63909f6bb2d22dd2d873b342684aad8b82fe6a25bf5d99ee5d41",
+      "verified_backup_bytes": 194477048,
+      "production_mutation": false
+    },
+    "database_migrate_retry": "ALREADY_MIGRATED",
+    "database_reexecution": false
+  },
+  "activation": {
+    "result": "ACTIVATED",
+    "activated_at": "2026-08-12T19:56:15Z",
+    "production_mutated": true,
+    "automatic_rollback": false,
+    "rollback_required": false,
+    "predecessor": {
+      "container_id": "53557ce80d417026ad819a701f74a0ef3c91972bdc3d49016f4b85063361ff19",
+      "image_id": "sha256:b36751e5a6d2b52e7a7676ee5babcd70f496111e9715e5056f6338d04b028f68",
+      "rollback_available": true
+    },
+    "deployed": {
+      "container_id": "86f18322adbc640771849c22163d746b73cd06c72c656f1d93b5695623fcaa73",
+      "image_id": "sha256:baf442f880ebca808897a0131a662c603a9119f652cbbc3e47937286dec49179",
+      "tag": "yoko/crm-gravity-mvp:7aea2823efe50e13a156540993d424594025e403-profile-v1",
+      "oci_revision": "7aea2823efe50e13a156540993d424594025e403",
+      "compose_config_hash": "772ba8f19dc89133ea55ce65aa2d68550594ab61060eac0e373ae7936161b9f8",
+      "started_at": "2026-08-12T19:55:47.817041276Z",
+      "running": true,
+      "health": "healthy",
+      "restart_count": 0,
+      "declared_user": "app",
+      "privileged": false,
+      "published_ports": 0,
+      "semantics_preserved": true,
+      "unrelated_containers_unchanged": true
+    },
+    "strict_stabilization": {
+      "bounded_timeout_seconds": 90,
+      "attempts": 9,
+      "elapsed_ms": 19975,
+      "required_consecutive_successes": 2,
+      "observed_consecutive_successes": 2,
+      "application_health_reachable": true,
+      "infrastructure_health_ok": true,
+      "outbox_publisher_startup_observed": true,
+      "result": "PASS"
+    },
+    "steady_state_observation": {
+      "observed_at": "2026-08-12T20:04:24Z",
+      "application_health": "ok",
+      "infrastructure_health": "ok",
+      "postgres": "ok",
+      "redis": "ok",
+      "minio": "ok",
+      "freeswitch_esl": "ok",
+      "gravity_health": "healthy",
+      "gravity_restart_count": 0
+    }
+  },
+  "database": {
+    "database_identity_sha256": "ed88dfeaad2a3dc2e759590d295992cd06531d4403d896ded00b21ea667be1c9",
+    "migration_count": 62,
+    "migration_ledger_sha256": "a50f1a8988f79c85059354d6b2d45e9e8ed07284fc27c78d98face6680f25dfc",
+    "migration_state": "APPROVED_OUTBOX_APPLIED",
+    "outbox_catalog_state": "EXACT",
+    "interrupted_target_migrations": 0,
+    "rolled_back_target_migrations": 0,
+    "production_database_mutated_during_v9_execution": false,
+    "read_only_observations": [
+      {
+        "observed_at": "2026-08-12T20:04:16Z",
+        "total": 1,
+        "published": 1,
+        "pending": 0,
+        "processing": 0,
+        "retry_wait": 0,
+        "dead_letter": 0,
+        "over_attempt_limit": 0,
+        "stale_claimed": 0
+      },
+      {
+        "observed_at": "2026-08-12T20:04:24Z",
+        "total": 1,
+        "published": 1,
+        "pending": 0,
+        "processing": 0,
+        "retry_wait": 0,
+        "dead_letter": 0,
+        "over_attempt_limit": 0,
+        "stale_claimed": 0
+      },
+      {
+        "observed_at": "2026-08-12T20:22:03Z",
+        "total": 1,
+        "published": 1,
+        "pending": 0,
+        "processing": 0,
+        "retry_wait": 0,
+        "dead_letter": 0,
+        "over_attempt_limit": 0,
+        "stale_claimed": 0
+      }
+    ],
+    "outbox_acceptance": "ONE_REAL_PRODUCTION_EVENT_PUBLISHED_WITH_ZERO_BACKLOG_RETRY_POISON_OR_STALE_CLAIMS"
+  },
+  "protected_messages": {
+    "production_transport_health": {
+      "whatsapp_ready": "1/1",
+      "telegram_ready": "1/1",
+      "degraded_connections": 0,
+      "failed_messages_last_24h": 0,
+      "stuck_messages": 0,
+      "pending_retryable": 0,
+      "retry_error": null,
+      "integrity_issues": 0
+    },
+    "service_status": {
+      "gravity_mvp": "running healthy restart=0",
+      "telegram_bot": "running healthy restart=0",
+      "telegram_frontend": "running healthy restart=0",
+      "max_scraper": "running healthy restart=0",
+      "max_personal_gateway": "running healthy restart=0",
+      "audio_bridge": "running healthy restart=0",
+      "freeswitch": "running healthy restart=0",
+      "nginx": "running restart=0",
+      "yfs_api": "running healthy restart=0",
+      "yfs_worker": "running healthy restart=0"
+    },
+    "safe_public_probes": {
+      "/api/health": 200,
+      "/api/health/infra": 200,
+      "/api/transport/health": 200,
+      "/api/messages_without_required_chat_id": 400,
+      "/api/debug-db": 404,
+      "/api/debug-db/users": 404,
+      "/api/debug-db/messages": 404
+    },
+    "source_and_characterization_validation": {
+      "independent_reconciliation_critic": "PASS; 26 selected; 0 unknown; 0 owner failures; unrelated writer rejected",
+      "messages_provider_and_calling_vitest": "PASS; 25 files; 75 tests",
+      "gravity_security_boundaries": "PASS; 9 files; 34 tests",
+      "telegram_security_boundaries": "PASS; 15 tests",
+      "health_contracts": "PASS; 17 tests"
+    },
+    "destructive_real_user_tests_performed": false,
+    "verdict": "DEPLOYED_RUNTIME_AND_SAFE_BEHAVIOR_CHARACTERIZATION_ACCEPTED"
+  },
+  "source_production_parity": {
+    "accepted_commit": "7aea2823efe50e13a156540993d424594025e403",
+    "accepted_tree": "dbb380be0775d41b246248a9fe8fbf99bcb38d22",
+    "accepted_archive_sha256": "be616b7d528bc111717d237bcd745a8b106302897e702be4b8af1b8643cba26d",
+    "reproduced_archive_sha256": "be616b7d528bc111717d237bcd745a8b106302897e702be4b8af1b8643cba26d",
+    "reproduction": "PASS",
+    "deployed_oci_revision": "7aea2823efe50e13a156540993d424594025e403",
+    "deployed_image_id": "sha256:baf442f880ebca808897a0131a662c603a9119f652cbbc3e47937286dec49179",
+    "application_source_changes_between_accepted_commit_and_evidence_head": 0,
+    "verdict": "EXACT"
+  },
+  "outbox_validation": {
+    "behavior_tests": "PASS; 16/16",
+    "architecture_controls": "PASS; 14/14",
+    "producer_atomicity": true,
+    "publisher_idempotency": true,
+    "consumer_idempotency": true,
+    "bounded_retry_and_dead_letter": true,
+    "observable_failure_state": true,
+    "runtime_registration": true,
+    "production_observation": "PASS"
+  },
+  "ai_calls_preservation": {
+    "protected_worktree": "/opt/codex-work/crm-ai-calls",
+    "protected_branch": "dev/ai-calls-product-preview-v2",
+    "protected_head": "b38b22d3e00b3fb43d05417131709b3d2c535b2b",
+    "worktree_mutated": false,
+    "protected_paths": [
+      "gravity-mvp/src/app/api/ai-calls",
+      "gravity-mvp/src/lib/ai-call"
+    ],
+    "protected_blob_inventory_sha256": "2448dcdaf4016a7a45f9779183cb448e22b465a42714168c42e4478a9bc20032",
+    "changed_protected_paths": 0,
+    "legacy_ai_calls_tests": "PASS; 76/76",
+    "calling_tests_in_messages_provider_batch": "PASS",
+    "safe_boundary_probes": {
+      "/api/calls/sip-credentials": 401,
+      "/api/settings/ai-call-keys": 401,
+      "/api/settings/ai-call-projects": 401,
+      "/api/settings/ai-call-scenarios": 401,
+      "/api/settings/telephony-ai": 401,
+      "/api/internal/ai-call-keys": 403,
+      "/api/ai-calls/dev-simulate_GET": 405,
+      "/api/ai-calls/mock_GET": 405
+    },
+    "verdict": "PROTECTED_DEVELOPMENT_LINEAGE_AND_DEPLOYED_SOURCE_PATHS_PRESERVED"
+  },
+  "known_non_gate_observation": {
+    "route": "/api/calls/stats",
+    "result": "HTTP_500_POSTGRES_SYNTAX_ERROR_AT_FILTER",
+    "classification": "PREEXISTING_AI_CALLS_ANALYTICS_PRODUCT_DEFECT_OUTSIDE_PROTECTED_AI_CALLS_PATHS_AND_ORIGINAL_MODULAR_ARCHITECTURE_DOD",
+    "introduced_by_activation": false,
+    "protected_ai_calls_lineage_changed": false,
+    "health_gate_impact": false,
+    "hidden_from_critic": false,
+    "product_completion_claimed": false
+  },
+  "targeted_final_gate": {
+    "independent_critic_final_gate": "PASS",
+    "temporary_dependency_link_used_for_exact_lock_test_execution": true,
+    "temporary_dependency_link_removed": true,
+    "application_source_diff_from_accepted_commit": 0,
+    "evidence_worktree_contains_only_current_acceptance_materialization": true,
+    "whole_repository_rescan_run": false
+  },
+  "extended_steady_state": {
+    "observed_at": "2026-08-12T20:22:03Z",
+    "gravity_health": "healthy",
+    "gravity_restart_count": 0,
+    "database_identity_and_62_row_ledger_exact": true,
+    "outbox_one_published_zero_backlog_poison_stale": true,
+    "postgres_redis_minio_freeswitch_esl": "ok",
+    "independent_final_gate": "PASS"
+  },
+  "production_change_summary": {
+    "owner_bootstrap_production_mutations": 0,
+    "v9_database_mutations": 0,
+    "deployments": 1,
+    "gravity_service_recreations": 1,
+    "unrelated_service_restarts_or_reloads": 0,
+    "rollbacks": 0
+  },
+  "independent_production_critic": {
+    "artifact": "architecture/recovery/whole-project-dod/v2/INDEPENDENT_PRODUCTION_ACCEPTANCE_CRITIC_20260812.json",
+    "verdict": "PASS",
+    "material_findings": 0
+  },
+  "executor_verdict": "PRODUCTION_ACTIVATION_AND_BOUNDED_ACCEPTANCE_PASS"
+}

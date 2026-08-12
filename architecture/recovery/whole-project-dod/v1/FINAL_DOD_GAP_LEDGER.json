@@ -2,9 +2,10 @@
   "schema": "yoko.crm.final-dod-gap-ledger.v1",
   "project": "YOKO CRM MODULAR ARCHITECTURE TRANSFORMATION",
   "phase": "WHOLE_PROJECT_DOD_RECOVERY",
-  "status": "IN_PROGRESS",
-  "updated_at": "2026-08-12T03:19:10Z",
+  "status": "INTERNALLY_CLOSED_READY_FOR_INDEPENDENT_EXTERNAL_RE_REVIEW",
+  "updated_at": "2026-08-12T20:12:00Z",
   "external_verdict": "YOKO CRM MODULAR ARCHITECTURE TRANSFORMATION NOT READY",
+  "current_internal_verdict": "YOKO CRM MODULAR ARCHITECTURE TRANSFORMATION READY FOR INDEPENDENT EXTERNAL RE-REVIEW",
   "external_review": {
     "task_id": "019feb29-bac2-7a51-84ff-df013bed1a93",
     "turn_id": "019feb29-e0e4-7d62-8116-b347afda47f5",
@@ -111,7 +112,7 @@
       "id": "FINAL-DOD-006",
       "category": "PROTECTED_MESSAGES",
       "severity": "CRITICAL",
-      "status": "CONFIRMED",
+      "status": "CLOSED",
       "title": "Architecture candidate is not reconciled with authoritative production Messages behavior",
       "source": "external review technical gap 5",
       "evidence": [
@@ -120,13 +121,14 @@
         "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts:24",
         "/opt/crm/gravity-mvp/src/lib/whatsapp/WhatsAppService.ts:24"
       ],
-      "closure": "Every production delta is classified and required MAX, Telegram, WhatsApp, webhook, reconciliation, contact and delivery behavior is reimplemented inside the target boundaries with protected regression evidence."
+      "closure": "Every production delta is classified and required MAX, Telegram, WhatsApp, webhook, reconciliation, contact and delivery behavior is reimplemented inside the target boundaries with protected regression evidence.",
+      "closure_evidence": "26/26 protected Messages corpus records reconciled with zero unknown, owner-boundary and independent critic PASS; deployed acceptance in PRODUCTION_ACTIVATION_ACCEPTANCE_20260812.json"
     },
     {
       "id": "FINAL-DOD-007",
       "category": "RELEASE_LINEAGE",
       "severity": "HIGH",
-      "status": "CONFIRMED",
+      "status": "CLOSED",
       "title": "Candidate is local, source-only and undeployed",
       "source": "external review production/deployment gap 1",
       "evidence": [
@@ -134,31 +136,34 @@
         "/opt/codex-work/crm-architecture-state/PRODUCTION_CHANGE_LEDGER.json",
         "review commit absent from normal remote/release refs at review time"
       ],
-      "closure": "A reproducible integration/release lineage is durably preserved through the normal repository/release process and incremental production identities are recorded."
+      "closure": "A reproducible integration/release lineage is durably preserved through the normal repository/release process and incremental production identities are recorded.",
+      "closure_evidence": "Production runs image sha256:baf442f880ebca808897a0131a662c603a9119f652cbbc3e47937286dec49179 with OCI revision 7aea2823efe50e13a156540993d424594025e403; archive be616b7d528bc111717d237bcd745a8b106302897e702be4b8af1b8643cba26d reproduces exactly"
     },
     {
       "id": "FINAL-DOD-008",
       "category": "OUTBOX",
       "severity": "HIGH",
-      "status": "CONFIRMED",
+      "status": "CLOSED",
       "title": "Transactional outbox remains inactive scaffolding",
       "source": "external review production/deployment gap 2",
       "evidence": [
         "architecture/events/v1/production-activation-gate.json:4"
       ],
-      "closure": "Selected justified flows prove atomic append, publisher, idempotent consumer, retry/failure, schema version and observability in preview before gated activation."
+      "closure": "Selected justified flows prove atomic append, publisher, idempotent consumer, retry/failure, schema version and observability in preview before gated activation.",
+      "closure_evidence": "Exact production outbox catalog; one published event and zero pending/processing/retry/dead/stale records across consecutive observations; 16/16 behavior and 14/14 architecture checks PASS"
     },
     {
       "id": "FINAL-DOD-009",
       "category": "PRIVILEGED_RUNTIME",
       "severity": "HIGH",
-      "status": "CONFIRMED",
+      "status": "CLOSED",
       "title": "Finite V2 release, migration and rollback profiles were not enabled",
       "source": "external review production/deployment gap 3",
       "evidence": [
         "/usr/local/share/yoko-privileged-runtime/policy.v2.json:129"
       ],
-      "closure": "Current V2 is reconciled and existing bounded profile mechanisms safely support each finite release/configuration/migration/rollback operation without generic root."
+      "closure": "Current V2 is reconciled and existing bounded profile mechanisms safely support each finite release/configuration/migration/rollback operation without generic root.",
+      "closure_evidence": "Runtime 2.0.0-9 profile crm-af9646f5-gravity-outbox-v1 independently verified and used for exact preflight/migration/activation; rollback remains available; exact five zero-argument operations; config activation disabled"
     },
     {
       "id": "FINAL-DOD-010",
@@ -233,7 +238,7 @@
       "id": "FINAL-DOD-013",
       "category": "EVIDENCE_SCOPE",
       "severity": "HIGH",
-      "status": "CONFIRMED",
+      "status": "CLOSED",
       "title": "Valid final checksums seal a selected but incomplete source-gate scope",
       "source": "external review evidence gap 1",
       "evidence": [
@@ -242,32 +247,35 @@
         "1614/1614 historical entries valid",
         "write analyzer and repository-coverage gaps remain"
       ],
-      "closure": "Historical evidence is retained and labeled; new current evidence independently seals corrected whole-repository controls and deployed claims."
+      "closure": "Historical evidence is retained and labeled; new current evidence independently seals corrected whole-repository controls and deployed claims.",
+      "closure_evidence": "Full tracked source at 7aea2823/tree dbb380be; deterministic archive be616b7d independently reproduced and bound to deployed image"
     },
     {
       "id": "FINAL-DOD-014",
       "category": "SOURCE_IDENTITY",
       "severity": "HIGH",
-      "status": "CONFIRMED",
+      "status": "CLOSED",
       "title": "Advertised application and enforcement source identities are split",
       "source": "external review evidence gap 2",
       "evidence": [
         "application source 024680591c188a34ae79594d92d47854648c73c8",
         "review tree 0b61ba296ba2734738d4a21b9d00ce8b110d63cf"
       ],
-      "closure": "One explicit lineage records source, architecture/evidence, release and production identities and each advertised identity independently reproduces its stated scope."
+      "closure": "One explicit lineage records source, architecture/evidence, release and production identities and each advertised identity independently reproduces its stated scope.",
+      "closure_evidence": "Exact source commit 7aea2823, tree dbb380be, archive be616b7d, image baf442f8 and deployed OCI revision 7aea2823 agree"
     },
     {
       "id": "FINAL-DOD-015",
       "category": "PROTECTED_MESSAGES_EVIDENCE",
       "severity": "CRITICAL",
-      "status": "CONFIRMED",
+      "status": "CLOSED",
       "title": "Messages evidence did not exercise transports, webhooks, database or deployed services",
       "source": "external review evidence gap 3",
       "evidence": [
         "architecture/reviews/crm-arch-007r-final/ACCEPTANCE_CHECKLIST.md:23"
       ],
-      "closure": "Protected provider, webhook, persistence and deployed behavior are verified under secret-safe regression and health gates before Messages-affecting activation."
+      "closure": "Protected provider, webhook, persistence and deployed behavior are verified under secret-safe regression and health gates before Messages-affecting activation.",
+      "closure_evidence": "Deployed Gravity/provider services healthy with zero restarts; WhatsApp and Telegram 1/1 ready; zero degraded/stuck/retry/integrity errors; protected Messages, provider and security characterizations PASS"
     },
     {
       "id": "FINAL-DOD-016",
@@ -299,9 +307,9 @@
   ],
   "summary": {
     "total": 19,
-    "confirmed": 9,
+    "confirmed": 0,
     "disproven_with_evidence": 0,
-    "closed": 10,
+    "closed": 19,
     "blocked_business": 0,
     "blocked_irreversible": 0,
     "blocked_external_auth": 0
