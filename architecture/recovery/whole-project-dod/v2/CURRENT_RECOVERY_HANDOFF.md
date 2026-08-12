@@ -1,8 +1,16 @@
 # Current recovery handoff
 
-Captured: `2026-08-12T05:18:00Z`
+Captured: `2026-08-12T17:26:25Z`
 
 This is the authoritative continuation checkpoint for the current task. It is a handoff, not an acceptance artifact. The whole-project state remains `EXTERNAL_FINAL_ACCEPTANCE_FAILED`; the current program remains `WHOLE-PROJECT DOD RECOVERY`; the project is **not READY**.
+
+## Newest checkpoint — ledger reconciliation successor requires one package install
+
+Owner bootstrap `2.0.0-6` was independently verified at ABI `2.0.0` with the exact five zero-argument activation operations, self-check PASS and an empty audit. Its first read-only `database-status` safely failed closed before mutation: the live database has 61 active migration rows and exact normalized ledger digest `f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201`, while the sealed v6 profile omitted 13 historical rows and expected only 48. The outbox target remains absent; there were no database writes, deployments, restarts, rollbacks or hidden bootstrap mutations.
+
+The accepted successor is Runtime package `2.0.0-7`, preserving ABI `2.0.0`, the same five operations, core, policy, sudoers, migration SQL and sealed source. It binds exact database identity `ed88dfeaad2a3dc2e759590d295992cd06531d4403d896ded00b21ea667be1c9`, 61 active rows and the exact normalized ledger digest, permitting only the reviewed outbox migration delta. Its deterministic tar SHA-256 is `db571de22ad7fe9110bd339992c4caec58598b311c547b9543bd560db5dcc29d`; package SHA-256 is `ababe50bcb0d3597786b1c77118867b1d700a5629bb2719892ce5ae4927a4738`; tests are 67/67 PASS and a fresh independent exact-artifact critic returned PASS.
+
+The installed finite ABI intentionally cannot install packages. Therefore one new genuine privileged primitive is required: execute only the checksum-pinned command authorized in `architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1-ledger-reconciliation/manifest.json`. After `YOKO_ACTIVATION_BOOTSTRAP_OK`, recovery resumes autonomously with database preview, verified backup/restore, migration, activation, health, protected Messages, outbox, production evidence and critics. Machine-readable evidence is `PRODUCTION_ACTIVATION_LEDGER_PROFILE_BLOCKED_20260812.json`. This section supersedes the older root-profile checkpoint immediately below.
 
 ## Latest checkpoint — production activation blocked
 

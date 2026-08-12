@@ -1,0 +1,28 @@
+{
+  "artifact_sha256": "db571de22ad7fe9110bd339992c4caec58598b311c547b9543bd560db5dcc29d",
+  "checks": {
+    "adversarial_ledger_drift_probes": "PASS",
+    "bootstrap_guard_rollback_and_rerun": "PASS",
+    "database_identity_binding": "PASS",
+    "deterministic_bundle_rebuild": "PASS",
+    "deterministic_package_rebuild": "PASS",
+    "exact_five_operation_abi": "PASS",
+    "finite_zero_argument_authorization": "PASS",
+    "installed_predecessor_binding": "PASS",
+    "ledger_normalization_scope": "PASS",
+    "manifest_and_checksum_coverage": "PASS",
+    "package_predecessor_diff": "PASS",
+    "recovery_state_machine": "PASS",
+    "static_security_validation": "PASS"
+  },
+  "critic_scope": "EXACT_SEALED_LEDGER_RECONCILIATION_ARTIFACT_ONLY",
+  "independent": true,
+  "material_findings": [],
+  "owner_command_authorized": true,
+  "package_sha256": "ababe50bcb0d3597786b1c77118867b1d700a5629bb2719892ce5ae4927a4738",
+  "production_mutation_by_critic": false,
+  "repository_mutation_by_critic": false,
+  "schema": "yoko.crm.owner-bootstrap-critic.v1",
+  "test_evidence": "67/67 PASS",
+  "verdict": "PASS"
+}

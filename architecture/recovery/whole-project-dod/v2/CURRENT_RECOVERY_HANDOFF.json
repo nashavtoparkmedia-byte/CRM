@@ -1,12 +1,12 @@
 {
   "schema": "yoko.crm.current-recovery-handoff.v1",
-  "generated_at": "2026-08-12T05:18:00Z",
+  "generated_at": "2026-08-12T17:26:25Z",
   "authority": "Continuation checkpoint; latest_checkpoint supersedes older fields retained below as historical lineage, but does not supersede the durable gap ledger or external NOT READY verdict.",
   "latest_checkpoint": {
-    "status": "PRODUCTION_ACTIVATION_BLOCKED_ON_ROOT_OWNED_V2_PROFILES",
+    "status": "PRODUCTION_ACTIVATION_BLOCKED_ON_LEDGER_RECONCILIATION_PROFILE_INSTALL",
     "project_ready": false,
-    "evidence_head_before_checkpoint": "88b7624c77e7f91a131139c993247df11b86156c",
-    "evidence_tree_before_checkpoint": "43027f413e2e7dd1fc4fc8fa9ab5205eb765bb03",
+    "evidence_head_before_checkpoint": "0c6f93323ec8af932d78f83c088c71efbd0077c6",
+    "evidence_tree_before_checkpoint": "f8bfbc4717e5817303d6ff67bf77e4679d7b7046",
     "accepted_source_commit": "af9646f51c1274d718d83eb4c78faf92f214a184",
     "accepted_source_tree": "f900a2bbae3a63f02ff85bf70821df9aab7ff1df",
     "accepted_source_archive_sha256": "c43d6e6ea0735b7a5dad9117822df24b7ec0133685c69b8c13b50effc7c9f808",
@@ -57,13 +57,13 @@
     "blocked_gap": "FINAL-DOD-009",
     "installed_v2": {
       "runtime": "2.0.0",
-      "package": "2.0.0-5",
+      "package": "2.0.0-6",
       "self_check": "PASS",
-      "release_preflight": "PROFILE_DISABLED",
-      "database_status": "PROFILE_DISABLED",
-      "database_migrate": "PROFILE_DISABLED",
-      "release_activate": "PROFILE_DISABLED",
-      "rollback": "PROFILE_DISABLED"
+      "release_preflight": "ENABLED_NOT_RUN_AFTER_READ_ONLY_LEDGER_GATE",
+      "database_status": "DRIFTED_FAIL_CLOSED_61_ACTIVE",
+      "database_migrate": "ENABLED_NOT_RUN",
+      "release_activate": "ENABLED_NOT_RUN",
+      "rollback": "ENABLED_NOT_RUN"
     },
     "production_mutations": {
       "source": 0,
@@ -72,15 +72,24 @@
       "service_restarts_or_reloads": 0,
       "rollbacks": 0
     },
-    "checkpoint_artifact": "architecture/recovery/whole-project-dod/v2/PRODUCTION_ACTIVATION_BLOCKED_CHECKPOINT_20260812.json",
-    "profile_request": "architecture/recovery/control-plane/v2/ROOT_OWNED_ACTIVATION_PROFILE_REQUEST_20260812.json",
-    "exact_next_action": "Root-authorized installation of the exact checksummed finite profiles, then isolated PostgreSQL preview, DB identity, verified backup/restore, expand-only migration, immutable Gravity activation, health and protected behavior validation, with automatic rollback on failure.",
-    "stop_condition": "OWNER_STOP_CONDITION_4_GENUINELY_NEW_ROOT_PRIMITIVE_OUTSIDE_INSTALLED_V2_FINITE_ABI"
+    "checkpoint_artifact": "architecture/recovery/whole-project-dod/v2/PRODUCTION_ACTIVATION_LEDGER_PROFILE_BLOCKED_20260812.json",
+    "profile_request": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1-ledger-reconciliation/manifest.json",
+    "exact_next_action": "Owner executes the single exact-SHA successor bootstrap command authorized in manifest.json; recovery then resumes autonomously with isolated PostgreSQL preview, DB identity, verified backup/restore, expand-only migration, immutable Gravity activation, health and protected behavior validation, with automatic rollback on failure.",
+    "stop_condition": "NEW_GENUINE_PRIVILEGED_PRIMITIVE_BEYOND_INSTALLED_FINITE_ABI_PACKAGE_INSTALL",
+    "ledger_reconciliation_successor": {
+      "package": "2.0.0-7",
+      "bootstrap_tar_sha256": "db571de22ad7fe9110bd339992c4caec58598b311c547b9543bd560db5dcc29d",
+      "package_sha256": "ababe50bcb0d3597786b1c77118867b1d700a5629bb2719892ce5ae4927a4738",
+      "tests": "67/67 PASS",
+      "deterministic_double_build": "PASS",
+      "independent_critic": "PASS",
+      "production_mutations": 0
+    }
   },
   "program_state": {
     "whole_project_state": "EXTERNAL_FINAL_ACCEPTANCE_FAILED",
     "current_program": "WHOLE-PROJECT DOD RECOVERY",
-    "milestone_status": "SOURCE_LEVEL_DOD_RECOVERY_INTERNALLY_ACCEPTED; PRODUCTION_ACTIVATION_BLOCKED_ON_ROOT_OWNED_V2_PROFILES",
+    "milestone_status": "SOURCE_LEVEL_DOD_RECOVERY_INTERNALLY_ACCEPTED; PRODUCTION_ACTIVATION_BLOCKED_ON_LEDGER_RECONCILIATION_PROFILE_INSTALL",
     "ready": false,
     "finding_summary": {
       "total": 19,
