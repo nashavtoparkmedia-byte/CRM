@@ -12,6 +12,9 @@ import { extractPrismaWrites } from './enforce-architecture.mjs'
 const root = process.cwd()
 const adapterPath =
   'gravity-mvp/src/modules/calling/public/v1/legacy-prisma-ai-agent-config-adapter.ts'
+const credentialVaultPath =
+  'gravity-mvp/src/modules/calling/application/ai-agent-provider-credential.ts'
+const publicPath = 'gravity-mvp/src/modules/calling/public/v1/index.ts'
 const ownershipPath = 'architecture/evidence/v1/data-ownership-candidates.json'
 const read = (relative) => readFileSync(path.join(root, relative), 'utf8')
 const plain = (value) => JSON.parse(JSON.stringify(value))
@@ -22,10 +25,25 @@ const check = (name, run) => { run(); checks.push(name) }
 const checkAsync = async (name, run) => { await run(); checks.push(name) }
 
 function loadAdapter(prisma) {
+  const compilerOptions = {
+    module: typescript.ModuleKind.CommonJS,
+    target: typescript.ScriptTarget.ES2022,
+  }
+  const credentialOutput = typescript.transpileModule(read(credentialVaultPath), {
+    compilerOptions,
+  }).outputText
+  const credentialModule = { exports: {} }
+  vm.runInNewContext(credentialOutput, {
+    module: credentialModule,
+    exports: credentialModule.exports,
+    require(specifier) {
+      throw new Error(`unexpected credential vault import: ${specifier}`)
+    },
+  })
+
   const output = typescript.transpileModule(read(adapterPath), {
     compilerOptions: {
-      module: typescript.ModuleKind.CommonJS,
-      target: typescript.ScriptTarget.ES2022,
+      ...compilerOptions,
     },
   }).outputText
   const module = { exports: {} }
@@ -34,10 +52,13 @@ function loadAdapter(prisma) {
     exports: module.exports,
     require(specifier) {
       if (specifier === '@/lib/prisma') return { prisma }
+      if (specifier === '../../application/ai-agent-provider-credential') {
+        return credentialModule.exports
+      }
       throw new Error(`unexpected adapter import: ${specifier}`)
     },
   })
-  return module.exports
+  return { ...credentialModule.exports, ...module.exports }
 }
 
 function harness(options = {}) {
@@ -260,15 +281,33 @@ check('real analyzer classifies the four raw writes as static AiAgentConfig writ
   assert.ok(calling.technical_modules.includes(ownership.owner_candidate))
 })
 
-check('adapter is closed to fixed persistence and has one-shot credential storage', () => {
-  const source = read(adapterPath)
-  assert.equal((source.match(/prisma\.\$executeRawUnsafe\s*\(/g) || []).length, 4)
-  assert.doesNotMatch(source, /\$transaction|Prisma\.|TransactionClient|PrismaPromise/)
-  assert.doesNotMatch(source, /\$executeRawUnsafe\s*\(\s*[A-Za-z_$]/)
-  assert.doesNotMatch(source, /`(?:UPDATE|INSERT)[^`]*\$\{/)
-  assert.match(source, /new WeakMap<OpaqueCredentialRefV1, string>\(\)/)
-  assert.match(source, /credentialValues\.delete\(reference\)/)
-  assert.doesNotMatch(source, /export function (?:reveal|unseal|read).*Credential/i)
+check('adapter is closed to fixed persistence and credential retrieval stays private and one-shot', () => {
+  const adapterSource = read(adapterPath)
+  const credentialVault = read(credentialVaultPath)
+  const publicSource = read(publicPath)
+  assert.equal((adapterSource.match(/prisma\.\$executeRawUnsafe\s*\(/g) || []).length, 4)
+  assert.doesNotMatch(adapterSource, /\$transaction|Prisma\.|TransactionClient|PrismaPromise/)
+  assert.doesNotMatch(adapterSource, /\$executeRawUnsafe\s*\(\s*[A-Za-z_$]/)
+  assert.doesNotMatch(adapterSource, /`(?:UPDATE|INSERT)[^`]*\$\{/)
+  assert.match(credentialVault, /new WeakMap<OpaqueCredentialRefV1, string>\(\)/)
+  assert.match(credentialVault, /credentialValues\.set\(reference, value\)/)
+  const readIndex = credentialVault.indexOf('credentialValues.get(reference)')
+  const deleteIndex = credentialVault.indexOf('credentialValues.delete(reference)')
+  const returnIndex = credentialVault.indexOf('return value', readIndex)
+  assert.ok(readIndex >= 0)
+  assert.ok(deleteIndex > readIndex)
+  assert.ok(returnIndex > deleteIndex)
+  assert.match(adapterSource, /from '\.\.\/\.\.\/application\/ai-agent-provider-credential'/)
+  assert.match(adapterSource, /revealAiAgentProviderCredentialV1\(entry\.value\)/)
+  assert.doesNotMatch(
+    adapterSource,
+    /export\s+(?:function|const|\{)[^\n]*(?:reveal|unseal|read)[A-Za-z]*Credential/i,
+  )
+  assert.match(
+    publicSource,
+    /export\s*\{\s*captureAiAgentProviderCredentialV1\s*\}\s*from\s*['"]\.\.\/\.\.\/application\/ai-agent-provider-credential['"]/,
+  )
+  assert.doesNotMatch(publicSource, /(?:reveal|unseal|read)[A-Za-z]*Credential|credentialValues/i)
 })
 
 process.stdout.write(`${JSON.stringify({ status: 'PASS', passed: checks.length, checks }, null, 2)}\n`)

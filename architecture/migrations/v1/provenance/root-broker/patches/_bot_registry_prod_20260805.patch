@@ -1,0 +1,1340 @@
+--- a/deploy/docker-compose.production.yml
++++ b/deploy/docker-compose.production.yml
+@@ -391,6 +391,7 @@
+     environment:
+       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+       NODE_ENV: production
++      BOT_SQLITE_PATH: /app/data/database.sqlite
+       BOT_UPDATE_MODE: webhook
+       TELEGRAM_WEBHOOK_URL: https://${BOT_ADMIN_DOMAIN}/api/telegram/webhook
+       BOT_WEBHOOK_CHECK_INTERVAL_MS: "60000"
+@@ -399,6 +400,8 @@
+       TELEGRAM_SOCKS_PROXY: ""
+       # gravity-mvp callbacks — через внутреннюю сеть
+       CRM_WEBHOOK_URL: http://gravity-mvp:3002
++    volumes:
++      - tg_bot_data:/app/data
+     networks:
+       - crm_internal
+     depends_on:
+@@ -574,6 +577,8 @@
+     name: crm_gravity_recordings
+   gravity_whatsapp:
+     name: crm_gravity_whatsapp
++  tg_bot_data:
++    name: crm_tg_bot_data
+   yfs_db:
+     name: crm_yfs_db
+   yfs_chrome_profile:
+--- a/gravity-mvp/prisma/schema.prisma
++++ b/gravity-mvp/prisma/schema.prisma
+@@ -174,6 +174,23 @@
+   createdAt  DateTime @default(now())
+ }
+ 
++/// Every Telegram account that has opened the driver bot. This registry is
++/// independent from DriverTelegram: the latter exists only after the account
++/// has been linked to a concrete Yandex driver.
++model BotUserRegistry {
++  id            String   @id @default(cuid())
++  telegramId    BigInt   @unique
++  username      String?
++  firstName     String?
++  lastName      String?
++  phone         String?
++  phoneVerified Boolean  @default(false)
++  firstSeenAt   DateTime @default(now())
++  lastSeenAt    DateTime @default(now())
++
++  @@index([lastSeenAt(sort: Desc)])
++}
++
+ model Bot {
+   id              String           @id @default(uuid())
+   token           String           @unique
+@@ -2223,4 +2240,3 @@
+   dropped_no_input
+   error
+ }
+-
+--- a/gravity-mvp/src/app/api/bot-link/route.ts
++++ b/gravity-mvp/src/app/api/bot-link/route.ts
+@@ -15,9 +15,13 @@
+ 
+     const driver = await prisma.driver.findUnique({
+       where: { id: link.driverId },
+-      select: { id: true, fullName: true, phone: true },
++      select: { id: true, fullName: true, phone: true, yandexDriverId: true },
+     })
+ 
++    if (!driver?.yandexDriverId) {
++      return NextResponse.json({ linked: false, reason: 'INCOMPLETE_LINK' })
++    }
++
+     return NextResponse.json({
+       linked: true,
+       driverId: driver?.id ?? null,
+@@ -42,10 +46,12 @@
+     const digits = query.replace(/\D/g, '')
+     const drivers = await prisma.driver.findMany({
+       where: {
+-        OR: [
+-          ...(digits.length >= 3 ? [{ phone: { contains: digits } }] : []),
+-          { fullName: { contains: query, mode: 'insensitive' as const } },
+-        ],
++        AND: {
++          OR: [
++            ...(digits.length >= 3 ? [{ phone: { contains: digits } }] : []),
++            { fullName: { contains: query, mode: 'insensitive' as const } },
++          ],
++        },
+       },
+       select: { id: true, fullName: true, phone: true },
+       take: 10,
+@@ -62,14 +68,30 @@
+ 
+     const driver = await prisma.driver.findUnique({
+       where: { id: driverId },
+-      select: { id: true, fullName: true },
++      select: { id: true, fullName: true, yandexDriverId: true },
+     })
+     if (!driver) return NextResponse.json({ error: 'Driver not found' }, { status: 404 })
++    if (!driver.yandexDriverId) {
++      return NextResponse.json({ error: 'Driver has no Yandex profile' }, { status: 409 })
++    }
+ 
+     await prisma.$transaction(async (tx) => {
+       await tx.driverTelegram.deleteMany({ where: { driverId } })
+       await tx.driverTelegram.deleteMany({ where: { telegramId: BigInt(telegramId) } })
+       await tx.driverTelegram.create({ data: { telegramId: BigInt(telegramId), driverId } })
++      await tx.botUserRegistry.upsert({
++        where: { telegramId: BigInt(telegramId) },
++        update: { lastSeenAt: new Date() },
++        create: { telegramId: BigInt(telegramId) },
++      })
++      await tx.botChatMessage.deleteMany({
++        where: {
++          telegramId: BigInt(telegramId),
++          driverId: null,
++          direction: 'INCOMING',
++          text: { startsWith: '[Запрос привязки]' },
++        },
++      })
+     })
+ 
+     return NextResponse.json({ success: true, driverName: driver.fullName })
+--- a/gravity-mvp/src/app/api/bot-users/route.ts
++++ b/gravity-mvp/src/app/api/bot-users/route.ts
+@@ -4,7 +4,7 @@
+ 
+ // GET /api/bot-users — linked drivers + pending link requests
+ export async function GET() {
+-  const [dtRows, requests] = await Promise.all([
++  const [dtRows, legacyRequests, registryRows] = await Promise.all([
+     prisma.driverTelegram.findMany({
+       orderBy: { createdAt: 'desc' },
+     }),
+@@ -16,19 +16,23 @@
+       },
+       orderBy: { createdAt: 'desc' },
+     }),
++    prisma.botUserRegistry.findMany({
++      orderBy: { lastSeenAt: 'desc' },
++    }),
+   ])
+ 
+   const driverIds = dtRows.map(r => r.driverId)
+   const allTelegramIds = [
+     ...dtRows.map(r => `telegram:${r.telegramId}`),
+-    ...requests.map(r => `telegram:${r.telegramId}`),
++    ...legacyRequests.map(r => `telegram:${r.telegramId}`),
++    ...registryRows.map(r => `telegram:${r.telegramId}`),
+   ]
+ 
+   const [drivers, parks, chats] = await Promise.all([
+     driverIds.length
+       ? prisma.driver.findMany({
+           where: { id: { in: driverIds } },
+-          select: { id: true, fullName: true, phone: true },
++          select: { id: true, fullName: true, phone: true, yandexDriverId: true },
+         })
+       : [],
+     dtRows.some(r => r.activeParkId)
+@@ -47,18 +51,25 @@
+ 
+   const driverMap = Object.fromEntries(drivers.map(d => [d.id, d]))
+   const parkMap = Object.fromEntries(parks.map(p => [p.parkId, p.name || p.parkId]))
++  const registryMap = Object.fromEntries(registryRows.map(row => [row.telegramId.toString(), row]))
+   // chatMap keyed by raw telegramId string (without prefix)
+   const chatMap = Object.fromEntries(
+     chats.map(c => [c.externalChatId.replace('telegram:', ''), c.id])
+   )
+ 
+-  const linked = dtRows.map(row => {
++  const validLinkedTelegramIds = new Set(
++    dtRows
++      .filter(row => Boolean(driverMap[row.driverId]?.yandexDriverId))
++      .map(row => row.telegramId.toString()),
++  )
++  const linked = dtRows.filter(row => validLinkedTelegramIds.has(row.telegramId.toString())).map(row => {
+     const driver = driverMap[row.driverId]
+     const tgId = row.telegramId.toString()
++    const registry = registryMap[tgId]
+     return {
+       id: row.id,
+       telegramId: tgId,
+-      username: row.username,
++      username: row.username || registry?.username || null,
+       driverId: row.driverId,
+       driverName: driver?.fullName ?? null,
+       driverPhone: driver?.phone ?? null,
+@@ -71,25 +82,88 @@
+       parkName: row.activeParkId ? (parkMap[row.activeParkId] ?? null) : null,
+       chatId: chatMap[tgId] ?? null,
+       createdAt: row.createdAt.toISOString(),
++      lastSeenAt: registry?.lastSeenAt.toISOString() || null,
++      status: 'LINKED' as const,
+     }
+   })
+ 
+-  // Parse "[Запрос привязки] Телефон: +79..., @username" text
+-  const parsedRequests = requests.map(r => {
++  // Legacy requests are kept for compatibility, while BotUserRegistry is the
++  // complete roster of everybody who has opened the bot.
++  const legacyByTelegramId = new Map(legacyRequests.map(r => [r.telegramId.toString(), r]))
++  const pendingByTelegramId = new Map<string, {
++    id: string
++    requestId: string | null
++    source: 'registry' | 'legacy' | 'broken_mapping'
++    telegramId: string
++    phone: string | null
++    username: string | null
++    chatId: string | null
++    createdAt: string
++    lastSeenAt: string | null
++    status: 'PENDING_MANAGER_LINK'
++  }>()
++
++  for (const row of registryRows) {
++    const telegramId = row.telegramId.toString()
++    if (validLinkedTelegramIds.has(telegramId)) continue
++    const legacy = legacyByTelegramId.get(telegramId)
++    const phoneMatch = legacy?.text.match(/Телефон:\s*([+\d]+)/)
++    const usernameMatch = legacy?.text.match(/@(\S+)/)
++    pendingByTelegramId.set(telegramId, {
++      id: row.id,
++      requestId: legacy?.id || null,
++      source: 'registry',
++      telegramId,
++      phone: row.phone || phoneMatch?.[1] || null,
++      username: row.username || usernameMatch?.[1] || null,
++      chatId: chatMap[telegramId] ?? null,
++      createdAt: row.firstSeenAt.toISOString(),
++      lastSeenAt: row.lastSeenAt.toISOString(),
++      status: 'PENDING_MANAGER_LINK',
++    })
++  }
++
++  for (const r of legacyRequests) {
+     const telegramId = r.telegramId.toString()
++    if (validLinkedTelegramIds.has(telegramId) || pendingByTelegramId.has(telegramId)) continue
+     const phoneMatch = r.text.match(/Телефон:\s*([+\d]+)/)
+     const usernameMatch = r.text.match(/@(\S+)/)
+-    return {
++    pendingByTelegramId.set(telegramId, {
+       id: r.id,
++      requestId: r.id,
++      source: 'legacy',
+       telegramId,
+       phone: phoneMatch?.[1] ?? null,
+       username: usernameMatch?.[1] ?? null,
+       chatId: chatMap[telegramId] ?? null,
+       createdAt: r.createdAt.toISOString(),
+-    }
+-  })
++      lastSeenAt: null,
++      status: 'PENDING_MANAGER_LINK',
++    })
++  }
++
++  for (const row of dtRows) {
++    const telegramId = row.telegramId.toString()
++    if (validLinkedTelegramIds.has(telegramId) || pendingByTelegramId.has(telegramId)) continue
++    pendingByTelegramId.set(telegramId, {
++      id: row.id,
++      requestId: null,
++      source: 'broken_mapping',
++      telegramId,
++      phone: null,
++      username: row.username,
++      chatId: chatMap[telegramId] ?? null,
++      createdAt: row.createdAt.toISOString(),
++      lastSeenAt: null,
++      status: 'PENDING_MANAGER_LINK',
++    })
++  }
++
++  const requests = [...pendingByTelegramId.values()].sort((left, right) =>
++    Date.parse(right.lastSeenAt || right.createdAt) - Date.parse(left.lastSeenAt || left.createdAt),
++  )
+ 
+-  return NextResponse.json({ linked, requests: parsedRequests })
++  return NextResponse.json({ linked, requests })
+ }
+ 
+ // DELETE /api/bot-users?telegramId=... — unlink driver from bot
+--- a/gravity-mvp/src/app/api/webhooks/bot/route.ts
++++ b/gravity-mvp/src/app/api/webhooks/bot/route.ts
+@@ -1,7 +1,15 @@
+ import { NextResponse } from 'next/server'
+ import { prisma } from '@/lib/prisma'
+ import { uploadBuffer } from '@/lib/storage/minio'
+-import { buildBotApiEndpoint, hasMoreFleetCarPages, normalizeDriverPhone, normalizeVehiclePlate } from '@/lib/botLinking'
++import {
++    buildBotApiEndpoint,
++    canonicalDriverPhone,
++    hasMoreFleetCarPages,
++    normalizeDriverPhone,
++    normalizeVehiclePlate,
++    selectUniqueWorkingPhoneProfile,
++    telegramExternalChatIds,
++} from '@/lib/botLinking'
+ import { ensureCrmDriverForYandexProfile, resolveMappedDriver } from '@/lib/botDriverResolver'
+ 
+ const BOT_API_URL = process.env.BOT_API_URL || 'http://localhost:4000/api/bot'
+@@ -17,8 +25,10 @@
+         const { action, payload } = body
+ 
+         switch (action) {
++            case 'register_bot_user':
++                return await handleRegisterBotUser(payload)
+             case 'sync_user':
+-                return await handleSyncUser(payload)
++                return await handleVerifiedSyncUser(payload)
+             case 'change_limit':
+                 return await handleChangeLimit(payload)
+             case 'check_link':
+@@ -59,6 +69,10 @@
+         return NextResponse.json({ error: 'Missing telegramId' }, { status: 400 })
+     }
+ 
++    await upsertBotUserRegistry({ telegramId }).catch((error: any) => {
++        console.warn(`[check_link] registry update failed TG=${telegramId}: ${error?.message || error}`)
++    })
++
+     const mapping = await prisma.driverTelegram.findFirst({
+         where: { telegramId: BigInt(telegramId) }
+     })
+@@ -345,6 +359,219 @@
+     return NextResponse.json({ success: true, autoLinked: false, message: 'Pending manual link by manager' })
+ }
+ 
++type BotUserRegistrationInput = {
++    telegramId: string | number
++    username?: string | null
++    firstName?: string | null
++    lastName?: string | null
++    phone?: string | null
++    phoneVerified?: boolean
++    attemptAutoLink?: boolean
++}
++
++async function upsertBotUserRegistry(input: BotUserRegistrationInput) {
++    const telegramId = BigInt(input.telegramId)
++    const phone = canonicalDriverPhone(input.phone)
++    const optional = {
++        ...(input.username ? { username: input.username } : {}),
++        ...(input.firstName ? { firstName: input.firstName } : {}),
++        ...(input.lastName ? { lastName: input.lastName } : {}),
++        ...(phone ? { phone } : {}),
++        ...(input.phoneVerified === true ? { phoneVerified: true } : {}),
++    }
++    return prisma.botUserRegistry.upsert({
++        where: { telegramId },
++        update: { ...optional, lastSeenAt: new Date() },
++        create: {
++            telegramId,
++            username: input.username || null,
++            firstName: input.firstName || null,
++            lastName: input.lastName || null,
++            phone,
++            phoneVerified: input.phoneVerified === true,
++        },
++    })
++}
++
++async function bindVerifiedTelegramDriver(input: {
++    telegramId: string
++    driverId: string
++    username?: string | null
++    phone: string
++    activeParkId: string
++}) {
++    const telegramId = BigInt(input.telegramId)
++    const [byTelegram, byDriver] = await Promise.all([
++        prisma.driverTelegram.findUnique({ where: { telegramId } }),
++        prisma.driverTelegram.findUnique({ where: { driverId: input.driverId } }),
++    ])
++    if (byDriver && byDriver.telegramId !== telegramId) return false
++
++    const data = {
++        driverId: input.driverId,
++        username: input.username || null,
++        activeParkId: input.activeParkId,
++        phoneVerified: true,
++        submittedPhone: normalizeDriverPhone(input.phone),
++        submittedPhoneAt: new Date(),
++    }
++    try {
++        if (byTelegram) {
++            await prisma.driverTelegram.update({ where: { id: byTelegram.id }, data })
++        } else {
++            await prisma.driverTelegram.create({ data: { ...data, telegramId } })
++        }
++        return true
++    } catch (error: any) {
++        console.warn(`[bot-link] verified mapping conflict TG=${input.telegramId}: ${error?.message || error}`)
++        return false
++    }
++}
++
++async function tryAutoLinkVerifiedPhone(input: BotUserRegistrationInput) {
++    if (!input.phone || input.phoneVerified !== true) return null
++
++    const connections = await prisma.apiConnection.findMany({ orderBy: { createdAt: 'asc' } })
++    for (const connection of connections) {
++        try {
++            const response = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list', {
++                method: 'POST',
++                headers: {
++                    'X-Client-ID': connection.clid,
++                    'X-Api-Key': connection.apiKey,
++                    'Accept-Language': 'ru',
++                    'Content-Type': 'application/json',
++                },
++                body: JSON.stringify({
++                    query: { park: { id: connection.parkId }, text: input.phone },
++                    fields: { driver_profile: ['id', 'first_name', 'last_name', 'phones', 'work_status'], car: [], account: [], current_status: ['status'] },
++                    limit: 10,
++                    offset: 0,
++                }),
++            })
++            if (!response.ok) continue
++
++            const data = await response.json()
++            const matched = selectUniqueWorkingPhoneProfile(data.driver_profiles || [], input.phone)
++            if (!matched) continue
++
++            const yandexDriverId = String(matched.driver_profile.id)
++            const driverName = `${String(matched.driver_profile.first_name || '')} ${String(matched.driver_profile.last_name || '')}`.trim()
++            const normalizedPhone = normalizeDriverPhone(input.phone)
++            const driver = await prisma.driver.upsert({
++                where: { yandexDriverId },
++                update: {
++                    ...(driverName ? { fullName: driverName } : {}),
++                    ...(normalizedPhone ? { phone: normalizedPhone } : {}),
++                },
++                create: {
++                    yandexDriverId,
++                    fullName: driverName || `Водитель ${yandexDriverId.slice(0, 8)}`,
++                    phone: normalizedPhone || null,
++                },
++            })
++            const linked = await bindVerifiedTelegramDriver({
++                telegramId: String(input.telegramId),
++                driverId: driver.id,
++                username: input.username,
++                phone: input.phone,
++                activeParkId: connection.parkId,
++            })
++            if (!linked) return null
++
++            await prisma.botChatMessage.deleteMany({
++                where: {
++                    telegramId: BigInt(input.telegramId),
++                    driverId: null,
++                    direction: 'INCOMING',
++                    text: { startsWith: '[Запрос привязки]' },
++                },
++            })
++            return {
++                driverId: driver.id,
++                driverName: driverName || driver.fullName,
++                parkId: connection.parkId,
++                parkName: connection.name || connection.parkId,
++            }
++        } catch (error: any) {
++            console.error(`[Webhook] safe auto-link failed park=${connection.parkId}: ${error?.message || error}`)
++        }
++    }
++    return null
++}
++
++async function handleRegisterBotUser(payload: BotUserRegistrationInput) {
++    if (!payload?.telegramId) {
++        return NextResponse.json({ error: 'Missing telegramId' }, { status: 400 })
++    }
++
++    await upsertBotUserRegistry(payload)
++    const mapping = await prisma.driverTelegram.findUnique({
++        where: { telegramId: BigInt(payload.telegramId) },
++    })
++    if (mapping) {
++        const driver = await resolveMappedDriver(mapping).catch(() => null)
++        if (driver?.yandexDriverId) {
++            return NextResponse.json({ success: true, linked: true, driverId: driver.id, driverName: driver.fullName })
++        }
++    }
++
++    const autoLinked = payload.attemptAutoLink === false
++        ? null
++        : await tryAutoLinkVerifiedPhone(payload)
++    if (autoLinked) {
++        await notifyDriverLinked(String(payload.telegramId), autoLinked.driverName)
++        return NextResponse.json({ success: true, linked: true, autoLinked: true, ...autoLinked })
++    }
++    return NextResponse.json({ success: true, linked: false, status: 'PENDING_MANAGER_LINK' })
++}
++
++async function handleVerifiedSyncUser(payload: any) {
++    const { telegramId, username, phone, contactUserId } = payload || {}
++    if (!telegramId || !phone) {
++        return NextResponse.json({ error: 'Missing telegramId or phone' }, { status: 400 })
++    }
++    if (!contactUserId || String(contactUserId) !== String(telegramId)) {
++        return NextResponse.json({
++            error: 'CONTACT_OWNER_MISMATCH',
++            message: 'Используйте кнопку «Поделиться номером» и отправьте свой контакт.',
++        }, { status: 400 })
++    }
++
++    const registration = { telegramId, username, phone, phoneVerified: true }
++    await upsertBotUserRegistry(registration)
++    const autoLinked = await tryAutoLinkVerifiedPhone(registration)
++    if (autoLinked) {
++        await notifyDriverLinked(String(telegramId), autoLinked.driverName)
++        return NextResponse.json({
++            success: true,
++            linked: true,
++            autoLinked: true,
++            driverName: autoLinked.driverName,
++            parkName: autoLinked.parkName,
++        })
++    }
++
++    const existing = await prisma.botChatMessage.findFirst({
++        where: {
++            telegramId: BigInt(telegramId),
++            driverId: null,
++            direction: 'INCOMING',
++            text: { startsWith: '[Запрос привязки]' },
++        },
++    })
++    const text = `[Запрос привязки] Телефон: ${phone}, @${username || 'нет'}`
++    if (existing) {
++        await prisma.botChatMessage.update({ where: { id: existing.id }, data: { text } })
++    } else {
++        await prisma.botChatMessage.create({
++            data: { telegramId: BigInt(telegramId), text, direction: 'INCOMING', driverId: null },
++        })
++        await notifyManagerPendingLink({ telegramId, username, phone })
++    }
++    return NextResponse.json({ success: true, linked: false, autoLinked: false, status: 'PENDING_MANAGER_LINK' })
++}
++
+ // Inject a system message into the driver's TG chat so the manager sees the pending link request
+ async function notifyManagerPendingLink({ telegramId, username, phone }: {
+     telegramId: string
+@@ -353,7 +580,10 @@
+ }) {
+     try {
+         const chat = await prisma.chat.findFirst({
+-            where: { channel: 'telegram', externalChatId: String(telegramId) },
++            where: {
++                channel: 'telegram',
++                externalChatId: { in: telegramExternalChatIds(telegramId) },
++            },
+             select: { id: true },
+         })
+         if (!chat) return
+@@ -730,6 +960,12 @@
+         return NextResponse.json({ ok: false, error: 'Missing telegramId' }, { status: 400 })
+     }
+ 
++    // Old persistent Telegram keyboards can send an action before the account
++    // presses /start again. Such a user must still be visible in the CRM roster.
++    await upsertBotUserRegistry({ telegramId }).catch((error: any) => {
++        console.warn(`[handleDriverAction] registry update failed TG=${telegramId}: ${error?.message || error}`)
++    })
++
+     // 1. Resolve telegram → driver → yandexDriverId
+     const mapping = await prisma.driverTelegram.findFirst({
+         where: { telegramId: BigInt(telegramId) }
+@@ -739,7 +975,7 @@
+             ok: false,
+             error: 'NOT_LINKED',
+             preFleet: true,
+-            message: 'Профиль не привязан. Нажмите «Мой автомобиль» и поделитесь номером.',
++            message: 'Профиль ещё не привязан. Запись уже видна менеджеру в CRM.',
+         })
+     }
+     const driver = await resolveMappedDriver(mapping).catch((e: any) => {
+@@ -932,8 +1168,15 @@
+ async function handleGetParkInfo(payload: any) {
+     const { telegramId } = payload
+     if (!telegramId) return NextResponse.json({ error: 'Missing telegramId' }, { status: 400 })
++    await upsertBotUserRegistry({ telegramId }).catch((error: any) => {
++        console.warn(`[get_park_info] registry update failed TG=${telegramId}: ${error?.message || error}`)
++    })
+     const mapping = await prisma.driverTelegram.findFirst({ where: { telegramId: BigInt(telegramId) } })
+     if (!mapping) return NextResponse.json({ linked: false })
++    const driver = await resolveMappedDriver(mapping).catch(() => null)
++    if (!driver?.yandexDriverId) {
++        return NextResponse.json({ linked: false, reason: 'INCOMPLETE_LINK' })
++    }
+     let parkName: string | null = null
+     if (mapping.activeParkId) {
+         const park = await prisma.apiConnection.findFirst({ where: { parkId: mapping.activeParkId } })
+--- a/gravity-mvp/src/app/settings/integrations/bot/BotPageClient.tsx
++++ b/gravity-mvp/src/app/settings/integrations/bot/BotPageClient.tsx
+@@ -21,11 +21,15 @@
+ 
+ interface PendingRequest {
+     id: string
++    requestId: string | null
++    source: 'registry' | 'legacy' | 'broken_mapping'
+     telegramId: string
+     phone: string | null
+     username: string | null
+     chatId: string | null
+     createdAt: string
++    lastSeenAt: string | null
++    status: 'PENDING_MANAGER_LINK'
+ }
+ 
+ interface DriverSearchResult {
+@@ -67,6 +71,7 @@
+                 <div className="text-[12px] text-[#64748B]">
+                     {row.username ? `@${row.username} · ` : ''}ID {row.telegramId}
+                     {row.parkName ? ` · ${row.parkName}` : ''}
++                    <span className="ml-1.5 rounded-full bg-emerald-100 text-emerald-700 px-1.5 py-0.5 font-medium">Привязан</span>
+                 </div>
+                 <div className="text-[11px] text-[#64748B] mt-0.5 flex flex-wrap items-center gap-x-2">
+                     <span>Бот: <span className="font-mono">{formatPhone(row.submittedPhone)}</span></span>
+@@ -116,6 +121,7 @@
+     const [searching, setSearching] = useState(false)
+     const [saving, setSaving] = useState(false)
+     const [dismissing, setDismissing] = useState(false)
++    const [linkError, setLinkError] = useState<string | null>(null)
+ 
+     useEffect(() => {
+         if (query.length < 3) { setResults([]); return }
+@@ -136,12 +142,20 @@
+ 
+     const handleLink = async (driver: DriverSearchResult) => {
+         setSaving(true)
+-        await fetch('/api/bot-link', {
++        setLinkError(null)
++        const response = await fetch('/api/bot-link', {
+             method: 'POST',
+             headers: { 'Content-Type': 'application/json' },
+             body: JSON.stringify({ action: 'link', telegramId: row.telegramId, driverId: driver.id }),
+         })
+-        await fetch(`/api/bot-users?requestId=${row.id}`, { method: 'DELETE' })
++        if (!response.ok) {
++            setSaving(false)
++            setLinkError('Не удалось создать рабочую привязку. Проверьте профиль водителя Яндекс.')
++            return
++        }
++        if (row.requestId) {
++            await fetch(`/api/bot-users?requestId=${row.requestId}`, { method: 'DELETE' })
++        }
+         setSaving(false)
+         onLinked()
+     }
+@@ -161,7 +175,10 @@
+                         {row.username ? `@${row.username}` : `TG ID ${row.telegramId}`}
+                         {row.phone && <span className="ml-2 font-normal text-[#64748B]">{row.phone}</span>}
+                     </div>
+-                    <div className="text-[11px] text-[#64748B]">ID {row.telegramId} · {formatDate(row.createdAt)}</div>
++                    <div className="text-[11px] text-[#64748B] flex items-center gap-1.5">
++                        <span>ID {row.telegramId} · {formatDate(row.lastSeenAt || row.createdAt)}</span>
++                        <span className="rounded-full bg-amber-100 text-amber-700 px-1.5 py-0.5 font-medium">Ожидает привязки</span>
++                    </div>
+                 </div>
+                 <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                     {row.chatId && (
+@@ -181,13 +198,15 @@
+                             >
+                                 Привязать
+                             </button>
+-                            <button
+-                                onClick={handleDismiss}
+-                                disabled={dismissing}
+-                                className="text-[11px] text-[#64748B] hover:text-[#0F172A] px-1.5 py-1 rounded hover:bg-gray-100"
+-                            >
+-                                {dismissing ? <Loader2 size={10} className="animate-spin" /> : 'Убрать'}
+-                            </button>
++                            {row.source === 'legacy' && (
++                                <button
++                                    onClick={handleDismiss}
++                                    disabled={dismissing}
++                                    className="text-[11px] text-[#64748B] hover:text-[#0F172A] px-1.5 py-1 rounded hover:bg-gray-100"
++                                >
++                                    {dismissing ? <Loader2 size={10} className="animate-spin" /> : 'Убрать'}
++                                </button>
++                            )}
+                         </>
+                     )}
+                     {showSearch && (
+@@ -235,6 +254,7 @@
+                     ) : (
+                         <div className="text-[11px] text-[#64748B]">Введите минимум 3 символа</div>
+                     )}
++                    {linkError && <div className="mt-1 text-[11px] text-[#DC2626]">{linkError}</div>}
+                 </div>
+             )}
+         </div>
+--- a/gravity-mvp/src/lib/botLinking.ts
++++ b/gravity-mvp/src/lib/botLinking.ts
+@@ -6,10 +6,52 @@
+ 
+ export function normalizeDriverPhone(value?: string | null) {
+     const digits = String(value || '').replace(/\D/g, '')
++    if (digits.length === 10) return `7${digits}`
+     if (digits.length === 11 && digits.startsWith('8')) return `7${digits.slice(1)}`
+     return digits
+ }
+ 
++export function canonicalDriverPhone(value?: string | null) {
++    const normalized = normalizeDriverPhone(value)
++    return normalized ? `+${normalized}` : null
++}
++
++export function sameDriverPhone(left?: string | null, right?: string | null) {
++    const a = normalizeDriverPhone(left)
++    const b = normalizeDriverPhone(right)
++    return Boolean(a && b && a === b)
++}
++
++export type SelectedYandexDriverProfile = {
++    driver_profile: {
++        id: string
++        first_name?: unknown
++        last_name?: unknown
++        phones: unknown[]
++        work_status?: unknown
++    }
++}
++
++export function selectUniqueWorkingPhoneProfile(
++    profiles: unknown,
++    phone: string,
++): SelectedYandexDriverProfile | null {
++    if (!Array.isArray(profiles)) return null
++    const matches = profiles.filter((item): item is SelectedYandexDriverProfile => {
++        if (!item || typeof item !== 'object') return false
++        const profile = (item as { driver_profile?: Record<string, unknown> }).driver_profile
++        if (!profile?.id || !Array.isArray(profile.phones)) return false
++        return profile.phones.some(candidate => sameDriverPhone(String(candidate), phone))
++    })
++    const working = matches.filter(item => item.driver_profile.work_status !== 'fired')
++    return working.length === 1 ? working[0] : null
++}
++
++export function telegramExternalChatIds(telegramId: string | number | bigint) {
++    const raw = String(telegramId).replace(/^telegram:/, '')
++    return [raw, `telegram:${raw}`]
++}
++
+ export function driverPhoneVariants(value?: string | null) {
+     const normalized = normalizeDriverPhone(value)
+     if (!normalized) return []
+--- a/tg-bot/src/bot.js
++++ b/tg-bot/src/bot.js
+@@ -5,6 +5,7 @@
+ const logger = require('./utils/logger');
+ const sheetsService = require('./services/sheets');
+ const botRuntime = require('./services/botRuntime');
++const botRegistrySync = require('./services/botRegistrySync');
+ 
+ // Import handlers
+ const startHandler = require('./handlers/start');
+@@ -232,6 +233,10 @@
+         const userService = require('./services/userService');
+         const state = await userService.getUserState(userId);
+ 
++        // Telegram's own-contact button proves that this phone belongs to the
++        // sender. Keep that proof so /start can safely retry automatic linking.
++        await userService.updateUser(userId, { phone, phone_verified: 1 });
++
+         // If user is in an active wizard scene — pass contact there
+         const activeScene = ctx.session?.__scenes?.current;
+         if (activeScene === 'car_management_scene' || activeScene === 'limit_management_scene') {
+@@ -341,6 +346,10 @@
+     sheetsService.initializeSheet().then(() => logger.info('Google Sheets initialization completed')),
+     initializeBotInDb().then(() => logger.info('Database bot mapping verified'))
+ ]).then(() => {
++    botRegistrySync.startPeriodicSync();
++    botRegistrySync.syncPendingUsers().catch((error) => {
++        logger.error(`[BotRegistry] startup sync failed: ${error?.message || error}`);
++    });
+     return botRuntime.start();
+ }).catch((err) => {
+     logger.error('Startup error:', err);
+--- a/tg-bot/src/config.js
++++ b/tg-bot/src/config.js
+@@ -9,7 +9,7 @@
+     adminId: parseInt(process.env.ADMIN_IDS) || null,
+     
+     // Database configuration
+-    databasePath: './database.sqlite',
++    databasePath: process.env.BOT_SQLITE_PATH || './database.sqlite',
+     
+     // Bot settings
+     botName: 'SurveyBot',
+--- a/tg-bot/src/database.js
++++ b/tg-bot/src/database.js
+@@ -54,6 +54,8 @@
+                     last_name TEXT,
+                     full_name TEXT,
+                     phone TEXT,
++                    phone_verified INTEGER DEFAULT 0,
++                    crm_registered_at DATETIME,
+                     state TEXT DEFAULT 'IDLE',
+                     status TEXT DEFAULT 'Opened',
+                     vu_link TEXT,
+@@ -93,7 +95,9 @@
+                 `ALTER TABLE users ADD COLUMN state TEXT DEFAULT 'IDLE'`,
+                 `ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'Opened'`,
+                 `ALTER TABLE users ADD COLUMN vu_link TEXT`,
+-                `ALTER TABLE users ADD COLUMN sts_link TEXT`
++                `ALTER TABLE users ADD COLUMN sts_link TEXT`,
++                `ALTER TABLE users ADD COLUMN phone_verified INTEGER DEFAULT 0`,
++                `ALTER TABLE users ADD COLUMN crm_registered_at DATETIME`
+             ];
+ 
+             for (const sql of migrations) {
+@@ -186,6 +190,22 @@
+         return await this.all('SELECT * FROM users ORDER BY created_at DESC');
+     }
+ 
++    async getUsersPendingCrmRegistration(limit = 200) {
++        return await this.all(
++            'SELECT * FROM users WHERE crm_registered_at IS NULL ORDER BY created_at ASC LIMIT ?',
++            [limit]
++        );
++    }
++
++    async markUserRegisteredInCrm(telegramId) {
++        return await this.run(
++            `UPDATE users
++             SET crm_registered_at = datetime('now')
++             WHERE telegram_id = ?`,
++            [telegramId.toString()]
++        );
++    }
++
+     async getRecentUsers(limit = 10) {
+         return await this.all(
+             'SELECT * FROM users ORDER BY created_at DESC LIMIT ?',
+--- a/tg-bot/src/services/userService.js
++++ b/tg-bot/src/services/userService.js
+@@ -35,6 +35,14 @@
+         return await db.getAllUsers();
+     }
+ 
++    async getUsersPendingCrmRegistration(limit = 200) {
++        return await db.getUsersPendingCrmRegistration(limit);
++    }
++
++    async markUserRegisteredInCrm(telegramId) {
++        return await db.markUserRegisteredInCrm(telegramId);
++    }
++
+     // Get recent users
+     async getRecentUsers(limit = 10) {
+         return await db.getRecentUsers(limit);
+--- a/tg-bot/src/handlers/start.js
++++ b/tg-bot/src/handlers/start.js
+@@ -3,6 +3,7 @@
+ const http = require('http');
+ const userService = require('../services/userService');
+ const sheetsService = require('../services/sheets');
++const botRegistrySync = require('../services/botRegistrySync');
+ const logger = require('../utils/logger');
+ const config = require('../config');
+ 
+@@ -86,18 +87,25 @@
+ 
+     // Fetch active park for this user (fast — just 2 DB reads on CRM side)
+     let parkButtonLabel = '🏢 Выбрать парк';
++    let isLinkedDriver = false;
+     try {
+         const parkRes = await crmParkRequest('get_park_info', { telegramId: String(userId) });
+-        if (parkRes.ok && parkRes.data?.linked && parkRes.data?.parkName) {
+-            parkButtonLabel = `🏢 Парк: ${parkRes.data.parkName}`;
++        if (parkRes.ok && parkRes.data?.linked) {
++            isLinkedDriver = true;
++            if (parkRes.data?.parkName) parkButtonLabel = `🏢 Парк: ${parkRes.data.parkName}`;
+         }
+     } catch { /* use default */ }
+ 
+     // Standard buttons for regular users
++    const driverButtons = isLinkedDriver
++        ? [
++            [parkButtonLabel],
++            ['💳 Только безнал', '💵 Включить наличку'],
++            ['🚖 Текущий заказ', '🚘 Мой автомобиль'],
++        ]
++        : [['⏳ Ожидает привязки к водителю']];
+     const userButtons = [
+-        [parkButtonLabel],
+-        ['💳 Только безнал', '💵 Включить наличку'],
+-        ['🚖 Текущий заказ', '🚘 Мой автомобиль'],
++        ...driverButtons,
+         ['🚗 Подключиться', surveyButtons[0]],
+         ['💬 Чат водителей', '🛠 Поддержка'],
+         ['© Yoko Park · Бот для водителей'],
+@@ -249,6 +257,10 @@
+             const connectionHandler = require('./connection');
+             return await connectionHandler.startConnectionFlow(ctx);
+ 
++        case '⏳ Ожидает привязки к водителю':
++            await ctx.reply('Проверяю, появилась ли привязка в CRM…');
++            return await showMainMenu(ctx);
++
+         case '💳 Управление лимитом':
+             // Enter the limit management scene
+             if (ctx.scene) {
+@@ -272,10 +284,19 @@
+                 await ctx.reply('⏳ Отправляю данные...');
+ 
+                 // Call webhook
+-                const apiUrl = process.env.CRM_WEBHOOK_URL || 'http://localhost:3002/api/webhooks/bot';
++                const configuredCrmUrl = process.env.BOT_ACTIONS_URL || process.env.CRM_WEBHOOK_URL;
++                let apiUrl = 'http://localhost:3002/api/webhooks/bot';
++                if (configuredCrmUrl) {
++                    try {
++                        const configured = new URL(configuredCrmUrl);
++                        apiUrl = `${configured.protocol}//${configured.host}/api/webhooks/bot`;
++                    } catch { /* keep the safe local fallback */ }
++                }
+                 const payloadStr = JSON.stringify({
+                     action: 'sync_user',
+-                    payload: { telegramId: userId, username: username, phone: phone }
++                    // The saved phone entered through Telegram's own-contact
++                    // button, so the bot can attest that it belongs to userId.
++                    payload: { telegramId: userId, username: username, phone: phone, contactUserId: userId }
+                 });
+ 
+                 const parsed = new URL(apiUrl);
+@@ -302,6 +323,9 @@
+                     logger.error('Error sending data to CRM:', err);
+                     ctx.reply('❌ Ошибка связи с CRM.').catch(() => { });
+                 });
++                req.setTimeout(15000, () => {
++                    req.destroy(new Error('CRM sync timeout'));
++                });
+                 req.write(payloadStr);
+                 req.end();
+             } catch (err) {
+@@ -349,6 +373,25 @@
+         await userService.registerUser(from);
+         await userService.logAction(from.id, from.username, 'START_COMMAND', { payload: startPayload });
+ 
++        // Every account that opens the bot must immediately appear in CRM,
++        // even when no Yandex driver link exists yet.
++        try {
++            const localUser = await userService.getUserByTelegramId(from.id);
++            const registration = await botRegistrySync.registerUser({
++                telegram_id: String(from.id),
++                username: from.username || null,
++                first_name: from.first_name || null,
++                last_name: from.last_name || null,
++                phone: localUser?.phone || null,
++                phone_verified: Boolean(localUser?.phone_verified),
++            });
++            if (!registration.ok) {
++                logger.error(`[BotRegistry] CRM registration failed for TG ${from.id}`);
++            }
++        } catch (registrationError) {
++            logger.error(`[BotRegistry] Could not register TG ${from.id}:`, registrationError);
++        }
++
+         // IMPORTANT: Ensure the bot exists in Prisma DB so surveys work
+         const { PrismaClient } = require('@prisma/client');
+         const prisma = new PrismaClient();
+--- a/tg-bot/src/handlers/carManagement.js
++++ b/tg-bot/src/handlers/carManagement.js
+@@ -187,7 +187,8 @@
+                 const result = await callCRM('sync_user', {
+                     telegramId: String(ctx.from.id),
+                     username: ctx.from.username,
+-                    phone
++                    phone,
++                    contactUserId: ctx.message.contact.user_id
+                 });
+ 
+                 if (result.status === 0 || result.status === 504) {
+@@ -210,6 +211,12 @@
+                         `Менеджер привяжет профиль вручную — придёт уведомление.`,
+                         { parse_mode: 'Markdown' }
+                     );
++                } else if (result.data?.error === 'CONTACT_OWNER_MISMATCH') {
++                    await ctx.reply(
++                        `⚠️ Для безопасной привязки нужно отправить именно свой контакт.\n\n` +
++                        `Нажмите кнопку *📱 Поделиться номером для привязки* — пересланный контакт не подойдёт.`,
++                        { parse_mode: 'Markdown' }
++                    );
+                 } else {
+                     await ctx.reply(
+                         `❌ Ошибка при отправке. Попробуйте позже.`
+--- a/tg-bot/src/handlers/driverOrder.js
++++ b/tg-bot/src/handlers/driverOrder.js
+@@ -17,7 +17,7 @@
+  *   ESCALATED_TO_MANAGER — "✉️ Передал менеджеру"
+  *   NEEDS_REASON_PROBE  — "✉️ Передал менеджеру" (cancel modal not yet probed)
+  *   FAILED              — "❌ Ошибка: ..."
+- *   NOT_LINKED          — "Привяжите профиль через Мой автомобиль"
++ *   NOT_LINKED          — account is visible in CRM and awaits manager link
+  *   NO_YANDEX_ID        — "Передал менеджеру"
+  *   SCRAPER_DOWN        — "Система недоступна, передал менеджеру"
+  */
+@@ -25,7 +25,11 @@
+ const https = require('https');
+ const http = require('http');
+ const logger = require('../utils/logger');
+-const { screenshotFallbackNote } = require('../utils/driverOrderDiagnostics');
++const {
++    diagnosticTitle,
++    screenshotFallbackNote,
++    shouldNotifyManagerAboutFailure,
++} = require('../utils/driverOrderDiagnostics');
+ 
+ // Same env resolution as carManagement.js — action calls must go to
+ // /api/webhooks/bot, NOT /api/webhook/telegram. CRM_WEBHOOK_URL is reserved
+@@ -190,9 +194,11 @@
+ }
+ 
+ async function notifyManagerAboutFailure(ctx, state) {
++    if (!shouldNotifyManagerAboutFailure(state)) return [];
++
+     const b64 = state?.diagnosticImageBase64;
+     const caption = [
+-        '⚠️ Ошибка действия с заказом',
++        diagnosticTitle(state),
+         `Водитель TG: ${ctx.from?.id || 'неизвестно'}`,
+         `Этап: ${state.diagnosticStep || state.error || state.errorMessage || state.status || 'неизвестно'}`,
+         state.result?.shortOrderId ? `Заказ: ${state.result.shortOrderId}` : null,
+@@ -233,12 +239,12 @@
+ }
+ 
+ async function reportFailure(ctx, state) {
+-    await notifyManagerAboutFailure(ctx, state);
+     // Map various failure shapes to a user-friendly message.
+     if (state.error === 'NOT_LINKED') {
+-        await ctx.reply('⚠️ Профиль не привязан. Нажмите «🚘 Мой автомобиль» и поделитесь номером.');
++        await ctx.reply('⏳ Профиль ещё не привязан. Вы уже видны менеджеру в CRM — дождитесь привязки и нажмите /start.');
+         return;
+     }
++    await notifyManagerAboutFailure(ctx, state);
+     if (state.error === 'NO_YANDEX_ID' || state.error === 'LINK_INCOMPLETE' || state.status === 'ESCALATED_TO_MANAGER') {
+         await ctx.reply('✉️ Передал менеджеру — он свяжется с тобой.');
+         return;
+--- a/tg-bot/src/utils/driverOrderDiagnostics.js
++++ b/tg-bot/src/utils/driverOrderDiagnostics.js
+@@ -4,10 +4,27 @@
+     return state?.preFleet === true || PRE_FLEET_ERRORS.has(state?.error);
+ }
+ 
++function shouldNotifyManagerAboutFailure(state) {
++    // A user who has not linked a profile yet is an expected onboarding state,
++    // not an order-system incident. Broken existing links remain actionable.
++    return state?.error !== 'NOT_LINKED';
++}
++
++function diagnosticTitle(state) {
++    return stoppedBeforeFleet(state)
++        ? '⚠️ Требуется восстановить привязку водителя'
++        : '⚠️ Ошибка действия с заказом';
++}
++
+ function screenshotFallbackNote(state) {
+     return stoppedBeforeFleet(state)
+         ? 'Скриншот отсутствует: запрос остановлен до запуска Fleet.'
+         : 'Скриншот сохранён в CRM или не был получен от скрапера.';
+ }
+ 
+-module.exports = { stoppedBeforeFleet, screenshotFallbackNote };
++module.exports = {
++    diagnosticTitle,
++    screenshotFallbackNote,
++    shouldNotifyManagerAboutFailure,
++    stoppedBeforeFleet,
++};
+--- /dev/null
++++ b/gravity-mvp/prisma/migrations/20260805073000_add_bot_user_registry/migration.sql
+@@ -0,0 +1,124 @@
++CREATE TABLE IF NOT EXISTS "BotUserRegistry" (
++    "id" TEXT NOT NULL,
++    "telegramId" BIGINT NOT NULL,
++    "username" TEXT,
++    "firstName" TEXT,
++    "lastName" TEXT,
++    "phone" TEXT,
++    "phoneVerified" BOOLEAN NOT NULL DEFAULT false,
++    "firstSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
++    "lastSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
++
++    CONSTRAINT "BotUserRegistry_pkey" PRIMARY KEY ("id")
++);
++
++CREATE UNIQUE INDEX IF NOT EXISTS "BotUserRegistry_telegramId_key"
++    ON "BotUserRegistry"("telegramId");
++
++CREATE INDEX IF NOT EXISTS "BotUserRegistry_lastSeenAt_idx"
++    ON "BotUserRegistry"("lastSeenAt" DESC);
++
++-- Backfill accounts that opened the bot before this registry existed.
++-- The survey user table is the broadest historical source. DISTINCT ON keeps
++-- one row when the same Telegram account interacted with more than one bot.
++INSERT INTO "BotUserRegistry" (
++    "id",
++    "telegramId",
++    "username",
++    "firstName",
++    "firstSeenAt",
++    "lastSeenAt"
++)
++SELECT
++    'legacy_user_' || historical_user."telegram_id"::TEXT,
++    historical_user."telegram_id",
++    historical_user."username",
++    historical_user."first_name",
++    historical_user."created_at",
++    CURRENT_TIMESTAMP
++FROM (
++    SELECT DISTINCT ON ("telegram_id")
++        "telegram_id",
++        "username",
++        "first_name",
++        "created_at"
++    FROM "users"
++    ORDER BY "telegram_id", "created_at" ASC
++) AS historical_user
++ON CONFLICT ("telegramId") DO NOTHING;
++
++-- Keep existing manual/automatic driver links visible even if no survey user
++-- record was created for that Telegram account.
++INSERT INTO "BotUserRegistry" (
++    "id",
++    "telegramId",
++    "username",
++    "phoneVerified",
++    "firstSeenAt",
++    "lastSeenAt"
++)
++SELECT
++    'legacy_link_' || "id",
++    "telegramId",
++    "username",
++    "phoneVerified",
++    "createdAt",
++    CURRENT_TIMESTAMP
++FROM "DriverTelegram"
++ON CONFLICT ("telegramId") DO NOTHING;
++
++-- Older manual-link requests are another valid proof that the account used
++-- the bot. Preserve one earliest request for each Telegram account.
++INSERT INTO "BotUserRegistry" (
++    "id",
++    "telegramId",
++    "firstSeenAt",
++    "lastSeenAt"
++)
++SELECT
++    'legacy_request_' || historical_request."telegramId"::TEXT,
++    historical_request."telegramId",
++    historical_request."createdAt",
++    CURRENT_TIMESTAMP
++FROM (
++    SELECT DISTINCT ON ("telegramId")
++        "telegramId",
++        "createdAt"
++    FROM "BotChatMessage"
++    ORDER BY "telegramId", "createdAt" ASC
++) AS historical_request
++ON CONFLICT ("telegramId") DO NOTHING;
++
++-- Telegram chats are a historical proof that the account interacted with the
++-- bot even when no survey row or driver link was created.
++INSERT INTO "BotUserRegistry" (
++    "id",
++    "telegramId",
++    "firstSeenAt",
++    "lastSeenAt"
++)
++SELECT
++    'legacy_chat_' || regexp_replace("externalChatId", '^telegram:', ''),
++    regexp_replace("externalChatId", '^telegram:', '')::BIGINT,
++    "createdAt",
++    COALESCE("lastMessageAt", "updatedAt", "createdAt")
++FROM "Chat"
++WHERE "channel" = 'telegram'
++  AND "externalChatId" ~ '^(telegram:)?[0-9]+$'
++ON CONFLICT ("telegramId") DO NOTHING;
++
++-- Recovery for the concrete account whose NOT_LINKED incident exposed the
++-- missing-registry gap. The alert itself proves that this account used the bot.
++INSERT INTO "BotUserRegistry" (
++    "id",
++    "telegramId",
++    "firstSeenAt",
++    "lastSeenAt"
++)
++VALUES (
++    'incident_1009966916',
++    1009966916,
++    CURRENT_TIMESTAMP,
++    CURRENT_TIMESTAMP
++)
++ON CONFLICT ("telegramId") DO NOTHING;
+--- /dev/null
++++ b/tg-bot/src/services/botRegistrySync.js
+@@ -0,0 +1,135 @@
++const https = require('https');
++const http = require('http');
++const userService = require('./userService');
++const logger = require('../utils/logger');
++
++const SYNC_INTERVAL_MS = Number.parseInt(
++    process.env.BOT_REGISTRY_SYNC_INTERVAL_MS || '300000',
++    10
++);
++const SYNC_BATCH_SIZE = 200;
++const SYNC_CONCURRENCY = 5;
++let syncInProgress = false;
++
++function crmActionsUrl() {
++    if (process.env.BOT_ACTIONS_URL) return process.env.BOT_ACTIONS_URL;
++    const configured = process.env.CRM_WEBHOOK_URL;
++    if (configured) {
++        try {
++            const url = new URL(configured);
++            return `${url.protocol}//${url.host}/api/webhooks/bot`;
++        } catch { /* use local service fallback */ }
++    }
++    return 'http://localhost:3002/api/webhooks/bot';
++}
++
++function postRegistration(payload) {
++    return new Promise((resolve) => {
++        const body = JSON.stringify({ action: 'register_bot_user', payload });
++        const parsed = new URL(crmActionsUrl());
++        const transport = parsed.protocol === 'https:' ? https : http;
++        let settled = false;
++        const finish = (result) => {
++            if (settled) return;
++            settled = true;
++            resolve(result);
++        };
++        const request = transport.request({
++            hostname: parsed.hostname,
++            port: parsed.port || (parsed.protocol === 'https:' ? 443 : 80),
++            path: `${parsed.pathname}${parsed.search}`,
++            method: 'POST',
++            headers: {
++                'Content-Type': 'application/json',
++                'Content-Length': Buffer.byteLength(body),
++                'x-bot-signature': process.env.BOT_CRM_SECRET || 'secret',
++            },
++        }, (response) => {
++            let responseBody = '';
++            response.on('data', chunk => { responseBody += chunk; });
++            response.on('end', () => {
++                let data = {};
++                try { data = JSON.parse(responseBody); } catch { /* keep empty response */ }
++                finish({ ok: response.statusCode >= 200 && response.statusCode < 300, data });
++            });
++        });
++        request.setTimeout(15000, () => {
++            request.destroy(new Error('CRM bot registry timeout'));
++        });
++        request.on('error', error => finish({ ok: false, error }));
++        request.write(body);
++        request.end();
++    });
++}
++
++function registrationPayload(user, attemptAutoLink) {
++    return {
++        telegramId: String(user.telegram_id ?? user.telegramId),
++        username: user.username || null,
++        firstName: user.first_name ?? user.firstName ?? null,
++        lastName: user.last_name ?? user.lastName ?? null,
++        phone: user.phone || null,
++        phoneVerified: Boolean(user.phone_verified ?? user.phoneVerified),
++        attemptAutoLink,
++    };
++}
++
++async function registerUser(user, { attemptAutoLink = true } = {}) {
++    const payload = registrationPayload(user, attemptAutoLink);
++    const result = await postRegistration(payload);
++    if (result.ok) {
++        await userService.markUserRegisteredInCrm(payload.telegramId);
++    }
++    return result;
++}
++
++async function syncPendingUsers() {
++    if (syncInProgress) return { skipped: true };
++    syncInProgress = true;
++    try {
++        const users = await userService.getUsersPendingCrmRegistration(SYNC_BATCH_SIZE);
++        let synced = 0;
++        let failed = 0;
++        for (let offset = 0; offset < users.length; offset += SYNC_CONCURRENCY) {
++            const batch = users.slice(offset, offset + SYNC_CONCURRENCY);
++            const results = await Promise.all(batch.map(user =>
++                registerUser(user, { attemptAutoLink: false })
++            ));
++            synced += results.filter(result => result.ok).length;
++            failed += results.filter(result => !result.ok).length;
++        }
++        if (users.length > 0) {
++            logger.info(`[BotRegistry] historical sync: ${synced} synced, ${failed} pending`);
++        }
++        if (users.length === SYNC_BATCH_SIZE && failed === 0) {
++            const continuation = setTimeout(() => {
++                syncPendingUsers().catch(error => {
++                    logger.error(`[BotRegistry] continuation failed: ${error?.message || error}`);
++                });
++            }, 1000);
++            continuation.unref();
++        }
++        return { synced, failed };
++    } catch (error) {
++        logger.error(`[BotRegistry] historical sync failed: ${error?.message || error}`);
++        return { synced: 0, failed: 1 };
++    } finally {
++        syncInProgress = false;
++    }
++}
++
++function startPeriodicSync() {
++    const timer = setInterval(() => {
++        syncPendingUsers().catch(error => {
++            logger.error(`[BotRegistry] scheduled sync failed: ${error?.message || error}`);
++        });
++    }, SYNC_INTERVAL_MS);
++    timer.unref();
++    return timer;
++}
++
++module.exports = {
++    registerUser,
++    startPeriodicSync,
++    syncPendingUsers,
++};

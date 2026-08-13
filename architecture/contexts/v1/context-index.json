@@ -23,7 +23,7 @@
     {
       "context": "configuration",
       "path": "architecture/contexts/v1/manifests/configuration.json",
-      "sha256": "95d603759216638327729b939bcc7cac1fe73372ec420dc5f8fbe4bc621373c0"
+      "sha256": "eb6c4786b0960adeaccc0b0935fde3ca31574a84a7cec3c740e6b8883b8204ee"
     },
     {
       "context": "contacts",
@@ -53,7 +53,7 @@
     {
       "context": "messaging",
       "path": "architecture/contexts/v1/manifests/messaging.json",
-      "sha256": "0b86561ad28a88d8b4e20925128bfb51003dfb77ac5f8cf65ce8727e7cb1132e"
+      "sha256": "44f6b369fb1fe8e8493dc1e025e7bf5d9960aebc44671a2dfc430dcac400fb8d"
     },
     {
       "context": "operations_observability",
@@ -78,7 +78,7 @@
     {
       "context": "work_management",
       "path": "architecture/contexts/v1/manifests/work_management.json",
-      "sha256": "9b87bd3c6b32d3265b743061ba900876089490cc0bbf851c5b3cdfa00b9f11f0"
+      "sha256": "df50b596e2c5850f84fbc20e2079519367048f5549b7704d97b0df971d513277"
     }
   ],
   "controls": {
@@ -110,9 +110,21 @@
       "path": "architecture/evidence/v1/dependency-graph.json",
       "sha256": "39aaf49f5ad61cda26fd1f74f1cf7f847a066a8b05445f64ba8fd6e6bbeafee6"
     },
+    "executable_path_ownership_validator": {
+      "path": "tools/architecture/validate-executable-path-ownership.mjs",
+      "sha256": "7487f74eef04393dc48801e1a76d90118baca7e962934e587a92c70e80540f82"
+    },
+    "final_dependency_source_deriver": {
+      "path": "tools/architecture/derive-final-dependency-source.mjs",
+      "sha256": "738e93ccfb67a02fe545fbfe9ce579d833ca8b7435a25404e840f655daae58bb"
+    },
     "generator": {
       "path": "tools/architecture/generate-context-manifests.mjs",
-      "sha256": "dc2a9ee8500d73022ca03fcf9f6edebab63daedad98cf095bfc966b97881cba2"
+      "sha256": "8662cd62f802f8c3f36be1cbe441af727e53ec7bf2b596079a0298a89b61730a"
+    },
+    "lifecycle_surface_registry": {
+      "path": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
+      "sha256": "f7b9e40d1af9f977112d32221060264682d753d8a4fa9039ae36b8d5beb44f2c"
     },
     "module_inventory": {
       "path": "architecture/evidence/v1/module-inventory.json",
@@ -132,7 +144,7 @@
     },
     "verification_profile_enricher": {
       "path": "tools/architecture/enrich-context-manifests.mjs",
-      "sha256": "31e035bb51c6521baa63179aa0d4da0abcb42a13742b423273aa6d9126d808b2"
+      "sha256": "49fd002b8e1aee46396ebb0543c7f2ed22b1dee0e933019c8ba8ec69647d9814"
     },
     "write_sites": {
       "path": "architecture/evidence/v1/write-sites.json",
@@ -143,7 +155,19 @@
   "outputs": {
     "dependency_transition_plan": {
       "path": "architecture/contexts/v1/dependency-transition-plan.json",
-      "sha256": "0b0d8576aa65e752dfcb4e9ef7f27766ca1414aba671a218f6972168dbf095a6"
+      "sha256": "15d521f52cc4b47bb38bf2c4f201146f1f376f925c216cdd4d14929b6bb97f4c"
+    },
+    "executable_path_ownership_coverage": {
+      "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
+      "sha256": "ba9384798b6352d9b32c83c7c2057824820f2f8e1ff96a79a76ef520de4377fa"
+    },
+    "final_dependency_current": {
+      "path": "architecture/contexts/v1/final-dependency-current.json",
+      "sha256": "72bf9b2b3154b5987a911730bd29ff01b263363e927dde5590def826565b9f10"
+    },
+    "final_dependency_source": {
+      "path": "architecture/contexts/v1/final-dependency-source.json",
+      "sha256": "0fb682338f54546d386e0a86e3bb7aad756d60a62d63c691074682cf4142a164"
     },
     "foreign_write_migration_plan": {
       "path": "architecture/contexts/v1/foreign-write-migration-plan.json",

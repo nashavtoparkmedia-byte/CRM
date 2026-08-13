@@ -35,9 +35,9 @@ export async function register() {
     // scheduling any recovery or retry job that can invoke MessageService.
     try {
         const [whatsapp, telegram, max] = await Promise.all([
-            import('@/modules/whatsapp-channel/public/v1/messaging-delivery-capability'),
-            import('@/modules/telegram-channel/public/v1/messaging-delivery-capability'),
-            import('@/modules/max-channel/public/v1/messaging-delivery-capability'),
+            import('@/modules/whatsapp-channel/public/v1'),
+            import('@/modules/telegram-channel/public/v1'),
+            import('@/modules/max-channel/public/v1'),
         ])
         whatsapp.registerWhatsAppMessagingDeliveryCapabilityV1()
         telegram.registerTelegramMessagingDeliveryCapabilityV1()
@@ -103,7 +103,7 @@ export async function register() {
         // left behind by an unclean previous exit (taskkill, crash, sleep).
         // Without this, warmup fails with "browser is already running for userDataDir".
         try {
-            const { cleanupStaleWhatsAppRuntimeV1 } = await import('@/modules/whatsapp-channel/public/v1/runtime-operations')
+            const { cleanupStaleWhatsAppRuntimeV1 } = await import('@/modules/whatsapp-channel/public/v1')
             const result = await cleanupStaleWhatsAppRuntimeV1()
             opsLog('info', 'whatsapp_cleanup_done', {
                 operation: 'startup',
@@ -118,7 +118,7 @@ export async function register() {
         // ── WhatsApp warmup ──────────────────────────────────────────────
         try {
             const { prisma } = await import('@/lib/prisma')
-            const { initializeWhatsAppRuntimeV1 } = await import('@/modules/whatsapp-channel/public/v1/runtime-operations')
+            const { initializeWhatsAppRuntimeV1 } = await import('@/modules/whatsapp-channel/public/v1')
             // Include 'error'/'idle' so connections that crashed or expired in a
             // previous container run are retried on startup. If the session file
             // is still valid on disk → auto-reconnect; if not → QR shown in UI.
@@ -143,7 +143,7 @@ export async function register() {
 
         // ── Initial stuck message recovery ───────────────────────────────
         try {
-            const { recoverStuckMessagingDeliveriesV1 } = await import('@/modules/messaging/public/v1/delivery-recovery-operations')
+            const { recoverStuckMessagingDeliveriesV1 } = await import('@/modules/messaging/public/v1')
             const recovered = await recoverStuckMessagingDeliveriesV1()
             if (recovered > 0) {
                 opsLog('info', 'stuck_recovery_startup', { count: recovered })
@@ -160,7 +160,7 @@ export async function register() {
 
         // Stuck recovery: every 5 minutes
         const recoveryInterval = setInterval(async () => {
-            const { recoverStuckMessagingDeliveriesV1 } = await import('@/modules/messaging/public/v1/delivery-recovery-operations')
+            const { recoverStuckMessagingDeliveriesV1 } = await import('@/modules/messaging/public/v1')
             await runOperationalJobV1('recovery', async () => {
                 const count = await recoverStuckMessagingDeliveriesV1()
                 return { count, at: new Date().toISOString() }
@@ -188,7 +188,7 @@ export async function register() {
         // Message retry: every 2 minutes
         const retryInterval = setInterval(async () => {
             await runOperationalJobV1('message_retry', async () => {
-                const { retryEligibleMessagingDeliveriesV1 } = await import('@/modules/messaging/public/v1/delivery-recovery-operations')
+                const { retryEligibleMessagingDeliveriesV1 } = await import('@/modules/messaging/public/v1')
                 const result = await retryEligibleMessagingDeliveriesV1()
                 return { ...result, at: new Date().toISOString() }
             })
@@ -198,7 +198,7 @@ export async function register() {
         // WA watchdog: every 60 seconds
         const watchdogInterval = setInterval(async () => {
             await runOperationalJobV1('wa_watchdog', async () => {
-                const { checkWhatsAppRuntimeHealthV1 } = await import('@/modules/whatsapp-channel/public/v1/runtime-operations')
+                const { checkWhatsAppRuntimeHealthV1 } = await import('@/modules/whatsapp-channel/public/v1')
                 const results = await checkWhatsAppRuntimeHealthV1()
                 return results
             })
@@ -260,7 +260,7 @@ export async function register() {
             const { registerCompletedCallTimelineProjectorV1 } = await import('@/modules/calling/public/v1')
             const { messagingCompletedCallTimelineProjectorV1 } = await import('@/modules/messaging/public/v1')
             registerCompletedCallTimelineProjectorV1(messagingCompletedCallTimelineProjectorV1)
-            const { startCallingEslRuntimeV1 } = await import('@/modules/calling/public/v1/runtime-startup')
+            const { startCallingEslRuntimeV1 } = await import('@/modules/calling/public/v1')
             await startCallingEslRuntimeV1()
             opsLog('info', 'esl_listener_started', { operation: 'startup' })
         } catch (err: any) {
@@ -272,7 +272,7 @@ export async function register() {
         // jobs enqueued by each other (transcribe → analyze). Safe to start
         // before Redis is up; the workers will retry on connect.
         try {
-            const { startCallingProcessingRuntimeV1 } = await import('@/modules/calling/public/v1/runtime-startup')
+            const { startCallingProcessingRuntimeV1 } = await import('@/modules/calling/public/v1')
             startCallingProcessingRuntimeV1()
             opsLog('info', 'call_workers_started', { operation: 'startup' })
         } catch (err: any) {
@@ -306,7 +306,7 @@ export async function register() {
             if (lastYandexSyncDay === today) return  // already ran today
 
             await runOperationalJobV1('yandex_fleet_sync', async () => {
-                const { runScheduledYandexSyncV1 } = await import('@/modules/fleet-operations/public/v1/yandex-sync-runtime')
+                const { runScheduledYandexSyncV1 } = await import('@/modules/fleet-operations/public/v1')
                 const result = await runScheduledYandexSyncV1()
                 if (result.ok) {
                     lastYandexSyncDay = today
@@ -346,7 +346,7 @@ export async function register() {
 
             // 2. Close WA clients
             try {
-                const { destroyWhatsAppRuntimeV1 } = await import('@/modules/whatsapp-channel/public/v1/runtime-operations')
+                const { destroyWhatsAppRuntimeV1 } = await import('@/modules/whatsapp-channel/public/v1')
                 if (typeof destroyWhatsAppRuntimeV1 === 'function') {
                     await destroyWhatsAppRuntimeV1()
                     log('info', 'shutdown_wa_clients_closed')
@@ -366,7 +366,7 @@ export async function register() {
 
             // 3a. Stop BullMQ workers + close Redis
             try {
-                const { stopCallingProcessingRuntimeV1 } = await import('@/modules/calling/public/v1/runtime-startup')
+                const { stopCallingProcessingRuntimeV1 } = await import('@/modules/calling/public/v1')
                 await stopCallingProcessingRuntimeV1()
                 log('info', 'shutdown_queues_closed')
             } catch (e: any) {
@@ -414,7 +414,7 @@ export async function register() {
         // Best-effort async WA cleanup — we fire-and-forget with a 5s cap then exit.
         const cleanup = (async () => {
             try {
-                const { destroyWhatsAppRuntimeV1 } = await import('@/modules/whatsapp-channel/public/v1/runtime-operations')
+                const { destroyWhatsAppRuntimeV1 } = await import('@/modules/whatsapp-channel/public/v1')
                 await Promise.race([
                     destroyWhatsAppRuntimeV1(),
                     new Promise(resolve => setTimeout(resolve, 5000)),

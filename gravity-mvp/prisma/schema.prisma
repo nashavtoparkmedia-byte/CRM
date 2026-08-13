@@ -15,6 +15,41 @@ model ApiConnection {
   name      String?
   createdAt DateTime @default(now())
   logs      ApiLog[]
+  parkConnections ParkConnection[]
+  sourcedDriverProfiles Driver[] @relation("DriverProfileSourceConnection")
+}
+
+model Park {
+  id             String           @id @default(cuid())
+  parkCode       String           @unique
+  parkName       String
+  externalParkId String           @unique
+  active         Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  connections    ParkConnection[]
+  driverProfiles Driver[]
+}
+
+model ParkConnection {
+  id                   String        @id @default(cuid())
+  parkId               String
+  apiConnectionId      String
+  externalParkId       String
+  enabled              Boolean       @default(true)
+  validFrom            DateTime      @default(now())
+  archivedAt           DateTime?
+  lastSuccessfulSyncAt DateTime?
+  lastFailedSyncAt     DateTime?
+  lastErrorSummary     String?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  park                 Park          @relation(fields: [parkId], references: [id], onDelete: Cascade)
+  apiConnection        ApiConnection @relation(fields: [apiConnectionId], references: [id], onDelete: Cascade)
+
+  @@unique([apiConnectionId, archivedAt])
+  @@index([parkId, enabled])
+  @@index([externalParkId])
 }
 
 model ApiLog {
@@ -92,6 +127,785 @@ model MaxPersonalSession {
   updatedAt               DateTime             @updatedAt
 }
 
+/// Append-only physical MAX transport observation. Correlation fields and
+/// payloadSha256 are deliberately non-unique: identical observations are
+/// distinct evidence and must receive distinct observationId/sequence values.
+model MaxRawTransportEvent {
+  observationId        String                      @id @default(cuid())
+  journalSequence      BigInt                      @unique @default(autoincrement())
+  accountId            String
+  captureEnvelopeId    String?
+  observedAt           DateTime
+  persistedAt          DateTime                    @default(now())
+  sourceTransport      String
+  sourceOrigin         String
+  historyLive          String
+  socketGeneration     String?
+  frameId              String?
+  providerEventId      String?
+  transportSequence    String?
+  opcode                Int?
+  eventType             String?
+  payloadEncoding       String
+  sanitizedPayload      Json
+  payloadSha256         String
+  payloadSizeBytes      Int
+  replayAvailability    String                      @default("available")
+  quarantineReason      String?
+  sanitizerVersion      String
+  captureAdapterVersion String
+  schemaVersion         Int                         @default(1)
+  correlationMetadata   Json?
+  redactionMetadata     Json
+  quarantineEligible    Boolean                     @default(true)
+  processingStates      MaxRawTransportProcessing[]
+  routeObservations     MaxRouteObservation[]
+  normalizationResults  MaxInboundNormalizationResult[]
+  shadowComparisonResults MaxShadowComparisonResult[]
+
+  @@unique([accountId, observationId])
+  @@index([accountId, captureEnvelopeId])
+  @@index([accountId, journalSequence])
+  @@index([accountId, observedAt])
+  @@index([accountId, providerEventId])
+  @@index([accountId, frameId])
+  @@index([accountId, transportSequence])
+  @@index([payloadSha256])
+  @@index([opcode])
+}
+
+/// Mutable parser lifecycle is separate from immutable raw evidence. State is
+/// constrained by the reviewed migration and validated at the adapter boundary.
+/// A raw observation may be processed once per parserVersion without preventing
+/// a later parser version from replaying the same evidence.
+model MaxRawTransportProcessing {
+  id                  String               @id @default(cuid())
+  observationId       String
+  parserVersion       String
+  state               String               @default("pending")
+  attempts            Int                  @default(0)
+  claimedBy           String?
+  claimedAt           DateTime?
+  leaseUntil          DateTime?
+  leaseVersion        Int                  @default(0)
+  completedAt         DateTime?
+  lastErrorCode       String?
+  lastErrorSummary    String?
+  quarantineReason    String?
+  replayMetadata      Json?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  rawObservation      MaxRawTransportEvent @relation(fields: [observationId], references: [observationId], onDelete: Restrict)
+
+  @@unique([observationId, parserVersion])
+  @@index([state, leaseUntil])
+  @@index([claimedBy, leaseUntil])
+  @@index([parserVersion, state])
+}
+
+/// Durable account-scoped consumer progress. Optimistic version prevents a
+/// stale worker from silently overwriting a newer restart checkpoint.
+model MaxRawTransportCursor {
+  id                  String   @id @default(cuid())
+  consumerId          String
+  accountId           String
+  parserVersion       String
+  lastJournalSequence BigInt   @default(0)
+  version             Int      @default(0)
+  updatedAt           DateTime @updatedAt
+
+  @@unique([consumerId, accountId, parserVersion])
+  @@index([accountId, lastJournalSequence])
+}
+
+/// Immutable terminal normalization outcome for one physical observation and
+/// parser version. Replaying with a new parserVersion creates another result;
+/// byte-identical physical observations are never collapsed.
+model MaxInboundNormalizationResult {
+  normalizationResultId String                        @id @default(cuid())
+  accountId              String
+  sourceObservationId    String
+  sourceJournalSequence  BigInt
+  parserVersion          String
+  envelopeVersion        String
+  status                 String
+  eventCount             Int
+  issueCode              String?
+  safeIssueSummary       String?
+  startedAt              DateTime
+  completedAt            DateTime
+  createdAt              DateTime                      @default(now())
+  sourceObservation      MaxRawTransportEvent           @relation(fields: [accountId, sourceObservationId], references: [accountId, observationId], onDelete: Restrict, map: "MaxInboundNormalizationResult_account_source_fkey")
+  events                 MaxInboundNormalizedEvent[]
+
+  @@unique([accountId, sourceObservationId, parserVersion], map: "MaxInboundNormalizationResult_account_source_parser_key")
+  @@unique([accountId, normalizationResultId], map: "MaxInboundNormalizationResult_account_result_key")
+  @@unique([accountId, normalizationResultId, sourceObservationId, parserVersion], map: "MaxInboundNormalizationResult_account_result_source_parser_key")
+  @@index([accountId, sourceJournalSequence], map: "MaxInboundNormalizationResult_account_sequence_idx")
+  @@index([accountId, parserVersion, sourceJournalSequence], map: "MaxInboundNormalizationResult_account_parser_sequence_idx")
+  @@index([status], map: "MaxInboundNormalizationResult_status_idx")
+}
+
+/// Immutable semantic event emitted by a completed normalization result.
+/// Provider and semantic hashes are correlation evidence, never dedup keys.
+model MaxInboundNormalizedEvent {
+  normalizedEventId     String                        @id @default(cuid())
+  normalizationResultId String
+  accountId             String
+  sourceObservationId   String
+  sourceJournalSequence BigInt
+  parserVersion         String
+  envelopeVersion       String
+  eventOrdinal          Int
+  eventKind             String
+  direction             String
+  origin                String
+  providerMessageId     String?
+  providerUserId        String?
+  protocolChatId        String?
+  webRouteId            String?
+  clientMessageId       String?
+  targetProviderMessageId String?
+  providerOccurredAt    DateTime?
+  normalizedPayload     Json
+  semanticSha256        String
+  createdAt             DateTime                      @default(now())
+  normalizationResult   MaxInboundNormalizationResult @relation(fields: [accountId, normalizationResultId, sourceObservationId, parserVersion], references: [accountId, normalizationResultId, sourceObservationId, parserVersion], onDelete: Restrict, map: "MaxInboundNormalizedEvent_result_account_source_parser_fkey")
+  confirmationEvidence  MaxProviderConfirmationEvidence[]
+
+  @@unique([normalizationResultId, eventOrdinal], map: "MaxInboundNormalizedEvent_result_ordinal_key")
+  @@unique([accountId, normalizedEventId], map: "MaxInboundNormalizedEvent_account_event_key")
+  @@index([accountId, sourceJournalSequence], map: "MaxInboundNormalizedEvent_account_sequence_idx")
+  @@index([accountId, parserVersion, sourceJournalSequence], map: "MaxInboundNormalizedEvent_account_parser_sequence_idx")
+  @@index([accountId, providerMessageId], map: "MaxInboundNormalizedEvent_account_provider_message_idx")
+  @@index([accountId, protocolChatId], map: "MaxInboundNormalizedEvent_account_protocol_chat_idx")
+  @@index([accountId, providerUserId], map: "MaxInboundNormalizedEvent_account_provider_user_idx")
+  @@index([targetProviderMessageId], map: "MaxInboundNormalizedEvent_target_provider_message_idx")
+  @@index([eventKind], map: "MaxInboundNormalizedEvent_kind_idx")
+}
+
+/// Stable internal route anchor. Provider identifiers are projections and may
+/// drift; they never replace the account-scoped conversationKey.
+model MaxRouteConversation {
+  id                  String                    @id @default(cuid())
+  accountId           String
+  conversationKey     String
+  routeVersion        Int                       @default(0)
+  optimisticVersion   Int                       @default(0)
+  state               String                    @default("unresolved")
+  retiredAt           DateTime?
+  retiredBy           String?
+  retirementReason    String?
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+  identities          MaxRouteIdentityBinding[]
+  observations        MaxRouteObservation[]     @relation("RouteObservationCandidate")
+  incumbentConflicts  MaxRouteConflict[]        @relation("RouteConflictIncumbent")
+  candidateConflicts  MaxRouteConflict[]        @relation("RouteConflictCandidate")
+  outboundCommands    MaxOutboundCommand[]
+  outboundActor       MaxOutboundConversationActor?
+  outboundDispatches  MaxOutboundDispatch[]
+  outboundDispatchLane MaxOutboundDispatchLane?
+
+  @@unique([accountId, conversationKey])
+  @@index([accountId, state])
+  @@index([accountId, routeVersion])
+}
+
+/// Immutable outbound intent. Dispatch and provider state deliberately do not
+/// exist at this boundary; Stage 4 can only prepare a future handoff.
+model MaxOutboundCommand {
+  commandId          String                          @id
+  accountId          String
+  conversationKey    String
+  clientMessageId    String?
+  commandSequence    Int
+  commandKind        String
+  envelopeVersion    String
+  commandPayload     Json
+  payloadSha256      String
+  source             String
+  createdAt          DateTime                        @default(now())
+  conversation       MaxRouteConversation            @relation(fields: [accountId, conversationKey], references: [accountId, conversationKey], onDelete: Restrict, map: "MaxOutboundCommand_account_conversation_fkey")
+  reservations       MaxOutboundCommandReservation[]
+  dispatch           MaxOutboundDispatch?
+  shadowPlan         MaxOutboundShadowPlan?
+
+  @@unique([accountId, conversationKey, commandSequence], map: "MaxOutboundCommand_account_conversation_sequence_key")
+  @@unique([accountId, conversationKey, commandId, commandSequence], map: "MaxOutboundCommand_account_conversation_command_sequence_key")
+  @@index([accountId, conversationKey, createdAt], map: "MaxOutboundCommand_account_conversation_created_idx")
+}
+
+/// Durable, account-scoped authority for the single physical MAX session.
+/// This fence is independent from per-conversation FIFO actor leases.
+model MaxAccountSessionOwner {
+  accountId       String   @id
+  ownerInstanceId String
+  fencingToken   BigInt
+  acquiredAt     DateTime
+  heartbeatAt    DateTime
+  leaseUntil     DateTime
+  lastReleasedAt DateTime?
+  state           String
+  version         Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([state, leaseUntil], map: "MaxAccountSessionOwner_state_lease_idx")
+}
+
+/// Append-only shadow evaluation. It never authorizes or records a physical
+/// provider action and deliberately does not duplicate command text.
+model MaxOutboundShadowPlan {
+  planId                    String   @id
+  schemaVersion             String
+  inputSha256               String
+  accountId                 String
+  accountAliasSha256        String
+  conversationKey           String
+  conversationKeySha256     String
+  commandId                 String   @unique(map: "MaxOutboundShadowPlan_command_key")
+  commandSequence           Int
+  reservationId             String
+  clientMessageId           String?
+  attemptCorrelationId      String
+  idempotencyKey            String
+  routeResolution           String
+  routeVersion              Int?
+  selectedProtocolChatId    String?
+  payloadKind               String
+  payloadSizeBytes          Int
+  payloadSha256             String
+  replyMetadata             String
+  ownerReadiness            String
+  ownerInstanceId           String?
+  ownerFencingToken         BigInt?
+  wouldSend                 Boolean
+  refusalReason             String?
+  semanticComparison        Json
+  evaluatedAt               DateTime
+  createdAt                 DateTime @default(now())
+  command                   MaxOutboundCommand @relation(fields: [accountId, conversationKey, commandId, commandSequence], references: [accountId, conversationKey, commandId, commandSequence], onDelete: Restrict, map: "MaxOutboundShadowPlan_command_fkey")
+
+  @@unique([accountId, conversationKey, commandId, commandSequence], map: "MaxOutboundShadowPlan_command_identity_key")
+  @@unique([accountId, idempotencyKey], map: "MaxOutboundShadowPlan_account_idempotency_key")
+  @@index([accountId, conversationKey, commandSequence], map: "MaxOutboundShadowPlan_account_conversation_sequence_idx")
+  @@index([accountId, wouldSend, refusalReason], map: "MaxOutboundShadowPlan_account_decision_idx")
+}
+
+/// Mutable coordination state for exactly one account-scoped conversation.
+/// Its lease epoch is not the SessionOwner fencing epoch and cannot authorize
+/// any physical provider action.
+model MaxOutboundConversationActor {
+  accountId           String
+  conversationKey     String
+  nextCommandSequence Int                               @default(0)
+  nextHandoffSequence Int                               @default(1)
+  leaseOwnerId        String?
+  leaseEpoch          Int                               @default(0)
+  leaseUntil          DateTime?
+  optimisticVersion   Int                               @default(0)
+  createdAt           DateTime                          @default(now())
+  updatedAt           DateTime                          @updatedAt
+  conversation        MaxRouteConversation              @relation(fields: [accountId, conversationKey], references: [accountId, conversationKey], onDelete: Restrict, map: "MaxOutboundConversationActor_account_conversation_fkey")
+  reservations        MaxOutboundCommandReservation[]
+
+  @@id([accountId, conversationKey])
+  @@index([leaseUntil], map: "MaxOutboundConversationActor_lease_until_idx")
+}
+
+/// Durable exclusive reservation of the current per-conversation FIFO head.
+/// `handed_off` means only that a future Dispatch Ledger boundary accepted the
+/// command; it is not provider acceptance, delivery, or read evidence.
+model MaxOutboundCommandReservation {
+  reservationId     String                       @id @default(cuid())
+  accountId         String
+  conversationKey   String
+  commandId         String
+  commandSequence   Int
+  leaseOwnerId      String
+  leaseEpoch        Int
+  reservationState String
+  reservationVersion Int                        @default(0)
+  reservedAt        DateTime
+  leaseUntil        DateTime
+  releasedAt        DateTime?
+  handoffReference  String?
+  handedOffAt       DateTime?
+  dispatchId        String?
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+  command           MaxOutboundCommand           @relation(fields: [accountId, conversationKey, commandId, commandSequence], references: [accountId, conversationKey, commandId, commandSequence], onDelete: Restrict, map: "MaxOutboundCommandReservation_command_fkey")
+  actor             MaxOutboundConversationActor @relation(fields: [accountId, conversationKey], references: [accountId, conversationKey], onDelete: Restrict, map: "MaxOutboundCommandReservation_actor_fkey")
+  sourceDispatch    MaxOutboundDispatch?         @relation("DispatchReservationSource")
+  linkedDispatch    MaxOutboundDispatch?         @relation("ReservationDispatchLink", fields: [accountId, conversationKey, dispatchId], references: [accountId, conversationKey, dispatchId], onDelete: Restrict, map: "MaxOutboundCommandReservation_dispatch_fkey")
+
+  @@unique([accountId, conversationKey, reservationId, commandId, commandSequence], map: "MaxOutboundCommandReservation_dispatch_source_key")
+  @@unique([accountId, conversationKey, dispatchId], map: "MaxOutboundCommandReservation_dispatch_key")
+  @@index([reservationState, leaseUntil], map: "MaxOutboundCommandReservation_state_lease_idx")
+  @@index([accountId, conversationKey, commandSequence], map: "MaxOutboundCommandReservation_account_conversation_sequence_idx")
+}
+
+/// Durable identity and honest state of one immutable outbound command execution.
+/// Provider confirmation proves MAX acceptance only, never recipient delivery/read.
+model MaxOutboundDispatch {
+  dispatchId                  String                              @id
+  accountId                   String
+  conversationKey             String
+  commandId                   String                              @unique(map: "MaxOutboundDispatch_command_key")
+  commandSequence             Int
+  reservationId               String                              @unique(map: "MaxOutboundDispatch_reservation_key")
+  state                       String
+  stateVersion                Int
+  initialRouteVersion         Int
+  initialProtocolChatId       String
+  initialProviderUserId       String?
+  initialWebRouteId           String?
+  initialRouteEvidence        Json
+  initialRouteSnapshotSha256  String
+  currentAttemptId            String?
+  attemptCount                Int                                 @default(0)
+  providerMessageId           String?
+  providerConfirmedAt         DateTime?
+  reconciliationRequiredAt    DateTime?
+  terminalAt                  DateTime?
+  createdAt                   DateTime                            @default(now())
+  updatedAt                   DateTime                            @updatedAt
+  conversation                MaxRouteConversation                @relation(fields: [accountId, conversationKey], references: [accountId, conversationKey], onDelete: Restrict, map: "MaxOutboundDispatch_account_conversation_fkey")
+  command                     MaxOutboundCommand                  @relation(fields: [accountId, conversationKey, commandId, commandSequence], references: [accountId, conversationKey, commandId, commandSequence], onDelete: Restrict, map: "MaxOutboundDispatch_command_fkey")
+  reservation                 MaxOutboundCommandReservation       @relation("DispatchReservationSource", fields: [accountId, conversationKey, reservationId, commandId, commandSequence], references: [accountId, conversationKey, reservationId, commandId, commandSequence], onDelete: Restrict, map: "MaxOutboundDispatch_reservation_fkey")
+  handedOffReservation        MaxOutboundCommandReservation?      @relation("ReservationDispatchLink")
+  attempts                    MaxOutboundDispatchAttempt[]
+  transitions                 MaxOutboundDispatchTransition[]
+  reconciliationTasks         MaxOutboundReconciliationTask[]
+  confirmationResolutions     MaxProviderConfirmationResolution[]
+  confirmationDecisions       MaxProviderConfirmationDecision[]
+
+  @@unique([accountId, conversationKey, commandSequence], map: "MaxOutboundDispatch_account_conversation_sequence_key")
+  @@unique([accountId, conversationKey, dispatchId], map: "MaxOutboundDispatch_account_conversation_dispatch_key")
+  @@unique([accountId, conversationKey, commandId, commandSequence], map: "MaxOutboundDispatch_command_identity_key")
+  @@unique([accountId, conversationKey, reservationId, commandId, commandSequence], map: "MaxOutboundDispatch_reservation_identity_key")
+  @@index([accountId, conversationKey, state, commandSequence], map: "MaxOutboundDispatch_account_conversation_state_sequence_idx")
+  @@index([state, reconciliationRequiredAt], map: "MaxOutboundDispatch_state_reconciliation_idx")
+}
+
+/// Independent physical-order cursor for one account-scoped conversation.
+model MaxOutboundDispatchLane {
+  accountId             String
+  conversationKey       String
+  nextPhysicalSequence  Int                   @default(1)
+  optimisticVersion     Int                   @default(0)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  conversation          MaxRouteConversation  @relation(fields: [accountId, conversationKey], references: [accountId, conversationKey], onDelete: Restrict, map: "MaxOutboundDispatchLane_account_conversation_fkey")
+
+  @@id([accountId, conversationKey])
+}
+
+/// One durable, fenced and route-pinned physical-action opportunity.
+model MaxOutboundDispatchAttempt {
+  attemptId                 String                           @id
+  dispatchId                String
+  accountId                 String
+  conversationKey           String
+  attemptNumber             Int
+  attemptState              String
+  attemptVersion            Int                              @default(0)
+  senderOwnerId             String
+  senderFencingEpoch        Int
+  senderAuthorityVerifiedAt DateTime
+  attemptCorrelationId      String
+  routeVersion              Int
+  protocolChatId            String
+  providerUserId            String?
+  webRouteId                String?
+  routeSnapshotSha256       String
+  preparedAt                DateTime
+  claimUntil                DateTime
+  physicalActionStartedAt   DateTime?
+  clientActionAcceptedAt    DateTime?
+  awaitingConfirmationAt    DateTime?
+  outcomeUnknownAt          DateTime?
+  completedAt               DateTime?
+  safeErrorCode             String?
+  createdAt                 DateTime                         @default(now())
+  updatedAt                 DateTime                         @updatedAt
+  dispatch                  MaxOutboundDispatch              @relation(fields: [accountId, conversationKey, dispatchId], references: [accountId, conversationKey, dispatchId], onDelete: Restrict, map: "MaxOutboundDispatchAttempt_dispatch_fkey")
+  transitions               MaxOutboundDispatchTransition[]
+  reconciliationTasks       MaxOutboundReconciliationTask[]
+  confirmationResolutions   MaxProviderConfirmationResolution[]
+  confirmationDecisions     MaxProviderConfirmationDecision[]
+
+  @@unique([dispatchId, attemptNumber], map: "MaxOutboundDispatchAttempt_dispatch_number_key")
+  @@unique([accountId, dispatchId, attemptCorrelationId], map: "MaxOutboundDispatchAttempt_account_dispatch_correlation_key")
+  @@unique([accountId, conversationKey, attemptId], map: "MaxOutboundDispatchAttempt_account_conversation_attempt_key")
+  @@index([attemptState, claimUntil], map: "MaxOutboundDispatchAttempt_state_claim_idx")
+  @@index([accountId, conversationKey, attemptState], map: "MaxOutboundDispatchAttempt_account_conversation_state_idx")
+}
+
+/// Append-only auditable state-machine event. It never stores command text.
+model MaxOutboundDispatchTransition {
+  transitionId             String                       @id
+  dispatchId               String
+  attemptId                String?
+  accountId                String
+  conversationKey          String
+  transitionSequence       Int
+  transitionIdempotencyKey String
+  fromState                String?
+  toState                  String
+  eventType                String
+  evidenceKind             String
+  evidenceReference        String?
+  evidenceSha256           String
+  safeEvidenceMetadata     Json
+  stateVersionBefore       Int
+  stateVersionAfter        Int
+  occurredAt               DateTime
+  createdAt                DateTime                     @default(now())
+  dispatch                 MaxOutboundDispatch          @relation(fields: [accountId, conversationKey, dispatchId], references: [accountId, conversationKey, dispatchId], onDelete: Restrict, map: "MaxOutboundDispatchTransition_dispatch_fkey")
+  attempt                  MaxOutboundDispatchAttempt?  @relation(fields: [accountId, conversationKey, attemptId], references: [accountId, conversationKey, attemptId], onDelete: Restrict, map: "MaxOutboundDispatchTransition_attempt_fkey")
+  confirmationResolutions MaxProviderConfirmationResolution[]
+  confirmationDecisions   MaxProviderConfirmationDecision[]
+
+  @@unique([dispatchId, transitionSequence], map: "MaxOutboundDispatchTransition_dispatch_sequence_key")
+  @@unique([accountId, dispatchId, transitionIdempotencyKey], map: "MaxOutboundDispatchTransition_idempotency_key")
+  @@index([accountId, conversationKey, occurredAt], map: "MaxOutboundDispatchTransition_account_conversation_occurred_idx")
+  @@index([attemptId], map: "MaxOutboundDispatchTransition_attempt_idx")
+}
+
+/// Durable investigation task for a potentially completed provider action.
+model MaxOutboundReconciliationTask {
+  reconciliationId           String                      @id
+  dispatchId                 String
+  attemptId                  String
+  accountId                  String
+  conversationKey            String
+  reason                     String
+  state                      String
+  taskVersion                Int                         @default(0)
+  openedAt                   DateTime
+  notBefore                  DateTime?
+  resolvedAt                 DateTime?
+  resolutionType             String?
+  resolutionEvidenceReference String?
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
+  dispatch                   MaxOutboundDispatch         @relation(fields: [accountId, conversationKey, dispatchId], references: [accountId, conversationKey, dispatchId], onDelete: Restrict, map: "MaxOutboundReconciliationTask_dispatch_fkey")
+  attempt                    MaxOutboundDispatchAttempt  @relation(fields: [accountId, conversationKey, attemptId], references: [accountId, conversationKey, attemptId], onDelete: Restrict, map: "MaxOutboundReconciliationTask_attempt_fkey")
+
+  @@index([state, notBefore, openedAt], map: "MaxOutboundReconciliationTask_state_not_before_idx")
+  @@index([accountId, conversationKey, state], map: "MaxOutboundReconciliationTask_account_conversation_state_idx")
+}
+
+/// One immutable row per physically normalized provider-confirmation event and
+/// matcher version. Provider identifiers are deliberately non-unique evidence.
+model MaxProviderConfirmationEvidence {
+  evidenceId               String                              @id
+  accountId                String
+  sourceNormalizedEventId  String
+  sourceObservationId      String
+  sourceJournalSequence    BigInt
+  sourceEventOrdinal       Int
+  matcherVersion           String
+  evidenceVersion          String
+  evidenceKind             String
+  providerMessageId        String?
+  attemptCorrelationId     String?
+  clientMessageId          String?
+  protocolChatId           String?
+  providerUserId           String?
+  webRouteId               String?
+  providerOccurredAt       DateTime?
+  evidenceSha256           String
+  safeMetadata             Json
+  createdAt                DateTime                            @default(now())
+  sourceEvent              MaxInboundNormalizedEvent           @relation(fields: [accountId, sourceNormalizedEventId], references: [accountId, normalizedEventId], onDelete: Restrict, map: "MaxProviderConfirmationEvidence_account_event_fkey")
+  resolution               MaxProviderConfirmationResolution?
+  canonicalForResolutions  MaxProviderConfirmationResolution[] @relation("MaxProviderConfirmationCanonicalEvidence")
+  decisions                MaxProviderConfirmationDecision[]
+
+  @@unique([accountId, sourceNormalizedEventId, matcherVersion], map: "MaxProviderConfirmationEvidence_account_event_matcher_key")
+  @@index([accountId, sourceJournalSequence, sourceEventOrdinal], map: "MaxProviderConfirmationEvidence_account_source_order_idx")
+  @@index([accountId, providerMessageId], map: "MaxProviderConfirmationEvidence_account_provider_message_idx")
+  @@index([accountId, attemptCorrelationId], map: "MaxProviderConfirmationEvidence_account_attempt_correlation_idx")
+  @@index([accountId, clientMessageId], map: "MaxProviderConfirmationEvidence_account_client_message_idx")
+  @@index([evidenceKind, createdAt], map: "MaxProviderConfirmationEvidence_kind_created_idx")
+}
+
+/// Mutable, optimistic projection of the decision for one immutable evidence
+/// row. Every mutation has a corresponding append-only Decision row.
+model MaxProviderConfirmationResolution {
+  resolutionId         String                           @id
+  evidenceId           String                           @unique(map: "MaxProviderConfirmationResolution_evidence_key")
+  accountId            String
+  matcherVersion       String
+  status               String
+  matchMethod          String
+  dispatchId           String?
+  attemptId            String?
+  transitionId         String?
+  canonicalEvidenceId  String?
+  issueCode            String?
+  safeIssueSummary     String?
+  candidateDispatchIds Json
+  candidateAttemptIds  Json
+  resolutionVersion    Int                              @default(0)
+  retryCount           Int                              @default(0)
+  nextRetryAt          DateTime?
+  resolvedAt           DateTime?
+  resolvedBy           String?
+  resolutionReason     String?
+  createdAt            DateTime                         @default(now())
+  updatedAt            DateTime                         @updatedAt
+  evidence             MaxProviderConfirmationEvidence @relation(fields: [evidenceId], references: [evidenceId], onDelete: Restrict, map: "MaxProviderConfirmationResolution_evidence_fkey")
+  canonicalEvidence    MaxProviderConfirmationEvidence? @relation("MaxProviderConfirmationCanonicalEvidence", fields: [canonicalEvidenceId], references: [evidenceId], onDelete: Restrict, map: "MaxProviderConfirmationResolution_canonical_evidence_fkey")
+  dispatch             MaxOutboundDispatch?             @relation(fields: [dispatchId], references: [dispatchId], onDelete: Restrict, map: "MaxProviderConfirmationResolution_dispatch_fkey")
+  attempt              MaxOutboundDispatchAttempt?      @relation(fields: [attemptId], references: [attemptId], onDelete: Restrict, map: "MaxProviderConfirmationResolution_attempt_fkey")
+  transition           MaxOutboundDispatchTransition?   @relation(fields: [transitionId], references: [transitionId], onDelete: Restrict, map: "MaxProviderConfirmationResolution_transition_fkey")
+  decisions            MaxProviderConfirmationDecision[]
+
+  @@index([accountId, matcherVersion, status, createdAt], map: "MaxProviderConfirmationResolution_account_matcher_status_idx")
+  @@index([dispatchId, status], map: "MaxProviderConfirmationResolution_dispatch_status_idx")
+  @@index([canonicalEvidenceId], map: "MaxProviderConfirmationResolution_canonical_evidence_idx")
+}
+
+/// Append-only audit for all automatic and manual matcher decisions.
+model MaxProviderConfirmationDecision {
+  decisionId          String                            @id
+  resolutionId        String
+  evidenceId          String
+  accountId           String
+  decisionSequence    Int
+  matcherVersion      String
+  decisionType        String
+  fromStatus          String?
+  toStatus            String
+  dispatchId          String?
+  attemptId           String?
+  transitionId        String?
+  actor                String
+  reason               String
+  decisionSha256       String
+  safeMetadata         Json
+  resolutionVersionBefore Int
+  resolutionVersionAfter  Int
+  createdAt            DateTime                          @default(now())
+  resolution           MaxProviderConfirmationResolution @relation(fields: [resolutionId], references: [resolutionId], onDelete: Restrict, map: "MaxProviderConfirmationDecision_resolution_fkey")
+  evidence             MaxProviderConfirmationEvidence  @relation(fields: [evidenceId], references: [evidenceId], onDelete: Restrict, map: "MaxProviderConfirmationDecision_evidence_fkey")
+  dispatch             MaxOutboundDispatch?              @relation(fields: [dispatchId], references: [dispatchId], onDelete: Restrict, map: "MaxProviderConfirmationDecision_dispatch_fkey")
+  attempt              MaxOutboundDispatchAttempt?       @relation(fields: [attemptId], references: [attemptId], onDelete: Restrict, map: "MaxProviderConfirmationDecision_attempt_fkey")
+  transition           MaxOutboundDispatchTransition?    @relation(fields: [transitionId], references: [transitionId], onDelete: Restrict, map: "MaxProviderConfirmationDecision_transition_fkey")
+
+  @@unique([resolutionId, decisionSequence], map: "MaxProviderConfirmationDecision_resolution_sequence_key")
+  @@index([accountId, createdAt], map: "MaxProviderConfirmationDecision_account_created_idx")
+  @@index([evidenceId, createdAt], map: "MaxProviderConfirmationDecision_evidence_idx")
+  @@index([dispatchId, createdAt], map: "MaxProviderConfirmationDecision_dispatch_idx")
+}
+
+/// Durable account/consumer/version checkpoint in normalized journal order.
+model MaxProviderConfirmationCursor {
+  cursorId             String   @id
+  consumerId           String
+  accountId            String
+  matcherVersion       String
+  lastJournalSequence  BigInt   @default(0)
+  lastEventOrdinal     Int      @default(0)
+  optimisticVersion    Int      @default(0)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@unique([consumerId, accountId, matcherVersion], map: "MaxProviderConfirmationCursor_consumer_account_matcher_key")
+  @@index([accountId, lastJournalSequence, lastEventOrdinal], map: "MaxProviderConfirmationCursor_account_source_order_idx")
+}
+
+/// One offline/shadow semantic-comparison execution. Counters are durable and
+/// must equal the immutable Result rows committed for this exact run/version.
+model MaxShadowComparisonRun {
+  runId                       String                      @id
+  accountId                   String
+  comparisonVersion           String
+  legacyAdapterVersion        String
+  newNormalizerVersion        String
+  state                       String                      @default("running")
+  sourceFromJournalSequence   BigInt?
+  sourceToJournalSequence     BigInt?
+  processedCount              Int                         @default(0)
+  matchedCount                Int                         @default(0)
+  expectedDifferenceCount     Int                         @default(0)
+  regressionCount             Int                         @default(0)
+  legacyOnlyCount             Int                         @default(0)
+  newOnlyCount                Int                         @default(0)
+  unsupportedCount            Int                         @default(0)
+  quarantinedCount            Int                         @default(0)
+  startedAt                   DateTime
+  completedAt                 DateTime?
+  createdAt                   DateTime                    @default(now())
+  updatedAt                   DateTime                    @updatedAt
+  results                     MaxShadowComparisonResult[]
+  cursor                      MaxShadowComparisonCursor?
+
+  @@unique([accountId, runId, comparisonVersion], map: "MaxShadowComparisonRun_account_run_version_key")
+  @@index([accountId, comparisonVersion, state, startedAt], map: "MaxShadowComparisonRun_account_version_state_idx")
+}
+
+/// Immutable terminal comparison result for one physical raw observation.
+/// Repeated physical observations remain distinct because sourceObservationId
+/// is the journal identity; only exact run/version replay is idempotent.
+model MaxShadowComparisonResult {
+  resultId               String                    @id
+  runId                  String
+  accountId              String
+  sourceObservationId    String
+  sourceJournalSequence  BigInt
+  comparisonVersion      String
+  classification         String
+  legacyStatus           String
+  newStatus              String
+  legacySemanticSha256   String
+  newSemanticSha256      String
+  diffCount              Int
+  highestSeverity        String
+  issueCode              String?
+  safeSummary            String?
+  createdAt              DateTime                  @default(now())
+  run                    MaxShadowComparisonRun    @relation(fields: [accountId, runId, comparisonVersion], references: [accountId, runId, comparisonVersion], onDelete: Restrict, map: "MaxShadowComparisonResult_account_run_version_fkey")
+  sourceObservation      MaxRawTransportEvent      @relation(fields: [accountId, sourceObservationId], references: [accountId, observationId], onDelete: Restrict, map: "MaxShadowComparisonResult_account_source_fkey")
+  diffs                  MaxShadowSemanticDiff[]
+
+  @@unique([runId, sourceObservationId, comparisonVersion], map: "MaxShadowComparisonResult_run_source_version_key")
+  @@unique([accountId, resultId], map: "MaxShadowComparisonResult_account_result_key")
+  @@index([accountId, sourceJournalSequence], map: "MaxShadowComparisonResult_account_sequence_idx")
+  @@index([accountId, comparisonVersion, classification, sourceJournalSequence], map: "MaxShadowComparisonResult_account_version_class_idx")
+  @@index([runId, classification], map: "MaxShadowComparisonResult_run_class_idx")
+}
+
+/// Append-only field-level semantic difference. Raw text, caption, cookies,
+/// tokens and signed URLs are never stored; values are represented by bounded
+/// hashes and safe typed metadata only.
+model MaxShadowSemanticDiff {
+  diffId             String                    @id
+  resultId           String
+  accountId          String
+  diffOrdinal        Int
+  path               String
+  differenceKind     String
+  severity           String
+  legacyValueType    String
+  newValueType       String
+  legacyValueHash    String?
+  newValueHash       String?
+  safeMetadata       Json
+  createdAt          DateTime                  @default(now())
+  result             MaxShadowComparisonResult @relation(fields: [accountId, resultId], references: [accountId, resultId], onDelete: Restrict, map: "MaxShadowSemanticDiff_account_result_fkey")
+
+  @@unique([resultId, diffOrdinal], map: "MaxShadowSemanticDiff_result_ordinal_key")
+  @@index([accountId, severity, createdAt], map: "MaxShadowSemanticDiff_account_severity_idx")
+  @@index([resultId, path], map: "MaxShadowSemanticDiff_result_path_idx")
+  @@index([differenceKind], map: "MaxShadowSemanticDiff_kind_idx")
+}
+
+/// Monotonic progress for one comparison run. It is deliberately run-scoped,
+/// account-scoped and comparisonVersion-scoped to make restart deterministic.
+model MaxShadowComparisonCursor {
+  cursorId             String                 @id
+  runId                String                 @unique(map: "MaxShadowComparisonCursor_run_key")
+  accountId            String
+  comparisonVersion    String
+  lastJournalSequence  BigInt                 @default(0)
+  optimisticVersion    Int                    @default(0)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  run                  MaxShadowComparisonRun @relation(fields: [accountId, runId, comparisonVersion], references: [accountId, runId, comparisonVersion], onDelete: Restrict, map: "MaxShadowComparisonCursor_account_run_version_fkey")
+
+  @@unique([accountId, runId, comparisonVersion], map: "MaxShadowComparisonCursor_account_run_version_key")
+  @@index([accountId, comparisonVersion, lastJournalSequence], map: "MaxShadowComparisonCursor_account_version_sequence_idx")
+}
+
+/// Current exact/provisional identity projection. The account-scoped unique
+/// key prevents last-write-wins reassignment of one provider identity.
+model MaxRouteIdentityBinding {
+  id              String               @id @default(cuid())
+  accountId       String
+  identityKind    String
+  identityValue   String
+  conversationKey String
+  status          String               @default("provisional")
+  firstSeenAt     DateTime
+  lastSeenAt      DateTime
+  evidenceRef     String
+  version         Int                  @default(0)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  conversation    MaxRouteConversation @relation(fields: [accountId, conversationKey], references: [accountId, conversationKey], onDelete: Restrict)
+
+  @@unique([accountId, identityKind, identityValue])
+  @@index([accountId, conversationKey, status])
+  @@index([accountId, identityKind, status])
+}
+
+/// Append-only extracted routing evidence. Idempotency is scoped to one
+/// physical/source observation and extractor result, never payload similarity.
+model MaxRouteObservation {
+  routeObservationId       String                @id @default(cuid())
+  accountId                String
+  idempotencyKey           String
+  sourceRawObservationId   String?
+  extractorVersion         String
+  observedAt               DateTime
+  evidenceSource           String
+  evidenceAuthority        String
+  candidateConversationKey String?
+  identityKind             String
+  identityValue            String
+  sanitizedEvidence        Json
+  evidenceSha256           String
+  evidenceSizeBytes        Int
+  evidenceQuarantined      Boolean               @default(false)
+  redactionMetadata        Json
+  processingResult         String
+  routeVersionAfter        Int?
+  createdAt                DateTime              @default(now())
+  candidateConversation    MaxRouteConversation? @relation("RouteObservationCandidate", fields: [accountId, candidateConversationKey], references: [accountId, conversationKey], onDelete: Restrict)
+  conflicts                MaxRouteConflict[]
+  sourceRawObservation     MaxRawTransportEvent? @relation(fields: [accountId, sourceRawObservationId], references: [accountId, observationId], onDelete: Restrict)
+
+  @@unique([accountId, idempotencyKey])
+  @@unique([accountId, routeObservationId])
+  @@index([sourceRawObservationId])
+  @@index([accountId, observedAt])
+  @@index([accountId, candidateConversationKey])
+}
+
+/// Durable ambiguity record. Resolution is explicit, versioned, and audited;
+/// automatic observation never silently reassigns an incumbent binding.
+model MaxRouteConflict {
+  conflictId                  String                @id @default(cuid())
+  accountId                   String
+  identityKind                String
+  identityValue               String
+  incumbentConversationKey    String
+  candidateConversationKey    String
+  sourceRouteObservationId    String
+  status                      String                @default("open")
+  expectedRouteVersion        Int
+  version                     Int                   @default(0)
+  createdAt                   DateTime              @default(now())
+  resolvedAt                  DateTime?
+  resolutionReason            String?
+  resolvedBy                  String?
+  auditMetadata               Json?
+  incumbentConversation       MaxRouteConversation  @relation("RouteConflictIncumbent", fields: [accountId, incumbentConversationKey], references: [accountId, conversationKey], onDelete: Restrict)
+  candidateConversation       MaxRouteConversation  @relation("RouteConflictCandidate", fields: [accountId, candidateConversationKey], references: [accountId, conversationKey], onDelete: Restrict)
+  sourceObservation           MaxRouteObservation   @relation(fields: [accountId, sourceRouteObservationId], references: [accountId, routeObservationId], onDelete: Restrict)
+
+  @@unique([accountId, sourceRouteObservationId])
+  @@index([accountId, status, createdAt])
+  @@index([accountId, identityKind, identityValue, status])
+  @@index([accountId, incumbentConversationKey, status])
+  @@index([accountId, candidateConversationKey, status])
+}
+
 model WhatsAppConnection {
   id          String                   @id @default(cuid())
   name        String?
@@ -160,6 +974,8 @@ model DriverTelegram {
   carId         String?
   carLabel      String?
   activeParkId  String?
+  submittedPhone String?
+  submittedPhoneAt DateTime?
   createdAt     DateTime @default(now())
 }
 
@@ -309,6 +1125,16 @@ model BroadcastStat {
 model Driver {
   id                   String               @id @default(cuid())
   yandexDriverId       String               @unique
+  externalDriverProfileId String?
+  externalParkId       String?
+  externalPersonKey    String?
+  personKeyType        String?
+  personResolutionStatus String            @default("unlinked")
+  personResolutionBasis  String?
+  personResolutionAt     DateTime?
+  personResolvedBy       String?
+  parkId               String?
+  sourceConnectionId   String?
   fullName             String
   phone                String?
   licenseNumber        String?
@@ -330,7 +1156,12 @@ model Driver {
   calls                Call[]
   chats                Chat[]
   communicationEvents  CommunicationEvent[]
-  contactProfile       Contact?
+  contactId            String?
+  contact              Contact?             @relation("ContactDriverProfiles", fields: [contactId], references: [id], onDelete: SetNull)
+  park                 Park?                @relation(fields: [parkId], references: [id], onDelete: SetNull)
+  sourceConnection     ApiConnection?       @relation("DriverProfileSourceConnection", fields: [sourceConnectionId], references: [id], onDelete: SetNull)
+  contactProfile       Contact?             @relation("ContactLegacyYandexDriver")
+  mainForContact       Contact?             @relation("ContactMainDriverProfile")
   attentions           DriverAttention[]
   daySummaries         DriverDaySummary[]
   events               DriverEvent[]
@@ -342,6 +1173,13 @@ model Driver {
   @@index([fullName])
   @@index([segment])
   @@index([primaryYandexId])
+  @@index([contactId])
+  @@unique([externalParkId, externalDriverProfileId])
+  @@index([parkId])
+  @@index([sourceConnectionId])
+  @@index([externalParkId])
+  @@index([externalPersonKey])
+  @@index([personResolutionStatus])
 }
 
 /// Driver-initiated actions on their active Yandex order, executed via the
@@ -611,8 +1449,12 @@ model Contact {
   displayName       String
   displayNameSource ContactNameSource @default(channel)
   masterSource      ContactSource     @default(chat)
-  yandexDriverId    String?           @unique
-  primaryPhoneId    String?
+  yandexDriverId          String?           @unique
+  mainDriverId            String?           @unique
+  mainDriverSelection     String            @default("auto")
+  mainDriverSelectedBy    String?
+  mainDriverSelectedAt    DateTime?
+  primaryPhoneId          String?
   notes             String?
   customFields      Json?             @default("{}")
   tags              String[]          @default([])
@@ -621,7 +1463,10 @@ model Contact {
   updatedAt         DateTime          @updatedAt
   calls             Call[]
   chats             Chat[]
-  driver            Driver?           @relation(fields: [yandexDriverId], references: [yandexDriverId])
+  driver            Driver?           @relation("ContactLegacyYandexDriver", fields: [yandexDriverId], references: [yandexDriverId])
+  driverProfiles    Driver[]          @relation("ContactDriverProfiles")
+  mainDriver        Driver?           @relation("ContactMainDriverProfile", fields: [mainDriverId], references: [id], onDelete: SetNull)
+  mainDriverAudits  ContactDriverProfileAudit[]
   identities        ContactIdentity[]
   mergesAsMerged    ContactMerge[]    @relation("MergeMerged")
   mergesAsSurvivor  ContactMerge[]    @relation("MergeSurvivor")
@@ -701,6 +1546,23 @@ model ContactMerge {
 
   @@index([survivorId])
   @@index([mergedId])
+}
+
+
+model ContactDriverProfileAudit {
+  id                   String   @id @default(cuid())
+  contactId            String
+  driverId             String?
+  previousMainDriverId String?
+  action               String
+  selectedBy           String   @default("system")
+  reason               String?
+  metadata             Json?    @default("{}")
+  createdAt            DateTime @default(now())
+  contact              Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([contactId, createdAt])
+  @@index([driverId])
 }
 
 model Task {

@@ -10,7 +10,13 @@ import { prisma } from '@/lib/prisma'
 export async function GET(req: NextRequest) {
     const connId = req.nextUrl.searchParams.get('connId')
     if (!connId) {
-        const conns = await prisma.whatsAppConnection.findMany()
+        const conns = await prisma.whatsAppConnection.findMany({
+            select: {
+                id: true,
+                status: true,
+                phoneNumber: true,
+            },
+        })
         const result = conns.map(c => ({
             id: c.id,
             status: c.status,

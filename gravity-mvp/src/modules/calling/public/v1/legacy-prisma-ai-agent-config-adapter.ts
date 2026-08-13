@@ -2,28 +2,9 @@ import { prisma } from '@/lib/prisma'
 import type {
   AiAgentConfigPatchEntryV1,
   ExtractionQualityTierV1,
-  OpaqueCredentialRefV1,
 } from '../../../../contracts/calling/v1'
 import type { AiAgentConfigPersistencePortV1 } from './ai-agent-config-handler'
-
-const credentialValues = new WeakMap<OpaqueCredentialRefV1, string>()
-
-/** Captures a provider credential without placing its value in a command object. */
-export function captureAiAgentProviderCredentialV1(value: string): OpaqueCredentialRefV1 {
-  if (typeof value !== 'string') throw new Error('Provider credential must be a string')
-  const reference = Object.freeze({}) as OpaqueCredentialRefV1
-  credentialValues.set(reference, value)
-  return reference
-}
-
-function revealCredential(reference: OpaqueCredentialRefV1): string {
-  if (!credentialValues.has(reference)) {
-    throw new Error('Invalid provider credential reference')
-  }
-  const value = credentialValues.get(reference) as string
-  credentialValues.delete(reference)
-  return value
-}
+import { revealAiAgentProviderCredentialV1 } from '../../application/ai-agent-provider-credential'
 
 const BIND_ORDER = [
   'enabled',
@@ -58,7 +39,7 @@ function bindArguments(entries: readonly AiAgentConfigPatchEntryV1[]): unknown[]
     const entry = byField.get(field)
     args.push(entry !== undefined)
     if (entry?.field === 'providerCredential' && entry.value !== null) {
-      args.push(revealCredential(entry.value))
+      args.push(revealAiAgentProviderCredentialV1(entry.value))
     } else {
       args.push(entry?.value ?? null)
     }

@@ -1,0 +1,26 @@
+diff --git a/gravity-mvp/prisma/migrations/20260805110000_restore_linked_bot_registry/migration.sql b/gravity-mvp/prisma/migrations/20260805110000_restore_linked_bot_registry/migration.sql
+new file mode 100644
+--- /dev/null
++++ b/gravity-mvp/prisma/migrations/20260805110000_restore_linked_bot_registry/migration.sql
+@@ -0,0 +1,21 @@
++-- A linked Telegram account is authoritative driver-bot evidence even when an
++-- older broad-source registry row was removed during historical cleanup.
++INSERT INTO "BotUserRegistry" (
++    "id",
++    "telegramId",
++    "username",
++    "phoneVerified",
++    "firstSeenAt",
++    "lastSeenAt"
++)
++SELECT
++    'linked_driver_' || "id",
++    "telegramId",
++    "username",
++    "phoneVerified",
++    "createdAt",
++    "createdAt"
++FROM "DriverTelegram"
++ON CONFLICT ("telegramId") DO UPDATE SET
++    "username" = COALESCE(EXCLUDED."username", "BotUserRegistry"."username"),
++    "phoneVerified" = "BotUserRegistry"."phoneVerified" OR EXCLUDED."phoneVerified";

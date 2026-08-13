@@ -8,9 +8,9 @@ import { broadcastChatMessageV1 as broadcastChatMessage } from '@/modules/messag
 import { channelDriverMatchV1 as DriverMatchService } from '@/modules/fleet-operations/public/v1/channel-driver-match'
 import { channelConversationWorkflowV1 as ConversationWorkflowService } from '@/modules/messaging/public/v1/channel-conversation-workflow'
 import {
-  maxContactResolutionShadowV1,
+  startMaxContactResolutionShadowV1,
   type LegacyContactResolutionOutcome,
-} from '@/modules/contacts/public/v1/max-contact-resolution-shadow'
+} from '@/modules/contacts/public/v1'
 import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
 import { resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
@@ -307,7 +307,7 @@ export async function POST(request: Request) {
     // mutation. Its result is diagnostic only and never feeds legacy flow.
     // MAX currently does not prove phone provenance in this payload, so a
     // provider phone remains untrusted for automatic planner matching.
-    const maxContactResolutionShadow = await maxContactResolutionShadowV1.start({
+    const maxContactResolutionShadow = await startMaxContactResolutionShadowV1({
       resolutionInput: {
         channel: 'max',
         externalUserId: senderIdString,

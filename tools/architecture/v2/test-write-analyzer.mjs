@@ -261,11 +261,14 @@ test('SQL analyzer treats FILTER and percentile aggregates as pure reads', () =>
 
 test('SQL analyzer does not treat boolean predicate parentheses as function calls', () => {
     const result = analyzeSqlMutation(`
-        SELECT COUNT(*) FILTER (WHERE assigned_to IS NULL AND (unread_count > 0 OR requires_response = true))
+        SELECT COUNT(*) FILTER (WHERE assigned_to IS NULL AND (unread_count > 0 OR requires_response = true)),
+               COUNT(*) OVER (PARTITION BY (assigned_to) ORDER BY created_at)
         FROM chats
+        WHERE id = ANY($1)
     `)
     assert.equal(result.is_mutation, false)
     assert.equal(result.ambiguous, false)
+    assert.deepEqual(result.called_functions, ['count'])
 })
 
 test('SQL analyzer opens executable DO blocks and retains CALL/COPY/function ambiguity', () => {

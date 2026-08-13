@@ -1,99 +1,71 @@
-import { createUpdateDriverStateHandlerV1 } from './update-driver-state-handler'
-import { legacyPrismaUpdateDriverStatePortV1 } from './legacy-prisma-driver-attention-adapter'
-import { createUpdateScoringThresholdsHandlerV1 } from './update-scoring-thresholds-handler'
-import { legacyPrismaUpdateScoringThresholdsPortV1 } from './legacy-prisma-scoring-threshold-adapter'
-import { createRecordDriverDailyActivityHandlerV1 } from './record-driver-daily-activity-handler'
-import { legacyPrismaRecordDriverDailyActivityPortV1 } from './legacy-prisma-driver-daily-activity-adapter'
-import { createClearFleetCheckStatusHandlerV1 } from './clear-fleet-check-status-handler'
-import { legacyPrismaClearFleetCheckStatusPortV1 } from './legacy-prisma-clear-fleet-check-status-adapter'
-import { createDeleteApiLogsHandlerV1, createRecordApiLogHandlerV1 } from './api-log-handler'
-import { legacyPrismaApiLogPortV1 } from './legacy-prisma-api-log-adapter'
-import { createResolveImportedDriverHandlerV1 } from './resolve-imported-driver-handler'
-import { legacyPrismaResolveImportedDriverPortV1 } from './legacy-prisma-resolve-imported-driver-adapter'
-import { createCreateApiConnectionHandlerV1,createDeleteApiConnectionHandlerV1,createUpdateApiConnectionNameHandlerV1 } from './api-connection-handler'
-import { legacyPrismaApiConnectionPortV1 } from './legacy-prisma-api-connection-adapter'
-import { createMirrorDriverActionResultHandlerV1,createRecordDriverActionHandlerV1 } from './driver-action-handler'
-import { legacyPrismaDriverActionPortV1 } from './legacy-prisma-driver-action-adapter'
-import { createRunApiLogRetentionHandlerV1,createRunDriverEventRetentionHandlerV1 } from './event-retention-handler'
-import { legacyPrismaFleetEventRetentionPortV1 } from './legacy-prisma-event-retention-adapter'
-import { createFindDriverByExactPhoneHandlerV1 } from './find-driver-by-exact-phone-handler'
-import { legacyPrismaFindDriverByExactPhonePortV1 } from './legacy-prisma-find-driver-by-exact-phone-adapter'
-import { createReconcileDriverProfileHandlerV1 } from './reconcile-driver-profile-handler'
-import { legacyPrismaReconcileDriverProfilePortV1 } from './legacy-prisma-reconcile-driver-profile-adapter'
-import {
-    createGetDriverCommunicationTimelineHandlerV1,
-    createRecordDriverCommunicationEventHandlerV1,
-} from './driver-communication-event-handler'
-import { legacyPrismaDriverCommunicationEventPortV1 } from './legacy-prisma-driver-communication-event-adapter'
-import { createRecordManagerDriverCommunicationHandlerV1 } from './record-manager-driver-communication-handler'
-import { legacyPrismaRecordManagerDriverCommunicationPortV1 } from './legacy-prisma-record-manager-driver-communication-adapter'
-import { createRunCommunicationEventRetentionHandlerV1 } from './communication-event-retention-handler'
-import { legacyPrismaCommunicationEventRetentionPortV1 } from './legacy-prisma-communication-event-retention-adapter'
 export { createUpdateDriverStateHandlerV1 } from './update-driver-state-handler'
 export type { UpdateDriverStatePersistencePortV1 } from './update-driver-state-handler'
-export const updateDriverStateV1=createUpdateDriverStateHandlerV1(legacyPrismaUpdateDriverStatePortV1)
 export { createUpdateScoringThresholdsHandlerV1 } from './update-scoring-thresholds-handler'
 export type { UpdateScoringThresholdsPersistencePortV1 } from './update-scoring-thresholds-handler'
-export const updateScoringThresholdsV1 = createUpdateScoringThresholdsHandlerV1(legacyPrismaUpdateScoringThresholdsPortV1)
 export { createRecordDriverDailyActivityHandlerV1 } from './record-driver-daily-activity-handler'
 export type { RecordDriverDailyActivityPersistencePortV1 } from './record-driver-daily-activity-handler'
-export const recordDriverDailyActivityV1 = createRecordDriverDailyActivityHandlerV1(legacyPrismaRecordDriverDailyActivityPortV1)
 export { createClearFleetCheckStatusHandlerV1 } from './clear-fleet-check-status-handler'
 export type { ClearFleetCheckStatusPersistencePortV1 } from './clear-fleet-check-status-handler'
-export const clearFleetCheckStatusV1 = createClearFleetCheckStatusHandlerV1(legacyPrismaClearFleetCheckStatusPortV1)
 export { createDeleteApiLogsHandlerV1, createRecordApiLogHandlerV1 } from './api-log-handler'
 export type { ApiLogPersistencePortV1 } from './api-log-handler'
-export const deleteApiLogsV1=createDeleteApiLogsHandlerV1(legacyPrismaApiLogPortV1)
-export const recordApiLogV1=createRecordApiLogHandlerV1(legacyPrismaApiLogPortV1)
-export { createResolveImportedDriverHandlerV1,makeImportedDriverIdV1 } from './resolve-imported-driver-handler'
-export type { ResolveImportedDriverPersistencePortV1,ImportedDriverIdFactoryV1 } from './resolve-imported-driver-handler'
-export const resolveImportedDriverV1=createResolveImportedDriverHandlerV1(legacyPrismaResolveImportedDriverPortV1)
-export { createCreateApiConnectionHandlerV1,createDeleteApiConnectionHandlerV1,createUpdateApiConnectionNameHandlerV1 } from './api-connection-handler'
+export { createResolveImportedDriverHandlerV1, makeImportedDriverIdV1 } from './resolve-imported-driver-handler'
+export type { ResolveImportedDriverPersistencePortV1, ImportedDriverIdFactoryV1 } from './resolve-imported-driver-handler'
+export { createCreateApiConnectionHandlerV1, createDeleteApiConnectionHandlerV1, createUpdateApiConnectionNameHandlerV1 } from './api-connection-handler'
 export type { ApiConnectionPersistencePortV1 } from './api-connection-handler'
-export const createApiConnectionV1=createCreateApiConnectionHandlerV1(legacyPrismaApiConnectionPortV1)
-export const updateApiConnectionNameV1=createUpdateApiConnectionNameHandlerV1(legacyPrismaApiConnectionPortV1)
-export const deleteApiConnectionV1=createDeleteApiConnectionHandlerV1(legacyPrismaApiConnectionPortV1)
-export { createMirrorDriverActionResultHandlerV1,createRecordDriverActionHandlerV1 } from './driver-action-handler'
+export { createMirrorDriverActionResultHandlerV1, createRecordDriverActionHandlerV1 } from './driver-action-handler'
 export type { DriverActionPersistencePortV1 } from './driver-action-handler'
-export const recordDriverActionV1=createRecordDriverActionHandlerV1(legacyPrismaDriverActionPortV1)
-export const mirrorDriverActionResultV1=createMirrorDriverActionResultHandlerV1(legacyPrismaDriverActionPortV1)
-export { createRunApiLogRetentionHandlerV1,createRunDriverEventRetentionHandlerV1 } from './event-retention-handler'
+export { createRunApiLogRetentionHandlerV1, createRunDriverEventRetentionHandlerV1 } from './event-retention-handler'
 export type { FleetEventRetentionPersistencePortV1 } from './event-retention-handler'
-export const runDriverEventRetentionV1=createRunDriverEventRetentionHandlerV1(legacyPrismaFleetEventRetentionPortV1)
-export const runApiLogRetentionV1=createRunApiLogRetentionHandlerV1(legacyPrismaFleetEventRetentionPortV1)
 export { createFindDriverByExactPhoneHandlerV1 } from './find-driver-by-exact-phone-handler'
 export type { FindDriverByExactPhonePersistencePortV1 } from './find-driver-by-exact-phone-handler'
-export const findDriverByExactPhoneV1=createFindDriverByExactPhoneHandlerV1(legacyPrismaFindDriverByExactPhonePortV1)
 export { createReconcileDriverProfileHandlerV1 } from './reconcile-driver-profile-handler'
 export type { ReconcileDriverProfilePersistencePortV1 } from './reconcile-driver-profile-handler'
-export const reconcileDriverProfileV1=createReconcileDriverProfileHandlerV1(legacyPrismaReconcileDriverProfilePortV1)
-export {
-    createGetDriverCommunicationTimelineHandlerV1,
-    createRecordDriverCommunicationEventHandlerV1,
-} from './driver-communication-event-handler'
+export { createGetDriverCommunicationTimelineHandlerV1, createRecordDriverCommunicationEventHandlerV1 } from './driver-communication-event-handler'
 export type { DriverCommunicationEventPersistencePortV1 } from './driver-communication-event-handler'
-export {
-    getDriverCommunicationTimelineV1,
-    recordDriverCommunicationEventV1,
-} from './driver-communication-event'
+export { getDriverCommunicationTimelineV1, recordDriverCommunicationEventV1 } from './driver-communication-event'
 export { createRecordManagerDriverCommunicationHandlerV1 } from './record-manager-driver-communication-handler'
 export type { RecordManagerDriverCommunicationPersistencePortV1 } from './record-manager-driver-communication-handler'
-export const recordManagerDriverCommunicationV1 = createRecordManagerDriverCommunicationHandlerV1(
-    legacyPrismaRecordManagerDriverCommunicationPortV1,
-)
 export { createRunCommunicationEventRetentionHandlerV1 } from './communication-event-retention-handler'
 export type { CommunicationEventRetentionPersistencePortV1 } from './communication-event-retention-handler'
-export const runCommunicationEventRetentionV1 = createRunCommunicationEventRetentionHandlerV1(
-    legacyPrismaCommunicationEventRetentionPortV1,
-)
-export { runScheduledYandexSyncV1 } from './yandex-sync-runtime'
 export type { ScheduledYandexSyncResultV1 } from './yandex-sync-runtime'
-export { dispatchScheduledScraperChecksV1 } from './scheduled-scraper-check-dispatch'
 export type { ScheduledScraperCheckDispatchResultV1 } from './scheduled-scraper-check-dispatch'
-export {
-    getParkLinkedDriverPhoneV1,
-    normalizeParkPhoneDigitsV1,
-    searchYandexParksByPhonesV1,
-    upsertParkMatchedDriverV1,
-} from './park-phone-search'
 export type { ParkPhoneProfileV1, ParkPhoneSearchResultV1 } from './park-phone-search'
+export {
+    addApiConnection,
+    changeDriverLimit,
+    deleteApiConnection,
+    getApiConnections,
+    getApiLogs,
+    getCarById,
+    getDriverById,
+    getDrivers,
+    testApiRequest,
+    updateApiConnectionName,
+} from './yandex-fleet-operations'
+export type { Car, Driver, DriverStatus } from './yandex-fleet-operations'
+export {
+    clearFleetCheckStatusV1,
+    createApiConnectionV1,
+    deleteApiConnectionV1,
+    deleteApiLogsV1,
+    dispatchScheduledScraperChecksV1,
+    findDriverByExactPhoneV1,
+    getParkLinkedDriverPhoneV1,
+    mirrorDriverActionResultV1,
+    normalizeParkPhoneDigitsV1,
+    recordApiLogV1,
+    recordDriverActionV1,
+    recordDriverDailyActivityV1,
+    recordManagerDriverCommunicationV1,
+    reconcileDriverProfileV1,
+    resolveImportedDriverV1,
+    runApiLogRetentionV1,
+    runCommunicationEventRetentionV1,
+    runDriverEventRetentionV1,
+    runScheduledYandexSyncV1,
+    searchYandexParksByPhonesV1,
+    updateApiConnectionNameV1,
+    updateDriverStateV1,
+    updateScoringThresholdsV1,
+    upsertParkMatchedDriverV1,
+} from '../../application/fleet-operations'

@@ -1,0 +1,4 @@
+// Public facades expose versioned operations and may not import internal code.
+export interface __MODULE_NAME__OperationV1 {
+  execute(input: Readonly<Record<string, never>>): Promise<void>
+}

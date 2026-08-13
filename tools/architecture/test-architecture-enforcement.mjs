@@ -8,8 +8,13 @@ import path from 'node:path'
 import {
     evaluateFindings,
     extractEnvironmentAccess,
+    extractCommonJsPublicExposure,
     extractImports,
     extractPrismaWrites,
+    extractPublicWriteCapabilityExposure,
+    extractUnsafeContactMergeCompositionExports,
+    extractUnsafeApplicationCompositionExports,
+    isApprovedContactMergeCompositionImport,
     scanArchitecture,
     validateManifestPolicy,
 } from './enforce-architecture.mjs'
@@ -79,6 +84,8 @@ async function makeFixture() {
             'manifest_inconsistency',
             'dependency_graph_cycle',
             'contract_version_violation',
+            'public_facade_internal_import',
+            'public_facade_implementation_laundering',
             'unresolved_internal_import',
             'unclassified_production_source',
         ],
@@ -97,14 +104,70 @@ async function makeFixture() {
     ].join('\n'))
     await mkdir(path.join(root, 'gravity-mvp/src/modules/beta/internal'), { recursive: true })
     await writeFile(path.join(root, 'gravity-mvp/src/modules/beta/internal/secret.ts'), 'export const secret = true\n')
+    await mkdir(path.join(root, 'gravity-mvp/src/modules/alpha/internal'), { recursive: true })
+    await writeFile(path.join(root, 'gravity-mvp/src/modules/alpha/internal/secret.ts'), 'export const secret = true\n')
     await mkdir(path.join(root, 'gravity-mvp/src/contracts/beta'), { recursive: true })
     await writeFile(path.join(root, 'gravity-mvp/src/contracts/beta/CreateThing.ts'), 'export const createThing = true\n')
+    await mkdir(path.join(root, 'gravity-mvp/src/modules/alpha/public/v1'), { recursive: true })
+    await writeFile(path.join(root, 'gravity-mvp/src/modules/alpha/public/v1/view.ts'), 'export const view = true\n')
+    await writeFile(path.join(root, 'gravity-mvp/src/modules/alpha/public/v1/facade.ts'), [
+        "import { secret } from '../../internal/secret'",
+        "import { view } from './view'",
+        'void secret; void view',
+        '',
+    ].join('\n'))
     return { root, betaPath }
+}
+
+async function writeFixtureFiles(root, files) {
+    for (const [relative, body] of Object.entries(files)) {
+        const absolute = path.join(root, relative)
+        await mkdir(path.dirname(absolute), { recursive: true })
+        await writeFile(absolute, body)
+    }
+}
+
+function reachablePublicLeaks(scan) {
+    return scan.findings.filter((finding) => (
+        finding.rule === 'public_facade_implementation_laundering'
+        && finding.subject.startsWith('reachable-export-implementation:')
+    ))
 }
 
 test('extracts imports while ignoring comments', () => {
     const imports = extractImports("// import x from 'ignored'\nimport x from 'kept'\nconst example = \"require('ignored-string')\"\n/* require('ignored-two') */")
     assert.deepEqual(imports.map((item) => item.specifier), ['kept'])
+})
+
+test('extracts exact static bindings and CommonJS factory aliases', () => {
+    const imports = extractImports([
+        "import { createRequire as makeRequire } from 'node:module'",
+        "import { exact as localExact, other } from './adapter'",
+        'const localRequire = makeRequire(import.meta.url)',
+        "const adapter = localRequire('./legacy-adapter')",
+        "const second = module.require('./second-adapter')",
+    ].join('\n'))
+    const staticAdapter = imports.find((record) => record.kind === 'static' && record.specifier === './adapter')
+    assert.deepEqual(staticAdapter.imports, [
+        { kind: 'named', imported: 'exact', local: 'localExact' },
+        { kind: 'named', imported: 'other', local: 'other' },
+    ])
+    assert.deepEqual(imports.filter((record) => record.kind === 'require').map((record) => record.specifier), [
+        './legacy-adapter',
+        './second-adapter',
+    ])
+})
+
+test('detects CommonJS exports in a public source', () => {
+    assert.deepEqual(extractCommonJsPublicExposure([
+        'module.exports = { view: true }',
+        'exports.other = true',
+        "Object.defineProperty(module.exports, 'third', { value: true })",
+    ].join('\n')).map((record) => record.subject), [
+        'public-commonjs-export-assignment',
+        'public-commonjs-export-assignment',
+        'public-commonjs-defineProperty',
+    ])
 })
 
 test('nested template expressions do not hide later source', () => {
@@ -117,6 +180,28 @@ test('extracts sensitive environment access forms', () => {
     const names = extractEnvironmentAccess("process.env.API_KEY; process.env['BOT_TOKEN']; env('DB_PASSWORD'); const example = 'process.env.FALSE_SECRET'")
         .map((item) => item.name)
     assert.deepEqual(names, ['API_KEY', 'BOT_TOKEN', 'DB_PASSWORD'])
+})
+
+test('extracts exported transaction capability injection from a public facade', () => {
+    const exposures = extractPublicWriteCapabilityExposure([
+        'export interface ReadyUnitOfWork { run(operation: unknown): Promise<void> }',
+        'export const createReady = (transaction: ReadyTransaction) => transaction',
+    ].join('\n'))
+    assert.deepEqual(exposures.map((exposure) => exposure.subject), [
+        'exported-capability:ReadyUnitOfWork',
+        'createReady:parameter:transaction: ReadyTransaction',
+    ])
+})
+
+test('application composition exports must be narrow functions, not value reexports or objects', () => {
+    assert.deepEqual(extractUnsafeApplicationCompositionExports([
+        "export { adapter as executeV1 } from '../internal/adapter'",
+        'export const safeV1 = (input: unknown) => input',
+        'export const leakedV1 = adapter',
+    ].join('\n')).map((record) => record.subject), [
+        'composition-value-reexport',
+        'composition-nonfunction-export:leakedV1',
+    ])
 })
 
 test('extracts Prisma model and raw writes', () => {
@@ -293,10 +378,698 @@ test('integration fixture detects every enforced mutation class', async () => {
             'non_public_cross_context_import',
             'undeclared_dependency',
             'contract_version_violation',
+            'public_facade_internal_import',
             'direct_provider_transport_access',
             'disallowed_credential_access',
             'direct_foreign_prisma_write',
         ]) assert(rules.has(rule), `missing fixture finding ${rule}`)
+    } finally {
+        await rm(fixture.root, { recursive: true, force: true })
+    }
+})
+
+test('public facades cannot import internal modules, including their own context', async () => {
+    const fixture = await makeFixture()
+    try {
+        const scan = await scanArchitecture(fixture.root)
+        const violations = scan.findings.filter((finding) => (
+            finding.rule === 'public_facade_internal_import'
+            && finding.file === 'gravity-mvp/src/modules/alpha/public/v1/facade.ts'
+        ))
+        assert.equal(violations.length, 1)
+        assert.equal(violations[0].source_context, 'alpha')
+        assert.equal(violations[0].target_context, 'alpha')
+    } finally {
+        await rm(fixture.root, { recursive: true, force: true })
+    }
+})
+
+test('type-only syntax cannot expose or depend on a private internal implementation through a public facade', async () => {
+    const fixture = await makeFixture()
+    const facadePath = 'gravity-mvp/src/modules/alpha/public/v1/facade.ts'
+    try {
+        for (const body of [
+            "import type { PrismaAdapter } from '../../internal/prisma-adapter'\nexport type PublicAdapter = PrismaAdapter\n",
+            "export type { PrismaAdapter } from '../../internal/prisma-adapter'\n",
+            "export { type PrismaAdapter } from '../../internal/prisma-adapter'\n",
+            "export type PublicAdapter = import('../../internal/prisma-adapter').PrismaAdapter\n",
+        ]) {
+            await writeFixtureFiles(fixture.root, {
+                [facadePath]: body,
+                'gravity-mvp/src/modules/alpha/internal/prisma-adapter.ts': 'export type PrismaAdapter = { readonly kind: \'private\' }\n',
+            })
+            const findings = (await scanArchitecture(fixture.root)).findings
+            assert(findings.some((finding) => (
+                finding.rule === 'public_facade_internal_import'
+                && finding.file === facadePath
+            )), `type-only private implementation exposure must fail: ${body.trim()}`)
+        }
+    } finally {
+        await rm(fixture.root, { recursive: true, force: true })
+    }
+})
+
+test('type-only application hops cannot launder a private implementation type while local DTOs remain public', async () => {
+    const fixture = await makeFixture()
+    const facadePath = 'gravity-mvp/src/modules/alpha/public/v1/facade.ts'
+    try {
+        await writeFixtureFiles(fixture.root, {
+            [facadePath]: [
+                "export type { PublicPrismaRepository } from '../../application/public-types'",
+                "export type { PublicResultV1 } from '../../application/public-dto'",
+                '',
+            ].join('\n'),
+            'gravity-mvp/src/modules/alpha/application/public-types.ts': "export type { PrivatePrismaRepository as PublicPrismaRepository } from '../internal/private-prisma-repository'\n",
+            'gravity-mvp/src/modules/alpha/application/public-dto.ts': 'export interface PublicResultV1 { readonly id: string }\n',
+            'gravity-mvp/src/modules/alpha/internal/private-prisma-repository.ts': "export interface PrivatePrismaRepository { readonly implementation: 'prisma' }\n",
+        })
+        const findings = (await scanArchitecture(fixture.root)).findings.filter((finding) => (
+            finding.rule === 'public_facade_implementation_laundering'
+            && finding.file === facadePath
+            && finding.subject.startsWith('reachable-export-internal-type:')
+        ))
+        assert(findings.some((finding) => finding.subject.endsWith(':PublicPrismaRepository')),
+            'a private type must remain tainted through an application re-export')
+        assert.equal(findings.some((finding) => finding.subject.endsWith(':PublicResultV1')), false,
+            'a locally declared narrow DTO must remain a valid public type')
+    } finally {
+        await rm(fixture.root, { recursive: true, force: true })
+    }
+})
+
+test('a matching legacy hash registry cannot suppress public implementation exposure', async () => {
+    const fixture = await makeFixture()
+    try {
+        const facadePath = 'gravity-mvp/src/modules/alpha/public/v1/facade.ts'
+        const adapterPath = 'gravity-mvp/src/modules/alpha/internal/prisma-adapter.ts'
+        const facadeBody = "export { prismaAdapter } from '../../internal/prisma-adapter'\n"
+        await writeFixtureFiles(fixture.root, {
+            [facadePath]: facadeBody,
+            [adapterPath]: "export const prismaAdapter = { kind: 'private-prisma-adapter' }\n",
+        })
+        await writeJson(fixture.root, 'architecture/enforcement/v1/frozen-public-implementation-debt.json', {
+            schema: 'yoko.crm.frozen-public-implementation-debt.v1',
+            version: 1,
+            records: [{
+                path: facadePath,
+                sha256: createHash('sha256').update(facadeBody).digest('hex'),
+                size: Buffer.byteLength(facadeBody),
+            }],
+        })
+        const policyPath = path.join(fixture.root, 'architecture/enforcement/v1/policy.json')
+        const policy = JSON.parse(await readFile(policyPath, 'utf8'))
+        policy.frozen_public_implementation_debt = 'architecture/enforcement/v1/frozen-public-implementation-debt.json'
+        await writeJson(fixture.root, 'architecture/enforcement/v1/policy.json', policy)
+
+        const findings = (await scanArchitecture(fixture.root)).findings
+        assert(findings.some((finding) => (
+            finding.rule === 'public_facade_internal_import'
+            && finding.file === facadePath
+        )))
+        assert(findings.some((finding) => (
+            finding.rule === 'public_facade_implementation_laundering'
+            && finding.file === facadePath
+            && finding.subject === 'reachable-export-implementation:prismaAdapter'
+        )))
+    } finally {
+        await rm(fixture.root, { recursive: true, force: true })
+    }
+})
+
+test('only the named contact-merge root may bind its three private owner adapters', () => {
+    const source = 'gravity-mvp/src/infrastructure/contact-merge-composition.ts'
+    const contacts = 'gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts'
+    const allowed = { kind: 'static', imports: [{
+        kind: 'named', imported: 'legacyPrismaContactMergeQueriesV1', local: 'legacyPrismaContactMergeQueriesV1',
+    }] }
+    assert.equal(isApprovedContactMergeCompositionImport(source, contacts, allowed), true)
+    assert.equal(isApprovedContactMergeCompositionImport(source, contacts, {
+        kind: 'static', imports: [{ kind: 'named', imported: 'eraseAllContacts', local: 'eraseAllContacts' }],
+    }), false)
+    assert.equal(isApprovedContactMergeCompositionImport(source, contacts, {
+        kind: 'static', imports: [{ kind: 'named', imported: 'legacyPrismaContactMergeQueriesV1', local: 'aliasedQuery' }],
+    }), false)
+    assert.equal(isApprovedContactMergeCompositionImport(source, contacts, {
+        kind: 'static', imports: [{ kind: 'namespace', imported: '*', local: 'contacts' }],
+    }), false)
+    assert.equal(isApprovedContactMergeCompositionImport(
+        'gravity-mvp/src/infrastructure/other-composition.ts',
+        contacts,
+        allowed,
+    ), false)
+    assert.equal(isApprovedContactMergeCompositionImport(
+        source,
+        'gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-other-adapter.ts',
+        allowed,
+    ), false)
+})
+
+test('the named contact-merge root cannot launder an allowed private adapter import', () => {
+    assert.deepEqual(extractUnsafeContactMergeCompositionExports([
+        "import { createMergeContactsHandlerV1 } from '@/modules/contacts/public/v1'",
+        "import { makeAdapter } from '@/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter'",
+        'export const mergeContactsV1 = createMergeContactsHandlerV1({ unitOfWork })',
+        '',
+    ].join('\n')), [])
+    const leaks = extractUnsafeContactMergeCompositionExports([
+        "import { createMergeContactsHandlerV1 } from '@/modules/contacts/public/v1'",
+        "import { makeAdapter } from '@/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter'",
+        'export { makeAdapter }',
+        'export const leakedAdapter = makeAdapter',
+        '',
+    ].join('\n'))
+    assert.deepEqual(leaks.map((entry) => entry.subject), [
+        'contact-merge-value-reexport',
+        'contact-merge-nonbusiness-export:leakedAdapter',
+    ])
+    const provenance = extractUnsafeContactMergeCompositionExports([
+        "import { createMergeContactsHandlerV1 as realFactory } from '@/modules/contacts/public/v1'",
+        'const createMergeContactsHandlerV1 = () => ({})',
+        'export const mergeContactsV1 = createMergeContactsHandlerV1({ unitOfWork })',
+        '',
+    ].join('\n'))
+    assert(provenance.some((entry) => entry.subject === 'contact-merge-unproven-factory-provenance'))
+    assert(provenance.some((entry) => entry.subject === 'contact-merge-shadowed-factory-provenance'))
+})
+
+test('public facade imports within the public surface remain allowed', async () => {
+    const fixture = await makeFixture()
+    try {
+        const facade = path.join(fixture.root, 'gravity-mvp/src/modules/alpha/public/v1/facade.ts')
+        await writeFile(facade, "import { view } from './view'\nvoid view\n")
+        const scan = await scanArchitecture(fixture.root)
+        assert.equal(scan.findings.some((finding) => (
+            finding.rule === 'public_facade_internal_import'
+            && finding.file === 'gravity-mvp/src/modules/alpha/public/v1/facade.ts'
+        )), false)
+    } finally {
+        await rm(fixture.root, { recursive: true, force: true })
+    }
+})
+
+test('same-context public barrels may expose only exact clean symbols from semantic implementation sources', async () => {
+    const fixture = await makeFixture()
+    try {
+        const facadePath = 'gravity-mvp/src/modules/alpha/public/v1/facade.ts'
+        const implementationPath = 'gravity-mvp/src/modules/alpha/public/v1/prisma-operation.ts'
+        await writeFixtureFiles(fixture.root, {
+            [implementationPath]: [
+                "import { prisma } from '@/lib/prisma'",
+                'export async function executeAlphaV1(id: string) {',
+                '  await prisma.alphaRecord.findUnique({ where: { id } })',
+                '  return { id }',
+                '}',
+                'export const alphaOperationMetadataV1 = { version: 1 }',
+                'export const legacyPrismaAlphaPortV1 = { find: () => prisma.alphaRecord }',
+                'export const leakedClientV1 = prisma',
+                'export default executeAlphaV1',
+                '',
+            ].join('\n'),
+            'gravity-mvp/src/lib/prisma.ts': 'export const prisma = { alphaRecord: { findUnique: async (_input: unknown) => null } }\n',
+            [facadePath]: "export { executeAlphaV1, alphaOperationMetadataV1 } from './prisma-operation'\n",
+        })
+        let scan = await scanArchitecture(fixture.root)
+        assert.equal(scan.findings.some((finding) => (
+            finding.rule === 'public_facade_internal_import' && finding.file === facadePath
+        )), false)
+        assert.equal(reachablePublicLeaks(scan).some((finding) => finding.file === facadePath), false)
+
+        await writeFile(path.join(fixture.root, facadePath), "import { executeAlphaV1 as aliasedOperation } from './prisma-operation'\nexport { aliasedOperation }\n")
+        scan = await scanArchitecture(fixture.root)
+        assert(scan.findings.some((finding) => (
+            finding.rule === 'public_facade_internal_import' && finding.file === facadePath
+        )), 'an aliased implementation binding must not become a public API')
+
+        await writeFile(path.join(fixture.root, facadePath), "import * as implementation from './prisma-operation'\nexport const executeAlphaV1 = implementation.executeAlphaV1\n")
+        scan = await scanArchitecture(fixture.root)
+        assert(scan.findings.some((finding) => (
+            finding.rule === 'public_facade_internal_import' && finding.file === facadePath
+        )), 'a namespace implementation binding must fail closed')
+
+        await writeFile(path.join(fixture.root, facadePath), "export { leakedClientV1 } from './prisma-operation'\n")
+        scan = await scanArchitecture(fixture.root)
+        assert(reachablePublicLeaks(scan).some((finding) => (
+            finding.file === facadePath && finding.subject.endsWith(':leakedClientV1')
+        )), 'a tainted implementation identity must not be re-exported')
+
+        const betaConsumer = 'gravity-mvp/src/modules/beta/public/v1/consumer.ts'
+        await writeFixtureFiles(fixture.root, {
+            [betaConsumer]: "import { executeAlphaV1 as executeAlphaOperationV1 } from '../../../alpha/public/v1/prisma-operation'\nvoid executeAlphaOperationV1\n",
+        })
+        scan = await scanArchitecture(fixture.root)
+        for (const rule of ['internal_module_import', 'non_public_cross_context_import', 'contract_version_violation']) {
+            assert.equal(scan.findings.some((finding) => finding.rule === rule && finding.file === betaConsumer), false,
+                `a cross-context named binding with exact symbol metadata may consume a clean business operation (${rule})`)
+        }
+
+        await writeFile(path.join(fixture.root, betaConsumer), "import * as implementation from '../../../alpha/public/v1/prisma-operation'\nvoid implementation.executeAlphaV1\n")
+        scan = await scanArchitecture(fixture.root)
+        assert(scan.findings.some((finding) => finding.rule === 'internal_module_import' && finding.file === betaConsumer),
+            'a cross-context namespace binding must fail closed')
+
+        await writeFile(path.join(fixture.root, betaConsumer), "import defaultOperation from '../../../alpha/public/v1/prisma-operation'\nvoid defaultOperation\n")
+        scan = await scanArchitecture(fixture.root)
+        assert(scan.findings.some((finding) => finding.rule === 'non_public_cross_context_import' && finding.file === betaConsumer),
+            'a cross-context default binding must fail closed')
+
+        await writeFile(path.join(fixture.root, betaConsumer), "import { unknownAlphaOperationV1 } from '../../../alpha/public/v1/prisma-operation'\nvoid unknownAlphaOperationV1\n")
+        scan = await scanArchitecture(fixture.root)
+        assert(scan.findings.some((finding) => finding.rule === 'contract_version_violation' && finding.file === betaConsumer),
+            'an unproven cross-context symbol must fail closed')
+
+        await writeFile(path.join(fixture.root, betaConsumer), "import { legacyPrismaAlphaPortV1 } from '../../../alpha/public/v1/prisma-operation'\nvoid legacyPrismaAlphaPortV1\n")
+        scan = await scanArchitecture(fixture.root)
+        assert(scan.findings.some((finding) => finding.rule === 'internal_module_import' && finding.file === betaConsumer),
+            'a legacy persistence port must never become a cross-context public operation')
+    } finally {
+        await rm(fixture.root, { recursive: true, force: true })
+    }
+})
+
+test('same-context public barrels prove each value export from semantic implementations and reject side-effect escapes', async () => {
+    const fixture = await makeFixture()
+    const facadePath = 'gravity-mvp/src/modules/alpha/public/v1/facade.ts'
+    const implementationPath = 'gravity-mvp/src/modules/alpha/public/v1/driver-messaging-capability.ts'
+    try {
+        await writeFixtureFiles(fixture.root, {
+            [facadePath]: "export { sendDriverMessageV1 } from './driver-messaging-capability'\n",
+            [implementationPath]: [
+                "import { prisma } from '@/lib/prisma'",
+                'export async function sendDriverMessageV1(id: string, onReady?: (value: { id: string }) => void) {',
+                '  await prisma.alphaRecord.findUnique({ where: { id } })',
+                '  const result = { id }',
+                '  onReady?.(result)',
+                '  return result',
+                '}',
+                '',
+            ].join('\n'),
+            'gravity-mvp/src/lib/prisma.ts': 'export const prisma = { alphaRecord: { findUnique: async (_input: unknown) => null } }\n',
+        })
+        let scan = await scanArchitecture(fixture.root)
+        assert.equal(scan.findings.some((finding) => (
+            finding.rule === 'public_facade_internal_import' && finding.file === facadePath
+        )), false, 'an exact narrow value operation must remain allowed')
+
+        await writeFile(path.join(fixture.root, implementationPath), [
+            "import { prisma } from '@/lib/prisma'",
+            'export async function sendDriverMessageV1(callback: (value: unknown) => void) {',
+            '  callback(prisma)',
+            '  return { ok: true }',
+            '}',
+            '',
+        ].join('\n'))
+        scan = await scanArchitecture(fixture.root)
+        assert(scan.findings.some((finding) => (
+            finding.rule === 'public_facade_internal_import' && finding.file === facadePath
+        )), 'a caller-controlled side-effect escape must make the exact value binding non-public')
+
+        await writeFile(path.join(fixture.root, implementationPath), [
+            "import { prisma } from '@/lib/prisma'",
+            'export function sendDriverMessageV1() { return prisma }',
+            '',
+        ].join('\n'))
+        scan = await scanArchitecture(fixture.root)
+        assert(scan.findings.some((finding) => (
+            finding.rule === 'public_facade_implementation_laundering'
+            && finding.file === facadePath
+            && finding.subject.endsWith(':sendDriverMessageV1')
+        )), 'a returned Prisma identity must remain rejected')
+    } finally {
+        await rm(fixture.root, { recursive: true, force: true })
+    }
+})
+
+test('public business facades reject exported Prisma and provider implementation identities', async () => {
+    const fixture = await makeFixture()
+    try {
+        const facade = path.join(fixture.root, 'gravity-mvp/src/modules/alpha/public/v1/facade.ts')
+        await writeFile(facade, [
+            "import { PrismaClient } from '@prisma/client'",
+            "import OpenAI from 'openai'",
+            'export const leakedPrisma = PrismaClient',
+            'export const leakedProvider = OpenAI',
+            '',
+        ].join('\n'))
+        const violations = (await scanArchitecture(fixture.root)).findings.filter((finding) => (
+            finding.rule === 'public_facade_implementation_laundering'
+            && finding.file === 'gravity-mvp/src/modules/alpha/public/v1/facade.ts'
+        ))
+        assert(violations.some((finding) => finding.subject === 'reachable-export-implementation:leakedPrisma'))
+        assert(violations.some((finding) => finding.subject === 'reachable-export-implementation:leakedProvider'))
+    } finally {
+        await rm(fixture.root, { recursive: true, force: true })
+    }
+})
+
+test('public index barrels cannot export Prisma or provider implementation identities', async () => {
+    const fixture = await makeFixture()
+    try {
+        const index = path.join(fixture.root, 'gravity-mvp/src/modules/alpha/public/v1/index.ts')
+        const prismaModule = path.join(fixture.root, 'gravity-mvp/src/lib/prisma.ts')
+        await mkdir(path.dirname(prismaModule), { recursive: true })
+        await writeFile(prismaModule, 'export const prisma = {}\n')
+        await writeFile(index, [
+            "import { prisma } from '@/lib/prisma'",
+            "import OpenAI from 'openai'",
+            'export const leakedPrisma = prisma',
+            'export const leakedProvider = OpenAI',
+            '',
+        ].join('\n'))
+        const violations = (await scanArchitecture(fixture.root)).findings.filter((finding) => (
+            finding.rule === 'public_facade_implementation_laundering'
+            && finding.file === 'gravity-mvp/src/modules/alpha/public/v1/index.ts'
+        ))
+        assert(violations.some((finding) => finding.subject === 'reachable-export-implementation:leakedPrisma'))
+        assert(violations.some((finding) => finding.subject === 'reachable-export-implementation:leakedProvider'))
+    } finally {
+        await rm(fixture.root, { recursive: true, force: true })
+    }
+})
+
+test('arbitrary public filenames cannot export a Prisma implementation handle', async () => {
+    const fixture = await makeFixture()
+    try {
+        const client = path.join(fixture.root, 'gravity-mvp/src/modules/alpha/public/v1/client.ts')
+        const prismaModule = path.join(fixture.root, 'gravity-mvp/src/lib/prisma.ts')
+        await mkdir(path.dirname(prismaModule), { recursive: true })
+        await writeFile(prismaModule, 'export const prisma = {}\n')
+        await writeFile(client, [
+            "import { prisma } from '@/lib/prisma'",
+            'export const leakedClient = prisma',
+            '',
+        ].join('\n'))
+        const violations = (await scanArchitecture(fixture.root)).findings.filter((finding) => (
+            finding.rule === 'public_facade_implementation_laundering'
+            && finding.file === 'gravity-mvp/src/modules/alpha/public/v1/client.ts'
+        ))
+        assert(violations.some((finding) => finding.subject === 'reachable-export-implementation:leakedClient'))
+    } finally {
+        await rm(fixture.root, { recursive: true, force: true })
+    }
+})
+
+test('arbitrary public filenames reject provider-tainted local modules', async () => {
+    const fixture = await makeFixture()
+    try {
+        const client = path.join(fixture.root, 'gravity-mvp/src/modules/alpha/public/v1/client.ts')
+        const transport = path.join(fixture.root, 'gravity-mvp/src/modules/alpha/provider-transport.ts')
+        await writeFile(client, "export { transport } from '../../provider-transport'\n")
+        await writeFile(transport, 'export const transport = true\n')
+        await writeJson(fixture.root, 'architecture/evidence/v1/provider-dependencies.json', {
+            providers: [{ provider: 'openai', evidence: [{ file: 'gravity-mvp/src/modules/alpha/provider-transport.ts', match_kind: 'path' }] }],
+        })
+        const violations = (await scanArchitecture(fixture.root)).findings.filter((finding) => (
+            finding.rule === 'public_facade_implementation_laundering'
+            && finding.file === 'gravity-mvp/src/modules/alpha/public/v1/client.ts'
+        ))
+        assert(violations.some((finding) => finding.subject === 'reachable-export-implementation:transport'))
+    } finally {
+        await rm(fixture.root, { recursive: true, force: true })
+    }
+})
+
+test('public facades inspect owner application composition transitively', async () => {
+    const fixture = await makeFixture()
+    try {
+        const facade = path.join(fixture.root, 'gravity-mvp/src/modules/alpha/public/v1/facade.ts')
+        const composition = path.join(fixture.root, 'gravity-mvp/src/modules/alpha/application/bridge.ts')
+        await mkdir(path.dirname(composition), { recursive: true })
+        await writeFile(facade, "export { executeV1 } from '../../application/bridge'\n")
+        await writeFile(composition, [
+            "import OpenAI from 'openai'",
+            "export { secret as executeV1 } from '../internal/secret'",
+            'export interface BridgeUnitOfWork { run(operation: unknown): Promise<void> }',
+            'prisma.alphaRecord.update({ where: { id: 1 }, data: {} })',
+            'void OpenAI',
+            '',
+        ].join('\n'))
+        const violations = (await scanArchitecture(fixture.root)).findings.filter((finding) => (
+            finding.rule === 'public_facade_implementation_laundering'
+            && finding.file === 'gravity-mvp/src/modules/alpha/application/bridge.ts'
+        ))
+        assert(violations.some((finding) => finding.subject === 'transitive:composition-value-reexport'))
+        assert(violations.some((finding) => finding.subject === 'transitive-write:alphaRecord.update'))
+        assert(violations.some((finding) => finding.subject === 'transitive-implementation-import:openai'))
+    } finally {
+        await rm(fixture.root, { recursive: true, force: true })
+    }
+})
+
+test('public facades reject nonliteral module loading while preserving literal wrappers', async () => {
+    const fixture = await makeFixture()
+    try {
+        const facade = path.join(fixture.root, 'gravity-mvp/src/modules/alpha/public/v1/facade.ts')
+        await writeFile(facade, "const internal = '../../internal/secret'\nexport const load = () => import(internal)\n")
+        let scan = await scanArchitecture(fixture.root)
+        assert.equal(scan.findings.some((finding) => (
+            finding.rule === 'public_facade_internal_import'
+            && finding.file === 'gravity-mvp/src/modules/alpha/public/v1/facade.ts'
+            && finding.details?.reason === 'public facades must use statically resolvable module specifiers'
+        )), true)
+        await writeFile(facade, "export const load = () => import('./view')\n")
+        scan = await scanArchitecture(fixture.root)
+        assert.equal(scan.findings.some((finding) => (
+            finding.rule === 'public_facade_internal_import'
+            && finding.file === 'gravity-mvp/src/modules/alpha/public/v1/facade.ts'
+        )), false)
+    } finally {
+        await rm(fixture.root, { recursive: true, force: true })
+    }
+})
+
+test('public alias re-export cannot return an imported internal Prisma client', async () => {
+    const fixture = await makeFixture()
+    try {
+        await writeFixtureFiles(fixture.root, {
+            'gravity-mvp/src/modules/alpha/public/v1/facade.ts': "export { exposeClient as executeV1 } from '../../application/expose-client'\n",
+            'gravity-mvp/src/modules/alpha/application/expose-client.ts': [
+                "import { prisma } from '../internal/prisma-holder'",
+                'export function exposeClient(): unknown { return prisma }',
+                '',
+            ].join('\n'),
+            'gravity-mvp/src/modules/alpha/internal/prisma-holder.ts': "export { prisma } from '@/lib/prisma'\n",
+            'gravity-mvp/src/lib/prisma.ts': 'export const prisma = { alphaRecord: {} }\n',
+        })
+        const leaks = reachablePublicLeaks(await scanArchitecture(fixture.root))
+        assert(leaks.some((finding) => finding.file.endsWith('/facade.ts') && finding.subject.endsWith(':executeV1')))
+    } finally {
+        await rm(fixture.root, { recursive: true, force: true })
+    }
+})
+
+test('public barrel hops cannot hide application exposure of internal Prisma', async () => {
+    const fixture = await makeFixture()
+    try {
+        await writeFixtureFiles(fixture.root, {
+            'gravity-mvp/src/modules/alpha/public/v1/facade.ts': "export { executeV1 } from './operations'\n",
+            'gravity-mvp/src/modules/alpha/public/v1/operations.ts': "export { exposeClient as executeV1 } from '../../application/expose-client'\n",
+            'gravity-mvp/src/modules/alpha/application/expose-client.ts': [
+                "import { prisma } from '../internal/prisma-holder'",
+                'export const exposeClient = (): unknown => prisma',
+                '',
+            ].join('\n'),
+            'gravity-mvp/src/modules/alpha/internal/prisma-holder.ts': "export { prisma } from '@/lib/prisma'\n",
+            'gravity-mvp/src/lib/prisma.ts': 'export const prisma = { alphaRecord: {} }\n',
+        })
+        const leaks = reachablePublicLeaks(await scanArchitecture(fixture.root))
+        assert(leaks.some((finding) => finding.file.endsWith('/facade.ts') && finding.subject.endsWith(':executeV1')))
+        assert(leaks.some((finding) => finding.file.endsWith('/operations.ts') && finding.subject.endsWith(':executeV1')))
+    } finally {
+        await rm(fixture.root, { recursive: true, force: true })
+    }
+})
+
+test('application functions cannot expose a literal dynamic import of an internal module', async () => {
+    const fixture = await makeFixture()
+    try {
+        await writeFixtureFiles(fixture.root, {
+            'gravity-mvp/src/modules/alpha/public/v1/facade.ts': "export { revealV1 } from '../../application/dynamic-exposure'\n",
+            'gravity-mvp/src/modules/alpha/application/dynamic-exposure.ts': "export function revealV1() { return import('../internal/concealed') }\n",
+            'gravity-mvp/src/modules/alpha/internal/concealed.ts': "export { prisma } from '@/lib/prisma'\n",
+            'gravity-mvp/src/lib/prisma.ts': 'export const prisma = { alphaRecord: {} }\n',
+        })
+        const leaks = reachablePublicLeaks(await scanArchitecture(fixture.root))
+        assert(leaks.some((finding) => finding.file.endsWith('/facade.ts') && finding.subject.endsWith(':revealV1')))
+    } finally {
+        await rm(fixture.root, { recursive: true, force: true })
+    }
+})
+
+test('application functions cannot return callbacks closing over internal Prisma', async () => {
+    const fixture = await makeFixture()
+    try {
+        await writeFixtureFiles(fixture.root, {
+            'gravity-mvp/src/modules/alpha/public/v1/facade.ts': "export { callbackV1 } from '../../application/callback-exposure'\n",
+            'gravity-mvp/src/modules/alpha/application/callback-exposure.ts': [
+                "import { prisma } from '../internal/prisma-holder'",
+                'export function callbackV1() { return () => prisma }',
+                '',
+            ].join('\n'),
+            'gravity-mvp/src/modules/alpha/internal/prisma-holder.ts': "export { prisma } from '@/lib/prisma'\n",
+            'gravity-mvp/src/lib/prisma.ts': 'export const prisma = { alphaRecord: {} }\n',
+        })
+        const leaks = reachablePublicLeaks(await scanArchitecture(fixture.root))
+        assert(leaks.some((finding) => finding.file.endsWith('/facade.ts') && finding.subject.endsWith(':callbackV1')))
+    } finally {
+        await rm(fixture.root, { recursive: true, force: true })
+    }
+})
+
+test('application functions cannot return objects containing internal Prisma', async () => {
+    const fixture = await makeFixture()
+    try {
+        await writeFixtureFiles(fixture.root, {
+            'gravity-mvp/src/modules/alpha/public/v1/facade.ts': "export { objectV1 } from '../../application/object-exposure'\n",
+            'gravity-mvp/src/modules/alpha/application/object-exposure.ts': [
+                "import { prisma } from '../internal/prisma-holder'",
+                'export const objectV1 = () => ({ client: prisma })',
+                '',
+            ].join('\n'),
+            'gravity-mvp/src/modules/alpha/internal/prisma-holder.ts': "export { prisma } from '@/lib/prisma'\n",
+            'gravity-mvp/src/lib/prisma.ts': 'export const prisma = { alphaRecord: {} }\n',
+        })
+        const leaks = reachablePublicLeaks(await scanArchitecture(fixture.root))
+        assert(leaks.some((finding) => finding.file.endsWith('/facade.ts') && finding.subject.endsWith(':objectV1')))
+    } finally {
+        await rm(fixture.root, { recursive: true, force: true })
+    }
+})
+
+test('application functions cannot expose provider clients imported through internal modules', async () => {
+    const fixture = await makeFixture()
+    try {
+        await writeFixtureFiles(fixture.root, {
+            'gravity-mvp/src/modules/alpha/public/v1/facade.ts': "export { providerV1 } from '../../application/provider-exposure'\n",
+            'gravity-mvp/src/modules/alpha/application/provider-exposure.ts': [
+                "import { openAiClient } from '../internal/provider-client'",
+                'export const providerV1 = (): unknown => openAiClient',
+                '',
+            ].join('\n'),
+            'gravity-mvp/src/modules/alpha/internal/provider-client.ts': "import OpenAI from 'openai'\nexport const openAiClient = new OpenAI()\n",
+        })
+        const leaks = reachablePublicLeaks(await scanArchitecture(fixture.root))
+        assert(leaks.some((finding) => finding.file.endsWith('/facade.ts') && finding.subject.endsWith(':providerV1')))
+    } finally {
+        await rm(fixture.root, { recursive: true, force: true })
+    }
+})
+
+test('narrow owner composition may call an internal implementation and return a business DTO', async () => {
+    const fixture = await makeFixture()
+    try {
+        await writeFixtureFiles(fixture.root, {
+            'gravity-mvp/src/modules/alpha/public/v1/facade.ts': "export { executeV1 } from '../../application/execute'\n",
+            'gravity-mvp/src/modules/alpha/application/execute.ts': [
+                "import { executeWithPrisma } from '../internal/prisma-adapter'",
+                'export interface ResultV1 { readonly id: string }',
+                'export async function executeV1(id: string, onReady?: (result: ResultV1) => void): Promise<ResultV1> {',
+                '  await executeWithPrisma(id)',
+                '  const result = { id }',
+                '  onReady?.(result)',
+                '  return result',
+                '}',
+                '',
+            ].join('\n'),
+            'gravity-mvp/src/modules/alpha/internal/prisma-adapter.ts': [
+                "import { prisma } from '@/lib/prisma'",
+                'export async function executeWithPrisma(id: string): Promise<void> {',
+                '  await prisma.alphaRecord.update({ where: { id }, data: {} })',
+                '}',
+                '',
+            ].join('\n'),
+            'gravity-mvp/src/lib/prisma.ts': 'export const prisma = { alphaRecord: { update: async (_input: unknown) => undefined } }\n',
+        })
+        const scan = await scanArchitecture(fixture.root)
+        assert.equal(reachablePublicLeaks(scan).length, 0)
+        assert.equal(scan.findings.some((finding) => (
+            finding.rule === 'public_facade_implementation_laundering'
+            && finding.details?.public_source === 'gravity-mvp/src/modules/alpha/public/v1/facade.ts'
+        )), false)
+    } finally {
+        await rm(fixture.root, { recursive: true, force: true })
+    }
+})
+
+test('public closure rejects argument, receiver, mutation, runtime-name, CommonJS, class, and filename laundering', async () => {
+    const fixture = await makeFixture()
+    try {
+        await writeFixtureFiles(fixture.root, {
+            'gravity-mvp/src/modules/alpha/public/v1/facade.ts': [
+                "export { promiseV1, passV1, defaultV1, dynamicV1, proxyV1, assignV1, defineV1, destructuringV1, callbackEscapeV1, callbackClosureV1, callbackWrappedV1, rejectionV1, generatorV1, prototypeV1, prototypeAliasV1, prototypeWrappedV1, moduleRequireV1, classV1, repositoryV1 } from '../../application/laundering'",
+                "export { prisma as cjsPrisma } from './evil.cjs'",
+                '',
+            ].join('\n'),
+            'gravity-mvp/src/modules/alpha/application/laundering.ts': [
+                "import { prisma } from '../internal/prisma-holder'",
+                'const pass = <T>(value: T) => value',
+                'export const promiseV1 = () => Promise.resolve(prisma)',
+                'export const passV1 = () => pass(prisma)',
+                'export function defaultV1(client = prisma) { return client }',
+                "export const dynamicV1 = () => import('../internal/prisma-holder').then((loaded) => loaded.prisma)",
+                'export const proxyV1 = () => new Proxy(prisma, {})',
+                'export const assignV1 = () => { const result = {}; Object.assign(result, { client: prisma }); return result }',
+                "export const defineV1 = () => { const result = {}; Object.defineProperty(result, 'client', { value: prisma }); return result }",
+                'export const destructuringV1 = () => { let leaked; ({ client: leaked } = { client: prisma }); return leaked }',
+                'export const callbackEscapeV1 = (callback: (value: unknown) => void) => { callback(prisma); return { ok: true } }',
+                'export const callbackClosureV1 = (callback: (value: unknown) => void) => { const bound = callback.bind(undefined); const leak = () => bound(prisma); leak(); return { ok: true } }',
+                'const invokeCallback = (callback: (value: unknown) => void, value: unknown) => callback(value)',
+                'export const callbackWrappedV1 = (callback: (value: unknown) => void) => { invokeCallback(callback, prisma); return { ok: true } }',
+                'export async function rejectionV1() { throw prisma }',
+                'export function* generatorV1() { yield prisma }',
+                'export const prototypeV1 = () => { const result = {}; Object.setPrototypeOf(result, prisma); return result }',
+                'const setPrototype = Reflect.setPrototypeOf',
+                'export const prototypeAliasV1 = () => { const result = {}; setPrototype(result, prisma); return result }',
+                'const wrapSetPrototype = (target: object, prototype: object) => Object.setPrototypeOf(target, prototype)',
+                'export const prototypeWrappedV1 = () => { const result = {}; wrapSetPrototype(result, prisma); return result }',
+                "const requiredPrisma = module.require('@/lib/prisma')",
+                'export const moduleRequireV1 = () => requiredPrisma',
+                'export const classV1 = class { static client = prisma }',
+                'export const repositoryV1 = { execute: () => ({ id: "safe-looking" }) }',
+                '',
+            ].join('\n'),
+            'gravity-mvp/src/modules/alpha/public/v1/innocent.ts': [
+                "import { prisma } from '@/lib/prisma'",
+                'export async function narrowWriteV1(id: string) {',
+                '  await prisma.alphaRecord.update({ where: { id }, data: {} })',
+                '  return { id }',
+                '}',
+                '',
+            ].join('\n'),
+            'gravity-mvp/src/modules/beta/public/v1/consumer.ts': "import { narrowWriteV1 } from '../../../alpha/public/v1/innocent'\nvoid narrowWriteV1\n",
+            'gravity-mvp/src/modules/alpha/public/v1/evil.cjs': [
+                "const { createRequire } = require('node:module')",
+                'const localRequire = createRequire(__filename)',
+                "const { prisma } = localRequire('@/lib/prisma')",
+                'module.exports = { prisma }',
+                '',
+            ].join('\n'),
+            'gravity-mvp/src/modules/alpha/internal/prisma-holder.ts': "export { prisma } from '@/lib/prisma'\n",
+            'gravity-mvp/src/lib/prisma.ts': 'export const prisma = { alphaRecord: { update: async (_input: unknown) => undefined } }\n',
+        })
+        const scan = await scanArchitecture(fixture.root)
+        const facadeFindings = scan.findings.filter((finding) => (
+            finding.rule === 'public_facade_implementation_laundering'
+            && finding.file === 'gravity-mvp/src/modules/alpha/public/v1/facade.ts'
+            && finding.subject.startsWith('reachable-export-implementation:')
+        ))
+        for (const name of [
+            'promiseV1', 'passV1', 'defaultV1', 'dynamicV1', 'proxyV1', 'assignV1', 'defineV1',
+            'destructuringV1', 'callbackEscapeV1', 'callbackClosureV1', 'callbackWrappedV1', 'rejectionV1', 'generatorV1',
+            'prototypeV1', 'prototypeAliasV1', 'prototypeWrappedV1', 'moduleRequireV1', 'classV1', 'repositoryV1', 'cjsPrisma',
+        ]) assert(facadeFindings.some((finding) => finding.subject.endsWith(`:${name}`)), `expected laundering finding for ${name}`)
+        assert.equal(scan.findings.some((finding) => (
+            finding.rule === 'internal_module_import'
+            && finding.file.endsWith('/beta/public/v1/consumer.ts')
+            && finding.subject.includes('/alpha/public/v1/innocent.ts')
+        )), false, 'a fixed-point-proven narrow business operation may attenuate its private Prisma binding for a cross-context caller')
+
+        await writeFile(path.join(fixture.root, 'gravity-mvp/src/modules/alpha/public/v1/commonjs-view.cjs'), 'module.exports = { view: true }\n')
+        const commonJsScan = await scanArchitecture(fixture.root)
+        assert(commonJsScan.findings.some((finding) => (
+            finding.rule === 'public_facade_implementation_laundering'
+            && finding.file.endsWith('/commonjs-view.cjs')
+            && finding.subject === 'public-commonjs-export-assignment'
+        )))
     } finally {
         await rm(fixture.root, { recursive: true, force: true })
     }
@@ -391,6 +1164,8 @@ const policy = {
         'manifest_inconsistency',
         'dependency_graph_cycle',
         'contract_version_violation',
+        'public_facade_internal_import',
+        'public_facade_implementation_laundering',
         'unresolved_internal_import',
         'unclassified_production_source',
     ],

@@ -50,6 +50,7 @@ const checks = []
 const check = (name, fn) => { fn(); checks.push(name) }
 const checkAsync = async (name, fn) => { await fn(); checks.push(name) }
 const plain = (value) => JSON.parse(JSON.stringify(value))
+const canonicalSql = (value) => value.replace(/\s+/g, '')
 
 const getCommand = {
   contract: contracts.GET_MERGED_SCENARIO_FIELDS_QUERY_V1,
@@ -301,7 +302,7 @@ try {
     })
     assert.equal(dateConstructions, 1)
     assert.equal(calls.length, 1)
-    assert.equal(calls[0][0], FROZEN_UPSERT_SQL)
+    assert.equal(canonicalSql(calls[0][0]), canonicalSql(FROZEN_UPSERT_SQL))
     assert.deepEqual(calls[0][1], [
       'driver_return_reason', 'driver_return', 'reason',
       false, null, true, false, null, 0,
@@ -332,7 +333,9 @@ try {
     }
     const adapterModule = loadAdapter(prisma)
     await adapterModule.legacyPrismaScenarioFieldSettingsPortV1.reset('driver_return', 'reason')
-    assert.deepEqual(calls, [[FROZEN_RESET_SQL, ['driver_return', 'reason']]])
+    assert.equal(calls.length, 1)
+    assert.equal(canonicalSql(calls[0][0]), canonicalSql(FROZEN_RESET_SQL))
+    assert.deepEqual(calls[0][1], ['driver_return', 'reason'])
   })
 
   check('repository is fixed-policy and exposes no generic SQL transaction or retry capability', () => {

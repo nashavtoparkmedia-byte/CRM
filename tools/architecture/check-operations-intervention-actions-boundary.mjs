@@ -1,7 +1,16 @@
 #!/usr/bin/env node
+import assert from 'node:assert/strict'
 import fs from 'node:fs'
+import path from 'node:path'
+import ts from '../../gravity-mvp/node_modules/typescript/lib/typescript.js'
+
+import {
+    extractImports,
+    extractUnsafeApplicationCompositionExports,
+} from './enforce-architecture.mjs'
 
 const read = file => fs.readFileSync(file, 'utf8')
+const root = process.cwd()
 const checks = []
 const failures = []
 const check = (name, value, detail) => value
@@ -22,6 +31,7 @@ const contract = read('gravity-mvp/src/contracts/operations-observability/v1/int
 const handler = read('gravity-mvp/src/modules/operations-observability/public/v1/intervention-actions-repository-handler.ts')
 const adapter = read('gravity-mvp/src/modules/operations-observability/public/v1/legacy-prisma-intervention-actions-repository.ts')
 const publicIndex = read('gravity-mvp/src/modules/operations-observability/public/v1/index.ts')
+const application = read('gravity-mvp/src/modules/operations-observability/application/observability-operations.ts')
 const consumer = read('gravity-mvp/src/app/team-overview/actions.ts')
 const callerActionConfig = read('gravity-mvp/src/lib/tasks/intervention-action-config.ts')
 const amendmentPath = 'architecture/isolation/operations-observability/intervention-actions-v1/module-manifest-amendments.json'
@@ -65,6 +75,386 @@ const actionLiterals = source => {
     const match = /(?:INTERVENTION_ACTIONS_V1|INTERVENTION_ACTIONS)\s*=\s*\[([\s\S]*?)\]\s*as const/.exec(source)
     return [...(match?.[1] ?? '').matchAll(/'([^']+)'/g)].map(value => value[1])
 }
+const interventionBindings = [
+    {
+        factory: 'createEnsureInterventionActionsRepositoryHandlerV1',
+        local: 'ensureInterventionActionsRepository',
+        exported: 'ensureInterventionActionsRepositoryV1',
+    },
+    {
+        factory: 'createCreateInterventionActionHandlerV1',
+        local: 'createInterventionAction',
+        exported: 'createInterventionActionV1',
+    },
+    {
+        factory: 'createListPendingInterventionActionsHandlerV1',
+        local: 'listPendingInterventionActions',
+        exported: 'listPendingInterventionActionsV1',
+    },
+    {
+        factory: 'createSetInterventionOutcomeHandlerV1',
+        local: 'setInterventionOutcome',
+        exported: 'setInterventionOutcomeV1',
+    },
+    {
+        factory: 'createListLatestInterventionActionsHandlerV1',
+        local: 'listLatestInterventionActions',
+        exported: 'listLatestInterventionActionsV1',
+    },
+    {
+        factory: 'createListInterventionOutcomeCountsHandlerV1',
+        local: 'listInterventionOutcomeCounts',
+        exported: 'listInterventionOutcomeCountsV1',
+    },
+    {
+        factory: 'createListCompletedInterventionTimesHandlerV1',
+        local: 'listCompletedInterventionTimes',
+        exported: 'listCompletedInterventionTimesV1',
+    },
+]
+const interventionApplicationSpecifier = '../../application/observability-operations'
+const interventionHandlerSpecifier = '../public/v1/intervention-actions-repository-handler'
+const interventionAdapterSpecifier = '../public/v1/legacy-prisma-intervention-actions-repository'
+const interventionPublicSpecifier = '@/modules/operations-observability/public/v1'
+const interventionRepository = 'legacyPrismaInterventionActionsRepositoryPortV1'
+const moduleBindings = (source, { kind, specifier }) => extractImports(source).flatMap(entry => (
+    entry.kind === kind && entry.specifier === specifier ? entry.imports : []
+))
+const exactBindingSet = (actual, expected) => (
+    actual.length === expected.length &&
+    expected.every(binding => actual.filter(candidate => (
+        candidate.kind === 'named' &&
+        candidate.imported === binding.imported &&
+        candidate.local === binding.local
+    )).length === 1)
+)
+const parse = (file, source) => {
+    const sourceFile = ts.createSourceFile(
+        file,
+        source,
+        ts.ScriptTarget.Latest,
+        true,
+        file.endsWith('.tsx') || file.endsWith('.jsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    )
+    assert.equal(sourceFile.parseDiagnostics.length, 0, `${file}: TypeScript parse diagnostics`)
+    return sourceFile
+}
+const visit = (node, callback) => {
+    callback(node)
+    ts.forEachChild(node, child => visit(child, callback))
+}
+const unwrap = (node) => {
+    let current = node
+    while (current && ts.isParenthesizedExpression(current)) current = current.expression
+    return current
+}
+const literalFalse = expression => expression.kind === ts.SyntaxKind.FalseKeyword
+    || (ts.isNumericLiteral(expression) && Number(expression.text) === 0)
+const syntacticallyDead = (node) => {
+    for (let child = node, current = node.parent; current; child = current, current = current.parent) {
+        if (ts.isIfStatement(current)) {
+            if (literalFalse(current.expression) && child === current.thenStatement) return true
+            if (current.expression.kind === ts.SyntaxKind.TrueKeyword && child === current.elseStatement) return true
+        }
+        if (ts.isWhileStatement(current) && literalFalse(current.expression)) return true
+        if (ts.isConditionalExpression(current)) {
+            if (literalFalse(current.condition) && child === current.whenTrue) return true
+            if (current.condition.kind === ts.SyntaxKind.TrueKeyword && child === current.whenFalse) return true
+        }
+    }
+    return false
+}
+const directCallForIdentifier = (identifier) => {
+    let expression = identifier
+    while (expression.parent && ts.isParenthesizedExpression(expression.parent)) expression = expression.parent
+    return expression.parent && ts.isCallExpression(expression.parent) && expression.parent.expression === expression
+        ? expression.parent
+        : null
+}
+const enclosingFunctionName = (node) => {
+    for (let current = node.parent; current; current = current.parent) {
+        if (!ts.isFunctionLike(current)) continue
+        if (ts.isFunctionDeclaration(current) && current.name) return current.name.text
+        if ((ts.isArrowFunction(current) || ts.isFunctionExpression(current))
+            && ts.isVariableDeclaration(current.parent)
+            && ts.isIdentifier(current.parent.name)) return current.parent.name.text
+        if (current.name && ts.isIdentifier(current.name)) return current.name.text
+        return null
+    }
+    return null
+}
+const topLevelConst = (sourceFile, name, exported) => sourceFile.statements.flatMap(statement => (
+    ts.isVariableStatement(statement)
+    && Boolean(statement.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.ExportKeyword)) === exported
+    && (statement.declarationList.flags & ts.NodeFlags.Const)
+        ? statement.declarationList.declarations.filter(declaration => ts.isIdentifier(declaration.name) && declaration.name.text === name)
+        : []
+))
+const assertImportedDirectCalls = (sourceFile, name, { count, awaited = false, callers = null }) => {
+    const calls = []
+    visit(sourceFile, node => {
+        if (!ts.isIdentifier(node) || node.text !== name) return
+        if (ts.isImportSpecifier(node.parent) && node.parent.name === node) return
+        const call = directCallForIdentifier(node)
+        assert(call, `${sourceFile.fileName}: ${name} must not be shadowed, copied, or referenced indirectly`)
+        assert.equal(syntacticallyDead(call), false, `${sourceFile.fileName}: ${name} call is syntactically dead`)
+        calls.push(call)
+    })
+    assert.equal(calls.length, count, `${sourceFile.fileName}: ${name} executable direct-call count`)
+    if (awaited) assert(calls.every(candidate => ts.isAwaitExpression(candidate.parent)), `${sourceFile.fileName}: ${name} calls must be awaited`)
+    if (callers) assert.deepEqual(calls.map(enclosingFunctionName).sort(), [...callers].sort(), `${sourceFile.fileName}: ${name} call owners`)
+    return calls
+}
+const assertRepositoryArguments = (sourceFile) => {
+    const uses = []
+    visit(sourceFile, node => {
+        if (!ts.isIdentifier(node) || node.text !== interventionRepository) return
+        if (ts.isImportSpecifier(node.parent) && node.parent.name === node) return
+        assert(ts.isCallExpression(node.parent) && node.parent.arguments.includes(node), `${interventionRepository} must only be passed directly to a factory`)
+        assert.equal(syntacticallyDead(node.parent), false)
+        uses.push(node.parent)
+    })
+    assert.equal(uses.length, interventionBindings.length)
+    assert.deepEqual(
+        uses.map(call => ts.isIdentifier(unwrap(call.expression)) ? unwrap(call.expression).text : null).sort(),
+        interventionBindings.map(({ factory }) => factory).sort(),
+    )
+}
+const assertLocalHandlerUse = (sourceFile, local, declaration, wrapperCall) => {
+    let declarations = 0
+    let typeQueries = 0
+    let calls = 0
+    visit(sourceFile, node => {
+        if (!ts.isIdentifier(node) || node.text !== local) return
+        if (ts.isVariableDeclaration(node.parent) && node.parent.name === node) {
+            assert.equal(node.parent, declaration)
+            declarations += 1
+            return
+        }
+        if (ts.isTypeQueryNode(node.parent) && node.parent.exprName === node) {
+            typeQueries += 1
+            return
+        }
+        const call = directCallForIdentifier(node)
+        assert.equal(call, wrapperCall, `${sourceFile.fileName}: ${local} indirect or shadowed use`)
+        calls += 1
+    })
+    assert.equal(declarations, 1)
+    assert.equal(typeQueries, 1)
+    assert.equal(calls, 1)
+}
+const assertNoWildcardModuleAccess = (source, specifiers) => {
+    for (const entry of extractImports(source)) {
+        if (![...specifiers].some(specifier => entry.specifier === specifier || entry.specifier.startsWith(`${specifier}/`))) continue
+        assert.equal(entry.imports.some(binding => binding.kind !== 'named'), false, `${entry.specifier}: namespace/default boundary access`)
+        assert(!(entry.imports.length === 0 && entry.kind !== 'static'), `${entry.specifier}: wildcard/dynamic boundary access`)
+    }
+}
+const consumerCallers = new Map([
+    ['ensureInterventionActionsRepositoryV1', [
+        'getOutcomeTimingStats',
+        'logInterventionAction',
+        'getLastInterventionActions',
+        'evaluateInterventionOutcomes',
+        'getInterventionEffectiveness',
+    ]],
+    ['createInterventionActionV1', ['logInterventionAction']],
+    ['listPendingInterventionActionsV1', ['evaluateInterventionOutcomes']],
+    ['setInterventionOutcomeV1', ['evaluateInterventionOutcomes']],
+    ['listLatestInterventionActionsV1', ['getLastInterventionActions']],
+    ['listInterventionOutcomeCountsV1', ['getInterventionEffectiveness']],
+    ['listCompletedInterventionTimesV1', ['getOutcomeTimingStats']],
+])
+const assertExactInterventionComposition = (publicSource, applicationSource, consumerSource) => {
+    const expectedFactories = interventionBindings.map(({ factory }) => ({
+        imported: factory,
+        local: factory,
+    }))
+    const expectedOperations = interventionBindings.map(({ exported }) => ({
+        imported: exported,
+        local: exported,
+    }))
+    const operationNames = new Set(expectedOperations.map(({ imported }) => imported))
+    const scopedOperations = bindings => bindings.filter(binding => (
+        operationNames.has(binding.imported) ||
+        /intervention/i.test(binding.imported) ||
+        /intervention/i.test(binding.local)
+    ))
+    assert.equal(interventionBindings.length, 7)
+    assert.equal(new Set(interventionBindings.map(({ factory }) => factory)).size, 7)
+    assert.equal(new Set(interventionBindings.map(({ local }) => local)).size, 7)
+    assert.equal(new Set(interventionBindings.map(({ exported }) => exported)).size, 7)
+    assert(exactBindingSet(
+            moduleBindings(applicationSource, { kind: 'static', specifier: interventionHandlerSpecifier }),
+            expectedFactories,
+        ))
+    assert(exactBindingSet(
+            moduleBindings(applicationSource, { kind: 'static', specifier: interventionAdapterSpecifier }),
+            [{ imported: interventionRepository, local: interventionRepository }],
+        ))
+    assert(exactBindingSet(
+            scopedOperations(moduleBindings(publicSource, { kind: 'export', specifier: interventionApplicationSpecifier })),
+            expectedOperations,
+        ))
+    assert(exactBindingSet(
+            scopedOperations(moduleBindings(consumerSource, { kind: 'static', specifier: interventionPublicSpecifier })),
+            expectedOperations,
+        ))
+    assert.deepEqual(extractUnsafeApplicationCompositionExports(applicationSource), [])
+    assertNoWildcardModuleAccess(applicationSource, new Set([interventionHandlerSpecifier, interventionAdapterSpecifier]))
+    assertNoWildcardModuleAccess(publicSource, new Set([interventionApplicationSpecifier]))
+    assertNoWildcardModuleAccess(consumerSource, new Set([interventionPublicSpecifier]))
+    assert.equal(extractImports(publicSource).some(entry => entry.specifier === interventionAdapterSpecifier || /legacy-prisma-intervention-actions-repository/.test(entry.specifier)), false)
+    assert.equal(extractImports(consumerSource).some(entry => /legacy-prisma-intervention-actions-repository/.test(entry.specifier)), false)
+
+    const applicationAst = parse('gravity-mvp/src/modules/operations-observability/application/observability-operations.ts', applicationSource)
+    for (const { factory, local, exported } of interventionBindings) {
+        const factoryCalls = assertImportedDirectCalls(applicationAst, factory, { count: 1 })
+        const localDeclarations = topLevelConst(applicationAst, local, false)
+        assert.equal(localDeclarations.length, 1, `${local}: exact local handler binding`)
+        assert.equal(unwrap(localDeclarations[0].initializer), factoryCalls[0], `${local}: direct factory composition`)
+        assert.deepEqual(factoryCalls[0].arguments.map(argument => argument.getText(applicationAst)), [interventionRepository])
+
+        const exportedDeclarations = topLevelConst(applicationAst, exported, true)
+        assert.equal(exportedDeclarations.length, 1, `${exported}: exact exported wrapper`)
+        const wrapper = unwrap(exportedDeclarations[0].initializer)
+        assert(wrapper && ts.isArrowFunction(wrapper) && wrapper.parameters.length === 1)
+        const parameter = wrapper.parameters[0]
+        assert(parameter.dotDotDotToken && ts.isIdentifier(parameter.name) && parameter.name.text === 'args')
+        assert.equal(parameter.type?.getText(applicationAst), `Parameters<typeof ${local}>`)
+        const wrapperCall = unwrap(wrapper.body)
+        assert(wrapperCall && ts.isCallExpression(wrapperCall) && ts.isIdentifier(wrapperCall.expression) && wrapperCall.expression.text === local)
+        assert.equal(syntacticallyDead(wrapperCall), false)
+        assert.equal(wrapperCall.arguments.length, 1)
+        assert(ts.isSpreadElement(wrapperCall.arguments[0]) && ts.isIdentifier(wrapperCall.arguments[0].expression) && wrapperCall.arguments[0].expression.text === 'args')
+        assertLocalHandlerUse(applicationAst, local, localDeclarations[0], wrapperCall)
+    }
+    assertRepositoryArguments(applicationAst)
+
+    const consumerAst = parse('gravity-mvp/src/app/team-overview/actions.ts', consumerSource)
+    for (const { exported } of interventionBindings) {
+        const callers = consumerCallers.get(exported)
+        assertImportedDirectCalls(consumerAst, exported, { count: callers.length, awaited: true, callers })
+    }
+}
+const hasExactInterventionComposition = (publicSource, applicationSource, consumerSource) => {
+    try {
+        assertExactInterventionComposition(publicSource, applicationSource, consumerSource)
+        return true
+    } catch {
+        return false
+    }
+}
+const runtimeSourceFiles = directory => fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+    const absolute = path.join(directory, entry.name)
+    if (entry.isDirectory()) return runtimeSourceFiles(absolute)
+    if (!/\.[cm]?[jt]sx?$/.test(entry.name)) return []
+    const relative = path.relative(root, absolute).split(path.sep).join('/')
+    return /(?:^|\/)__tests__\/|\.(?:test|spec)\.[cm]?[jt]sx?$/.test(relative) ? [] : [relative]
+})
+const operationNames = new Set(interventionBindings.map(({ exported }) => exported))
+const factoryNames = new Set(interventionBindings.map(({ factory }) => factory))
+const governedNames = new Set([...operationNames, ...factoryNames, interventionRepository])
+const applicationPath = 'gravity-mvp/src/modules/operations-observability/application/observability-operations.ts'
+const publicIndexPath = 'gravity-mvp/src/modules/operations-observability/public/v1/index.ts'
+const publicAggregatorPath = 'gravity-mvp/src/modules/operations-observability/public/index.ts'
+const moduleIndexPath = 'gravity-mvp/src/modules/operations-observability/index.ts'
+const consumerPath = 'gravity-mvp/src/app/team-overview/actions.ts'
+const handlerPath = 'gravity-mvp/src/modules/operations-observability/public/v1/intervention-actions-repository-handler.ts'
+const adapterPath = 'gravity-mvp/src/modules/operations-observability/public/v1/legacy-prisma-intervention-actions-repository.ts'
+const expectedOperationBindings = [
+    {
+        file: moduleIndexPath,
+        kind: 'export',
+        specifier: './public',
+        imported: '*',
+        local: '*',
+    },
+    ...interventionBindings.map(({ factory }) => ({
+        file: applicationPath,
+        kind: 'static',
+        specifier: interventionHandlerSpecifier,
+        imported: factory,
+        local: factory,
+    })),
+    {
+        file: applicationPath,
+        kind: 'static',
+        specifier: interventionAdapterSpecifier,
+        imported: interventionRepository,
+        local: interventionRepository,
+    },
+    ...interventionBindings.map(({ exported }) => ({
+        file: publicIndexPath,
+        kind: 'export',
+        specifier: interventionApplicationSpecifier,
+        imported: exported,
+        local: exported,
+    })),
+    ...interventionBindings.map(({ factory }) => ({
+        file: publicIndexPath,
+        kind: 'export',
+        specifier: './intervention-actions-repository-handler',
+        imported: factory,
+        local: factory,
+    })),
+    {
+        file: publicAggregatorPath,
+        kind: 'export',
+        specifier: './v1',
+        imported: '*',
+        local: '*',
+    },
+    ...interventionBindings.map(({ exported }) => ({
+        file: consumerPath,
+        kind: 'static',
+        specifier: interventionPublicSpecifier,
+        imported: exported,
+        local: exported,
+    })),
+].sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)))
+const baseRuntimeSources = new Map(runtimeSourceFiles(path.join(root, 'gravity-mvp/src')).map(file => [file, read(file)]))
+const withoutModuleSuffix = value => value.replace(/\.(?:[cm]?[jt]sx?)$/, '').replace(/\/index$/, '')
+const resolveModule = (file, specifier) => {
+    if (specifier.startsWith('@/')) return withoutModuleSuffix(`gravity-mvp/src/${specifier.slice(2)}`)
+    if (specifier.startsWith('.')) return withoutModuleSuffix(path.posix.normalize(path.posix.join(path.posix.dirname(file), specifier)))
+    return specifier
+}
+const governedModulePaths = new Set([
+    applicationPath,
+    publicIndexPath,
+    handlerPath,
+    adapterPath,
+    path.posix.dirname(publicAggregatorPath),
+].map(withoutModuleSuffix))
+const governedModule = (file, specifier) => {
+    const resolved = resolveModule(file, specifier)
+    const publicDirectory = withoutModuleSuffix(path.posix.dirname(publicIndexPath))
+    return governedModulePaths.has(resolved)
+        || resolved === publicDirectory
+}
+const discoverOperationBindings = (sources = baseRuntimeSources) => [...sources].flatMap(([file, source]) => (
+    extractImports(source).flatMap(entry => {
+        const named = entry.imports
+            .filter(binding => governedNames.has(binding.imported))
+            .map(binding => ({
+            file,
+            kind: entry.kind,
+            specifier: entry.specifier,
+            imported: binding.imported,
+            local: binding.local,
+            }))
+        const wildcard = governedModule(file, entry.specifier)
+            && (entry.imports.some(binding => binding.kind !== 'named')
+                || (entry.imports.length === 0 && entry.kind !== 'static'))
+            ? [{ file, kind: entry.kind, specifier: entry.specifier, imported: '*', local: '*' }]
+            : []
+        return [...named, ...wildcard]
+    })
+)).sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right)))
+const hasExactRepositoryWideConsumerDenominator = (sources = baseRuntimeSources) => (
+    JSON.stringify(discoverOperationBindings(sources)) === JSON.stringify(expectedOperationBindings)
+)
 
 check(
     'contract and handler are infrastructure neutral',
@@ -118,8 +508,82 @@ check(
 )
 check(
     'all public facades bind the same owner repository',
-    (publicIndex.match(/legacyPrismaInterventionActionsRepositoryPortV1\)/g) || []).length === 7,
+    hasExactInterventionComposition(publicIndex, application, consumer),
     'public repository binding drift',
+)
+check(
+    'repository-wide intervention-operation consumer denominator is exact',
+    hasExactRepositoryWideConsumerDenominator(),
+    'an intervention operation acquired an unreviewed import, re-export, alias, or entrypoint',
+)
+const directAdapterFacadeProbe = publicIndex.replace(
+    interventionApplicationSpecifier,
+    './legacy-prisma-intervention-actions-repository',
+)
+const splitRepositoryProbe = application.replace(
+    `createSetInterventionOutcomeHandlerV1(${interventionRepository})`,
+    'createSetInterventionOutcomeHandlerV1(alternateInterventionActionsRepositoryPortV1)',
+)
+const reducedDenominatorProbe = publicIndex.replace('    listCompletedInterventionTimesV1,\n', '')
+const extraConsumerProbe = new Map(baseRuntimeSources)
+extraConsumerProbe.set(
+    'gravity-mvp/src/__architecture_probe__/extra-intervention-consumer.ts',
+    `import { createInterventionActionV1 as createAction } from '${interventionPublicSpecifier}'\nvoid createAction\n`,
+)
+const commentedConsumerCallProbe = consumer.replace(
+    'await createInterventionActionV1({',
+    'await disabledCreateInterventionActionV1({ // await createInterventionActionV1({',
+)
+const removedConsumerCallProbe = consumer.replace('await createInterventionActionV1({', 'await disabledCreateInterventionActionV1({')
+const deadConsumerCallProbe = `${removedConsumerCallProbe}\nif (false) { await createInterventionActionV1({} as never) }\n`
+const shadowConsumerCallProbe = removedConsumerCallProbe.replace(
+    'export async function logInterventionAction',
+    'const shadowProbe = async (createInterventionActionV1: (input: never) => Promise<void>) => { await createInterventionActionV1({} as never) }\nvoid shadowProbe\n\nexport async function logInterventionAction',
+)
+const aliasConsumerProbe = consumer
+    .replace('    createInterventionActionV1,', '    createInterventionActionV1 as createActionV1,')
+    .replace('await createInterventionActionV1({', 'await createActionV1({')
+const namespaceConsumerProbe = `${consumer}\nimport * as interventionBoundaryProbe from '${interventionPublicSpecifier}'\nvoid interventionBoundaryProbe\n`
+const namespaceConsumerSources = new Map(baseRuntimeSources)
+namespaceConsumerSources.set(consumerPath, namespaceConsumerProbe)
+const deepImportConsumerProbe = consumer.replace(
+    interventionPublicSpecifier,
+    '@/modules/operations-observability/application/observability-operations',
+)
+const noOpWrapperProbe = application.replace(
+    '=> createInterventionAction(...args)',
+    '=> Promise.resolve(args as never)',
+)
+const deadFactoryProbe = application.replace(
+    `const createInterventionAction = createCreateInterventionActionHandlerV1(${interventionRepository})`,
+    `if (false) { createCreateInterventionActionHandlerV1(${interventionRepository}) }\nconst createInterventionAction = disabledCreateInterventionActionHandlerV1(${interventionRepository})`,
+)
+check(
+    'negative probes reject facade ownership denominator comment dead shadow alias namespace deep-import and no-op bypasses',
+    directAdapterFacadeProbe !== publicIndex &&
+        splitRepositoryProbe !== application &&
+        reducedDenominatorProbe !== publicIndex &&
+        !hasExactInterventionComposition(directAdapterFacadeProbe, application, consumer) &&
+        !hasExactInterventionComposition(publicIndex, splitRepositoryProbe, consumer) &&
+        !hasExactInterventionComposition(reducedDenominatorProbe, application, consumer) &&
+        !hasExactRepositoryWideConsumerDenominator(extraConsumerProbe) &&
+        commentedConsumerCallProbe !== consumer &&
+        deadConsumerCallProbe !== consumer &&
+        shadowConsumerCallProbe !== consumer &&
+        aliasConsumerProbe !== consumer &&
+        namespaceConsumerProbe !== consumer &&
+        deepImportConsumerProbe !== consumer &&
+        noOpWrapperProbe !== application &&
+        deadFactoryProbe !== application &&
+        !hasExactInterventionComposition(publicIndex, application, commentedConsumerCallProbe) &&
+        !hasExactInterventionComposition(publicIndex, application, deadConsumerCallProbe) &&
+        !hasExactInterventionComposition(publicIndex, application, shadowConsumerCallProbe) &&
+        !hasExactInterventionComposition(publicIndex, application, aliasConsumerProbe) &&
+        !hasExactRepositoryWideConsumerDenominator(namespaceConsumerSources) &&
+        !hasExactInterventionComposition(publicIndex, application, deepImportConsumerProbe) &&
+        !hasExactInterventionComposition(publicIndex, noOpWrapperProbe, consumer) &&
+        !hasExactInterventionComposition(publicIndex, deadFactoryProbe, consumer),
+    'an adversarial intervention boundary bypass was accepted',
 )
 check(
     'compatibility DDL bytes are exact',

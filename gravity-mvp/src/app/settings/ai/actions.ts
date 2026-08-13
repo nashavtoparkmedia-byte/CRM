@@ -83,8 +83,8 @@ import {
     getConnectionTotalsForUi as getOwnedConnectionTotalsForUi,
     getLastImportJob as getOwnedLastImportJob,
     type ConnectionTotalsForUi,
-} from '@/modules/messaging/public/v1/channel-sync-operations'
-export type { ConnectionTotalsForUi } from '@/modules/messaging/public/v1/channel-sync-operations'
+} from '@/modules/messaging/public/v1'
+export type { ConnectionTotalsForUi } from '@/modules/messaging/public/v1'
 
 // ─── Role guard ───────────────────────────────────────────────────
 //

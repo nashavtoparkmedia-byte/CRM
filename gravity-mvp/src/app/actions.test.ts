@@ -12,7 +12,7 @@ vi.mock('@/contracts/fleet-operations/v1', () => ({}))
 vi.mock('@/modules/fleet-operations/public/v1', () => ({}))
 vi.mock('@/modules/identity-access/public/v1', () => ({ requireIntegrationAdminAccess: vi.fn() }))
 
-import { getApiConnections } from './actions'
+import { getApiConnections } from '@/modules/fleet-operations/public/v1/yandex-fleet-operations'
 
 beforeEach(() => vi.resetAllMocks())
 

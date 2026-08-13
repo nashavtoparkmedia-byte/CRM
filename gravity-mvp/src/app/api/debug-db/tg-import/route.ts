@@ -6,7 +6,10 @@ export async function POST(req: Request) {
     try {
         const { connectionId, daysBack = 30 } = await req.json()
 
-        const conn = await prisma.telegramConnection.findUnique({ where: { id: connectionId } })
+        const conn = await prisma.telegramConnection.findUnique({
+            where: { id: connectionId },
+            select: { id: true },
+        })
         if (!conn) return NextResponse.json({ error: 'Connection not found' }, { status: 404 })
 
         // Fire-and-forget — import runs in background

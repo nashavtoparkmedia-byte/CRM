@@ -1,19 +1,25 @@
 #!/usr/bin/env node
 
+import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { access, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
-const indexPath = path.join(root, 'architecture/contexts/v1/context-index.json')
+const defaultRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
+const defaultIndexRelative = 'architecture/contexts/v1/context-index.json'
 const sha256 = (value) => createHash('sha256').update(value).digest('hex')
+const SHA256 = /^[0-9a-f]{64}$/u
 const stable = (value) => {
   if (Array.isArray(value)) return value.map(stable)
   if (!value || typeof value !== 'object') return value
   return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stable(value[key])]))
 }
 const command = (checker) => `node tools/architecture/${checker}`
+const minimizeOwnedPaths = (paths) => [...new Set(paths)]
+  .sort((left, right) => left.length - right.length || left.localeCompare(right))
+  .filter((candidate, index, values) => !values.slice(0, index).some((owner) => candidate === owner || candidate.startsWith(`${owner}/`)))
+  .sort()
 const moduleTests = {
   ai_knowledge: [
     command('check-ai-knowledge-governance-boundary.mjs'),
@@ -83,15 +89,69 @@ const moduleTests = {
   ],
 }
 
-async function exists(relative) {
-  try { await access(path.join(root, relative)); return true } catch { return false }
+function exactPath(repositoryRoot, relative, label) {
+  assert(typeof relative === 'string' && relative.length > 0, `${label} path is missing`)
+  assert(!path.isAbsolute(relative) && !relative.includes('\\') && path.posix.normalize(relative) === relative && relative !== '..' && !relative.startsWith('../'), `${label} path is not an exact repository-relative path: ${relative}`)
+  const absolute = path.resolve(repositoryRoot, relative)
+  assert(absolute.startsWith(`${path.resolve(repositoryRoot)}${path.sep}`), `${label} path escapes repository root: ${relative}`)
+  return absolute
 }
 
-async function main() {
-  const index = JSON.parse(await readFile(indexPath, 'utf8'))
+function exactReferences(index) {
+  assert(index?.schema === 'yoko.crm.context-index.v1', 'context index identity mismatch')
+  assert(Array.isArray(index.contexts), 'context index contexts are missing')
+  assert(index.controls && typeof index.controls === 'object' && !Array.isArray(index.controls), 'context index controls are missing')
+  assert(index.outputs && typeof index.outputs === 'object' && !Array.isArray(index.outputs), 'context index outputs are missing')
+  const rows = [
+    ...index.contexts.map((entry) => ({ category: 'context', id: entry.context, entry })),
+    ...Object.keys(index.controls).sort().map((id) => ({ category: 'control', id, entry: index.controls[id] })),
+    ...Object.keys(index.outputs).sort().map((id) => ({ category: 'output', id, entry: index.outputs[id] })),
+  ]
+  const identities = new Set()
+  for (const { category, id, entry } of rows) {
+    assert(typeof id === 'string' && id.length > 0, `${category} reference identity is missing`)
+    assert(!identities.has(`${category}:${id}`), `duplicate ${category} reference identity: ${id}`)
+    identities.add(`${category}:${id}`)
+    assert(entry && typeof entry === 'object', `${category} reference is missing: ${id}`)
+  }
+  return rows
+}
+
+export async function verifyExactContextIndexHashes(index, repositoryRoot) {
+  const counts = { contexts: 0, controls: 0, outputs: 0 }
+  for (const { category, id, entry } of exactReferences(index)) {
+    const bytes = await readFile(exactPath(repositoryRoot, entry.path, `${category} ${id}`))
+    assert(SHA256.test(entry.sha256 ?? '') && sha256(bytes) === entry.sha256, `${category} hash mismatch: ${entry.path}`)
+    counts[`${category}s`] += 1
+  }
+  return counts
+}
+
+export async function refreshExactContextIndexHashes(index, repositoryRoot) {
+  const refreshed = structuredClone(index)
+  for (const { category, id, entry } of exactReferences(refreshed)) {
+    const bytes = await readFile(exactPath(repositoryRoot, entry.path, `${category} ${id}`))
+    entry.sha256 = sha256(bytes)
+  }
+  return refreshed
+}
+
+export async function materializeContextIndexHashes(indexFile, repositoryRoot) {
+  const index = JSON.parse(await readFile(indexFile, 'utf8'))
+  const refreshed = await refreshExactContextIndexHashes(index, repositoryRoot)
+  await writeFile(indexFile, `${JSON.stringify(stable(refreshed), null, 2)}\n`)
+  return verifyExactContextIndexHashes(refreshed, repositoryRoot)
+}
+
+async function exists(repositoryRoot, relative) {
+  try { await access(exactPath(repositoryRoot, relative, 'owned-path candidate')); return true } catch { return false }
+}
+
+export async function enrichContextManifests(repositoryRoot, indexFile) {
+  const index = JSON.parse(await readFile(indexFile, 'utf8'))
   const manifests = await Promise.all(index.contexts.map(async (entry) => ({
     entry,
-    manifest: JSON.parse(await readFile(path.join(root, entry.path), 'utf8')),
+    manifest: JSON.parse(await readFile(exactPath(repositoryRoot, entry.path, `context ${entry.context}`), 'utf8')),
   })))
   const consumers = new Map(manifests.map(({ manifest }) => [manifest.context.id, []]))
   for (const { manifest } of manifests) {
@@ -105,7 +165,7 @@ async function main() {
       `gravity-mvp/src/contracts/${slug}`,
     ]
     const ownedPaths = [...manifest.internal_surface]
-    for (const candidate of candidates) if (!ownedPaths.includes(candidate) && await exists(candidate)) ownedPaths.push(candidate)
+    for (const candidate of candidates) if (!ownedPaths.includes(candidate) && await exists(repositoryRoot, candidate)) ownedPaths.push(candidate)
     const providerScope = id === 'messaging'
       ? 'SHARED_PROVIDER_CONTRACT'
       : ['max_channel', 'telegram_channel', 'whatsapp_channel'].includes(id)
@@ -120,7 +180,7 @@ async function main() {
         accountability: `${manifest.context.name} bounded-context owner`,
         context: id,
       },
-      owned_paths: ownedPaths.sort(),
+      owned_paths: minimizeOwnedPaths(ownedPaths),
       verification: {
         architecture_checks: [
           'node tools/architecture/validate-context-manifests.mjs',
@@ -142,20 +202,53 @@ async function main() {
       },
     }
     const bytes = `${JSON.stringify(stable(enriched), null, 2)}\n`
-    await writeFile(path.join(root, entry.path), bytes)
-    entry.sha256 = sha256(bytes)
+    const manifestPath = exactPath(repositoryRoot, entry.path, `context ${entry.context}`)
+    if (await readFile(manifestPath, 'utf8') !== bytes) await writeFile(manifestPath, bytes)
   }
-  for (const [id, relative] of Object.entries({
-    module_manifest_schema: 'architecture/contexts/v1/module-manifest.schema.json',
-    verification_profile_enricher: 'tools/architecture/enrich-context-manifests.mjs',
-  })) {
-    index.controls[id] = { path: relative, sha256: sha256(await readFile(path.join(root, relative))) }
-  }
-  await writeFile(indexPath, `${JSON.stringify(stable(index), null, 2)}\n`)
-  process.stdout.write(`context verification profiles: UPDATED (${manifests.length}/${manifests.length})\n`)
+  const refreshed = await refreshExactContextIndexHashes(index, repositoryRoot)
+  await writeFile(indexFile, `${JSON.stringify(stable(refreshed), null, 2)}\n`)
+  await verifyExactContextIndexHashes(refreshed, repositoryRoot)
+  return { contexts: manifests.length, controls: Object.keys(refreshed.controls).length, outputs: Object.keys(refreshed.outputs).length }
 }
 
-main().catch((error) => {
-  process.stderr.write(`${error.stack ?? error.message}\n`)
-  process.exitCode = 1
-})
+function option(argv, name) {
+  const index = argv.indexOf(name)
+  assert(index < 0 || (index + 1 < argv.length && !argv[index + 1].startsWith('--')), `${name} requires a value`)
+  return index < 0 ? null : argv[index + 1]
+}
+
+async function main() {
+  const argv = process.argv.slice(2)
+  const materializeProfiles = argv.includes('--materialize')
+  const materializeHashes = argv.includes('--materialize-index-hashes')
+  assert(!(materializeProfiles && materializeHashes), 'choose one explicit materialization mode')
+  const repositoryRoot = path.resolve(option(argv, '--root') ?? defaultRoot)
+  const indexRelative = option(argv, '--index') ?? defaultIndexRelative
+  const allowed = new Set(['--materialize', '--materialize-index-hashes', '--root', '--index'])
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index]
+    assert(allowed.has(argument), `unknown argument: ${argument}`)
+    if (argument === '--root' || argument === '--index') index += 1
+  }
+  const indexFile = exactPath(repositoryRoot, indexRelative, 'context index')
+  if (materializeProfiles) {
+    const result = await enrichContextManifests(repositoryRoot, indexFile)
+    process.stdout.write(`context verification profiles and exact index hashes: MATERIALIZED (${result.contexts} contexts; ${result.controls} controls; ${result.outputs} outputs)\n`)
+    return
+  }
+  if (materializeHashes) {
+    const result = await materializeContextIndexHashes(indexFile, repositoryRoot)
+    process.stdout.write(`context index exact hashes: MATERIALIZED (${result.contexts} contexts; ${result.controls} controls; ${result.outputs} outputs)\n`)
+    return
+  }
+  const index = JSON.parse(await readFile(indexFile, 'utf8'))
+  const result = await verifyExactContextIndexHashes(index, repositoryRoot)
+  process.stdout.write(`context index exact hashes: VERIFIED (${result.contexts} contexts; ${result.controls} controls; ${result.outputs} outputs)\n`)
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((error) => {
+    process.stderr.write(`${error.stack ?? error.message}\n`)
+    process.exitCode = 1
+  })
+}

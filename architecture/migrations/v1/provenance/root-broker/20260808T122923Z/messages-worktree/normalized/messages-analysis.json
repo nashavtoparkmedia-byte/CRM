@@ -1,0 +1,29 @@
+{
+  "source_output_sha256": "051e9366cd95ad9fcd2ed26a8ea9b91c4fcadef8ed2f68c41a1fd552e9e49a9d",
+  "repository": "/opt/codex-work/crm-messages-remediation-clean",
+  "head": "50ae48a5761ced6acb1639497fa80094b108f305",
+  "branch": "dev/messages-complete-remediation",
+  "upstream": "origin/dev/messages-complete-remediation",
+  "index_entry_count": 1719,
+  "staged_count": 0,
+  "unstaged_count": 0,
+  "untracked_count": 0,
+  "worktree_classification": "CLEAN",
+  "protected_root_count": 4,
+  "protected_file_count": 12,
+  "protected_bytes": 14767,
+  "protected_file_mode": "0644",
+  "protected_owner": "root:root",
+  "all_non_sensitive": true,
+  "all_blobs_present_in_shared_object_database": true,
+  "production_exact_match_count": 0,
+  "production_corresponding_regular_file_count": 0,
+  "unique_filesystem_source_count": 0,
+  "historical_classification_changed": false,
+  "protected_roots": [
+    {"path": "gravity-mvp/typecheck/messages-max-forensics", "files": 2, "manifest_sha256": "b230fdf1784a8d98e9b161ad9a83e99a50092ecaa9b8949ebc2c2562b0ea75b5"},
+    {"path": "max-web-scraper/forensics", "files": 7, "manifest_sha256": "7afc754647de017cacd88cf6c445116d334a20a24bda9e8b727a0aa0fef18b40"},
+    {"path": "max-web-scraper/pipeline", "files": 1, "manifest_sha256": "d9db97a7df240d042a742e82e472c036617881d5c797943d1acd89dea9c966e0"},
+    {"path": "max-web-scraper/test", "files": 2, "manifest_sha256": "d9d8738d21eb0e646fd0b4fd9560730c578be7677a4720c9602096904d07e8fb"}
+  ]
+}

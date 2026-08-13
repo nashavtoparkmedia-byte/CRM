@@ -7,6 +7,8 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 
+import ts from '../../../gravity-mvp/node_modules/typescript/lib/typescript.js'
+
 import { analyzeSqlScript } from './sql-mutation-analyzer.mjs'
 import { inventoryTrackedSurfaces } from './tracked-surface-inventory.mjs'
 import { analyzePrismaWriteSites } from './write-analyzer.mjs'
@@ -584,7 +586,7 @@ function executableQuotedCommandText(text, options = {}) {
     const powershellProcessPayload = /(?:^|[;|]\s*|\s)(?:Start-Process(?:\s+-FilePath)?|&|Invoke-Expression|iex)\s*$/iu.test(rawPrefix)
     const shellEvalPayload = /(?:^|[;&|]\s*|\s)eval\s*$/iu.test(rawPrefix)
     const javascriptChildProcessPayload = importsChildProcess && (
-      /(?:\b(?:exec|execFile|spawn)\s*\(|\b[A-Za-z_$][\w$]*\s*\.\s*(?:exec|execFile|spawn)\s*\()\s*$/u.test(executionPrefix)
+      /(?:\b(?:exec|execFile|spawn)(?:Sync)?\s*\(|\b[A-Za-z_$][\w$]*\s*\.\s*(?:exec|execFile|spawn)(?:Sync)?\s*\()\s*$/u.test(executionPrefix)
     )
     if (
       !shellPayload
@@ -759,8 +761,13 @@ export function standaloneSqlSites(surface, text, mixedLanguage = false, options
         scope: mixedLanguage ? '<mixed-operational-script>' : '<sql-script>',
         kind: 'raw',
         method: mixedLanguage ? 'mixed-script-sql' : 'sql-script',
+        fragment_source: fragment.source,
         tables: [],
         operations: [],
+        read_tables: analysis.read_tables ?? [],
+        selected_columns: analysis.selected_columns ?? [],
+        called_functions: analysis.called_functions ?? [],
+        sql_sha256: analysis.sql_sha256,
         ambiguous: true,
         ambiguity_reasons: [...new Set(analysis.reasons ?? ['unresolved_sql_intent'])].sort(),
         site_signature: sha256(`${surface.path}\n${analysis.sql_sha256}\nunresolved:${ordinal}`),
@@ -801,10 +808,150 @@ export function javascriptDatabaseCommandSites(surface, text) {
     return []
   }
   const code = maskQuotedAndCommentText(text)
-  if (!/\b(?:exec|execFile|spawn)\s*\(|\b[A-Za-z_$][\w$]*\s*\.\s*(?:exec|execFile|spawn)\s*\(/u.test(code)) {
+  if (!/\b(?:exec|execFile|spawn)(?:Sync)?\s*\(|\b[A-Za-z_$][\w$]*\s*\.\s*(?:exec|execFile|spawn)(?:Sync)?\s*\(/u.test(code)) {
     return []
   }
-  return standaloneSqlSites(surface, text, true, { assumeNodeChildProcess: true }).filter((site) => (
+  // TypeScript's parser distinguishes regular-expression literals from
+  // executable string arguments. Mask regex bytes before the mixed-language
+  // command scan so detector vocabularies such as /(psql|mysql)/ cannot be
+  // mistaken for a child-process invocation merely because the same module
+  // also uses execFile for an unrelated command.
+  const sourceFile = ts.createSourceFile(
+    surface.path,
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.getScriptKindFromFileName(surface.path),
+  )
+  const childProcessCallNames = new Set(['exec', 'execFile', 'spawn', 'execSync', 'execFileSync', 'spawnSync'])
+  const childProcessNamespaces = new Set()
+  const variableInitializers = new Map()
+  const collectBindings = (node) => {
+    if (
+      ts.isImportDeclaration(node)
+      && ts.isStringLiteral(node.moduleSpecifier)
+      && /^(?:node:)?child_process$/u.test(node.moduleSpecifier.text)
+    ) {
+      const clause = node.importClause
+      if (clause?.namedBindings && ts.isNamespaceImport(clause.namedBindings)) {
+        childProcessNamespaces.add(clause.namedBindings.name.text)
+      }
+      if (clause?.namedBindings && ts.isNamedImports(clause.namedBindings)) for (const element of clause.namedBindings.elements) {
+        if (childProcessCallNames.has(element.propertyName?.text ?? element.name.text)) childProcessCallNames.add(element.name.text)
+      }
+    }
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+      variableInitializers.set(node.name.text, node.initializer)
+      if (
+        ts.isCallExpression(node.initializer)
+        && ts.isIdentifier(node.initializer.expression)
+        && node.initializer.expression.text === 'require'
+        && ts.isStringLiteral(node.initializer.arguments[0])
+        && /^(?:node:)?child_process$/u.test(node.initializer.arguments[0].text)
+      ) childProcessNamespaces.add(node.name.text)
+    }
+    ts.forEachChild(node, collectBindings)
+  }
+  collectBindings(sourceFile)
+
+  // Regex detector vocabularies remain masked unless the exact literal reaches
+  // the command argument of a child_process call. This keeps the analyzer from
+  // scanning its own detector regexes while retaining real patterns such as
+  // `execFile(/pg_restore/.source, ...)` and their local const aliases.
+  const commandRegexLiterals = new Set()
+  const markCommandProvenance = (node, seenNames = new Set()) => {
+    if (!node) return
+    if (node.kind === ts.SyntaxKind.RegularExpressionLiteral) {
+      commandRegexLiterals.add(node)
+      return
+    }
+    if (ts.isIdentifier(node)) {
+      if (seenNames.has(node.text)) return
+      const initializer = variableInitializers.get(node.text)
+      if (initializer) markCommandProvenance(initializer, new Set(seenNames).add(node.text))
+      return
+    }
+    ts.forEachChild(node, (child) => markCommandProvenance(child, new Set(seenNames)))
+  }
+  const collectCommandProvenance = (node) => {
+    if (ts.isCallExpression(node)) {
+      const callee = node.expression
+      const direct = ts.isIdentifier(callee) && childProcessCallNames.has(callee.text)
+      const namespaced = ts.isPropertyAccessExpression(callee)
+        && ts.isIdentifier(callee.expression)
+        && childProcessNamespaces.has(callee.expression.text)
+        && childProcessCallNames.has(callee.name.text)
+      if ((direct || namespaced) && node.arguments[0]) markCommandProvenance(node.arguments[0])
+    }
+    ts.forEachChild(node, collectCommandProvenance)
+  }
+  collectCommandProvenance(sourceFile)
+
+  // The mixed-language scanner is intentionally conservative, but for a
+  // JavaScript-family file we already have an AST and can distinguish a CLI
+  // token that merely appears in a binding/comparison from one that can reach
+  // the command argument of child_process. Mask all CLI identifier/string
+  // occurrences first, then reveal only the exact first-argument provenance
+  // of a child-process call. This prevents `const psql = env || 'psql'` and
+  // `program === 'psql'` from becoming phantom command sites while retaining
+  // real direct, aliased and regex-derived executions.
+  const commandText = [...text]
+  const databaseCliToken = /^(?:pg_restore|pg_dump|mysqldump|psql|mysql|sqlite3|sqlcmd)$/iu
+  const maskDatabaseCliVocabulary = (node) => {
+    const token = (
+      (ts.isIdentifier(node) && databaseCliToken.test(node.text))
+      || (ts.isStringLiteralLike(node) && databaseCliToken.test(node.text))
+    )
+    if (token) {
+      for (let index = node.getStart(sourceFile); index < node.end; index += 1) {
+        commandText[index] = text[index] === '\n' ? '\n' : ' '
+      }
+      return
+    }
+    ts.forEachChild(node, maskDatabaseCliVocabulary)
+  }
+  maskDatabaseCliVocabulary(sourceFile)
+  const revealCommandProvenance = (node, seenNames = new Set()) => {
+    if (!node) return
+    if (ts.isIdentifier(node)) {
+      if (seenNames.has(node.text)) return
+      const initializer = variableInitializers.get(node.text)
+      if (initializer) revealCommandProvenance(initializer, new Set(seenNames).add(node.text))
+      return
+    }
+    if (
+      (ts.isStringLiteralLike(node) && databaseCliToken.test(node.text))
+      || node.kind === ts.SyntaxKind.RegularExpressionLiteral
+    ) {
+      for (let index = node.getStart(sourceFile); index < node.end; index += 1) commandText[index] = text[index]
+      return
+    }
+    ts.forEachChild(node, (child) => revealCommandProvenance(child, new Set(seenNames)))
+  }
+  const revealExecutedCommands = (node) => {
+    if (ts.isCallExpression(node)) {
+      const callee = node.expression
+      const direct = ts.isIdentifier(callee) && childProcessCallNames.has(callee.text)
+      const namespaced = ts.isPropertyAccessExpression(callee)
+        && ts.isIdentifier(callee.expression)
+        && childProcessNamespaces.has(callee.expression.text)
+        && childProcessCallNames.has(callee.name.text)
+      if ((direct || namespaced) && node.arguments[0]) revealCommandProvenance(node.arguments[0])
+    }
+    ts.forEachChild(node, revealExecutedCommands)
+  }
+  revealExecutedCommands(sourceFile)
+  const maskRegularExpressions = (node) => {
+    if (node.kind === ts.SyntaxKind.RegularExpressionLiteral && !commandRegexLiterals.has(node)) {
+      for (let index = node.getStart(sourceFile); index < node.end; index += 1) {
+        commandText[index] = text[index] === '\n' ? '\n' : ' '
+      }
+      return
+    }
+    ts.forEachChild(node, maskRegularExpressions)
+  }
+  maskRegularExpressions(sourceFile)
+  return standaloneSqlSites(surface, commandText.join(''), true, { assumeNodeChildProcess: true }).filter((site) => (
     site.method.startsWith('mixed-script-command:')
   ))
 }
@@ -813,6 +960,7 @@ async function analyzeSurface(surface, taskId, repositoryRoot, architecture, exe
   const startedAt = process.hrtime.bigint()
   try {
     const bytes = await readFile(path.join(repositoryRoot, surface.path))
+    const sourceSha256 = sha256(bytes)
     const decoded = decodeSource(bytes)
     const source = sourceIdentity(surface, architecture)
     let discovered = []
@@ -835,7 +983,7 @@ async function analyzeSurface(surface, taskId, repositoryRoot, architecture, exe
         parseFindings.push({
           file: surface.path,
           encoding: decoded.encoding,
-          source_sha256: sha256(bytes),
+          source_sha256: sourceSha256,
           ...diagnostic,
         })
       }
@@ -848,6 +996,10 @@ async function analyzeSurface(surface, taskId, repositoryRoot, architecture, exe
       const result = classifySite(site, surface, source, architecture)
       return {
         ...site,
+        source_sha256: sourceSha256,
+        sql_provenance_sha256: site.kind === 'raw' && site.sql_sha256
+          ? sha256(`${sourceSha256}\n${site.site_signature}\n${site.sql_sha256}`)
+          : null,
         ...result,
         source_context: source.context,
         source_technical_module: source.technical_module,
@@ -856,6 +1008,8 @@ async function analyzeSurface(surface, taskId, repositoryRoot, architecture, exe
           lifecycle: surface.lifecycle,
           disposition: surface.disposition,
           production_capability: surface.production_capability,
+          maintenance_lifecycle: surface.maintenance_lifecycle,
+          migration_authority: surface.migration_authority,
           registry_classified: surface.registry_classified,
         },
       }
@@ -864,7 +1018,7 @@ async function analyzeSurface(surface, taskId, repositoryRoot, architecture, exe
       parseFindings.push({
         file: surface.path,
         encoding: decoded.encoding,
-        source_sha256: sha256(bytes),
+        source_sha256: sourceSha256,
         code: 'ENCODING_INFERRED',
         line: 1,
         column: 1,

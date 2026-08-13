@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
 # ─────────────────────────────────────────────────────────────────────────────
 # gravity-mvp — CRM фронтенд/бэкенд (Next.js 16.1.6 + Prisma 6)
 #
@@ -11,28 +11,40 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ─── Stage 1: deps ───────────────────────────────────────────────────────────
-FROM node:20-bookworm-slim AS deps
+FROM node:20-bookworm-slim@sha256:3d0f05455dea2c82e2f76e7e2543964c30f6b7d673fc1a83286736d44fe4c41c AS deps
 WORKDIR /app
 # OpenSSL нужен Prisma для генерации schema engine
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN rm -f /etc/apt/sources.list.d/debian.sources \
+    && printf '%s\n' \
+      'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20260801T000000Z bookworm main' \
+      'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20260801T000000Z bookworm-updates main' \
+      'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian-security/20260801T000000Z bookworm-security main' \
+      > /etc/apt/sources.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
     openssl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma
 # npm ci быстрее install + воспроизводимо. ignore-scripts чтобы prisma generate
 # выполнить осознанно ниже (а не как побочный эффект).
-RUN npm ci --no-audit --no-fund
+RUN PUPPETEER_SKIP_DOWNLOAD=true npm ci --ignore-scripts --no-audit --no-fund
 
 # ─── Stage 2: builder ────────────────────────────────────────────────────────
-FROM node:20-bookworm-slim AS builder
+FROM node:20-bookworm-slim@sha256:3d0f05455dea2c82e2f76e7e2543964c30f6b7d673fc1a83286736d44fe4c41c AS builder
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN rm -f /etc/apt/sources.list.d/debian.sources \
+    && printf '%s\n' \
+      'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20260801T000000Z bookworm main' \
+      'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20260801T000000Z bookworm-updates main' \
+      'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian-security/20260801T000000Z bookworm-security main' \
+      > /etc/apt/sources.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
     openssl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # Prisma client (генерируется под текущую платформу)
-RUN npx prisma generate
+RUN ./node_modules/.bin/prisma generate
 # Next build — нужны переменные NEXT_PUBLIC_* во время сборки.
 # Передаются через --build-arg в compose, чтобы они вкомпилировались в client bundle.
 ARG NEXT_PUBLIC_AVITO_LEADS_URL=""
@@ -46,7 +58,7 @@ ENV NODE_ENV=production
 RUN npm run build
 
 # ─── Stage 3: runner ─────────────────────────────────────────────────────────
-FROM node:20-bookworm-slim AS runner
+FROM node:20-bookworm-slim@sha256:3d0f05455dea2c82e2f76e7e2543964c30f6b7d673fc1a83286736d44fe4c41c AS runner
 WORKDIR /app
 
 # Runtime зависимости:
@@ -57,7 +69,13 @@ WORKDIR /app
 #     Chromium с GUI-зависимостями. Без них instrumentation.ts whatsapp_warmup
 #     падает с "Failed to launch the browser process".
 #   - fonts-liberation: рендеринг шрифтов в Chromium (иначе emoji-крокозябры)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN rm -f /etc/apt/sources.list.d/debian.sources \
+    && printf '%s\n' \
+      'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20260801T000000Z bookworm main' \
+      'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian/20260801T000000Z bookworm-updates main' \
+      'deb [check-valid-until=no] https://snapshot.debian.org/archive/debian-security/20260801T000000Z bookworm-security main' \
+      > /etc/apt/sources.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
     openssl ca-certificates ffmpeg tini \
     chromium fonts-liberation \
     libnss3 libatk-bridge2.0-0 libxkbcommon0 libpangocairo-1.0-0 \
@@ -93,7 +111,7 @@ COPY --from=builder --chown=app:app /app/prisma ./prisma
 COPY --from=builder --chown=app:app /app/src/data ./src/data
 
 # Удаляем dev-зависимости (npm prune вместо отдельной stage — экономит слой)
-RUN npm prune --omit=dev && npm cache clean --force
+RUN npm prune --omit=dev --ignore-scripts && npm cache clean --force
 
 # Pre-create writable cache + ensure /app сам по себе writable для app user.
 # Без chown /app — npx prisma migrate deploy не может писать в /tmp/.npm,

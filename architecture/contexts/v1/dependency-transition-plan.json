@@ -1,5 +1,5 @@
 {
-  "current_relationships": [
+  "historical_relationships": [
     {
       "allowed_target": false,
       "current_import_count": 11,
@@ -955,7 +955,8 @@
       "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
     }
   ],
-  "schema": "yoko.crm.dependency-transition-plan.v1",
+  "historical_status": "ARCHIVED_BASELINE_EVIDENCE_NOT_CURRENT_DEPENDENCY_TRUTH",
+  "schema": "yoko.crm.historical-dependency-transition-plan.v1",
   "summary": {
     "allowed_but_requires_public_surface": 38,
     "currently_forbidden": 68,

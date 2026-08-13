@@ -5,8 +5,41 @@ export const SQL_DYNAMIC_MARKER = '__YOKO_DYNAMIC_SQL__'
 const IDENTIFIER_START = /[A-Za-z_\p{L}]/u
 const IDENTIFIER_PART = /[A-Za-z0-9_$\p{L}\p{N}]/u
 
+// This analyzer-owned vocabulary is used only to decide which SELECT calls
+// need side-effect review. The authoritative gate keeps its own independent
+// allowlist and checks the exact analyzer-derived `called_functions` set.
+const SAFE_SELECT_FUNCTIONS = new Set([
+    'ABS', 'AND', 'ARRAY_AGG', 'AVG', 'CEIL', 'COALESCE', 'CONCAT', 'COUNT',
+    'CURRENT_DATE', 'CURRENT_TIMESTAMP', 'DATE', 'DATE_TRUNC', 'DATETIME',
+    'EXISTS', 'EXTRACT', 'FILTER', 'FLOOR', 'FROM', 'GROUP', 'GREATEST', 'HAVING',
+    'JSON_AGG', 'JSON_BUILD_OBJECT', 'JSONB_AGG', 'JSONB_BUILD_OBJECT', 'LEAST',
+    'LENGTH', 'LOWER', 'MAX', 'MD5', 'MIN', 'NOW', 'NULLIF', 'POSITION',
+    'REGEXP_REPLACE', 'REPLACE', 'RIGHT', 'ON', 'OR', 'PERCENTILE_CONT',
+    'PERCENTILE_DISC', 'ROUND', 'SPLIT_PART', 'STRING_AGG', 'STRPOS', 'SUBSTRING',
+    'SUM', 'TO_CHAR', 'TO_DATE', 'TO_TIMESTAMP', 'TRIM', 'UPPER', 'WHERE',
+])
+
+const SQL_CALL_SYNTAX = new Set([
+    'AND', 'ANY', 'AS', 'BY', 'CASE', 'ELSE', 'EXISTS', 'FILTER', 'FROM', 'GROUP', 'HAVING', 'IN',
+    'JOIN', 'NOT', 'ON', 'OR', 'ORDER', 'OVER', 'PARTITION', 'SELECT', 'THEN',
+    'UNION', 'USING', 'VALUES', 'WHEN', 'WHERE', 'WITH',
+])
+
 function sha256(value) {
     return createHash('sha256').update(value).digest('hex')
+}
+
+function calledSqlFunctions(tokens) {
+    const functions = new Set()
+    for (let cursor = 0; cursor + 1 < tokens.length; cursor += 1) {
+        const token = tokens[cursor]
+        if (
+            (token.kind === 'word' || token.kind === 'identifier')
+            && tokens[cursor + 1]?.value === '('
+            && !SQL_CALL_SYNTAX.has(upper(token))
+        ) functions.add(token.value.toLowerCase())
+    }
+    return [...functions].sort()
 }
 
 function isIdentifierStart(character) {
@@ -609,6 +642,7 @@ export function analyzeSqlMutation(sql, options = {}) {
             written_columns: [],
             read_tables: [],
             selected_columns: [],
+            called_functions: [],
             selected_column_sources: [],
             select_all: false,
             read_projection_dynamic: true,
@@ -618,6 +652,7 @@ export function analyzeSqlMutation(sql, options = {}) {
     }
 
     const tokens = tokenizeSql(sql)
+    const calledFunctions = calledSqlFunctions(tokens)
     const dialectReasons = [...new Set(tokens
         .map((token) => token.dialect_ambiguity_reason)
         .filter(Boolean))].sort()
@@ -690,6 +725,7 @@ export function analyzeSqlMutation(sql, options = {}) {
             written_columns: [...new Set(parts.flatMap(({ analysis }) => analysis.written_columns ?? []))].sort(),
             read_tables: [...new Set(parts.flatMap(({ analysis }) => analysis.read_tables ?? []))].sort(),
             selected_columns: [...new Set(parts.flatMap(({ analysis }) => analysis.selected_columns ?? []))].sort(),
+            called_functions: [...new Set(parts.flatMap(({ analysis }) => analysis.called_functions ?? []))].sort(),
             selected_column_sources: [...sourceMap.values()].sort((left, right) => (
                 left.field.localeCompare(right.field) || String(left.table).localeCompare(String(right.table))
             )),
@@ -1214,15 +1250,6 @@ export function analyzeSqlMutation(sql, options = {}) {
                 const target = identifierAt(tokens, targetCursor)
                 operations.push(mutationRecord('SELECT_INTO', target, token))
             }
-            const SAFE_SELECT_FUNCTIONS = new Set([
-                'ABS', 'AND', 'ARRAY_AGG', 'AVG', 'CEIL', 'COALESCE', 'CONCAT', 'COUNT',
-                'CURRENT_DATE', 'CURRENT_TIMESTAMP', 'DATE', 'DATE_TRUNC', 'DATETIME',
-                'EXISTS', 'EXTRACT', 'FILTER', 'FLOOR', 'FROM', 'GROUP', 'GREATEST', 'HAVING', 'JSON_AGG', 'JSON_BUILD_OBJECT',
-                'JSONB_AGG', 'JSONB_BUILD_OBJECT', 'LEAST', 'LENGTH', 'LOWER', 'MAX',
-                'MD5', 'MIN', 'NOW', 'NULLIF', 'POSITION', 'REGEXP_REPLACE', 'REPLACE',
-                'ON', 'OR', 'PERCENTILE_CONT', 'PERCENTILE_DISC', 'ROUND', 'SPLIT_PART', 'STRING_AGG', 'STRPOS', 'SUBSTRING', 'SUM',
-                'TO_CHAR', 'TO_DATE', 'TO_TIMESTAMP', 'TRIM', 'UPPER', 'WHERE',
-            ])
             for (let lookahead = cursor + 1; lookahead + 1 < tokens.length; lookahead += 1) {
                 const lookaheadKeyword = upper(tokens[lookahead])
                 if (['FROM', 'INTO', 'UNION', ';'].includes(lookaheadKeyword) || tokens[lookahead]?.value === ';') break
@@ -1230,6 +1257,7 @@ export function analyzeSqlMutation(sql, options = {}) {
                     (tokens[lookahead]?.kind === 'word' || tokens[lookahead]?.kind === 'identifier')
                     && tokens[lookahead + 1]?.value === '('
                     && !SAFE_SELECT_FUNCTIONS.has(lookaheadKeyword)
+                    && !SQL_CALL_SYNTAX.has(lookaheadKeyword)
                 ) {
                     indeterminateMutation = true
                     reasons.add('select_function_side_effect_unresolved')
@@ -1387,6 +1415,7 @@ export function analyzeSqlMutation(sql, options = {}) {
         operations,
         tables,
         written_columns: [...writtenColumns].sort(),
+        called_functions: calledFunctions,
         ...readSurface,
         reasons: [...reasons].sort(),
         sql_sha256: sha256(sql),

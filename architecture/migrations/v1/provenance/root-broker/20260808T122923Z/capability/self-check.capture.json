@@ -1,0 +1,10 @@
+{
+  "command": "sudo -n /usr/local/sbin/yoko-crm-arch-evidence self-check",
+  "started_at": "2026-08-08T12:31:05.569840464Z",
+  "ended_at": "2026-08-08T12:31:05.675921460Z",
+  "exit_status": 0,
+  "output_sha256": "4014fb0668b841cf5ae731324f3a1b3574a3c6f61d005a8229ff4a2596f4bd93",
+  "broker_sha256": "0a8f18bad0467056c3b7460827618b5d8df8ac8678da57040988478dba34ab18",
+  "package_version": "1.0.2-1",
+  "host": "jvxthcorvm"
+}

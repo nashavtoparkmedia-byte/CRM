@@ -1,0 +1,10 @@
+{
+  "command": "sudo -n /usr/local/sbin/yoko-crm-arch-evidence messages-worktree-state",
+  "started_at": "2026-08-08T12:31:49.817639021Z",
+  "ended_at": "2026-08-08T12:31:50.044730425Z",
+  "exit_status": 0,
+  "output_sha256": "051e9366cd95ad9fcd2ed26a8ea9b91c4fcadef8ed2f68c41a1fd552e9e49a9d",
+  "broker_sha256": "0a8f18bad0467056c3b7460827618b5d8df8ac8678da57040988478dba34ab18",
+  "package_version": "1.0.2-1",
+  "host": "jvxthcorvm"
+}

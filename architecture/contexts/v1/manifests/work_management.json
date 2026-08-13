@@ -124,8 +124,7 @@
     "gravity-mvp/src/app/tasks",
     "gravity-mvp/src/contracts/work-management",
     "gravity-mvp/src/lib/tasks",
-    "gravity-mvp/src/modules/work-management",
-    "gravity-mvp/src/modules/work-management/internal"
+    "gravity-mvp/src/modules/work-management"
   ],
   "owner": {
     "accountability": "Work Management bounded-context owner",

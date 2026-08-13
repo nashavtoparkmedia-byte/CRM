@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -75,6 +76,13 @@ execFileSync('git', ['add', ...trackedFiles], { cwd: root })
 
 const result = await inventoryCredentialAccess(root, { registry })
 assert.equal(result.source.repository_root, '.')
+assert.equal(result.accesses.every((entry) => /^[a-f0-9]{64}$/u.test(entry.source_sha256)), true, 'every credential access must carry its whole-file source SHA-256')
+const exportDbSourceSha = createHash('sha256').update(await readFile(path.join(root, 'scripts/export-db.py'))).digest('hex')
+assert.equal(
+  result.accesses.filter((entry) => entry.file === 'scripts/export-db.py').every((entry) => entry.source_sha256 === exportDbSourceSha),
+  true,
+  'every site in one source file must bind to that exact file byte hash',
+)
 assert.equal(new Set(result.accesses.map((entry) => (
   `${entry.file}:${entry.site_signature}:${entry.policy_id ?? '<null>'}:${entry.access}`
 ))).size, result.accesses.length)

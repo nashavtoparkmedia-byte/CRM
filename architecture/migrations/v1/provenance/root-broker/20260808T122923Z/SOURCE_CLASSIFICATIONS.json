@@ -1,0 +1,104 @@
+{
+  "schema": "CRM-ARCH-000R-BLOCKED-1",
+  "generated_at": "2026-08-08T12:44:00Z",
+  "milestone_status": "BLOCKED_PRIVILEGE",
+  "classification_basis": {
+    "runtime_source_comparison": "/opt/codex-work/crm-arch-000r-closure/20260808T120034Z/runtime-content-manifest.json",
+    "runtime_source_sha256": "e4cf904efafd89e5c63715e67fe7b588381556201ba9079ecc8370e84546d0ba",
+    "sanitized_derivative": "runtime-manifests/runtime-content-manifest.v1.sanitized.json",
+    "docker_provenance_result": "FAILED_FIXED_COMMAND",
+    "installed_broker": "1.0.2-1",
+    "required_successor": "1.2.0-1"
+  },
+  "components": [
+    {
+      "component": "Gravity",
+      "container": "crm-gravity-mvp",
+      "image_id": "sha256:b36751e5a6d2b52e7a7676ee5babcd70f496111e9715e5056f6338d04b028f68",
+      "classification": "UNRESOLVED",
+      "mapped_non_generated_files": 291,
+      "generated_artifact_files": 3657,
+      "unmatched_generated_files": 954,
+      "missing_fact": "safe OCI metadata and image-versus-writable origin for the generated Next.js artifact"
+    },
+    {
+      "component": "MAX scraper",
+      "container": "crm-max-scraper",
+      "image_id": "sha256:87835969ed6335a99d50e1cc2eaf70aa33fdbaf937f4cef658a926f55b26f365",
+      "classification": "PROVEN_CONTENT_EQUIVALENT",
+      "application_files": 56,
+      "unmatched_application_files": 0,
+      "source": "/opt/crm/max-web-scraper at e6a0a833... plus explicit working-tree deltas"
+    },
+    {
+      "component": "Personal MAX",
+      "container": "crm-max-personal-gateway",
+      "image_id": "sha256:1859c44327ba4e2264728534c334b81f8ee0cdbd56ebe28c50bb62dffadfc0c1",
+      "classification": "PROVEN_GIT_REVISION",
+      "revision": "f97532cb6903f033c070856b4a8c207df8e35026",
+      "continuity": "frozen baseline accepted; current broker cannot re-observe the gateway and successor check remains pending"
+    },
+    {
+      "component": "Telegram bot",
+      "container": "crm-tg-bot",
+      "image_id": "sha256:0849c4c9912aecf3cb7c35b51abba22cdb1c85a385afa6c2746000d14b9835f6",
+      "classification": "PROVEN_CONTENT_EQUIVALENT",
+      "application_files": 43,
+      "unmatched_application_files": 0,
+      "source": "/opt/crm/tg-bot at e6a0a833... plus explicit working-tree deltas"
+    },
+    {
+      "component": "Telegram frontend",
+      "container": "crm-tg-bot-frontend",
+      "image_id": "sha256:87e2f3c70e11dd49e179889b8cacd6ebbc3ed188ed2787698b288a98b89b083d",
+      "classification": "UNRESOLVED",
+      "source_files": 4,
+      "generated_artifact_files": 75,
+      "missing_fact": "safe OCI metadata and image-versus-writable origin for unmatched Next.js output"
+    },
+    {
+      "component": "YFS API",
+      "container": "crm-yfs-api",
+      "image_id": "sha256:7df77531470940da08a216e75ffbe1f17d44ce7f66747f1fc3dcf31094b1b5e4",
+      "classification": "UNRESOLVED",
+      "application_files": 25,
+      "unmatched_path": "/app/src/worker.ts",
+      "unmatched_sha256": "c14327159069d8f49071d78209b380f1baf646577a00473bfc295f87bde6ce15",
+      "missing_fact": "whether the unmatched source is immutable image content or writable-layer drift"
+    },
+    {
+      "component": "YFS worker",
+      "container": "crm-yfs-worker",
+      "image_id": "sha256:9a909f13f46f260cc490016be65b9d7923d3b29e5fe0493f6a1ba763474d8501",
+      "classification": "PROVEN_CONTENT_EQUIVALENT",
+      "application_files": 27,
+      "unmatched_application_files": 0,
+      "source": "/opt/crm/yandex-fleet-scraper at e6a0a833... plus preserved production-only files"
+    },
+    {
+      "component": "Audio Bridge",
+      "container": "crm-audio-bridge",
+      "image_id": "sha256:ba83a60f43149d71f25fc1663dd32094ecff9b166bd59d2cacfa880869e86417",
+      "classification": "PROVEN_CONTENT_EQUIVALENT",
+      "application_files": 24,
+      "unmatched_application_files": 0,
+      "source_revision": "e6a0a833fbb756216b058bfe326f9f9c77c4cc6d"
+    },
+    {
+      "component": "FreeSWITCH",
+      "container": "crm-freeswitch",
+      "image_id": "sha256:d5f8183e3754bda3f9d21dc69eb452ff98ec15bcf3b73264c25ef5fd0ee86947",
+      "classification": "UNRESOLVED",
+      "v1_component_quarantined": true,
+      "missing_fact": "secret-safe recapture of non-secret overrides with image-versus-writable origin and safe OCI metadata"
+    },
+    {
+      "component": "Nginx",
+      "container": "crm-nginx",
+      "image_id": "sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10",
+      "classification": "PROVEN_CONTENT_EQUIVALENT",
+      "authority": "live bind-mounted /opt/crm/deploy/nginx",
+      "continuity": "frozen baseline accepted; current successor mount check pending"
+    }
+  ]
+}

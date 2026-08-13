@@ -2,6 +2,9 @@
 import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
+import ts from '../../gravity-mvp/node_modules/typescript/lib/typescript.js'
+
+import { extractUnsafeApplicationCompositionExports } from './enforce-architecture.mjs'
 
 const read = file => fs.readFileSync(file, 'utf8')
 const checks = []
@@ -25,6 +28,8 @@ const contractIndex = read('gravity-mvp/src/contracts/messaging/v1/index.ts')
 const handler = read('gravity-mvp/src/modules/messaging/public/v1/conversation-contact-link-handler.ts')
 const adapter = read('gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-conversation-contact-link-adapter.ts')
 const publicIndex = read('gravity-mvp/src/modules/messaging/public/v1/index.ts')
+const applicationPath = 'gravity-mvp/src/modules/messaging/application/messaging-operations.ts'
+const application = read(applicationPath)
 const contactService = read('gravity-mvp/src/lib/ContactService.ts')
 const amendmentPath = 'architecture/isolation/messaging/conversation-contact-link-v1/module-manifest-amendments.json'
 const amendment = JSON.parse(read(amendmentPath))
@@ -35,20 +40,233 @@ const policy = JSON.parse(read('architecture/enforcement/v1/policy.json'))
 const registry = JSON.parse(read('architecture/enforcement/v1/exceptions.json'))
 const sourceFiles = walk('gravity-mvp/src')
 const sources = new Map(sourceFiles.map(file => [file, read(file)]))
-const consumers = [
-  'gravity-mvp/src/app/messages/link-chat-actions.ts',
-  'gravity-mvp/src/lib/whatsapp/WhatsAppService.ts',
-  'gravity-mvp/src/app/api/messages/start-chat/route.ts',
-  'gravity-mvp/src/app/api/webhook/telegram/route.ts',
-  'gravity-mvp/src/app/tg-actions.ts',
-  'gravity-mvp/src/app/api/webhook/max/route.ts',
-  'gravity-mvp/src/app/api/webhooks/max/route.ts',
-]
-const consumerSource = consumers.map(file => sources.get(file)).join('\n')
-const ensureBody = sliceBetween(adapter, 'async ensure(input)', '\n  },\n}')
+const consumerModel = new Map([
+  ['gravity-mvp/src/app/messages/link-chat-actions.ts', { count: 1, chatIds: ['chat.id'] }],
+  ['gravity-mvp/src/lib/whatsapp/WhatsAppService.ts', {
+    count: 5,
+    chatIds: ['unifiedSyncChat.id', 'unifiedSyncChat.id', 'unifiedChat.id', 'unifiedChat.id', 'unifiedChat.id'],
+  }],
+  ['gravity-mvp/src/app/api/messages/start-chat/route.ts', { count: 1, chatIds: ['chat.id'] }],
+  ['gravity-mvp/src/app/api/webhook/telegram/route.ts', { count: 1, chatIds: ['unifiedChat.id'] }],
+  ['gravity-mvp/src/app/tg-actions.ts', { count: 2, chatIds: ['chat.id', 'unifiedChat.id'] }],
+  ['gravity-mvp/src/app/api/webhook/max/route.ts', { count: 2, chatIds: ['unifiedChat.id', 'unifiedChat.id'] }],
+  ['gravity-mvp/src/app/api/webhooks/max/route.ts', { count: 1, chatIds: ['chat.id'] }],
+])
+const consumers = [...consumerModel.keys()]
 const portSource = sliceBetween(handler, 'export interface ConversationContactLinkPersistencePortV1', 'export function')
-const commandBodies = [...consumerSource.matchAll(/ensureConversationContactLinkV1\(\{([\s\S]*?)\}\)/g)]
-  .map(match => match[1])
+const productionSourceFiles = sourceFiles.filter(file => !/(?:^|\/)__tests__\/|\.(?:test|spec)\.tsx?$/.test(file))
+const normalize = value => value.replace(/\s+/g, '')
+const canonical = value => normalize(value).replace(/,\}/g, '}')
+const parse = (file, source) => {
+  const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS)
+  if (ast.parseDiagnostics.length > 0) throw new Error(`${file}: TypeScript parse diagnostics`)
+  return ast
+}
+const visit = (node, visitor) => {
+  visitor(node)
+  ts.forEachChild(node, child => visit(child, visitor))
+}
+const namedImports = ast => ast.statements.flatMap(statement => {
+  if (!ts.isImportDeclaration(statement) || !ts.isStringLiteralLike(statement.moduleSpecifier)) return []
+  const bindings = statement.importClause?.namedBindings
+  if (!bindings || !ts.isNamedImports(bindings)) return []
+  return bindings.elements.map(element => ({
+    specifier: statement.moduleSpecifier.text,
+    imported: element.propertyName?.text ?? element.name.text,
+    local: element.name.text,
+    typeOnly: statement.importClause?.isTypeOnly || element.isTypeOnly,
+  }))
+})
+const identifierCalls = (node, name) => {
+  const calls = []
+  visit(node, candidate => {
+    if (ts.isCallExpression(candidate) && ts.isIdentifier(candidate.expression) && candidate.expression.text === name) calls.push(candidate)
+  })
+  return calls
+}
+const expressionCalls = (node, text, ast) => {
+  const calls = []
+  visit(node, candidate => {
+    if (ts.isCallExpression(candidate) && normalize(candidate.expression.getText(ast)) === text) calls.push(candidate)
+  })
+  return calls
+}
+const falseLiteral = node => node.kind === ts.SyntaxKind.FalseKeyword
+  || (ts.isNumericLiteral(node) && Number(node.text) === 0)
+const syntacticallyDead = node => {
+  for (let child = node, current = node.parent; current; child = current, current = current.parent) {
+    if (ts.isIfStatement(current)) {
+      if (falseLiteral(current.expression) && child === current.thenStatement) return true
+      if (current.expression.kind === ts.SyntaxKind.TrueKeyword && child === current.elseStatement) return true
+    }
+    if ((ts.isWhileStatement(current) || ts.isDoStatement(current)) && falseLiteral(current.expression)) return true
+  }
+  return false
+}
+const staticPropertyName = property => (
+  ts.isIdentifier(property.name) || ts.isStringLiteralLike(property.name) ? property.name.text : undefined
+)
+const objectValues = (literal, ast) => Object.fromEntries(literal.properties.map(property => {
+  if (ts.isShorthandPropertyAssignment(property)) return [property.name.text, property.name.text]
+  if (!ts.isPropertyAssignment(property)) throw new Error('non-static object property')
+  const name = staticPropertyName(property)
+  if (!name) throw new Error('computed object property')
+  return [name, normalize(property.initializer.getText(ast))]
+}))
+const assertNoIndirectIdentifierUse = (ast, name) => {
+  const bad = []
+  visit(ast, node => {
+    if (!ts.isIdentifier(node) || node.text !== name) return
+    if (ts.isImportSpecifier(node.parent) && node.parent.name === node) return
+    if (ts.isCallExpression(node.parent) && node.parent.expression === node) return
+    bad.push(node)
+  })
+  if (bad.length > 0) throw new Error(`${name}: indirect use`)
+}
+
+function assertConsumerModel(overrides = new Map()) {
+  const sourceFor = file => overrides.get(file) ?? sources.get(file)
+  const observed = new Map()
+  for (const file of productionSourceFiles) {
+    const ast = parse(file, sourceFor(file))
+    const imports = namedImports(ast).filter(binding => binding.imported === 'ensureConversationContactLinkV1')
+    if (imports.length > 0) observed.set(file, { ast, imports })
+  }
+  if (JSON.stringify([...observed.keys()].sort()) !== JSON.stringify([...consumerModel.keys()].sort())) throw new Error('consumer denominator')
+  let total = 0
+  for (const [file, expected] of consumerModel) {
+    const { ast, imports } = observed.get(file)
+    if (JSON.stringify(imports) !== JSON.stringify([{
+      specifier: '@/modules/messaging/public/v1',
+      imported: 'ensureConversationContactLinkV1',
+      local: 'ensureConversationContactLinkV1',
+      typeOnly: false,
+    }])) throw new Error(`${file}: facade import`)
+    const commandImports = namedImports(ast).filter(binding => binding.imported === 'ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1')
+    if (JSON.stringify(commandImports) !== JSON.stringify([{
+      specifier: '@/contracts/messaging/v1',
+      imported: 'ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1',
+      local: 'ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1',
+      typeOnly: false,
+    }])) throw new Error(`${file}: command import`)
+    assertNoIndirectIdentifierUse(ast, 'ensureConversationContactLinkV1')
+    const calls = identifierCalls(ast, 'ensureConversationContactLinkV1')
+    if (calls.length !== expected.count || calls.some(call => syntacticallyDead(call))) throw new Error(`${file}: call denominator`)
+    const chatIds = []
+    for (const call of calls) {
+      if (!ts.isAwaitExpression(call.parent) || call.arguments.length !== 1 || !ts.isObjectLiteralExpression(call.arguments[0])) throw new Error(`${file}: awaited literal call`)
+      const values = objectValues(call.arguments[0], ast)
+      if (JSON.stringify(Object.keys(values)) !== JSON.stringify(['contract', 'chatId', 'contactId', 'contactIdentityId'])) throw new Error(`${file}: command fields`)
+      if (values.contract !== 'ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1'
+        || values.contactId !== 'contactResult.contact.id'
+        || values.contactIdentityId !== 'contactResult.identity.id') throw new Error(`${file}: command mapping`)
+      chatIds.push(values.chatId)
+    }
+    if (JSON.stringify(chatIds.sort()) !== JSON.stringify([...expected.chatIds].sort())) throw new Error(`${file}: chat mapping`)
+    total += calls.length
+  }
+  if (total !== 13) throw new Error('total call denominator')
+}
+const acceptsConsumerModel = overrides => {
+  try { assertConsumerModel(overrides); return true } catch { return false }
+}
+
+function assertCompositionModel(publicSource, applicationSource) {
+  const publicAst = parse('messaging-public-index.ts', publicSource)
+  const reexports = publicAst.statements.flatMap(statement => {
+    if (!ts.isExportDeclaration(statement) || statement.moduleSpecifier?.text !== '../../application/messaging-operations') return []
+    if (!statement.exportClause || !ts.isNamedExports(statement.exportClause)) throw new Error('application wildcard export')
+    return statement.exportClause.elements.filter(element => (
+      (element.propertyName?.text ?? element.name.text) === 'ensureConversationContactLinkV1'
+    ))
+  })
+  if (reexports.length !== 1 || reexports[0].name.text !== 'ensureConversationContactLinkV1') throw new Error('facade re-export')
+  const ast = parse(applicationPath, applicationSource)
+  for (const [specifier, imported] of [
+    ['../public/v1/conversation-contact-link-handler', 'createEnsureConversationContactLinkHandlerV1'],
+    ['../public/v1/legacy-prisma-conversation-contact-link-adapter', 'legacyPrismaConversationContactLinkPortV1'],
+  ]) {
+    const imports = namedImports(ast).filter(binding => binding.specifier === specifier && binding.imported === imported)
+    if (imports.length !== 1 || imports[0].local !== imported || imports[0].typeOnly) throw new Error(`${imported}: composition import`)
+  }
+  const factories = identifierCalls(ast, 'createEnsureConversationContactLinkHandlerV1')
+  if (factories.length !== 1 || syntacticallyDead(factories[0])
+    || factories[0].arguments.length !== 1
+    || factories[0].arguments[0].getText(ast) !== 'legacyPrismaConversationContactLinkPortV1') throw new Error('handler composition')
+  const factoryDeclaration = factories[0].parent
+  if (!ts.isVariableDeclaration(factoryDeclaration)
+    || !ts.isIdentifier(factoryDeclaration.name)
+    || factoryDeclaration.name.text !== 'ensureConversationContactLink') throw new Error('handler binding')
+  const wrappers = ast.statements.flatMap(statement => (
+    ts.isVariableStatement(statement)
+    && statement.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.ExportKeyword)
+      ? [...statement.declarationList.declarations]
+      : []
+  )).filter(declaration => ts.isIdentifier(declaration.name) && declaration.name.text === 'ensureConversationContactLinkV1')
+  if (wrappers.length !== 1 || !wrappers[0].initializer || !ts.isArrowFunction(wrappers[0].initializer)) throw new Error('facade wrapper')
+  const arrow = wrappers[0].initializer
+  if (!ts.isCallExpression(arrow.body)
+    || !ts.isIdentifier(arrow.body.expression)
+    || arrow.body.expression.text !== 'ensureConversationContactLink'
+    || arrow.body.arguments.length !== 1
+    || !ts.isSpreadElement(arrow.body.arguments[0])
+    || arrow.body.arguments[0].expression.getText(ast) !== 'args') throw new Error('facade wrapper delegate')
+  if (extractUnsafeApplicationCompositionExports(applicationSource).length !== 0) throw new Error('unsafe application composition export')
+}
+const acceptsCompositionModel = (publicSource, applicationSource) => {
+  try { assertCompositionModel(publicSource, applicationSource); return true } catch { return false }
+}
+const accepts = operation => {
+  try { operation(); return true } catch { return false }
+}
+
+function assertHandlerModel(source) {
+  const ast = parse('conversation-contact-link-handler.ts', source)
+  const ports = ast.statements.filter(statement => ts.isInterfaceDeclaration(statement) && statement.name.text === 'ConversationContactLinkPersistencePortV1')
+  if (ports.length !== 1 || ports[0].members.length !== 1 || !ts.isMethodSignature(ports[0].members[0]) || ports[0].members[0].name.getText(ast) !== 'ensure') throw new Error('port surface')
+  const parses = identifierCalls(ast, 'parseEnsureConversationContactLinkCommandV1')
+  const persists = expressionCalls(ast, 'port.ensure', ast)
+  if (parses.length !== 1 || persists.length !== 1 || parses[0].pos >= persists[0].pos || !ts.isAwaitExpression(persists[0].parent)) throw new Error('handler order')
+  if (persists[0].arguments.length !== 1 || !ts.isObjectLiteralExpression(persists[0].arguments[0])
+    || JSON.stringify(objectValues(persists[0].arguments[0], ast)) !== JSON.stringify({
+      chatId: 'parsed.chatId', contactId: 'parsed.contactId', contactIdentityId: 'parsed.contactIdentityId',
+    })) throw new Error('handler persistence mapping')
+  const returns = []
+  visit(ast, node => { if (ts.isReturnStatement(node) && node.expression && ts.isObjectLiteralExpression(node.expression)) returns.push(node.expression) })
+  if (!returns.some(literal => JSON.stringify(objectValues(literal, ast)) === JSON.stringify({
+    contract: 'ENSURE_CONVERSATION_CONTACT_LINK_RESULT_V1', completed: 'true',
+  }))) throw new Error('handler result')
+  let forbidden = false
+  visit(ast, node => { if (ts.isTryStatement(node) || ts.isCatchClause(node)) forbidden = true })
+  if (forbidden) throw new Error('handler catches owner failure')
+}
+
+function assertAdapterModel(source) {
+  const ast = parse('legacy-prisma-conversation-contact-link-adapter.ts', source)
+  const chains = [
+    ['prisma.chat.findUnique', '{where:{id:input.chatId},select:{driverId:true}}'],
+    ['prisma.contact.findUnique', '{where:{id:input.contactId},select:{yandexDriverId:true}}'],
+    ['prisma.driver.findUnique', '{where:{yandexDriverId:contact.yandexDriverId},select:{id:true}}'],
+    ['prisma.chat.update', '{where:{id:input.chatId},data:updateData}'],
+  ]
+  let previous = -1
+  for (const [expression, argument] of chains) {
+    const calls = expressionCalls(ast, expression, ast)
+    if (calls.length !== 1 || calls[0].pos <= previous || !ts.isAwaitExpression(calls[0].parent)
+      || calls[0].arguments.length !== 1 || canonical(calls[0].arguments[0].getText(ast)) !== argument) throw new Error(`${expression}: exact ordered call`)
+    previous = calls[0].pos
+  }
+  const conditions = []
+  visit(ast, node => { if (ts.isIfStatement(node)) conditions.push(normalize(node.expression.getText(ast))) })
+  for (const expected of ['chat&&!chat.driverId', 'contact?.yandexDriverId', 'driver']) {
+    if (conditions.filter(value => value === expected).length !== 1) throw new Error(`${expected}: exact condition`)
+  }
+  const assignments = []
+  visit(ast, node => {
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) assignments.push(normalize(node.getText(ast)))
+  })
+  if (assignments.filter(value => value === 'updateData.driverId=driver.id').length !== 1) throw new Error('driver assignment')
+}
 
 check(
   'contract and handler are provider and infrastructure neutral',
@@ -80,53 +298,35 @@ check(
 )
 check(
   'one named port owns only the exact link operation',
-  handler.includes('export interface ConversationContactLinkPersistencePortV1') &&
-    (portSource.match(/\bensure\(/g) || []).length === 1 &&
-    !/(find|read|query|patch|delete|create|transaction)\(/.test(portSource),
+  accepts(() => assertHandlerModel(handler)),
   'port widened beyond the exact use case',
 )
 check(
   'handler parses before one port call and returns the exact result',
-  handler.indexOf('parseEnsureConversationContactLinkCommandV1(command)') < handler.indexOf('await port.ensure({') &&
-    (handler.match(/await port\.ensure/g) || []).length === 1 &&
-    handler.includes('contract: ENSURE_CONVERSATION_CONTACT_LINK_RESULT_V1') &&
-    handler.includes('completed: true') &&
-    !/\b(?:try|catch)\b/.test(handler),
+  accepts(() => assertHandlerModel(handler)),
   'handler mapping, result or failure visibility drift',
 )
 check(
-  'public facade binds only the owner adapter and indexes export the contract',
+  'public facade exposes the narrow application function and application binds the owner adapter exactly once',
   contractIndex.includes("export * from './conversation-contact-link-command'") &&
     publicIndex.includes('createEnsureConversationContactLinkHandlerV1') &&
-    publicIndex.includes('legacyPrismaConversationContactLinkPortV1') &&
-    publicIndex.includes('ensureConversationContactLinkV1=createEnsureConversationContactLinkHandlerV1(legacyPrismaConversationContactLinkPortV1)'),
+    !publicIndex.includes('legacyPrismaConversationContactLinkPortV1') &&
+    acceptsCompositionModel(publicIndex, application),
   'contract export or owner binding drift',
 )
 check(
   'owner reads Chat then Contact then Driver with exact projections',
-  ensureBody.indexOf('prisma.chat.findUnique({') < ensureBody.indexOf('prisma.contact.findUnique({') &&
-    ensureBody.indexOf('prisma.contact.findUnique({') < ensureBody.indexOf('prisma.driver.findUnique({') &&
-    ensureBody.includes('where: { id: input.chatId }') &&
-    ensureBody.includes('select: { driverId: true }') &&
-    ensureBody.includes('where: { id: input.contactId }') &&
-    ensureBody.includes('select: { yandexDriverId: true }') &&
-    ensureBody.includes('where: { yandexDriverId: contact.yandexDriverId }') &&
-    ensureBody.includes('select: { id: true }'),
+  accepts(() => assertAdapterModel(adapter)),
   'owner read order, predicates or projections drift',
 )
 check(
   'driver enrichment preserves inherited truthy short circuits',
-  ensureBody.includes('if (chat && !chat.driverId)') &&
-    ensureBody.includes('if (contact?.yandexDriverId)') &&
-    ensureBody.includes('if (driver) updateData.driverId = driver.id'),
+  accepts(() => assertAdapterModel(adapter)),
   'driver lookup or preservation semantics drift',
 )
 check(
   'missing Chat still reaches one exact update',
-  (ensureBody.match(/prisma\.chat\.update\(/g) || []).length === 1 &&
-    ensureBody.indexOf('await prisma.chat.update({') > ensureBody.indexOf('if (chat && !chat.driverId)') &&
-    ensureBody.includes('where: { id: input.chatId }') &&
-    ensureBody.includes('data: updateData'),
+  accepts(() => assertAdapterModel(adapter)),
   'missing-Chat behavior or final update mapping drift',
 )
 check(
@@ -151,22 +351,33 @@ check(
 )
 check(
   'exactly thirteen calls exist across the seven accepted consumers',
-  (consumerSource.match(/await ensureConversationContactLinkV1\(\{/g) || []).length === 13 &&
-    consumers.every(file => sources.get(file).includes('ensureConversationContactLinkV1')) &&
-    [...sources.entries()]
-      .filter(([file, source]) => source.includes('ensureConversationContactLinkV1') && !file.includes('/modules/messaging/public/v1/'))
-      .every(([file]) => consumers.includes(file)),
+  consumers.length === 7 && accepts(() => assertConsumerModel()),
   'consumer population or awaited call count drift',
+)
+const directFacadeBindingProbe = publicIndex.replace(
+  '../../application/messaging-operations',
+  './legacy-prisma-conversation-contact-link-adapter',
+)
+const reducedDenominatorProbe = sources.get(consumers[0]).replace(
+  'await ensureConversationContactLinkV1(',
+  'await removedConversationContactLinkV1(',
+)
+const consumerProbes = [
+  new Map([[consumers[0], `${reducedDenominatorProbe}\n// await ensureConversationContactLinkV1({})\n`]]),
+  new Map([[consumers[0], `${reducedDenominatorProbe}\nif (false) { void ensureConversationContactLinkV1({}) }\n`]]),
+  new Map([[consumers[0], sources.get(consumers[0]).replace('@/modules/messaging/public/v1', '@/modules/messaging/application/messaging-operations')]]),
+  new Map([[consumers[0], reducedDenominatorProbe]]),
+  new Map([[consumers[0], `${sources.get(consumers[0])}\nvoid ensureConversationContactLinkV1({})\n`]]),
+]
+check(
+  'negative probes reject comments dead code direct bypass and denominator drift',
+  !acceptsCompositionModel(directFacadeBindingProbe, application) &&
+    consumerProbes.every(probe => !acceptsConsumerModel(probe)),
+  'facade bypass or reduced consumer denominator was accepted',
 )
 check(
   'all consumer commands use the exact mapping with no generic fields',
-  commandBodies.length === 13 &&
-    commandBodies.every(body => (body.match(/contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1/g) || []).length === 1) &&
-    commandBodies.every(body => (body.match(/contactId: contactResult\.contact\.id/g) || []).length === 1) &&
-    commandBodies.every(body => (body.match(/contactIdentityId: contactResult\.identity\.id/g) || []).length === 1) &&
-    !/(patch:|driverId:|tableName:|sql:|transaction:)/.test(
-      commandBodies.join('\n'),
-    ),
+  accepts(() => assertConsumerModel()),
   'consumer payload mapping widened or drifted',
 )
 check(

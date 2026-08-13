@@ -1,0 +1,230 @@
+{
+  "schema": "yoko.crm.external-rereview-remediation-ledger.v1",
+  "project": "YOKO CRM MODULAR ARCHITECTURE TRANSFORMATION",
+  "created_at": "2026-08-13T06:40:00Z",
+  "updated_at": "2026-08-13T16:26:46Z",
+  "controlling_verdict": "YOKO CRM MODULAR ARCHITECTURE TRANSFORMATION NOT READY",
+  "status_vocabulary": [
+    "CONFIRMED",
+    "DISPROVEN_WITH_CURRENT_EVIDENCE",
+    "IMPLEMENTED_NOT_ACCEPTED",
+    "CLOSED",
+    "BLOCKED_EXTERNAL_AUTH",
+    "BLOCKED_IRREVERSIBLE",
+    "BLOCKED_BUSINESS"
+  ],
+  "external_review": {
+    "task_id": "019ff808-a8ba-7523-a367-e860814e14ab",
+    "session_jsonl": "/home/codexbot/.codex/sessions/2026/08/12/rollout-2026-08-12T22-12-24-019ff808-a8ba-7523-a367-e860814e14ab.jsonl",
+    "session_jsonl_sha256": "3bcd2a9c1342c19cc070279aa1eaeeefa9c3abd6ba33bf6d85982a89f3d460f9",
+    "review_prompt": "/home/codexbot/.codex/attachments/7ac8ba1f-a35e-41d5-bb9e-cbb7e2dc7dd7/pasted-text.txt",
+    "review_prompt_sha256": "8cba1cd27c4c49d1654f37ac4053fb7f889e8f2130273e3e10810d97093d1773",
+    "final_output_timestamp": "2026-08-12T22:41:10.786Z",
+    "final_output_sha256_without_added_newline": "0655008414018f50153c07655fdb235fe94964253ad11f928cf7c933c9f59a2c"
+  },
+  "canonical_dod": "architecture/recovery/whole-project-dod/v2/ORIGINAL_DOD_CANONICAL_MAPPING.json",
+  "findings": [
+    {
+      "id": "EXTERNAL-REREVIEW-001",
+      "title": "Original DoD authority and denominator were not proven",
+      "severity": "CRITICAL",
+      "violated_original_dod_items": [
+        "ORIGINAL-DOD-001","ORIGINAL-DOD-002","ORIGINAL-DOD-003","ORIGINAL-DOD-004","ORIGINAL-DOD-005","ORIGINAL-DOD-006","ORIGINAL-DOD-007","ORIGINAL-DOD-008","ORIGINAL-DOD-009","ORIGINAL-DOD-010","ORIGINAL-DOD-011","ORIGINAL-DOD-012","ORIGINAL-DOD-013","ORIGINAL-DOD-014","ORIGINAL-DOD-015","ORIGINAL-DOD-016","ORIGINAL-DOD-017","ORIGINAL-DOD-018","ORIGINAL-DOD-019","ORIGINAL-DOD-020","ORIGINAL-DOD-021","ORIGINAL-DOD-022"
+      ],
+      "exact_reviewer_evidence": [
+        "Original execution contract attachment /home/codexbot/.codex/attachments/ba69e9a6-64e4-440c-9365-9b9ac60025e3/pasted-text.txt has SHA-256 0f06b9369c107f970e3ff702b4e59c78614f991fde7eaace4ffd4ae7548d1f03 and exactly 22 requirements at lines 1684-1726.",
+        "architecture/reviews/crm-arch-007r-final/ACCEPTANCE_CHECKLIST.md has 23 entries but is a narrower source-gate checklist whose final three entries leave Architecture Lead acceptance, production/preview validation, and whole-project Owner acceptance open.",
+        "architecture/recovery/whole-project-dod/v2/ORIGINAL_DOD_RECOMPUTE_20260812.json contains 19 previous-review finding IDs without original ordinal, exact text, source hash, or 22/23-to-19 mapping."
+      ],
+      "current_reproduction_status": "SOURCE_REMEDIATION_IMPLEMENTED; the hash-pinned original 22-item authority, retained 21-item recovery crosswalk, historical 23-entry scope classification, legacy 19-row crosswalk, symmetric seven-finding crosswalk, semantic digests, and fail-closed negative probes are present; fresh independent external acceptance remains pending",
+      "remediation": [
+        "Pinned the exact original 22-item source bytes/hash and recorded chronology, scope, authority, and supersession for every recovered candidate.",
+        "Classified the 23-entry CRM-ARCH-007R checklist as narrow historical source-gate evidence rather than a competing whole-project contract.",
+        "Replaced 19-row denominator use with one exact canonical row per original requirement and preserved explicit recovery, legacy-review, and external-finding crosswalks.",
+        "Added deterministic semantic pins and negative validation for denominator, source, status, evidence, false closure, self-reference, and bidirectional crosswalk drift."
+      ],
+      "tests": [
+        "tools/architecture/v2/verify-original-dod-canonical-mapping.mjs",
+        "tools/architecture/v2/test-original-dod-canonical-mapping.mjs"
+      ],
+      "production_relevance": "Acceptance-accounting only; no production mutation is required. Runtime evidence remains attached requirement by requirement and is not inferred from source-only proof.",
+      "closure_criterion": "The exact authoritative source/hash and denominator are pinned; all authoritative ordinals map exactly once to evidence-bearing canonical rows; the historical 23 and current 19 scopes are explicitly resolved; deterministic positive and negative validation passes; a fresh reviewer accepts the result.",
+      "status": "IMPLEMENTED_NOT_ACCEPTED"
+    },
+    {
+      "id": "EXTERNAL-REREVIEW-002",
+      "title": "Authoritative CI is not reproducible from a clean or hosted checkout",
+      "severity": "CRITICAL",
+      "violated_original_dod_items": ["ORIGINAL-DOD-009","ORIGINAL-DOD-010","ORIGINAL-DOD-020"],
+      "exact_reviewer_evidence": [
+        ".github/workflows/architecture-enforcement.yml used npm install --ignore-scripts without Prisma generation; clean checkout produced 277 TypeScript diagnostics against an allowance of 30.",
+        "After manual Prisma generation, fresh credential verification still failed on four signatures in ContactService.ts, the fleet legacy communication-event adapter, and park-phone-search.ts.",
+        "No hosted GitHub Actions run existed for accepted commits 7aea2823 or c6f352ae."
+      ],
+      "current_reproduction_status": "SOURCE_REMEDIATION_IMPLEMENTED; the workflow checks out the exact pull-request head with its exact parent, performs locked installs followed by explicit Gravity and TG-bot Prisma generation, and invokes the hard-pinned unreduced 52-control authoritative catalog beginning with its own executable inventory guard; exact final clean-checkout and hosted GitHub Actions acceptance remain pending",
+      "remediation": [
+        "Encoded locked dependency installation and explicit Prisma client generation for both generated-client projects before authoritative controls.",
+        "Bound the hosted workflow to the complete authoritative runner, including fresh whole-repository write and credential scans, both migration replays, and the canonical mapping negative suite.",
+        "Preserved exact-final-commit clean-checkout and hosted workflow PASS as acceptance requirements rather than converting local source checks into hosted evidence."
+      ],
+      "tests": [
+        ".github/workflows/architecture-enforcement.yml",
+        "tools/architecture/run-authoritative-ci.mjs",
+        "tools/architecture/test-authoritative-ci-inventory.mjs"
+      ],
+      "production_relevance": "Source/control-plane acceptance must pass before any runtime-source redeployment; no hosted exact-final-commit result is claimed by this source ledger.",
+      "closure_criterion": "Self-contained clean and fresh checkout PASS plus hosted full authoritative workflow PASS on the exact accepted final commit.",
+      "status": "IMPLEMENTED_NOT_ACCEPTED"
+    },
+    {
+      "id": "EXTERNAL-REREVIEW-003",
+      "title": "Write ownership gate accepts unauthorized migration writes",
+      "severity": "CRITICAL",
+      "violated_original_dod_items": ["ORIGINAL-DOD-001","ORIGINAL-DOD-002","ORIGINAL-DOD-003","ORIGINAL-DOD-009","ORIGINAL-DOD-010","ORIGINAL-DOD-020"],
+      "exact_reviewer_evidence": [
+        "architecture/recovery/whole-project-dod/v2/MAINTENANCE_MIGRATION_CAPABILITY_REGISTRY.json reported approved 0/188 while active DB-mutating compose, Dockerfile, and deploy.sh records were PENDING_EVIDENCE, approved:false, UNRESOLVED, and UNKNOWN reachability.",
+        "tools/architecture/v2/verify-authoritative-write-analysis.mjs did not call exact capability authorization.",
+        "Controlled reproduction returned authorizeMaintenanceWrite=false while the authoritative gate returned PASS with material_unresolved=0."
+      ],
+      "current_reproduction_status": "SOURCE_REMEDIATION_IMPLEMENTED; all 813 current non-test MIGRATION_ONLY sites are reconciled one-to-one by signature against byte-pinned exact capabilities (760 sites bound to all 62 sealed authority artifacts; 53 sites bound to 17 explicit noncanonical source decisions), and the original unauthorized-write bypass is represented by failing negative probes; exact-final-commit acceptance remains pending",
+      "remediation": [
+        "Added an independently reviewed exact-capability registry for current active maintenance and migration writes without treating the historical raw 0/188 inventory as authorization.",
+        "Made the authoritative write verifier invoke exact capability authorization for every active non-test write and fail absent, pending, unresolved, unknown-reachability, or scope-mismatched records.",
+        "Bound canonical migration sites to exact production-migration name/hash/ordinal/authority provenance and required explicit committed per-site owner/target/operation/reachability decisions for every noncanonical deployment, standalone SQL, script, active byte-distinct variant, and separate TG migration site.",
+        "Added positive and negative probes covering missing capability, wrong owner/model/target kind/operation/lifecycle/reachability/source/hash/site, pending evidence, duplicate/stale sites, plain SQL without capability, and newly discovered noncanonical sites that lack an explicit decision.",
+        "Added fresh-migration-write-site-authorizations to the unreduced authoritative runner, consuming the exact fresh write-analysis output."
+      ],
+      "tests": [
+        "tools/architecture/v2/verify-authoritative-write-analysis.mjs",
+        "tools/architecture/v2/test-authoritative-write-analysis.mjs",
+        "tools/architecture/v2/test-maintenance-capability-policy.mjs",
+        "tools/architecture/v2/test-migration-write-site-authorizations.mjs",
+        "tools/architecture/run-authoritative-ci.mjs",
+        "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+        "architecture/recovery/whole-project-dod/v2/MIGRATION_WRITE_SITE_AUTHORIZATION_REVIEW_20260813.json"
+      ],
+      "production_relevance": "Covers production/deployment mutation surfaces; remediation must not itself mutate production.",
+      "closure_criterion": "Zero unauthorized or unresolved active writes and all exact negative/positive authorization probes pass through the authoritative verifier.",
+      "status": "IMPLEMENTED_NOT_ACCEPTED"
+    },
+    {
+      "id": "EXTERNAL-REREVIEW-004",
+      "title": "Credential gate treats raw accepted inventory as authorization",
+      "severity": "CRITICAL",
+      "violated_original_dod_items": ["ORIGINAL-DOD-006","ORIGINAL-DOD-009","ORIGINAL-DOD-010","ORIGINAL-DOD-020"],
+      "exact_reviewer_evidence": [
+        "tools/architecture/v2/verify-authoritative-credential-inventory.mjs populated public-risk, unknown, and cross-domain accepted sets directly from raw checkpoint signatures rather than independent review records.",
+        "A synthetic FOREIGN_DIRECT_DB_ACCESS plus SECRET_READ with empty review records returned PASS, new_public_risk=0, new_cross_domain_secret_reads=0, and material_unresolved=0.",
+        "The cited checkpoint contained 121 possible public risks, 81 ambiguous/unresolved accesses, and 155 secret reads; three production migration operations remained GENUINELY_DYNAMIC_UNRESOLVED."
+      ],
+      "current_reproduction_status": "SOURCE_REMEDIATION_IMPLEMENTED; raw inventory is evidence-only, all 118 current public-risk signatures, 88 ambiguity signatures, and 74 production secret-read accesses require exact independently reviewed dispositions, reviewed provider-capability accesses are source- and consumer-edge-bound with zero hash mismatches, and foreign direct secret reads fail rather than becoming authorized by review prose; exact-final-commit acceptance remains pending",
+      "remediation": [
+        "Separated raw credential inventory from the public-risk, ambiguity, and cross-domain review registries and bound each registry to the exact current denominator and digest.",
+        "Required allowed classification vocabularies, resolved semantics, complete evidence, and one-to-one non-contradictory review records, including a separately committed production secret-read disposition review.",
+        "Bound each reviewed runtime-provider capability to exact provider source hashes and exact consumer edges; retained owner-internal access only where the value remains masked or its result is discarded.",
+        "Made foreign direct secret reads require a separately governed owner capability and added synthetic missing/contradictory/unresolved/public-risk/foreign-secret-read failures."
+      ],
+      "tests": [
+        "tools/architecture/v2/verify-authoritative-credential-inventory.mjs",
+        "tools/architecture/v2/test-authoritative-credential-inventory.mjs",
+        "tools/architecture/v2/test-credential-boundary-negative.mjs",
+        "architecture/recovery/whole-project-dod/v2/PRODUCTION_SECRET_READ_DISPOSITION_REVIEW_20260813.json"
+      ],
+      "production_relevance": "Guards production-relevant credential reads and public serialization without disclosing secret values.",
+      "closure_criterion": "Every current risk signature has exactly one accepted review; material unresolved, public exposure violations, and unapproved cross-domain secret reads are zero; unreviewed synthetic access fails.",
+      "status": "IMPLEMENTED_NOT_ACCEPTED"
+    },
+    {
+      "id": "EXTERNAL-REREVIEW-005",
+      "title": "Calling public facade launders a private Prisma adapter",
+      "severity": "HIGH",
+      "violated_original_dod_items": ["ORIGINAL-DOD-004","ORIGINAL-DOD-009","ORIGINAL-DOD-020"],
+      "exact_reviewer_evidence": [
+        "gravity-mvp/src/modules/calling/public/v1/index.ts re-exported ../../internal/recording-ready-prisma-adapter.",
+        "The adapter imported Prisma and wrote Call plus DomainOutboxEvent, and gravity-mvp/src/lib/freeswitch/recordingProcessor.ts consumed it through the public alias.",
+        "tools/architecture/enforce-architecture.mjs returned early for same-context targets before checking public-to-internal exposure and reported findings:0."
+      ],
+      "current_reproduction_status": "SOURCE_REMEDIATION_IMPLEMENTED; Calling public v1 exports a provider-neutral business operation while the Prisma adapter remains internal, fixed-point symbolic architecture analysis rejects direct, CommonJS-aliased, dynamic, transitive, same-context, callback, object, constructor, repository, provider-client, and write-capability laundering, and the whole-repository scan reports zero findings and zero exceptions; exact-final-commit and production acceptance remain pending",
+      "remediation": [
+        "Replaced the public private-adapter re-export with a narrow Calling recording-ready input/function contract and owner application composition.",
+        "Kept the Prisma transaction adapter internal and changed consumers to the ready-to-use public business operation.",
+        "Moved public-to-internal and implementation-taint enforcement ahead of same-context allowance and added adversarial fixed-point, CommonJS alias, dynamic-load, constructor, default-argument, Object.assign, callback, object, and transitive laundering probes.",
+        "Constrained public exports to exact clean business callables and DTOs; namespace, default, unknown, adapter, repository, port, Prisma, and provider-client identities remain implementation-tainted."
+      ],
+      "tests": [
+        "tools/architecture/test-architecture-enforcement.mjs",
+        "tools/architecture/check-outbox-architecture.mjs",
+        "tools/architecture/test-outbox.mjs"
+      ],
+      "production_relevance": "Application source changed and requires protected Calling/recording/outbox regression plus proportional redeployment after exact source acceptance; no post-remediation production observation is claimed here.",
+      "closure_criterion": "Private adapter remains internal, consumers use a narrow public capability, negative laundering probes fail for the right reason, and affected behavior tests pass.",
+      "status": "IMPLEMENTED_NOT_ACCEPTED"
+    },
+    {
+      "id": "EXTERNAL-REREVIEW-006",
+      "title": "Module ownership and parallel-development control plane is incomplete",
+      "severity": "HIGH",
+      "violated_original_dod_items": ["ORIGINAL-DOD-011","ORIGINAL-DOD-012","ORIGINAL-DOD-013","ORIGINAL-DOD-018","ORIGINAL-DOD-019","ORIGINAL-DOD-020"],
+      "exact_reviewer_evidence": [
+        "configuration.json owned src/app/settings while whatsapp_channel.json also owned nested settings/integrations/whatsapp; three runtime files therefore had two owners and the manifest validator lacked cross-manifest overlap checks.",
+        "architecture/contexts/v1/dependency-transition-plan.json recorded 68 currently forbidden and 38 public-surface migration relationships while its validator required nonzero forbidden debt.",
+        "The accepted tree had no repository-backed standard new-module scaffold; architecture/contexts/v1/README.md only exposed lightweight generation commands."
+      ],
+      "current_reproduction_status": "SOURCE_REMEDIATION_IMPLEMENTED; executable ownership validation covers all 2131 tracked executable surfaces exactly once as 1082 context-owned paths plus 1049 governed exclusions, with independently reviewed source-hash-bound decisions for the exact denominator transition; the final dependency artifact has zero forbidden dependencies and zero pending public-surface migrations; and the repository scaffold instantiates and validates a disposable candidate with negative boundary probes; exact-final-commit acceptance remains pending",
+      "remediation": [
+        "Split overlapping Configuration/WhatsApp owned paths and added exact executable-path ownership coverage with governed exclusions.",
+        "Made exact-inventory denominator refresh fail closed unless a separate reviewed decision registry matches the baseline coverage, current denominator, assignment owner/lifecycle/exclusion/inventory kind, and current source hash one-to-one; the coverage file cannot authorize its own materialization.",
+        "Archived the historical debt plan and derived a new current dependency artifact that fails on any forbidden dependency or pending public-surface migration.",
+        "Added a repository-backed standard module scaffold, operational integration guide, executable module/contract/architecture/build entries, and illegal private-import/foreign-write/provider/credential probes."
+      ],
+      "tests": [
+        "tools/architecture/__tests__/context-manifests.test.mjs",
+        "tools/architecture/test-executable-path-ownership.mjs",
+        "tools/architecture/test-final-dependency-artifact.mjs",
+        "tools/architecture/test-module-scaffold.mjs"
+      ],
+      "production_relevance": "Primarily source/control-plane; do not redeploy unless application runtime paths change.",
+      "closure_criterion": "Ownership is exhaustive/non-overlapping, current dependency debt is zero, and the real scaffold plus positive/negative CI proof passes.",
+      "status": "IMPLEMENTED_NOT_ACCEPTED"
+    },
+    {
+      "id": "EXTERNAL-REREVIEW-007",
+      "title": "Production migration authority is not fully reproducible",
+      "severity": "HIGH",
+      "violated_original_dod_items": ["ORIGINAL-DOD-022"],
+      "exact_reviewer_evidence": [
+        "Accepted source contained 47 Gravity migrations; source plus declared production-only and all reachable-ref names accounted for at most 59 predecessor rows while production had 61 predecessors and 62 rows after outbox.",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1-ledger-reconciliation/evidence/PRE_ACTIVATION_LEDGER_RECONCILIATION_20260812.json recorded SEALED_PROFILE_BASELINE_OMISSION with 13 omitted rows.",
+        "Runtime accepted predecessor state using count 61 plus an opaque digest, which proves current fingerprint equality but not names, checksums, artifacts, or replay provenance."
+      ],
+      "current_reproduction_status": "SOURCE_REMEDIATION_IMPLEMENTED; canonical 62-row artifact/provenance authority, default-clean-checkout validation, exact semantic runtime verification source, chronology-sensitive live-ledger comparison, fresh/predecessor isolated replay controls, and a finite dual-service Runtime v10 release profile are present; installation, proportional Gravity/Telegram activation, and read-only observation against current production remain pending external acceptance",
+      "remediation": [
+        "Recovered and preserved the complete 62-row canonical migration artifact inventory with exact bytes, checksums, storage classification, and source/archive/image/release provenance.",
+        "Added fail-closed authority validation and isolated fresh plus predecessor recovery replay with schema and outbox parity.",
+        "Added a finite source-only Runtime v10 database-status implementation that returns exact secret-safe live ledger row metadata, seals the accepted 62-row chronology and its authority provenance, and rejects missing, extra, reordered, duplicate, malformed, inactive, or checksum-mismatched rows without exposing raw logs.",
+        "Added one proportional dual-service release profile: Gravity is built from the exact accepted source archive, Telegram is derived without network access from the exact live predecessor by replacing only public-bot-maintenance.js, and preflight/activation/rollback preserve the full unrelated production provenance vector while treating only the exact pre-existing missing SEO provenance record as known drift."
+      ],
+      "tests": [
+        "tools/architecture/validate-production-migration-authority.mjs",
+        "tools/architecture/test-production-migration-authority.mjs",
+        "tools/architecture/test-production-migration-runtime.mjs",
+        "tools/architecture/test-production-migration-clean-checkout.mjs",
+        "tools/architecture/replay-production-migration-authority.mjs",
+        "tools/architecture/test-source-only-runtime-v10.mjs"
+      ],
+      "production_relevance": "Runtime v10 remains source-only until exact-commit CI and independent package review accept it; isolated replay does not authorize production SQL, and no package installation, production mutation, or post-remediation production observation is claimed by this source ledger.",
+      "closure_criterion": "All 62 rows have exact recoverable artifacts/provenance, finite semantic verification detects drift, fresh/recovery replay reaches the expected schema, and the accepted Runtime v10 observes the exact current live production ledger read-only.",
+      "status": "IMPLEMENTED_NOT_ACCEPTED"
+    }
+  ],
+  "summary": {
+    "total": 7,
+    "confirmed": 0,
+    "disproven_with_current_evidence": 0,
+    "implemented_not_accepted": 7,
+    "closed": 0,
+    "blocked_external_auth": 0,
+    "blocked_irreversible": 0,
+    "blocked_business": 0
+  }
+}

@@ -4,8 +4,8 @@ import {
 } from '@/lib/TransportRegistry'
 import {
     projectTransportConnectionEntryV1,
-} from '@/modules/messaging/internal/transport-registry-projection'
-import type { TransportConnectionEntryV1 } from './transport-registry-types'
+    type TransportConnectionEntryV1,
+} from './transport-registry-types'
 
 export type { TransportConnectionEntryV1 }
 

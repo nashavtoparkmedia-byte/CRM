@@ -7,14 +7,15 @@ function git(root, args) {
 }
 
 export function resolveGitDiffBase(root, preferred = process.env.YOKO_BLAST_BASE) {
-  const candidates = [preferred, 'HEAD^']
-    .map((candidate) => candidate?.trim())
-    .filter((candidate) => candidate && !/^0+$/u.test(candidate))
-  for (const candidate of [...new Set(candidates)]) {
-    const result = git(root, ['rev-parse', '--verify', '--quiet', `${candidate}^{commit}`])
-    if (result.status === 0) return candidate
+  const eventBase = preferred?.trim()
+  if (eventBase && !/^0+$/u.test(eventBase)) {
+    const result = git(root, ['rev-parse', '--verify', '--quiet', `${eventBase}^{commit}`])
+    if (result.status === 0) return eventBase
+    throw new Error(`configured Git change-set base is not resolvable: ${JSON.stringify(eventBase)}`)
   }
-  throw new Error(`unable to resolve a Git change-set base from ${JSON.stringify(candidates)}`)
+  const fallback = git(root, ['rev-parse', '--verify', '--quiet', 'HEAD^^{commit}'])
+  if (fallback.status === 0) return 'HEAD^'
+  throw new Error('unable to resolve a Git change-set base: event base is empty/zero and HEAD has no parent')
 }
 
 export function gitChangedPaths(root, preferred = process.env.YOKO_BLAST_BASE) {

@@ -3,7 +3,7 @@
 import {
   listMaxDriverDeliveryConnectionsV1 as listMaxOwnedDriverDeliveryConnectionsV1,
   sendMaxDriverMessageV1 as sendMaxOwnedDriverMessageV1,
-} from '@/modules/max-channel/public/v1/driver-messaging-capability'
+} from '@/modules/max-channel/public/v1'
 
 export interface MaxDriverMessageOptionsV1 {
   connectionId?: string

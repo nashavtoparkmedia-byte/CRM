@@ -1,0 +1,31 @@
+{
+  "content_status": "EXCLUDED_SECRET_SAFE",
+  "current_sha256": "84a9f46904a65a69afcf19d2e56162e026b29718da52c43160abfc5449f84cc1",
+  "exclusion_reason": "Potential credential-bearing content detected by secret-safe scan; source bytes intentionally excluded. Safe metadata and whole-file hash retained.",
+  "findings": [
+    {
+      "category": "nonempty_sensitive_env_default",
+      "identifier": "ESL_PASSWORD",
+      "line": 164
+    },
+    {
+      "category": "nonempty_sensitive_env_default",
+      "identifier": "ESL_PASSWORD",
+      "line": 182
+    },
+    {
+      "category": "nonempty_sensitive_env_default",
+      "identifier": "ESL_PASSWORD",
+      "line": 212
+    }
+  ],
+  "gid": 0,
+  "mode_octal": "0644",
+  "mtime_utc": "2026-08-06T17:41:20.834356021Z",
+  "old_reported_sha256": "84a9f46904a65a69afcf19d2e56162e026b29718da52c43160abfc5449f84cc1",
+  "relative_original_path": "deploy/docker-compose.production.yml",
+  "schema": "crm-arch-000r-content-exclusion-v1",
+  "size_bytes": 26817,
+  "source_path": "/opt/crm/deploy/docker-compose.production.yml",
+  "uid": 0
+}

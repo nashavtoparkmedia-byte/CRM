@@ -43,7 +43,7 @@ assertCheck(
     consumer.includes("from '@/contracts/work-management/v1'")
         && consumer.includes("from '@/modules/work-management/public/v1'")
         && consumer.includes('REASSIGN_TASKS_COMMAND_V1')
-        && consumer.includes('taskReassignmentV1.reassignTasks({'),
+        && consumer.includes('reassignTasksV1({'),
     'reassignment route does not use the Work Management public v1 surface',
 )
 assertCheck(

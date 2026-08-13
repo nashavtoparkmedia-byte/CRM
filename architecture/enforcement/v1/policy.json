@@ -108,6 +108,8 @@
     "manifest_inconsistency",
     "dependency_graph_cycle",
     "contract_version_violation",
+    "public_facade_internal_import",
+    "public_facade_implementation_laundering",
     "unresolved_internal_import",
     "unclassified_production_source"
   ]

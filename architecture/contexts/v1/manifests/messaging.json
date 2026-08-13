@@ -195,8 +195,7 @@
     "gravity-mvp/src/contracts/messaging",
     "gravity-mvp/src/lib/ConversationWorkflowService.ts",
     "gravity-mvp/src/lib/MessageService.ts",
-    "gravity-mvp/src/modules/messaging",
-    "gravity-mvp/src/modules/messaging/internal/ai-reply-pipeline"
+    "gravity-mvp/src/modules/messaging"
   ],
   "owner": {
     "accountability": "Messaging bounded-context owner",

@@ -2,6 +2,10 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { deriveCurrentDependencySource } from './derive-final-dependency-source.mjs';
+import { materializeFinalDependencyArtifact } from './materialize-final-dependency-artifact.mjs';
+import { validateExecutablePathOwnershipCoverage, validateExecutablePathOwnershipProvenance } from './validate-executable-path-ownership.mjs';
+import { inventoryTrackedSurfaces } from './v2/tracked-surface-inventory.mjs';
 
 const SHA256 = /^[0-9a-f]{64}$/;
 const WRITE_MIGRATION_CLASSES = new Set(['FOREIGN', 'LEGACY', 'SHARED_AMBIGUOUS']);
@@ -23,6 +27,10 @@ function stable(value) {
 
 function siteId(site) {
   return `write_${digest(JSON.stringify(stable(site))).slice(0, 20)}`;
+}
+
+function pathContains(ownerPath, candidatePath) {
+  return candidatePath === ownerPath || candidatePath.startsWith(`${ownerPath}/`);
 }
 
 function assertNoValues(value, trail = '$') {
@@ -73,7 +81,7 @@ function dependencyCycles(manifests) {
 }
 
 export function validateContexts(bundle) {
-  const { decisions, inventory, dependencies, writes, ownership, index, manifests, foreignPlan, dependencyPlan } = bundle;
+  const { decisions, inventory, dependencies, writes, ownership, index, manifests, foreignPlan, dependencyPlan, finalDependency, finalDependencySource } = bundle;
   assert(decisions.schema === 'yoko.crm.context-decisions.v1' && decisions.milestone === 'CRM-ARCH-003', 'context decision identity mismatch');
   const contextIds = new Set(decisions.contexts.map((context) => context.id));
   assert(contextIds.size === decisions.contexts.length, 'duplicate context id');
@@ -94,8 +102,14 @@ export function validateContexts(bundle) {
     }
     assert(Array.isArray(manifest.public_surface) && Array.isArray(manifest.internal_surface) && manifest.internal_surface.length > 0, `surface missing: ${manifest.context.id}`);
     assert(Array.isArray(manifest.owned_paths) && manifest.owned_paths.length > 0, `owned paths missing: ${manifest.context.id}`);
-    assert(manifest.internal_surface.every((ownedPath) => manifest.owned_paths.includes(ownedPath)), `internal surface absent from owned paths: ${manifest.context.id}`);
+    assert(new Set(manifest.owned_paths).size === manifest.owned_paths.length, `duplicate owned path: ${manifest.context.id}`);
     assert(manifest.owned_paths.every((ownedPath) => !path.isAbsolute(ownedPath) && !ownedPath.split('/').includes('..')), `unsafe owned path: ${manifest.context.id}`);
+    assert(manifest.internal_surface.every((surface) => manifest.owned_paths.some((ownedPath) => pathContains(ownedPath, surface))), `internal surface absent from owned paths: ${manifest.context.id}`);
+    for (let left = 0; left < manifest.owned_paths.length; left += 1) {
+      for (let right = left + 1; right < manifest.owned_paths.length; right += 1) {
+        assert(!pathContains(manifest.owned_paths[left], manifest.owned_paths[right]) && !pathContains(manifest.owned_paths[right], manifest.owned_paths[left]), `overlapping owned paths: ${manifest.context.id}`);
+      }
+    }
     assert(manifest.public_surface.every((contract) => /\.v[1-9][0-9]*$/.test(contract)), `unversioned public surface: ${manifest.context.id}`);
     assert(manifest.protected === true, `context compatibility protection missing: ${manifest.context.id}`);
     assert(typeof manifest.compatibility_strategy === 'string' && manifest.compatibility_strategy.length > 0, `compatibility strategy missing: ${manifest.context.id}`);
@@ -115,6 +129,14 @@ export function validateContexts(bundle) {
     assert(verification.blast_radius?.owner_context === manifest.context.id, `blast-radius owner mismatch: ${manifest.context.id}`);
   }
   assert(assignedModules.size === expectedModules.size, 'not every technical module is assigned');
+  const allOwnedPaths = manifests.flatMap((manifest) => manifest.owned_paths.map((ownedPath) => ({ context: manifest.context.id, ownedPath })));
+  for (let left = 0; left < allOwnedPaths.length; left += 1) {
+    for (let right = left + 1; right < allOwnedPaths.length; right += 1) {
+      const first = allOwnedPaths[left];
+      const second = allOwnedPaths[right];
+      assert(!pathContains(first.ownedPath, second.ownedPath) && !pathContains(second.ownedPath, first.ownedPath), `owned path overlap: ${first.context}/${second.context}`);
+    }
+  }
   assert(dependencyCycles(manifests).length === 0, 'target allowed-dependency graph must be acyclic');
   for (const manifest of manifests) {
     const expectedConsumers = manifests.filter((candidate) => candidate.allowed_dependencies.some((dependency) => dependency.context === manifest.context.id)).map((candidate) => candidate.context.id).sort();
@@ -159,20 +181,51 @@ export function validateContexts(bundle) {
   for (const manifest of manifests) for (const planId of manifest.foreign_write_migration_plans) assert(planIds.has(planId), `unknown migration-plan reference: ${manifest.context.id}/${planId}`);
 
   const expectedCrossEdges = dependencies.module_edges.filter((edge) => assignedModules.get(edge.source) !== assignedModules.get(edge.target));
-  assert(dependencyPlan.current_relationships.length === expectedCrossEdges.length, 'dependency transition coverage mismatch');
-  const relationshipKeys = new Set(dependencyPlan.current_relationships.map((edge) => `${edge.source_module}>${edge.target_module}`));
+  assert(dependencyPlan.schema === 'yoko.crm.historical-dependency-transition-plan.v1' && dependencyPlan.historical_status === 'ARCHIVED_BASELINE_EVIDENCE_NOT_CURRENT_DEPENDENCY_TRUTH', 'dependency transition plan must be explicitly historical');
+  assert(dependencyPlan.historical_relationships.length === expectedCrossEdges.length, 'dependency transition coverage mismatch');
+  const relationshipKeys = new Set(dependencyPlan.historical_relationships.map((edge) => `${edge.source_module}>${edge.target_module}`));
   for (const edge of expectedCrossEdges) assert(relationshipKeys.has(`${edge.source}>${edge.target}`), `cross-context dependency missing: ${edge.source}>${edge.target}`);
-  assert(dependencyPlan.current_relationships.every((edge) => edge.transition && contextIds.has(edge.source_context) && contextIds.has(edge.target_context)), 'incomplete dependency transition');
-  assert(dependencyPlan.summary.currently_forbidden > 0, 'current forbidden dependencies must not be hidden');
+  assert(dependencyPlan.historical_relationships.every((edge) => edge.transition && contextIds.has(edge.source_context) && contextIds.has(edge.target_context)), 'incomplete historical dependency transition');
+  assert(dependencyPlan.summary.currently_forbidden > 0, 'historical dependency evidence unexpectedly lacks observed forbidden dependencies');
+  assert(finalDependency?.schema === 'yoko.crm.final-dependency-current.v1', 'final dependency artifact identity mismatch');
+  assert(finalDependencySource?.schema === 'yoko.crm.accepted-dependency-source.v1' && finalDependencySource.derivation?.kind === 'architecture-enforcement-observed-cross-context-imports', 'accepted dependency source identity mismatch');
+  assert(Number.isInteger(finalDependencySource.observed?.cross_context_imports) && finalDependencySource.observed.cross_context_imports > 0, 'accepted dependency source hides observed cross-context imports');
+  assert(Number.isInteger(finalDependencySource.relationship_projection?.count) && finalDependencySource.relationship_projection.count > 0 && SHA256.test(finalDependencySource.relationship_projection.sha256), 'accepted dependency source relationship projection missing');
+  assert(Array.isArray(finalDependencySource.public_surface_migrations) && finalDependencySource.public_surface_migrations.length === 0, 'accepted dependency source retains public-surface migration debt');
+  assert(finalDependencySource.observed.architecture_findings === 0 && finalDependency.summary?.forbidden_dependencies === 0, 'current dependency artifact retains enforcement debt');
+  assert(finalDependency.source_sha256 === digest(`${JSON.stringify(stable(finalDependencySource), null, 2)}\n`), 'final dependency artifact source digest mismatch');
+  assert(finalDependency.summary?.forbidden_dependencies === finalDependencySource.observed.architecture_findings, 'final dependency artifact enforcement finding drift');
+  assert(finalDependency.summary?.public_surface_migrations === 0, 'final dependency artifact retains public-surface migration debt');
+  assert(finalDependency.summary?.relationships === finalDependencySource.relationship_projection.count, 'final dependency artifact relationship projection drift');
   return {
     contexts: decisions.contexts.length,
-    dependencyRelationships: dependencyPlan.current_relationships.length,
+    dependencyRelationships: dependencyPlan.historical_relationships.length,
     foreignWriteSites: migrationSites.length,
     manifests: manifests.length,
     migrationPlans: foreignPlan.plans.length,
     ownedData: assignedOwnedData.size,
     technicalModules: assignedModules.size,
+    ownedPaths: allOwnedPaths.length,
   };
+}
+
+export async function verifyCurrentDependencyTruth(repositoryRoot, finalDependencySource, finalDependency) {
+  const derived = await deriveCurrentDependencySource(repositoryRoot);
+  assert(JSON.stringify(stable(finalDependencySource)) === JSON.stringify(stable(derived)), 'accepted dependency source is not derived from current architecture enforcement');
+  const sourceBytes = await readFile(path.join(repositoryRoot, 'architecture/contexts/v1/final-dependency-source.json'), 'utf8');
+  assert(JSON.stringify(finalDependency) === JSON.stringify(materializeFinalDependencyArtifact(sourceBytes)), 'final dependency artifact is not materialized from current derived source');
+  return derived.observed;
+}
+
+export async function verifyExecutablePathOwnership(repositoryRoot, manifests) {
+  const [registry, coverage] = await Promise.all([
+    readFile(path.join(repositoryRoot, 'architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json'), 'utf8').then(JSON.parse),
+    readFile(path.join(repositoryRoot, 'architecture/contexts/v1/executable-path-ownership-coverage.json'), 'utf8').then(JSON.parse),
+  ]);
+  const inventory = await inventoryTrackedSurfaces(repositoryRoot, { registry });
+  const derived = validateExecutablePathOwnershipCoverage(inventory, manifests, coverage);
+  await validateExecutablePathOwnershipProvenance(repositoryRoot, coverage, inventory, manifests);
+  return derived;
 }
 
 export async function verifyContextIndex(index, repositoryRoot) {
@@ -220,6 +273,8 @@ async function loadBundle(repositoryRoot) {
     manifests: await Promise.all(index.contexts.map((entry) => loadJson(repositoryRoot, entry.path))),
     foreignPlan: await loadJson(repositoryRoot, 'architecture/contexts/v1/foreign-write-migration-plan.json'),
     dependencyPlan: await loadJson(repositoryRoot, 'architecture/contexts/v1/dependency-transition-plan.json'),
+    finalDependency: await loadJson(repositoryRoot, 'architecture/contexts/v1/final-dependency-current.json'),
+    finalDependencySource: await loadJson(repositoryRoot, 'architecture/contexts/v1/final-dependency-source.json'),
   };
 }
 
@@ -228,7 +283,9 @@ async function main() {
   const bundle = await loadBundle(repositoryRoot);
   const shape = validateContexts(bundle);
   const hashes = await verifyContextIndex(bundle.index, repositoryRoot);
-  process.stdout.write(`${JSON.stringify({ ok: true, ...shape, ...hashes })}\n`);
+  const dependencyTruth = await verifyCurrentDependencyTruth(repositoryRoot, bundle.finalDependencySource, bundle.finalDependency);
+  const executableOwnership = await verifyExecutablePathOwnership(repositoryRoot, bundle.manifests);
+  process.stdout.write(`${JSON.stringify({ ok: true, ...shape, ...hashes, dependencyTruth, executableOwnership: { ...executableOwnership, records: undefined } })}\n`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

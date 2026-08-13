@@ -1,0 +1,10 @@
+{
+  "command": "sudo -n /usr/local/sbin/yoko-crm-arch-evidence docker-provenance",
+  "started_at": "2026-08-08T12:31:26.754375834Z",
+  "ended_at": "2026-08-08T12:31:27.301355067Z",
+  "exit_status": 70,
+  "output_sha256": "e0180d12837a245362a85d72fc01ae673b289e8456541444de546aa00d069113",
+  "broker_sha256": "0a8f18bad0467056c3b7460827618b5d8df8ac8678da57040988478dba34ab18",
+  "package_version": "1.0.2-1",
+  "host": "jvxthcorvm"
+}

@@ -1,10 +1,16 @@
 #!/usr/bin/env node
 
+import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
+import ts from '../../gravity-mvp/node_modules/typescript/lib/typescript.js'
 
-import { evaluateFindings, scanArchitecture } from './enforce-architecture.mjs'
+import {
+  evaluateFindings,
+  extractUnsafeApplicationCompositionExports,
+  scanArchitecture,
+} from './enforce-architecture.mjs'
 
 const root = process.cwd()
 const read = (relative) => readFileSync(path.join(root, relative), 'utf8')
@@ -15,6 +21,7 @@ const paths = {
   handler: 'gravity-mvp/src/modules/work-management/public/v1/scenario-field-settings-handler.ts',
   adapter: 'gravity-mvp/src/modules/work-management/public/v1/legacy-prisma-scenario-field-settings-adapter.ts',
   publicIndex: 'gravity-mvp/src/modules/work-management/public/v1/index.ts',
+  application: 'gravity-mvp/src/modules/work-management/application/task-operations.ts',
   actions: 'gravity-mvp/src/app/settings/scenarios/actions.ts',
   client: 'gravity-mvp/src/app/settings/scenarios/[id]/fields/ScenarioFieldsSettingsClient.tsx',
   internal: 'gravity-mvp/src/lib/tasks/scenario-settings.ts',
@@ -24,6 +31,7 @@ const frozenBehaviorSources = Object.entries(
   JSON.parse(read('architecture/isolation/work-management/scenario-field-settings-v1/BEHAVIOR-FREEZE.json'))
     .source_hashes_after ?? {},
 ).filter(([file]) => !file.startsWith('architecture/contexts/v1/'))
+const historicalBehaviorPaths = Object.values(paths).filter(file => file !== paths.application)
 const evidenceRoot = 'architecture/isolation/work-management/scenario-field-settings-v1'
 const amendmentPath = `${evidenceRoot}/module-manifest-amendments.json`
 const amendment = JSON.parse(read(amendmentPath))
@@ -48,6 +56,528 @@ const check = (name, predicate, detail) => {
   else failures.push({ check: name, detail })
 }
 
+const scenarioFactories = [
+  'createGetMergedScenarioFieldsHandlerV1',
+  'createResetScenarioFieldSettingHandlerV1',
+  'createUpsertScenarioFieldSettingHandlerV1',
+]
+const scenarioCapabilities = [
+  'getMergedScenarioFieldsV1',
+  'resetScenarioFieldSettingV1',
+  'upsertScenarioFieldSettingV1',
+]
+const scenarioAdapter = 'legacyPrismaScenarioFieldSettingsPortV1'
+const handlerSpecifier = './scenario-field-settings-handler'
+const applicationSpecifier = '../../application/task-operations'
+const applicationHandlerSpecifier = '../public/v1/scenario-field-settings-handler'
+const applicationAdapterSpecifier = '../public/v1/legacy-prisma-scenario-field-settings-adapter'
+const reviewedEvidenceHashes = {
+  behavior: 'ddcf306c2a6448245c0308b5ce75b0030889ae98caf768795dc37743a30deb96',
+  verification: '7d5f1b397bc2a6fd1834c87749ec46e817efeeb9ef4d633cf44155730c64ced9',
+  migration: '0638fdd4b04e4ed2dba96a4835d05c487b0604d6ecdcadf56d07539201128665',
+}
+const scenarioPort = 'ScenarioFieldSettingsPersistencePortV1'
+const publicSpecifier = '@/modules/work-management/public/v1'
+const compositionPairs = [
+  {
+    local: 'getMergedScenarioFields',
+    factory: 'createGetMergedScenarioFieldsHandlerV1',
+    capability: 'getMergedScenarioFieldsV1',
+  },
+  {
+    local: 'resetScenarioFieldSetting',
+    factory: 'createResetScenarioFieldSettingHandlerV1',
+    capability: 'resetScenarioFieldSettingV1',
+  },
+  {
+    local: 'upsertScenarioFieldSetting',
+    factory: 'createUpsertScenarioFieldSettingHandlerV1',
+    capability: 'upsertScenarioFieldSettingV1',
+  },
+]
+
+function parseSource(relative, sourceText) {
+  const kind = relative.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS
+  return ts.createSourceFile(relative, sourceText, ts.ScriptTarget.Latest, true, kind)
+}
+
+function hasModifier(node, kind) {
+  return node.modifiers?.some(modifier => modifier.kind === kind) ?? false
+}
+
+function unwrapExpression(expression) {
+  let current = expression
+  while (
+    ts.isAwaitExpression(current) ||
+    ts.isParenthesizedExpression(current) ||
+    ts.isAsExpression(current) ||
+    ts.isTypeAssertionExpression(current) ||
+    ts.isNonNullExpression(current) ||
+    (typeof ts.isSatisfiesExpression === 'function' && ts.isSatisfiesExpression(current))
+  ) current = current.expression
+  return current
+}
+
+function importSites(relative, sourceText) {
+  const sourceFile = parseSource(relative, sourceText)
+  const sites = []
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteralLike(statement.moduleSpecifier)) continue
+    const clause = statement.importClause
+    const bindings = []
+    if (clause?.name) bindings.push(['default', clause.name.text, Boolean(clause.isTypeOnly)])
+    if (clause?.namedBindings && ts.isNamedImports(clause.namedBindings)) {
+      for (const element of clause.namedBindings.elements) {
+        bindings.push([
+          (element.propertyName ?? element.name).text,
+          element.name.text,
+          Boolean(clause.isTypeOnly || element.isTypeOnly),
+        ])
+      }
+    } else if (clause?.namedBindings && ts.isNamespaceImport(clause.namedBindings)) {
+      bindings.push(['*', clause.namedBindings.name.text, Boolean(clause.isTypeOnly)])
+    }
+    sites.push({
+      kind: 'static',
+      specifier: statement.moduleSpecifier.text,
+      bindings,
+      index: statement.getStart(sourceFile),
+    })
+  }
+  function visit(node) {
+    if (ts.isVariableDeclaration(node) && node.initializer) {
+      const initializer = unwrapExpression(node.initializer)
+      if (
+        ts.isCallExpression(initializer) &&
+        initializer.expression.kind === ts.SyntaxKind.ImportKeyword &&
+        initializer.arguments.length === 1 &&
+        ts.isStringLiteralLike(initializer.arguments[0])
+      ) {
+        const bindings = ts.isObjectBindingPattern(node.name)
+          ? node.name.elements.map(element => [
+            (element.propertyName ?? element.name).getText(sourceFile),
+            element.name.getText(sourceFile),
+            false,
+          ])
+          : [['*', node.name.getText(sourceFile), false]]
+        sites.push({
+          kind: 'dynamic',
+          specifier: initializer.arguments[0].text,
+          bindings,
+          index: node.getStart(sourceFile),
+        })
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  return sites.sort((left, right) => left.index - right.index)
+}
+
+function exportBindings(relative, sourceText) {
+  const sourceFile = parseSource(relative, sourceText)
+  return sourceFile.statements.flatMap(statement => {
+    if (!ts.isExportDeclaration(statement) || !statement.moduleSpecifier ||
+        !ts.isStringLiteralLike(statement.moduleSpecifier)) return []
+    if (!statement.exportClause || !ts.isNamedExports(statement.exportClause)) {
+      return [{
+        specifier: statement.moduleSpecifier.text,
+        imported: '*',
+        local: '*',
+        typeOnly: Boolean(statement.isTypeOnly),
+      }]
+    }
+    return statement.exportClause.elements.map(element => ({
+      specifier: statement.moduleSpecifier.text,
+      imported: (element.propertyName ?? element.name).text,
+      local: element.name.text,
+      typeOnly: Boolean(statement.isTypeOnly || element.isTypeOnly),
+    }))
+  })
+}
+
+function bindingNames(name, sourceFile) {
+  if (ts.isIdentifier(name)) return [name.text]
+  if (ts.isObjectBindingPattern(name) || ts.isArrayBindingPattern(name)) {
+    return name.elements.flatMap(element => (
+      ts.isBindingElement(element) ? bindingNames(element.name, sourceFile) : []
+    ))
+  }
+  return [name.getText(sourceFile)]
+}
+
+function nonImportDeclarations(relative, sourceText) {
+  const sourceFile = parseSource(relative, sourceText)
+  const names = []
+  function visit(node) {
+    if (ts.isImportDeclaration(node)) return
+    if (ts.isVariableDeclaration(node)) {
+      const initializer = node.initializer && unwrapExpression(node.initializer)
+      const isDynamicImport = initializer && ts.isCallExpression(initializer) &&
+        initializer.expression.kind === ts.SyntaxKind.ImportKeyword
+      if (!isDynamicImport) names.push(...bindingNames(node.name, sourceFile))
+    } else if (ts.isParameter(node)) {
+      names.push(...bindingNames(node.name, sourceFile))
+    } else if (
+      (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node) ||
+       ts.isClassDeclaration(node) || ts.isClassExpression(node) || ts.isEnumDeclaration(node)) &&
+      node.name
+    ) names.push(node.name.text)
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  return names
+}
+
+function callSites(relative, sourceText) {
+  const sourceFile = parseSource(relative, sourceText)
+  const calls = []
+  function visit(node, containingFunction = null) {
+    const nextFunction = ts.isFunctionDeclaration(node) && node.name
+      ? node.name.text
+      : containingFunction
+    if (ts.isCallExpression(node)) {
+      const callee = unwrapExpression(node.expression)
+      if (ts.isIdentifier(callee)) {
+        calls.push({ kind: 'identifier', name: callee.text, containingFunction: nextFunction })
+      } else if (ts.isPropertyAccessExpression(callee)) {
+        calls.push({
+          kind: 'property',
+          object: callee.expression.getText(sourceFile),
+          name: callee.name.text,
+          containingFunction: nextFunction,
+        })
+      }
+    }
+    ts.forEachChild(node, child => visit(child, nextFunction))
+  }
+  visit(sourceFile)
+  return calls
+}
+
+function variableDeclarations(sourceFile, name) {
+  const matches = []
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue
+    for (const declaration of statement.declarationList.declarations) {
+      if (ts.isIdentifier(declaration.name) && declaration.name.text === name) {
+        matches.push({ statement, declaration })
+      }
+    }
+  }
+  return matches
+}
+
+function assertFactoryBinding(sourceFile, { local, factory }) {
+  const matches = variableDeclarations(sourceFile, local)
+  assert.equal(matches.length, 1)
+  const [{ statement, declaration }] = matches
+  assert((statement.declarationList.flags & ts.NodeFlags.Const) !== 0)
+  assert.equal(hasModifier(statement, ts.SyntaxKind.ExportKeyword), false)
+  const initializer = declaration.initializer && unwrapExpression(declaration.initializer)
+  assert(initializer && ts.isCallExpression(initializer))
+  assert(ts.isIdentifier(initializer.expression) && initializer.expression.text === factory)
+  assert.equal(initializer.arguments.length, 1)
+  assert(ts.isIdentifier(initializer.arguments[0]) && initializer.arguments[0].text === scenarioAdapter)
+}
+
+function assertRestWrapper(sourceFile, { local, capability }) {
+  const matches = variableDeclarations(sourceFile, capability)
+  assert.equal(matches.length, 1)
+  const [{ statement, declaration }] = matches
+  assert((statement.declarationList.flags & ts.NodeFlags.Const) !== 0)
+  assert(hasModifier(statement, ts.SyntaxKind.ExportKeyword))
+  const initializer = declaration.initializer
+  assert(initializer && ts.isArrowFunction(initializer))
+  assert.equal(initializer.parameters.length, 1)
+  const parameter = initializer.parameters[0]
+  assert(parameter.dotDotDotToken)
+  assert(ts.isIdentifier(parameter.name) && parameter.name.text === 'args')
+  assert(parameter.type && ts.isTypeReferenceNode(parameter.type))
+  assert(ts.isIdentifier(parameter.type.typeName) && parameter.type.typeName.text === 'Parameters')
+  assert.equal(parameter.type.typeArguments?.length, 1)
+  const typeArgument = parameter.type.typeArguments[0]
+  assert(ts.isTypeQueryNode(typeArgument) && ts.isIdentifier(typeArgument.exprName) &&
+    typeArgument.exprName.text === local)
+  const returned = unwrapExpression(initializer.body)
+  assert(ts.isCallExpression(returned))
+  assert(ts.isIdentifier(returned.expression) && returned.expression.text === local)
+  assert.equal(returned.arguments.length, 1)
+  assert(ts.isSpreadElement(returned.arguments[0]))
+  assert(ts.isIdentifier(returned.arguments[0].expression) && returned.arguments[0].expression.text === 'args')
+}
+
+function scenarioCompositionStructureIsExact(publicIndex, application) {
+  try {
+    const publicTargets = new Set([
+      ...scenarioFactories,
+      ...scenarioCapabilities,
+      scenarioPort,
+      scenarioAdapter,
+    ])
+    const actualPublicBindings = exportBindings(paths.publicIndex, publicIndex)
+      .filter(binding => publicTargets.has(binding.imported) || publicTargets.has(binding.local) ||
+        /scenario.*field/i.test(binding.imported) || /scenario.*field/i.test(binding.local) ||
+        (binding.imported === '*' && [handlerSpecifier, applicationSpecifier].includes(binding.specifier)))
+      .sort((left, right) => left.imported.localeCompare(right.imported))
+    const expectedPublicBindings = [
+      ...scenarioFactories.map(name => ({
+        specifier: handlerSpecifier, imported: name, local: name, typeOnly: false,
+      })),
+      { specifier: handlerSpecifier, imported: scenarioPort, local: scenarioPort, typeOnly: true },
+      ...scenarioCapabilities.map(name => ({
+        specifier: applicationSpecifier, imported: name, local: name, typeOnly: false,
+      })),
+    ].sort((left, right) => left.imported.localeCompare(right.imported))
+    assert.deepEqual(actualPublicBindings, expectedPublicBindings)
+    assert.equal(exportBindings(paths.publicIndex, publicIndex).some(binding => (
+      binding.specifier.includes('legacy-prisma-scenario-field-settings-adapter')
+    )), false)
+    const publicFile = parseSource(paths.publicIndex, publicIndex)
+    const locallyDeclaredPublicScenarioNames = publicFile.statements.flatMap(statement => {
+      if (!hasModifier(statement, ts.SyntaxKind.ExportKeyword)) return []
+      if (ts.isVariableStatement(statement)) {
+        return statement.declarationList.declarations.flatMap(declaration => (
+          ts.isIdentifier(declaration.name) && /scenario.*field/i.test(declaration.name.text)
+            ? [declaration.name.text]
+            : []
+        ))
+      }
+      if ((ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) &&
+          statement.name && /scenario.*field/i.test(statement.name.text)) return [statement.name.text]
+      return []
+    })
+    assert.deepEqual(locallyDeclaredPublicScenarioNames, [])
+
+    const selectedApplicationNames = new Set([...scenarioFactories, scenarioAdapter])
+    const actualApplicationBindings = importSites(paths.application, application)
+      .flatMap(site => site.bindings.map(([imported, local, typeOnly]) => ({
+        kind: site.kind, specifier: site.specifier, imported, local, typeOnly,
+      })))
+      .filter(binding => selectedApplicationNames.has(binding.imported) ||
+        selectedApplicationNames.has(binding.local))
+      .sort((left, right) => left.imported.localeCompare(right.imported))
+    const expectedApplicationBindings = [
+      ...scenarioFactories.map(name => ({
+        kind: 'static',
+        specifier: applicationHandlerSpecifier,
+        imported: name,
+        local: name,
+        typeOnly: false,
+      })),
+      {
+        kind: 'static',
+        specifier: applicationAdapterSpecifier,
+        imported: scenarioAdapter,
+        local: scenarioAdapter,
+        typeOnly: false,
+      },
+    ].sort((left, right) => left.imported.localeCompare(right.imported))
+    assert.deepEqual(actualApplicationBindings, expectedApplicationBindings)
+
+    const applicationFile = parseSource(paths.application, application)
+    for (const pair of compositionPairs) {
+      assertFactoryBinding(applicationFile, pair)
+      assertRestWrapper(applicationFile, pair)
+    }
+    const declared = nonImportDeclarations(paths.application, application)
+    for (const imported of [...scenarioFactories, scenarioAdapter]) {
+      assert.equal(declared.filter(name => name === imported).length, 0)
+    }
+    for (const { local, capability } of compositionPairs) {
+      assert.equal(declared.filter(name => name === local).length, 1)
+      assert.equal(declared.filter(name => name === capability).length, 1)
+    }
+    const exportedScenarioNames = applicationFile.statements.flatMap(statement => {
+      if (!ts.isVariableStatement(statement) || !hasModifier(statement, ts.SyntaxKind.ExportKeyword)) return []
+      return statement.declarationList.declarations.flatMap(declaration => (
+        ts.isIdentifier(declaration.name) && /scenario.*field/i.test(declaration.name.text)
+          ? [declaration.name.text]
+          : []
+      ))
+    }).sort()
+    assert.deepEqual(exportedScenarioNames, [...scenarioCapabilities].sort())
+    assert.deepEqual(extractUnsafeApplicationCompositionExports(application), [])
+    assert.equal(importSites(paths.application, application).some(site => (
+      site.specifier === '@/lib/prisma' || site.specifier === '@prisma/client'
+    )), false)
+    assert.doesNotMatch(
+      application,
+      /(?:\$executeRaw|\$queryRaw|scenario_field_settings|\$transaction|\bcatch\b|\bretry\b|console\.|export\s+\*)/i,
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
+function rejectsCompositionProbe(publicIndex, application) {
+  return !scenarioCompositionStructureIsExact(publicIndex, application)
+}
+
+function targetCapabilityImportSites(relative, sourceText) {
+  return importSites(relative, sourceText)
+    .filter(site => site.bindings.some(([imported, local]) => (
+      scenarioCapabilities.includes(imported) || scenarioCapabilities.includes(local)
+    )))
+    .map(({ kind, specifier, bindings }) => ({
+      kind,
+      specifier,
+      bindings: bindings.filter(([imported, local]) => (
+        scenarioCapabilities.includes(imported) || scenarioCapabilities.includes(local)
+      )),
+    }))
+}
+
+function exportedAsyncFunction(sourceFile, name) {
+  const matches = sourceFile.statements.filter(statement => (
+    ts.isFunctionDeclaration(statement) && statement.name?.text === name
+  ))
+  assert.equal(matches.length, 1)
+  const declaration = matches[0]
+  assert(hasModifier(declaration, ts.SyntaxKind.ExportKeyword))
+  assert(hasModifier(declaration, ts.SyntaxKind.AsyncKeyword))
+  assert(declaration.body)
+  return declaration
+}
+
+function assertAwaitedCapabilityCall(expression, capability) {
+  assert(ts.isAwaitExpression(expression))
+  const call = unwrapExpression(expression)
+  assert(ts.isCallExpression(call))
+  assert(ts.isIdentifier(call.expression) && call.expression.text === capability)
+  assert.equal(call.arguments.length, 1)
+  assert(ts.isObjectLiteralExpression(call.arguments[0]))
+}
+
+function assertActionConsumerStructureIsExact(actionsSource) {
+  assert.deepEqual(targetCapabilityImportSites(paths.actions, actionsSource), [{
+    kind: 'static',
+    specifier: publicSpecifier,
+    bindings: [
+      ['getMergedScenarioFieldsV1', 'getMergedScenarioFieldsV1', false],
+      ['resetScenarioFieldSettingV1', 'resetScenarioFieldSettingV1', false],
+      ['upsertScenarioFieldSettingV1', 'upsertScenarioFieldSettingV1', false],
+    ],
+  }])
+  assert.deepEqual(
+    nonImportDeclarations(paths.actions, actionsSource)
+      .filter(name => scenarioCapabilities.includes(name)),
+    [],
+  )
+  for (const site of importSites(paths.actions, actionsSource)) {
+    assert.notEqual(site.specifier, '@/lib/tasks/scenario-settings')
+    assert.equal(site.specifier.includes('/modules/work-management/application/'), false)
+    assert.equal(site.specifier.includes('legacy-prisma-scenario-field-settings-adapter'), false)
+  }
+
+  const sourceFile = parseSource(paths.actions, actionsSource)
+  const get = exportedAsyncFunction(sourceFile, 'getScenarioFieldsConfig')
+  assert.equal(get.body.statements.length, 2)
+  const getResult = get.body.statements[0]
+  assert(ts.isVariableStatement(getResult))
+  assert((getResult.declarationList.flags & ts.NodeFlags.Const) !== 0)
+  assert.equal(getResult.declarationList.declarations.length, 1)
+  const getResultDeclaration = getResult.declarationList.declarations[0]
+  assert(ts.isIdentifier(getResultDeclaration.name) && getResultDeclaration.name.text === 'result')
+  assert(getResultDeclaration.initializer)
+  assertAwaitedCapabilityCall(getResultDeclaration.initializer, 'getMergedScenarioFieldsV1')
+  const getReturn = get.body.statements[1]
+  assert(ts.isReturnStatement(getReturn) && getReturn.expression)
+  assert(ts.isPropertyAccessExpression(getReturn.expression))
+  assert(ts.isIdentifier(getReturn.expression.expression) && getReturn.expression.expression.text === 'result')
+  assert.equal(getReturn.expression.name.text, 'fields')
+
+  for (const [functionName, capability] of [
+    ['updateScenarioFieldSetting', 'upsertScenarioFieldSettingV1'],
+    ['reorderScenarioField', 'upsertScenarioFieldSettingV1'],
+  ]) {
+    const declaration = exportedAsyncFunction(sourceFile, functionName)
+    assert.equal(declaration.body.statements.length, 4)
+    const callStatement = declaration.body.statements[3]
+    assert(ts.isExpressionStatement(callStatement))
+    assertAwaitedCapabilityCall(callStatement.expression, capability)
+  }
+
+  const reset = exportedAsyncFunction(sourceFile, 'resetScenarioField')
+  assert.equal(reset.body.statements.length, 1)
+  assert(ts.isExpressionStatement(reset.body.statements[0]))
+  assertAwaitedCapabilityCall(reset.body.statements[0].expression, 'resetScenarioFieldSettingV1')
+
+  const targetCalls = callSites(paths.actions, actionsSource)
+    .filter(call => scenarioCapabilities.includes(call.name))
+    .map(({ kind, name, containingFunction }) => ({ kind, name, containingFunction }))
+  assert.deepEqual(targetCalls, [
+    { kind: 'identifier', name: 'getMergedScenarioFieldsV1', containingFunction: 'getScenarioFieldsConfig' },
+    { kind: 'identifier', name: 'upsertScenarioFieldSettingV1', containingFunction: 'updateScenarioFieldSetting' },
+    { kind: 'identifier', name: 'upsertScenarioFieldSettingV1', containingFunction: 'reorderScenarioField' },
+    { kind: 'identifier', name: 'resetScenarioFieldSettingV1', containingFunction: 'resetScenarioField' },
+  ])
+}
+
+function actionConsumerStructureIsExact(actionsSource) {
+  try {
+    assertActionConsumerStructureIsExact(actionsSource)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function rejectsActionProbe(original, changed) {
+  return changed !== original && !actionConsumerStructureIsExact(changed)
+}
+
+function discoverScenarioConsumers(entries) {
+  return entries.filter(({ relative, sourceText }) => (
+    targetCapabilityImportSites(relative, sourceText).length > 0 ||
+    callSites(relative, sourceText).some(call => scenarioCapabilities.includes(call.name))
+  )).map(({ relative }) => relative).sort()
+}
+
+function scenarioConsumerDenominatorIsExact(entries) {
+  return JSON.stringify(discoverScenarioConsumers(entries)) === JSON.stringify([paths.actions])
+}
+
+function sourceOnlyEvidenceIsExact(verificationRecord, migrationRecord, behaviorRecord) {
+  const sourceCommit = 'b1f911b7b17273363df764d6e312a40c9f0fa8fc'
+  return verificationRecord.schema === 'yoko.crm.context-isolation-verification.v1' &&
+    migrationRecord.schema === 'yoko.crm.context-isolation-migration.v1' &&
+    behaviorRecord.schema === 'yoko.crm.behavior-freeze.v1' &&
+    [verificationRecord, migrationRecord, behaviorRecord].every(record =>
+      record.source_commit === sourceCommit && record.status === 'PASS_CONTINUE_SOURCE_GATE'
+    ) &&
+    verificationRecord.tests?.work_management_scenario_field_settings_boundary === '24/24 PASS' &&
+    verificationRecord.source_control_only === true &&
+    verificationRecord.database_accessed === false &&
+    verificationRecord.scenario_field_settings_executed_against_database === false &&
+    verificationRecord.runtime_or_provider_invoked === false &&
+    verificationRecord.production_mutated === false &&
+    verificationRecord.secret_values_read_or_emitted === false &&
+    migrationRecord.plan?.role === 'production_source_inactive' &&
+    migrationRecord.source_control_mutation?.source_only === true &&
+    migrationRecord.execution_performed === false &&
+    behaviorRecord.out_of_scope?.includes(
+      'database access, runtime execution, provider calls, service activation, deployment, production mutation and secrets',
+    )
+}
+
+function behaviorHashContinuityIsExact(behaviorRecord, frozenSources, publicIndex, application) {
+  const frozen = Object.fromEntries(frozenSources)
+  const recordedHistoricalSources = Object.entries(behaviorRecord.source_hashes_after ?? {})
+    .filter(([file]) => !file.startsWith('architecture/contexts/v1/'))
+  return behaviorRecord.source_commit === 'b1f911b7b17273363df764d6e312a40c9f0fa8fc' &&
+    JSON.stringify(frozenSources.map(([file]) => file).sort()) ===
+      JSON.stringify([...historicalBehaviorPaths].sort()) &&
+    JSON.stringify([...frozenSources].sort(([left], [right]) => left.localeCompare(right))) ===
+      JSON.stringify(recordedHistoricalSources.sort(([left], [right]) => left.localeCompare(right))) &&
+    typeof frozen[paths.publicIndex] === 'string' &&
+    /^[a-f0-9]{64}$/.test(frozen[paths.publicIndex]) &&
+    frozenSources.filter(([file]) => file !== paths.publicIndex)
+      .every(([file, expected]) => sha(file) === expected) &&
+    scenarioCompositionStructureIsExact(publicIndex, application)
+}
+
 function filesUnder(directory) {
   const results = []
   for (const entry of readdirSync(directory)) {
@@ -59,6 +589,12 @@ function filesUnder(directory) {
 }
 
 const allApplicationSources = filesUnder(path.join(root, 'gravity-mvp/src'))
+const runtimeSourceEntries = allApplicationSources
+  .filter(absolute => !/\.(?:test|spec)\.tsx?$/.test(absolute) && !absolute.endsWith('.d.ts'))
+  .map(absolute => ({
+    relative: path.relative(root, absolute).split(path.sep).join('/'),
+    sourceText: readFileSync(absolute, 'utf8'),
+  }))
 const writeOwners = { insert: [], delete: [] }
 for (const absolute of allApplicationSources) {
   const body = readFileSync(absolute, 'utf8')
@@ -168,14 +704,38 @@ check(
 )
 
 check(
-  'Configuration actions consume only Work public scenario settings',
+  'Configuration actions execute the exact Work public scenario capabilities',
   source.actions.includes("from '@/contracts/work-management/v1'")
-    && source.actions.includes("from '@/modules/work-management/public/v1'")
-    && !source.actions.includes("from '@/lib/tasks/scenario-settings'")
-    && source.actions.includes('getMergedScenarioFieldsV1({')
-    && source.actions.includes('upsertScenarioFieldSettingV1({')
-    && source.actions.includes('resetScenarioFieldSettingV1({'),
-  'Configuration still reaches Work internals',
+    && actionConsumerStructureIsExact(source.actions),
+  'Configuration import, binding or executable call map drifted',
+)
+
+const commentOnlyActionsProbe = source.actions.replace(
+  'getMergedScenarioFieldsV1({',
+  'Promise.resolve({ // getMergedScenarioFieldsV1({',
+)
+const deadCallActionsProbe = source.actions.replace(
+  'await resetScenarioFieldSettingV1({',
+  'if (false) await resetScenarioFieldSettingV1({',
+)
+const shadowedActionsProbe = source.actions.replace(
+  'export async function resetScenarioField(scenarioId: string, fieldId: string): Promise<void> {\n',
+  'export async function resetScenarioField(scenarioId: string, fieldId: string): Promise<void> {\n' +
+    '    const resetScenarioFieldSettingV1 = async () => undefined\n',
+)
+const extraConsumerPath = 'gravity-mvp/src/app/settings/scenarios/scenario-field-settings-probe.ts'
+const extraConsumerSource = `import { getMergedScenarioFieldsV1 } from '${publicSpecifier}'\nif (false) void getMergedScenarioFieldsV1({ contract: 'probe', scenarioId: 'probe' })\n`
+check(
+  'repo-wide scenario capability denominator and executable-call probes fail closed',
+  scenarioConsumerDenominatorIsExact(runtimeSourceEntries)
+    && rejectsActionProbe(source.actions, commentOnlyActionsProbe)
+    && rejectsActionProbe(source.actions, deadCallActionsProbe)
+    && rejectsActionProbe(source.actions, shadowedActionsProbe)
+    && !scenarioConsumerDenominatorIsExact([
+      ...runtimeSourceEntries,
+      { relative: extraConsumerPath, sourceText: extraConsumerSource },
+    ]),
+  'comment, dead call, shadowing or an extra consumer escaped the exact denominator',
 )
 
 check(
@@ -196,13 +756,35 @@ check(
 )
 
 check(
-  'public indexes expose only the typed Work surface and bound facades',
+  'public indexes expose the exact typed Work surface through reviewed application composition',
   source.contractIndex.includes("export * from './scenario-field-settings'")
-    && source.publicIndex.includes("from './scenario-field-settings-handler'")
-    && source.publicIndex.includes("from './legacy-prisma-scenario-field-settings-adapter'")
-    && source.publicIndex.includes('getMergedScenarioFieldsV1 = createGetMergedScenarioFieldsHandlerV1(')
-    && source.publicIndex.includes('upsertScenarioFieldSettingV1 = createUpsertScenarioFieldSettingHandlerV1(')
-    && source.publicIndex.includes('resetScenarioFieldSettingV1 = createResetScenarioFieldSettingHandlerV1('),
+    && scenarioCompositionStructureIsExact(source.publicIndex, source.application)
+    && rejectsCompositionProbe(
+      source.publicIndex.replace(applicationSpecifier, './scenario-field-settings-handler'),
+      source.application,
+    )
+    && rejectsCompositionProbe(
+      source.publicIndex,
+      source.application.replace(applicationAdapterSpecifier, '@/lib/prisma'),
+    )
+    && rejectsCompositionProbe(
+      source.publicIndex,
+      `${source.application}\nexport const deleteAllScenarioFieldSettingsV1 = async () => true\n`,
+    )
+    && rejectsCompositionProbe(
+      source.publicIndex,
+      source.application.replace(
+        'getMergedScenarioFields(...args)',
+        'undefined // getMergedScenarioFields(...args)',
+      ),
+    )
+    && rejectsCompositionProbe(
+      source.publicIndex.replace(
+        'export { createGetMergedScenarioFieldsHandlerV1, createResetScenarioFieldSettingHandlerV1, createUpsertScenarioFieldSettingHandlerV1 } from \'./scenario-field-settings-handler\'',
+        "export * from './scenario-field-settings-handler'",
+      ),
+      source.application,
+    ),
   'public binding absent or widened',
 )
 
@@ -382,22 +964,59 @@ check(
   'historical plan disposition is absent or rewritten',
 )
 check(
-  'behavior hashes and verification retain the source-only non-execution boundary',
-  behavior.source_commit === 'b1f911b7b17273363df764d6e312a40c9f0fa8fc' &&
-    JSON.stringify(frozenBehaviorSources.map(([file]) => file).sort()) ===
-      JSON.stringify(Object.values(paths).sort()) &&
-    frozenBehaviorSources.every(([file, expected]) => sha(file) === expected) &&
-    verification.database_accessed === false &&
-    verification.scenario_field_settings_executed_against_database === false &&
-    verification.runtime_or_provider_invoked === false &&
-    verification.production_mutated === false &&
-    verification.secret_values_read_or_emitted === false,
-  'source hash or non-execution evidence drifted',
+  'historical frozen evidence remains exact while current composition is structural',
+  behaviorHashContinuityIsExact(
+    behavior,
+    frozenBehaviorSources,
+    source.publicIndex,
+    source.application,
+  ) &&
+    !behaviorHashContinuityIsExact(
+      behavior,
+      frozenBehaviorSources.map(([file, expected]) => [
+        file,
+        file === paths.adapter ? '0'.repeat(64) : expected,
+      ]),
+      source.publicIndex,
+      source.application,
+    ) &&
+    !behaviorHashContinuityIsExact(
+      behavior,
+      frozenBehaviorSources,
+      `${source.publicIndex}\nexport const scenarioFieldHashDriftProbe = true\n`,
+      source.application,
+    ),
+  'historical freeze or current structural composition drifted',
+)
+check(
+  'verification retains the exact source-only non-execution boundary',
+  sha(`${evidenceRoot}/BEHAVIOR-FREEZE.json`) === reviewedEvidenceHashes.behavior &&
+    sha(`${evidenceRoot}/verification.json`) === reviewedEvidenceHashes.verification &&
+    sha(`${evidenceRoot}/migration-manifest.json`) === reviewedEvidenceHashes.migration &&
+    sourceOnlyEvidenceIsExact(verification, migration, behavior) &&
+    !sourceOnlyEvidenceIsExact(
+      { ...verification, database_accessed: true },
+      migration,
+      behavior,
+    ) &&
+    !sourceOnlyEvidenceIsExact(
+      verification,
+      { ...migration, execution_performed: true },
+      behavior,
+    ),
+  'source-only or non-execution evidence drifted',
 )
 
 process.stdout.write(`${JSON.stringify({
   status: failures.length > 0 ? 'FAIL' : 'PASS',
   sourceOnly: true,
+  reviewedComposition: 'PUBLIC_TO_APPLICATION_TO_HANDLER_ADAPTER',
+  currentCompositionVerification: 'TYPESCRIPT_AST_NO_CURRENT_SOURCE_HASH',
+  scenarioCapabilityConsumers: discoverScenarioConsumers(runtimeSourceEntries),
+  negativeCompositionProbes: 5,
+  negativeConsumerProbes: 4,
+  negativeBehaviorHashProbes: 2,
+  negativeNonExecutionProbes: 2,
   checks,
   failures,
 }, null, 2)}\n`)

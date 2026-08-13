@@ -1,0 +1,33 @@
+{
+  "source_output_sha256": "6318696f1d66d7bb7451d3a097b20846ace850fd954d1737905aeb33d4ce8f13",
+  "repository": "/opt/crm",
+  "head": "e6a0a833fbb756216b058bfe326f9f9c77c4cc6d",
+  "branch": "feature/ai-knowledge-core",
+  "upstream": "origin/feature/ai-knowledge-core",
+  "index_entry_count": 1513,
+  "staged_count": 0,
+  "staged_additions": 0,
+  "staged_modifications": 0,
+  "staged_deletions": 0,
+  "unstaged_count": 85,
+  "unstaged_modifications": 81,
+  "unstaged_deletions": 4,
+  "untracked_count": 102,
+  "untracked_bytes": 3230796,
+  "dirty_index_relationship": "all 85 dirty tracked paths have stage-0 index blobs equal to HEAD; 81 working blobs differ and four working files are absent",
+  "index_only_source_version_count": 0,
+  "meaningful_intent_only_in_index": false,
+  "classification": "CLEAN_INDEX_DIRTY_WORKTREE_NO_INDEX_ONLY_VERSION",
+  "deleted_paths": [
+    {"path": "gravity-mvp/backfill_out.txt", "head_and_index_blob": "2c14967c0b7793439a4f0be7558f9cd0e29b2707"},
+    {"path": "gravity-mvp/db_log.txt", "head_and_index_blob": "89f8c10315b62e43ab69e8ed5ea6111d36cc72f0"},
+    {"path": "gravity-mvp/wa_diag.json", "head_and_index_blob": "521cf4a9a047fe44eede4638d867f85c0ab47255"},
+    {"path": "gravity-mvp/wa_out.txt", "head_and_index_blob": "4d646ec970cc38412699108b88be556880cf4e4f"}
+  ],
+  "missing_v1_fields_requiring_successor": [
+    "index file SHA-256",
+    "index mode/owner/size/inode/device/hardlinks",
+    "index mtime_ns and ctime_ns",
+    "before/after index and HEAD stability"
+  ]
+}

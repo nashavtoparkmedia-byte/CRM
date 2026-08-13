@@ -13,6 +13,7 @@ const output = mkdtempSync(path.join(tmpdir(), 'yoko-outbox-tests-'))
 const sources = [
     'gravity-mvp/src/contracts/calling/v1/recording-ready-event.ts',
     'gravity-mvp/src/contracts/calling/v1/index.ts',
+    'gravity-mvp/src/modules/calling/public/v1/recording-ready-operation.ts',
     'gravity-mvp/src/modules/calling/internal/recording-ready.ts',
     'gravity-mvp/src/infrastructure/outbox/v1/outbox-publisher.ts',
     'gravity-mvp/src/infrastructure/outbox/v1/index.ts',

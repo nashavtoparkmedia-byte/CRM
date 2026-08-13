@@ -1,0 +1,12 @@
+diff --git a/gravity-mvp/prisma/migrations/20260805093000_prune_unverified_bot_registry_backfill/migration.sql b/gravity-mvp/prisma/migrations/20260805093000_prune_unverified_bot_registry_backfill/migration.sql
+new file mode 100644
+--- /dev/null
++++ b/gravity-mvp/prisma/migrations/20260805093000_prune_unverified_bot_registry_backfill/migration.sql
+@@ -0,0 +1,7 @@
++-- Chat and generic survey tables are shared by several Telegram integrations.
++-- Their rows do not prove that an account opened the drivers bot, so they must
++-- not be shown as pending driver-link requests. Keep only registry entries
++-- created by the drivers bot, proven link requests, or existing driver links.
++DELETE FROM "BotUserRegistry"
++WHERE "id" LIKE 'legacy_chat_%'
++   OR "id" LIKE 'legacy_user_%';

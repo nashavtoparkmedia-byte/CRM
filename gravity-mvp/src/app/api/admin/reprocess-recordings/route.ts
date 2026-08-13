@@ -7,7 +7,7 @@ import {
     backfillCompletedCallTimelineV1,
     enqueueRecoveredCallTranscriptionV1,
     recoverCallRecordingV1,
-} from '@/modules/calling/public/v1/recording-recovery'
+} from '@/modules/calling/public/v1'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 
 export const runtime = 'nodejs'

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 
 import { analyzeCredentialAccess } from './credential-analyzer.mjs'
 
@@ -26,6 +27,18 @@ const safeMetadata = analyzeCredentialAccess(
 assert.equal(safeMetadata.accesses[0].credential_exposure, 'METADATA_ONLY')
 assert.equal(safeMetadata.accesses[0].public_secret_risk, false)
 
+for (const [fileName, entity] of [
+  ['gravity-mvp/src/app/api/debug-db/tg-import/route.ts', 'TelegramConnection'],
+  ['gravity-mvp/src/app/api/debug-db/wa-diag/route.ts', 'WhatsAppConnection'],
+]) {
+  const routeAnalysis = analyzeCredentialAccess(readFileSync(fileName, 'utf8'), { fileName })
+  const connectionReads = routeAnalysis.accesses.filter((entry) => entry.entity === entity)
+  assert.equal(connectionReads.length, 1, `${fileName} must retain one exact connection metadata read`)
+  assert.equal(connectionReads[0].credential_exposure, 'METADATA_ONLY')
+  assert.deepEqual(connectionReads[0].exposed_sensitive_field_names, [])
+  assert.equal(connectionReads[0].public_secret_risk, false)
+}
+
 const providerUse = analyzeCredentialAccess(
   'export async function send() { const row = await prisma.whatsAppConnection.findUnique({ where: { id } }); return provider.send(row.sessionData) }',
   { fileName: 'gravity-mvp/src/modules/whatsapp_channel/provider-adapter.ts' },
@@ -42,4 +55,4 @@ const futureField = analyzeCredentialAccess(
 assert.equal(futureField.accesses[0].credential_exposure, 'SECRET_READ')
 assert.deepEqual(futureField.accesses[0].exposed_sensitive_field_names, ['refreshToken'])
 
-console.log('credential-boundary-negative-probes: PASS (5 probes)')
+console.log('credential-boundary-negative-probes: PASS (7 probes)')

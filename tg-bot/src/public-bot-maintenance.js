@@ -1,5 +1,14 @@
 const { PrismaClient } = require('@prisma/client')
 
+const adminBotPublicSelect = Object.freeze({
+    id: true,
+    name: true,
+    username: true,
+    isActive: true,
+    createdAt: true,
+    surveys: true,
+})
+
 function requiredText(value, field) {
     if (typeof value !== 'string' || value.trim() === '' || value.length > 256) throw new TypeError(`${field} must be bounded text`)
     return value.trim()
@@ -49,6 +58,10 @@ async function createAdminBotV1({ token, name, username }) {
     try {
         return await prisma.bot.create({
             data: { token, name, username, surveys: { create: [{ title: 'Основной опрос', triggerButton: '📊 Опрос качества' }] } },
+            // The owner capability itself projects the public result.  A
+            // downstream route/projector change therefore cannot recover the
+            // stored token from the value returned across this boundary.
+            select: adminBotPublicSelect,
         })
     } finally {
         await prisma.$disconnect()

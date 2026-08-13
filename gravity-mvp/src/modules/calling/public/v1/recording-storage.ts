@@ -44,7 +44,14 @@ export async function uploadFile(localPath: string, objectKey: string, contentTy
 
 /** Generate a short-lived recording download URL. */
 export async function getRecordingUrl(objectKey: string, expiresInSec = 3600): Promise<string> {
-    return getSignedUrl(getClient(), new GetObjectCommand({ Bucket: S3_BUCKET, Key: objectKey }), { expiresIn: expiresInSec })
+    const signedUrl = await getSignedUrl(
+        getClient(),
+        new GetObjectCommand({ Bucket: S3_BUCKET, Key: objectKey }),
+        { expiresIn: expiresInSec },
+    )
+    // Attenuate the SDK helper result to the public value contract.  The
+    // facade exposes a URL string, never a provider response or client.
+    return signedUrl.toString()
 }
 
 /** Read a recording for the Calling transcription/playback flows. */

@@ -170,6 +170,7 @@ function summarize(accesses, inventory, parseFindings) {
   const count = (predicate) => accesses.filter(predicate).length
   return {
     tracked_executable_surfaces: inventory.summary.tracked_executable_surfaces,
+    unreviewed_operational_surfaces: inventory.summary.unreviewed_operational_surfaces,
     credential_database_accesses: accesses.length,
     credential_reads: count((entry) => entry.access === 'READ'),
     credential_record_writes: count((entry) => entry.access === 'WRITE'),
@@ -201,6 +202,7 @@ export async function inventoryCredentialAccess(repositoryRoot, options = {}) {
 
   for (const surface of inventory.surfaces) {
     const sourceText = decodeSource(await readFile(path.join(repositoryRoot, surface.path)))
+    const sourceSha256 = sha256(sourceText)
     const source = resolveSource(surface)
     let discovered = []
     let diagnostics = []
@@ -246,6 +248,7 @@ export async function inventoryCredentialAccess(repositoryRoot, options = {}) {
     for (const access of discovered) {
       accesses.push({
         ...access,
+        source_sha256: sourceSha256,
         context_classification: classifyAccess(access, surface, source),
         source_context: source.context,
         source_technical_module: source.technical_module,
@@ -254,6 +257,8 @@ export async function inventoryCredentialAccess(repositoryRoot, options = {}) {
           lifecycle: surface.lifecycle,
           disposition: surface.disposition,
           production_capability: surface.production_capability,
+          functional_owner: surface.functional_owner,
+          registered_source_sha256: surface.registered_source_sha256,
           registry_classified: surface.registry_classified,
         },
       })

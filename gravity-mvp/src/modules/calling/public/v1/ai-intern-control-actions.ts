@@ -1,35 +1,21 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
-import {
-    GET_AI_INTERN_STATE_RESULT_V1,
-    type GetAiInternStateQueryV1,
-    type SetAiInternStateCommandV1,
+import type {
+    GetAiInternStateQueryV1,
+    SetAiInternStateCommandV1,
 } from '../../../../contracts/calling/v1'
-import { requireIntegrationAdminAccess } from '../../../identity-access/public/v1'
-import { createAiInternControlHandlerV1 } from './ai-intern-control-handler'
-import { legacyPrismaAiInternControlPortV1 } from './legacy-prisma-ai-intern-control-adapter'
+import {
+    getAiInternStateV1 as executeGetAiInternStateV1,
+    setAiInternStateV1 as executeSetAiInternStateV1,
+} from '../../application/ai-intern-control-operations'
 
-const aiInternControl = createAiInternControlHandlerV1(legacyPrismaAiInternControlPortV1)
-
+// These concrete async wrappers are the public Server Action boundary. Next.js
+// does not register a re-export from a `use server` module as a Server Action,
+// and callers must never reach the application implementation directly.
 export async function getAiInternStateV1(query: GetAiInternStateQueryV1 | unknown) {
-    await requireIntegrationAdminAccess()
-    try {
-        return await aiInternControl.getState(query)
-    } catch {
-        return { contract: GET_AI_INTERN_STATE_RESULT_V1, internEnabled: null }
-    }
+    return await executeGetAiInternStateV1(query)
 }
 
 export async function setAiInternStateV1(command: SetAiInternStateCommandV1 | unknown) {
-    await requireIntegrationAdminAccess()
-    try {
-        const result = await aiInternControl.setState(command)
-        revalidatePath('/settings/ai')
-        return result
-    } catch (error: any) {
-        const detail = error?.message ?? 'unknown error'
-        console.error('[AI Config] saveAiConfig error:', detail)
-        throw new Error(`Не удалось сохранить настройки AI: ${detail}`)
-    }
+    return await executeSetAiInternStateV1(command)
 }

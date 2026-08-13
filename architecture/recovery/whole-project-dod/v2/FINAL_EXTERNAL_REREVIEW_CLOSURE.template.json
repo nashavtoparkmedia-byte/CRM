@@ -1,0 +1,24 @@
+{
+  "schema": "yoko.crm.external-rereview-final-closure-template.v1",
+  "status": "PENDING",
+  "closure_schema": "yoko.crm.external-rereview-final-closure.v1",
+  "instruction": "Materialize FINAL_EXTERNAL_REREVIEW_CLOSURE.json only after the exact accepted source has passed both clean reproductions and hosted CI, Runtime 2.0.0-10 has been installed and used for the proportional deployment, production parity has been recaptured, and a separate internal critic has passed all eight attacks. Placeholder or PENDING values never authorize closure.",
+  "required_evidence_files": {
+    "accepted_source_record": "architecture/recovery/whole-project-dod/v2/FINAL_ACCEPTED_SOURCE_RECORD_20260813.json",
+    "local_clean_ci_execution": "architecture/recovery/whole-project-dod/v2/FINAL_LOCAL_CLEAN_CI_EXECUTION_20260813.json",
+    "fresh_clean_ci_execution": "architecture/recovery/whole-project-dod/v2/FINAL_FRESH_CLEAN_CI_EXECUTION_20260813.json",
+    "runtime_release_seal": "architecture/recovery/whole-project-dod/v2/FINAL_RUNTIME_V10_RELEASE_SEAL_20260813.json",
+    "runtime_owner_bootstrap": "architecture/recovery/whole-project-dod/v2/FINAL_RUNTIME_V10_OWNER_BOOTSTRAP_20260813.json",
+    "runtime_production_acceptance": "architecture/recovery/whole-project-dod/v2/FINAL_RUNTIME_V10_PRODUCTION_ACCEPTANCE_20260813.json",
+    "internal_critic_review": "architecture/recovery/whole-project-dod/v2/FINAL_INTERNAL_ADVERSARIAL_REVIEW_20260813.json",
+    "internal_critic_verification": "architecture/recovery/whole-project-dod/v2/FINAL_INTERNAL_ADVERSARIAL_VERIFICATION_20260813.json"
+  },
+  "required_final_counts": {
+    "external_findings_closed": 7,
+    "canonical_dod_closed": 22,
+    "authoritative_ci_controls_passed": 52,
+    "internal_attacks_passed": 8,
+    "production_migrations_active": 62
+  },
+  "external_project_rereview_satisfied": false
+}

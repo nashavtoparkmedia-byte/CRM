@@ -16,5 +16,5 @@ node --test tools/architecture/__tests__/context-manifests.test.mjs
 The generator binds every one of the 96 ownership candidates to exactly one
 context and gives all 195 non-owner/legacy/ambiguous write sites a reversible
 migration plan. Target allowed dependencies are acyclic. Current direct imports
-are retained in `dependency-transition-plan.json` as migration debt, not
+are retained in `dependency-transition-plan.json` as archived baseline migration debt, not
 silently accepted as the target architecture.

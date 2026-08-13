@@ -1,0 +1,54 @@
+# YOKO CRM one-time source-only Owner bootstrap
+
+This payload upgrades Runtime package `2.0.0-9` to `2.0.0-10` without changing
+ABI `2.0.0`, the Runtime core, policy, or sudoers semantics. It installs one
+new checksum-pinned source-only Gravity profile with a fresh transaction state.
+
+Bootstrap itself does not invoke a profile, build or deploy an image, access
+PostgreSQL, restart a service, or mutate `/opt/crm`. `database-migrate` is
+disabled. Package installation is the sole Owner/root action.
+
+The release seal is admitted only after an exact structured hosted GitHub
+Actions attestation cross-binds the accepted commit/tree, workflow and runner
+hashes, live run/two-job/Gravity-artifact IDs and URLs, exact head SHA,
+successful conclusions, and the complete ordered 52-control authoritative
+catalog, including its reviewed command/argument/cwd/order semantic digest.
+The final Gravity artifact also embeds the runner-emitted proof that all 52
+ordered controls actually completed with PASS; the sealer binds that proof to
+the accepted source, workflow, runner, and Node runtime identities.
+Gravity is built by digest-pinned hosted BuildKit and shipped as an exact Docker
+archive; production loads it offline and rejects every pre-existing target tag.
+The seal also binds the complete Runtime builder subtree to exact accepted Git
+blobs, all package/bootstrap inputs, and both deterministic output identities.
+A bare PASS assertion or any missing, forged, partial, drifted, extra-staging,
+or post-seal-mutated identity is rejected.
+
+Owner authorization additionally requires a review artifact authored by a
+separate internal reviewer and a fresh mechanical replay of the exact fixed
+eight-attack catalog against the clean accepted source checkout, with exact
+seal, package, tar and hosted-CI bindings. The builder itself emits only
+non-authorizing replay evidence and cannot create the review decision. Reviewer
+identity is an explicit process assertion, not a fabricated cryptographic
+claim. The later fresh external project re-review after normal READY is a
+separate gate.
+
+The application predecessor is the accepted `7aea2823…` image
+`sha256:baf442f8…`. Release preflight must seal that image as rollback before
+activation. Failure restores that exact image and proves bounded health.
+
+The separately deployed Telegram bot is equally part of the transaction: its
+exact predecessor is sealed under a distinct rollback tag, its accepted change
+is a one-file derived image, and activation/rollback always recreate both
+services through the same fixed two-service overlay. Mixed states trigger pair
+rollback and cannot be reported as success.
+
+The installed profile binds the complete 62-row active migration
+name/checksum map and a source-attested semantic order. `database-status`
+reports the actual live timestamp-ordered rows; a reorder of known rows is
+`DRIFTED` and blocks preflight rather than being auto-authorized. No historical
+timestamp is fabricated by the package.
+
+That production migration authority is accepted only as the complete exact Git
+blob from the sealed source commit, with its SHA-256 bound into the release
+seal. A modified or structurally reduced 62-row substitute is rejected before
+packaging.

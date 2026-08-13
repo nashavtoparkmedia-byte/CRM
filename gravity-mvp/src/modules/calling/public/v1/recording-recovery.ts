@@ -4,7 +4,7 @@ import { enqueueTranscribe } from '@/lib/queue/queues'
 
 export interface CompletedCallTimelineBackfillV1 {
   id: string
-  contactId: string
+  contactId: string | null
   driverId: string | null
   direction: string
   fromNumber: string | null

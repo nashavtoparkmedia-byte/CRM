@@ -12,9 +12,9 @@ export {
   getDrivers,
   testApiRequest,
   updateApiConnectionName,
-} from '@/modules/fleet-operations/public/v1/yandex-fleet-operations'
+} from '@/modules/fleet-operations/public/v1'
 export type {
   Car,
   Driver,
   DriverStatus,
-} from '@/modules/fleet-operations/public/v1/yandex-fleet-operations'
+} from '@/modules/fleet-operations/public/v1'

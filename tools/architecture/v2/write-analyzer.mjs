@@ -2262,6 +2262,7 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
             tables: sqlAnalysis.tables.length > 0 ? sqlAnalysis.tables : (options.includeRawReads ? sqlAnalysis.read_tables : []),
             read_tables: sqlAnalysis.read_tables,
             selected_columns: sqlAnalysis.selected_columns,
+            called_functions: sqlAnalysis.called_functions ?? [],
             selected_column_sources: sqlAnalysis.selected_column_sources ?? [],
             written_columns: sqlAnalysis.written_columns ?? [],
             select_all: sqlAnalysis.select_all,
@@ -3172,6 +3173,10 @@ export function analyzePrismaWriteSites(sourceText, options = {}) {
             signatureOrdinals.set(original, ordinal + 1)
             site.site_signature = digest(`${original}\nduplicate-set:${fileDigest}\nordinal:${ordinal}\nindex:${site.index}:${site.end}`)
         }
+        site.source_sha256 = fileDigest
+        site.sql_provenance_sha256 = site.kind === 'raw' && site.sql_sha256
+            ? digest(`${fileDigest}\n${site.site_signature}\n${site.sql_sha256}`)
+            : null
     }
 
     return {

@@ -93,17 +93,13 @@ function loadConsumer({
             if (specifier === '@/lib/prisma') return { prisma }
             if (specifier === '@/contracts/operations-observability/v1') return CONTRACTS
             if (specifier === '@/modules/operations-observability/public/v1') return ops
-            if (specifier === '@/lib/tasks/intervention-action-config') {
-                return { INTERVENTION_ACTION_LABELS: ACTION_LABELS }
-            }
-            if (specifier === '@/lib/tasks/intervention-outcome-config') {
+            if (specifier === '@/modules/work-management/public/v1/team-operational-policy') {
                 return {
+                    INTERVENTION_ACTION_LABELS: ACTION_LABELS,
                     evaluateOutcome,
                     INTERVENTION_OUTCOME_CONFIG: { outcomeWindowHours: 24, improvementThreshold: 3 },
+                    OUTCOME_TIMING_CONFIG: { minCompletedForStats: 3, recentPeriodDays: 7 },
                 }
-            }
-            if (specifier === '@/lib/tasks/outcome-timing-config') {
-                return { OUTCOME_TIMING_CONFIG: { minCompletedForStats: 3, recentPeriodDays: 7 } }
             }
             return {}
         },

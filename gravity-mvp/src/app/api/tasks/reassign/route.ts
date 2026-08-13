@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { REASSIGN_TASKS_COMMAND_V1 } from '@/contracts/work-management/v1'
-import { taskReassignmentV1 } from '@/modules/work-management/public/v1'
+import { reassignTasksV1 } from '@/modules/work-management/public/v1'
 
 /**
  * POST /api/tasks/reassign
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
             )
         }
 
-        const result = await taskReassignmentV1.reassignTasks({
+        const result = await reassignTasksV1({
             contract: REASSIGN_TASKS_COMMAND_V1,
             taskIds,
             newAssigneeId,

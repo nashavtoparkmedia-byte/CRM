@@ -1,13 +1,37 @@
 #!/usr/bin/env node
 
+import assert from 'node:assert/strict'
 import { readFile, rename, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 
-const [input, output] = process.argv.slice(2)
+const args = process.argv.slice(2)
+const [input, output] = args
+const acceptedBaselineIndex = args.indexOf('--accepted-baseline')
+const acceptedBaseline = acceptedBaselineIndex >= 0 ? args[acceptedBaselineIndex + 1] : null
+const materializeReviewedFinalClosure = args.includes('--materialize-reviewed-final-closure')
 if (!input || !output) {
-  throw new Error('usage: triage-ambiguous-writes.mjs BASELINE.json TRIAGE.json')
+  throw new Error('usage: triage-ambiguous-writes.mjs CURRENT_ANALYSIS.json TRIAGE.json [--accepted-baseline ACCEPTED.json --materialize-reviewed-final-closure]')
 }
+if (materializeReviewedFinalClosure && !acceptedBaseline) throw new Error('reviewed final closure materialization requires --accepted-baseline')
+
+const sha256 = bytes => createHash('sha256').update(bytes).digest('hex')
+const sha256Lines = values => sha256(`${[...values].sort().join('\n')}\n`)
+
+// Independent final-closure review list. A detector-side classification is not
+// sufficient: every function reachable from an accepted ambiguous SELECT must
+// remain in this verifier-aligned exact set.
+const reviewedReadOnlySqlFunctions = new Set([
+  'abs', 'array_agg', 'avg', 'bool_or', 'ceil', 'coalesce', 'concat', 'convert_to',
+  'count', 'current_database', 'current_setting', 'date', 'date_trunc', 'encode',
+  'extract', 'floor', 'format_type', 'greatest', 'json_agg', 'json_build_object',
+  'jsonb_agg', 'jsonb_array_elements_text', 'jsonb_build_object', 'least', 'length',
+  'lower', 'max', 'md5', 'min', 'now', 'nullif', 'octet_length', 'percentile_cont',
+  'percentile_disc', 'pg_control_system', 'pg_get_constraintdef', 'pg_get_expr',
+  'position', 'regexp_replace', 'replace', 'right', 'round', 'sha256', 'split_part',
+  'string_agg', 'strpos', 'substring', 'sum', 'to_char', 'to_date', 'to_regclass',
+  'to_timestamp', 'trim', 'upper',
+])
 
 const focusedOwnershipDecisions = new Map([
   ...['45645e0b760a5827a47289517fa298c1a3bcd215068e418d7c93e887b8ad17ac','81f28083be28056e5c9be0ca8018f6ec9121a53bee49136fe9fd7e710afdb913','64934aa9a77c0de5bafd842a668fa1b1f10654ce0a3ffa06cfe7a7fd3b995046','8779aa7c9ab18d702c45db346d6e34b2262c14d2744796efbc77bd6bcf6927a2','68e7b2590b446a521037a09ba257bd2dc3e9dc5160ae46e2838bc955f203ab4d','48452c703f3878500e43002f7311f83f1a84a5d7a7c7fc02ac262672a49917b9','f2385246a9722e1692eaa96a81289d48e1bc42701ab7bbaf653642fac72b7e40'].map(signature => [signature, 'OWNER_VALID']),
@@ -35,15 +59,26 @@ const confirmedReadOnlyDecisions = new Set([
   // sql_sha256 89d1cf16...).  The public adapter split changed only the
   // containing scope, and therefore the site signature.
   'd0c82d56b1ebc1290af28a4c3add0047a2da0f9ab7cf0643ae9ac5ccd3920fc9',
+  // Runtime v10 keeps these exact SQL literals read-only: PostgreSQL identity,
+  // migration-ledger observation, and outbox catalog projections in the
+  // installed source plus its byte-identical package template. Their exact
+  // site/provenance signatures reopen review on any source or SQL drift.
+  '285751a0a8f4a577b7866c586f2cd5c29374bf8fe28aaac7b10b446150192909',
+  'db58ec08efaa08ff46d65c6514af2e4e7f3ea91fc829291f3555696d5ab6ffe1',
+  'ed73ec50cf0da00bc470d3f5bfd82747620760e0c4f6bfa706b42dff421ce67a',
+  '3a19a0dbda9182e8fb61901a6f9645d519e97bfafed996916694e437e387d307',
+  'e1bb0d06f7069896ad0113852070e1047b5b3226ad79cfe239943b95585c1827',
+  '493cd2bbc915132b5b76f372dc8538929757c7ea4379ac3cfff69584e5a07c62',
+  'daebc11dfee4c485a983a0160cab94ee9065ee492a46dcb13d73e5d7094b465a',
+  'd9186fc05728ff6f00cac9f9eb60aee5df74438494c9a4b377c617d4e0bf07a3',
 ])
 
 function classify(site) {
   const reasons = new Set(site.ambiguity_reasons ?? [])
   if (
-    (site.file === 'max-web-scraper/contacts/ContactStore.js' && /^sql-driver:get$/u.test(site.method))
-    || (site.file === 'tools/architecture/v2/analyze.mjs' && site.method.startsWith('mixed-script-command:'))
+    site.file === 'max-web-scraper/contacts/ContactStore.js' && /^sql-driver:get$/u.test(site.method)
   ) {
-    return { disposition: 'CONFIRMED_NON_WRITE', rationale: 'Source inspection proves an in-memory Map lookup or analyzer detector literal, not a database operation.' }
+    return { disposition: 'CONFIRMED_NON_WRITE', rationale: 'Source inspection proves an in-memory Map lookup, not a database operation.' }
   }
   // A queryRaw site with a fully resolved, read-only SQL statement is an
   // analyzer false positive when it was retained only because raw reads are
@@ -111,21 +146,30 @@ const records = source.write_sites
     return {
     record_id: site.site_signature,
     site_signature: site.site_signature,
+    source_sha256: site.source_sha256 ?? null,
     file: site.file,
     line: site.line,
     column: site.column,
     kind: site.kind,
     method: site.method,
+    fragment_source: site.fragment_source ?? null,
+    database_command_intent: site.database_command_intent ?? null,
     model: site.model ?? null,
     candidate_models: site.candidate_models ?? [],
     tables: site.tables ?? [],
     operations: site.operations ?? [],
+    read_tables: site.read_tables ?? [],
+    selected_columns: site.selected_columns ?? [],
+    called_functions: site.called_functions ?? [],
+    sql_sha256: site.sql_sha256 ?? null,
+    sql_provenance_sha256: site.sql_provenance_sha256 ?? null,
     source_context: site.source_context ?? null,
     source_technical_module: site.source_technical_module ?? null,
     owner_contexts: site.owner_contexts ?? [],
     receiver_origin: site.receiver_origin ?? null,
     surface: site.surface,
     ambiguity_reasons: site.ambiguity_reasons ?? [],
+    unresolved_targets: site.unresolved_targets ?? [],
     ...result,
     disposition: effectiveDisposition,
     ownership_classification: inferredOwnership,
@@ -174,16 +218,92 @@ const summary = {
 }
 summary.RECONCILIATION_TOTAL = summary.RESOLVED_NON_WRITE + summary.OWNER_VALID_WRITE + summary.CONTROLLED_MIGRATION_WRITE + summary.MATERIAL_UNRESOLVED_WRITE_RISK
 summary.RECONCILIATION_EXACT = summary.RECONCILIATION_TOTAL === summary.RAW_BASELINE_AMBIGUOUS
+
+function reviewedNonWriteProof(record) {
+  assert.equal(record.kind, 'raw', `reviewed non-write is not a raw SQL site: ${record.site_signature}`)
+  assert.equal(record.operations.length, 0, `reviewed non-write contains an analyzed mutation: ${record.site_signature}`)
+  assert.match(record.source_sha256 ?? '', /^[0-9a-f]{64}$/u, `reviewed non-write lacks exact source bytes: ${record.site_signature}`)
+  assert.match(record.sql_sha256 ?? '', /^[0-9a-f]{64}$/u, `reviewed non-write lacks exact SQL bytes: ${record.site_signature}`)
+  assert.match(record.sql_provenance_sha256 ?? '', /^[0-9a-f]{64}$/u, `reviewed non-write lacks SQL provenance: ${record.site_signature}`)
+  assert.equal(record.called_functions.every(name => reviewedReadOnlySqlFunctions.has(name)), true, `reviewed non-write invokes an unreviewed function: ${record.site_signature}`)
+  const mixed = record.method === 'mixed-script-sql'
+  if (mixed) {
+    assert.equal(record.fragment_source, 'embedded_database_string', `reviewed mixed-script read is not an embedded exact string: ${record.site_signature}`)
+    const reasons = record.ambiguity_reasons
+    const baseReasons = ['dynamic_sql_fragment', 'select_function_side_effect_unresolved']
+    const escapedReasons = ['dialect_dependent_string_escape', ...baseReasons]
+    assert.equal(
+      JSON.stringify(reasons) === JSON.stringify(baseReasons) || JSON.stringify(reasons) === JSON.stringify(escapedReasons),
+      true,
+      `reviewed mixed-script read has a new ambiguity shape: ${record.site_signature}`,
+    )
+  } else assert.match(record.method, /^\$queryRaw(?:Unsafe)?$/u, `reviewed SQL projection is not a query method: ${record.site_signature}`)
+  const classification = mixed ? 'STATIC_MIXED_SCRIPT_SQL_READ' : 'READ_ONLY_SQL_PROJECTION'
+  const kind = mixed ? 'STATIC_MIXED_SCRIPT_SQL_READ' : 'SQL_READ_PROJECTION'
+  return {
+    site_signature: record.site_signature,
+    classification,
+    source: {
+      file: record.file,
+      line: record.line,
+      column: record.column,
+      method: record.method,
+      source_sha256: record.source_sha256,
+      sql_provenance_sha256: record.sql_provenance_sha256,
+    },
+    resolved_target: {
+      kind,
+      ...(mixed ? { fragment_source: record.fragment_source } : {}),
+      read_tables: record.read_tables,
+      selected_columns: record.selected_columns,
+      sql_sha256: record.sql_sha256,
+      reviewed_read_only_functions: record.called_functions,
+    },
+    evidence: [
+      `${record.file}:${record.line}:${record.column}`,
+      `analysis_site_signature:${record.site_signature}`,
+      `sql_sha256:${record.sql_sha256}`,
+      mixed
+        ? 'Exact embedded SELECT invokes only independently reviewed read-only PostgreSQL projection, catalog, identity, formatting, and hashing functions.'
+        : 'Exact query projection and transitive SQL provenance contain no analyzed mutation operation.',
+      `source_sha256:${record.source_sha256}`,
+      `sql_provenance_sha256:${record.sql_provenance_sha256}`,
+    ],
+  }
+}
+
+const defaultBaselineBytes = await readFile(resolve(input))
 const document = {
   schema: 'yoko.crm.ambiguous-write-triage.v1',
   baseline: {
     analysis_sha256: source.analysis_sha256,
-    baseline_sha256: createHash('sha256').update(await readFile(resolve(input))).digest('hex'),
+    baseline_sha256: sha256(defaultBaselineBytes),
   },
   policy: 'No unresolved record is converted to PASS or non-write without source or analyzer evidence.',
   taxonomy,
   summary,
   records,
+}
+if (materializeReviewedFinalClosure) {
+  assert.equal(source.execution?.complete, true, 'reviewed final closure requires a complete current analysis')
+  assert.equal(source.execution?.worker_failures, 0, 'reviewed final closure forbids worker failures')
+  assert.equal(source.execution?.worker_timeouts, 0, 'reviewed final closure forbids worker timeouts')
+  assert.equal(summary.MATERIAL_UNRESOLVED_WRITE_RISK, 0, 'new or unresolved ambiguous sites require independent review')
+  const acceptedBaselineBytes = await readFile(resolve(acceptedBaseline))
+  const accepted = JSON.parse(acceptedBaselineBytes)
+  document.baseline = {
+    analysis_sha256: accepted.analysis_sha256,
+    baseline_sha256: sha256(acceptedBaselineBytes),
+  }
+  document.current_exact_review = {
+    ambiguous_denominator: records.length,
+    review_key: 'site_signature',
+    sorted_site_signatures_sha256: sha256Lines(records.map(record => record.site_signature)),
+    policy: 'Every current ambiguous analyzer signature requires one independent disposition and every resolved non-write requires one exact proof; the historical raw baseline grants no authorization.',
+  }
+  document.non_write_proofs = records
+    .filter(record => record.semantic_state === 'RESOLVED_NON_WRITE')
+    .map(reviewedNonWriteProof)
 }
 const target = resolve(output)
 await writeFile(`${target}.tmp`, `${JSON.stringify(document, null, 2)}\n`)

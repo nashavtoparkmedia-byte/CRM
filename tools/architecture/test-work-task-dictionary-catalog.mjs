@@ -21,6 +21,7 @@ const sandbox = mkdtempSync(path.join(tmpdir(), 'yoko-work-task-dictionary-data-
 const sources = [
     'gravity-mvp/src/contracts/work-management/v1/task-dictionary-catalog.ts',
     'gravity-mvp/src/modules/work-management/internal/task-dictionary-store.ts',
+    'gravity-mvp/src/modules/work-management/application/task-dictionary-operations.ts',
 ].map((value) => path.join(root, value))
 
 const compile = spawnSync(process.execPath, [

@@ -1,0 +1,51 @@
+{
+  "observed_at": "2026-08-08T12:59:12.762814381Z",
+  "host": "jvxthcorvm",
+  "executor": "uid=998(codexbot) gid=998(codexbot) groups=998(codexbot)",
+  "repositories": {
+    "/opt/crm": {"head":"e6a0a833fbb756216b058bfe326f9f9c77c4cc6d","changed_from_start":false},
+    "/opt/codex-work/crm": {"head":"ee93f8e2e964e523c5f3922a906ce110e491b4e4","changed_from_start":false},
+    "/opt/codex-work/crm-ai-calls": {"head":"b38b22d3e00b3fb43d05417131709b3d2c535b2b","changed_from_start":false},
+    "/opt/codex-work/crm-messages-remediation-clean": {"head":"50ae48a5761ced6acb1639497fa80094b108f305","changed_from_start":false},
+    "/opt/codex-work/crm-max-release.20260806": {"head":"74657f827153babbe601a2765bf6c526efbb73d2","changed_from_start":false},
+    "/opt/codex-work/crm-call-release.QkpL6H": {"head":"2fdd44a3e7aa6af32d6c7dbf7e033477bc6201bf","changed_from_start":false}
+  },
+  "installed_capability": {
+    "package":"yoko-crm-arch-evidence",
+    "version":"1.0.2-1",
+    "dpkg_state":"installed",
+    "broker_sha256":"0a8f18bad0467056c3b7460827618b5d8df8ac8678da57040988478dba34ab18",
+    "root_owned_package_copy_sha256":"a9b1d524d94cb658c415f85c423dbaf1df4f45de0fdc2a38db1b6132484a188f",
+    "end_self_check_exit_status":0,
+    "end_self_check_output_sha256":"4014fb0668b841cf5ae731324f3a1b3574a3c6f61d005a8229ff4a2596f4bd93",
+    "changed_from_start":false
+  },
+  "production_working_tree": {
+    "known_modified_working_file_hash_count":81,
+    "all_known_modified_working_file_hashes_equal_start":true,
+    "known_deleted_paths_still_absent":true,
+    "head_changed_from_start":false,
+    "last_exact_root_broker_observation":"2026-08-08T12:31:39Z",
+    "last_exact_root_broker_output_sha256":"6318696f1d66d7bb7451d3a097b20846ace850fd954d1737905aeb33d4ce8f13",
+    "exact_end_index_and_untracked_observation":"PENDING_SUCCESSOR_INSTALLATION"
+  },
+  "messages_worktree": {
+    "head_changed_from_start":false,
+    "last_exact_root_broker_observation":"2026-08-08T12:31:50Z",
+    "last_exact_root_broker_output_sha256":"051e9366cd95ad9fcd2ed26a8ea9b91c4fcadef8ed2f68c41a1fd552e9e49a9d",
+    "last_exact_status":"CLEAN",
+    "end_protected_path_reobservation":"NOT_REPEATED_AFTER_PRIVILEGED_GIT_SECURITY_DEFECT_IDENTIFIED"
+  },
+  "runtime": {
+    "last_successful_eight_service_identity_observation":"2026-08-08T12:01:52Z",
+    "current_ten_service_identity_observation":"BLOCKED_BY_INSTALLED_V1_DOCKER_PROVENANCE_DEFECT",
+    "current_docker_provenance_failure_sha256":"e0180d12837a245362a85d72fc01ae673b289e8456541444de546aa00d069113",
+    "exact_end_runtime_identity":"PENDING_SUCCESSOR_INSTALLATION"
+  },
+  "successor_candidate": {
+    "version":"1.2.0-1",
+    "package_sha256":"af6512b446a662734f292fda3f3f861500dd9610657bfd7f9cbfcca4551a9e47",
+    "installed":false
+  },
+  "continuity_verdict":"PARTIAL_UNCHANGED_KNOWN_REPOSITORY_AND_WORKING_FILE_IDENTITIES_RUNTIME_AND_INDEX_END_OBSERVATION_BLOCKED_PRIVILEGE"
+}

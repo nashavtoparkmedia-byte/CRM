@@ -12,6 +12,30 @@ const consumerSource = readFileSync(consumerPath, 'utf8')
 const pureConfigSource = readFileSync(pureConfigPath, 'utf8')
 const require = createRequire(import.meta.url)
 const typescript = require(path.join(root, 'gravity-mvp/node_modules/typescript/lib/typescript.js'))
+const consumerAst = typescript.createSourceFile(
+    consumerPath,
+    consumerSource,
+    typescript.ScriptTarget.Latest,
+    true,
+    typescript.ScriptKind.TS,
+)
+const namedImportsFrom = specifier => consumerAst.statements.flatMap(statement => {
+    if (!typescript.isImportDeclaration(statement)
+        || !typescript.isStringLiteralLike(statement.moduleSpecifier)
+        || statement.moduleSpecifier.text !== specifier) return []
+    const named = statement.importClause?.namedBindings
+    if (!named || !typescript.isNamedImports(named)) return []
+    return named.elements.map(element => ({
+        imported: element.propertyName?.text ?? element.name.text,
+        local: element.name.text,
+        typeOnly: Boolean(statement.importClause?.isTypeOnly || element.isTypeOnly),
+    }))
+})
+const importStatementIndex = specifier => consumerAst.statements.findIndex(statement => (
+    typescript.isImportDeclaration(statement)
+    && typescript.isStringLiteralLike(statement.moduleSpecifier)
+    && statement.moduleSpecifier.text === specifier
+))
 
 const sliceBetween = (source, startMarker, endMarker) => {
     const start = source.indexOf(startMarker)
@@ -97,16 +121,50 @@ check('manager health pure module remains Prisma and Operations free with data s
     assert.match(pureConfigSource, /export function computeTeamStability/)
 })
 
-check('consumer keeps inherited import line positions and imports only public Operations health surface', () => {
-    const lines = consumerSource.split('\n')
-    assert.match(lines[12], /^import \{ HEALTH_HISTORY_CONFIG, calculateManagerHealthScore/)
-    assert.match(lines[12], /type HealthSnapshot, type PreviousHealthData/)
-    assert.equal(/\bgetPreviousHealthScores\b|\bsaveHealthScores\b|\bgetHealthHistory\b/.test(lines[12]), false)
-    assert.match(consumerSource, /ENSURE_MANAGER_HEALTH_REPOSITORY_COMMAND_V1/)
-    assert.match(consumerSource, /LIST_MANAGER_HEALTH_SNAPSHOTS_QUERY_V1/)
-    assert.match(consumerSource, /SAVE_MANAGER_HEALTH_SCORES_COMMAND_V1/)
-    assert.match(consumerSource, /LIST_MANAGER_HEALTH_HISTORY_QUERY_V1/)
-    assert.match(consumerSource, /from '@\/modules\/operations-observability\/public\/v1'/)
+check('consumer preserves AST import ownership and imports only public Operations health surface', () => {
+    const workPolicySpecifier = '@/modules/work-management/public/v1/team-operational-policy'
+    const contractSpecifier = '@/contracts/operations-observability/v1'
+    const operationsSpecifier = '@/modules/operations-observability/public/v1'
+    const workPolicyBindings = namedImportsFrom(workPolicySpecifier)
+    const contractBindings = namedImportsFrom(contractSpecifier)
+    const operationsBindings = namedImportsFrom(operationsSpecifier)
+    assert.equal(consumerAst.parseDiagnostics.length, 0)
+    assert.deepEqual(
+        workPolicyBindings.filter(binding => [
+            'HEALTH_HISTORY_CONFIG',
+            'calculateManagerHealthScore',
+            'HealthSnapshot',
+            'PreviousHealthData',
+        ].includes(binding.imported)),
+        [
+            { imported: 'HEALTH_HISTORY_CONFIG', local: 'HEALTH_HISTORY_CONFIG', typeOnly: false },
+            { imported: 'calculateManagerHealthScore', local: 'calculateManagerHealthScore', typeOnly: false },
+            { imported: 'HealthSnapshot', local: 'HealthSnapshot', typeOnly: true },
+            { imported: 'PreviousHealthData', local: 'PreviousHealthData', typeOnly: true },
+        ],
+    )
+    assert.deepEqual(
+        contractBindings.filter(binding => /MANAGER_HEALTH/.test(binding.imported)),
+        [
+            { imported: 'ENSURE_MANAGER_HEALTH_REPOSITORY_COMMAND_V1', local: 'ENSURE_MANAGER_HEALTH_REPOSITORY_COMMAND_V1', typeOnly: false },
+            { imported: 'LIST_MANAGER_HEALTH_HISTORY_QUERY_V1', local: 'LIST_MANAGER_HEALTH_HISTORY_QUERY_V1', typeOnly: false },
+            { imported: 'LIST_MANAGER_HEALTH_SNAPSHOTS_QUERY_V1', local: 'LIST_MANAGER_HEALTH_SNAPSHOTS_QUERY_V1', typeOnly: false },
+            { imported: 'SAVE_MANAGER_HEALTH_SCORES_COMMAND_V1', local: 'SAVE_MANAGER_HEALTH_SCORES_COMMAND_V1', typeOnly: false },
+        ],
+    )
+    assert.deepEqual(
+        operationsBindings.filter(binding => /ManagerHealth/.test(binding.imported)),
+        [
+            { imported: 'ensureManagerHealthRepositoryV1', local: 'ensureManagerHealthRepositoryV1', typeOnly: false },
+            { imported: 'listManagerHealthHistoryV1', local: 'listManagerHealthHistoryV1', typeOnly: false },
+            { imported: 'listManagerHealthSnapshotsV1', local: 'listManagerHealthSnapshotsV1', typeOnly: false },
+            { imported: 'saveManagerHealthScoresV1', local: 'saveManagerHealthScoresV1', typeOnly: false },
+        ],
+    )
+    assert.ok(importStatementIndex(workPolicySpecifier) < importStatementIndex(contractSpecifier))
+    assert.ok(importStatementIndex(contractSpecifier) < importStatementIndex(operationsSpecifier))
+    assert.equal(workPolicyBindings.some(binding => /getPreviousHealthScores|saveHealthScores|getHealthHistory/.test(binding.imported)), false)
+    assert.equal(/from ['"]@\/modules\/operations-observability\/(?:application|internal|public\/v1\/)/.test(consumerSource), false)
     assert.equal(/FROM health_|INSERT INTO health_|CREATE TABLE IF NOT EXISTS health_|\bprisma\.health_/.test(consumerSource), false)
 })
 

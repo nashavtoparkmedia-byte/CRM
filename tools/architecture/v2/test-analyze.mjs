@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 
 import {
@@ -10,6 +11,7 @@ import {
   mixedSqlFragments,
   standaloneSqlSites,
 } from './analyze.mjs'
+import { classifyTrackedSurface } from './tracked-surface-inventory.mjs'
 import { analyzePrismaWriteSites } from './write-analyzer.mjs'
 
 const shellSurface = { path: 'scripts/reconcile.sh' }
@@ -97,6 +99,25 @@ assert.equal(dynamicHeredocSites[0].method, 'mixed-script-command:psql')
 
 const staticExecute = 'cursor.execute("UPDATE bots SET token = NULL")'
 assert.equal(standaloneSqlSites({ path: 'static-execute.py' }, staticExecute, true).length, 1)
+const staticReadWithReviewedFunction = `cursor.execute("SELECT current_setting('server_version_num'), system_identifier::text FROM pg_control_system()")`
+const [staticReadWithReviewedFunctionSite] = standaloneSqlSites(
+  { path: 'static-read.py' },
+  staticReadWithReviewedFunction,
+  true,
+)
+assert.deepEqual({
+  method: staticReadWithReviewedFunctionSite.method,
+  fragment_source: staticReadWithReviewedFunctionSite.fragment_source,
+  read_tables: staticReadWithReviewedFunctionSite.read_tables,
+  selected_columns: staticReadWithReviewedFunctionSite.selected_columns,
+  sql_sha256: staticReadWithReviewedFunctionSite.sql_sha256,
+}, {
+  method: 'mixed-script-sql',
+  fragment_source: 'embedded_database_string',
+  read_tables: ['pg_control_system'],
+  selected_columns: ['system_identifier', 'text'],
+  sql_sha256: 'f91c4a6a6024d7a627e15e6c823a92e8ff13127b6a2574abfbb029ad71c12ad0',
+})
 const staticAndDynamicExecute = `${staticExecute}\ncursor.execute(runtime_sql)`
 const staticAndDynamicExecuteSites = standaloneSqlSites(
   { path: 'static-dynamic-execute.py' },
@@ -212,6 +233,37 @@ for (const source of [
     })),
     [{ method: 'mixed-script-command:pg_restore', database_command_intent: 'WRITE' }],
     source,
+  )
+}
+const detectorVocabularyBesideUnrelatedExec = [
+  "import { execFile } from 'node:child_process'",
+  'const databaseCommands = /(?:psql|mysql|sqlite3|sqlcmd|pg_restore)/u',
+  "execFile('printf', ['ok'])",
+].join('\n')
+assert.deepEqual(
+  javascriptDatabaseCommandSites({ path: 'detector.mjs' }, detectorVocabularyBesideUnrelatedExec),
+  [],
+  'regular-expression detector vocabulary is not an executable database command',
+)
+assert.deepEqual(
+  javascriptDatabaseCommandSites({ path: 'bound-client.mjs' }, [
+    "import { spawnSync } from 'node:child_process'",
+    "const psql = process.env.PSQL_BIN || 'psql'",
+    "const pgDump = process.env.PG_DUMP_BIN || 'pg_dump'",
+    "function runClient(program, args) { return spawnSync(program === 'psql' ? psql : pgDump, args) }",
+  ].join('\n')),
+  [],
+  'CLI fallback bindings and selector comparisons are not themselves executed database commands',
+)
+for (const source of [
+  "import { execFile } from 'node:child_process'; const tool = /pg_restore/.source; execFile(tool, ['-d', 'crm', 'backup.dump'])",
+  "import { execFile } from 'node:child_process'; const match = /pg_restore/.exec(process.env.DB_TOOL); execFile(match[0], ['-d', 'crm', 'backup.dump'])",
+  "import { execFileSync } from 'node:child_process'; execFileSync(/pg_restore/.source, ['-d', 'crm', 'backup.dump'])",
+]) {
+  assert.deepEqual(
+    javascriptDatabaseCommandSites({ path: 'regex-derived-runner.mjs' }, source).map((site) => site.method),
+    ['mixed-script-command:pg_restore'],
+    'regex-derived database command execution must remain visible',
   )
 }
 for (const source of [
@@ -344,6 +396,10 @@ assert.deepEqual(
 )
 
 const exactProductionCompose = await readFile(new URL('../../../deploy/docker-compose.production.yml', import.meta.url), 'utf8')
+const exactLifecycleRegistry = JSON.parse(await readFile(new URL(
+  '../../../architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json',
+  import.meta.url,
+), 'utf8'))
 const exactProductionComposeSites = standaloneSqlSites(
   { path: 'deploy/docker-compose.production.yml' },
   exactProductionCompose,
@@ -352,6 +408,22 @@ const exactProductionComposeSites = standaloneSqlSites(
 assert(exactProductionComposeSites.some((site) => (
   site.method === 'mixed-script-command:prisma db push' && site.line === 452
 )))
+const exactProductionComposeSurface = classifyTrackedSurface('deploy/docker-compose.production.yml', exactLifecycleRegistry)
+assert.deepEqual({
+  lifecycle: exactProductionComposeSurface.lifecycle,
+  disposition: exactProductionComposeSurface.disposition,
+  production_capability: exactProductionComposeSurface.production_capability,
+  functional_owner: exactProductionComposeSurface.functional_owner,
+  registered_source_sha256: exactProductionComposeSurface.registered_source_sha256,
+  registry_classified: exactProductionComposeSurface.registry_classified,
+}, {
+  lifecycle: 'MIGRATION',
+  disposition: 'MIGRATION_ONLY',
+  production_capability: 'CONFIRMED_AUTOMATIC_DEPLOYMENT',
+  functional_owner: 'fleet_operations',
+  registered_source_sha256: createHash('sha256').update(exactProductionCompose).digest('hex'),
+  registry_classified: true,
+})
 const exactGravityDockerfile = await readFile(new URL('../../../gravity-mvp/Dockerfile', import.meta.url), 'utf8')
 const exactGravityDockerfileSites = standaloneSqlSites(
   { path: 'gravity-mvp/Dockerfile' },
@@ -365,6 +437,22 @@ assert(exactGravityDockerfileSites.some((site) => (
   site.method === 'mixed-script-command:prisma migrate deploy'
   && site.line === exactGravityDockerfileMigrationLine
 )))
+const exactGravityDockerfileSurface = classifyTrackedSurface('gravity-mvp/Dockerfile', exactLifecycleRegistry)
+assert.deepEqual({
+  lifecycle: exactGravityDockerfileSurface.lifecycle,
+  disposition: exactGravityDockerfileSurface.disposition,
+  production_capability: exactGravityDockerfileSurface.production_capability,
+  functional_owner: exactGravityDockerfileSurface.functional_owner,
+  registered_source_sha256: exactGravityDockerfileSurface.registered_source_sha256,
+  registry_classified: exactGravityDockerfileSurface.registry_classified,
+}, {
+  lifecycle: 'MIGRATION',
+  disposition: 'MIGRATION_ONLY',
+  production_capability: 'CONFIRMED_AUTOMATIC_DEPLOYMENT',
+  functional_owner: 'production_migration_authority',
+  registered_source_sha256: createHash('sha256').update(exactGravityDockerfile).digest('hex'),
+  registry_classified: true,
+})
 
 const sameLineSql = 'SELECT 1; UPDATE ApiConnection SET apiKey = NULL;'
 const [sameLineSite] = standaloneSqlSites({ path: 'same-line.sql' }, sameLineSql)
@@ -394,6 +482,23 @@ const isolatedResult = await analyzeJavaScriptSurfaceIsolated(
 assert.deepEqual(isolatedResult.sites, directIsolatedSites)
 assert.deepEqual(isolatedResult.diagnostics, directIsolatedResult.diagnostics)
 assert.equal(isolatedResult.source_sha256, directIsolatedResult.source_sha256)
+
+const dynamicSqlCall = 'await prisma.$queryRaw`SELECT id FROM "User" ${fragment}`'
+const safeUpstream = analyzePrismaWriteSites([
+  "import { PrismaClient } from '@prisma/client'",
+  'const prisma = new PrismaClient()',
+  'const fragment = buildReviewedFilter()',
+  dynamicSqlCall,
+].join('\n'), { fileName: 'provenance.ts' }).sites[0]
+const changedUpstream = analyzePrismaWriteSites([
+  "import { PrismaClient } from '@prisma/client'",
+  'const prisma = new PrismaClient()',
+  'const fragment = attackerControlledSql()',
+  dynamicSqlCall,
+].join('\n'), { fileName: 'provenance.ts' }).sites[0]
+assert.equal(safeUpstream.site_signature, changedUpstream.site_signature, 'fixture must retain the same call-site identity')
+assert.notEqual(safeUpstream.source_sha256, changedUpstream.source_sha256, 'upstream SQL provenance mutation must change source identity')
+assert.notEqual(safeUpstream.sql_provenance_sha256, changedUpstream.sql_provenance_sha256, 'upstream SQL provenance mutation must reopen proof')
 assert.throws(() => isolatedExecutionOptions({ workers: 5 }), /1\.\.4/)
 assert.throws(() => isolatedExecutionOptions({ workerTimeoutMs: 999 }), /1000\.\.600000/)
 

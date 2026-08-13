@@ -2,6 +2,7 @@
 import { createHash } from 'node:crypto'
 import { readFile, rename, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const [triagePath, outputPath, decisionsPath] = process.argv.slice(2)
 if (!triagePath || !outputPath || !decisionsPath) throw new Error('usage: materialize-maintenance-capabilities.mjs TRIAGE.json OUTPUT.json DECISIONS.json')
@@ -15,6 +16,16 @@ for (const decision of decisions.decisions ?? []) {
   }
 }
 const sites = triage.records.filter(record => record.final_ownership_classification === 'MAINTENANCE_MIGRATION_CAPABILITY')
+const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
+const currentSourceHashes = new Map(await Promise.all([...new Set(sites.map(record => record.file))].map(async file => [
+  file,
+  createHash('sha256').update(await readFile(path.join(repositoryRoot, file))).digest('hex'),
+])))
+for (const record of sites) {
+  if (record.source_sha256 !== currentSourceHashes.get(record.file)) {
+    throw new Error(`maintenance analysis is stale for current source bytes: ${record.file}:${record.line}`)
+  }
+}
 
 function lifecycle(file) {
   const name = path.basename(file).toLowerCase()
@@ -37,6 +48,10 @@ for (const record of sites) {
 const capabilities = [...groups.values()].map(group => {
   const records = group.records.sort((a, b) => a.site_signature.localeCompare(b.site_signature))
   const first = records[0]
+  if (!/^[a-f0-9]{64}$/u.test(first.source_sha256 ?? '')
+    || records.some(record => record.source_sha256 !== first.source_sha256)) {
+    throw new Error(`maintenance capability lacks one exact source hash: ${first.file} ${first.method}`)
+  }
   const matchedDecisions = [...new Set(records.map(record => decisionsBySignature.get(record.site_signature)).filter(Boolean))]
   if (matchedDecisions.length > 1) throw new Error(`conflicting maintenance decisions for ${first.file} ${first.method}`)
   const decision = matchedDecisions[0] ?? null
@@ -54,7 +69,12 @@ const capabilities = [...groups.values()].map(group => {
     capability_id: id,
     status: approved ? 'APPROVED' : remediated ? 'REMEDIATED_PENDING_AUTHORITATIVE_RESCAN' : 'PENDING_EVIDENCE',
     approved,
-    source: { path: first.file, entrypoint: first.file, site_signatures: records.map(record => record.site_signature) },
+    source: {
+      path: first.file,
+      source_sha256: first.source_sha256,
+      entrypoint: first.file,
+      site_signatures: records.map(record => record.site_signature),
+    },
     lifecycle: effectiveLifecycle,
     lifecycle_evidence_status: decision?.lifecycle_evidence_status ?? 'PENDING_ENTRYPOINT_REACHABILITY_REVIEW',
     lifecycle_evidence: decision?.lifecycle_evidence ?? null,
@@ -66,7 +86,7 @@ const capabilities = [...groups.values()].map(group => {
     cross_domain: decision?.cross_domain ?? Boolean(first.source_context && !first.owner_contexts.includes(first.source_context)),
     architecture_path: decision?.architecture_path ?? `${first.source_context ?? 'operational caller'} -> ${effectiveOwner} owner-controlled maintenance/migration capability -> exact target operation`,
     retirement_condition: decision?.retirement_condition ?? (effectiveLifecycle === 'ONE_SHOT_PENDING_RETIREMENT' ? 'remove from active executable inventory after evidenced completion' : null),
-    enforcement: { match: ['source.path', 'site_signature', 'target.data_owner', 'target.exact_names', 'target.operations'], unrelated_model_write_must_fail: true, unrelated_destructive_operation_must_fail: true },
+    enforcement: { match: ['source.path', 'source.source_sha256', 'site_signature', 'target.data_owner', 'target.exact_names', 'target.operations'], unrelated_model_write_must_fail: true, unrelated_destructive_operation_must_fail: true },
     baseline: triage.baseline,
   }
 }).sort((a, b) => a.capability_id.localeCompare(b.capability_id))

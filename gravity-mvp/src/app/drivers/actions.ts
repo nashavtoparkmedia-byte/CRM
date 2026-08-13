@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
 import { getThresholds, Thresholds, recalculateAllSegments, getSharedSegmentationStats, calculateDriverStatus, calculateSegment } from '@/lib/scoring'
-import { yandexDriverContactLinkV1 } from '@/modules/contacts/public/v1/yandex-driver-contact-link'
+import { linkContactToBestDriverV1 } from '@/modules/contacts/public/v1'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -686,7 +686,7 @@ async function syncDriversByStatuses(
                 // sync если matcher ошибся на одной строке.
                 if (phone) {
                     try {
-                        await yandexDriverContactLinkV1.linkContactToBestDriver(phone)
+                        await linkContactToBestDriverV1(phone)
                     } catch (e: any) {
                         console.warn(
                             `[${label}] linkContactToBestDriver failed for phone=${phone} driver=${profile.id}:`,

@@ -1,0 +1,10 @@
+{
+  "command": "sudo -n /usr/local/sbin/yoko-crm-arch-evidence production-git-state",
+  "started_at": "2026-08-08T12:31:38.446026389Z",
+  "ended_at": "2026-08-08T12:31:39.969657557Z",
+  "exit_status": 0,
+  "output_sha256": "6318696f1d66d7bb7451d3a097b20846ace850fd954d1737905aeb33d4ce8f13",
+  "broker_sha256": "0a8f18bad0467056c3b7460827618b5d8df8ac8678da57040988478dba34ab18",
+  "package_version": "1.0.2-1",
+  "host": "jvxthcorvm"
+}

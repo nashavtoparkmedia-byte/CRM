@@ -1,19 +1,25 @@
-import{createDismissBotLinkRequestHandlerV1,createRecordPendingBotLinkRequestHandlerV1}from'./bot-chat-message-handler';import{legacyPrismaBotChatMessagePortV1}from'./legacy-prisma-bot-chat-message-adapter'
-import{createDeleteDriverTelegramLinkHandlerV1,createPatchDriverTelegramLinkHandlerV1,createReplaceDriverTelegramLinkHandlerV1,createUpsertDriverTelegramLinkHandlerV1}from'./driver-telegram-handler';import{legacyPrismaDriverTelegramPortV1}from'./legacy-prisma-driver-telegram-adapter'
-import{createRemoveManualDriverTelegramLinkHandlerV1,createSaveManualDriverTelegramLinkHandlerV1}from'./manual-driver-telegram-link-handler';import{legacyPrismaManualDriverTelegramLinkPortV1}from'./legacy-prisma-manual-driver-telegram-link-adapter'
-import{createNotifyManualDriverTelegramLinkHandlerV1}from'./manual-driver-telegram-link-notification-handler';import{legacyBotApiManualDriverTelegramLinkNotificationPortV1}from'./legacy-bot-api-manual-driver-telegram-link-notification-adapter'
-import { createRecordBotUserProfileHandlerV1 } from './bot-user-profile-handler'
-import { legacyPrismaBotUserProfilePortV1 } from './legacy-prisma-bot-user-profile-adapter'
-export{createDismissBotLinkRequestHandlerV1,createRecordPendingBotLinkRequestHandlerV1}from'./bot-chat-message-handler';export type{BotChatMessagePersistencePortV1}from'./bot-chat-message-handler'
-export const dismissBotLinkRequestV1=createDismissBotLinkRequestHandlerV1(legacyPrismaBotChatMessagePortV1);export const recordPendingBotLinkRequestV1=createRecordPendingBotLinkRequestHandlerV1(legacyPrismaBotChatMessagePortV1)
-export{createDeleteDriverTelegramLinkHandlerV1,createPatchDriverTelegramLinkHandlerV1,createReplaceDriverTelegramLinkHandlerV1,createUpsertDriverTelegramLinkHandlerV1}from'./driver-telegram-handler';export type{DriverTelegramPersistencePortV1}from'./driver-telegram-handler'
-export const replaceDriverTelegramLinkV1=createReplaceDriverTelegramLinkHandlerV1(legacyPrismaDriverTelegramPortV1);export const deleteDriverTelegramLinkV1=createDeleteDriverTelegramLinkHandlerV1(legacyPrismaDriverTelegramPortV1);export const patchDriverTelegramLinkV1=createPatchDriverTelegramLinkHandlerV1(legacyPrismaDriverTelegramPortV1);export const upsertDriverTelegramLinkV1=createUpsertDriverTelegramLinkHandlerV1(legacyPrismaDriverTelegramPortV1)
-export{createRemoveManualDriverTelegramLinkHandlerV1,createSaveManualDriverTelegramLinkHandlerV1}from'./manual-driver-telegram-link-handler';export type{ManualDriverTelegramLinkPersistencePortV1}from'./manual-driver-telegram-link-handler'
-export const saveManualDriverTelegramLinkV1=createSaveManualDriverTelegramLinkHandlerV1(legacyPrismaManualDriverTelegramLinkPortV1);export const removeManualDriverTelegramLinkV1=createRemoveManualDriverTelegramLinkHandlerV1(legacyPrismaManualDriverTelegramLinkPortV1)
-export{createNotifyManualDriverTelegramLinkHandlerV1}from'./manual-driver-telegram-link-notification-handler';export type{ManualDriverTelegramLinkNotificationPortV1}from'./manual-driver-telegram-link-notification-handler'
-export const notifyManualDriverTelegramLinkV1=createNotifyManualDriverTelegramLinkHandlerV1(legacyBotApiManualDriverTelegramLinkNotificationPortV1)
+export { createDismissBotLinkRequestHandlerV1, createRecordPendingBotLinkRequestHandlerV1 } from './bot-chat-message-handler'
+export type { BotChatMessagePersistencePortV1 } from './bot-chat-message-handler'
+export { createDeleteDriverTelegramLinkHandlerV1, createPatchDriverTelegramLinkHandlerV1, createReplaceDriverTelegramLinkHandlerV1, createUpsertDriverTelegramLinkHandlerV1 } from './driver-telegram-handler'
+export type { DriverTelegramPersistencePortV1 } from './driver-telegram-handler'
+export { createRemoveManualDriverTelegramLinkHandlerV1, createSaveManualDriverTelegramLinkHandlerV1 } from './manual-driver-telegram-link-handler'
+export type { ManualDriverTelegramLinkPersistencePortV1 } from './manual-driver-telegram-link-handler'
+export { createNotifyManualDriverTelegramLinkHandlerV1 } from './manual-driver-telegram-link-notification-handler'
+export type { ManualDriverTelegramLinkNotificationPortV1 } from './manual-driver-telegram-link-notification-handler'
 export { TelegramHttpConnectSocketV1, getTelegramTransportOptionsV1 } from './http-connect-transport'
 export type { TelegramTransportOptionsV1 } from './http-connect-transport'
 export { createRecordBotUserProfileHandlerV1 } from './bot-user-profile-handler'
 export type { BotUserProfilePersistencePortV1 } from './bot-user-profile-handler'
-export const recordBotUserProfileV1 = createRecordBotUserProfileHandlerV1(legacyPrismaBotUserProfilePortV1)
+export { registerTelegramMessagingDeliveryCapabilityV1 } from './messaging-delivery-capability'
+export {
+    deleteDriverTelegramLinkV1,
+    dismissBotLinkRequestV1,
+    notifyManualDriverTelegramLinkV1,
+    patchDriverTelegramLinkV1,
+    recordBotUserProfileV1,
+    recordPendingBotLinkRequestV1,
+    removeManualDriverTelegramLinkV1,
+    replaceDriverTelegramLinkV1,
+    saveManualDriverTelegramLinkV1,
+    upsertDriverTelegramLinkV1,
+} from '../../application/telegram-link-operations'

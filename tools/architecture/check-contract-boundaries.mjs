@@ -67,7 +67,8 @@ const reassignmentConsumer = source('gravity-mvp/src/app/api/tasks/reassign/rout
 assertCheck(
     'representative reassignment route uses ReassignTasksCommand.v1',
     reassignmentConsumer.includes('REASSIGN_TASKS_COMMAND_V1')
-        && reassignmentConsumer.includes('taskReassignmentV1.reassignTasks({'),
+        && /import\s*\{\s*reassignTasksV1\s*\}\s*from\s*['"]@\/modules\/work-management\/public\/v1['"]/.test(reassignmentConsumer)
+        && reassignmentConsumer.includes('reassignTasksV1({'),
     'versioned batch assignment command invocation is absent',
 )
 assertCheck(
@@ -193,9 +194,27 @@ assertCheck('AiAgentConfig save result and credential errors are secret-safe',ai
 const callingAiConfigContract=source('gravity-mvp/src/contracts/calling/v1/ai-agent-config-commands.ts')
 assertCheck('Calling AiAgentConfig contract has a closed 23-field union',callingAiConfigContract.includes('AI_AGENT_CONFIG_PATCH_FIELDS_V1')&&(callingAiConfigContract.slice(callingAiConfigContract.indexOf('AI_AGENT_CONFIG_PATCH_FIELDS_V1'),callingAiConfigContract.indexOf('] as const',callingAiConfigContract.indexOf('AI_AGENT_CONFIG_PATCH_FIELDS_V1'))).match(/^  '[^']+',?$/gm)||[]).length===23&&!callingAiConfigContract.includes('apiKeyEncrypted'),'Calling AiAgentConfig contract shape drifted')
 const callingAiConfigAdapter=source('gravity-mvp/src/modules/calling/public/v1/legacy-prisma-ai-agent-config-adapter.ts')
+const callingCredentialVault=source('gravity-mvp/src/modules/calling/application/ai-agent-provider-credential.ts')
+const callingPublicSurface=source('gravity-mvp/src/modules/calling/public/v1/index.ts')
 const callingAdapterWrites=extractPrismaWrites(callingAiConfigAdapter)
 assertCheck('Calling owns five static AiAgentConfig persistence sites',callingAdapterWrites.length===5&&callingAdapterWrites.every((write)=>(write.model==='aiAgentConfig'||write.tables?.includes('AiAgentConfig'))&&(write.kind!=='raw'||write.dynamic===false)),'Calling AiAgentConfig persistence is dynamic or misowned')
-assertCheck('Calling credential references are private and one-shot',callingAiConfigAdapter.includes('new WeakMap<OpaqueCredentialRefV1, string>()')&&callingAiConfigAdapter.includes('credentialValues.delete(reference)')&&!/export function (?:reveal|unseal|read).*Credential/i.test(callingAiConfigAdapter),'Calling credential reference lifetime drifted')
+const credentialReadIndex=callingCredentialVault.indexOf('credentialValues.get(reference)')
+const credentialDeleteIndex=callingCredentialVault.indexOf('credentialValues.delete(reference)')
+const credentialReturnIndex=callingCredentialVault.indexOf('return value',credentialReadIndex)
+assertCheck(
+    'Calling credential references are private and one-shot',
+    callingCredentialVault.includes('new WeakMap<OpaqueCredentialRefV1, string>()')
+        && callingCredentialVault.includes('credentialValues.set(reference, value)')
+        && credentialReadIndex>=0
+        && credentialDeleteIndex>credentialReadIndex
+        && credentialReturnIndex>credentialDeleteIndex
+        && callingAiConfigAdapter.includes("from '../../application/ai-agent-provider-credential'")
+        && callingAiConfigAdapter.includes('revealAiAgentProviderCredentialV1(entry.value)')
+        && /export\s*\{\s*captureAiAgentProviderCredentialV1\s*\}\s*from\s*['"]\.\.\/\.\.\/application\/ai-agent-provider-credential['"]/.test(callingPublicSurface)
+        && !/(?:reveal|unseal|read)[A-Za-z]*Credential/i.test(callingPublicSurface)
+        && !/export\s+(?:function|const|\{)[^\n]*(?:reveal|unseal|read)[A-Za-z]*Credential/i.test(callingAiConfigAdapter),
+    'Calling credential reference lifetime drifted',
+)
 
 const handler = source('gravity-mvp/src/modules/work-management/public/v1/create-task-handler.ts')
 assertCheck(

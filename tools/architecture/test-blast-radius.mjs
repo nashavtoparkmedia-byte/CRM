@@ -47,6 +47,11 @@ assert(sharedMessaging.required_checks.includes('node tools/architecture/check-m
 assert(sharedMessaging.required_checks.includes('node tools/architecture/check-telegram-runtime-provider-boundary.mjs'))
 assert(sharedMessaging.required_checks.includes('node tools/architecture/check-whatsapp-runtime-provider-boundary.mjs'))
 assert.equal(resolveGitDiffBase(process.cwd(), '0'.repeat(40)), 'HEAD^')
+assert.equal(resolveGitDiffBase(process.cwd(), ''), 'HEAD^')
+assert.throws(
+  () => resolveGitDiffBase(process.cwd(), 'f'.repeat(40)),
+  /configured Git change-set base is not resolvable/u,
+)
 assert.match(GIT_DIFF_FILTER, /D/u)
 
-process.stdout.write('blast-radius mapping: PASS (provider-specific isolation and shared-contract fanout enforced; deleted paths retained; unclassified production path rejected; invalid event base resolved)\n')
+process.stdout.write('blast-radius mapping: PASS (provider-specific isolation and shared-contract fanout enforced; deleted paths retained; unclassified production path rejected; empty/zero event bases resolve and missing nonzero bases fail closed)\n')

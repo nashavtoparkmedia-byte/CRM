@@ -3,6 +3,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import { getCurrentUserIdentityV1 as getCurrentUser } from '@/modules/identity-access/public/v1/user-directory'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
+import { rescanMegafonTelephonyGatewayV1 } from '@/modules/calling/public/v1'
 
 /**
  * GET / PUT  /api/settings/telephony-connection
@@ -98,16 +99,7 @@ function replaceParam(xml: string, name: string, value: string): string {
 }
 
 async function rescanGateway(): Promise<{ ok: boolean; error?: string }> {
-    try {
-        const { getEslConnection } = await import('@/lib/freeswitch/EslClient')
-        const conn = getEslConnection()
-        if (!conn) return { ok: false, error: 'ESL not connected' }
-        await new Promise<void>((resolve) => conn.api('sofia profile external killgw megafon', () => resolve()))
-        await new Promise<void>((resolve) => conn.api('sofia profile external rescan', () => resolve()))
-        return { ok: true }
-    } catch (err: any) {
-        return { ok: false, error: err.message }
-    }
+    return rescanMegafonTelephonyGatewayV1()
 }
 
 export async function GET(req: NextRequest) {

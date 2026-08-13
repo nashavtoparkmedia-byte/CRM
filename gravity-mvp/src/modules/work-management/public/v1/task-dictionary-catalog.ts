@@ -6,21 +6,21 @@ import type {
     TaskDictionaryTypeV1,
 } from '../../../../contracts/work-management/v1'
 import {
-    addTaskDictionaryItem,
-    deleteTaskDictionaryItem,
-    getTaskDictionaries,
-    updateTaskDictionaryItem,
-} from '../../internal/task-dictionary-store'
+    addTaskDictionaryItemOperation,
+    deleteTaskDictionaryItemOperation,
+    getTaskDictionariesOperation,
+    updateTaskDictionaryItemOperation,
+} from '../../application/task-dictionary-operations'
 
 export async function getTaskDictionariesV1(): Promise<TaskDictionariesV1> {
-    return getTaskDictionaries()
+    return getTaskDictionariesOperation()
 }
 
 export async function addTaskDictionaryItemV1(
     type: TaskDictionaryTypeV1,
     item: Omit<TaskDictionaryItemV1, 'id'>,
 ): Promise<TaskDictionaryItemV1> {
-    return addTaskDictionaryItem(type, item)
+    return addTaskDictionaryItemOperation(type, item)
 }
 
 export async function updateTaskDictionaryItemV1(
@@ -28,12 +28,12 @@ export async function updateTaskDictionaryItemV1(
     id: string,
     patch: Partial<Omit<TaskDictionaryItemV1, 'id'>>,
 ): Promise<void> {
-    return updateTaskDictionaryItem(type, id, patch)
+    return updateTaskDictionaryItemOperation(type, id, patch)
 }
 
 export async function deleteTaskDictionaryItemV1(
     type: TaskDictionaryTypeV1,
     id: string,
 ): Promise<void> {
-    return deleteTaskDictionaryItem(type, id)
+    return deleteTaskDictionaryItemOperation(type, id)
 }

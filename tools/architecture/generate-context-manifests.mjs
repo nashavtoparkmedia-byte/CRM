@@ -79,7 +79,7 @@ async function main() {
     credentials: 'architecture/evidence/v1/credential-access.json',
   };
   const overridesRelative = 'architecture/contexts/v1/raw-write-owner-overrides.json';
-  const [decisionsInput, inventoryInput, dependencyInput, writesInput, ownershipInput, credentialInput, overridesInput, generatorBytes] = await Promise.all([
+  const [decisionsInput, inventoryInput, dependencyInput, writesInput, ownershipInput, credentialInput, overridesInput, generatorBytes, finalDependencyBytes, finalDependencySourceBytes, existingIndexInput, executableCoverageBytes, executableOwnershipValidatorBytes, finalDependencyDeriverBytes] = await Promise.all([
     loadJson(decisionsRelative),
     loadJson(evidenceRelatives.inventory),
     loadJson(evidenceRelatives.dependencies),
@@ -88,6 +88,12 @@ async function main() {
     loadJson(evidenceRelatives.credentials),
     loadJson(overridesRelative),
     readFile(fileURLToPath(import.meta.url)),
+    readFile(path.join(repositoryRoot, 'architecture/contexts/v1/final-dependency-current.json')),
+    readFile(path.join(repositoryRoot, 'architecture/contexts/v1/final-dependency-source.json')),
+    loadJson('architecture/contexts/v1/context-index.json'),
+    readFile(path.join(repositoryRoot, 'architecture/contexts/v1/executable-path-ownership-coverage.json')),
+    readFile(path.join(repositoryRoot, 'tools/architecture/validate-executable-path-ownership.mjs')),
+    readFile(path.join(repositoryRoot, 'tools/architecture/derive-final-dependency-source.mjs')),
   ]);
   const decisions = decisionsInput.document;
   const inventory = inventoryInput.document;
@@ -252,10 +258,13 @@ async function main() {
   });
 
   const controls = {
+    ...existingIndexInput.document.controls,
     context_decisions: { path: decisionsRelative, sha256: sha256(decisionsInput.bytes) },
     credential_access: { path: evidenceRelatives.credentials, sha256: sha256(credentialInput.bytes) },
     dependency_graph: { path: evidenceRelatives.dependencies, sha256: sha256(dependencyInput.bytes) },
     generator: { path: 'tools/architecture/generate-context-manifests.mjs', sha256: sha256(generatorBytes) },
+    executable_path_ownership_validator: { path: 'tools/architecture/validate-executable-path-ownership.mjs', sha256: sha256(executableOwnershipValidatorBytes) },
+    final_dependency_source_deriver: { path: 'tools/architecture/derive-final-dependency-source.mjs', sha256: sha256(finalDependencyDeriverBytes) },
     module_inventory: { path: evidenceRelatives.inventory, sha256: sha256(inventoryInput.bytes) },
     ownership_candidates: { path: evidenceRelatives.ownership, sha256: sha256(ownershipInput.bytes) },
     raw_write_owner_overrides: { path: overridesRelative, sha256: sha256(overridesInput.bytes) },
@@ -266,7 +275,11 @@ async function main() {
     controls,
     generated_from: 'CRM-ARCH-002 PASS_CONTINUE',
     outputs: {
+      ...existingIndexInput.document.outputs,
       dependency_transition_plan: { path: 'architecture/contexts/v1/dependency-transition-plan.json', sha256: sha256(dependencyPlanBytes) },
+      final_dependency_current: { path: 'architecture/contexts/v1/final-dependency-current.json', sha256: sha256(finalDependencyBytes) },
+      final_dependency_source: { path: 'architecture/contexts/v1/final-dependency-source.json', sha256: sha256(finalDependencySourceBytes) },
+      executable_path_ownership_coverage: { path: 'architecture/contexts/v1/executable-path-ownership-coverage.json', sha256: sha256(executableCoverageBytes) },
       foreign_write_migration_plan: { path: 'architecture/contexts/v1/foreign-write-migration-plan.json', sha256: sha256(foreignPlanBytes) },
     },
     schema: 'yoko.crm.context-index.v1',
