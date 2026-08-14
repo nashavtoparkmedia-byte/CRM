@@ -23,7 +23,7 @@ export function evaluateTypeScriptBaseline(output, changedPaths, maximum = TYPES
   assert.equal(execution?.error ?? null, null, 'TypeScript compiler failed to start')
   assert.equal(execution?.signal ?? null, null, 'TypeScript compiler was terminated by a signal')
   assert.equal(
-    execution?.status === 0 || execution?.status === 1,
+    execution?.status === 0 || execution?.status === 1 || execution?.status === 2,
     true,
     `TypeScript compiler returned an unexpected exit status: ${String(execution?.status)}`,
   )
@@ -36,7 +36,9 @@ export function evaluateTypeScriptBaseline(output, changedPaths, maximum = TYPES
     /(?:^|:\s)error TS\d+:/u.test(line) && !DIAGNOSTIC.test(line)
   ))
   assert.deepEqual(unparsedCompilerErrors, [], 'TypeScript compiler emitted an unparsed global diagnostic')
-  if (execution.status === 1) {
+  if (execution.status === 0) {
+    assert.equal(diagnostics.length, 0, 'TypeScript compiler reported diagnostics with a successful exit status')
+  } else {
     assert.equal(diagnostics.length > 0, true, 'TypeScript compiler failed without a recognized diagnostic')
   }
   assert(diagnostics.length <= maximum, `TypeScript diagnostic baseline grew: ${diagnostics.length} > ${maximum}`)

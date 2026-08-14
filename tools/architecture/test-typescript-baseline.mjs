@@ -31,6 +31,14 @@ assert.throws(
 )
 assert.throws(
   () => evaluateTypeScriptBaseline('internal compiler failure', [], 30, { status: 2, signal: null, error: null }),
+  /failed without a recognized diagnostic/,
+)
+assert.equal(
+  evaluateTypeScriptBaseline(inherited, ['gravity-mvp/src/changed.ts'], 2, { status: 2, signal: null, error: null }).status,
+  'PASS',
+)
+assert.throws(
+  () => evaluateTypeScriptBaseline(inherited, [], 30, { status: 3, signal: null, error: null }),
   /unexpected exit status/,
 )
 assert.throws(
@@ -49,4 +57,8 @@ assert.equal(
   evaluateTypeScriptBaseline('', [], 30, { status: 0, signal: null, error: null }).status,
   'PASS',
 )
-process.stdout.write('TypeScript inherited-baseline gate: PASS (9 negative properties)\n')
+assert.throws(
+  () => evaluateTypeScriptBaseline(inherited, [], 30, { status: 0, signal: null, error: null }),
+  /reported diagnostics with a successful exit status/,
+)
+process.stdout.write('TypeScript inherited-baseline gate: PASS (11 negative properties)\n')
