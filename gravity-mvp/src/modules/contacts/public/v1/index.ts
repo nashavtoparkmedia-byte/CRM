@@ -68,6 +68,6 @@ export {
 export {
     linkContactToBestDriverV1,
     startMaxContactResolutionShadowV1,
+    type LegacyContactResolutionOutcome,
+    type YandexDriverContactLinkResultV1,
 } from '../../application/contact-external-operations'
-export type { LegacyContactResolutionOutcome } from './max-contact-resolution-shadow'
-export type { YandexDriverContactLinkResultV1 } from './yandex-driver-contact-link'
