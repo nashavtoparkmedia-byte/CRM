@@ -1,17 +1,145 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 
 import {
+  AUTHORITATIVE_BLAST_BASE,
+  AUTHORITATIVE_NODE_VERSION,
+  assertAuthoritativeRuntimeContract,
+  assertCleanWorktree,
+  assertExecutionProofIdentity,
+  assertExecutionProofOutputAbsent,
   buildExecutionProof,
+  captureExecutionProofIdentity,
   controlIdCatalogSha256,
   fullScanControls,
   normalizedControlCatalog,
   semanticControlCatalogSha256,
   targetedControls,
 } from './run-authoritative-ci.mjs'
+import {
+  assertNoInheritedGeneratedProducts,
+  cleanCheckoutEnvironmentIdSha256,
+} from './run-local-clean-acceptance.mjs'
+
+function git(directory, args) {
+  const result = spawnSync('git', args, { cwd: directory, encoding: 'utf8' })
+  assert.equal(result.status, 0, result.stderr || result.error?.message || `git ${args.join(' ')} failed`)
+}
+
+const cleanFixture = mkdtempSync(path.join(os.tmpdir(), 'yoko-authoritative-ci-cleanliness-'))
+try {
+  git(cleanFixture, ['init', '--quiet'])
+  git(cleanFixture, ['config', 'user.email', 'authoritative-ci@example.invalid'])
+  git(cleanFixture, ['config', 'user.name', 'Authoritative CI'])
+  writeFileSync(path.join(cleanFixture, 'tracked.txt'), 'clean\n')
+  mkdirSync(path.join(cleanFixture, '.github/workflows'), { recursive: true })
+  mkdirSync(path.join(cleanFixture, 'tools/architecture'), { recursive: true })
+  writeFileSync(path.join(cleanFixture, '.github/workflows/architecture-enforcement.yml'), 'workflow\n')
+  writeFileSync(path.join(cleanFixture, 'tools/architecture/run-authoritative-ci.mjs'), 'runner\n')
+  git(cleanFixture, ['add', 'tracked.txt', '.github/workflows/architecture-enforcement.yml', 'tools/architecture/run-authoritative-ci.mjs'])
+  git(cleanFixture, ['commit', '--quiet', '-m', 'fixture'])
+  writeFileSync(path.join(cleanFixture, 'baseline.txt'), 'parent for HEAD^\n')
+  git(cleanFixture, ['add', 'baseline.txt'])
+  git(cleanFixture, ['commit', '--quiet', '-m', 'fixture head'])
+  assert.doesNotThrow(() => assertCleanWorktree(cleanFixture, 'fixture baseline'))
+  const capturedIdentity = captureExecutionProofIdentity(cleanFixture)
+
+  writeFileSync(path.join(cleanFixture, 'tracked.txt'), 'dirty\n')
+  assert.throws(() => assertCleanWorktree(cleanFixture, 'dirty tracked fixture'), /clean worktree.*tracked\.txt/su)
+  git(cleanFixture, ['checkout', '--', 'tracked.txt'])
+
+  writeFileSync(path.join(cleanFixture, 'untracked.txt'), 'dirty\n')
+  assert.throws(() => assertCleanWorktree(cleanFixture, 'dirty untracked fixture'), /clean worktree.*untracked\.txt/su)
+  rmSync(path.join(cleanFixture, 'untracked.txt'))
+
+  writeFileSync(path.join(cleanFixture, 'tracked.txt'), 'post-control drift\n')
+  assert.throws(() => assertCleanWorktree(cleanFixture, 'immediately before execution proof'), /immediately before execution proof.*tracked\.txt/su)
+  git(cleanFixture, ['add', 'tracked.txt'])
+  git(cleanFixture, ['commit', '--quiet', '-m', 'head transition'])
+  assert.throws(
+    () => assertExecutionProofIdentity(capturedIdentity, cleanFixture, 'after fixture head transition'),
+    /source identity drift .*: (?:commit|tree|parent)/u,
+  )
+} finally {
+  rmSync(cleanFixture, { recursive: true, force: true })
+}
+
+assert.doesNotThrow(() => assertAuthoritativeRuntimeContract({ YOKO_BLAST_BASE: 'HEAD^' }, '20.20.2'))
+assert.throws(
+  () => assertAuthoritativeRuntimeContract({ YOKO_BLAST_BASE: 'HEAD^' }, '20.20.1'),
+  /requires Node\.js 20\.20\.2/u,
+)
+assert.throws(
+  () => assertAuthoritativeRuntimeContract({ YOKO_BLAST_BASE: 'HEAD^^' }, '20.20.2'),
+  /requires YOKO_BLAST_BASE=HEAD\^/u,
+)
+assert.equal(AUTHORITATIVE_NODE_VERSION, '20.20.2')
+assert.equal(AUTHORITATIVE_BLAST_BASE, 'HEAD^')
+const proofOutputFixture = path.join(os.tmpdir(), `yoko-authoritative-ci-proof-${process.pid}.json`)
+try {
+  assert.doesNotThrow(() => assertExecutionProofOutputAbsent(proofOutputFixture))
+  writeFileSync(proofOutputFixture, '{}\n')
+  assert.throws(() => assertExecutionProofOutputAbsent(proofOutputFixture), /must not exist before authoritative CI/u)
+  rmSync(proofOutputFixture)
+  writeFileSync(`${proofOutputFixture}.new`, '{}\n')
+  assert.throws(() => assertExecutionProofOutputAbsent(proofOutputFixture), /must not exist before authoritative CI/u)
+} finally {
+  rmSync(proofOutputFixture, { force: true })
+  rmSync(`${proofOutputFixture}.new`, { force: true })
+}
+
+const generatedFixture = mkdtempSync(path.join(os.tmpdir(), 'yoko-local-clean-products-'))
+try {
+  git(generatedFixture, ['init', '--quiet'])
+  mkdirSync(path.join(generatedFixture, 'node_modules'), { recursive: true })
+  assert.throws(
+    () => assertNoInheritedGeneratedProducts(generatedFixture),
+    /no inherited node_modules or build products.*node_modules/su,
+  )
+  rmSync(path.join(generatedFixture, 'node_modules'), { recursive: true, force: true })
+  mkdirSync(path.join(generatedFixture, 'arbitrary/inherited/node_modules'), { recursive: true })
+  assert.throws(
+    () => assertNoInheritedGeneratedProducts(generatedFixture),
+    /no inherited node_modules or build products.*arbitrary\/inherited\/node_modules/su,
+  )
+  rmSync(path.join(generatedFixture, 'arbitrary'), { recursive: true, force: true })
+  mkdirSync(path.join(generatedFixture, 'arbitrary/inherited/.next'), { recursive: true })
+  assert.throws(
+    () => assertNoInheritedGeneratedProducts(generatedFixture),
+    /no inherited node_modules or build products.*arbitrary\/inherited\/\.next/su,
+  )
+  rmSync(path.join(generatedFixture, 'arbitrary'), { recursive: true, force: true })
+  const inheritedTarget = mkdtempSync(path.join(os.tmpdir(), 'yoko-inherited-products-target-'))
+  symlinkSync(inheritedTarget, path.join(generatedFixture, 'node_modules'), 'dir')
+  assert.throws(
+    () => assertNoInheritedGeneratedProducts(generatedFixture),
+    /no inherited node_modules or build products.*node_modules/su,
+  )
+  rmSync(path.join(generatedFixture, 'node_modules'))
+  symlinkSync(inheritedTarget, path.join(generatedFixture, '.next'), 'dir')
+  assert.throws(
+    () => assertNoInheritedGeneratedProducts(generatedFixture),
+    /no inherited node_modules or build products.*\.next/su,
+  )
+  rmSync(path.join(generatedFixture, '.next'))
+  rmSync(inheritedTarget, { recursive: true, force: true })
+  const firstEnvironmentId = cleanCheckoutEnvironmentIdSha256(generatedFixture)
+  const secondEnvironmentId = cleanCheckoutEnvironmentIdSha256(generatedFixture)
+  assert.equal(
+    firstEnvironmentId,
+    secondEnvironmentId,
+    'kind or replay-schema labels must not manufacture a distinct checkout environment identity',
+  )
+  assert.doesNotThrow(() => assertNoInheritedGeneratedProducts(generatedFixture))
+} finally {
+  rmSync(generatedFixture, { recursive: true, force: true })
+}
 
 function catalogDigest(controls) {
   return createHash('sha256').update(`${JSON.stringify({
@@ -127,10 +255,12 @@ const passingExecutions = normalizedCatalog.map(({ id }) => ({ id, status: 'PASS
 const proof = buildExecutionProof(passingExecutions, {
   commit: 'a'.repeat(40),
   tree: 'b'.repeat(40),
+  parent: 'e'.repeat(40),
   workflow_sha256: 'c'.repeat(64),
   runner_sha256: 'd'.repeat(64),
 })
 assert.equal(proof.outcome, 'PASS')
+assert.deepEqual(proof.runtime, { node: '20.20.2', blast_base: 'HEAD^', blast_base_commit: 'e'.repeat(40) })
 assert.equal(proof.controls.count, 52)
 assert.equal(proof.controls.catalog_sha256, 'bfb592cb752b1f9a7b5ff41e13ed40ca690c9277e255263023fe85f43b689885')
 assert.equal(proof.controls.semantic_catalog_sha256, '2ea7e4740c626347bda39b50c925eba62e46ba7daf8867e2e629f3ace07f1cf0')
@@ -159,6 +289,16 @@ assert.deepEqual(
   'the inventory must execute as the first non-recursive authoritative control',
 )
 const workflow = readFileSync('.github/workflows/architecture-enforcement.yml', 'utf8')
+const localCleanHarness = readFileSync('tools/architecture/run-local-clean-acceptance.mjs', 'utf8')
+assert.match(localCleanHarness, /assertNoInheritedGeneratedProducts\(\)/u)
+assert.match(localCleanHarness, /git', \['ls-files', '-z', '--', 'package\.json', ':\(glob\)\*\*\/package\.json'\]/u)
+assert.match(localCleanHarness, /function nestedDependencyProducts/u)
+assert.match(localCleanHarness, /entry\.name === 'node_modules' \|\| entry\.name === '\.next'/u)
+assert.match(localCleanHarness, /'node_modules', '\.next', 'out', 'dist', 'build', '\.turbo'/u)
+assert.match(localCleanHarness, /postgresClientIdentity\(process\.env\)/u)
+assert.match(localCleanHarness, /run\('npm', \['run', '--prefix', 'gravity-mvp', 'build'\]/u)
+assert.match(localCleanHarness, /YOKO_CI_ATTESTATION_OUTPUT: proofPath/u)
+assert.match(localCleanHarness, /evidence directory must be outside the repository/u)
 assert.match(workflow, /node tools\/architecture\/run-authoritative-ci\.mjs/u)
 assert.equal(
   workflowStepRun(workflow, 'architecture', 'Run authoritative architecture controls'),

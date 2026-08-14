@@ -5550,6 +5550,15 @@
       "functional_owner": "architecture_recovery"
     },
     {
+      "path": "tools/architecture/run-local-clean-acceptance.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture acceptance harness owned by architecture_governance. It requires a fresh source checkout, performs only locked local dependency generation, bounded isolated migration replay, architecture verification and production build evidence outside the repository; lifecycle classification grants no application-runtime or business-data write authority.",
+      "classification_artifact": "tools/architecture/run-local-clean-acceptance.mjs",
+      "functional_owner": "architecture_governance"
+    },
+    {
       "path": "tools/architecture/run-boundary-controls.mjs",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",

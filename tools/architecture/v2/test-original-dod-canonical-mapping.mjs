@@ -319,6 +319,7 @@ function buildFinalClosureFixture() {
   })))
   const repository = {
     acceptedSource,
+    acceptedSourceParent: 'c'.repeat(40),
     evidenceHead,
     evidenceCommitTime: '2026-08-13T18:11:00Z',
     acceptedSourceIsParent: true,
@@ -411,7 +412,7 @@ function buildFinalClosureFixture() {
     source: acceptedSource,
     workflow: hosted.workflow,
     runner: hosted.runner,
-    runtime: { node: '20.20.2' },
+    runtime: { node: '20.20.2', blast_base: 'HEAD^', blast_base_commit: repository.acceptedSourceParent },
     controls: {
       count: 52,
       catalog_sha256: controlIdCatalogSha256(),
@@ -756,6 +757,25 @@ for (const key of ['installed_version', 'steady_state_version']) {
 staleRuntime.capture_transcript_sha256 = sha256(canonicalBytes(staleRuntime.observations))
 replaceClosureEvidence(runtimeV9, 'runtime_production_acceptance', staleRuntime)
 assert.throws(() => verifyFinalClosureEvidence(runtimeV9), /Runtime v9\/stale production observation/)
+
+const forgedBlastBaseParent = buildFinalClosureFixture()
+const forgedCleanEvidence = clone(forgedBlastBaseParent.evidenceDocuments.local_clean_ci_execution)
+forgedCleanEvidence.execution_proof.runtime.blast_base_commit = 'f'.repeat(40)
+replaceClosureEvidence(forgedBlastBaseParent, 'local_clean_ci_execution', forgedCleanEvidence)
+assert.throws(
+  () => verifyFinalClosureEvidence(forgedBlastBaseParent),
+  /exact accepted-source parent commit/,
+)
+
+const reusedCleanCheckout = buildFinalClosureFixture()
+const reusedFreshEvidence = clone(reusedCleanCheckout.evidenceDocuments.fresh_clean_ci_execution)
+reusedFreshEvidence.checkout.environment_id_sha256 =
+  reusedCleanCheckout.evidenceDocuments.local_clean_ci_execution.checkout.environment_id_sha256
+replaceClosureEvidence(reusedCleanCheckout, 'fresh_clean_ci_execution', reusedFreshEvidence)
+assert.throws(
+  () => verifyFinalClosureEvidence(reusedCleanCheckout),
+  /must use distinct environments/,
+)
 
 const substitutedGravityArtifact = buildFinalClosureFixture()
 const tamperedSeal = clone(substitutedGravityArtifact.evidenceDocuments.runtime_release_seal)

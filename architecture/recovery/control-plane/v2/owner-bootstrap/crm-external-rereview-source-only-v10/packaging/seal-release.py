@@ -350,6 +350,7 @@ def validate_ci_execution_proof(
     value: object,
     commit: str,
     tree: str,
+    accepted_parent_commit: str,
     workflow_bytes: bytes,
     runner_bytes: bytes,
     accepted_controls: object,
@@ -366,8 +367,10 @@ def validate_ci_execution_proof(
         != {"path": AUTHORITATIVE_WORKFLOW_PATH, "sha256": sha(workflow_bytes)}
         or exact_object(proof["runner"], {"path", "sha256"}, "CI proof runner")
         != {"path": AUTHORITATIVE_RUNNER_PATH, "sha256": sha(runner_bytes)}
-        or exact_object(proof["runtime"], {"node"}, "CI proof runtime")
-        != {"node": "20.20.2"}
+        or exact_object(proof["runtime"], {"node", "blast_base", "blast_base_commit"}, "CI proof runtime")["node"]
+        != "20.20.2"
+        or proof["runtime"]["blast_base"] != "HEAD^"
+        or proof["runtime"]["blast_base_commit"] != accepted_parent_commit
     ):
         raise SystemExit("runner-emitted CI proof source, code, runtime, or outcome mismatch")
     controls = exact_object(proof["controls"], {
@@ -569,6 +572,7 @@ def inspect_gravity_artifact_zip(
     docker_archive_destination: Path,
     commit: str,
     tree: str,
+    accepted_parent_commit: str,
     profile_id: str,
     accepted_artifact: object,
     dockerfile_bytes: bytes,
@@ -646,7 +650,8 @@ def inspect_gravity_artifact_zip(
                 ci_proof_bytes = archive.read(ci_proof_member)
                 ci_proof = validate_ci_execution_proof(
                     strict_json_bytes(ci_proof_bytes, "authoritative CI execution proof"),
-                    commit, tree, workflow_bytes, runner_bytes, accepted_controls,
+                    commit, tree, accepted_parent_commit, workflow_bytes, runner_bytes,
+                    accepted_controls,
                 )
                 docker_member = by_name[GRAVITY_DOCKER_ARCHIVE]
                 with archive.open(docker_member, "r") as reader:
@@ -1015,6 +1020,9 @@ def main() -> None:
     if run(repo, "rev-parse", "HEAD") != commit or run(repo, "status", "--porcelain", "--untracked-files=all"):
         raise SystemExit("source repository must be clean with HEAD at accepted commit")
     tree = str(run(repo, "rev-parse", f"{commit}^{{tree}}"))
+    accepted_parent_commit = str(run(repo, "rev-parse", f"{commit}^"))
+    if not SHA40.fullmatch(accepted_parent_commit):
+        raise SystemExit("accepted commit parent is not a full SHA-1 commit")
     accepted_builder_source = bind_builder_source(repo, commit, ROOT)
 
     accepted_raw = strict_json_bytes(
@@ -1066,7 +1074,7 @@ def main() -> None:
     package_lock_bytes = git_blob(repo, commit, "gravity-mvp/package-lock.json")
     gravity_artifact = inspect_gravity_artifact_zip(
         args.gravity_artifact_zip.absolute(), ROOT / "inputs/gravity-image.docker.tar",
-        commit, tree, profile_id,
+        commit, tree, accepted_parent_commit, profile_id,
         accepted["authoritative_ci"]["artifact"], dockerfile_bytes, package_lock_bytes,
         workflow_bytes, runner_bytes, accepted["authoritative_ci"]["controls"],
     )

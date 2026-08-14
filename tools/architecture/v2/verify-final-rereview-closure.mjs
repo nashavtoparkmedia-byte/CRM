@@ -284,7 +284,14 @@ function verifyExecutionProof(proof, source, repository) {
   assert.deepEqual(proof.source, source, 'clean CI source SHA mismatch')
   assert.deepEqual(proof.workflow, { path: WORKFLOW_PATH, sha256: repository.workflowSha256 })
   assert.deepEqual(proof.runner, { path: RUNNER_PATH, sha256: repository.runnerSha256 })
-  assert.deepEqual(proof.runtime, { node: '20.20.2' })
+  exactObject(proof.runtime, ['node', 'blast_base', 'blast_base_commit'], 'CI proof runtime')
+  assert.equal(proof.runtime.node, '20.20.2')
+  assert.equal(proof.runtime.blast_base, 'HEAD^')
+  assert.equal(
+    proof.runtime.blast_base_commit,
+    repository.acceptedSourceParent,
+    'clean CI blast base must bind the exact accepted-source parent commit',
+  )
   const catalog = expectedCatalog()
   assert.deepEqual(proof.controls, {
     count: 52,
@@ -800,6 +807,7 @@ export async function verifyFinalClosureRepository(root, mapping, ledger, closur
   assert.equal(git(root, ['merge-base', '--is-ancestor', source.commit, head]) === '', true)
   const repository = {
     acceptedSource: { commit: source.commit, tree: source.tree },
+    acceptedSourceParent: git(root, ['rev-parse', `${source.commit}^`]),
     evidenceHead: { commit: head, tree: headTree },
     evidenceCommitTime: git(root, ['show', '-s', '--format=%cI', head]),
     acceptedSourceIsParent: parent === source.commit,

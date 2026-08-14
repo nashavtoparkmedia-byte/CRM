@@ -7,14 +7,16 @@ import {
   readFileSync,
   renameSync,
   rmSync,
-  unlinkSync,
   writeFileSync,
+  existsSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = process.cwd()
+export const AUTHORITATIVE_NODE_VERSION = '20.20.2'
+export const AUTHORITATIVE_BLAST_BASE = 'HEAD^'
 
 export const targetedControls = [
   ['authoritative-ci-inventory', 'node', ['tools/architecture/test-authoritative-ci-inventory.mjs']],
@@ -116,14 +118,40 @@ export function semanticControlCatalogSha256(catalog = normalizedControlCatalog(
   })}\n`).digest('hex')
 }
 
-function sha256File(relative) {
-  return createHash('sha256').update(readFileSync(path.join(root, relative))).digest('hex')
+function sha256File(relative, repository = root) {
+  return createHash('sha256').update(readFileSync(path.join(repository, relative))).digest('hex')
 }
 
-function gitIdentity(expression) {
-  const result = spawnSync('git', ['rev-parse', expression], { cwd: root, encoding: 'utf8' })
+function gitIdentity(expression, repository = root) {
+  const result = spawnSync('git', ['rev-parse', expression], { cwd: repository, encoding: 'utf8' })
   if (result.status !== 0) throw new Error(`unable to resolve authoritative CI source identity: ${expression}`)
   return result.stdout.trim()
+}
+
+export function assertAuthoritativeRuntimeContract(
+  environment = process.env,
+  nodeVersion = process.versions.node,
+) {
+  if (nodeVersion !== AUTHORITATIVE_NODE_VERSION) {
+    throw new Error(`authoritative CI requires Node.js ${AUTHORITATIVE_NODE_VERSION}; received ${nodeVersion}`)
+  }
+  if (environment.YOKO_BLAST_BASE !== AUTHORITATIVE_BLAST_BASE) {
+    throw new Error(`authoritative CI requires YOKO_BLAST_BASE=${AUTHORITATIVE_BLAST_BASE}`)
+  }
+}
+
+export function assertCleanWorktree(repository = root, stage = 'before authoritative controls') {
+  const result = spawnSync('git', ['status', '--porcelain=v1', '--untracked-files=all'], {
+    cwd: repository,
+    encoding: 'utf8',
+  })
+  if (result.status !== 0) {
+    throw new Error(`unable to verify clean authoritative CI worktree ${stage}: ${result.stderr || result.error?.message || `exit ${result.status}`}`)
+  }
+  const status = result.stdout.trim()
+  if (status !== '') {
+    throw new Error(`authoritative CI requires a clean worktree ${stage}; found:\n${status}`)
+  }
 }
 
 export function buildExecutionProof(executions, identity) {
@@ -151,7 +179,11 @@ export function buildExecutionProof(executions, identity) {
       path: 'tools/architecture/run-authoritative-ci.mjs',
       sha256: identity.runner_sha256,
     },
-    runtime: { node: process.versions.node },
+    runtime: {
+      node: process.versions.node,
+      blast_base: AUTHORITATIVE_BLAST_BASE,
+      blast_base_commit: identity.parent,
+    },
     controls: {
       count: ids.length,
       catalog_sha256: controlIdCatalogSha256(ids),
@@ -161,12 +193,22 @@ export function buildExecutionProof(executions, identity) {
   }
 }
 
-function executionProofIdentity() {
+export function captureExecutionProofIdentity(repository = root) {
   return {
-    commit: gitIdentity('HEAD^{commit}'),
-    tree: gitIdentity('HEAD^{tree}'),
-    workflow_sha256: sha256File('.github/workflows/architecture-enforcement.yml'),
-    runner_sha256: sha256File('tools/architecture/run-authoritative-ci.mjs'),
+    commit: gitIdentity('HEAD^{commit}', repository),
+    tree: gitIdentity('HEAD^{tree}', repository),
+    parent: gitIdentity('HEAD^', repository),
+    workflow_sha256: sha256File('.github/workflows/architecture-enforcement.yml', repository),
+    runner_sha256: sha256File('tools/architecture/run-authoritative-ci.mjs', repository),
+  }
+}
+
+export function assertExecutionProofIdentity(identity, repository = root, stage = 'before authoritative control') {
+  const current = captureExecutionProofIdentity(repository)
+  for (const key of ['commit', 'tree', 'parent', 'workflow_sha256', 'runner_sha256']) {
+    if (current[key] !== identity[key]) {
+      throw new Error(`authoritative CI source identity drift ${stage}: ${key}`)
+    }
   }
 }
 
@@ -174,24 +216,28 @@ function resolveExecutionProofOutput() {
   const configured = process.env.YOKO_CI_ATTESTATION_OUTPUT?.trim()
   if (!configured) return null
   const resolved = path.resolve(root, configured)
-  if (path.dirname(resolved) !== root || path.basename(resolved) !== configured) {
-    throw new Error('YOKO_CI_ATTESTATION_OUTPUT must be one plain repository-root filename')
-  }
-  return resolved
+  const relative = path.relative(root, resolved)
+  const outsideRepository = path.isAbsolute(configured)
+    && relative !== ''
+    && (relative === '..' || relative.startsWith(`..${path.sep}`))
+  if (path.dirname(resolved) === root && path.basename(resolved) === configured) return resolved
+  if (outsideRepository) return resolved
+  throw new Error('YOKO_CI_ATTESTATION_OUTPUT must be one plain repository-root filename or an absolute path outside the repository')
 }
 
-function removeExecutionProof(output) {
+export function assertExecutionProofOutputAbsent(output) {
   if (!output) return
-  try { unlinkSync(output) } catch (error) {
-    if (error?.code !== 'ENOENT') throw error
-  }
-  try { unlinkSync(`${output}.new`) } catch (error) {
-    if (error?.code !== 'ENOENT') throw error
+  for (const candidate of [output, `${output}.new`]) {
+    if (existsSync(candidate)) {
+      throw new Error(`YOKO_CI_ATTESTATION_OUTPUT must not exist before authoritative CI: ${candidate}`)
+    }
   }
 }
 
-function writeExecutionProof(output, executions) {
-  const proof = buildExecutionProof(executions, executionProofIdentity())
+function writeExecutionProof(output, executions, identity) {
+  assertCleanWorktree(root, 'immediately before execution proof')
+  assertExecutionProofIdentity(identity, root, 'immediately before execution proof')
+  const proof = buildExecutionProof(executions, identity)
   const temporary = `${output}.new`
   writeFileSync(temporary, `${JSON.stringify(proof, null, 2)}\n`, { encoding: 'ascii', flag: 'wx', mode: 0o444 })
   renameSync(temporary, output)
@@ -202,7 +248,8 @@ function resolveCommand(command) {
   return command
 }
 
-function run([id, command, args, relativeCwd = '.']) {
+function run([id, command, args, relativeCwd = '.'], identity) {
+  assertExecutionProofIdentity(identity, root, `before control ${id}`)
   process.stdout.write(`AUTHORITATIVE_CONTROL_START ${id}\n`)
   const result = spawnSync(resolveCommand(command), args, {
     cwd: path.join(root, relativeCwd),
@@ -226,7 +273,6 @@ function main() {
   if (proofOutput && (listOnly || skipFullScans)) {
     throw new Error('execution proof is permitted only for the complete authoritative catalog')
   }
-  removeExecutionProof(proofOutput)
   const temporary = mkdtempSync(path.join(tmpdir(), 'yoko-authoritative-ci-'))
   const currentFullScanControls = fullScanControlsFor(temporary)
   const selected = skipFullScans
@@ -241,13 +287,17 @@ function main() {
     rmSync(temporary, { recursive: true, force: true })
     return
   }
+  assertAuthoritativeRuntimeContract()
+  assertExecutionProofOutputAbsent(proofOutput)
+  assertCleanWorktree(root, 'before authoritative controls')
+  const identity = captureExecutionProofIdentity()
   const executions = []
   try {
     selected.forEach((control) => {
-      run(control)
+      run(control, identity)
       executions.push({ id: control[0], status: 'PASS' })
     })
-    if (proofOutput) writeExecutionProof(proofOutput, executions)
+    if (proofOutput) writeExecutionProof(proofOutput, executions, identity)
     process.stdout.write(`authoritative architecture CI: PASS (${selected.length}/${selected.length})\n`)
   } finally {
     rmSync(temporary, { recursive: true, force: true })

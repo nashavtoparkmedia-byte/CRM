@@ -480,7 +480,7 @@ class HostedCiAcceptanceTests(unittest.TestCase):
                 "path": self.sealer.AUTHORITATIVE_RUNNER_PATH,
                 "sha256": hashlib.sha256(self.runner_bytes).hexdigest(),
             },
-            "runtime": {"node": "20.20.2"},
+            "runtime": {"node": "20.20.2", "blast_base": "HEAD^", "blast_base_commit": "e" * 40},
             "controls": {
                 "count": controls["count"],
                 "catalog_sha256": controls["catalog_sha256"],
@@ -511,7 +511,7 @@ class HostedCiAcceptanceTests(unittest.TestCase):
             "2ea7e4740c626347bda39b50c925eba62e46ba7daf8867e2e629f3ace07f1cf0",
         )
         proof = self.sealer.validate_ci_execution_proof(
-            self.execution_proof(), self.commit, self.tree,
+            self.execution_proof(), self.commit, self.tree, "e" * 40,
             self.workflow_bytes, self.runner_bytes, controls,
         )
         self.assertEqual(len(proof["controls"]["executions"]), 52)
@@ -538,11 +538,14 @@ class HostedCiAcceptanceTests(unittest.TestCase):
         wrong_runtime = self.execution_proof()
         wrong_runtime["runtime"]["node"] = "20.20.1"
         candidates.append(wrong_runtime)
+        forged_parent = self.execution_proof()
+        forged_parent["runtime"]["blast_base_commit"] = "f" * 40
+        candidates.append(forged_parent)
         for candidate in candidates:
             with self.subTest(candidate=candidates.index(candidate)):
                 with self.assertRaises(SystemExit):
                     self.sealer.validate_ci_execution_proof(
-                        candidate, self.commit, self.tree,
+                        candidate, self.commit, self.tree, "e" * 40,
                         self.workflow_bytes, self.runner_bytes,
                         self.accepted["authoritative_ci"]["controls"],
                     )
@@ -738,6 +741,7 @@ class SealedFixtureTests(unittest.TestCase):
         subprocess.run(["/usr/bin/git", "-C", str(cls.repo), "config", "maintenance.auto", "false"], check=True)
         cls.commit = subprocess.check_output(["/usr/bin/git", "-C", str(cls.repo), "rev-parse", "HEAD"], text=True).strip()
         cls.tree = subprocess.check_output(["/usr/bin/git", "-C", str(cls.repo), "rev-parse", "HEAD^{tree}"], text=True).strip()
+        cls.parent = subprocess.check_output(["/usr/bin/git", "-C", str(cls.repo), "rev-parse", "HEAD^"], text=True).strip()
         cls.expected_patch_sha = expected_patch_sha
         if hashlib.sha256(git_blob(cls.repo, cls.commit, TG_PATCH_PATH)).hexdigest() != expected_patch_sha:
             raise RuntimeError("clean accepted fixture commit lacks the exact TG capability patch")
@@ -844,7 +848,7 @@ class SealedFixtureTests(unittest.TestCase):
                 "path": AUTHORITATIVE_RUNNER_PATH,
                 "sha256": hosted_ci["runner"]["sha256"],
             },
-            "runtime": {"node": "20.20.2"},
+            "runtime": {"node": "20.20.2", "blast_base": "HEAD^", "blast_base_commit": cls.parent},
             "controls": {
                 "count": controls["count"],
                 "catalog_sha256": controls["catalog_sha256"],

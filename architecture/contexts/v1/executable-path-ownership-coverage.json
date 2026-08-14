@@ -108,8 +108,8 @@
     }
   ],
   "source": {
-    "tracked_executable_surfaces": 2186,
-    "tracked_inventory_sha256": "33cac416eb7917353d793c135929d74b35210410178efad43fd3e21b9bd4c888"
+    "tracked_executable_surfaces": 2187,
+    "tracked_inventory_sha256": "ad9570c5b2f48868b3bf4a5542e7170ad7adf3d00a6796fe5244ba7cfb34d7ff"
   },
   "governed_exclusions": [
     {
@@ -267,18 +267,18 @@
       "review_artifact": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json"
     }
   ],
-  "coverage_sha256": "0a7f94ae7eeaa56b7f23963a34be5d6228c454140ad9be21f5b65ac6ff40b619",
+  "coverage_sha256": "5eb727b6ffabb642ea2b56418d0481180f34c52b014ff2f7a07860fa37cd67db",
   "summary": {
-    "tracked_executable_surfaces": 2186,
+    "tracked_executable_surfaces": 2187,
     "context_owned_paths": 1082,
-    "governed_exclusion_paths": 1104
+    "governed_exclusion_paths": 1105
   },
   "reviewed_exact_inventory_materialization": {
     "decision_registry_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json",
-    "decision_registry_sha256": "c82cbc8111d70a37a3c6e0d3a4bfb5b3de9c12361a5fab92fdb9f302e4b41284",
+    "decision_registry_sha256": "c1773305c94b7872b70961608743b82402e094b0e6942369ec8a332e2557f2c7",
     "baseline_coverage_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_COVERAGE_BASELINE_2108.json",
     "baseline_coverage_sha256": "429a48c9d257408025bbc273a4d6f1413ed78196549ed889118422b6caba5730",
-    "tracked_inventory_sha256": "33cac416eb7917353d793c135929d74b35210410178efad43fd3e21b9bd4c888",
+    "tracked_inventory_sha256": "ad9570c5b2f48868b3bf4a5542e7170ad7adf3d00a6796fe5244ba7cfb34d7ff",
     "exact_inventory_change_count": 2,
     "reviewed_assignment_count": 42
   }
