@@ -6,15 +6,15 @@ export {
     createListLatestInterventionActionsHandlerV1,
     createListPendingInterventionActionsHandlerV1,
     createSetInterventionOutcomeHandlerV1,
+    type InterventionActionsRepositoryPortV1,
 } from './intervention-actions-repository-handler'
-export type { InterventionActionsRepositoryPortV1 } from './intervention-actions-repository-handler'
 export {
     createEnsureManagerHealthRepositoryHandlerV1,
     createListManagerHealthHistoryHandlerV1,
     createListManagerHealthSnapshotsHandlerV1,
     createSaveManagerHealthScoresHandlerV1,
+    type ManagerHealthRepositoryPortV1,
 } from './manager-health-repository-handler'
-export type { ManagerHealthRepositoryPortV1 } from './manager-health-repository-handler'
 export {
     createInterventionActionV1,
     ensureInterventionActionsRepositoryV1,
