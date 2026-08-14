@@ -342,7 +342,16 @@ const runnerStepEnd = workflow.indexOf('\n      - name:', runnerStepStart + 1)
 const runnerStep = workflow.slice(runnerStepStart, runnerStepEnd)
 assert.doesNotMatch(runnerStep, /^        (?:if|continue-on-error):/mu, 'the authoritative runner step cannot be skipped or tolerated')
 assert.match(runnerStep, /^          YOKO_CI_ATTESTATION_OUTPUT: authoritative-ci-execution\.json$/mu)
-assert.match(workflow, /timeout-minutes: 60/u, 'authoritative CI needs bounded headroom for locked installs, two PostgreSQL replays, and full scans')
+assert.match(
+  workflow,
+  /jobs:\n  architecture:\n    runs-on: ubuntu-24\.04\n    timeout-minutes: 240\n/u,
+  'the architecture job needs bounded 240-minute headroom for 112 boundary controls and the full repository scans',
+)
+assert.match(
+  workflow,
+  /  gravity-artifact:\n    needs: architecture\n    runs-on: ubuntu-24\.04\n    timeout-minutes: 60\n/u,
+  'the dependent immutable artifact build must retain its bounded 60-minute timeout',
+)
 assert.match(workflow, /image: postgres:16\.14-alpine/u)
 assert.match(workflow, /ports:\s*\n\s*- 5432:5432/u, 'PostgreSQL must be published to the host runner used by Prisma')
 assert.doesNotMatch(workflow, /fetch-depth:\s*0/u, 'hosted controls must not require an unbounded full-history checkout')

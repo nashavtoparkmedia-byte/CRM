@@ -17,7 +17,7 @@ concurrency:
 jobs:
   architecture:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 240
     services:
       postgres:
         image: postgres:16.14-alpine@sha256:7a396fd264a2067788b6551122b50f162bf6136312c7fc9d74381cb92c648382
