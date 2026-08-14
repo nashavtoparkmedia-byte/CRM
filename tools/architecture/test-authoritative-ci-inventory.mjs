@@ -320,6 +320,7 @@ assert.notEqual(
 )
 assert.deepEqual(workflowJobStepNames(workflow, 'architecture'), [
   'Check out exact revision',
+  'Fetch exact Runtime v10 predecessor',
   'Set up exact Node.js',
   'Verify exact Node.js',
   'Install locked test toolchain without lifecycle scripts',
@@ -344,9 +345,25 @@ assert.match(runnerStep, /^          YOKO_CI_ATTESTATION_OUTPUT: authoritative-c
 assert.match(workflow, /timeout-minutes: 60/u, 'authoritative CI needs bounded headroom for locked installs, two PostgreSQL replays, and full scans')
 assert.match(workflow, /image: postgres:16\.14-alpine/u)
 assert.match(workflow, /ports:\s*\n\s*- 5432:5432/u, 'PostgreSQL must be published to the host runner used by Prisma')
-assert.doesNotMatch(workflow, /git fetch|fetch-depth:\s*0/u, 'migration authority must pass the default single-branch checkout without remote provenance history')
+assert.doesNotMatch(workflow, /fetch-depth:\s*0/u, 'hosted controls must not require an unbounded full-history checkout')
 assert.match(workflow, /ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/u, 'hosted PR CI must test the exact accepted source commit rather than a synthetic merge commit')
 assert.match(workflow, /fetch-depth: 2/u, 'hosted blast-radius analysis needs the accepted source parent without full-history dependence')
+assert.match(
+  workflow,
+  /RUNTIME_V10_PREDECESSOR_COMMIT: 7aea2823efe50e13a156540993d424594025e403[\s\S]*git fetch --no-tags --depth=1 origin \\\n\s+"\$RUNTIME_V10_PREDECESSOR_COMMIT:refs\/heads\/yoko-runtime-v10-predecessor"[\s\S]*git rev-parse 'refs\/heads\/yoko-runtime-v10-predecessor\^\{commit\}'/u,
+  'hosted Runtime v10 contract must fetch the exact predecessor into a clone-visible ref and verify its commit identity',
+)
+for (const predecessorFetchMutation of [
+  workflow.replace('7aea2823efe50e13a156540993d424594025e403', '0'.repeat(40)),
+  workflow.replace(':refs/heads/yoko-runtime-v10-predecessor', ''),
+  workflow.replace("git rev-parse 'refs/heads/yoko-runtime-v10-predecessor^{commit}'", 'true'),
+]) {
+  assert.doesNotMatch(
+    predecessorFetchMutation,
+    /RUNTIME_V10_PREDECESSOR_COMMIT: 7aea2823efe50e13a156540993d424594025e403[\s\S]*git fetch --no-tags --depth=1 origin \\\n\s+"\$RUNTIME_V10_PREDECESSOR_COMMIT:refs\/heads\/yoko-runtime-v10-predecessor"[\s\S]*git rev-parse 'refs\/heads\/yoko-runtime-v10-predecessor\^\{commit\}'/u,
+    'wrong, unreachable, or unverified Runtime v10 predecessor fetch must fail the workflow contract',
+  )
+}
 assert.match(
   workflow,
   /uses: actions\/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020/u,

@@ -39,6 +39,16 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 2
 
+      - name: Fetch exact Runtime v10 predecessor
+        env:
+          RUNTIME_V10_PREDECESSOR_COMMIT: 7aea2823efe50e13a156540993d424594025e403
+        run: |
+          set -Eeuo pipefail
+          git fetch --no-tags --depth=1 origin \
+            "$RUNTIME_V10_PREDECESSOR_COMMIT:refs/heads/yoko-runtime-v10-predecessor"
+          test "$(git rev-parse 'refs/heads/yoko-runtime-v10-predecessor^{commit}')" = \
+            "$RUNTIME_V10_PREDECESSOR_COMMIT"
+
       - name: Set up exact Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
