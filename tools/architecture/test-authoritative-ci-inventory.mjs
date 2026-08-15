@@ -354,8 +354,8 @@ assert.match(
 )
 assert.match(
   workflow,
-  /buildx_inspect=\$\(docker buildx inspect --bootstrap\)[\s\S]*awk '\$1 == "Driver:" \{ print \$2 \}'\)" = 'docker-container'[\s\S]*awk '\$1 == "BuildKit:" \{ print \$2 \}'\)" = 'v0\.25\.2'/u,
-  'the hosted artifact job must verify the pinned Buildx driver and BuildKit through v0.30.1-compatible inspect output',
+  /buildx_inspect=\$\(docker buildx inspect --bootstrap\)[\s\S]*awk '\$1 == "Driver:" \{ print \$2 \}'\)" = 'docker-container'[\s\S]*awk '\$1 == "BuildKit" && \$2 == "version:" \{ print \$3 \}'\)" = 'v0\.25\.2'/u,
+  'the hosted artifact job must verify the pinned Buildx driver and exact v0.30.1 BuildKit version label',
 )
 assert.doesNotMatch(
   workflow,
