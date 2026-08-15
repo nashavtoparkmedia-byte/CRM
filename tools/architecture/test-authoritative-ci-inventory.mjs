@@ -352,6 +352,16 @@ assert.match(
   /  gravity-artifact:\n    needs: architecture\n    runs-on: ubuntu-24\.04\n    timeout-minutes: 60\n/u,
   'the dependent immutable artifact build must retain its bounded 60-minute timeout',
 )
+assert.match(
+  workflow,
+  /buildx_inspect=\$\(docker buildx inspect --bootstrap\)[\s\S]*awk '\$1 == "Driver:" \{ print \$2 \}'\)" = 'docker-container'[\s\S]*awk '\$1 == "BuildKit:" \{ print \$2 \}'\)" = 'v0\.25\.2'/u,
+  'the hosted artifact job must verify the pinned Buildx driver and BuildKit through v0.30.1-compatible inspect output',
+)
+assert.doesNotMatch(
+  workflow,
+  /docker buildx inspect[^\n]*--format/u,
+  'Buildx v0.30.1 inspect does not support --format',
+)
 assert.match(workflow, /image: postgres:16\.14-alpine/u)
 assert.match(workflow, /ports:\s*\n\s*- 5432:5432/u, 'PostgreSQL must be published to the host runner used by Prisma')
 assert.doesNotMatch(workflow, /fetch-depth:\s*0/u, 'hosted controls must not require an unbounded full-history checkout')
