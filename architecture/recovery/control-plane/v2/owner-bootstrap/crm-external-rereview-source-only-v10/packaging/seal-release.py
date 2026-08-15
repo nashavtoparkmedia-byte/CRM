@@ -456,45 +456,244 @@ def inspect_gravity_docker_archive(
             manifest = strict_json_bytes(manifest_bytes, "Gravity docker archive manifest")
             if type(manifest) is not list or len(manifest) != 1 or type(manifest[0]) is not dict:
                 raise SystemExit("Gravity docker archive manifest invalid")
-            entry = exact_object(manifest[0], {"Config", "RepoTags", "Layers"}, "Gravity docker archive manifest entry")
+            entry_keys = set(manifest[0])
+            legacy_format = entry_keys == {"Config", "RepoTags", "Layers"}
+            oci_blob_format = entry_keys == {"Config", "RepoTags", "Layers", "LayerSources"}
+            if not legacy_format and not oci_blob_format:
+                raise SystemExit("invalid exact-key Gravity docker archive manifest entry")
+            entry = exact_object(manifest[0], entry_keys, "Gravity docker archive manifest entry")
             config_name = entry["Config"]
             layers = entry["Layers"]
             if (
                 not isinstance(config_name, str)
-                or not re.fullmatch(r"[0-9a-f]{64}\.json", config_name)
                 or type(layers) is not list
                 or len(layers) < 1
                 or len(layers) != len(set(layers))
-                or any(
-                    not isinstance(layer, str)
-                    or not layer.endswith("/layer.tar")
-                    or Path(layer).is_absolute()
-                    or ".." in Path(layer).parts
-                    or "\\" in layer
-                    for layer in layers
-                )
             ):
                 raise SystemExit("Gravity docker archive layer inventory invalid")
-            required_names = {"manifest.json", config_name, *layers}
-            legacy_metadata = {"repositories"}
-            layer_directories = set()
-            for layer in layers:
-                parent = layer.removesuffix("/layer.tar")
-                layer_directories.add(parent)
-                legacy_metadata.update({f"{parent}/VERSION", f"{parent}/json"})
             regular_names = {member.name for member in members if member.isfile()}
             directory_members = [member.name.rstrip("/") for member in members if member.isdir()]
-            if (
-                (regular_names != required_names and regular_names != required_names | legacy_metadata)
-                or len(directory_members) != len(set(directory_members))
-                or not set(directory_members).issubset(layer_directories)
-            ):
-                raise SystemExit("Gravity docker archive contains unbound members")
+            if len(directory_members) != len(set(directory_members)):
+                raise SystemExit("Gravity docker archive contains duplicate directories")
+
+            if legacy_format:
+                if (
+                    not re.fullmatch(r"[0-9a-f]{64}\.json", config_name)
+                    or any(
+                        not isinstance(layer, str)
+                        or not layer.endswith("/layer.tar")
+                        or Path(layer).is_absolute()
+                        or ".." in Path(layer).parts
+                        or "\\" in layer
+                        for layer in layers
+                    )
+                ):
+                    raise SystemExit("Gravity legacy docker archive layer inventory invalid")
+                required_names = {"manifest.json", config_name, *layers}
+                legacy_metadata = {"repositories"}
+                layer_directories = set()
+                for layer in layers:
+                    parent = layer.removesuffix("/layer.tar")
+                    layer_directories.add(parent)
+                    legacy_metadata.update({f"{parent}/VERSION", f"{parent}/json"})
+                if (
+                    (regular_names != required_names and regular_names != required_names | legacy_metadata)
+                    or not set(directory_members).issubset(layer_directories)
+                ):
+                    raise SystemExit("Gravity legacy docker archive contains unbound members")
+                config_hex = config_name.removesuffix(".json")
+            else:
+                blob_pattern = re.compile(r"blobs/sha256/([0-9a-f]{64})")
+                config_match = blob_pattern.fullmatch(config_name)
+                if (
+                    config_match is None
+                    or any(not isinstance(layer, str) or blob_pattern.fullmatch(layer) is None for layer in layers)
+                    or set(directory_members) != {"blobs", "blobs/sha256"}
+                ):
+                    raise SystemExit("Gravity OCI-blob docker archive inventory invalid")
+                config_hex = config_match.group(1)
+                layer_sources = exact_object(
+                    entry["LayerSources"],
+                    {f"sha256:{str(layer).removeprefix('blobs/sha256/')}" for layer in layers},
+                    "Gravity OCI layer sources",
+                )
+                for layer in layers:
+                    layer_digest = f"sha256:{str(layer).removeprefix('blobs/sha256/')}"
+                    descriptor = exact_object(
+                        layer_sources[layer_digest], {"mediaType", "size", "digest"},
+                        "Gravity OCI layer source descriptor",
+                    )
+                    if (
+                        descriptor["mediaType"] != "application/vnd.oci.image.layer.v1.tar"
+                        or descriptor["digest"] != layer_digest
+                        or descriptor["size"] != archive.getmember(str(layer)).size
+                    ):
+                        raise SystemExit("Gravity OCI layer source descriptor mismatch")
+
+                oci_layout = strict_json_bytes(
+                    archive.extractfile("oci-layout").read(1024 * 1024 + 1),  # type: ignore[union-attr]
+                    "Gravity OCI layout",
+                )
+                if oci_layout != {"imageLayoutVersion": "1.0.0"}:
+                    raise SystemExit("Gravity OCI layout mismatch")
+                index = exact_object(
+                    strict_json_bytes(
+                        archive.extractfile("index.json").read(1024 * 1024 + 1),  # type: ignore[union-attr]
+                        "Gravity OCI index",
+                    ),
+                    {"schemaVersion", "mediaType", "manifests"}, "Gravity OCI index",
+                )
+                if (
+                    index["schemaVersion"] != 2
+                    or index["mediaType"] != "application/vnd.oci.image.index.v1+json"
+                    or type(index["manifests"]) is not list
+                    or len(index["manifests"]) != 1
+                ):
+                    raise SystemExit("Gravity OCI index inventory mismatch")
+                image_descriptor = exact_object(
+                    index["manifests"][0], {"mediaType", "digest", "size", "annotations"},
+                    "Gravity OCI image descriptor",
+                )
+                repository, tag = expected_image_reference.rsplit(":", 1)
+                if (
+                    image_descriptor["mediaType"] != "application/vnd.oci.image.manifest.v1+json"
+                    or not isinstance(image_descriptor["digest"], str)
+                    or not re.fullmatch(r"sha256:[0-9a-f]{64}", image_descriptor["digest"])
+                    or image_descriptor["annotations"] != {
+                        "io.containerd.image.name": f"docker.io/{expected_image_reference}",
+                        "org.opencontainers.image.ref.name": tag,
+                    }
+                ):
+                    raise SystemExit("Gravity OCI image descriptor mismatch")
+                image_manifest_name = f"blobs/sha256/{str(image_descriptor['digest']).removeprefix('sha256:')}"
+                image_manifest_member = archive.getmember(image_manifest_name)
+                image_manifest_file = archive.extractfile(image_manifest_name)
+                if (
+                    image_manifest_file is None
+                    or image_descriptor["size"] != image_manifest_member.size
+                    or image_manifest_member.size > 1024 * 1024
+                ):
+                    raise SystemExit("Gravity OCI image manifest identity mismatch")
+                image_manifest_bytes = image_manifest_file.read(1024 * 1024 + 1)
+                if f"sha256:{sha(image_manifest_bytes)}" != image_descriptor["digest"]:
+                    raise SystemExit("Gravity OCI image manifest digest mismatch")
+                image_manifest = exact_object(
+                    strict_json_bytes(image_manifest_bytes, "Gravity OCI image manifest"),
+                    {"schemaVersion", "mediaType", "config", "layers"},
+                    "Gravity OCI image manifest",
+                )
+                config_descriptor = exact_object(
+                    image_manifest["config"], {"mediaType", "digest", "size"},
+                    "Gravity OCI config descriptor",
+                )
+                layer_descriptors = image_manifest["layers"]
+                if (
+                    image_manifest["schemaVersion"] != 2
+                    or image_manifest["mediaType"] != "application/vnd.oci.image.manifest.v1+json"
+                    or config_descriptor != {
+                        "mediaType": "application/vnd.oci.image.config.v1+json",
+                        "digest": expected_image_id,
+                        "size": archive.getmember(config_name).size,
+                    }
+                    or type(layer_descriptors) is not list
+                    or len(layer_descriptors) != len(layers)
+                ):
+                    raise SystemExit("Gravity OCI image manifest inventory mismatch")
+                for layer, descriptor_value in zip(layers, layer_descriptors):
+                    digest = f"sha256:{str(layer).removeprefix('blobs/sha256/')}"
+                    descriptor = exact_object(
+                        descriptor_value, {"mediaType", "digest", "size"},
+                        "Gravity OCI image layer descriptor",
+                    )
+                    if descriptor != layer_sources[digest]:
+                        raise SystemExit("Gravity OCI manifest and layer sources differ")
+
+                fixed_names = {
+                    "manifest.json", "repositories", "index.json", "oci-layout",
+                    config_name, image_manifest_name, *layers,
+                }
+                blob_names = {name for name in regular_names if blob_pattern.fullmatch(name)}
+                legacy_blob_names = blob_names - {config_name, image_manifest_name, *layers}
+                if (
+                    regular_names != fixed_names | legacy_blob_names
+                    or len(legacy_blob_names) != len(layers)
+                ):
+                    raise SystemExit("Gravity OCI-blob archive contains unbound members")
+                legacy_rows = []
+                for name in legacy_blob_names:
+                    member = archive.getmember(name)
+                    source = archive.extractfile(name)
+                    if source is None or member.size > 1024 * 1024:
+                        raise SystemExit("Gravity OCI legacy layer metadata invalid")
+                    raw = source.read(1024 * 1024 + 1)
+                    if sha(raw) != name.removeprefix("blobs/sha256/"):
+                        raise SystemExit("Gravity OCI legacy layer metadata digest mismatch")
+                    row = strict_json_bytes(raw, "Gravity OCI legacy layer metadata")
+                    base_keys = {"id", "created", "container_config", "os"}
+                    row_keys = set(row) if type(row) is dict else set()
+                    if "parent" in row_keys:
+                        base_keys.add("parent")
+                    if "config" in row_keys or "architecture" in row_keys:
+                        base_keys.update({"config", "architecture"})
+                    row = exact_object(row, base_keys, "Gravity OCI legacy layer metadata")
+                    if (
+                        not isinstance(row["id"], str)
+                        or not re.fullmatch(r"[0-9a-f]{64}", row["id"])
+                        or not isinstance(row["created"], str)
+                        or not row["created"]
+                        or type(row["container_config"]) is not dict
+                        or row["os"] != "linux"
+                        or ("parent" in row and not re.fullmatch(r"[0-9a-f]{64}", str(row["parent"])))
+                    ):
+                        raise SystemExit("Gravity OCI legacy layer metadata shape mismatch")
+                    legacy_rows.append(row)
+                by_id = {str(row["id"]): row for row in legacy_rows}
+                roots = [row for row in legacy_rows if "parent" not in row]
+                parents = [str(row["parent"]) for row in legacy_rows if "parent" in row]
+                children = {parent: [] for parent in by_id}
+                for row in legacy_rows:
+                    if "parent" in row and str(row["parent"]) in children:
+                        children[str(row["parent"])].append(str(row["id"]))
+                if (
+                    len(by_id) != len(legacy_rows)
+                    or len(roots) != 1
+                    or any(parent not in by_id for parent in parents)
+                    or any(len(value) > 1 for value in children.values())
+                ):
+                    raise SystemExit("Gravity OCI legacy layer chain mismatch")
+                observed_chain = []
+                current = str(roots[0]["id"])
+                while current not in observed_chain:
+                    observed_chain.append(current)
+                    successors = children[current]
+                    if not successors:
+                        break
+                    current = successors[0]
+                leaf = by_id[observed_chain[-1]]
+                leaf_labels = (leaf.get("config") or {}).get("Labels") or {}
+                if (
+                    len(observed_chain) != len(legacy_rows)
+                    or leaf.get("architecture") != "amd64"
+                    or leaf_labels.get("org.opencontainers.image.revision") != commit
+                    or leaf_labels.get("yoko.activation.profile") != profile_id
+                    or sum("config" in row for row in legacy_rows) != 1
+                ):
+                    raise SystemExit("Gravity OCI legacy layer terminal metadata mismatch")
+
+                repositories_file = archive.extractfile("repositories")
+                repositories = strict_json_bytes(
+                    repositories_file.read(1024 * 1024 + 1),  # type: ignore[union-attr]
+                    "Gravity OCI repository metadata",
+                )
+                if repositories != {
+                    repository: {tag: str(layers[-1]).removeprefix("blobs/sha256/")},
+                }:
+                    raise SystemExit("Gravity OCI repository metadata mismatch")
             config_file = archive.extractfile(config_name)
             if (
                 config_file is None
                 or entry["RepoTags"] != [expected_image_reference]
-                or f"sha256:{config_name.removesuffix('.json')}" != expected_image_id
+                or f"sha256:{config_hex}" != expected_image_id
             ):
                 raise SystemExit("Gravity docker archive image identity mismatch")
             config_bytes = config_file.read(16 * 1024 * 1024 + 1)
@@ -518,7 +717,7 @@ def inspect_gravity_docker_archive(
                 observed_sha256, observed_bytes = stream_identity(layer_file, layer_size)
                 if observed_bytes != layer_size or expected_diff_id != f"sha256:{observed_sha256}":
                     raise SystemExit("Gravity docker archive layer digest mismatch")
-            if regular_names == required_names | legacy_metadata:
+            if legacy_format and regular_names == required_names | legacy_metadata:
                 repository, tag = expected_image_reference.rsplit(":", 1)
                 repositories_file = archive.extractfile("repositories")
                 if repositories_file is None:
@@ -529,7 +728,7 @@ def inspect_gravity_docker_archive(
                 )
                 if repositories != {repository: {tag: layers[-1].removesuffix("/layer.tar")}}:
                     raise SystemExit("Gravity docker archive repository metadata mismatch")
-    except (KeyError, OSError, tarfile.TarError, UnicodeError, ValueError) as exc:
+    except (AttributeError, KeyError, OSError, tarfile.TarError, UnicodeError, ValueError) as exc:
         raise SystemExit("Gravity docker archive invalid") from exc
     labels = (config.get("config") or {}).get("Labels") or {}
     if (
