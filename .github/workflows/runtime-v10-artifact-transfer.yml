@@ -1,0 +1,112 @@
+name: Runtime v10 exact artifact transfer
+
+on:
+  push:
+    branches:
+      - codex/runtime-v10-artifact-transfer-ca2d28c5
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  split-exact-artifact:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Download and verify exact accepted artifact
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -Eeuo pipefail
+          mkdir -p chunks
+          curl --fail --location --silent --show-error \
+            --header "Authorization: Bearer $GITHUB_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            --output gravity-image-ca2d28c5.zip \
+            https://api.github.com/repos/nashavtoparkmedia-byte/CRM/actions/artifacts/9249301067/zip
+          test "$(stat -c %s gravity-image-ca2d28c5.zip)" = 2521186942
+          printf '%s  %s\n' \
+            c9116a5481f069653da0a2ba0f9d5a186b3641d0cbd9c631fd8e54aead33ef8a \
+            gravity-image-ca2d28c5.zip | sha256sum --check --strict
+          split --bytes=400000000 --numeric-suffixes=0 --suffix-length=2 \
+            gravity-image-ca2d28c5.zip chunks/part-
+          test "$(find chunks -maxdepth 1 -type f -name 'part-*' | wc -l)" = 7
+          for suffix in 00 01 02 03 04 05 06; do
+            test -s "chunks/part-$suffix"
+          done
+          sha256sum chunks/part-* > chunks/SHA256SUMS
+          cat chunks/part-* | sha256sum --check --strict <(printf '%s  -\n' c9116a5481f069653da0a2ba0f9d5a186b3641d0cbd9c631fd8e54aead33ef8a)
+
+      - name: Upload transfer manifest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: gravity-transfer-ca2d28c5-manifest
+          path: chunks/SHA256SUMS
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload transfer part 00
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: gravity-transfer-ca2d28c5-part-00
+          path: chunks/part-00
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload transfer part 01
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: gravity-transfer-ca2d28c5-part-01
+          path: chunks/part-01
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload transfer part 02
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: gravity-transfer-ca2d28c5-part-02
+          path: chunks/part-02
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload transfer part 03
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: gravity-transfer-ca2d28c5-part-03
+          path: chunks/part-03
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload transfer part 04
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: gravity-transfer-ca2d28c5-part-04
+          path: chunks/part-04
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload transfer part 05
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: gravity-transfer-ca2d28c5-part-05
+          path: chunks/part-05
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload transfer part 06
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: gravity-transfer-ca2d28c5-part-06
+          path: chunks/part-06
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
