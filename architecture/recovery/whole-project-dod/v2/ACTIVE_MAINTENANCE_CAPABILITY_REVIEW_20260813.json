@@ -63,7 +63,7 @@
       "capability_id": "mmc.reviewed.v1.production_migration_authority.gravity_container_migrate_deploy",
       "status": "APPROVED",
       "approved": true,
-      "source": { "path": "gravity-mvp/Dockerfile", "source_sha256": "4e066ce880f5048fe7da21b3b4278a4ab18c8cb5795626c4cfcfb54634534be8", "entrypoint": "gravity-mvp production container CMD", "site_signatures": ["c11f15f50107d973981261e984b531e81678b88801d26fc3de0008810d27c66d"] },
+      "source": { "path": "gravity-mvp/Dockerfile", "source_sha256": "ed00cec7e761d63209a7da67fcbea5b7c8c0fb165c0f2243c650ee35f1f97336", "entrypoint": "gravity-mvp production container CMD", "site_signatures": ["20042cbc917b8cccb95945e464b43aabc7eb1b57c5ca3da4476cc1b72e77eed9"] },
       "lifecycle": "MIGRATION",
       "lifecycle_evidence_status": "REVIEWED_ACTIVE_DEPLOYMENT_ENTRYPOINT",
       "lifecycle_evidence": "The production container applies only the checked finite Prisma migration catalog before application start.",

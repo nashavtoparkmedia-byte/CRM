@@ -22,6 +22,27 @@ const nginxSource = readFileSync(join(repositoryRoot, 'deploy/nginx/templates/cr
 const nginxDenials = nginxSource.match(/location\s+\^~\s+\/api\/debug-db\s*\{[\s\S]*?return\s+404\s*;/g) ?? []
 assert.equal(nginxDenials.length, 2, 'both public CRM TLS virtual hosts must deny /api/debug-db')
 
+const dockerfileSource = readFileSync(join(appRoot, 'Dockerfile'), 'utf8')
+const pinnedNodeBase = 'node:20-bookworm-slim@sha256:3d0f05455dea2c82e2f76e7e2543964c30f6b7d673fc1a83286736d44fe4c41c'
+assert.equal(
+    dockerfileSource.split(`FROM ${pinnedNodeBase} AS `).length - 1,
+    3,
+    'all Gravity image stages must use the exact reviewed Node base digest',
+)
+const authenticatedSnapshotSources = dockerfileSource.match(
+    /^\s*'deb \[check-valid-until=no\] http:\/\/snapshot\.debian\.org\/archive\/(?:debian|debian-security)\/20260801T000000Z bookworm(?:-updates|-security)? main' \\/gm,
+) ?? []
+assert.equal(
+    authenticatedSnapshotSources.length,
+    9,
+    'all Gravity APT sources must use the exact immutable Debian snapshot',
+)
+assert.doesNotMatch(
+    dockerfileSource,
+    /(?:trusted\s*=\s*yes|allow-unauthenticated|allowinsecurerepositories|verify-peer\s*=\s*false)/i,
+    'Gravity APT bootstrap must retain Debian signature and package-hash verification',
+)
+
 const cookieImporter = readFileSync(
     join(repositoryRoot, 'yandex-fleet-scraper/src/scripts/import-chrome-cookies.ts'),
     'utf8',

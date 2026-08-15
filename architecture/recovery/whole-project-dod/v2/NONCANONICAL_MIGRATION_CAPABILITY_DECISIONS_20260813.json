@@ -24,7 +24,7 @@
       "lifecycle_evidence_status": "REVIEWED_CONTAINER_MIGRATE_DEPLOY_COMMAND",
       "rationale": "Production container command invokes Prisma migrate deploy before starting the application, so its database write is migration-only rather than application runtime.",
       "expected_site_signatures": [
-        "c11f15f50107d973981261e984b531e81678b88801d26fc3de0008810d27c66d"
+        "20042cbc917b8cccb95945e464b43aabc7eb1b57c5ca3da4476cc1b72e77eed9"
       ]
     },
     {
@@ -401,10 +401,10 @@
       "review_rationale": "Explicit production data-migration entrypoint recreates schema grants and restores the reviewed production database."
     },
     {
-      "site_signature": "c11f15f50107d973981261e984b531e81678b88801d26fc3de0008810d27c66d",
+      "site_signature": "20042cbc917b8cccb95945e464b43aabc7eb1b57c5ca3da4476cc1b72e77eed9",
       "path": "gravity-mvp/Dockerfile",
-      "source_sha256": "4e066ce880f5048fe7da21b3b4278a4ab18c8cb5795626c4cfcfb54634534be8",
-      "line": 136,
+      "source_sha256": "ed00cec7e761d63209a7da67fcbea5b7c8c0fb165c0f2243c650ee35f1f97336",
+      "line": 139,
       "column": 23,
       "method": "mixed-script-command:prisma migrate deploy",
       "functional_owner": "production_migration_authority",

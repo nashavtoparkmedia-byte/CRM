@@ -1068,7 +1068,7 @@
       "rationale": "Production container command invokes Prisma migrate deploy before starting the application, so its database write is migration-only rather than application runtime.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
       "functional_owner": "production_migration_authority",
-      "source_sha256": "4e066ce880f5048fe7da21b3b4278a4ab18c8cb5795626c4cfcfb54634534be8"
+      "source_sha256": "ed00cec7e761d63209a7da67fcbea5b7c8c0fb165c0f2243c650ee35f1f97336"
     },
     {
       "path": "gravity-mvp/dump-order.js",
