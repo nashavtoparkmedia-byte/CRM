@@ -83,6 +83,9 @@ OLD_DEB_NAME = "yoko-privileged-runtime_2.0.0-9_all.deb"
 STREAM_CHUNK_BYTES = 1024 * 1024
 MAX_BOOTSTRAP_DOCUMENT_BYTES = 4 * 1024 * 1024
 MAX_ROLLBACK_DEB_BYTES = 64 * 1024 * 1024
+FULL_AUTHORITATIVE_CI_TIMEOUT_SECONDS = 4 * 60 * 60
+FRESH_WRITE_ANALYSIS_TIMEOUT_SECONDS = 15 * 60
+DEFAULT_ATTACK_COMMAND_TIMEOUT_SECONDS = 5 * 60
 BOOTSTRAP_MODES = {
     "payload": 0o700,
     "payload/install.sh": 0o500,
@@ -420,15 +423,20 @@ def run_attack_command(
 ) -> None:
     resolved = [replacements.get(argument, argument) for argument in arguments]
     if resolved[0].endswith("/run-authoritative-ci.mjs"):
-        timeout = 3600
+        timeout = FULL_AUTHORITATIVE_CI_TIMEOUT_SECONDS
     elif resolved[0].endswith("/analyze.mjs"):
-        timeout = 900
+        timeout = FRESH_WRITE_ANALYSIS_TIMEOUT_SECONDS
     else:
-        timeout = 300
-    completed = subprocess.run(
-        [str(node), *resolved], cwd=repo, env=environment,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout,
-    )
+        timeout = DEFAULT_ATTACK_COMMAND_TIMEOUT_SECONDS
+    try:
+        completed = subprocess.run(
+            [str(node), *resolved], cwd=repo, env=environment,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout,
+        )
+    except subprocess.TimeoutExpired:
+        raise SystemExit(
+            f"internal attack reproduction timed out after {timeout}s: {arguments[0]}"
+        ) from None
     if completed.returncode != 0:
         raise SystemExit(f"internal attack reproduction failed: {arguments[0]}")
     if len(completed.stdout) > 4 * 1024 * 1024 or len(completed.stderr) > 4 * 1024 * 1024:

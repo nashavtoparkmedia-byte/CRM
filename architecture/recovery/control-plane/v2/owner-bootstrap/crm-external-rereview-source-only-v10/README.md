@@ -125,7 +125,10 @@ exact release bindings, validator identity, all eight ordered attack digests,
 an empty residual-finding list, and no-mutation assertions. The identity string
 is deliberately not described as a cryptographic identity. Finalization then
 requires the review to be no more than 24 hours old, reruns all eight attacks,
-and consumes—but never creates—that artifact:
+and consumes—but never creates—that artifact. The exhaustive positive replay
+has a fail-closed four-hour process budget because it executes all authoritative
+CI denominators; final review verification has a bounded six-hour budget for
+that replay plus the seven negative attacks:
 
 ```sh
 python3 -I packaging/finalize-evidence.py \

@@ -33,10 +33,24 @@ def load_validator():
     return module
 
 
+def load_finalizer():
+    loader = importlib.machinery.SourceFileLoader(
+        "yoko_runtime_v10_final_evidence_contract",
+        str(ROOT / "packaging/finalize-evidence.py"),
+    )
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[loader.name] = module
+    loader.exec_module(module)
+    return module
+
+
 class InternalAdversarialReplayTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.validator = load_validator()
+        cls.finalizer = load_finalizer()
 
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory(prefix="yoko-critic-contract-")
@@ -404,6 +418,45 @@ class InternalAdversarialReplayTests(unittest.TestCase):
         materialize = source.index("result = build_replay_evidence(")
         self.assertLess(rerun, materialize)
         self.assertGreaterEqual(source.count("release_inputs_unchanged("), 3)
+
+    def test_exhaustive_replay_has_bounded_multi_hour_timeouts(self) -> None:
+        self.assertEqual(
+            self.validator.FULL_AUTHORITATIVE_CI_TIMEOUT_SECONDS,
+            4 * 60 * 60,
+        )
+        self.assertEqual(
+            self.validator.FRESH_WRITE_ANALYSIS_TIMEOUT_SECONDS,
+            15 * 60,
+        )
+        self.assertEqual(
+            self.validator.DEFAULT_ATTACK_COMMAND_TIMEOUT_SECONDS,
+            5 * 60,
+        )
+        self.assertEqual(
+            self.finalizer.INTERNAL_REVIEW_VERIFICATION_TIMEOUT_SECONDS,
+            6 * 60 * 60,
+        )
+
+    def test_full_ci_replay_timeout_fails_closed_without_uncaught_traceback(self) -> None:
+        timeout = self.validator.FULL_AUTHORITATIVE_CI_TIMEOUT_SECONDS
+        with mock.patch.object(
+            self.validator.subprocess,
+            "run",
+            side_effect=subprocess.TimeoutExpired(cmd=["node"], timeout=timeout),
+        ) as run:
+            with self.assertRaisesRegex(
+                SystemExit,
+                rf"^internal attack reproduction timed out after {timeout}s: "
+                r"tools/architecture/run-authoritative-ci\.mjs$",
+            ):
+                self.validator.run_attack_command(
+                    Path("/exact/node/bin/node"),
+                    self.directory,
+                    ("tools/architecture/run-authoritative-ci.mjs",),
+                    {},
+                    {},
+                )
+        self.assertEqual(run.call_args.kwargs["timeout"], timeout)
 
 
 if __name__ == "__main__":

@@ -17,6 +17,7 @@ DEB = ROOT / "dist/yoko-privileged-runtime_2.0.0-10_all.deb"
 SEAL = ROOT / "SEALED_RELEASE.json"
 SEALED_INPUT_VERIFIER = ROOT / "packaging/verify-sealed-inputs.py"
 INTERNAL_REVIEW_VERIFIER = ROOT / "packaging/verify-independent-critic.py"
+INTERNAL_REVIEW_VERIFICATION_TIMEOUT_SECONDS = 6 * 60 * 60
 
 
 def sha(path: Path) -> str:
@@ -135,7 +136,7 @@ def main() -> None:
                 "--review-artifact", str(args.review_artifact),
             ],
             check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, timeout=7200,
+            text=True, timeout=INTERNAL_REVIEW_VERIFICATION_TIMEOUT_SECONDS,
         )
         try:
             review_verification = json.loads(completed.stdout)
