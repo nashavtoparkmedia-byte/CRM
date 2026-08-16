@@ -132,6 +132,25 @@ def positive_github_id(value: object, label: str) -> int:
     return value
 
 
+def accepted_outbox_counts(value: object) -> bool:
+    expected = {
+        "dead_letter", "over_attempt_limit", "pending", "processing",
+        "published", "retry_wait", "stale_claimed", "total",
+    }
+    if type(value) is not dict or set(value) != expected:
+        return False
+    if any(type(count) is not int for count in value.values()):
+        return False
+    return (
+        value["total"] >= 1
+        and value["published"] == value["total"]
+        and all(value[key] == 0 for key in (
+            "dead_letter", "over_attempt_limit", "pending", "processing",
+            "retry_wait", "stale_claimed",
+        ))
+    )
+
+
 def authoritative_control_catalog_sha256() -> str:
     encoded = (json.dumps(
         list(AUTHORITATIVE_CONTROL_CATALOG), separators=(",", ":"),
@@ -1254,7 +1273,40 @@ def main() -> None:
         snapshot = capture_verifier.sealing_values(snapshot_document)
     except (OSError, ValueError) as exc:
         raise SystemExit(f"production snapshot transcript validation failed: {exc}") from exc
-    if snapshot_document["schema"] != "yoko.crm.source-only-production-snapshot.v2" or snapshot_document["status"] != "ACCEPTED_READ_ONLY_CAPTURE" or snapshot_document["host"] != "jvxthcorvm" or snapshot["runtime_package_version"] != "2.0.0-9" or snapshot["runtime_abi"] != "2.0.0" or snapshot["profile_id"] != "crm-af9646f5-gravity-outbox-v1" or snapshot["audit_state"] != "VALID" or snapshot["audit_records"] != 19 or snapshot["audit_last_digest"] != "95668295b49045f430f19512d7cd60c81c88ae6e3586f26dd39fcf12a09f0c81" or snapshot["gravity_image_id"] != PREDECESSOR_IMAGE or snapshot["gravity_oci_revision"] != PREDECESSOR_COMMIT or snapshot["gravity_running"] is not True or snapshot["gravity_health"] != "healthy" or snapshot["gravity_restart_count"] != 0 or snapshot["tg_bot_image_id"] != TG_BOT_PREDECESSOR_IMAGE or snapshot["tg_bot_running"] is not True or snapshot["tg_bot_health"] != "healthy" or snapshot["tg_bot_restart_count"] != 0 or snapshot["tg_bot_entrypoint"] != ["/usr/bin/tini", "--", "/usr/local/bin/tg-bot-entrypoint"] or snapshot["tg_bot_cmd"] != ["node", "start.js"] or snapshot["tg_bot_declared_user"] != "" or snapshot["tg_bot_working_dir"] != "/app" or snapshot["tg_bot_patch_path"] != TG_BOT_PATCH_DESTINATION or snapshot["tg_bot_patch_sha256"] != TG_BOT_BASELINE_SHA256 or snapshot["tg_bot_patch_uid"] != 0 or snapshot["tg_bot_patch_gid"] != 0 or snapshot["tg_bot_patch_mode"] != "0644" or snapshot["tg_bot_patch_size"] != 2385 or snapshot["outbox_catalog_state"] != "EXACT" or snapshot["outbox_counts"] != {"dead_letter": 0, "over_attempt_limit": 0, "pending": 0, "processing": 0, "published": 4, "retry_wait": 0, "stale_claimed": 0, "total": 4} or snapshot["secret_values_emitted"] is not False or snapshot["production_mutated"] is not False:
+    if (
+        snapshot_document["schema"] != "yoko.crm.source-only-production-snapshot.v2"
+        or snapshot_document["status"] != "ACCEPTED_READ_ONLY_CAPTURE"
+        or snapshot_document["host"] != "jvxthcorvm"
+        or snapshot["runtime_package_version"] != "2.0.0-9"
+        or snapshot["runtime_abi"] != "2.0.0"
+        or snapshot["profile_id"] != "crm-af9646f5-gravity-outbox-v1"
+        or snapshot["audit_state"] != "VALID"
+        or snapshot["audit_records"] != 19
+        or snapshot["audit_last_digest"] != "95668295b49045f430f19512d7cd60c81c88ae6e3586f26dd39fcf12a09f0c81"
+        or snapshot["gravity_image_id"] != PREDECESSOR_IMAGE
+        or snapshot["gravity_oci_revision"] != PREDECESSOR_COMMIT
+        or snapshot["gravity_running"] is not True
+        or snapshot["gravity_health"] != "healthy"
+        or snapshot["gravity_restart_count"] != 0
+        or snapshot["tg_bot_image_id"] != TG_BOT_PREDECESSOR_IMAGE
+        or snapshot["tg_bot_running"] is not True
+        or snapshot["tg_bot_health"] != "healthy"
+        or snapshot["tg_bot_restart_count"] != 0
+        or snapshot["tg_bot_entrypoint"] != ["/usr/bin/tini", "--", "/usr/local/bin/tg-bot-entrypoint"]
+        or snapshot["tg_bot_cmd"] != ["node", "start.js"]
+        or snapshot["tg_bot_declared_user"] != ""
+        or snapshot["tg_bot_working_dir"] != "/app"
+        or snapshot["tg_bot_patch_path"] != TG_BOT_PATCH_DESTINATION
+        or snapshot["tg_bot_patch_sha256"] != TG_BOT_BASELINE_SHA256
+        or snapshot["tg_bot_patch_uid"] != 0
+        or snapshot["tg_bot_patch_gid"] != 0
+        or snapshot["tg_bot_patch_mode"] != "0644"
+        or snapshot["tg_bot_patch_size"] != 2385
+        or snapshot["outbox_catalog_state"] != "EXACT"
+        or not accepted_outbox_counts(snapshot["outbox_counts"])
+        or snapshot["secret_values_emitted"] is not False
+        or snapshot["production_mutated"] is not False
+    ):
         raise SystemExit("production snapshot is not the accepted 2.0.0-9 / 7aea / baf442 predecessor")
     for key in ("audit_last_digest", "source_manifest_sha256", "compose_sha256", "compose_config_hash", "gravity_container_id", "tg_bot_container_id", "tg_bot_compose_config_hash", "database_identity_sha256", "migration_ledger_sha256", "outbox_catalog_sha256"):
         if not SHA64.fullmatch(str(snapshot[key])):

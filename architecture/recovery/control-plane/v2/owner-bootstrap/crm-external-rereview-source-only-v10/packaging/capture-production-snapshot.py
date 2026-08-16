@@ -409,10 +409,12 @@ def validate_response(value: object, primitive: str, resource: str | None) -> di
             or evidence["rolled_back_target_migrations"] != 0
             or evidence["server_version_num"] != "160014"
             or any(type(count) is not int for count in counts.values())
-            or counts != {
-                "dead_letter": 0, "over_attempt_limit": 0, "pending": 0, "processing": 0,
-                "published": 4, "retry_wait": 0, "stale_claimed": 0, "total": 4,
-            }
+            or counts["total"] < 1
+            or counts["published"] != counts["total"]
+            or any(counts[key] != 0 for key in (
+                "dead_letter", "over_attempt_limit", "pending", "processing",
+                "retry_wait", "stale_claimed",
+            ))
         ):
             raise CaptureError("database read-only evidence mismatch")
         for key in ("database_name_sha256", "database_user_sha256", "system_identifier_sha256"):

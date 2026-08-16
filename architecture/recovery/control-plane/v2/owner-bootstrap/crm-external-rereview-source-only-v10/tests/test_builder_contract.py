@@ -362,6 +362,30 @@ class HostedCiAcceptanceTests(unittest.TestCase):
         }
         cls.accepted = accepted
 
+    def test_healthy_published_outbox_growth_is_accepted_fail_closed(self) -> None:
+        healthy = {
+            "dead_letter": 0,
+            "over_attempt_limit": 0,
+            "pending": 0,
+            "processing": 0,
+            "published": 5,
+            "retry_wait": 0,
+            "stale_claimed": 0,
+            "total": 5,
+        }
+        self.assertTrue(self.sealer.accepted_outbox_counts(healthy))
+        for total in (1, 4, 999):
+            candidate = dict(healthy, published=total, total=total)
+            self.assertTrue(self.sealer.accepted_outbox_counts(candidate))
+        for candidate in (
+            dict(healthy, total=0, published=0),
+            dict(healthy, published=4),
+            dict(healthy, pending=1),
+            dict(healthy, total=True),
+            {key: value for key, value in healthy.items() if key != "stale_claimed"},
+        ):
+            self.assertFalse(self.sealer.accepted_outbox_counts(candidate))
+
     def clone(self) -> dict[str, object]:
         return json.loads(json.dumps(self.accepted))
 
@@ -938,7 +962,7 @@ class SealedFixtureTests(unittest.TestCase):
             "database_identity_sha256": "ed88dfeaad2a3dc2e759590d295992cd06531d4403d896ded00b21ea667be1c9",
             "migration_ledger_sha256": "a50f1a8988f79c85059354d6b2d45e9e8ed07284fc27c78d98face6680f25dfc",
             "outbox_catalog_state": "EXACT",
-            "outbox_counts": {"dead_letter": 0, "over_attempt_limit": 0, "pending": 0, "processing": 0, "published": 4, "retry_wait": 0, "stale_claimed": 0, "total": 4},
+            "outbox_counts": {"dead_letter": 0, "over_attempt_limit": 0, "pending": 0, "processing": 0, "published": 5, "retry_wait": 0, "stale_claimed": 0, "total": 5},
             "outbox_catalog_sha256": "ef0bce36bca8283b491a966ff3886644a8887f4bded3deebbec7ce559ac2defe",
             "secret_values_emitted": False,
             "production_mutated": False,

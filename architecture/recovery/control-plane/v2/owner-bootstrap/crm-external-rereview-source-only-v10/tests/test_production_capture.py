@@ -56,6 +56,48 @@ def version_record() -> dict[str, object]:
     }
 
 
+def database_response(total: int) -> dict[str, object]:
+    counts = {
+        "dead_letter": 0,
+        "over_attempt_limit": 0,
+        "pending": 0,
+        "processing": 0,
+        "published": total,
+        "retry_wait": 0,
+        "stale_claimed": 0,
+        "total": total,
+    }
+    return {
+        "errors": [],
+        "evidence": {
+            "applied_migration_count": 62,
+            "database_identity_sha256": capture.DATABASE_IDENTITY,
+            "database_name_sha256": "3f831e31b1b5e63661e38c3af85b8d46c5558d2a4b5029e6c15bfd092e793e6c",
+            "database_user_sha256": "9261ceef0b969e70ac20f1510f07a1e0d8db05f20c75161a2ef43b4eba27a7aa",
+            "interrupted_target_migrations": 0,
+            "migration_ledger_sha256": capture.MIGRATION_LEDGER,
+            "migration_state": "APPROVED_OUTBOX_APPLIED",
+            "outbox_catalog_state": "EXACT",
+            "outbox_counts": counts,
+            "postgres_container_id": "57a09acd5b407d72934ea4cb398874fec60d25a815265b018ba9dd4ab5dbddda",
+            "postgres_image_id": capture.POSTGRES_IMAGE,
+            "profile_id": capture.PROFILE_ID,
+            "read_only": True,
+            "rolled_back_target_migrations": 0,
+            "secret_values_emitted": False,
+            "server_version_num": "160014",
+            "system_identifier_sha256": "9b73df197b2607b5be82f56cbfc404718e1116353e1d454ce955d0d2b0d86b23",
+        },
+        "ok": True,
+        "primitive": "database-status",
+        "resource": None,
+        "runtime_version": capture.RUNTIME_VERSION,
+        "schema": "yoko.privileged-runtime.response.v1",
+        "timestamp": "2026-08-13T20:00:00Z",
+        "warnings": [],
+    }
+
+
 def outer_snapshot(at: dt.datetime) -> dict[str, object]:
     stamp = capture.utc_text(at)
     observed = {key: None for key in capture.OBSERVED_KEYS}
@@ -87,6 +129,29 @@ def outer_snapshot(at: dt.datetime) -> dict[str, object]:
 
 
 class ProductionCaptureContractTests(unittest.TestCase):
+    def test_healthy_published_outbox_growth_is_accepted_fail_closed(self) -> None:
+        for total in (1, 4, 5, 999):
+            with self.subTest(total=total):
+                response = database_response(total)
+                accepted = capture.validate_response(response, "database-status", None)
+                self.assertEqual(accepted["evidence"]["outbox_counts"]["total"], total)
+
+        invalid: list[dict[str, object]] = []
+        zero = database_response(0)
+        invalid.append(zero)
+        unpublished = database_response(5)
+        unpublished["evidence"]["outbox_counts"]["published"] = 4
+        invalid.append(unpublished)
+        pending = database_response(5)
+        pending["evidence"]["outbox_counts"]["pending"] = 1
+        invalid.append(pending)
+        bool_total = database_response(5)
+        bool_total["evidence"]["outbox_counts"]["total"] = True
+        invalid.append(bool_total)
+        for response in invalid:
+            with self.assertRaisesRegex(capture.CaptureError, "database read-only evidence mismatch"):
+                capture.validate_response(response, "database-status", None)
+
     def test_finite_plan_contains_only_exact_read_only_runtime_verbs(self) -> None:
         self.assertEqual(capture.COMMANDS, (
             ("version", None),
