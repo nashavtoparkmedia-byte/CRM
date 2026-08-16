@@ -80,6 +80,9 @@ ATTACK_COMMANDS: dict[str, tuple[tuple[str, ...], ...]] = {
 BOOTSTRAP_MTIME = 1786492800
 NEW_DEB_NAME = "yoko-privileged-runtime_2.0.0-10_all.deb"
 OLD_DEB_NAME = "yoko-privileged-runtime_2.0.0-9_all.deb"
+STREAM_CHUNK_BYTES = 1024 * 1024
+MAX_BOOTSTRAP_DOCUMENT_BYTES = 4 * 1024 * 1024
+MAX_ROLLBACK_DEB_BYTES = 64 * 1024 * 1024
 BOOTSTRAP_MODES = {
     "payload": 0o700,
     "payload/install.sh": 0o500,
@@ -224,8 +227,57 @@ def expected_bindings(
     }
 
 
+def validate_bootstrap_member_size(name: str, member_size: int, exact_deb_size: int) -> None:
+    if name == f"payload/{NEW_DEB_NAME}":
+        if member_size != exact_deb_size:
+            raise SystemExit("bootstrap tar does not contain the exact Debian package")
+        return
+    maximum = (
+        MAX_ROLLBACK_DEB_BYTES
+        if name == f"payload/{OLD_DEB_NAME}"
+        else MAX_BOOTSTRAP_DOCUMENT_BYTES
+    )
+    if member_size < 0 or member_size > maximum:
+        raise SystemExit("bootstrap tar member exceeded its exact bound")
+
+
+def consume_bootstrap_member(
+    source: Any, member_size: int, *, exact_path: Path | None = None, capture: bool = True,
+) -> tuple[str, bytes | None]:
+    digest = hashlib.sha256()
+    captured = bytearray() if capture and exact_path is None else None
+    total = 0
+    try:
+        expected = exact_path.open("rb") if exact_path is not None else None
+        try:
+            while total < member_size:
+                chunk = source.read(min(STREAM_CHUNK_BYTES, member_size - total))
+                if not chunk:
+                    raise SystemExit("bootstrap tar member length is not exact")
+                if expected is not None and chunk != expected.read(len(chunk)):
+                    raise SystemExit("bootstrap tar does not contain the exact Debian package")
+                digest.update(chunk)
+                if captured is not None:
+                    captured.extend(chunk)
+                total += len(chunk)
+            if source.read(1) or (expected is not None and expected.read(1)):
+                message = (
+                    "bootstrap tar does not contain the exact Debian package"
+                    if expected is not None
+                    else "bootstrap tar member length is not exact"
+                )
+                raise SystemExit(message)
+        finally:
+            if expected is not None:
+                expected.close()
+    except OSError as exc:
+        raise SystemExit("bootstrap tar member is unavailable") from exc
+    return digest.hexdigest(), bytes(captured) if captured is not None else None
+
+
 def validate_bootstrap_tar(tar_path: Path, deb_path: Path) -> str:
     try:
+        exact_deb_size = deb_path.stat().st_size
         with tarfile.open(tar_path, mode="r:") as archive:
             members = archive.getmembers()
             if (
@@ -235,6 +287,7 @@ def validate_bootstrap_tar(tar_path: Path, deb_path: Path) -> str:
                 raise SystemExit("bootstrap tar inventory is not exact")
             material: list[dict[str, Any]] = []
             content: dict[str, bytes] = {}
+            member_digests: dict[str, str] = {}
             for member in members:
                 expected_mode = BOOTSTRAP_MODES[member.name]
                 expected_directory = member.name in {"payload", "payload/review"}
@@ -261,24 +314,28 @@ def validate_bootstrap_tar(tar_path: Path, deb_path: Path) -> str:
                     "bytes": member.size,
                 }
                 if not expected_directory:
+                    validate_bootstrap_member_size(member.name, member.size, exact_deb_size)
                     source = archive.extractfile(member)
                     if source is None:
                         raise SystemExit("bootstrap tar member is unavailable")
-                    raw = source.read(256 * 1024 * 1024 + 1)
-                    if len(raw) > 256 * 1024 * 1024 or len(raw) != member.size:
-                        raise SystemExit("bootstrap tar member exceeded its exact bound")
-                    content[member.name] = raw
-                    identity["sha256"] = digest_bytes(raw)
+                    member_digest, raw = consume_bootstrap_member(
+                        source,
+                        member.size,
+                        exact_path=deb_path if member.name == f"payload/{NEW_DEB_NAME}" else None,
+                        capture=member.name not in {
+                            f"payload/{NEW_DEB_NAME}", f"payload/{OLD_DEB_NAME}",
+                        },
+                    )
+                    member_digests[member.name] = member_digest
+                    if raw is not None:
+                        content[member.name] = raw
+                    identity["sha256"] = member_digest
                 material.append(identity)
     except (OSError, tarfile.TarError) as exc:
         raise SystemExit("bootstrap tar is invalid") from exc
 
-    embedded_deb = content[f"payload/{NEW_DEB_NAME}"]
-    if (
-        len(embedded_deb) != deb_path.stat().st_size
-        or digest_bytes(embedded_deb) != sha(deb_path)
-        or embedded_deb != deb_path.read_bytes()
-    ):
+    exact_deb_sha256 = sha(deb_path)
+    if member_digests[f"payload/{NEW_DEB_NAME}"] != exact_deb_sha256:
         raise SystemExit("bootstrap tar does not contain the exact Debian package")
     payload = parse_json_bytes(content["payload/payload-manifest.json"], "bootstrap payload manifest")
     review = parse_json_bytes(content["payload/review/package-manifest.json"], "bootstrap review manifest")
@@ -295,8 +352,8 @@ def validate_bootstrap_tar(tar_path: Path, deb_path: Path) -> str:
         or review.get("schema") != "yoko.crm.owner-bootstrap-review-manifest.v2"
         or type(new_package) is not dict
         or new_package.get("path") != NEW_DEB_NAME
-        or new_package.get("sha256") != sha(deb_path)
-        or new_package.get("bytes") != deb_path.stat().st_size
+        or new_package.get("sha256") != exact_deb_sha256
+        or new_package.get("bytes") != exact_deb_size
     ):
         raise SystemExit("bootstrap tar package/review manifests are not exact")
     for relative, recorded in payload_files.items():
@@ -304,7 +361,7 @@ def validate_bootstrap_tar(tar_path: Path, deb_path: Path) -> str:
         if (
             type(recorded) is not dict
             or set(recorded) != {"sha256", "mode"}
-            or recorded["sha256"] != digest_bytes(content[member_name])
+            or recorded["sha256"] != member_digests[member_name]
             or recorded["mode"] != format(BOOTSTRAP_MODES[member_name], "04o")
         ):
             raise SystemExit("bootstrap tar payload identity mismatch")

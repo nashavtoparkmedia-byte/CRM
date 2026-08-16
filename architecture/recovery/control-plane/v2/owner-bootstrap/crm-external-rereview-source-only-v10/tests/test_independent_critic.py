@@ -341,6 +341,37 @@ class InternalAdversarialReplayTests(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "exact Debian package"):
             self.validator.validate_bootstrap_tar(self.tar, self.deb)
 
+    def test_large_exact_new_deb_has_a_streamed_exact_size_contract(self) -> None:
+        formerly_rejected_size = 256 * 1024 * 1024 + 1
+        self.validator.validate_bootstrap_member_size(
+            f"payload/{self.validator.NEW_DEB_NAME}",
+            formerly_rejected_size,
+            formerly_rejected_size,
+        )
+        with self.assertRaisesRegex(SystemExit, "exact Debian package"):
+            self.validator.validate_bootstrap_member_size(
+                f"payload/{self.validator.NEW_DEB_NAME}",
+                formerly_rejected_size,
+                formerly_rejected_size + 1,
+            )
+        with self.assertRaisesRegex(SystemExit, "exceeded its exact bound"):
+            self.validator.validate_bootstrap_member_size(
+                "payload/review/package-manifest.json",
+                formerly_rejected_size,
+                formerly_rejected_size,
+            )
+
+    def test_streamed_exact_deb_comparison_fails_closed_on_same_size_substitution(self) -> None:
+        substituted = self.directory / "substituted.deb"
+        exact = self.deb.read_bytes()
+        substituted.write_bytes(bytes([exact[0] ^ 1]) + exact[1:])
+        self.assertEqual(substituted.stat().st_size, self.deb.stat().st_size)
+        with substituted.open("rb") as source:
+            with self.assertRaisesRegex(SystemExit, "exact Debian package"):
+                self.validator.consume_bootstrap_member(
+                    source, substituted.stat().st_size, exact_path=self.deb,
+                )
+
     def test_bootstrap_tar_link_metadata_fails_closed(self) -> None:
         self.write_bootstrap_tar(symlink_member="payload/review/human-manifest.md")
         with self.assertRaisesRegex(SystemExit, "member metadata"):
