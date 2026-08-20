@@ -6,14 +6,24 @@ on:
       - codex/runtime-v10-artifact-transfer-451c0ea4
 
 permissions:
-  contents: read
+  contents: write
   actions: read
+
+concurrency:
+  group: runtime-v10-artifact-transfer-451c0ea4
+  cancel-in-progress: true
 
 jobs:
   split-exact-artifact:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
+      - name: Check out transfer locator branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: codex/runtime-v10-artifact-transfer-result-451c0ea4
+          fetch-depth: 1
+
       - name: Download and verify exact accepted artifact
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -110,3 +120,16 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 1
+
+      - name: Publish exact run locator
+        run: |
+          set -Eeuo pipefail
+          mkdir -p .runtime-v10-transfer
+          printf '{"run_id":%s,"run_attempt":%s,"workflow_sha":"%s","source_artifact_id":9401849671,"source_artifact_sha256":"86b3a32f2affa7b580eef45fbb7e7116e957ee0e9c9cda26bc16e3eafd54a48d"}\n' \
+            "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$GITHUB_SHA" \
+            > .runtime-v10-transfer/451c0ea4-run.json
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git add .runtime-v10-transfer/451c0ea4-run.json
+          git commit -m "ci: publish exact Runtime v10 transfer run $GITHUB_RUN_ID"
+          git push origin HEAD:refs/heads/codex/runtime-v10-artifact-transfer-result-451c0ea4
