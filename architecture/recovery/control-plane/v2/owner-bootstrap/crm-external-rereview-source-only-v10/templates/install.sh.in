@@ -54,13 +54,13 @@ provenance_identity() {
     /usr/bin/python3 -I -c '
 import hashlib,json,re,sys
 v=json.load(sys.stdin)
-expected=[{"logical_resource":"seo.container.site","code":"CONTAINER_NOT_FOUND"}]
+expected=[]
 if not isinstance(v,dict) or v.get("ok") is not True or not isinstance(v.get("evidence"),dict): raise SystemExit("provenance envelope")
 e=v["evidence"]
-if e.get("complete") is not False or e.get("failures")!=expected: raise SystemExit("provenance failure set drift")
+if e.get("complete") is not True or e.get("failures")!=expected: raise SystemExit("provenance failure set drift")
 records=e.get("records")
 semantic=e.get("semantic")
-if not isinstance(records,list) or not isinstance(semantic,dict) or not isinstance(semantic.get("records"),list) or semantic.get("fingerprint_sha256") is not None: raise SystemExit("provenance shape")
+if not isinstance(records,list) or not isinstance(semantic,dict) or semantic.get("schema")!="yoko.ai-calls.production-semantic-identity.v1" or not isinstance(semantic.get("records"),list) or not re.fullmatch(r"[0-9a-f]{64}",str(semantic.get("fingerprint_sha256",""))): raise SystemExit("provenance shape")
 names=[]
 for record in records:
     if not isinstance(record,dict) or not isinstance(record.get("semantic"),dict): raise SystemExit("provenance record shape")
@@ -74,8 +74,10 @@ if len(names)!=len(set(names)): raise SystemExit("provenance duplicate record")
 expected_semantic=sorted((record["semantic"] for record in records),key=lambda item:item["name"])
 if semantic["records"]!=expected_semantic: raise SystemExit("provenance semantic record drift")
 canonical=lambda value:json.dumps(value,separators=(",",":"),sort_keys=True).encode("ascii")
+semantic_sha256=hashlib.sha256(canonical({"records":expected_semantic,"schema":"yoko.ai-calls.production-semantic-identity.v1"})).hexdigest()
+if semantic["fingerprint_sha256"]!=semantic_sha256: raise SystemExit("provenance semantic fingerprint drift")
 runtime=sorted((record["name"],record["container_id"],record["image_id"],record["status"],record["started_at"],record["restart_count"]) for record in records)
-identity={"failures_sha256":hashlib.sha256(canonical(expected)).hexdigest(),"semantic_sha256":hashlib.sha256(canonical(expected_semantic)).hexdigest(),"containers_sha256":hashlib.sha256(canonical(runtime)).hexdigest()}
+identity={"failures_sha256":hashlib.sha256(canonical(expected)).hexdigest(),"semantic_sha256":semantic_sha256,"containers_sha256":hashlib.sha256(canonical(runtime)).hexdigest()}
 print(json.dumps(identity,separators=(",",":"),sort_keys=True))
 '
 }

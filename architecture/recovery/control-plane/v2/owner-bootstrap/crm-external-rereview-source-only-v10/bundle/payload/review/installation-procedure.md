@@ -10,10 +10,10 @@ package SHA. A root-owned guard blocks all release-profile calls throughout
 `dpkg`. Post-install checks prove Runtime `2.0.0-10`, the new profile identity,
 four enabled operations, disabled database migration, unchanged sudo boundary,
 unchanged audit and unchanged Docker provenance. The provenance comparison
-includes the exact pinned pre-existing absence of only `seo.container.site`
-plus hashes of every available record's semantic and runtime identity; a new,
-different, or unexpectedly missing failure aborts installation. No profile is
-invoked.
+requires a complete inventory with an empty failure list and includes the
+schema-bound semantic fingerprint plus hashes of every available record's
+runtime identity; any failure, missing resource, or fingerprint drift aborts
+installation. No profile is invoked.
 
 After an explicitly authorized `release-activate`, the target postdeploy gate
 uses only bounded internal HTTP GETs and a bounded recent-log read. Two

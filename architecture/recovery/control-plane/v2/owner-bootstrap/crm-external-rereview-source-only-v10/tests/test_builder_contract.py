@@ -162,13 +162,14 @@ class StaticContractTests(unittest.TestCase):
         self.assertIn('raise core.RuntimeFault("SOURCE_ARCHIVE_PATH_INVALID"', runtime)
         self.assertNotIn('f"--prefix={prefix}"', seal)
 
-    def test_pinned_preexisting_provenance_absence_is_exact(self) -> None:
+    def test_complete_provenance_contract_is_exact(self) -> None:
         profile = (ROOT / "templates/crm-activation-profile.py.in").read_text()
-        self.assertIn('{"logical_resource": "seo.container.site", "code": "CONTAINER_NOT_FOUND"}', profile)
-        self.assertIn('provenance.get("complete") is not False', profile)
+        self.assertIn('EXPECTED_PROVENANCE_FAILURES: list[dict[str, str]] = []', profile)
+        self.assertIn('provenance.get("complete") is not True', profile)
         self.assertIn('provenance.get("failures") != EXPECTED_PROVENANCE_FAILURES', profile)
+        self.assertIn('provenance["semantic"]["fingerprint_sha256"] != core.semantic_fingerprint(semantic_records)', profile)
         self.assertIn('"provenance_failures_sha256": _digest(EXPECTED_PROVENANCE_FAILURES)', profile)
-        self.assertNotIn('if not provenance["complete"]', profile)
+        self.assertNotIn('"seo.container.site", "code": "CONTAINER_NOT_FOUND"', profile)
 
     def test_bootstrap_and_sudo_negative_contract(self) -> None:
         installer = (ROOT / "templates/install.sh.in").read_text()
@@ -182,18 +183,19 @@ class StaticContractTests(unittest.TestCase):
             self.assertIn(denied, postinst)
         self.assertNotIn("NOPASSWD: ALL", (ROOT / "packaging/92-yoko-privileged-runtime").read_text())
 
-    def test_installer_pins_preexisting_provenance_failure_and_full_available_identity(self) -> None:
+    def test_installer_requires_complete_provenance_and_full_identity(self) -> None:
         installer = (ROOT / "templates/install.sh.in").read_text()
-        self.assertIn('expected=[{"logical_resource":"seo.container.site","code":"CONTAINER_NOT_FOUND"}]', installer)
-        self.assertIn('e.get("complete") is not False', installer)
+        self.assertIn('expected=[]', installer)
+        self.assertIn('e.get("complete") is not True', installer)
         self.assertIn('e.get("failures")!=expected', installer)
         self.assertIn('record["semantic"].get("name")!=name', installer)
         self.assertIn('semantic["records"]!=expected_semantic', installer)
+        self.assertIn('semantic["fingerprint_sha256"]!=semantic_sha256', installer)
         self.assertIn('"failures_sha256"', installer)
         self.assertIn('"semantic_sha256"', installer)
         self.assertIn('"containers_sha256"', installer)
         self.assertIn('test "$pre_provenance_identity" = "$post_provenance_identity"', installer)
-        self.assertNotIn('v["evidence"]["complete"]', installer)
+        self.assertNotIn('"seo.container.site","code":"CONTAINER_NOT_FOUND"', installer)
 
     def test_installer_provenance_validator_rejects_failure_and_shape_drift(self) -> None:
         installer = (ROOT / "templates/install.sh.in").read_text()
@@ -210,7 +212,10 @@ class StaticContractTests(unittest.TestCase):
             "restart_count": 0,
             "semantic": semantic,
         }
-        expected_failure = [{"logical_resource": "seo.container.site", "code": "CONTAINER_NOT_FOUND"}]
+        expected_fingerprint = hashlib.sha256(json.dumps(
+            {"records": [semantic], "schema": "yoko.ai-calls.production-semantic-identity.v1"},
+            sort_keys=True, separators=(",", ":"),
+        ).encode("ascii")).hexdigest()
 
         def run(value: dict[str, object]) -> subprocess.CompletedProcess[str]:
             return subprocess.run(
@@ -219,14 +224,14 @@ class StaticContractTests(unittest.TestCase):
                 timeout=30,
             )
 
-        accepted = {"ok": True, "evidence": {"complete": False, "failures": expected_failure, "records": [record], "semantic": {"records": [semantic], "fingerprint_sha256": None}}}
+        accepted = {"ok": True, "evidence": {"complete": True, "failures": [], "records": [record], "semantic": {"schema": "yoko.ai-calls.production-semantic-identity.v1", "records": [semantic], "fingerprint_sha256": expected_fingerprint}}}
         self.assertEqual(run(accepted).returncode, 0)
         candidates = []
         for failures, complete in (
             ([], False),
-            (expected_failure, True),
+            ([{"logical_resource": "seo.container.site", "code": "CONTAINER_NOT_FOUND"}], True),
             ([{"logical_resource": "crm.container.telegram_bot", "code": "CONTAINER_NOT_FOUND"}], False),
-            (expected_failure + [{"logical_resource": "crm.container.max_scraper", "code": "CONTAINER_NOT_FOUND"}], False),
+            ([{"logical_resource": "seo.container.site", "code": "CONTAINER_NOT_FOUND"}, {"logical_resource": "crm.container.max_scraper", "code": "CONTAINER_NOT_FOUND"}], False),
         ):
             value = json.loads(json.dumps(accepted))
             value["evidence"]["failures"] = failures
@@ -235,6 +240,9 @@ class StaticContractTests(unittest.TestCase):
         wrong_cross_bind = json.loads(json.dumps(accepted))
         wrong_cross_bind["evidence"]["semantic"]["records"][0]["image_id"] = "sha256:" + "c" * 64
         candidates.append(wrong_cross_bind)
+        wrong_fingerprint = json.loads(json.dumps(accepted))
+        wrong_fingerprint["evidence"]["semantic"]["fingerprint_sha256"] = "0" * 64
+        candidates.append(wrong_fingerprint)
         missing_record = json.loads(json.dumps(accepted))
         missing_record["evidence"]["records"] = []
         candidates.append(missing_record)
@@ -1472,29 +1480,40 @@ class SealedFixtureTests(unittest.TestCase):
             with self.assertRaisesRegex(Exception, "TG_PATCH_NEGATIVE"):
                 self.runtime._validate_tg_patch_probe(FaultCore, self.profile, tampered, self.runtime.TG_PATCH_TARGET_SHA256, "TG_PATCH_NEGATIVE")
 
-    def test_pinned_provenance_failure_set_rejects_any_drift(self) -> None:
+    def test_complete_provenance_rejects_any_failure_or_identity_drift(self) -> None:
         class FakeCore:
             RuntimeFault = self.core.RuntimeFault
 
-            def __init__(self, failures, complete=False):
+            def __init__(self, failures, complete=True):
                 self.failures = failures
                 self.complete = complete
+
+            def semantic_fingerprint(self, records):
+                payload = {
+                    "records": sorted(records, key=lambda item: str(item["name"])),
+                    "schema": "yoko.ai-calls.production-semantic-identity.v1",
+                }
+                return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")).hexdigest()
 
             def docker_provenance(self, _policy):
                 return {
                     "complete": self.complete,
                     "failures": self.failures,
                     "records": [],
-                    "semantic": {"records": []},
+                    "semantic": {
+                        "schema": "yoko.ai-calls.production-semantic-identity.v1",
+                        "records": [],
+                        "fingerprint_sha256": None if self.failures else self.semantic_fingerprint([]),
+                    },
                 }
 
-        exact = [{"logical_resource": "seo.container.site", "code": "CONTAINER_NOT_FOUND"}]
+        exact = []
         self.assertEqual(self.runtime._pinned_provenance(FakeCore(exact), {}), FakeCore(exact).docker_provenance({}))
         for failures, complete in (
-            ([], True),
             ([], False),
+            ([{"logical_resource": "seo.container.site", "code": "CONTAINER_NOT_FOUND"}], True),
             ([{"logical_resource": "crm.container.telegram_bot", "code": "CONTAINER_NOT_FOUND"}], False),
-            (exact + [{"logical_resource": "crm.container.max_scraper", "code": "CONTAINER_NOT_FOUND"}], False),
+            ([{"logical_resource": "seo.container.site", "code": "CONTAINER_NOT_FOUND"}, {"logical_resource": "crm.container.max_scraper", "code": "CONTAINER_NOT_FOUND"}], False),
         ):
             with self.assertRaisesRegex(Exception, "PRODUCTION_PROVENANCE_FAILURE_SET_DRIFT"):
                 self.runtime._pinned_provenance(FakeCore(failures, complete), {})
@@ -1511,6 +1530,7 @@ class SealedFixtureTests(unittest.TestCase):
                 value = super().docker_provenance(_policy)
                 value["records"] = self.records
                 value["semantic"]["records"] = self.semantic_records
+                value["semantic"]["fingerprint_sha256"] = self.semantic_fingerprint(self.semantic_records)
                 return value
 
         record = {"name": "crm-gravity-mvp", "image_id": semantic["image_id"], "semantic": semantic}
@@ -1522,6 +1542,12 @@ class SealedFixtureTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(Exception, "PRODUCTION_PROVENANCE_RECORD_SET_DRIFT"):
                 self.runtime._pinned_provenance(RecordCore(records, semantics), {})
+
+        wrong_fingerprint = RecordCore([record], [semantic])
+        original = wrong_fingerprint.docker_provenance
+        wrong_fingerprint.docker_provenance = lambda policy: {**original(policy), "semantic": {**original(policy)["semantic"], "fingerprint_sha256": "0" * 64}}
+        with self.assertRaisesRegex(Exception, "PRODUCTION_PROVENANCE_RECORD_SET_DRIFT"):
+            self.runtime._pinned_provenance(wrong_fingerprint, {})
 
 
 class ProtectedMessagesPostdeployProbeTests(unittest.TestCase):

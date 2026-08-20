@@ -66,9 +66,7 @@ PRODUCTION_RESOLVE_RUNNER = "yoko-crm-af9646f5-production-resolve"
 BACKUP_LIST_RUNNER = "yoko-crm-af9646f5-backup-list"
 MIGRATION_NAME = "20260809140000_add_domain_outbox"
 ACCEPTED_LIVE_CHRONOLOGY_SHA256 = "62aaa333a8df02cc9c255da14e8bb7ba70ed441098148846f1855c24623ac465"
-EXPECTED_PROVENANCE_FAILURES = [
-    {"logical_resource": "seo.container.site", "code": "CONTAINER_NOT_FOUND"},
-]
+EXPECTED_PROVENANCE_FAILURES: list[dict[str, str]] = []
 APPLICATION_STABILIZATION_SECONDS = 90
 APPLICATION_STABILIZATION_INTERVAL_SECONDS = 2
 APPLICATION_STABILIZATION_REQUIRED_SUCCESSES = 2
@@ -1165,11 +1163,14 @@ def _pinned_provenance(core: Any, policy: dict[str, Any]) -> dict[str, Any]:
     provenance = core.docker_provenance(policy)
     if (
         not isinstance(provenance, dict)
-        or provenance.get("complete") is not False
+        or provenance.get("complete") is not True
         or provenance.get("failures") != EXPECTED_PROVENANCE_FAILURES
         or not isinstance(provenance.get("records"), list)
         or not isinstance(provenance.get("semantic"), dict)
+        or provenance["semantic"].get("schema") != "yoko.ai-calls.production-semantic-identity.v1"
         or not isinstance(provenance["semantic"].get("records"), list)
+        or not isinstance(provenance["semantic"].get("fingerprint_sha256"), str)
+        or not SHA256.fullmatch(provenance["semantic"]["fingerprint_sha256"])
     ):
         raise core.RuntimeFault("PRODUCTION_PROVENANCE_FAILURE_SET_DRIFT", 74)
     records = provenance["records"]
@@ -1185,6 +1186,7 @@ def _pinned_provenance(core: Any, policy: dict[str, Any]) -> dict[str, Any]:
         )
         or len({record["name"] for record in records}) != len(records)
         or semantic_records != sorted((record["semantic"] for record in records), key=lambda item: item["name"])
+        or provenance["semantic"]["fingerprint_sha256"] != core.semantic_fingerprint(semantic_records)
     ):
         raise core.RuntimeFault("PRODUCTION_PROVENANCE_RECORD_SET_DRIFT", 74)
     return provenance

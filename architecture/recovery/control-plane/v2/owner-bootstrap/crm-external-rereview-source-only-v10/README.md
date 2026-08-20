@@ -159,11 +159,10 @@ Gravity and Telegram rollback tags. Activation and recovery always use a fixed
 two-service overlay and one bounded Compose call; any partial/mixed state is
 rolled back as a pair.
 
-The production provenance gate records the exact pre-existing absence of only
-`seo.container.site`. That exact failure list is part of the preflight identity
-and must remain unchanged; any additional, different, or unexpectedly absent
-failure fails closed while all available unrelated-container fingerprints are
-still preserved.
+The production provenance gate requires a complete inventory with an empty
+failure list. Its schema-bound semantic fingerprint and every available
+record's runtime identity are part of the preflight identity and must remain
+unchanged; any missing resource, failure, or fingerprint drift fails closed.
 
 An accepted `schema.prisma` synchronization to the canonical production model
 is allowed and its exact hash is pinned. This does not authorize SQL or a
