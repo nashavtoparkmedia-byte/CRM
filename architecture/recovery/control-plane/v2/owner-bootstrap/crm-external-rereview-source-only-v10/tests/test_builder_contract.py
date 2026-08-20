@@ -164,7 +164,7 @@ class StaticContractTests(unittest.TestCase):
 
     def test_complete_provenance_contract_is_exact(self) -> None:
         profile = (ROOT / "templates/crm-activation-profile.py.in").read_text()
-        self.assertIn('EXPECTED_PROVENANCE_FAILURES: list[dict[str, str]] = []', profile)
+        self.assertIn('Complete provenance is required; no missing resource is accepted.', profile)
         self.assertIn('provenance.get("complete") is not True', profile)
         self.assertIn('provenance.get("failures") != EXPECTED_PROVENANCE_FAILURES', profile)
         self.assertIn('provenance["semantic"]["fingerprint_sha256"] != core.semantic_fingerprint(semantic_records)', profile)

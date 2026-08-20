@@ -36,7 +36,7 @@
     {
       "record_id": "285751a0a8f4a577b7866c586f2cd5c29374bf8fe28aaac7b10b446150192909",
       "site_signature": "285751a0a8f4a577b7866c586f2cd5c29374bf8fe28aaac7b10b446150192909",
-      "source_sha256": "9b6e67405df3ae2626c08f963e0fd74674bd8909b78114866d3f3b53c047a769",
+      "source_sha256": "b3aa90f77f40b21399bbac49737d90f7bfb36514ee95f94aa0448857f719f7c2",
       "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py",
       "line": 505,
       "column": 12,
@@ -61,7 +61,7 @@
         "pg_control_system"
       ],
       "sql_sha256": "1f4094522bade4b4b67314cab42cc3847f506365a4af368ed704b2ed09c25882",
-      "sql_provenance_sha256": "69b36687169cd4bd4e4b99f69987c0e64f7cd0fb2bc09ca959c1208840b379c9",
+      "sql_provenance_sha256": "cf61f0d1848414fb8cec2230d086ebcfdaeec6ee3d1b208cf0ccd8c495332374",
       "source_context": null,
       "source_technical_module": null,
       "owner_contexts": [],
@@ -86,7 +86,7 @@
     {
       "record_id": "db58ec08efaa08ff46d65c6514af2e4e7f3ea91fc829291f3555696d5ab6ffe1",
       "site_signature": "db58ec08efaa08ff46d65c6514af2e4e7f3ea91fc829291f3555696d5ab6ffe1",
-      "source_sha256": "9b6e67405df3ae2626c08f963e0fd74674bd8909b78114866d3f3b53c047a769",
+      "source_sha256": "b3aa90f77f40b21399bbac49737d90f7bfb36514ee95f94aa0448857f719f7c2",
       "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py",
       "line": 587,
       "column": 14,
@@ -124,7 +124,7 @@
         "to_char"
       ],
       "sql_sha256": "cf33ccab7d66812ffd3b0bf0139e01b42bbae530bef6e5b396865bcbae03b7bb",
-      "sql_provenance_sha256": "5bbc6de431f8e4edc3f6630c24037c5b54edd9b5ab6b59ec70975686de927ca5",
+      "sql_provenance_sha256": "240ddaaa14ba907421a7e8b80263c5f01134709e3fce1fb82b7a4071d6f8e774",
       "source_context": null,
       "source_technical_module": null,
       "owner_contexts": [],
@@ -150,7 +150,7 @@
     {
       "record_id": "ed73ec50cf0da00bc470d3f5bfd82747620760e0c4f6bfa706b42dff421ce67a",
       "site_signature": "ed73ec50cf0da00bc470d3f5bfd82747620760e0c4f6bfa706b42dff421ce67a",
-      "source_sha256": "9b6e67405df3ae2626c08f963e0fd74674bd8909b78114866d3f3b53c047a769",
+      "source_sha256": "b3aa90f77f40b21399bbac49737d90f7bfb36514ee95f94aa0448857f719f7c2",
       "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py",
       "line": 587,
       "column": 14,
@@ -190,7 +190,7 @@
         "to_char"
       ],
       "sql_sha256": "c92726a047fa91cec3b709b135a89d6ca9ea15fbbf61fe2351c44f9a4c16d1b3",
-      "sql_provenance_sha256": "832abc50ce8cf1309a6bb6b3f2e887f4b151f6eda984777bc556dc7a202e9765",
+      "sql_provenance_sha256": "ab07d82cade098495f3b71ed688dce33b41d221859a362e0e51801f4e72b16e3",
       "source_context": null,
       "source_technical_module": null,
       "owner_contexts": [],
@@ -216,7 +216,7 @@
     {
       "record_id": "3a19a0dbda9182e8fb61901a6f9645d519e97bfafed996916694e437e387d307",
       "site_signature": "3a19a0dbda9182e8fb61901a6f9645d519e97bfafed996916694e437e387d307",
-      "source_sha256": "9b6e67405df3ae2626c08f963e0fd74674bd8909b78114866d3f3b53c047a769",
+      "source_sha256": "b3aa90f77f40b21399bbac49737d90f7bfb36514ee95f94aa0448857f719f7c2",
       "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py",
       "line": 741,
       "column": 14,
@@ -267,7 +267,7 @@
         "to_regclass"
       ],
       "sql_sha256": "ed9cfd406f605d57ad81ce24b9bc1f8bb572087e6e9c12680cce71f154ca2341",
-      "sql_provenance_sha256": "6681928f8d79a21959ae45d7c0118c67d69d5e079deb2a79aafa8b342a908b5c",
+      "sql_provenance_sha256": "5ac07f95af6fe1410ed01d9a43e936109c5ab916e3bc251db4b98742d60b0032",
       "source_context": null,
       "source_technical_module": null,
       "owner_contexts": [],
@@ -292,7 +292,7 @@
     {
       "record_id": "e1bb0d06f7069896ad0113852070e1047b5b3226ad79cfe239943b95585c1827",
       "site_signature": "e1bb0d06f7069896ad0113852070e1047b5b3226ad79cfe239943b95585c1827",
-      "source_sha256": "9b6e67405df3ae2626c08f963e0fd74674bd8909b78114866d3f3b53c047a769",
+      "source_sha256": "b3aa90f77f40b21399bbac49737d90f7bfb36514ee95f94aa0448857f719f7c2",
       "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in",
       "line": 505,
       "column": 12,
@@ -317,7 +317,7 @@
         "pg_control_system"
       ],
       "sql_sha256": "1f4094522bade4b4b67314cab42cc3847f506365a4af368ed704b2ed09c25882",
-      "sql_provenance_sha256": "6af7fefeac2b018116220b096602d94c27a0c9fb332fc064ec9259615831586f",
+      "sql_provenance_sha256": "74d04038941c96d2b289840f1669c046efbda976bf13489dda70618cac3d549f",
       "source_context": null,
       "source_technical_module": null,
       "owner_contexts": [],
@@ -342,7 +342,7 @@
     {
       "record_id": "493cd2bbc915132b5b76f372dc8538929757c7ea4379ac3cfff69584e5a07c62",
       "site_signature": "493cd2bbc915132b5b76f372dc8538929757c7ea4379ac3cfff69584e5a07c62",
-      "source_sha256": "9b6e67405df3ae2626c08f963e0fd74674bd8909b78114866d3f3b53c047a769",
+      "source_sha256": "b3aa90f77f40b21399bbac49737d90f7bfb36514ee95f94aa0448857f719f7c2",
       "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in",
       "line": 587,
       "column": 14,
@@ -382,7 +382,7 @@
         "to_char"
       ],
       "sql_sha256": "c92726a047fa91cec3b709b135a89d6ca9ea15fbbf61fe2351c44f9a4c16d1b3",
-      "sql_provenance_sha256": "170ffd001625046e37319d646a91beb547230403916c41247d8e16d79222a6bd",
+      "sql_provenance_sha256": "277111a3b2eefc5e2a43ca54a20d073054d6ac591b27ac5568090ad04201d7db",
       "source_context": null,
       "source_technical_module": null,
       "owner_contexts": [],
@@ -408,7 +408,7 @@
     {
       "record_id": "daebc11dfee4c485a983a0160cab94ee9065ee492a46dcb13d73e5d7094b465a",
       "site_signature": "daebc11dfee4c485a983a0160cab94ee9065ee492a46dcb13d73e5d7094b465a",
-      "source_sha256": "9b6e67405df3ae2626c08f963e0fd74674bd8909b78114866d3f3b53c047a769",
+      "source_sha256": "b3aa90f77f40b21399bbac49737d90f7bfb36514ee95f94aa0448857f719f7c2",
       "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in",
       "line": 587,
       "column": 14,
@@ -446,7 +446,7 @@
         "to_char"
       ],
       "sql_sha256": "cf33ccab7d66812ffd3b0bf0139e01b42bbae530bef6e5b396865bcbae03b7bb",
-      "sql_provenance_sha256": "a28470831062740a05d1d8b839db9763a57b10dc7ea6eb3c9f933e3a505b029f",
+      "sql_provenance_sha256": "da11e7b70c375fcba81b731566d868d9313d2c573341dea4c9bb763c0ada9363",
       "source_context": null,
       "source_technical_module": null,
       "owner_contexts": [],
@@ -472,7 +472,7 @@
     {
       "record_id": "d9186fc05728ff6f00cac9f9eb60aee5df74438494c9a4b377c617d4e0bf07a3",
       "site_signature": "d9186fc05728ff6f00cac9f9eb60aee5df74438494c9a4b377c617d4e0bf07a3",
-      "source_sha256": "9b6e67405df3ae2626c08f963e0fd74674bd8909b78114866d3f3b53c047a769",
+      "source_sha256": "b3aa90f77f40b21399bbac49737d90f7bfb36514ee95f94aa0448857f719f7c2",
       "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in",
       "line": 741,
       "column": 14,
@@ -523,7 +523,7 @@
         "to_regclass"
       ],
       "sql_sha256": "ed9cfd406f605d57ad81ce24b9bc1f8bb572087e6e9c12680cce71f154ca2341",
-      "sql_provenance_sha256": "fa3260ef3a01d6a209d70853474af9d33b081d0265ea979bfb7fd3458a5e1edb",
+      "sql_provenance_sha256": "daf298115f0fa6888b9cdf32fb0cf28daacf495e2a31f0812dfd0ab4352e0d89",
       "source_context": null,
       "source_technical_module": null,
       "owner_contexts": [],
@@ -2610,8 +2610,8 @@
         "line": 505,
         "column": 12,
         "method": "mixed-script-sql",
-        "source_sha256": "9b6e67405df3ae2626c08f963e0fd74674bd8909b78114866d3f3b53c047a769",
-        "sql_provenance_sha256": "69b36687169cd4bd4e4b99f69987c0e64f7cd0fb2bc09ca959c1208840b379c9"
+        "source_sha256": "b3aa90f77f40b21399bbac49737d90f7bfb36514ee95f94aa0448857f719f7c2",
+        "sql_provenance_sha256": "cf61f0d1848414fb8cec2230d086ebcfdaeec6ee3d1b208cf0ccd8c495332374"
       },
       "resolved_target": {
         "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
@@ -2635,8 +2635,8 @@
         "analysis_site_signature:285751a0a8f4a577b7866c586f2cd5c29374bf8fe28aaac7b10b446150192909",
         "sql_sha256:1f4094522bade4b4b67314cab42cc3847f506365a4af368ed704b2ed09c25882",
         "Exact embedded SELECT invokes only independently reviewed read-only PostgreSQL projection, catalog, identity, formatting, and hashing functions.",
-        "source_sha256:9b6e67405df3ae2626c08f963e0fd74674bd8909b78114866d3f3b53c047a769",
-        "sql_provenance_sha256:69b36687169cd4bd4e4b99f69987c0e64f7cd0fb2bc09ca959c1208840b379c9"
+        "source_sha256:b3aa90f77f40b21399bbac49737d90f7bfb36514ee95f94aa0448857f719f7c2",
+        "sql_provenance_sha256:cf61f0d1848414fb8cec2230d086ebcfdaeec6ee3d1b208cf0ccd8c495332374"
       ]
     },
     {
@@ -2647,8 +2647,8 @@
         "line": 587,
         "column": 14,
         "method": "mixed-script-sql",
-        "source_sha256": "9b6e67405df3ae2626c08f963e0fd74674bd8909b78114866d3f3b53c047a769",
-        "sql_provenance_sha256": "5bbc6de431f8e4edc3f6630c24037c5b54edd9b5ab6b59ec70975686de927ca5"
+        "source_sha256": "b3aa90f77f40b21399bbac49737d90f7bfb36514ee95f94aa0448857f719f7c2",
+        "sql_provenance_sha256": "240ddaaa14ba907421a7e8b80263c5f01134709e3fce1fb82b7a4071d6f8e774"
       },
       "resolved_target": {
         "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
@@ -2685,8 +2685,8 @@
         "analysis_site_signature:db58ec08efaa08ff46d65c6514af2e4e7f3ea91fc829291f3555696d5ab6ffe1",
         "sql_sha256:cf33ccab7d66812ffd3b0bf0139e01b42bbae530bef6e5b396865bcbae03b7bb",
         "Exact embedded SELECT invokes only independently reviewed read-only PostgreSQL projection, catalog, identity, formatting, and hashing functions.",
-        "source_sha256:9b6e67405df3ae2626c08f963e0fd74674bd8909b78114866d3f3b53c047a769",
-        "sql_provenance_sha256:5bbc6de431f8e4edc3f6630c24037c5b54edd9b5ab6b59ec70975686de927ca5"
+        "source_sha256:b3aa90f77f40b21399bbac49737d90f7bfb36514ee95f94aa0448857f719f7c2",
+        "sql_provenance_sha256:240ddaaa14ba907421a7e8b80263c5f01134709e3fce1fb82b7a4071d6f8e774"
       ]
     },
     {
@@ -2697,8 +2697,8 @@
         "line": 587,
         "column": 14,
         "method": "mixed-script-sql",
-        "source_sha256": "9b6e67405df3ae2626c08f963e0fd74674bd8909b78114866d3f3b53c047a769",
-        "sql_provenance_sha256": "832abc50ce8cf1309a6bb6b3f2e887f4b151f6eda984777bc556dc7a202e9765"
+        "source_sha256": "b3aa90f77f40b21399bbac49737d90f7bfb36514ee95f94aa0448857f719f7c2",
+        "sql_provenance_sha256": "ab07d82cade098495f3b71ed688dce33b41d221859a362e0e51801f4e72b16e3"
       },
       "resolved_target": {
         "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
@@ -2737,8 +2737,8 @@
         "analysis_site_signature:ed73ec50cf0da00bc470d3f5bfd82747620760e0c4f6bfa706b42dff421ce67a",
         "sql_sha256:c92726a047fa91cec3b709b135a89d6ca9ea15fbbf61fe2351c44f9a4c16d1b3",
         "Exact embedded SELECT invokes only independently reviewed read-only PostgreSQL projection, catalog, identity, formatting, and hashing functions.",
-        "source_sha256:9b6e67405df3ae2626c08f963e0fd74674bd8909b78114866d3f3b53c047a769",
-        "sql_provenance_sha256:832abc50ce8cf1309a6bb6b3f2e887f4b151f6eda984777bc556dc7a202e9765"
+        "source_sha256:b3aa90f77f40b21399bbac49737d90f7bfb36514ee95f94aa0448857f719f7c2",
+        "sql_provenance_sha256:ab07d82cade098495f3b71ed688dce33b41d221859a362e0e51801f4e72b16e3"
       ]
     },
     {
@@ -2749,8 +2749,8 @@
         "line": 741,
         "column": 14,
         "method": "mixed-script-sql",
-        "source_sha256": "9b6e67405df3ae2626c08f963e0fd74674bd8909b78114866d3f3b53c047a769",
-        "sql_provenance_sha256": "6681928f8d79a21959ae45d7c0118c67d69d5e079deb2a79aafa8b342a908b5c"
+        "source_sha256": "b3aa90f77f40b21399bbac49737d90f7bfb36514ee95f94aa0448857f719f7c2",
+        "sql_provenance_sha256": "5ac07f95af6fe1410ed01d9a43e936109c5ab916e3bc251db4b98742d60b0032"
       },
       "resolved_target": {
         "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
@@ -2800,8 +2800,8 @@
         "analysis_site_signature:3a19a0dbda9182e8fb61901a6f9645d519e97bfafed996916694e437e387d307",
         "sql_sha256:ed9cfd406f605d57ad81ce24b9bc1f8bb572087e6e9c12680cce71f154ca2341",
         "Exact embedded SELECT invokes only independently reviewed read-only PostgreSQL projection, catalog, identity, formatting, and hashing functions.",
-        "source_sha256:9b6e67405df3ae2626c08f963e0fd74674bd8909b78114866d3f3b53c047a769",
-        "sql_provenance_sha256:6681928f8d79a21959ae45d7c0118c67d69d5e079deb2a79aafa8b342a908b5c"
+        "source_sha256:b3aa90f77f40b21399bbac49737d90f7bfb36514ee95f94aa0448857f719f7c2",
+        "sql_provenance_sha256:5ac07f95af6fe1410ed01d9a43e936109c5ab916e3bc251db4b98742d60b0032"
       ]
     },
     {
@@ -2812,8 +2812,8 @@
         "line": 505,
         "column": 12,
         "method": "mixed-script-sql",
-        "source_sha256": "9b6e67405df3ae2626c08f963e0fd74674bd8909b78114866d3f3b53c047a769",
-        "sql_provenance_sha256": "6af7fefeac2b018116220b096602d94c27a0c9fb332fc064ec9259615831586f"
+        "source_sha256": "b3aa90f77f40b21399bbac49737d90f7bfb36514ee95f94aa0448857f719f7c2",
+        "sql_provenance_sha256": "74d04038941c96d2b289840f1669c046efbda976bf13489dda70618cac3d549f"
       },
       "resolved_target": {
         "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
@@ -2837,8 +2837,8 @@
         "analysis_site_signature:e1bb0d06f7069896ad0113852070e1047b5b3226ad79cfe239943b95585c1827",
         "sql_sha256:1f4094522bade4b4b67314cab42cc3847f506365a4af368ed704b2ed09c25882",
         "Exact embedded SELECT invokes only independently reviewed read-only PostgreSQL projection, catalog, identity, formatting, and hashing functions.",
-        "source_sha256:9b6e67405df3ae2626c08f963e0fd74674bd8909b78114866d3f3b53c047a769",
-        "sql_provenance_sha256:6af7fefeac2b018116220b096602d94c27a0c9fb332fc064ec9259615831586f"
+        "source_sha256:b3aa90f77f40b21399bbac49737d90f7bfb36514ee95f94aa0448857f719f7c2",
+        "sql_provenance_sha256:74d04038941c96d2b289840f1669c046efbda976bf13489dda70618cac3d549f"
       ]
     },
     {
@@ -2849,8 +2849,8 @@
         "line": 587,
         "column": 14,
         "method": "mixed-script-sql",
-        "source_sha256": "9b6e67405df3ae2626c08f963e0fd74674bd8909b78114866d3f3b53c047a769",
-        "sql_provenance_sha256": "170ffd001625046e37319d646a91beb547230403916c41247d8e16d79222a6bd"
+        "source_sha256": "b3aa90f77f40b21399bbac49737d90f7bfb36514ee95f94aa0448857f719f7c2",
+        "sql_provenance_sha256": "277111a3b2eefc5e2a43ca54a20d073054d6ac591b27ac5568090ad04201d7db"
       },
       "resolved_target": {
         "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
@@ -2889,8 +2889,8 @@
         "analysis_site_signature:493cd2bbc915132b5b76f372dc8538929757c7ea4379ac3cfff69584e5a07c62",
         "sql_sha256:c92726a047fa91cec3b709b135a89d6ca9ea15fbbf61fe2351c44f9a4c16d1b3",
         "Exact embedded SELECT invokes only independently reviewed read-only PostgreSQL projection, catalog, identity, formatting, and hashing functions.",
-        "source_sha256:9b6e67405df3ae2626c08f963e0fd74674bd8909b78114866d3f3b53c047a769",
-        "sql_provenance_sha256:170ffd001625046e37319d646a91beb547230403916c41247d8e16d79222a6bd"
+        "source_sha256:b3aa90f77f40b21399bbac49737d90f7bfb36514ee95f94aa0448857f719f7c2",
+        "sql_provenance_sha256:277111a3b2eefc5e2a43ca54a20d073054d6ac591b27ac5568090ad04201d7db"
       ]
     },
     {
@@ -2901,8 +2901,8 @@
         "line": 587,
         "column": 14,
         "method": "mixed-script-sql",
-        "source_sha256": "9b6e67405df3ae2626c08f963e0fd74674bd8909b78114866d3f3b53c047a769",
-        "sql_provenance_sha256": "a28470831062740a05d1d8b839db9763a57b10dc7ea6eb3c9f933e3a505b029f"
+        "source_sha256": "b3aa90f77f40b21399bbac49737d90f7bfb36514ee95f94aa0448857f719f7c2",
+        "sql_provenance_sha256": "da11e7b70c375fcba81b731566d868d9313d2c573341dea4c9bb763c0ada9363"
       },
       "resolved_target": {
         "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
@@ -2939,8 +2939,8 @@
         "analysis_site_signature:daebc11dfee4c485a983a0160cab94ee9065ee492a46dcb13d73e5d7094b465a",
         "sql_sha256:cf33ccab7d66812ffd3b0bf0139e01b42bbae530bef6e5b396865bcbae03b7bb",
         "Exact embedded SELECT invokes only independently reviewed read-only PostgreSQL projection, catalog, identity, formatting, and hashing functions.",
-        "source_sha256:9b6e67405df3ae2626c08f963e0fd74674bd8909b78114866d3f3b53c047a769",
-        "sql_provenance_sha256:a28470831062740a05d1d8b839db9763a57b10dc7ea6eb3c9f933e3a505b029f"
+        "source_sha256:b3aa90f77f40b21399bbac49737d90f7bfb36514ee95f94aa0448857f719f7c2",
+        "sql_provenance_sha256:da11e7b70c375fcba81b731566d868d9313d2c573341dea4c9bb763c0ada9363"
       ]
     },
     {
@@ -2951,8 +2951,8 @@
         "line": 741,
         "column": 14,
         "method": "mixed-script-sql",
-        "source_sha256": "9b6e67405df3ae2626c08f963e0fd74674bd8909b78114866d3f3b53c047a769",
-        "sql_provenance_sha256": "fa3260ef3a01d6a209d70853474af9d33b081d0265ea979bfb7fd3458a5e1edb"
+        "source_sha256": "b3aa90f77f40b21399bbac49737d90f7bfb36514ee95f94aa0448857f719f7c2",
+        "sql_provenance_sha256": "daf298115f0fa6888b9cdf32fb0cf28daacf495e2a31f0812dfd0ab4352e0d89"
       },
       "resolved_target": {
         "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
@@ -3002,8 +3002,8 @@
         "analysis_site_signature:d9186fc05728ff6f00cac9f9eb60aee5df74438494c9a4b377c617d4e0bf07a3",
         "sql_sha256:ed9cfd406f605d57ad81ce24b9bc1f8bb572087e6e9c12680cce71f154ca2341",
         "Exact embedded SELECT invokes only independently reviewed read-only PostgreSQL projection, catalog, identity, formatting, and hashing functions.",
-        "source_sha256:9b6e67405df3ae2626c08f963e0fd74674bd8909b78114866d3f3b53c047a769",
-        "sql_provenance_sha256:fa3260ef3a01d6a209d70853474af9d33b081d0265ea979bfb7fd3458a5e1edb"
+        "source_sha256:b3aa90f77f40b21399bbac49737d90f7bfb36514ee95f94aa0448857f719f7c2",
+        "sql_provenance_sha256:daf298115f0fa6888b9cdf32fb0cf28daacf495e2a31f0812dfd0ab4352e0d89"
       ]
     },
     {
