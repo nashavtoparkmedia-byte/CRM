@@ -29,7 +29,10 @@ TG_BOT_PREDECESSOR_IMAGE = "sha256:0849c4c9912aecf3cb7c35b51abba22cdb1c85a385afa
 TG_BOT_PATCH_PATH = "tg-bot/src/public-bot-maintenance.js"
 TG_BOT_PATCH_DESTINATION = "/app/src/public-bot-maintenance.js"
 TG_BOT_PATCH_SHA256 = "d31a95451e148423ce8ad0dad0b78d4d7a487f428d5103a05bd3fed4c454c247"
-TG_BOT_BASELINE_SHA256 = "22bdb3fd236f04abdd9a2e825b2340339e92664ec94b36d582004d0d6756ed97"
+TG_BOT_BASELINE_STATE = "ABSENT"
+TG_BOT_BASELINE_MANIFEST_PATH = "architecture/migrations/v1/provenance/root-broker/20260808T122923Z/runtime-manifests/runtime-content-manifest.v1.sanitized.json"
+TG_BOT_BASELINE_MANIFEST_FILE_SHA256 = "1bd1d5100cabeb37277262179ee1119b3dcd9154b9774947dcf218d38e4d19fe"
+TG_BOT_BASELINE_MANIFEST_SHA256 = "72397e9c7e3c728b94d1e5645da825ddd75216bfacd13212b4671fe15f206d56"
 SHA40 = re.compile(r"[0-9a-f]{40}")
 SHA64 = re.compile(r"[0-9a-f]{64}")
 GITHUB_REPOSITORY = "nashavtoparkmedia-byte/CRM"
@@ -1168,6 +1171,50 @@ def tg_bot_patch_recipe(commit: str, archive_sha256: str, profile_id: str) -> by
     ).encode("ascii")
 
 
+def validate_tg_bot_baseline_manifest(repo: Path, commit: str, snapshot: dict[str, object]) -> None:
+    raw = git_blob(repo, commit, TG_BOT_BASELINE_MANIFEST_PATH)
+    if (
+        sha(raw) != TG_BOT_BASELINE_MANIFEST_FILE_SHA256
+        or snapshot["tg_bot_patch_baseline_manifest_file_sha256"] != TG_BOT_BASELINE_MANIFEST_FILE_SHA256
+        or snapshot["tg_bot_patch_baseline_manifest_sha256"] != TG_BOT_BASELINE_MANIFEST_SHA256
+    ):
+        raise SystemExit("Telegram predecessor filesystem manifest identity drift")
+    document = strict_json_bytes(raw, "Telegram predecessor filesystem manifest")
+    if (
+        not isinstance(document, dict)
+        or set(document) != {"schema", "source_artifact", "source_artifact_sha256", "command", "containers"}
+        or document.get("schema") != "CRM-ARCH-000R-1-SANITIZED-DERIVATIVE"
+        or document.get("command") != "runtime-content-manifest"
+        or not isinstance(document.get("containers"), list)
+    ):
+        raise SystemExit("Telegram predecessor filesystem manifest structure drift")
+    matches = [row for row in document["containers"] if isinstance(row, dict) and row.get("name") == "crm-tg-bot"]
+    if len(matches) != 1:
+        raise SystemExit("Telegram predecessor filesystem manifest container inventory drift")
+    container = matches[0]
+    records = container.get("records")
+    if not isinstance(records, list) or any(not isinstance(row, dict) or not isinstance(row.get("path"), str) for row in records):
+        raise SystemExit("Telegram predecessor filesystem manifest record structure drift")
+    paths = [row["path"] for row in records]
+    if (
+        container.get("container_id") != snapshot["tg_bot_container_id"]
+        or container.get("image_id") != TG_BOT_PREDECESSOR_IMAGE
+        or container.get("started_at") != "2026-08-05T09:48:11.147093533Z"
+        or container.get("roots") != ["/app", "/usr/local/bin/tg-bot-entrypoint"]
+        or container.get("file_count") != 43
+        or container.get("hashed_bytes") != 239811
+        or container.get("derivative_excluded_record_count") != 0
+        or container.get("sanitized_manifest_sha256") != TG_BOT_BASELINE_MANIFEST_SHA256
+        or container.get("original_manifest_sha256") != TG_BOT_BASELINE_MANIFEST_SHA256
+        or container.get("manifest_sha256") is not None
+        or len(records) != 43
+        or len(paths) != len(set(paths))
+        or any(not path.startswith("/") for path in paths)
+        or TG_BOT_PATCH_DESTINATION in paths
+    ):
+        raise SystemExit("Telegram predecessor baseline is not the exact proven absent-file state")
+
+
 def load_exact(path: Path, keys: set[str]) -> dict[str, object]:
     value = strict_json_bytes(path.read_bytes(), str(path))
     if not isinstance(value, dict) or set(value) != keys:
@@ -1274,12 +1321,12 @@ def main() -> None:
     except (OSError, ValueError) as exc:
         raise SystemExit(f"production snapshot transcript validation failed: {exc}") from exc
     if (
-        snapshot_document["schema"] != "yoko.crm.source-only-production-snapshot.v2"
+        snapshot_document["schema"] != "yoko.crm.source-only-production-snapshot.v3"
         or snapshot_document["status"] != "ACCEPTED_READ_ONLY_CAPTURE"
         or snapshot_document["host"] != "jvxthcorvm"
-        or snapshot["runtime_package_version"] != "2.0.0-9"
+        or snapshot["runtime_package_version"] != "2.0.0-10"
         or snapshot["runtime_abi"] != "2.0.0"
-        or snapshot["profile_id"] != "crm-af9646f5-gravity-outbox-v1"
+        or snapshot["profile_id"] != "crm-451c0ea4ca54-gravity-source-v1"
         or snapshot["audit_state"] != "VALID"
         or snapshot["audit_records"] != 19
         or snapshot["audit_last_digest"] != "95668295b49045f430f19512d7cd60c81c88ae6e3586f26dd39fcf12a09f0c81"
@@ -1297,17 +1344,16 @@ def main() -> None:
         or snapshot["tg_bot_declared_user"] != ""
         or snapshot["tg_bot_working_dir"] != "/app"
         or snapshot["tg_bot_patch_path"] != TG_BOT_PATCH_DESTINATION
-        or snapshot["tg_bot_patch_sha256"] != TG_BOT_BASELINE_SHA256
-        or snapshot["tg_bot_patch_uid"] != 0
-        or snapshot["tg_bot_patch_gid"] != 0
-        or snapshot["tg_bot_patch_mode"] != "0644"
-        or snapshot["tg_bot_patch_size"] != 2385
+        or snapshot["tg_bot_patch_baseline_state"] != TG_BOT_BASELINE_STATE
+        or snapshot["tg_bot_patch_baseline_manifest_file_sha256"] != TG_BOT_BASELINE_MANIFEST_FILE_SHA256
+        or snapshot["tg_bot_patch_baseline_manifest_sha256"] != TG_BOT_BASELINE_MANIFEST_SHA256
         or snapshot["outbox_catalog_state"] != "EXACT"
         or not accepted_outbox_counts(snapshot["outbox_counts"])
         or snapshot["secret_values_emitted"] is not False
         or snapshot["production_mutated"] is not False
     ):
-        raise SystemExit("production snapshot is not the accepted 2.0.0-9 / 7aea / baf442 predecessor")
+        raise SystemExit("production snapshot is not the accepted installed v10 control plane over the 7aea / baf442 production predecessor")
+    validate_tg_bot_baseline_manifest(repo, commit, snapshot)
     for key in ("audit_last_digest", "source_manifest_sha256", "compose_sha256", "compose_config_hash", "gravity_container_id", "tg_bot_container_id", "tg_bot_compose_config_hash", "database_identity_sha256", "migration_ledger_sha256", "outbox_catalog_sha256"):
         if not SHA64.fullmatch(str(snapshot[key])):
             raise SystemExit(f"invalid production snapshot digest: {key}")
@@ -1437,7 +1483,7 @@ def main() -> None:
         "sequence_sha256": live_chronology_sha256,
     }
     production = profile["production"]
-    for key in ("source_manifest_sha256", "compose_sha256", "compose_config_hash", "gravity_container_id", "gravity_image_id", "tg_bot_container_id", "tg_bot_image_id", "tg_bot_compose_config_hash", "tg_bot_entrypoint", "tg_bot_cmd", "tg_bot_declared_user", "tg_bot_working_dir", "tg_bot_patch_uid", "tg_bot_patch_gid", "tg_bot_patch_mode", "tg_bot_patch_size", "postgres_container_id", "postgres_image_id"):
+    for key in ("source_manifest_sha256", "compose_sha256", "compose_config_hash", "gravity_container_id", "gravity_image_id", "tg_bot_container_id", "tg_bot_image_id", "tg_bot_compose_config_hash", "tg_bot_entrypoint", "tg_bot_cmd", "tg_bot_declared_user", "tg_bot_working_dir", "tg_bot_patch_baseline_state", "tg_bot_patch_baseline_manifest_file_sha256", "tg_bot_patch_baseline_manifest_sha256", "postgres_container_id", "postgres_image_id"):
         production[key] = snapshot[key]
     recovery = profile["recovery"]
     recovery.update({"prior_compose_config_hash": snapshot["compose_config_hash"], "recovered_gravity_container_id": snapshot["gravity_container_id"], "recovered_compose_config_hash": snapshot["compose_config_hash"], "prior_tg_bot_image_id": snapshot["tg_bot_image_id"], "prior_tg_bot_compose_config_hash": snapshot["tg_bot_compose_config_hash"], "recovered_tg_bot_container_id": snapshot["tg_bot_container_id"], "recovered_tg_bot_compose_config_hash": snapshot["tg_bot_compose_config_hash"], "database_identity_sha256": snapshot["database_identity_sha256"], "migration_ledger_sha256": snapshot["migration_ledger_sha256"], "preview_outbox_catalog_sha256": snapshot["outbox_catalog_sha256"]})

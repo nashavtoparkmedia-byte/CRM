@@ -140,15 +140,16 @@ class StaticContractTests(unittest.TestCase):
         self.assertIn('"--no-deps", "--no-build", "--pull", "never", "--force-recreate", "--wait"', profile)
         self.assertIn('COPY --chown=0:0 --chmod=0644 public-bot-maintenance.js /app/src/public-bot-maintenance.js', profile)
         self.assertIn('[DOCKER, "diff", TG_DIFF_PROOF_CONTAINER]', profile)
-        self.assertIn('[f"C {TG_PATCH_DESTINATION}"]', profile)
+        self.assertIn('[f"A {TG_PATCH_DESTINATION}"]', profile)
         self.assertIn('target_layers[:-1] != base_layers', profile)
         self.assertIn('target_config != base_config', profile)
         self.assertIn('"--pull=false", "--network", "none", "--no-cache"', profile)
         self.assertIn('"gravity-mvp", TG_BOT_PATCH_PATH', seal)
-        self.assertEqual(snapshot["schema"], "yoko.crm.source-only-production-snapshot.v2")
+        self.assertEqual(snapshot["schema"], "yoko.crm.source-only-production-snapshot.v3")
         self.assertEqual(snapshot["status"], "RECAPTURE_REQUIRED")
         self.assertEqual(snapshot["observed"], {})
-        self.assertEqual(snapshot["sealed_predecessor_authority"]["tg_bot_patch_sha256"], "22bdb3fd236f04abdd9a2e825b2340339e92664ec94b36d582004d0d6756ed97")
+        self.assertEqual(snapshot["sealed_predecessor_authority"]["tg_bot_patch_baseline_state"], "ABSENT")
+        self.assertEqual(snapshot["sealed_predecessor_authority"]["tg_bot_patch_baseline_manifest_sha256"], "72397e9c7e3c728b94d1e5645da825ddd75216bfacd13212b4671fe15f206d56")
         self.assertIn("capture-production-snapshot.py", seal)
         self.assertIn("load_snapshot(args.production_snapshot.resolve(strict=True))", seal)
 
@@ -422,6 +423,27 @@ class HostedCiAcceptanceTests(unittest.TestCase):
             path.write_bytes(b'{"schema":"first","schema":"second"}\n')
             with self.assertRaisesRegex(SystemExit, "invalid"):
                 self.sealer.load_exact(path, {"schema"})
+
+    def test_tg_predecessor_absence_is_bound_to_exact_container_manifest(self) -> None:
+        manifest = (repository_root() / self.sealer.TG_BOT_BASELINE_MANIFEST_PATH).read_bytes()
+        snapshot = {
+            "tg_bot_container_id": "c3fae82f86726739c6e768cd524f5903a1d0a9a0e926f86d9cc559ac633c0f7a",
+            "tg_bot_patch_baseline_manifest_file_sha256": self.sealer.TG_BOT_BASELINE_MANIFEST_FILE_SHA256,
+            "tg_bot_patch_baseline_manifest_sha256": self.sealer.TG_BOT_BASELINE_MANIFEST_SHA256,
+        }
+        original_git_blob = self.sealer.git_blob
+        try:
+            self.sealer.git_blob = lambda _repo, _commit, _path: manifest
+            self.sealer.validate_tg_bot_baseline_manifest(Path("/unused"), "0" * 40, snapshot)
+            self.sealer.git_blob = lambda _repo, _commit, _path: manifest + b"\n"
+            with self.assertRaisesRegex(SystemExit, "filesystem manifest identity drift"):
+                self.sealer.validate_tg_bot_baseline_manifest(Path("/unused"), "0" * 40, snapshot)
+            wrong_container = dict(snapshot, tg_bot_container_id="1" * 64)
+            self.sealer.git_blob = lambda _repo, _commit, _path: manifest
+            with self.assertRaisesRegex(SystemExit, "exact proven absent-file state"):
+                self.sealer.validate_tg_bot_baseline_manifest(Path("/unused"), "0" * 40, wrong_container)
+        finally:
+            self.sealer.git_blob = original_git_blob
 
     def test_migration_authority_input_is_exact_accepted_commit_blob(self) -> None:
         authority_path = repository_root() / MIGRATION_AUTHORITY_PATH
@@ -934,9 +956,9 @@ class SealedFixtureTests(unittest.TestCase):
         cls.acceptance = temp / "acceptance.json"
         cls.acceptance.write_text(json.dumps(acceptance), encoding="ascii")
         snapshot = {
-            "runtime_package_version": "2.0.0-9",
+            "runtime_package_version": "2.0.0-10",
             "runtime_abi": "2.0.0",
-            "profile_id": "crm-af9646f5-gravity-outbox-v1",
+            "profile_id": "crm-451c0ea4ca54-gravity-source-v1",
             "audit_state": "VALID",
             "audit_records": 19,
             "audit_last_digest": "95668295b49045f430f19512d7cd60c81c88ae6e3586f26dd39fcf12a09f0c81",
@@ -960,11 +982,9 @@ class SealedFixtureTests(unittest.TestCase):
             "tg_bot_declared_user": "",
             "tg_bot_working_dir": "/app",
             "tg_bot_patch_path": fixture_sealer.TG_BOT_PATCH_DESTINATION,
-            "tg_bot_patch_sha256": fixture_sealer.TG_BOT_BASELINE_SHA256,
-            "tg_bot_patch_uid": 0,
-            "tg_bot_patch_gid": 0,
-            "tg_bot_patch_mode": "0644",
-            "tg_bot_patch_size": 2385,
+            "tg_bot_patch_baseline_state": fixture_sealer.TG_BOT_BASELINE_STATE,
+            "tg_bot_patch_baseline_manifest_file_sha256": fixture_sealer.TG_BOT_BASELINE_MANIFEST_FILE_SHA256,
+            "tg_bot_patch_baseline_manifest_sha256": fixture_sealer.TG_BOT_BASELINE_MANIFEST_SHA256,
             "postgres_container_id": "57a09acd5b407d72934ea4cb398874fec60d25a815265b018ba9dd4ab5dbddda",
             "postgres_image_id": "sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229",
             "database_identity_sha256": "ed88dfeaad2a3dc2e759590d295992cd06531d4403d896ded00b21ea667be1c9",
@@ -976,7 +996,7 @@ class SealedFixtureTests(unittest.TestCase):
             "production_mutated": False,
         }
         snapshot_document = {
-            "schema": "yoko.crm.source-only-production-snapshot.v2",
+            "schema": "yoko.crm.source-only-production-snapshot.v3",
             "status": "ACCEPTED_READ_ONLY_CAPTURE",
             "host": "jvxthcorvm",
         }
@@ -1461,11 +1481,11 @@ class SealedFixtureTests(unittest.TestCase):
         class FaultCore:
             RuntimeFault = self.core.RuntimeFault
 
-        self.runtime._validate_tg_diff_lines(FaultCore, [f"C {self.runtime.TG_PATCH_DESTINATION}"])
+        self.runtime._validate_tg_diff_lines(FaultCore, [f"A {self.runtime.TG_PATCH_DESTINATION}"])
         for bad in (
             [],
-            [f"A {self.runtime.TG_PATCH_DESTINATION}"],
-            [f"C {self.runtime.TG_PATCH_DESTINATION}", "C /app/package.json"],
+            [f"C {self.runtime.TG_PATCH_DESTINATION}"],
+            [f"A {self.runtime.TG_PATCH_DESTINATION}", "C /app/package.json"],
         ):
             with self.assertRaisesRegex(Exception, "TG_DIFF_PROOF_INVALID"):
                 self.runtime._validate_tg_diff_lines(FaultCore, bad)
@@ -1479,6 +1499,45 @@ class SealedFixtureTests(unittest.TestCase):
             tampered[field] = bad_value
             with self.assertRaisesRegex(Exception, "TG_PATCH_NEGATIVE"):
                 self.runtime._validate_tg_patch_probe(FaultCore, self.profile, tampered, self.runtime.TG_PATCH_TARGET_SHA256, "TG_PATCH_NEGATIVE")
+        self.assertEqual(
+            self.runtime._validate_tg_patch_absent(FaultCore, {"state": "ABSENT"}, "BAD"),
+            {"state": "ABSENT"},
+        )
+        for bad in ({"state": "PRESENT"}, {"state": "ABSENT", "sha256": "0" * 64}):
+            with self.assertRaisesRegex(Exception, "TG_PATCH_ABSENCE_NEGATIVE"):
+                self.runtime._validate_tg_patch_absent(FaultCore, bad, "TG_PATCH_ABSENCE_NEGATIVE")
+
+    def test_tg_runtime_and_image_probes_distinguish_absence_from_exact_target(self) -> None:
+        class FaultCore:
+            RuntimeFault = self.core.RuntimeFault
+
+        original_run = self.runtime._run
+        target = self.runtime._expected_tg_patch_metadata(self.profile, self.runtime.TG_PATCH_TARGET_SHA256)
+        responses = [
+            json.dumps({"state": "ABSENT"}).encode("ascii"),
+            json.dumps(target).encode("ascii"),
+        ]
+        invocations: list[list[str]] = []
+
+        def fake_run(_core: object, argv: list[str], **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+            invocations.append(argv)
+            return subprocess.CompletedProcess(argv, 0, stdout=responses.pop(0), stderr=b"")
+
+        self.runtime._run = fake_run
+        try:
+            self.assertEqual(
+                self.runtime._tg_patch_file_probe(FaultCore, "crm-tg-bot"),
+                {"state": "ABSENT"},
+            )
+            self.assertEqual(
+                self.runtime._tg_image_file_probe(FaultCore, self.profile, self.runtime.TG_TARGET_TAG),
+                target,
+            )
+        finally:
+            self.runtime._run = original_run
+        self.assertEqual(invocations[0][1:3], ["exec", "crm-tg-bot"])
+        self.assertIn("--network", invocations[1])
+        self.assertEqual(responses, [])
 
     def test_complete_provenance_rejects_any_failure_or_identity_drift(self) -> None:
         class FakeCore:

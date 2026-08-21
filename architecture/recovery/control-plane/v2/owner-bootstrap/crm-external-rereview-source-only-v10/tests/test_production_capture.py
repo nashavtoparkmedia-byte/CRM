@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 import datetime as dt
+import hashlib
 import importlib.machinery
 import importlib.util
 import json
@@ -67,10 +68,45 @@ def database_response(total: int) -> dict[str, object]:
         "stale_claimed": 0,
         "total": total,
     }
+    rows = []
+    for ordinal in range(1, 63):
+        started = dt.datetime(2026, 8, 1, tzinfo=UTC) + dt.timedelta(seconds=ordinal * 2)
+        finished = started + dt.timedelta(seconds=1)
+        name = capture.CANONICAL_TARGET_NAME if ordinal == 62 else f"{ordinal:04d}_fixture"
+        checksum = (
+            capture.CANONICAL_TARGET_CHECKSUM
+            if ordinal == 62
+            else hashlib.sha256(name.encode("ascii")).hexdigest()
+        )
+        rows.append({
+            "applied_steps_count": 1,
+            "checksum": checksum,
+            "finished_at": capture.utc_text(finished),
+            "logs_bytes": None,
+            "logs_present": False,
+            "logs_sha256": None,
+            "migration_id": f"{ordinal:08x}-0000-0000-0000-{ordinal:012x}",
+            "migration_name": name,
+            "observed_chronological_ordinal": ordinal,
+            "rolled_back_at": None,
+            "started_at": capture.utc_text(started),
+            "status": "FINISHED_ACTIVE",
+        })
+    rows_sha256 = hashlib.sha256(
+        json.dumps(rows, sort_keys=True, separators=(",", ":")).encode("ascii")
+    ).hexdigest()
     return {
         "errors": [],
         "evidence": {
             "applied_migration_count": 62,
+            "canonical_active_inventory_sha256": capture.CANONICAL_ACTIVE_INVENTORY,
+            "canonical_active_map_exact": True,
+            "canonical_live_chronology_exact": True,
+            "canonical_live_rows": rows,
+            "canonical_live_rows_sha256": rows_sha256,
+            "canonical_predecessor_entry_count": 61,
+            "canonical_target_checksum": capture.CANONICAL_TARGET_CHECKSUM,
+            "canonical_target_name": capture.CANONICAL_TARGET_NAME,
             "database_identity_sha256": capture.DATABASE_IDENTITY,
             "database_name_sha256": "3f831e31b1b5e63661e38c3af85b8d46c5558d2a4b5029e6c15bfd092e793e6c",
             "database_user_sha256": "9261ceef0b969e70ac20f1510f07a1e0d8db05f20c75161a2ef43b4eba27a7aa",
@@ -87,6 +123,8 @@ def database_response(total: int) -> dict[str, object]:
             "secret_values_emitted": False,
             "server_version_num": "160014",
             "system_identifier_sha256": "9b73df197b2607b5be82f56cbfc404718e1116353e1d454ce955d0d2b0d86b23",
+            "expected_canonical_active_inventory_sha256": capture.CANONICAL_ACTIVE_INVENTORY,
+            "expected_live_chronology_sha256": capture.CANONICAL_LIVE_CHRONOLOGY,
         },
         "ok": True,
         "primitive": "database-status",
@@ -105,7 +143,7 @@ def outer_snapshot(at: dt.datetime) -> dict[str, object]:
     cross = {"status": "PASS", "checks": capture.CROSS_CHECKS}
     commands: list[object] = []
     transcript = {
-        "schema": "yoko.crm.read-only-production-capture-transcript.v1",
+        "schema": "yoko.crm.read-only-production-capture-transcript.v2",
         "started_at": stamp,
         "completed_at": stamp,
         "duration_seconds": 0,
@@ -117,7 +155,7 @@ def outer_snapshot(at: dt.datetime) -> dict[str, object]:
         "production_mutated": False,
     }
     return {
-        "schema": "yoko.crm.source-only-production-snapshot.v2",
+        "schema": "yoko.crm.source-only-production-snapshot.v3",
         "status": "ACCEPTED_READ_ONLY_CAPTURE",
         "captured_at": stamp,
         "host": capture.HOST,

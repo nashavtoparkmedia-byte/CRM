@@ -275,7 +275,7 @@
   },
   "reviewed_exact_inventory_materialization": {
     "decision_registry_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json",
-    "decision_registry_sha256": "bbe30dd57864ee67a3a98b45fae414ed10a5efc265c28dca98240567ee611908",
+    "decision_registry_sha256": "c7d5d38b662860cb1aaca89fc0c1114fe1a6dae541c26607c395e37122df3b60",
     "baseline_coverage_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_COVERAGE_BASELINE_2108.json",
     "baseline_coverage_sha256": "429a48c9d257408025bbc273a4d6f1413ed78196549ed889118422b6caba5730",
     "tracked_inventory_sha256": "5cd651f8f3212f4ed4e74f4a650aef1914810d4dabee446c10b93c857016d017",

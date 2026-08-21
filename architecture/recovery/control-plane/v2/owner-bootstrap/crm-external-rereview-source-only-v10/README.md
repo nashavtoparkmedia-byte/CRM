@@ -1,8 +1,9 @@
 # Runtime 2.0.0-10 source-only release builder
 
-This external staging tree prepares a deterministic same-ABI successor to the
-installed `yoko-privileged-runtime` `2.0.0-9`. It is not an authorization to
-install or deploy anything.
+This external staging tree prepares a deterministic same-version, same-ABI
+replacement for the installed `yoko-privileged-runtime` `2.0.0-10` profile
+`crm-451c0ea4ca54-gravity-source-v1`. It is not an authorization to install or
+deploy anything. The exact `2.0.0-9` package remains the rollback bridge.
 
 The successor preserves these accepted 2.0.0-9 files byte-for-byte:
 
@@ -79,8 +80,9 @@ package source tree.
 
 `seal-release.py` refuses a dirty/non-HEAD commit, a commit without that exact
 hosted-CI acceptance record, any migration SQL delta from `7aea2823…`, or a
-production snapshot that is not Runtime 2.0.0-9 with the healthy `baf442f8…`
-image at revision `7aea2823…`. The capture CLI accepts no arguments and invokes
+production snapshot that is not the installed Runtime 2.0.0-10 control plane
+over the healthy `baf442f8…` image at revision `7aea2823…`. The capture CLI
+accepts no arguments and invokes
 only the exact finite `sudo -n yoko-privileged-runtime` read-only plan: version,
 self-check, audit status, exact Gravity/TG/Postgres inspections, the production
 repository snapshot manifest, and database status. Its duplicate-key-safe v2
@@ -151,11 +153,14 @@ The accepted full commit/tree and archive inventory remain pinned in the seal.
 
 The Telegram change is not a rebuild of the drifting repository Dockerfile.
 Preflight derives a one-file image from the exact live predecessor image
-`sha256:0849c4…35f6`, proves the live baseline file SHA and metadata, creates a
-network-disabled `FROM` + `COPY` layer for only
+`sha256:0849c4…35f6`. The exact-container sanitized filesystem manifest proves
+that the destination is absent in that predecessor; preflight re-probes that
+absence before mutation. It then creates a network-disabled `FROM` + `COPY`
+addition for only
 `/app/src/public-bot-maintenance.js`, checks the exact `docker diff`, layer
-ancestry, preserved image configuration and read-back hash, and seals separate
-Gravity and Telegram rollback tags. Activation and recovery always use a fixed
+ancestry, preserved image configuration and read-back hash. Rollback proves the
+path is absent again and seals separate Gravity and Telegram rollback tags.
+Activation and recovery always use a fixed
 two-service overlay and one bounded Compose call; any partial/mixed state is
 rolled back as a pair.
 

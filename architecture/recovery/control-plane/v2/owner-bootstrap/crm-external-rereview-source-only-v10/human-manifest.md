@@ -40,6 +40,7 @@ SHA-256 is carried into the release seal; a reduced or separately rewritten
 
 The release archive has exact roots `gravity-mvp/` and the single accepted
 `tg-bot/src/public-bot-maintenance.js` path. Preflight derives the Telegram
-candidate from the hash-pinned live image with an exact one-file rootfs diff;
+candidate from the hash-pinned live image after proving the destination absent,
+with an exact one-file addition; rollback proves the path absent again;
 activation and every rollback/recovery path transact `gravity-mvp` and
 `tg-bot` together. A mixed image state can never be accepted as terminal.

@@ -54,7 +54,9 @@ TG_ROLLBACK_TAG = "yoko/crm-tg-bot:rollback-0849c4c9912aecf3cb7c35b51abba22cdb1c
 TG_BASE_IMAGE = "sha256:0849c4c9912aecf3cb7c35b51abba22cdb1c85a385afa6c2746000d14b9835f6"
 TG_PATCH_DESTINATION = "/app/src/public-bot-maintenance.js"
 TG_PATCH_TARGET_SHA256 = "d31a95451e148423ce8ad0dad0b78d4d7a487f428d5103a05bd3fed4c454c247"
-TG_PATCH_BASELINE_SHA256 = "22bdb3fd236f04abdd9a2e825b2340339e92664ec94b36d582004d0d6756ed97"
+TG_PATCH_BASELINE_STATE = "ABSENT"
+TG_PATCH_BASELINE_MANIFEST_FILE_SHA256 = "1bd1d5100cabeb37277262179ee1119b3dcd9154b9774947dcf218d38e4d19fe"
+TG_PATCH_BASELINE_MANIFEST_SHA256 = "72397e9c7e3c728b94d1e5645da825ddd75216bfacd13212b4671fe15f206d56"
 TG_DIFF_PROOF_CONTAINER = "yoko-crm-@COMMIT_SHORT16@-tg-diff-proof"
 PRIOR_TARGET_TAG = "yoko/crm-gravity-mvp:7aea2823efe50e13a156540993d424594025e403-profile-v1"
 PREVIEW_NETWORK = "yoko-crm-af9646f5-preview"
@@ -137,7 +139,7 @@ def _load_profile(core: Any) -> dict[str, Any]:
         raise core.RuntimeFault("ACTIVATION_PROFILE_INVALID", 78)
     for key in (
         "archive_sha256", "dockerfile_sha256", "package_lock_sha256", "prisma_schema_sha256",
-        "tg_bot_patch_sha256", "tg_bot_patch_baseline_sha256", "tg_bot_patch_recipe_sha256",
+        "tg_bot_patch_sha256", "tg_bot_patch_recipe_sha256",
     ):
         if not SHA256.fullmatch(str(profile["accepted_source"].get(key, ""))):
             raise core.RuntimeFault("ACTIVATION_PROFILE_INVALID", 78)
@@ -276,7 +278,7 @@ def _load_profile(core: Any) -> dict[str, Any]:
         or source.get("archive_prefix") != ""
         or source.get("tg_bot_patch_destination_path") != TG_PATCH_DESTINATION
         or source.get("tg_bot_patch_sha256") != TG_PATCH_TARGET_SHA256
-        or source.get("tg_bot_patch_baseline_sha256") != TG_PATCH_BASELINE_SHA256
+        or source.get("tg_bot_patch_baseline_state") != TG_PATCH_BASELINE_STATE
         or production.get("tg_bot_compose_service") != "tg-bot"
         or production.get("tg_bot_container") != "crm-tg-bot"
         or production.get("tg_bot_image_id") != TG_BASE_IMAGE
@@ -287,7 +289,9 @@ def _load_profile(core: Any) -> dict[str, Any]:
         or production.get("tg_bot_patch_uid") != 0
         or production.get("tg_bot_patch_gid") != 0
         or production.get("tg_bot_patch_mode") != "0644"
-        or production.get("tg_bot_patch_size") != 2385
+        or production.get("tg_bot_patch_baseline_state") != TG_PATCH_BASELINE_STATE
+        or production.get("tg_bot_patch_baseline_manifest_file_sha256") != TG_PATCH_BASELINE_MANIFEST_FILE_SHA256
+        or production.get("tg_bot_patch_baseline_manifest_sha256") != TG_PATCH_BASELINE_MANIFEST_SHA256
         or not SHA256.fullmatch(str(production.get("tg_bot_container_id", "")))
         or not SHA256.fullmatch(str(production.get("tg_bot_compose_config_hash", "")))
     ):
@@ -1109,23 +1113,30 @@ def _image_inspect(core: Any, reference: str, *, required: bool = True) -> dict[
     return value[0]
 
 
-def _tg_patch_file_probe(core: Any, container: str) -> dict[str, Any]:
-    script = (
+def _tg_patch_probe_script() -> str:
+    return (
         "const f=require('fs'),c=require('crypto'),p='/app/src/public-bot-maintenance.js';"
-        "const s=f.lstatSync(p);if(!s.isFile()||s.isSymbolicLink()||s.nlink!==1)process.exit(2);"
-        "process.stdout.write(JSON.stringify({sha256:c.createHash('sha256').update(f.readFileSync(p)).digest('hex'),"
+        "let s;try{s=f.lstatSync(p)}catch(e){if(e&&e.code==='ENOENT'){process.stdout.write(JSON.stringify({state:'ABSENT'}));process.exit(0)}process.exit(3)};"
+        "if(!s.isFile()||s.isSymbolicLink()||s.nlink!==1)process.exit(2);"
+        "process.stdout.write(JSON.stringify({state:'PRESENT',sha256:c.createHash('sha256').update(f.readFileSync(p)).digest('hex'),"
         "uid:s.uid,gid:s.gid,mode:(s.mode&4095).toString(8).padStart(4,'0'),size:s.size}));"
     )
-    completed = _run(core, [DOCKER, "exec", container, "node", "-e", script], timeout=20)
+
+
+def _tg_patch_file_probe(core: Any, container: str) -> dict[str, Any]:
+    completed = _run(core, [DOCKER, "exec", container, "node", "-e", _tg_patch_probe_script()], timeout=20)
     if completed.returncode != 0:
         raise core.RuntimeFault("TG_PATCH_FILE_PROBE_FAILED", 74)
     try:
         value = json.loads(completed.stdout)
     except (UnicodeError, ValueError) as exc:
         raise core.RuntimeFault("TG_PATCH_FILE_PROBE_INVALID", 74) from exc
+    if value == {"state": TG_PATCH_BASELINE_STATE}:
+        return value
     if (
         not isinstance(value, dict)
-        or set(value) != {"sha256", "uid", "gid", "mode", "size"}
+        or set(value) != {"state", "sha256", "uid", "gid", "mode", "size"}
+        or value.get("state") != "PRESENT"
         or not SHA256.fullmatch(str(value.get("sha256", "")))
         or isinstance(value.get("uid"), bool)
         or not isinstance(value.get("uid"), int)
@@ -1143,16 +1154,19 @@ def _tg_patch_file_probe(core: Any, container: str) -> dict[str, Any]:
 def _expected_tg_patch_metadata(profile: dict[str, Any], sha256: str) -> dict[str, Any]:
     production = profile["production"]
     return {
+        "state": "PRESENT",
         "sha256": sha256,
         "uid": production["tg_bot_patch_uid"],
         "gid": production["tg_bot_patch_gid"],
         "mode": production["tg_bot_patch_mode"],
-        "size": (
-            production["tg_bot_patch_size"]
-            if sha256 == TG_PATCH_BASELINE_SHA256
-            else profile["accepted_source"]["tg_bot_patch_size"]
-        ),
+        "size": profile["accepted_source"]["tg_bot_patch_size"],
     }
+
+
+def _validate_tg_patch_absent(core: Any, value: Any, code: str) -> dict[str, Any]:
+    if value != {"state": TG_PATCH_BASELINE_STATE}:
+        raise core.RuntimeFault(code, 74)
+    return value
 
 
 def _validate_tg_patch_probe(core: Any, profile: dict[str, Any], value: Any, expected_sha256: str, code: str) -> dict[str, Any]:
@@ -1247,8 +1261,7 @@ def _production_preflight_identity(core: Any, policy: dict[str, Any], profile: d
     ):
         raise core.RuntimeFault("PRODUCTION_TG_BOT_IDENTITY_DRIFT", 74)
     tg_patch = _tg_patch_file_probe(core, production["tg_bot_container"])
-    if tg_patch != _expected_tg_patch_metadata(profile, TG_PATCH_BASELINE_SHA256):
-        raise core.RuntimeFault("PRODUCTION_TG_PATCH_BASELINE_DRIFT", 74)
+    _validate_tg_patch_absent(core, tg_patch, "PRODUCTION_TG_PATCH_BASELINE_DRIFT")
     manifest = core.tree_manifest(policy, core.Invocation("fs-tree", "crm.repo.production"))
     if manifest["manifest_sha256"] != production["source_manifest_sha256"]:
         raise core.RuntimeFault("PRODUCTION_SOURCE_IDENTITY_DRIFT", 74)
@@ -1447,7 +1460,7 @@ def _prove_tg_one_file_diff(core: Any, context: Path) -> None:
 
 
 def _validate_tg_diff_lines(core: Any, lines: Any) -> None:
-    if lines != [f"C {TG_PATCH_DESTINATION}"]:
+    if lines != [f"A {TG_PATCH_DESTINATION}"]:
         raise core.RuntimeFault("TG_DIFF_PROOF_INVALID", 74)
 
 
@@ -1475,14 +1488,8 @@ def _verify_tg_candidate_image(core: Any, profile: dict[str, Any], image: dict[s
         raise core.RuntimeFault("TG_CANDIDATE_IMAGE_IDENTITY_MISMATCH", 74)
 
 
-def _tg_image_file_probe(core: Any, reference: str) -> dict[str, Any]:
-    script = (
-        "const f=require('fs'),c=require('crypto'),p='/app/src/public-bot-maintenance.js';"
-        "const s=f.lstatSync(p);if(!s.isFile()||s.isSymbolicLink()||s.nlink!==1)process.exit(2);"
-        "process.stdout.write(JSON.stringify({sha256:c.createHash('sha256').update(f.readFileSync(p)).digest('hex'),"
-        "uid:s.uid,gid:s.gid,mode:(s.mode&4095).toString(8).padStart(4,'0'),size:s.size}));"
-    )
-    completed = _run(core, [DOCKER, "run", "--rm", "--network", "none", "--entrypoint", "node", reference, "-e", script], timeout=60)
+def _tg_image_file_probe(core: Any, profile: dict[str, Any], reference: str) -> dict[str, Any]:
+    completed = _run(core, [DOCKER, "run", "--rm", "--network", "none", "--entrypoint", "node", reference, "-e", _tg_patch_probe_script()], timeout=60)
     if completed.returncode != 0:
         raise core.RuntimeFault("TG_CANDIDATE_FILE_PROBE_FAILED", 74)
     try:
@@ -1514,7 +1521,7 @@ def _build_tg_candidate(core: Any, profile: dict[str, Any]) -> str:
         existing = _image_inspect(core, TG_TARGET_TAG)
     assert existing is not None
     _verify_tg_candidate_image(core, profile, existing)
-    _tg_image_file_probe(core, TG_TARGET_TAG)
+    _tg_image_file_probe(core, profile, TG_TARGET_TAG)
     return existing["Id"]
 
 
@@ -3013,7 +3020,7 @@ def _rollback_application_health(core: Any, profile: dict[str, Any]) -> dict[str
     }
 
 
-def _tg_bot_health(core: Any, profile: dict[str, Any], expected_sha256: str) -> dict[str, Any]:
+def _tg_bot_health(core: Any, profile: dict[str, Any], expected_sha256: str | None) -> dict[str, Any]:
     container = profile["production"]["tg_bot_container"]
     script = (
         "const n=require('net');const s=n.connect(3001,'127.0.0.1');"
@@ -3024,10 +3031,14 @@ def _tg_bot_health(core: Any, profile: dict[str, Any], expected_sha256: str) -> 
     if completed.returncode != 0:
         raise core.RuntimeFault("TG_BOT_INTERNAL_API_HEALTH_FAILED", 74)
     patch = _tg_patch_file_probe(core, container)
-    _validate_tg_patch_probe(core, profile, patch, expected_sha256, "TG_BOT_PATCH_RUNTIME_IDENTITY_FAILED")
+    if expected_sha256 is None:
+        _validate_tg_patch_absent(core, patch, "TG_BOT_PATCH_RUNTIME_IDENTITY_FAILED")
+    else:
+        _validate_tg_patch_probe(core, profile, patch, expected_sha256, "TG_BOT_PATCH_RUNTIME_IDENTITY_FAILED")
     return {
         "tg_bot_internal_api_reachable": True,
-        "tg_bot_patch_sha256": patch["sha256"],
+        "tg_bot_patch_state": patch["state"],
+        "tg_bot_patch_sha256": patch.get("sha256"),
         "tg_bot_patch_metadata_exact": True,
         "response_body_emitted": False,
     }
@@ -3118,7 +3129,7 @@ def _rollback_impl(core: Any, policy: dict[str, Any], profile: dict[str, Any], s
         raise core.RuntimeFault("ROLLBACK_SEMANTIC_DRIFT", 74)
     database = _rollback_database_postcheck(core, profile, state)
     rollback_health = _rollback_application_health(core, profile)
-    tg_health = _tg_bot_health(core, profile, TG_PATCH_BASELINE_SHA256)
+    tg_health = _tg_bot_health(core, profile, None)
     _assert_unrelated_runtime_unchanged(core, policy, profile, state)
     return {
         "gravity_container_id": gravity["container_id"],
@@ -3154,7 +3165,7 @@ def _accept_existing_rollback(core: Any, policy: dict[str, Any], profile: dict[s
     _validate_production_compose_inputs(core, profile, state)
     database = _rollback_database_postcheck(core, profile, state)
     rollback_health = _rollback_application_health(core, profile)
-    tg_health = _tg_bot_health(core, profile, TG_PATCH_BASELINE_SHA256)
+    tg_health = _tg_bot_health(core, profile, None)
     _assert_unrelated_runtime_unchanged(core, policy, profile, state)
     return {
         "gravity_container_id": gravity["container_id"],
@@ -3293,7 +3304,7 @@ def _release_activate(core: Any, policy: dict[str, Any], profile: dict[str, Any]
         if rollback_image is None or rollback_image["Id"] != profile["production"]["gravity_image_id"] or tg_rollback_image is None or tg_rollback_image["Id"] != profile["production"]["tg_bot_image_id"]:
             raise core.RuntimeFault("ROLLBACK_IMAGE_IDENTITY_DRIFT", 74)
         _verify_tg_candidate_image(core, profile, tg_target)
-        _tg_image_file_probe(core, TG_TARGET_TAG)
+        _tg_image_file_probe(core, profile, TG_TARGET_TAG)
         status, _ = _database_status(core, profile)
         if status["migration_state"] != "APPROVED_OUTBOX_APPLIED" or status["database_identity_sha256"] != state.get("database_identity_sha256") or status["migration_ledger_sha256"] != state.get("migration_ledger_sha256"):
             raise core.RuntimeFault("DATABASE_MIGRATION_POSTSTATE_REQUIRED", 74)

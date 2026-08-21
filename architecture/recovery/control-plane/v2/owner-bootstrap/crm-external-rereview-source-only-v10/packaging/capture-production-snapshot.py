@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Capture the exact Runtime v9 production predecessor through read-only verbs only."""
+"""Capture the exact installed Runtime v10 control-plane predecessor through read-only verbs only."""
 from __future__ import annotations
 
 import datetime as dt
@@ -17,8 +17,8 @@ RUNTIME = "/usr/local/sbin/yoko-privileged-runtime"
 SUDO = "/usr/bin/sudo"
 HOST = "jvxthcorvm"
 RUNTIME_VERSION = "2.0.0"
-PACKAGE_VERSION = "2.0.0-9"
-PROFILE_ID = "crm-af9646f5-gravity-outbox-v1"
+PACKAGE_VERSION = "2.0.0-10"
+PROFILE_ID = "crm-451c0ea4ca54-gravity-source-v1"
 PREDECESSOR_COMMIT = "7aea2823efe50e13a156540993d424594025e403"
 PREDECESSOR_IMAGE = "sha256:baf442f880ebca808897a0131a662c603a9119f652cbbc3e47937286dec49179"
 TG_BOT_IMAGE = "sha256:0849c4c9912aecf3cb7c35b51abba22cdb1c85a385afa6c2746000d14b9835f6"
@@ -26,12 +26,18 @@ POSTGRES_IMAGE = "sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac3
 AUDIT_DIGEST = "95668295b49045f430f19512d7cd60c81c88ae6e3586f26dd39fcf12a09f0c81"
 DATABASE_IDENTITY = "ed88dfeaad2a3dc2e759590d295992cd06531d4403d896ded00b21ea667be1c9"
 MIGRATION_LEDGER = "a50f1a8988f79c85059354d6b2d45e9e8ed07284fc27c78d98face6680f25dfc"
+CANONICAL_ACTIVE_INVENTORY = "a05eb3a3a6a0c78df2e68b150421a00f971b6e39b9346bb25f76733ed799d197"
+CANONICAL_LIVE_CHRONOLOGY = "62aaa333a8df02cc9c255da14e8bb7ba70ed441098148846f1855c24623ac465"
+CANONICAL_TARGET_NAME = "20260809140000_add_domain_outbox"
+CANONICAL_TARGET_CHECKSUM = "433b0d503f054ed6a8161a059e2650d5e401829dabe8c9d992a1d1763eef0016"
 SOURCE_MANIFEST = "ecfb0a8b6dc24121fb5c9efb58af28eb1f1626711ef1a6d977b0db29d05bdda3"
 COMPOSE_SHA = "84a9f46904a65a69afcf19d2e56162e026b29718da52c43160abfc5449f84cc1"
 GRAVITY_COMPOSE = "772ba8f19dc89133ea55ce65aa2d68550594ab61060eac0e373ae7936161b9f8"
 TG_COMPOSE = "00952518d668126c08950de087a7c46fa368cd8879590ad9c1584bb7c39b42e2"
 OUTBOX_CATALOG = "ef0bce36bca8283b491a966ff3886644a8887f4bded3deebbec7ce559ac2defe"
-TG_PATCH_SHA = "22bdb3fd236f04abdd9a2e825b2340339e92664ec94b36d582004d0d6756ed97"
+TG_PATCH_BASELINE_STATE = "ABSENT"
+TG_BASELINE_MANIFEST_FILE_SHA = "1bd1d5100cabeb37277262179ee1119b3dcd9154b9774947dcf218d38e4d19fe"
+TG_BASELINE_MANIFEST_SHA = "72397e9c7e3c728b94d1e5645da825ddd75216bfacd13212b4671fe15f206d56"
 SHA64 = re.compile(r"[0-9a-f]{64}")
 UTC = dt.timezone.utc
 MAX_RESPONSE_BYTES = 1024 * 1024
@@ -82,11 +88,20 @@ CONTENT_MANIFEST_KEYS = {
     "bytes", "entries", "entry_count", "excluded", "logical_resource", "manifest_sha256",
 }
 DATABASE_KEYS = {
-    "applied_migration_count", "database_identity_sha256", "database_name_sha256",
+    "applied_migration_count", "canonical_active_inventory_sha256", "canonical_active_map_exact",
+    "canonical_live_chronology_exact", "canonical_live_rows", "canonical_live_rows_sha256",
+    "canonical_predecessor_entry_count", "canonical_target_checksum", "canonical_target_name",
+    "database_identity_sha256", "database_name_sha256",
     "database_user_sha256", "interrupted_target_migrations", "migration_ledger_sha256",
     "migration_state", "outbox_catalog_state", "outbox_counts", "postgres_container_id",
     "postgres_image_id", "profile_id", "read_only", "rolled_back_target_migrations",
     "secret_values_emitted", "server_version_num", "system_identifier_sha256",
+    "expected_canonical_active_inventory_sha256", "expected_live_chronology_sha256",
+}
+DATABASE_ROW_KEYS = {
+    "applied_steps_count", "checksum", "finished_at", "logs_bytes", "logs_present",
+    "logs_sha256", "migration_id", "migration_name", "observed_chronological_ordinal",
+    "rolled_back_at", "started_at", "status",
 }
 OUTBOX_COUNT_KEYS = {
     "dead_letter", "over_attempt_limit", "pending", "processing", "published",
@@ -105,8 +120,9 @@ OBSERVED_KEYS = {
     "secret_values_emitted", "production_mutated",
 }
 AUTHORITY_KEYS = {
-    "schema", "source", "tg_bot_patch_path", "tg_bot_patch_sha256", "tg_bot_patch_uid",
-    "tg_bot_patch_gid", "tg_bot_patch_mode", "tg_bot_patch_size", "outbox_catalog_sha256",
+    "schema", "source", "tg_bot_patch_path", "tg_bot_patch_baseline_state",
+    "tg_bot_patch_baseline_manifest_file_sha256", "tg_bot_patch_baseline_manifest_sha256",
+    "outbox_catalog_sha256",
 }
 CAPTURE_KEYS = {
     "schema", "started_at", "completed_at", "duration_seconds", "commands",
@@ -166,10 +182,10 @@ def exact_dict(value: object, keys: set[str], label: str) -> dict[str, object]:
 
 
 def parse_utc(value: object, label: str) -> dt.datetime:
-    if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", value):
+    if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z", value):
         raise CaptureError(f"invalid UTC timestamp: {label}")
     try:
-        return dt.datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+        return dt.datetime.fromisoformat(value[:-1] + "+00:00").astimezone(UTC)
     except ValueError as exc:
         raise CaptureError(f"invalid UTC timestamp: {label}") from exc
 
@@ -397,6 +413,7 @@ def validate_response(value: object, primitive: str, resource: str | None) -> di
     elif primitive == "database-status":
         evidence = exact_dict(evidence, DATABASE_KEYS, "database evidence")
         counts = exact_dict(evidence["outbox_counts"], OUTBOX_COUNT_KEYS, "outbox counts")
+        rows = evidence["canonical_live_rows"]
         if (
             evidence["profile_id"] != PROFILE_ID or evidence["read_only"] is not True
             or evidence["secret_values_emitted"] is not False
@@ -405,6 +422,55 @@ def validate_response(value: object, primitive: str, resource: str | None) -> di
             or evidence["migration_state"] != "APPROVED_OUTBOX_APPLIED"
             or evidence["outbox_catalog_state"] != "EXACT"
             or evidence["applied_migration_count"] != 62
+            or evidence["canonical_active_inventory_sha256"] != CANONICAL_ACTIVE_INVENTORY
+            or evidence["expected_canonical_active_inventory_sha256"] != CANONICAL_ACTIVE_INVENTORY
+            or evidence["canonical_active_map_exact"] is not True
+            or evidence["canonical_live_chronology_exact"] is not True
+            or evidence["expected_live_chronology_sha256"] != CANONICAL_LIVE_CHRONOLOGY
+            or evidence["canonical_predecessor_entry_count"] != 61
+            or evidence["canonical_target_name"] != CANONICAL_TARGET_NAME
+            or evidence["canonical_target_checksum"] != CANONICAL_TARGET_CHECKSUM
+            or type(rows) is not list
+            or len(rows) != 62
+            or evidence["canonical_live_rows_sha256"] != hashlib.sha256(
+                json.dumps(rows, sort_keys=True, separators=(",", ":")).encode("ascii")
+            ).hexdigest()
+            or any(
+                type(row) is not dict
+                or set(row) != DATABASE_ROW_KEYS
+                or row["observed_chronological_ordinal"] != index
+                or not isinstance(row["migration_name"], str)
+                or not re.fullmatch(r"[0-9][A-Za-z0-9_-]{1,199}", row["migration_name"])
+                or not isinstance(row["checksum"], str)
+                or not SHA64.fullmatch(row["checksum"])
+                or not isinstance(row["migration_id"], str)
+                or not re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", row["migration_id"])
+                or row["status"] != "FINISHED_ACTIVE"
+                or row["rolled_back_at"] is not None
+                or not isinstance(row["started_at"], str)
+                or not isinstance(row["finished_at"], str)
+                or type(row["applied_steps_count"]) is not int
+                or row["applied_steps_count"] < 0
+                or type(row["logs_present"]) is not bool
+                or (
+                    row["logs_present"]
+                    and (
+                        type(row["logs_bytes"]) is not int
+                        or row["logs_bytes"] < 0
+                        or not isinstance(row["logs_sha256"], str)
+                        or not SHA64.fullmatch(row["logs_sha256"])
+                    )
+                )
+                or (
+                    not row["logs_present"]
+                    and (row["logs_bytes"] is not None or row["logs_sha256"] is not None)
+                )
+                for index, row in enumerate(rows, 1)
+            )
+            or len({row["migration_name"] for row in rows}) != 62
+            or len({row["migration_id"] for row in rows}) != 62
+            or rows[-1]["migration_name"] != CANONICAL_TARGET_NAME
+            or rows[-1]["checksum"] != CANONICAL_TARGET_CHECKSUM
             or evidence["interrupted_target_migrations"] != 0
             or evidence["rolled_back_target_migrations"] != 0
             or evidence["server_version_num"] != "160014"
@@ -417,6 +483,11 @@ def validate_response(value: object, primitive: str, resource: str | None) -> di
             ))
         ):
             raise CaptureError("database read-only evidence mismatch")
+        for row in rows:
+            started_at = parse_utc(row["started_at"], "migration row start")
+            finished_at = parse_utc(row["finished_at"], "migration row finish")
+            if finished_at < started_at:
+                raise CaptureError("database migration row chronology mismatch")
         for key in ("database_name_sha256", "database_user_sha256", "system_identifier_sha256"):
             if not isinstance(evidence[key], str) or not SHA64.fullmatch(evidence[key]):
                 raise CaptureError(f"invalid database identity component: {key}")
@@ -645,7 +716,7 @@ def build_snapshot(records: list[dict[str, object]], started: dt.datetime, compl
 
     cross_consistency = {"status": "PASS", "checks": CROSS_CHECKS}
     capture: dict[str, object] = {
-        "schema": "yoko.crm.read-only-production-capture-transcript.v1",
+        "schema": "yoko.crm.read-only-production-capture-transcript.v2",
         "started_at": utc_text(started),
         "completed_at": utc_text(completed),
         "duration_seconds": duration,
@@ -693,18 +764,16 @@ def build_snapshot(records: list[dict[str, object]], started: dt.datetime, compl
         "production_mutated": False,
     }
     sealed_predecessor_authority: dict[str, object] = {
-        "schema": "yoko.crm.sealed-predecessor-authority.v1",
-        "source": "runtime-v9-reviewed-profile-and-container-baseline",
+        "schema": "yoko.crm.sealed-predecessor-authority.v2",
+        "source": "exact-container-sanitized-runtime-content-manifest",
         "tg_bot_patch_path": "/app/src/public-bot-maintenance.js",
-        "tg_bot_patch_sha256": TG_PATCH_SHA,
-        "tg_bot_patch_uid": 0,
-        "tg_bot_patch_gid": 0,
-        "tg_bot_patch_mode": "0644",
-        "tg_bot_patch_size": 2385,
+        "tg_bot_patch_baseline_state": TG_PATCH_BASELINE_STATE,
+        "tg_bot_patch_baseline_manifest_file_sha256": TG_BASELINE_MANIFEST_FILE_SHA,
+        "tg_bot_patch_baseline_manifest_sha256": TG_BASELINE_MANIFEST_SHA,
         "outbox_catalog_sha256": OUTBOX_CATALOG,
     }
     snapshot: dict[str, object] = {
-        "schema": "yoko.crm.source-only-production-snapshot.v2",
+        "schema": "yoko.crm.source-only-production-snapshot.v3",
         "status": "ACCEPTED_READ_ONLY_CAPTURE",
         "captured_at": utc_text(completed),
         "host": HOST,

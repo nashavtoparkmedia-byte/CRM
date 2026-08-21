@@ -34,7 +34,7 @@
     "tg_bot_patch_source_path": "tg-bot/src/public-bot-maintenance.js",
     "tg_bot_patch_destination_path": "/app/src/public-bot-maintenance.js",
     "tg_bot_patch_sha256": "d31a95451e148423ce8ad0dad0b78d4d7a487f428d5103a05bd3fed4c454c247",
-    "tg_bot_patch_baseline_sha256": "22bdb3fd236f04abdd9a2e825b2340339e92664ec94b36d582004d0d6756ed97",
+    "tg_bot_patch_baseline_state": "ABSENT",
     "tg_bot_patch_recipe_sha256": "@TG_BOT_PATCH_RECIPE_SHA256@"
   },
   "production": {
@@ -60,7 +60,9 @@
     "tg_bot_patch_uid": 0,
     "tg_bot_patch_gid": 0,
     "tg_bot_patch_mode": "0644",
-    "tg_bot_patch_size": 2385,
+    "tg_bot_patch_baseline_state": "ABSENT",
+    "tg_bot_patch_baseline_manifest_file_sha256": "1bd1d5100cabeb37277262179ee1119b3dcd9154b9774947dcf218d38e4d19fe",
+    "tg_bot_patch_baseline_manifest_sha256": "72397e9c7e3c728b94d1e5645da825ddd75216bfacd13212b4671fe15f206d56",
     "postgres_container": "crm-postgres",
     "postgres_container_id": "57a09acd5b407d72934ea4cb398874fec60d25a815265b018ba9dd4ab5dbddda",
     "postgres_image_id": "sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229",
