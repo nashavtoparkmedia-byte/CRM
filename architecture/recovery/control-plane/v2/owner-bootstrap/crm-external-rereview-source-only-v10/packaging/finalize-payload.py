@@ -33,8 +33,8 @@ OLD = {
     "registry_sha256": "8ea5c3b7113e1dd2ad5a74b82a1fb0bf56643fd59774dccf37e8aa9eb67bd057",
     "rollback_deb_sha256": "0c259741b4b58992acb830806e42db79ec87730f1b568a21e2879483d739be83",
     "audit_state": "VALID",
-    "audit_records": 23,
-    "audit_last_digest": "724044340213b8f07035969c0cc127cd49108fa5c4b62701dc55baa8d6e562db",
+    "audit_records": 25,
+    "audit_last_digest": "b9e7c07bf06ebd881bf6f731b6ae2a1d0c59b5a5b4373bcd502a0d65f6748af7",
 }
 
 

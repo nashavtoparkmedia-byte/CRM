@@ -1330,10 +1330,10 @@ def main() -> None:
         or snapshot_document["host"] != "jvxthcorvm"
         or snapshot["runtime_package_version"] != "2.0.0-10"
         or snapshot["runtime_abi"] != "2.0.0"
-        or snapshot["profile_id"] != "crm-9514cd7ac10f-gravity-source-v1"
+        or snapshot["profile_id"] != "crm-f926cc69f285-gravity-source-v1"
         or snapshot["audit_state"] != "VALID"
-        or snapshot["audit_records"] != 23
-        or snapshot["audit_last_digest"] != "724044340213b8f07035969c0cc127cd49108fa5c4b62701dc55baa8d6e562db"
+        or snapshot["audit_records"] != 25
+        or snapshot["audit_last_digest"] != "b9e7c07bf06ebd881bf6f731b6ae2a1d0c59b5a5b4373bcd502a0d65f6748af7"
         or snapshot["gravity_image_id"] != PREDECESSOR_IMAGE
         or snapshot["gravity_oci_revision"] != PREDECESSOR_COMMIT
         or snapshot["gravity_running"] is not True

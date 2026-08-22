@@ -1505,7 +1505,7 @@ def _prove_tg_one_file_diff(core: Any, context: Path) -> None:
 
 
 def _validate_tg_diff_lines(core: Any, lines: Any) -> None:
-    if lines != [f"A {TG_PATCH_DESTINATION}"]:
+    if lines != ["C /app", "C /app/src", f"A {TG_PATCH_DESTINATION}"]:
         raise core.RuntimeFault("TG_DIFF_PROOF_INVALID", 74)
 
 

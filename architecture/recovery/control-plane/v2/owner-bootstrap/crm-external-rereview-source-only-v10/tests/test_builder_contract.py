@@ -151,7 +151,7 @@ class StaticContractTests(unittest.TestCase):
         self.assertIn('"--no-deps", "--no-build", "--pull", "never", "--force-recreate", "--wait"', profile)
         self.assertIn('COPY --chown=0:0 --chmod=0644 public-bot-maintenance.js /app/src/public-bot-maintenance.js', profile)
         self.assertIn('[DOCKER, "diff", TG_DIFF_PROOF_CONTAINER]', profile)
-        self.assertIn('[f"A {TG_PATCH_DESTINATION}"]', profile)
+        self.assertIn('["C /app", "C /app/src", f"A {TG_PATCH_DESTINATION}"]', profile)
         self.assertIn('target_layers[:-1] != base_layers', profile)
         self.assertIn('target_config != base_config', profile)
         self.assertIn('"--pull=false", "--network", "none", "--no-cache"', profile)
@@ -188,8 +188,8 @@ class StaticContractTests(unittest.TestCase):
         postinst = (ROOT / "templates/postinst.in").read_text()
         self.assertIn('test "$#" -eq 0', installer)
         self.assertIn("EXPECTED_HOST='jvxthcorvm'", installer)
-        self.assertIn("EXPECTED_AUDIT_RECORDS='23'", installer)
-        self.assertIn("EXPECTED_AUDIT_DIGEST='72404434", installer)
+        self.assertIn("EXPECTED_AUDIT_RECORDS='25'", installer)
+        self.assertIn("EXPECTED_AUDIT_DIGEST='b9e7c07b", installer)
         for forbidden in ("curl ", "wget ", "git clone", "apt-get", "docker compose", "pg_dump", "psql "):
             self.assertNotIn(forbidden, installer)
         for denied in ("/bin/sh -c ':'", "/usr/bin/docker ps", "/usr/bin/dpkg --status sudo", "self-check unexpected", "fs-stat ../../../etc", "service-restart crm.container.unrelated"):
@@ -970,10 +970,10 @@ class SealedFixtureTests(unittest.TestCase):
         snapshot = {
             "runtime_package_version": "2.0.0-10",
             "runtime_abi": "2.0.0",
-            "profile_id": "crm-9514cd7ac10f-gravity-source-v1",
+            "profile_id": "crm-f926cc69f285-gravity-source-v1",
             "audit_state": "VALID",
-            "audit_records": 23,
-            "audit_last_digest": "724044340213b8f07035969c0cc127cd49108fa5c4b62701dc55baa8d6e562db",
+            "audit_records": 25,
+            "audit_last_digest": "b9e7c07bf06ebd881bf6f731b6ae2a1d0c59b5a5b4373bcd502a0d65f6748af7",
             "source_manifest_sha256": "ecfb0a8b6dc24121fb5c9efb58af28eb1f1626711ef1a6d977b0db29d05bdda3",
             "compose_sha256": "84a9f46904a65a69afcf19d2e56162e026b29718da52c43160abfc5449f84cc1",
             "compose_config_hash": "772ba8f19dc89133ea55ce65aa2d68550594ab61060eac0e373ae7936161b9f8",
@@ -1493,11 +1493,14 @@ class SealedFixtureTests(unittest.TestCase):
         class FaultCore:
             RuntimeFault = self.core.RuntimeFault
 
-        self.runtime._validate_tg_diff_lines(FaultCore, [f"A {self.runtime.TG_PATCH_DESTINATION}"])
+        exact = ["C /app", "C /app/src", f"A {self.runtime.TG_PATCH_DESTINATION}"]
+        self.runtime._validate_tg_diff_lines(FaultCore, exact)
         for bad in (
             [],
+            [f"A {self.runtime.TG_PATCH_DESTINATION}"],
             [f"C {self.runtime.TG_PATCH_DESTINATION}"],
-            [f"A {self.runtime.TG_PATCH_DESTINATION}", "C /app/package.json"],
+            ["C /app/src", "C /app", f"A {self.runtime.TG_PATCH_DESTINATION}"],
+            [*exact, "C /app/package.json"],
         ):
             with self.assertRaisesRegex(Exception, "TG_DIFF_PROOF_INVALID"):
                 self.runtime._validate_tg_diff_lines(FaultCore, bad)
