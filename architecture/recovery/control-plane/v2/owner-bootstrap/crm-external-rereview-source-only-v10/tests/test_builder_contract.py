@@ -177,7 +177,8 @@ class StaticContractTests(unittest.TestCase):
         postinst = (ROOT / "templates/postinst.in").read_text()
         self.assertIn('test "$#" -eq 0', installer)
         self.assertIn("EXPECTED_HOST='jvxthcorvm'", installer)
-        self.assertIn("EXPECTED_AUDIT_DIGEST='95668295", installer)
+        self.assertIn("EXPECTED_AUDIT_RECORDS='23'", installer)
+        self.assertIn("EXPECTED_AUDIT_DIGEST='72404434", installer)
         for forbidden in ("curl ", "wget ", "git clone", "apt-get", "docker compose", "pg_dump", "psql "):
             self.assertNotIn(forbidden, installer)
         for denied in ("/bin/sh -c ':'", "/usr/bin/docker ps", "/usr/bin/dpkg --status sudo", "self-check unexpected", "fs-stat ../../../etc", "service-restart crm.container.unrelated"):
@@ -958,10 +959,10 @@ class SealedFixtureTests(unittest.TestCase):
         snapshot = {
             "runtime_package_version": "2.0.0-10",
             "runtime_abi": "2.0.0",
-            "profile_id": "crm-451c0ea4ca54-gravity-source-v1",
+            "profile_id": "crm-9514cd7ac10f-gravity-source-v1",
             "audit_state": "VALID",
-            "audit_records": 19,
-            "audit_last_digest": "95668295b49045f430f19512d7cd60c81c88ae6e3586f26dd39fcf12a09f0c81",
+            "audit_records": 23,
+            "audit_last_digest": "724044340213b8f07035969c0cc127cd49108fa5c4b62701dc55baa8d6e562db",
             "source_manifest_sha256": "ecfb0a8b6dc24121fb5c9efb58af28eb1f1626711ef1a6d977b0db29d05bdda3",
             "compose_sha256": "84a9f46904a65a69afcf19d2e56162e026b29718da52c43160abfc5449f84cc1",
             "compose_config_hash": "772ba8f19dc89133ea55ce65aa2d68550594ab61060eac0e373ae7936161b9f8",

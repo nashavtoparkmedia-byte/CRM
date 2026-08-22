@@ -56,7 +56,7 @@ def load_sealer():
     return module
 
 
-def oci_blob_archive(*, descriptor_size_delta: int = 0, extra_blob: bool = False) -> tuple[bytes, str]:
+def oci_blob_archive(*, descriptor_size_delta: int = 0, extra_blob: bool = False) -> tuple[bytes, str, str]:
     layer = deterministic_tar({"fixture.txt": b"hosted gravity layer\n"})
     layer_hex = digest(layer)
     layer_name = f"blobs/sha256/{layer_hex}"
@@ -133,7 +133,11 @@ def oci_blob_archive(*, descriptor_size_delta: int = 0, extra_blob: bool = False
     if extra_blob:
         value = b"unbound content-addressed payload\n"
         files[f"blobs/sha256/{digest(value)}"] = value
-    return deterministic_tar(files, ("blobs/", "blobs/sha256/")), f"sha256:{config_hex}"
+    return (
+        deterministic_tar(files, ("blobs/", "blobs/sha256/")),
+        f"sha256:{config_hex}",
+        f"sha256:{image_manifest_hex}",
+    )
 
 
 class DockerArchiveFormatTests(unittest.TestCase):
@@ -141,22 +145,22 @@ class DockerArchiveFormatTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.sealer = load_sealer()
 
-    def validate(self, archive: bytes, image_id: str) -> None:
-        self.sealer.inspect_gravity_docker_archive(
+    def validate(self, archive: bytes, image_id: str) -> str:
+        return self.sealer.inspect_gravity_docker_archive(
             io.BytesIO(archive), IMAGE_REFERENCE, image_id, COMMIT, PROFILE_ID,
         )
 
     def test_oci_blob_docker_archive_is_fully_validated(self) -> None:
-        archive, image_id = oci_blob_archive()
-        self.validate(archive, image_id)
+        archive, image_id, containerd_image_id = oci_blob_archive()
+        self.assertEqual(self.validate(archive, image_id), containerd_image_id)
 
     def test_oci_layer_descriptor_drift_fails_closed(self) -> None:
-        archive, image_id = oci_blob_archive(descriptor_size_delta=1)
+        archive, image_id, _containerd_image_id = oci_blob_archive(descriptor_size_delta=1)
         with self.assertRaises(SystemExit):
             self.validate(archive, image_id)
 
     def test_unbound_content_addressed_blob_fails_closed(self) -> None:
-        archive, image_id = oci_blob_archive(extra_blob=True)
+        archive, image_id, _containerd_image_id = oci_blob_archive(extra_blob=True)
         with self.assertRaises(SystemExit):
             self.validate(archive, image_id)
 

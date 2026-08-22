@@ -43,7 +43,12 @@ class GravityOfflineArtifactTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.runtime = load_runtime()
 
-    def profile(self, archive: bytes, image_id: str = "sha256:" + "a" * 64) -> dict[str, object]:
+    def profile(
+        self,
+        archive: bytes,
+        image_id: str = "sha256:" + "a" * 64,
+        containerd_image_id: str = "sha256:" + "b" * 64,
+    ) -> dict[str, object]:
         return {
             "accepted_source": {
                 "commit": "b" * 40,
@@ -51,6 +56,7 @@ class GravityOfflineArtifactTests(unittest.TestCase):
                     "docker_archive_sha256": hashlib.sha256(archive).hexdigest(),
                     "docker_archive_bytes": len(archive),
                     "image_id": image_id,
+                    "containerd_image_id": containerd_image_id,
                 },
             },
             "limits": {"build_timeout_seconds": 30},
@@ -65,15 +71,36 @@ class GravityOfflineArtifactTests(unittest.TestCase):
     def test_preexisting_tag_with_wrong_identity_is_rejected_before_load(self) -> None:
         self.assert_collision({"Id": "sha256:" + "c" * 64, "Config": {"Labels": {}}})
 
-    def test_preexisting_tag_with_matching_identity_and_labels_is_still_rejected(self) -> None:
+    def test_preexisting_exact_config_identity_and_labels_are_adopted(self) -> None:
         image_id = "sha256:" + "a" * 64
-        self.assert_collision({
+        existing = {
             "Id": image_id,
             "Config": {"Labels": {
                 "org.opencontainers.image.revision": "b" * 40,
                 "yoko.activation.profile": self.runtime.PROFILE_ID,
             }},
-        })
+        }
+        with mock.patch.object(self.runtime, "_image_inspect", return_value=existing):
+            observed = self.runtime._build_candidate(
+                Core(), self.profile(b"archive", image_id), Path("unused"),
+            )
+        self.assertEqual(observed, image_id)
+
+    def test_preexisting_exact_containerd_manifest_identity_and_labels_are_adopted(self) -> None:
+        containerd_image_id = "sha256:" + "b" * 64
+        existing = {
+            "Id": containerd_image_id,
+            "Config": {"Labels": {
+                "org.opencontainers.image.revision": "b" * 40,
+                "yoko.activation.profile": self.runtime.PROFILE_ID,
+            }},
+        }
+        with mock.patch.object(self.runtime, "_image_inspect", return_value=existing):
+            observed = self.runtime._build_candidate(
+                Core(), self.profile(b"archive", containerd_image_id=containerd_image_id),
+                Path("unused"),
+            )
+        self.assertEqual(observed, containerd_image_id)
 
     def test_candidate_uses_only_exact_offline_docker_load_then_revalidates(self) -> None:
         archive = b"exact hosted docker archive\n"
@@ -128,6 +155,83 @@ class GravityOfflineArtifactTests(unittest.TestCase):
             ):
                 with self.assertRaises(RuntimeFault):
                     self.runtime._verify_gravity_candidate_image(Core(), profile)
+
+    def test_failed_post_load_identity_check_removes_only_just_loaded_target_tag(self) -> None:
+        archive = b"archive"
+        expected_image = "sha256:" + "a" * 64
+        wrong_image = {
+            "Id": "sha256:" + "d" * 64,
+            "Config": {"Labels": {
+                "org.opencontainers.image.revision": "b" * 40,
+                "yoko.activation.profile": self.runtime.PROFILE_ID,
+            }},
+        }
+        commands: list[list[str]] = []
+        with tempfile.TemporaryDirectory(prefix="gravity-offline-cleanup-") as temporary:
+            archive_path = Path(temporary) / "gravity-image.docker.tar"
+            archive_path.write_bytes(archive)
+
+            def run_required(_core: object, command: list[str], **_kwargs: object) -> SimpleNamespace:
+                commands.append(command)
+                if command[2] == "load":
+                    return SimpleNamespace(
+                        stdout=f"Loaded image: {self.runtime.TARGET_TAG}\n".encode("ascii"),
+                        stderr=b"",
+                    )
+                return SimpleNamespace(stdout=b"", stderr=b"")
+
+            with (
+                mock.patch.object(
+                    self.runtime, "_image_inspect",
+                    side_effect=[None, wrong_image, wrong_image, None],
+                ),
+                mock.patch.object(self.runtime, "_secure_host_file", return_value=archive_path),
+                mock.patch.object(self.runtime, "_required_success", side_effect=run_required),
+            ):
+                with self.assertRaises(RuntimeFault) as raised:
+                    self.runtime._build_candidate(
+                        Core(), self.profile(archive, expected_image), Path("unused"),
+                    )
+        self.assertEqual(raised.exception.code, "GRAVITY_CANDIDATE_IMAGE_IDENTITY_MISMATCH")
+        self.assertEqual(commands, [
+            [self.runtime.DOCKER, "image", "load", "--input", self.runtime.GRAVITY_IMAGE_ARCHIVE_PATH],
+            [self.runtime.DOCKER, "image", "rm", self.runtime.TARGET_TAG],
+        ])
+
+    def test_invalid_success_output_also_removes_the_just_loaded_target_tag(self) -> None:
+        archive = b"archive"
+        exact_image = {
+            "Id": "sha256:" + "a" * 64,
+            "Config": {"Labels": {
+                "org.opencontainers.image.revision": "b" * 40,
+                "yoko.activation.profile": self.runtime.PROFILE_ID,
+            }},
+        }
+        commands: list[list[str]] = []
+        with tempfile.TemporaryDirectory(prefix="gravity-offline-output-cleanup-") as temporary:
+            archive_path = Path(temporary) / "gravity-image.docker.tar"
+            archive_path.write_bytes(archive)
+
+            def run_required(_core: object, command: list[str], **_kwargs: object) -> SimpleNamespace:
+                commands.append(command)
+                if command[2] == "load":
+                    return SimpleNamespace(stdout=b"unexpected load output\n", stderr=b"")
+                return SimpleNamespace(stdout=b"", stderr=b"")
+
+            with (
+                mock.patch.object(
+                    self.runtime, "_image_inspect",
+                    side_effect=[None, exact_image, None],
+                ),
+                mock.patch.object(self.runtime, "_secure_host_file", return_value=archive_path),
+                mock.patch.object(self.runtime, "_required_success", side_effect=run_required),
+            ):
+                with self.assertRaises(RuntimeFault) as raised:
+                    self.runtime._build_candidate(
+                        Core(), self.profile(archive), Path("unused"),
+                    )
+        self.assertEqual(raised.exception.code, "GRAVITY_IMAGE_OFFLINE_LOAD_OUTPUT_INVALID")
+        self.assertEqual(commands[-1], [self.runtime.DOCKER, "image", "rm", self.runtime.TARGET_TAG])
 
     def test_automatic_rollback_completion_does_not_depend_on_target_tag(self) -> None:
         state = {"phase": "RELEASE_ACTIVATION_ROLLBACK_INTENT"}

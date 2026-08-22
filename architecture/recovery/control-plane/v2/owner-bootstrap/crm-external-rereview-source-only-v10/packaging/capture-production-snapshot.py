@@ -18,12 +18,13 @@ SUDO = "/usr/bin/sudo"
 HOST = "jvxthcorvm"
 RUNTIME_VERSION = "2.0.0"
 PACKAGE_VERSION = "2.0.0-10"
-PROFILE_ID = "crm-451c0ea4ca54-gravity-source-v1"
+PROFILE_ID = "crm-9514cd7ac10f-gravity-source-v1"
 PREDECESSOR_COMMIT = "7aea2823efe50e13a156540993d424594025e403"
 PREDECESSOR_IMAGE = "sha256:baf442f880ebca808897a0131a662c603a9119f652cbbc3e47937286dec49179"
 TG_BOT_IMAGE = "sha256:0849c4c9912aecf3cb7c35b51abba22cdb1c85a385afa6c2746000d14b9835f6"
 POSTGRES_IMAGE = "sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229"
-AUDIT_DIGEST = "95668295b49045f430f19512d7cd60c81c88ae6e3586f26dd39fcf12a09f0c81"
+AUDIT_RECORDS = 23
+AUDIT_DIGEST = "724044340213b8f07035969c0cc127cd49108fa5c4b62701dc55baa8d6e562db"
 DATABASE_IDENTITY = "ed88dfeaad2a3dc2e759590d295992cd06531d4403d896ded00b21ea667be1c9"
 MIGRATION_LEDGER = "a50f1a8988f79c85059354d6b2d45e9e8ed07284fc27c78d98face6680f25dfc"
 CANONICAL_ACTIVE_INVENTORY = "a05eb3a3a6a0c78df2e68b150421a00f971b6e39b9346bb25f76733ed799d197"
@@ -394,12 +395,12 @@ def validate_response(value: object, primitive: str, resource: str | None) -> di
             or not SHA64.fullmatch(evidence["activation_profile_manifest_sha256"])
             or not isinstance(evidence["policy_sha256"], str) or not SHA64.fullmatch(evidence["policy_sha256"])
             or not isinstance(evidence["registry_sha256"], str) or not SHA64.fullmatch(evidence["registry_sha256"])
-            or audit != {"last_digest": AUDIT_DIGEST, "record_count": 19, "state": "VALID"}
+            or audit != {"last_digest": AUDIT_DIGEST, "record_count": AUDIT_RECORDS, "state": "VALID"}
         ):
             raise CaptureError("self-check evidence mismatch")
     elif primitive == "audit-status":
         evidence = exact_dict(evidence, {"last_digest", "record_count", "state"}, "audit evidence")
-        if evidence != {"last_digest": AUDIT_DIGEST, "record_count": 19, "state": "VALID"}:
+        if evidence != {"last_digest": AUDIT_DIGEST, "record_count": AUDIT_RECORDS, "state": "VALID"}:
             raise CaptureError("audit evidence mismatch")
     elif primitive == "docker-inspect":
         evidence = exact_dict(evidence, DOCKER_KEYS, "docker evidence")
@@ -565,7 +566,7 @@ def validate_projection(value: object, primitive: str, resource: str | None) -> 
             or projection["runtime_version"] != RUNTIME_VERSION or projection["arbitrary_paths"] is not False
             or projection["docker_socket_delegated"] is not False or projection["generic_command_execution"] is not False
             or projection["profile_argument_shape"] != "ZERO_ARGUMENT_ONLY"
-            or audit != {"last_digest": AUDIT_DIGEST, "record_count": 19, "state": "VALID"}
+            or audit != {"last_digest": AUDIT_DIGEST, "record_count": AUDIT_RECORDS, "state": "VALID"}
         ):
             raise CaptureError("self-check projection mismatch")
         for key in ("activation_profile_manifest_sha256", "policy_sha256", "registry_sha256"):
@@ -574,7 +575,7 @@ def validate_projection(value: object, primitive: str, resource: str | None) -> 
         return projection
     if primitive == "audit-status":
         projection = exact_dict(value, {"last_digest", "record_count", "state"}, "audit projection")
-        if projection != {"last_digest": AUDIT_DIGEST, "record_count": 19, "state": "VALID"}:
+        if projection != {"last_digest": AUDIT_DIGEST, "record_count": AUDIT_RECORDS, "state": "VALID"}:
             raise CaptureError("audit projection mismatch")
         return projection
     if primitive == "docker-inspect":

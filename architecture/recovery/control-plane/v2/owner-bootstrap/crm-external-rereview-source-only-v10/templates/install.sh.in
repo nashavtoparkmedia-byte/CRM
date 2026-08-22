@@ -12,7 +12,8 @@ readonly OLD_DEB_SHA='0c259741b4b58992acb830806e42db79ec87730f1b568a21e2879483d7
 readonly OLD_RUNTIME_SHA='40f7a2fc8d8c7f308aab932e70c1f98f461bb6b1c7f4b52ba715f59f54911fd3'
 readonly OLD_POLICY_SHA='8727373b0c6ec79c9abf82f1aaaa58abc2bae67e96aa96a602ac419f308db0e0'
 readonly OLD_INSTALL_MANIFEST_SHA='eef2e269a00c2f6f51f8fe3844b1cb65c3c32b3ec478140059747d5d7799dd3b'
-readonly EXPECTED_AUDIT_DIGEST='95668295b49045f430f19512d7cd60c81c88ae6e3586f26dd39fcf12a09f0c81'
+readonly EXPECTED_AUDIT_RECORDS='23'
+readonly EXPECTED_AUDIT_DIGEST='724044340213b8f07035969c0cc127cd49108fa5c4b62701dc55baa8d6e562db'
 readonly OLD_SUDOERS_SHA='6e6b7cb2a088cc92fa7aee747adca46c64b4b96d1224be21117be5adef488c06'
 readonly BOOTSTRAP_STORE='/var/lib/yoko-privileged-runtime/activation-bootstraps'
 readonly INSTALL_LOG='/var/lib/yoko-privileged-runtime/activation-bootstrap-install.log'
@@ -47,7 +48,7 @@ new_identity() {
 
 audit_exact() {
     audit=$(/usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n /usr/local/sbin/yoko-privileged-runtime audit-status) || return 1
-    /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v["evidence"]; assert v["ok"] and e["state"]=="VALID" and e["record_count"]==19 and e["last_digest"]==sys.argv[1]' "$EXPECTED_AUDIT_DIGEST" <<<"$audit" || return 1
+    /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v["evidence"]; assert v["ok"] and e["state"]=="VALID" and e["record_count"]==int(sys.argv[2]) and e["last_digest"]==sys.argv[1]' "$EXPECTED_AUDIT_DIGEST" "$EXPECTED_AUDIT_RECORDS" <<<"$audit" || return 1
 }
 
 provenance_identity() {
@@ -227,7 +228,7 @@ fi
 pre=$(/usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n /usr/local/sbin/yoko-privileged-runtime docker-provenance)
 pre_provenance_identity=$(provenance_identity <<<"$pre")
 audit_before=$(/usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n /usr/local/sbin/yoko-privileged-runtime audit-status)
-/usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v["evidence"]; assert v["ok"] and e["state"]=="VALID" and e["record_count"]==19 and e["last_digest"]==sys.argv[1]' "$EXPECTED_AUDIT_DIGEST" <<<"$audit_before"
+/usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v["evidence"]; assert v["ok"] and e["state"]=="VALID" and e["record_count"]==int(sys.argv[2]) and e["last_digest"]==sys.argv[1]' "$EXPECTED_AUDIT_DIGEST" "$EXPECTED_AUDIT_RECORDS" <<<"$audit_before"
 
 /usr/bin/install -d -o root -g root -m 0700 "$BOOTSTRAP_STORE"
 if [ "$store_present" -eq 0 ]; then
@@ -274,7 +275,7 @@ post=$(/usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n /usr/local/sbin/yoko-pr
 post_provenance_identity=$(provenance_identity <<<"$post")
 test "$pre_provenance_identity" = "$post_provenance_identity"
 audit_after=$(/usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n /usr/local/sbin/yoko-privileged-runtime audit-status)
-/usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v["evidence"]; assert v["ok"] and e["state"]=="VALID" and e["record_count"]==19 and e["last_digest"]==sys.argv[1]' "$EXPECTED_AUDIT_DIGEST" <<<"$audit_after"
+/usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v["evidence"]; assert v["ok"] and e["state"]=="VALID" and e["record_count"]==int(sys.argv[2]) and e["last_digest"]==sys.argv[1]' "$EXPECTED_AUDIT_DIGEST" "$EXPECTED_AUDIT_RECORDS" <<<"$audit_after"
 
 clear_guard
 new_attempted=0

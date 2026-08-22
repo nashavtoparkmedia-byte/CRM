@@ -153,7 +153,7 @@ def _load_profile(core: Any) -> dict[str, Any]:
         or set(gravity_artifact) != {
             "zip_sha256", "zip_bytes", "machine_attestation_sha256",
             "ci_execution_proof_sha256", "ci_execution_proof_bytes",
-            "docker_archive_sha256", "docker_archive_bytes", "image_id",
+            "docker_archive_sha256", "docker_archive_bytes", "image_id", "containerd_image_id",
             "image_reference", "platform", "materials", "github_artifact",
         }
         or not all(SHA256.fullmatch(str(gravity_artifact.get(key, ""))) for key in (
@@ -167,6 +167,7 @@ def _load_profile(core: Any) -> dict[str, Any]:
             for key in ("zip_bytes", "ci_execution_proof_bytes", "docker_archive_bytes")
         )
         or not re.fullmatch(r"sha256:[0-9a-f]{64}", str(gravity_artifact.get("image_id", "")))
+        or not re.fullmatch(r"sha256:[0-9a-f]{64}", str(gravity_artifact.get("containerd_image_id", "")))
         or gravity_artifact.get("image_reference") != TARGET_TAG
         or gravity_artifact.get("platform") != "linux/amd64"
         or not isinstance(gravity_artifact.get("materials"), dict)
@@ -1299,26 +1300,56 @@ def _root_log(core: Any, name: str) -> tuple[Path, int]:
     return path, fd
 
 
+def _gravity_candidate_image_ids(profile: dict[str, Any]) -> set[str]:
+    artifact = profile["accepted_source"]["gravity_image_artifact"]
+    return {artifact["image_id"], artifact["containerd_image_id"]}
+
+
 def _verify_gravity_candidate_image(core: Any, profile: dict[str, Any]) -> dict[str, Any]:
     source = profile["accepted_source"]
-    artifact = source["gravity_image_artifact"]
     image = _image_inspect(core, TARGET_TAG)
-    if image is None or image.get("Id") != artifact["image_id"]:
-        raise core.RuntimeFault("GRAVITY_CANDIDATE_IMAGE_IDENTITY_MISMATCH", 74)
+    accepted_ids = _gravity_candidate_image_ids(profile)
+    if image is None or image.get("Id") not in accepted_ids:
+        raise core.RuntimeFault("GRAVITY_CANDIDATE_IMAGE_IDENTITY_MISMATCH", 74, {
+            "expected_image_ids": sorted(accepted_ids),
+            "observed_image_id": None if image is None else image.get("Id"),
+        })
     labels = (image.get("Config") or {}).get("Labels") or {}
     if (
         labels.get("org.opencontainers.image.revision") != source["commit"]
         or labels.get("yoko.activation.profile") != PROFILE_ID
     ):
-        raise core.RuntimeFault("GRAVITY_CANDIDATE_IMAGE_PROVENANCE_MISMATCH", 74)
+        raise core.RuntimeFault("GRAVITY_CANDIDATE_IMAGE_PROVENANCE_MISMATCH", 74, {
+            "expected_revision": source["commit"],
+            "expected_profile_id": PROFILE_ID,
+            "observed_revision": labels.get("org.opencontainers.image.revision"),
+            "observed_profile_id": labels.get("yoko.activation.profile"),
+        })
     return image
+
+
+def _remove_just_loaded_gravity_candidate(core: Any) -> None:
+    if _image_inspect(core, TARGET_TAG, required=False) is None:
+        return
+    _required_success(
+        core, [DOCKER, "image", "rm", TARGET_TAG], timeout=60,
+        code="GRAVITY_CANDIDATE_FAILED_LOAD_CLEANUP_FAILED",
+    )
+    if _image_inspect(core, TARGET_TAG, required=False) is not None:
+        raise core.RuntimeFault("GRAVITY_CANDIDATE_FAILED_LOAD_CLEANUP_FAILED", 74)
 
 
 def _build_candidate(core: Any, profile: dict[str, Any], context: Path) -> str:
     del context  # Runtime never builds Gravity; source remains audit evidence.
     existing = _image_inspect(core, TARGET_TAG, required=False)
     if existing is not None:
-        raise core.RuntimeFault("TARGET_IMAGE_TAG_COLLISION", 74)
+        try:
+            return _verify_gravity_candidate_image(core, profile)["Id"]
+        except core.RuntimeFault as exc:
+            raise core.RuntimeFault("TARGET_IMAGE_TAG_COLLISION", 74, {
+                "observed_image_id": existing.get("Id"),
+                "verification_failure_code": exc.code,
+            }) from exc
     artifact = profile["accepted_source"]["gravity_image_artifact"]
     archive = _secure_host_file(
         core, GRAVITY_IMAGE_ARCHIVE_PATH, 0o444,
@@ -1331,18 +1362,32 @@ def _build_candidate(core: Any, profile: dict[str, Any], context: Path) -> str:
         != artifact["docker_archive_sha256"]
     ):
         raise core.RuntimeFault("GRAVITY_IMAGE_ARCHIVE_IDENTITY_MISMATCH", 74)
-    completed = _required_success(
-        core,
-        [DOCKER, "image", "load", "--input", GRAVITY_IMAGE_ARCHIVE_PATH],
-        timeout=int(profile["limits"]["build_timeout_seconds"]),
-        code="GRAVITY_IMAGE_OFFLINE_LOAD_FAILED",
-    )
-    expected_line = f"Loaded image: {TARGET_TAG}\n".encode("ascii")
-    if (completed.stdout, completed.stderr) not in {
-        (expected_line, b""), (b"", expected_line),
-    }:
-        raise core.RuntimeFault("GRAVITY_IMAGE_OFFLINE_LOAD_OUTPUT_INVALID", 74)
-    return _verify_gravity_candidate_image(core, profile)["Id"]
+    try:
+        completed = _required_success(
+            core,
+            [DOCKER, "image", "load", "--input", GRAVITY_IMAGE_ARCHIVE_PATH],
+            timeout=int(profile["limits"]["build_timeout_seconds"]),
+            code="GRAVITY_IMAGE_OFFLINE_LOAD_FAILED",
+        )
+        expected_line = f"Loaded image: {TARGET_TAG}\n".encode("ascii")
+        if (completed.stdout, completed.stderr) not in {
+            (expected_line, b""), (b"", expected_line),
+        }:
+            raise core.RuntimeFault("GRAVITY_IMAGE_OFFLINE_LOAD_OUTPUT_INVALID", 74)
+        return _verify_gravity_candidate_image(core, profile)["Id"]
+    except Exception as verification_failure:
+        try:
+            _remove_just_loaded_gravity_candidate(core)
+        except Exception as cleanup_failure:
+            failure_code = (
+                verification_failure.code
+                if isinstance(verification_failure, core.RuntimeFault)
+                else "INTERNAL_CANDIDATE_VERIFICATION_FAILURE"
+            )
+            raise core.RuntimeFault("GRAVITY_CANDIDATE_FAILED_LOAD_CLEANUP_FAILED", 74, {
+                "verification_failure_code": failure_code,
+            }) from cleanup_failure
+        raise
 
 
 def _tg_patch_labels(profile: dict[str, Any]) -> dict[str, str]:

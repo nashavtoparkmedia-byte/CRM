@@ -447,8 +447,9 @@ def inspect_gravity_docker_archive(
     expected_image_id: str,
     commit: str,
     profile_id: str,
-) -> None:
+) -> str:
     docker_archive.seek(0)  # type: ignore[attr-defined]
+    containerd_image_id = expected_image_id
     try:
         with tarfile.open(fileobj=docker_archive, mode="r:") as archive:
             members = archive.getmembers()
@@ -587,6 +588,7 @@ def inspect_gravity_docker_archive(
                     }
                 ):
                     raise SystemExit("Gravity OCI image descriptor mismatch")
+                containerd_image_id = str(image_descriptor["digest"])
                 image_manifest_name = f"blobs/sha256/{str(image_descriptor['digest']).removeprefix('sha256:')}"
                 image_manifest_member = archive.getmember(image_manifest_name)
                 image_manifest_file = archive.extractfile(image_manifest_name)
@@ -758,6 +760,7 @@ def inspect_gravity_docker_archive(
         or labels.get("yoko.activation.profile") != profile_id
     ):
         raise SystemExit("Gravity docker archive immutable labels mismatch")
+    return containerd_image_id
 
 
 def install_stream_atomic(
@@ -918,7 +921,7 @@ def inspect_gravity_artifact_zip(
                 or semantic_digest != sha((json.dumps(semantic, sort_keys=True, separators=(",", ":")) + "\n").encode("ascii"))
             ):
                 raise SystemExit("Gravity artifact source, image, or material provenance mismatch")
-            inspect_gravity_docker_archive(
+            containerd_image_id = inspect_gravity_docker_archive(
                 docker_archive, expected_image_reference, machine["image_id"], commit, profile_id,
             )
             install_stream_atomic(
@@ -937,6 +940,7 @@ def inspect_gravity_artifact_zip(
         "docker_archive_sha256": docker_identity["sha256"],
         "docker_archive_bytes": docker_identity["bytes"],
         "image_id": machine["image_id"],
+        "containerd_image_id": containerd_image_id,
         "image_reference": machine["image_reference"],
         "platform": machine["platform"],
         "materials": materials,
@@ -1326,10 +1330,10 @@ def main() -> None:
         or snapshot_document["host"] != "jvxthcorvm"
         or snapshot["runtime_package_version"] != "2.0.0-10"
         or snapshot["runtime_abi"] != "2.0.0"
-        or snapshot["profile_id"] != "crm-451c0ea4ca54-gravity-source-v1"
+        or snapshot["profile_id"] != "crm-9514cd7ac10f-gravity-source-v1"
         or snapshot["audit_state"] != "VALID"
-        or snapshot["audit_records"] != 19
-        or snapshot["audit_last_digest"] != "95668295b49045f430f19512d7cd60c81c88ae6e3586f26dd39fcf12a09f0c81"
+        or snapshot["audit_records"] != 23
+        or snapshot["audit_last_digest"] != "724044340213b8f07035969c0cc127cd49108fa5c4b62701dc55baa8d6e562db"
         or snapshot["gravity_image_id"] != PREDECESSOR_IMAGE
         or snapshot["gravity_oci_revision"] != PREDECESSOR_COMMIT
         or snapshot["gravity_running"] is not True
