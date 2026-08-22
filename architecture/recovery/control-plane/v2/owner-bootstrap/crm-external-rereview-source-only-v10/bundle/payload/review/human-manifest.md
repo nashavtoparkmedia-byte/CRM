@@ -17,7 +17,10 @@ The final Gravity artifact also embeds the runner-emitted proof that all 52
 ordered controls actually completed with PASS; the sealer binds that proof to
 the accepted source, workflow, runner, and Node runtime identities.
 Gravity is built by digest-pinned hosted BuildKit and shipped as an exact Docker
-archive; production loads it offline and rejects every pre-existing target tag.
+archive. Production adopts a pre-existing target tag only when its identity and
+exact source/profile labels match the sealed artifact, and rejects every foreign
+identity. If a newly loaded tag fails output or identity verification, Runtime
+removes that tag and proves it absent before returning the failure.
 The seal also binds the complete Runtime builder subtree to exact accepted Git
 blobs, all package/bootstrap inputs, and both deterministic output identities.
 A bare PASS assertion or any missing, forged, partial, drifted, extra-staging,

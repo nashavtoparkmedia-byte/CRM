@@ -121,6 +121,17 @@ class StaticContractTests(unittest.TestCase):
         self.assertIn("known-row reorder is `DRIFTED`", manifest)
         self.assertIn("reorder of known rows is", payload_manifest)
 
+    def test_human_contract_matches_exact_candidate_adoption_and_cleanup(self) -> None:
+        documents = [
+            (ROOT / "README.md").read_text(),
+            (ROOT / "human-manifest.md").read_text(),
+            (ROOT / "bundle/payload/review/human-manifest.md").read_text(),
+        ]
+        for document in documents:
+            self.assertIn("adopt", document)
+            self.assertIn("foreign", document)
+            self.assertIn("remov", document)
+
     def test_terminal_rollback_cannot_reseal_or_change_source(self) -> None:
         profile = (ROOT / "templates/crm-activation-profile.py.in").read_text()
         self.assertIn('if state.get("phase") == "ROLLED_BACK":\n            raise core.RuntimeFault("ROLLED_BACK_RELEASE_TERMINAL"', profile)

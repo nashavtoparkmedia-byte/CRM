@@ -13,8 +13,11 @@ by the reviewed semantic command/argument/cwd/order digest. A runner-emitted
 success-only proof of all 52 ordered executions is embedded in the final
 Gravity artifact and validated independently by the sealer. The hosted Gravity
 image is built by digest-pinned BuildKit, inspected by immutable image ID and
-labels, packaged into Runtime and loaded offline; any pre-existing target tag
-is rejected. The complete external Runtime builder subtree is also byte-bound
+labels, packaged into Runtime and loaded offline. A pre-existing target tag is
+adopted only when its identity and exact source/profile labels match the sealed
+artifact; every foreign identity is rejected. A newly loaded tag that fails
+output or identity verification is removed and proved absent before Runtime
+returns the failure. The complete external Runtime builder subtree is also byte-bound
 to the accepted commit before rendering or execution, and its Git inventory is
 sealed. Every transitive build input and both deterministic output identities
 are sealed. Any identity, hash, conclusion, count, catalog, staging entry or

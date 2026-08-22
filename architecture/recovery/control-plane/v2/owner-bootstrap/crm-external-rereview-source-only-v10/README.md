@@ -1,9 +1,9 @@
 # Runtime 2.0.0-10 source-only release builder
 
 This external staging tree prepares a deterministic same-version, same-ABI
-replacement for the installed `yoko-privileged-runtime` `2.0.0-10` profile
-`crm-451c0ea4ca54-gravity-source-v1`. It is not an authorization to install or
-deploy anything. The exact `2.0.0-9` package remains the rollback bridge.
+replacement for the installed `yoko-privileged-runtime` `2.0.0-10` package.
+It is not an authorization to install or deploy anything. The exact `2.0.0-9`
+package remains the rollback bridge.
 
 The successor preserves these accepted 2.0.0-9 files byte-for-byte:
 
@@ -102,8 +102,12 @@ Gravity is not built on the production host. The hosted job uses Buildx
 `v0.30.1` with a digest-pinned BuildKit `v0.25.2` container and digest-pinned
 Dockerfile/base materials. Runtime admits the exact image ID, source commit,
 tree, profile label, archive digest, platform, materials and GitHub artifact,
-then loads the installed archive offline with `docker image load`. A pre-existing
-target tag is always a collision, even when its labels appear correct.
+then loads the installed archive offline with `docker image load`. A
+pre-existing target tag is adopted only when its image identity and exact
+source/profile labels match the sealed artifact; every foreign identity is a
+collision. If a newly loaded tag fails output or identity verification, Runtime
+removes only that just-loaded target tag and proves it absent before returning
+the original failure. Cleanup failure is a separate fail-closed error.
 
 The builder may emit only non-authorizing replay evidence for the fixed eight
 attacks. It cannot author a reviewer decision or assign itself an independent
