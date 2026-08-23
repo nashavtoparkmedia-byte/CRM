@@ -320,6 +320,7 @@ assert.notEqual(
 )
 assert.deepEqual(workflowJobStepNames(workflow, 'architecture'), [
   'Check out exact revision',
+  'Run targeted Runtime TG base-reference contract',
   'Fetch exact Runtime v10 predecessor',
   'Set up exact Node.js',
   'Verify exact Node.js',
@@ -329,6 +330,14 @@ assert.deepEqual(workflowJobStepNames(workflow, 'architecture'), [
   'Run authoritative architecture controls',
   'Upload exact authoritative CI execution proof',
 ], 'the architecture job step inventory must remain exact and ordered')
+const tgReferenceStepStart = workflow.indexOf('      - name: Run targeted Runtime TG base-reference contract')
+const tgReferenceStepEnd = workflow.indexOf('\n      - name:', tgReferenceStepStart + 1)
+const tgReferenceStep = workflow.slice(tgReferenceStepStart, tgReferenceStepEnd)
+assert.ok(tgReferenceStepStart > 0, 'the real-Docker TG base-reference gate must exist')
+assert.match(tgReferenceStep, /^          YOKO_RUNTIME_REAL_DOCKER: '1'$/mu)
+assert.match(tgReferenceStep, /^          YOKO_TG_REFERENCE_TEST_BASE: 'postgres@sha256:7a396fd264a2067788b6551122b50f162bf6136312c7fc9d74381cb92c648382'$/mu)
+assert.match(tgReferenceStep, /test_builder_contract\.py" RealDockerTgBaseReferenceTests/u)
+assert.doesNotMatch(tgReferenceStep, /^        (?:if|continue-on-error):/mu, 'the real-Docker TG gate cannot be skipped or tolerated')
 assert.deepEqual(workflowJobStepNames(workflow, 'gravity-artifact'), [
   'Check out exact revision',
   'Set up exact Buildx',

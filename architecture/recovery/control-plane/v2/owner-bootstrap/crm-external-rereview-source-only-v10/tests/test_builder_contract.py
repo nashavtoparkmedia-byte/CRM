@@ -150,6 +150,11 @@ class StaticContractTests(unittest.TestCase):
         self.assertIn('production["compose_service"], production["tg_bot_compose_service"]', profile)
         self.assertIn('"--no-deps", "--no-build", "--pull", "never", "--force-recreate", "--wait"', profile)
         self.assertIn('COPY --chown=0:0 --chmod=0644 public-bot-maintenance.js /app/src/public-bot-maintenance.js', profile)
+        self.assertIn('TG_BASE_REFERENCE = "crm/tg-bot@sha256:0849c4c9912aecf3cb7c35b51abba22cdb1c85a385afa6c2746000d14b9835f6"', profile)
+        self.assertIn('f"FROM {TG_BASE_REFERENCE}\\n"', profile)
+        self.assertNotIn('f"FROM {TG_BASE_IMAGE}\\n"', profile)
+        self.assertIn('TG_BOT_PREDECESSOR_REFERENCE = f"crm/tg-bot@{TG_BOT_PREDECESSOR_IMAGE}"', seal)
+        self.assertTrue(self._sealed_tg_recipe_uses_reference_and_preserves_image_identity(seal))
         self.assertIn('[DOCKER, "diff", TG_DIFF_PROOF_CONTAINER]', profile)
         self.assertIn('["C /app", "C /app/src", f"A {TG_PATCH_DESTINATION}"]', profile)
         self.assertIn('target_layers[:-1] != base_layers', profile)
@@ -163,6 +168,17 @@ class StaticContractTests(unittest.TestCase):
         self.assertEqual(snapshot["sealed_predecessor_authority"]["tg_bot_patch_baseline_manifest_sha256"], "72397e9c7e3c728b94d1e5645da825ddd75216bfacd13212b4671fe15f206d56")
         self.assertIn("capture-production-snapshot.py", seal)
         self.assertIn("load_snapshot(args.production_snapshot.resolve(strict=True))", seal)
+
+    @staticmethod
+    def _sealed_tg_recipe_uses_reference_and_preserves_image_identity(seal: str) -> bool:
+        recipe_start = seal.index("def tg_bot_patch_recipe(")
+        recipe_end = seal.index("\n\ndef validate_tg_bot_baseline_manifest", recipe_start)
+        recipe = seal[recipe_start:recipe_end]
+        return (
+            'f"FROM {TG_BOT_PREDECESSOR_REFERENCE}\\n"' in recipe
+            and 'f"LABEL yoko.tg-bot.base-image=\\"{TG_BOT_PREDECESSOR_IMAGE}\\"\\n"' in recipe
+            and 'f"FROM {TG_BOT_PREDECESSOR_IMAGE}\\n"' not in recipe
+        )
 
     def test_archive_has_exact_root_inventory_without_common_prefix(self) -> None:
         profile = json.loads((ROOT / "templates/profile.v1.json.in").read_text())
@@ -188,8 +204,8 @@ class StaticContractTests(unittest.TestCase):
         postinst = (ROOT / "templates/postinst.in").read_text()
         self.assertIn('test "$#" -eq 0', installer)
         self.assertIn("EXPECTED_HOST='jvxthcorvm'", installer)
-        self.assertIn("EXPECTED_AUDIT_RECORDS='25'", installer)
-        self.assertIn("EXPECTED_AUDIT_DIGEST='b9e7c07b", installer)
+        self.assertIn("EXPECTED_AUDIT_RECORDS='29'", installer)
+        self.assertIn("EXPECTED_AUDIT_DIGEST='dc6fcbaa", installer)
         for forbidden in ("curl ", "wget ", "git clone", "apt-get", "docker compose", "pg_dump", "psql "):
             self.assertNotIn(forbidden, installer)
         for denied in ("/bin/sh -c ':'", "/usr/bin/docker ps", "/usr/bin/dpkg --status sudo", "self-check unexpected", "fs-stat ../../../etc", "service-restart crm.container.unrelated"):
@@ -309,6 +325,72 @@ class StaticContractTests(unittest.TestCase):
         self.assertIn('accepted live migration chronology authority drift', seal)
         self.assertIn('"status"] != "ACCEPTED_READ_ONLY_CAPTURE"', seal)
         self.assertIn('acceptance record lacks independent reviewer identity or UTC acceptance time', seal)
+
+
+class RealDockerTgBaseReferenceTests(unittest.TestCase):
+    @staticmethod
+    def _docker(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.run(
+            args,
+            cwd=cwd,
+            env={**os.environ, "DOCKER_BUILDKIT": "1"},
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=180,
+        )
+
+    @unittest.skipUnless(os.environ.get("YOKO_RUNTIME_REAL_DOCKER") == "1", "real Docker regression is an explicit hosted gate")
+    def test_real_buildkit_rejects_bare_config_id_and_builds_from_repo_digest(self) -> None:
+        base_reference = os.environ.get("YOKO_TG_REFERENCE_TEST_BASE", "")
+        self.assertRegex(base_reference, r"^[a-z0-9][a-z0-9./_-]*@sha256:[0-9a-f]{64}$")
+        server = self._docker("/usr/bin/docker", "version", "--format", "{{json .Server}}")
+        self.assertEqual(server.returncode, 0, server.stderr.decode("utf-8", "replace"))
+        self.assertIsInstance(json.loads(server.stdout), dict)
+        inspected = self._docker("/usr/bin/docker", "image", "inspect", base_reference)
+        self.assertEqual(inspected.returncode, 0, inspected.stderr.decode("utf-8", "replace"))
+        image = json.loads(inspected.stdout)[0]
+        image_id = image["Id"]
+        self.assertRegex(image_id, r"^sha256:[0-9a-f]{64}$")
+        self.assertIn(base_reference, image.get("RepoDigests") or [])
+
+        target = f"yoko/tg-base-reference-regression:{os.getpid()}-{time.time_ns()}"
+        self.addCleanup(lambda: self._docker("/usr/bin/docker", "image", "rm", target))
+        with tempfile.TemporaryDirectory(prefix="yoko-tg-base-reference-") as temporary:
+            context = Path(temporary)
+            (context / "public-bot-maintenance.js").write_text("export const regression = true;\n", encoding="ascii")
+            dockerfile = context / "Dockerfile"
+            dockerfile.write_text(
+                f"FROM {image_id}\n"
+                "COPY --chown=0:0 --chmod=0644 public-bot-maintenance.js /app/src/public-bot-maintenance.js\n",
+                encoding="ascii",
+            )
+            rejected = self._docker(
+                "/usr/bin/docker", "build", "--pull=false", "--network", "none", "--no-cache",
+                "--tag", target, "--file", str(dockerfile), str(context), cwd=context,
+            )
+            self.assertNotEqual(rejected.returncode, 0, "BuildKit unexpectedly accepted a bare config-image ID in FROM")
+            rejection = (rejected.stdout + rejected.stderr).decode("utf-8", "replace").lower()
+            self.assertIn(image_id, rejection)
+            self.assertTrue(
+                any(marker in rejection for marker in ("failed to resolve", "not found", "pull access denied", "invalid reference")),
+                rejection,
+            )
+
+            dockerfile.write_text(
+                f"FROM {base_reference}\n"
+                "LABEL yoko.tg-bot.base-image=\"regression-pinned\"\n"
+                "COPY --chown=0:0 --chmod=0644 public-bot-maintenance.js /app/src/public-bot-maintenance.js\n",
+                encoding="ascii",
+            )
+            accepted = self._docker(
+                "/usr/bin/docker", "build", "--pull=false", "--network", "none", "--no-cache",
+                "--tag", target, "--file", str(dockerfile), str(context), cwd=context,
+            )
+            self.assertEqual(accepted.returncode, 0, accepted.stderr.decode("utf-8", "replace"))
+            derived = self._docker("/usr/bin/docker", "image", "inspect", target)
+            self.assertEqual(derived.returncode, 0, derived.stderr.decode("utf-8", "replace"))
+            value = json.loads(derived.stdout)[0]
+            self.assertEqual((value.get("Config") or {}).get("Labels", {}).get("yoko.tg-bot.base-image"), "regression-pinned")
 
 
 class HostedCiAcceptanceTests(unittest.TestCase):
@@ -970,10 +1052,10 @@ class SealedFixtureTests(unittest.TestCase):
         snapshot = {
             "runtime_package_version": "2.0.0-10",
             "runtime_abi": "2.0.0",
-            "profile_id": "crm-f926cc69f285-gravity-source-v1",
+            "profile_id": "crm-21fe6e911cad-gravity-source-v1",
             "audit_state": "VALID",
-            "audit_records": 25,
-            "audit_last_digest": "b9e7c07bf06ebd881bf6f731b6ae2a1d0c59b5a5b4373bcd502a0d65f6748af7",
+            "audit_records": 29,
+            "audit_last_digest": "dc6fcbaa5c9ebf3f9717cb91fec69b873e4eeac52357bf44e20525252e46e3c0",
             "source_manifest_sha256": "ecfb0a8b6dc24121fb5c9efb58af28eb1f1626711ef1a6d977b0db29d05bdda3",
             "compose_sha256": "84a9f46904a65a69afcf19d2e56162e026b29718da52c43160abfc5449f84cc1",
             "compose_config_hash": "772ba8f19dc89133ea55ce65aa2d68550594ab61060eac0e373ae7936161b9f8",

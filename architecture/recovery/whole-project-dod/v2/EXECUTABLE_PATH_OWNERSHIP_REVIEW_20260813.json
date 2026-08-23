@@ -7,7 +7,7 @@
     "role": "SOL_HIGH_INTERNAL_REVIEW",
     "external_acceptance": false,
     "independent_acceptance": false,
-    "decision": "Internal remediation review approved the exact baseline-to-current ownership assignments and the exact-inventory transitions enumerated below; the added Runtime v10 Docker-archive regression test remains TEST lifecycle under the existing architecture_recovery rule and changes neither exact-inventory set; this artifact is not external or independent acceptance."
+    "decision": "Internal remediation review approved the exact baseline-to-current ownership assignments and the exact-inventory transitions enumerated below; the Runtime v10 real-Docker TG base-reference regression remains inside the already tracked test file and changes neither the executable denominator nor either exact-inventory set; this artifact is not external or independent acceptance."
   },
   "baseline": {
     "coverage_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_COVERAGE_BASELINE_2108.json",
@@ -196,7 +196,7 @@
       "functional_owner": "architecture_recovery_evidence",
       "exclusion": "architecture_recovery",
       "inventory_kind": "exact_runtime_inventory",
-      "source_sha256": "0b06d730c6ba77167a4c99878575e2a2d31ee1d68715046f2bcdcfc3ea1e8e2c",
+      "source_sha256": "83b2c5c1560a39e6d0fdd8c58de1fbb6ce8204b51f0b3886fbd67bba12e39114",
       "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
       "review_rationale": "Internal executor review confirms this exact current source path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
     },

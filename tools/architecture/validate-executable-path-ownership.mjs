@@ -1,10 +1,13 @@
 #!/usr/bin/env node
+import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { inventoryTrackedSurfaces } from './v2/tracked-surface-inventory.mjs'
 
+const execFileAsync = promisify(execFile)
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 export const COVERAGE_PATH = 'architecture/contexts/v1/executable-path-ownership-coverage.json'
 export const REGISTRY_PATH = 'architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json'
@@ -17,6 +20,7 @@ export const REVIEWED_BASELINE_PATH = 'architecture/recovery/whole-project-dod/v
 export const REVIEWED_BASELINE_SHA256 = '429a48c9d257408025bbc273a4d6f1413ed78196549ed889118422b6caba5730'
 
 const SHA256 = /^[0-9a-f]{64}$/u
+const SHA1 = /^[0-9a-f]{40}$/u
 
 const stable = (value) => {
   if (Array.isArray(value)) return value.map(stable)
@@ -27,6 +31,50 @@ const digest = (value) => createHash('sha256').update(JSON.stringify(stable(valu
 const byteDigest = (value) => createHash('sha256').update(value).digest('hex')
 const assert = (value, message) => { if (!value) throw new Error(message) }
 const contains = (ownerPath, candidatePath) => candidatePath === ownerPath || candidatePath.startsWith(`${ownerPath}/`)
+
+function dirtySourceSummary(statusBytes) {
+  const counts = {
+    working_tree_deleted: 0,
+    tracked_modified: 0,
+    staged_changes: 0,
+    untracked_files: 0,
+  }
+  for (const record of statusBytes.toString('utf8').split('\0').filter(Boolean)) {
+    if (record.startsWith('?? ')) {
+      counts.untracked_files += 1
+      continue
+    }
+    if (record.length < 3 || record[2] !== ' ') continue
+    const indexState = record[0]
+    const worktreeState = record[1]
+    if (indexState !== ' ') counts.staged_changes += 1
+    if (indexState === 'D' || worktreeState === 'D') counts.working_tree_deleted += 1
+    if (['M', 'T'].includes(indexState) || ['M', 'T'].includes(worktreeState)) counts.tracked_modified += 1
+  }
+  return Object.entries(counts)
+    .filter(([, count]) => count > 0)
+    .map(([kind, count]) => `${kind}=${count}`)
+    .join(', ')
+}
+
+export async function assertCleanExactCandidateCheckout(repositoryRoot, expectedCommit) {
+  assert(SHA1.test(expectedCommit ?? ''), 'materialization requires explicit --candidate <full-40-character-commit>')
+  const { stdout: headBytes } = await execFileAsync('git', ['-C', repositoryRoot, 'rev-parse', 'HEAD^{commit}'], {
+    encoding: 'buffer',
+    maxBuffer: 1024 * 1024,
+  })
+  const head = headBytes.toString('ascii').trim()
+  assert(head === expectedCommit, `materialization candidate mismatch: expected ${expectedCommit}, checkout HEAD is ${head}`)
+  const { stdout: statusBytes } = await execFileAsync('git', ['-C', repositoryRoot, 'status', '--porcelain=v1', '-z', '--untracked-files=all'], {
+    encoding: 'buffer',
+    maxBuffer: 64 * 1024 * 1024,
+  })
+  if (statusBytes.length > 0) {
+    const summary = dirtySourceSummary(statusBytes) || 'unclassified_dirty_state=1'
+    throw new Error(`materialization requires a clean exact candidate checkout; ${summary}; no source was cleaned or materialized`)
+  }
+  return { candidate: head, status_porcelain_bytes: 0 }
+}
 
 function matchesExclusion(surface, rule) {
   if (rule.lifecycles && !rule.lifecycles.includes(surface.lifecycle)) return false
@@ -339,6 +387,9 @@ export async function validateExecutablePathOwnershipProvenance(repositoryRoot, 
 }
 
 async function main() {
+  const materializing = process.argv.includes('--materialize-reviewed-current-denominator')
+  const candidateArgument = materializing ? option('--candidate') : null
+  if (materializing) await assertCleanExactCandidateCheckout(root, candidateArgument)
   const [registry, coverageBytes, index] = await Promise.all([
     readFile(path.join(root, REGISTRY_PATH), 'utf8').then(JSON.parse),
     readFile(path.join(root, COVERAGE_PATH)),
@@ -347,7 +398,7 @@ async function main() {
   const coverage = JSON.parse(coverageBytes.toString('utf8'))
   const manifests = await Promise.all(index.contexts.map(async (entry) => JSON.parse(await readFile(path.join(root, entry.path), 'utf8'))))
   const inventory = await inventoryTrackedSurfaces(root, { registry })
-  if (process.argv.includes('--materialize-reviewed-current-denominator')) {
+  if (materializing) {
     const decisionArgument = option('--reviewed-decisions')
     assert(decisionArgument, 'explicit --reviewed-decisions <registry.json> input is required for materialization')
     const decisionPath = path.resolve(root, decisionArgument)
@@ -373,8 +424,9 @@ async function main() {
       decisionRegistryPath,
       decisionRegistrySha256: byteDigest(decisionBytes),
     })
+    await assertCleanExactCandidateCheckout(root, candidateArgument)
     await writeFile(path.join(root, COVERAGE_PATH), `${JSON.stringify(refreshed, null, 2)}\n`)
-    process.stdout.write(`${JSON.stringify({ materialized: true, ...refreshed.summary, coverage_sha256: refreshed.coverage_sha256 })}\n`)
+    process.stdout.write(`${JSON.stringify({ materialized: true, candidate: candidateArgument, source_was_clean: true, ...refreshed.summary, coverage_sha256: refreshed.coverage_sha256 })}\n`)
     return
   }
   const result = validateExecutablePathOwnershipCoverage(inventory, manifests, coverage)

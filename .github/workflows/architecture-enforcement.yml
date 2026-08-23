@@ -39,6 +39,15 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 2
 
+      - name: Run targeted Runtime TG base-reference contract
+        env:
+          YOKO_RUNTIME_REAL_DOCKER: '1'
+          YOKO_TG_REFERENCE_TEST_BASE: 'postgres@sha256:7a396fd264a2067788b6551122b50f162bf6136312c7fc9d74381cb92c648382'
+        run: |
+          set -Eeuo pipefail
+          runtime=architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10
+          python3 -I -B "$runtime/tests/test_builder_contract.py" RealDockerTgBaseReferenceTests -v
+
       - name: Fetch exact Runtime v10 predecessor
         env:
           RUNTIME_V10_PREDECESSOR_COMMIT: 7aea2823efe50e13a156540993d424594025e403

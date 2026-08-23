@@ -52,6 +52,7 @@ ROLLBACK_TAG = "yoko/crm-gravity-mvp:rollback-baf442f880ebca808897a0131a662c603a
 TG_TARGET_TAG = "yoko/crm-tg-bot:@FINAL_COMMIT@-public-capability-v1"
 TG_ROLLBACK_TAG = "yoko/crm-tg-bot:rollback-0849c4c9912aecf3cb7c35b51abba22cdb1c85a385afa6c2746000d14b9835f6"
 TG_BASE_IMAGE = "sha256:0849c4c9912aecf3cb7c35b51abba22cdb1c85a385afa6c2746000d14b9835f6"
+TG_BASE_REFERENCE = "crm/tg-bot@sha256:0849c4c9912aecf3cb7c35b51abba22cdb1c85a385afa6c2746000d14b9835f6"
 TG_PATCH_DESTINATION = "/app/src/public-bot-maintenance.js"
 TG_PATCH_TARGET_SHA256 = "d31a95451e148423ce8ad0dad0b78d4d7a487f428d5103a05bd3fed4c454c247"
 TG_PATCH_BASELINE_STATE = "ABSENT"
@@ -1405,7 +1406,7 @@ def _tg_patch_labels(profile: dict[str, Any]) -> dict[str, str]:
 def _tg_patch_recipe(profile: dict[str, Any]) -> bytes:
     labels = _tg_patch_labels(profile)
     return (
-        f"FROM {TG_BASE_IMAGE}\n"
+        f"FROM {TG_BASE_REFERENCE}\n"
         f"LABEL org.opencontainers.image.revision=\"{labels['org.opencontainers.image.revision']}\"\n"
         f"LABEL yoko.activation.profile=\"{labels['yoko.activation.profile']}\"\n"
         f"LABEL yoko.source.archive.sha256=\"{labels['yoko.source.archive.sha256']}\"\n"

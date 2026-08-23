@@ -1,17 +1,32 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict'
+import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { promisify } from 'node:util'
+import { fileURLToPath } from 'node:url'
 import {
+  assertCleanExactCandidateCheckout,
   deriveExecutablePathOwnershipCoverage,
   materializeReviewedExecutablePathOwnershipCoverage,
+  REVIEWED_BASELINE_PATH,
+  REVIEWED_BASELINE_SHA256,
+  REVIEWED_DECISION_PATH,
   validateExecutablePathOwnershipProvenance,
   validateExecutablePathOwnershipCoverage,
 } from './validate-executable-path-ownership.mjs'
+import { inventoryTrackedSurfaces } from './v2/tracked-surface-inventory.mjs'
 
+const execFileAsync = promisify(execFile)
 const sha256 = (value) => createHash('sha256').update(value).digest('hex')
+const stable = (value) => {
+  if (Array.isArray(value)) return value.map(stable)
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stable(value[key])]))
+}
+const stableDigest = (value) => sha256(JSON.stringify(stable(value)))
 
 const inventory = {
   schema: 'yoko.crm.tracked-executable-surface-inventory.v2',
@@ -298,4 +313,107 @@ assert.throws(() => materialize(staleCurrent), /stale for the current denominato
 const staleAssignment = structuredClone(reviewedMigrationDrift)
 staleAssignment.assignments[0].path = 'archive/stale/migration.sql'
 assert.throws(() => materialize(staleAssignment), /stale reviewed exact inventory assignment/)
+
+async function gitFixture() {
+  const fixture = await mkdtemp(path.join(os.tmpdir(), 'yoko-clean-materialization-'))
+  const git = (...args) => execFileAsync('git', args, { cwd: fixture, encoding: 'utf8', maxBuffer: 1024 * 1024 })
+  await git('init', '--quiet')
+  await git('config', 'user.name', 'Yoko Materialization Fixture')
+  await git('config', 'user.email', 'fixture@example.invalid')
+  await writeFile(path.join(fixture, 'tracked.txt'), 'accepted\n')
+  await git('add', 'tracked.txt')
+  await git('commit', '--quiet', '-m', 'fixture')
+  const candidate = (await git('rev-parse', 'HEAD^{commit}')).stdout.trim()
+  return { candidate, fixture, git }
+}
+
+const cleanFixture = await gitFixture()
+assert.deepEqual(
+  await assertCleanExactCandidateCheckout(cleanFixture.fixture, cleanFixture.candidate),
+  { candidate: cleanFixture.candidate, status_porcelain_bytes: 0 },
+)
+await assert.rejects(
+  () => assertCleanExactCandidateCheckout(cleanFixture.fixture, '0'.repeat(40)),
+  /materialization candidate mismatch/,
+)
+
+const modifiedFixture = await gitFixture()
+await writeFile(path.join(modifiedFixture.fixture, 'tracked.txt'), 'modified\n')
+await assert.rejects(
+  () => assertCleanExactCandidateCheckout(modifiedFixture.fixture, modifiedFixture.candidate),
+  /clean exact candidate checkout; tracked_modified=1; no source was cleaned or materialized/,
+)
+
+const stagedFixture = await gitFixture()
+await writeFile(path.join(stagedFixture.fixture, 'tracked.txt'), 'staged\n')
+await stagedFixture.git('add', 'tracked.txt')
+await assert.rejects(
+  () => assertCleanExactCandidateCheckout(stagedFixture.fixture, stagedFixture.candidate),
+  /clean exact candidate checkout; tracked_modified=1, staged_changes=1; no source was cleaned or materialized/,
+)
+
+const deletedFixture = await gitFixture()
+await unlink(path.join(deletedFixture.fixture, 'tracked.txt'))
+await assert.rejects(
+  () => assertCleanExactCandidateCheckout(deletedFixture.fixture, deletedFixture.candidate),
+  /clean exact candidate checkout; working_tree_deleted=1; no source was cleaned or materialized/,
+)
+
+const untrackedFixture = await gitFixture()
+await writeFile(path.join(untrackedFixture.fixture, 'untracked.txt'), 'untracked\n')
+await assert.rejects(
+  () => assertCleanExactCandidateCheckout(untrackedFixture.fixture, untrackedFixture.candidate),
+  /clean exact candidate checkout; untracked_files=1; no source was cleaned or materialized/,
+)
+
+const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
+const [currentRegistry, currentCoverage, currentIndex, currentDecisionBytes, currentBaselineBytes] = await Promise.all([
+  readFile(path.join(repositoryRoot, 'architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json'), 'utf8').then(JSON.parse),
+  readFile(path.join(repositoryRoot, 'architecture/contexts/v1/executable-path-ownership-coverage.json'), 'utf8').then(JSON.parse),
+  readFile(path.join(repositoryRoot, 'architecture/contexts/v1/context-index.json'), 'utf8').then(JSON.parse),
+  readFile(path.join(repositoryRoot, REVIEWED_DECISION_PATH)),
+  readFile(path.join(repositoryRoot, REVIEWED_BASELINE_PATH)),
+])
+const currentManifests = await Promise.all(currentIndex.contexts.map(async (entry) => JSON.parse(await readFile(path.join(repositoryRoot, entry.path), 'utf8'))))
+const [firstCleanInventory, secondCleanInventory] = await Promise.all([
+  inventoryTrackedSurfaces(repositoryRoot, { registry: currentRegistry }),
+  inventoryTrackedSurfaces(repositoryRoot, { registry: currentRegistry }),
+])
+assert.deepEqual(firstCleanInventory, secondCleanInventory, 'clean exact inventory must be deterministic across repeated derivations')
+assert.deepEqual(firstCleanInventory.controls.working_tree_deleted, [])
+assert.equal(firstCleanInventory.summary.tracked_executable_surfaces, 2188)
+assert.equal(stableDigest(firstCleanInventory), '5cd651f8f3212f4ed4e74f4a650aef1914810d4dabee446c10b93c857016d017')
+const historicalDirtyInventory = structuredClone(firstCleanInventory)
+historicalDirtyInventory.controls.working_tree_deleted = [
+  'architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/tests/test_tg_base_reference_real_docker.py',
+]
+assert.equal(
+  stableDigest(historicalDirtyInventory),
+  'aff0c11bf9048393d95bb4ca3d340ffc29a57aff3bdb6a6b43fd1bd71d77adb0',
+  'the historical deleted-worktree state must reproduce the exact rejected aff0c11b drift',
+)
+const currentDerived = deriveExecutablePathOwnershipCoverage(firstCleanInventory, currentManifests, currentCoverage)
+assert.equal(currentDerived.coverage_sha256, '4f1d5b9fd6ac236d0ba5f2fc09ed6658fb23d783658defbbc12ea08c7e7debdf')
+const currentDecisions = JSON.parse(currentDecisionBytes.toString('utf8'))
+const currentBaseline = JSON.parse(currentBaselineBytes.toString('utf8'))
+assert.equal(sha256(currentBaselineBytes), REVIEWED_BASELINE_SHA256)
+const currentSourceSha256ByPath = new Map(await Promise.all(currentDecisions.assignments.map(async ({ path: relativePath }) => [
+  relativePath,
+  sha256(await readFile(path.join(repositoryRoot, relativePath))),
+])))
+const currentMaterializationOptions = {
+  baselineCoveragePath: REVIEWED_BASELINE_PATH,
+  baselineCoverageSha256: REVIEWED_BASELINE_SHA256,
+  sourceSha256ByPath: currentSourceSha256ByPath,
+  decisionRegistryPath: REVIEWED_DECISION_PATH,
+  decisionRegistrySha256: sha256(currentDecisionBytes),
+}
+const firstMaterialization = materializeReviewedExecutablePathOwnershipCoverage(
+  firstCleanInventory, currentManifests, currentBaseline, currentDecisions, currentMaterializationOptions,
+)
+const secondMaterialization = materializeReviewedExecutablePathOwnershipCoverage(
+  secondCleanInventory, currentManifests, currentBaseline, currentDecisions, currentMaterializationOptions,
+)
+assert.deepEqual(firstMaterialization, secondMaterialization, 'clean exact materialization must be deterministic across repeated executions')
+assert.deepEqual(firstMaterialization, currentCoverage, 'committed coverage must be the exact deterministic clean materialization')
 process.stdout.write('executable path ownership coverage: PASS\n')

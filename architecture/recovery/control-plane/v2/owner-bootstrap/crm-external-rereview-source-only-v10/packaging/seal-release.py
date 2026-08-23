@@ -26,6 +26,7 @@ RUNTIME_SOURCE_PREFIX = "architecture/recovery/control-plane/v2/owner-bootstrap/
 PREDECESSOR_COMMIT = "7aea2823efe50e13a156540993d424594025e403"
 PREDECESSOR_IMAGE = "sha256:baf442f880ebca808897a0131a662c603a9119f652cbbc3e47937286dec49179"
 TG_BOT_PREDECESSOR_IMAGE = "sha256:0849c4c9912aecf3cb7c35b51abba22cdb1c85a385afa6c2746000d14b9835f6"
+TG_BOT_PREDECESSOR_REFERENCE = f"crm/tg-bot@{TG_BOT_PREDECESSOR_IMAGE}"
 TG_BOT_PATCH_PATH = "tg-bot/src/public-bot-maintenance.js"
 TG_BOT_PATCH_DESTINATION = "/app/src/public-bot-maintenance.js"
 TG_BOT_PATCH_SHA256 = "d31a95451e148423ce8ad0dad0b78d4d7a487f428d5103a05bd3fed4c454c247"
@@ -1164,7 +1165,7 @@ def archive(repo: Path, commit: str, prefix: str) -> tuple[bytes, dict[str, int]
 
 def tg_bot_patch_recipe(commit: str, archive_sha256: str, profile_id: str) -> bytes:
     return (
-        f"FROM {TG_BOT_PREDECESSOR_IMAGE}\n"
+        f"FROM {TG_BOT_PREDECESSOR_REFERENCE}\n"
         f"LABEL org.opencontainers.image.revision=\"{commit}\"\n"
         f"LABEL yoko.activation.profile=\"{profile_id}\"\n"
         f"LABEL yoko.source.archive.sha256=\"{archive_sha256}\"\n"
@@ -1330,10 +1331,10 @@ def main() -> None:
         or snapshot_document["host"] != "jvxthcorvm"
         or snapshot["runtime_package_version"] != "2.0.0-10"
         or snapshot["runtime_abi"] != "2.0.0"
-        or snapshot["profile_id"] != "crm-f926cc69f285-gravity-source-v1"
+        or snapshot["profile_id"] != "crm-21fe6e911cad-gravity-source-v1"
         or snapshot["audit_state"] != "VALID"
-        or snapshot["audit_records"] != 25
-        or snapshot["audit_last_digest"] != "b9e7c07bf06ebd881bf6f731b6ae2a1d0c59b5a5b4373bcd502a0d65f6748af7"
+        or snapshot["audit_records"] != 29
+        or snapshot["audit_last_digest"] != "dc6fcbaa5c9ebf3f9717cb91fec69b873e4eeac52357bf44e20525252e46e3c0"
         or snapshot["gravity_image_id"] != PREDECESSOR_IMAGE
         or snapshot["gravity_oci_revision"] != PREDECESSOR_COMMIT
         or snapshot["gravity_running"] is not True
