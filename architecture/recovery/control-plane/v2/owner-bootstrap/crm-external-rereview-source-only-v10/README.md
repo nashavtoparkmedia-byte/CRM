@@ -55,8 +55,8 @@ positive hosted run/job/artifact IDs, their canonical GitHub URLs, the exact
 head SHA, and `success` conclusions for both exact jobs. The sealer fetches the
 public GitHub API and independently matches those identities before accepting
 the downloaded artifact ZIP. It must also carry the complete
-ordered 52-control catalog, count `52`, ID catalog SHA-256 `bfb592cb…9885`, and
-semantic catalog SHA-256 `2ea7e474…1cf0` over the reviewed command, argument,
+ordered 52-control catalog, count `52`, ID catalog SHA-256 `7268cb0b…7680`, and
+semantic catalog SHA-256 `24ad32ba…5483` over the reviewed command, argument,
 working-directory, and order tuples. The architecture runner itself emits a
 success-only execution proof containing all 52 ordered PASS records; the
 architecture job uploads that proof, and the dependent Gravity job downloads

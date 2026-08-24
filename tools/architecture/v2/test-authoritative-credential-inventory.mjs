@@ -14,11 +14,54 @@ import {
   isGovernedImmutableCredentialEvidence,
   verifyCredentialInventorySourceIntegrity,
   verifyAuthoritativeCredentialInventory,
+  verifyCredentialEvidenceDependencyBindings,
   verifyRuntimeBoundaryReviews,
 } from './verify-authoritative-credential-inventory.mjs'
 import { materializeCredentialReviewScopes } from './materialize-credential-review-scopes.mjs'
 
 const sourceSha = (label) => createHash('sha256').update(label).digest('hex')
+const publicClassificationBytes = Buffer.from('exact public classification artifact')
+const credentialClosureBytes = Buffer.from('exact credential closure artifact')
+const dependencyBoundPublicRisk = {
+  source_artifact: 'PUBLIC_SECRET_RISK_CLASSIFICATION_20260811.json',
+  source_sha256: createHash('sha256').update(publicClassificationBytes).digest('hex'),
+}
+const dependencyBoundCrossDomain = {
+  source_inventory: 'CREDENTIAL_DATABASE_ACCESS_CLOSURE_20260811.json',
+  source_sha256: createHash('sha256').update(credentialClosureBytes).digest('hex'),
+}
+assert.deepEqual(
+  verifyCredentialEvidenceDependencyBindings(
+    dependencyBoundPublicRisk,
+    publicClassificationBytes,
+    dependencyBoundCrossDomain,
+    credentialClosureBytes,
+  ),
+  {
+    public_risk_source_sha256: dependencyBoundPublicRisk.source_sha256,
+    cross_domain_source_sha256: dependencyBoundCrossDomain.source_sha256,
+  },
+)
+assert.throws(
+  () => verifyCredentialEvidenceDependencyBindings(
+    { ...dependencyBoundPublicRisk, source_sha256: '0'.repeat(64) },
+    publicClassificationBytes,
+    dependencyBoundCrossDomain,
+    credentialClosureBytes,
+  ),
+  /public credential-risk closure source artifact SHA-256 drift/,
+  'a stale public-risk transitive source pointer must fail closed',
+)
+assert.throws(
+  () => verifyCredentialEvidenceDependencyBindings(
+    dependencyBoundPublicRisk,
+    publicClassificationBytes,
+    { ...dependencyBoundCrossDomain, source_sha256: '0'.repeat(64) },
+    credentialClosureBytes,
+  ),
+  /cross-domain credential review source artifact SHA-256 drift/,
+  'a stale cross-domain transitive source pointer must fail closed',
+)
 const publicSourceSha = sourceSha('public-reviewed-source')
 const unknownSourceSha = sourceSha('unknown-reviewed-source')
 const publicAccess = {
@@ -524,6 +567,20 @@ assert.throws(() => verifyAuthoritativeCredentialInventory({
   ...inventory,
   accesses: [...inventory.accesses, { site_signature: 'new-unknown', access: 'UNKNOWN' }],
 }, inventory, publicRisk, unknown, emptyCrossDomain, fields), /one-to-one/)
+assert.throws(() => verifyAuthoritativeCredentialInventory(
+  inventory,
+  inventory,
+  publicRisk,
+  {
+    ...unknown,
+    current_exact_review: {
+      ...unknown.current_exact_review,
+      sorted_review_keys_sha256: '0'.repeat(64),
+    },
+  },
+  emptyCrossDomain,
+  fields,
+), /credential ambiguity review is not exact for the current source-bound inventory/, 'a stale current ambiguity aggregate must fail closed')
 assert.throws(() => verifyAuthoritativeCredentialInventory({
   ...inventory,
   accesses: [...inventory.accesses, {

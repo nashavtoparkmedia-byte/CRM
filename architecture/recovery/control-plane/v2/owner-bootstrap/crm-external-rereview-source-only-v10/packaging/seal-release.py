@@ -55,9 +55,14 @@ GRAVITY_BUILD_ARGS = {
     "NEXT_PUBLIC_MAX_SCRAPER_PHONE": "+79221853150",
     "NEXT_PUBLIC_FORCE_SHOW_ALL_CHANNELS": "true",
 }
-AUTHORITATIVE_CONTROL_SEMANTIC_CATALOG_SHA256 = "2ea7e4740c626347bda39b50c925eba62e46ba7daf8867e2e629f3ace07f1cf0"
+AUTHORITATIVE_CONTROL_SEMANTIC_CATALOG_SHA256 = "24ad32ba5a97e617e34bd19a3bcb2109807bf946636737d02b12fd7607185483"
 AUTHORITATIVE_CONTROL_CATALOG = (
     "authoritative-ci-inventory",
+    "whole-repository-credential-inventory",
+    "fresh-credential-verification",
+    "whole-repository-write-scan",
+    "fresh-write-verification",
+    "fresh-migration-write-site-authorizations",
     "original-dod-canonical-mapping",
     "original-dod-canonical-mapping-negatives",
     "manifest-policy",
@@ -104,11 +109,6 @@ AUTHORITATIVE_CONTROL_CATALOG = (
     "independent-source-critic",
     "gravity-security",
     "tg-bot-security",
-    "whole-repository-write-scan",
-    "fresh-write-verification",
-    "fresh-migration-write-site-authorizations",
-    "whole-repository-credential-inventory",
-    "fresh-credential-verification",
 )
 
 

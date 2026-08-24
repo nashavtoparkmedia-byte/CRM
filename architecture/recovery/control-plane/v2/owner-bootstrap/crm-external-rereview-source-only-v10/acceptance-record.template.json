@@ -63,10 +63,15 @@
     },
     "controls": {
       "count": 52,
-      "catalog_sha256": "bfb592cb752b1f9a7b5ff41e13ed40ca690c9277e255263023fe85f43b689885",
-      "semantic_catalog_sha256": "2ea7e4740c626347bda39b50c925eba62e46ba7daf8867e2e629f3ace07f1cf0",
+      "catalog_sha256": "7268cb0b049390bee10aebf53277c1f771b04670ed5c59ae022db0e9ff317680",
+      "semantic_catalog_sha256": "24ad32ba5a97e617e34bd19a3bcb2109807bf946636737d02b12fd7607185483",
       "catalog": [
         "authoritative-ci-inventory",
+        "whole-repository-credential-inventory",
+        "fresh-credential-verification",
+        "whole-repository-write-scan",
+        "fresh-write-verification",
+        "fresh-migration-write-site-authorizations",
         "original-dod-canonical-mapping",
         "original-dod-canonical-mapping-negatives",
         "manifest-policy",
@@ -112,12 +117,7 @@
         "all-current-boundaries",
         "independent-source-critic",
         "gravity-security",
-        "tg-bot-security",
-        "whole-repository-write-scan",
-        "fresh-write-verification",
-        "fresh-migration-write-site-authorizations",
-        "whole-repository-credential-inventory",
-        "fresh-credential-verification"
+        "tg-bot-security"
       ]
     }
   },

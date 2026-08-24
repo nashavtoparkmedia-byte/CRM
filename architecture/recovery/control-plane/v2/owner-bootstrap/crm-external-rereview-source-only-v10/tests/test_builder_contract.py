@@ -656,7 +656,7 @@ class HostedCiAcceptanceTests(unittest.TestCase):
         )
         self.assertEqual(
             controls["semantic_catalog_sha256"],
-            "2ea7e4740c626347bda39b50c925eba62e46ba7daf8867e2e629f3ace07f1cf0",
+            "24ad32ba5a97e617e34bd19a3bcb2109807bf946636737d02b12fd7607185483",
         )
         proof = self.sealer.validate_ci_execution_proof(
             self.execution_proof(), self.commit, self.tree, "e" * 40,

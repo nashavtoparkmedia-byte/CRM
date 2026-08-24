@@ -17,8 +17,10 @@ import {
   buildExecutionProof,
   captureExecutionProofIdentity,
   controlIdCatalogSha256,
+  executeControlSequence,
   fullScanControls,
   normalizedControlCatalog,
+  orderedControlsFor,
   semanticControlCatalogSha256,
   targetedControls,
 } from './run-authoritative-ci.mjs'
@@ -246,11 +248,11 @@ const normalizedCatalog = normalizedControlCatalog()
 assert.equal(normalizedCatalog.length, 52, 'normalized authoritative catalog must cover every control')
 assert.equal(
   catalogDigest(normalizedCatalog),
-  '2ea7e4740c626347bda39b50c925eba62e46ba7daf8867e2e629f3ace07f1cf0',
+  '24ad32ba5a97e617e34bd19a3bcb2109807bf946636737d02b12fd7607185483',
   'authoritative CI command/order/argument/cwd catalog changed without an explicit full-catalog review',
 )
-assert.equal(semanticControlCatalogSha256(), '2ea7e4740c626347bda39b50c925eba62e46ba7daf8867e2e629f3ace07f1cf0')
-assert.equal(controlIdCatalogSha256(), 'bfb592cb752b1f9a7b5ff41e13ed40ca690c9277e255263023fe85f43b689885')
+assert.equal(semanticControlCatalogSha256(), '24ad32ba5a97e617e34bd19a3bcb2109807bf946636737d02b12fd7607185483')
+assert.equal(controlIdCatalogSha256(), '7268cb0b049390bee10aebf53277c1f771b04670ed5c59ae022db0e9ff317680')
 const passingExecutions = normalizedCatalog.map(({ id }) => ({ id, status: 'PASS' }))
 const proof = buildExecutionProof(passingExecutions, {
   commit: 'a'.repeat(40),
@@ -262,8 +264,8 @@ const proof = buildExecutionProof(passingExecutions, {
 assert.equal(proof.outcome, 'PASS')
 assert.deepEqual(proof.runtime, { node: '20.20.2', blast_base: 'HEAD^', blast_base_commit: 'e'.repeat(40) })
 assert.equal(proof.controls.count, 52)
-assert.equal(proof.controls.catalog_sha256, 'bfb592cb752b1f9a7b5ff41e13ed40ca690c9277e255263023fe85f43b689885')
-assert.equal(proof.controls.semantic_catalog_sha256, '2ea7e4740c626347bda39b50c925eba62e46ba7daf8867e2e629f3ace07f1cf0')
+assert.equal(proof.controls.catalog_sha256, '7268cb0b049390bee10aebf53277c1f771b04670ed5c59ae022db0e9ff317680')
+assert.equal(proof.controls.semantic_catalog_sha256, '24ad32ba5a97e617e34bd19a3bcb2109807bf946636737d02b12fd7607185483')
 for (const invalidExecutions of [
   passingExecutions.slice(1),
   [passingExecutions[1], passingExecutions[0], ...passingExecutions.slice(2)],
@@ -272,14 +274,14 @@ for (const invalidExecutions of [
 const catalogMutations = [
   normalizedCatalog.slice(1),
   [normalizedCatalog[1], normalizedCatalog[0], ...normalizedCatalog.slice(2)],
-  normalizedCatalog.map((control, index) => index === 16 ? { ...control, command: 'true', args: [] } : control),
-  normalizedCatalog.map((control, index) => index === 47 ? { ...control, args: control.args.filter(argument => argument !== '--strict') } : control),
-  normalizedCatalog.map((control, index) => index === 46 ? { ...control, cwd: '.' } : control),
+  normalizedCatalog.map(control => control.id === 'architecture-policy' ? { ...control, command: 'true', args: [] } : control),
+  normalizedCatalog.map(control => control.id === 'whole-repository-write-scan' ? { ...control, args: control.args.filter(argument => argument !== '--strict') } : control),
+  normalizedCatalog.map(control => control.id === 'tg-bot-security' ? { ...control, cwd: '.' } : control),
 ]
 for (const mutation of catalogMutations) {
   assert.notEqual(
     catalogDigest(mutation),
-    '2ea7e4740c626347bda39b50c925eba62e46ba7daf8867e2e629f3ace07f1cf0',
+    '24ad32ba5a97e617e34bd19a3bcb2109807bf946636737d02b12fd7607185483',
     'removed, reordered, replaced, argument-weakened, or cwd-mutated controls must invalidate the reviewed catalog',
   )
 }
@@ -288,6 +290,41 @@ assert.deepEqual(
   ['authoritative-ci-inventory', 'node', ['tools/architecture/test-authoritative-ci-inventory.mjs']],
   'the inventory must execute as the first non-recursive authoritative control',
 )
+assert.deepEqual(
+  normalizedCatalog.slice(0, 6).map(({ id }) => id),
+  [
+    'authoritative-ci-inventory',
+    'whole-repository-credential-inventory',
+    'fresh-credential-verification',
+    'whole-repository-write-scan',
+    'fresh-write-verification',
+    'fresh-migration-write-site-authorizations',
+  ],
+  'fresh source-bound evidence must be verified before expensive authoritative consumers',
+)
+for (const expensive of ['production-migration-canonical-replay', 'all-current-boundaries', 'independent-source-critic']) {
+  assert(
+    normalizedCatalog.findIndex(({ id }) => id === 'fresh-migration-write-site-authorizations')
+      < normalizedCatalog.findIndex(({ id }) => id === expensive),
+    `fresh source-bound evidence must precede ${expensive}`,
+  )
+}
+const orderedRawControls = orderedControlsFor('/tmp/yoko-authoritative-ci-ordering-test')
+for (const failingControl of ['fresh-credential-verification', 'fresh-write-verification']) {
+  const visited = []
+  assert.throws(
+    () => executeControlSequence(orderedRawControls, null, ([id]) => {
+      visited.push(id)
+      if (id === failingControl) throw new Error(`stale current evidence: ${id}`)
+    }),
+    /stale current evidence/,
+    `stale ${failingControl} evidence must fail the ordered runner`,
+  )
+  assert.equal(visited.at(-1), failingControl)
+  assert.equal(visited.includes('production-migration-canonical-replay'), false)
+  assert.equal(visited.includes('all-current-boundaries'), false)
+  assert.equal(visited.includes('independent-source-critic'), false)
+}
 const workflow = readFileSync('.github/workflows/architecture-enforcement.yml', 'utf8')
 const localCleanHarness = readFileSync('tools/architecture/run-local-clean-acceptance.mjs', 'utf8')
 assert.match(localCleanHarness, /assertNoInheritedGeneratedProducts\(\)/u)
@@ -472,4 +509,4 @@ assert.equal(
   'architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json',
 )
 
-process.stdout.write(`authoritative CI inventory: PASS (${ids.size} controls; semantic catalog sha256=2ea7e4740c626347bda39b50c925eba62e46ba7daf8867e2e629f3ace07f1cf0; fresh write and credential scans enabled)\n`)
+process.stdout.write(`authoritative CI inventory: PASS (${ids.size} controls; semantic catalog sha256=24ad32ba5a97e617e34bd19a3bcb2109807bf946636737d02b12fd7607185483; fail-fast fresh credential and write scans enabled)\n`)

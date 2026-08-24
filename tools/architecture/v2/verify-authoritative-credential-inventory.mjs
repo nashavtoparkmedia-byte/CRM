@@ -457,6 +457,38 @@ function sha256Bytes(value) {
   return createHash('sha256').update(value).digest('hex')
 }
 
+export function verifyCredentialEvidenceDependencyBindings(
+  publicRisk,
+  publicRiskClassificationBytes,
+  crossDomain,
+  credentialClosureBytes,
+) {
+  assert.equal(
+    publicRisk.source_artifact,
+    'PUBLIC_SECRET_RISK_CLASSIFICATION_20260811.json',
+    'public credential-risk closure source artifact drift',
+  )
+  assert.equal(
+    publicRisk.source_sha256,
+    sha256Bytes(publicRiskClassificationBytes),
+    'public credential-risk closure source artifact SHA-256 drift',
+  )
+  assert.equal(
+    crossDomain.source_inventory,
+    'CREDENTIAL_DATABASE_ACCESS_CLOSURE_20260811.json',
+    'cross-domain credential review source artifact drift',
+  )
+  assert.equal(
+    crossDomain.source_sha256,
+    sha256Bytes(credentialClosureBytes),
+    'cross-domain credential review source artifact SHA-256 drift',
+  )
+  return {
+    public_risk_source_sha256: publicRisk.source_sha256,
+    cross_domain_source_sha256: crossDomain.source_sha256,
+  }
+}
+
 function edgeIdentity(edge) {
   return [edge.source, edge.exported_symbol, edge.consumer, edge.imported_as, edge.import_kind].join('|')
 }
@@ -984,7 +1016,18 @@ async function main() {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
   assert(process.argv[2], 'usage: verify-authoritative-credential-inventory.mjs <fresh-inventory.json>')
   const readJson = (relative) => readFile(path.join(root, relative), 'utf8').then(JSON.parse)
-  const [inventory, acceptedInventory, publicRisk, unknown, crossDomain, sensitiveFields, productionSecretReads, lifecycleRegistry] = await Promise.all([
+  const [
+    inventory,
+    acceptedInventory,
+    publicRisk,
+    unknown,
+    crossDomain,
+    sensitiveFields,
+    productionSecretReads,
+    lifecycleRegistry,
+    publicRiskClassificationBytes,
+    credentialClosureBytes,
+  ] = await Promise.all([
     readFile(path.resolve(process.argv[2]), 'utf8').then(JSON.parse),
     readJson('architecture/recovery/whole-project-dod/v2/CREDENTIAL_DATABASE_ACCESS_ARCHITECTURE_CHECKPOINT_20260811.json'),
     readJson('architecture/recovery/whole-project-dod/v2/PUBLIC_SECRET_RISK_CLOSURE_20260811.json'),
@@ -993,7 +1036,15 @@ async function main() {
     readJson('architecture/recovery/whole-project-dod/v2/CREDENTIAL_SENSITIVE_FIELD_REGISTRY.json'),
     readJson('architecture/recovery/whole-project-dod/v2/PRODUCTION_SECRET_READ_DISPOSITION_REVIEW_20260813.json'),
     readJson('architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json'),
+    readFile(path.join(root, 'architecture/recovery/whole-project-dod/v2/PUBLIC_SECRET_RISK_CLASSIFICATION_20260811.json')),
+    readFile(path.join(root, 'architecture/recovery/whole-project-dod/v2/CREDENTIAL_DATABASE_ACCESS_CLOSURE_20260811.json')),
   ])
+  verifyCredentialEvidenceDependencyBindings(
+    publicRisk,
+    publicRiskClassificationBytes,
+    crossDomain,
+    credentialClosureBytes,
+  )
   process.stdout.write(`${JSON.stringify(verifyAuthoritativeCredentialInventory(
     inventory,
     acceptedInventory,

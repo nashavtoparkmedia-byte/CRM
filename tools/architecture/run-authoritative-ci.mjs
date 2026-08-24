@@ -73,33 +73,37 @@ export function fullScanControlsFor(temporary) {
   const progressOutput = path.join(temporary, 'write-progress.jsonl')
   const credentialOutput = path.join(temporary, 'credential-inventory.json')
   return [
-  ['whole-repository-write-scan', 'node', [
-    'tools/architecture/v2/analyze.mjs', '--root', '.', '--strict', '--workers', '4',
-    '--worker-timeout-ms', '120000', '--progress-every', '25',
-    '--surface-registry', 'architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json',
-    '--progress-jsonl', progressOutput, '--output', writeOutput,
-  ]],
-  ['fresh-write-verification', 'node', [
-    'tools/architecture/v2/verify-authoritative-write-analysis.mjs', writeOutput,
-  ]],
-  ['fresh-migration-write-site-authorizations', 'node', [
-    'tools/architecture/v2/test-migration-write-site-authorizations.mjs', writeOutput,
-  ]],
-  ['whole-repository-credential-inventory', 'node', [
-    'tools/architecture/v2/credential-inventory.mjs', '--root', '.',
-    '--surface-registry', 'architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json',
-    '--output', credentialOutput,
-  ]],
-  ['fresh-credential-verification', 'node', [
-    'tools/architecture/v2/verify-authoritative-credential-inventory.mjs', credentialOutput,
-  ]],
+    ['whole-repository-credential-inventory', 'node', [
+      'tools/architecture/v2/credential-inventory.mjs', '--root', '.',
+      '--surface-registry', 'architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json',
+      '--output', credentialOutput,
+    ]],
+    ['fresh-credential-verification', 'node', [
+      'tools/architecture/v2/verify-authoritative-credential-inventory.mjs', credentialOutput,
+    ]],
+    ['whole-repository-write-scan', 'node', [
+      'tools/architecture/v2/analyze.mjs', '--root', '.', '--strict', '--workers', '4',
+      '--worker-timeout-ms', '120000', '--progress-every', '25',
+      '--surface-registry', 'architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json',
+      '--progress-jsonl', progressOutput, '--output', writeOutput,
+    ]],
+    ['fresh-write-verification', 'node', [
+      'tools/architecture/v2/verify-authoritative-write-analysis.mjs', writeOutput,
+    ]],
+    ['fresh-migration-write-site-authorizations', 'node', [
+      'tools/architecture/v2/test-migration-write-site-authorizations.mjs', writeOutput,
+    ]],
   ]
 }
 
 export const fullScanControls = fullScanControlsFor('/tmp/yoko-authoritative-ci')
 
+export function orderedControlsFor(temporary) {
+  return [targetedControls[0], ...fullScanControlsFor(temporary), ...targetedControls.slice(1)]
+}
+
 export function normalizedControlCatalog(temporary = '$YOKO_CI_TEMP') {
-  return [...targetedControls, ...fullScanControlsFor(temporary)].map(([id, command, args, relativeCwd = '.']) => ({
+  return orderedControlsFor(temporary).map(([id, command, args, relativeCwd = '.']) => ({
     id,
     command,
     args: [...args],
@@ -266,6 +270,15 @@ function run([id, command, args, relativeCwd = '.'], identity) {
   process.stdout.write(`AUTHORITATIVE_CONTROL_PASS ${id}\n`)
 }
 
+export function executeControlSequence(selected, identity, executeControl = run) {
+  const executions = []
+  selected.forEach((control) => {
+    executeControl(control, identity)
+    executions.push({ id: control[0], status: 'PASS' })
+  })
+  return executions
+}
+
 function main() {
   const skipFullScans = process.argv.includes('--skip-full-scans')
   const listOnly = process.argv.includes('--list')
@@ -277,7 +290,7 @@ function main() {
   const currentFullScanControls = fullScanControlsFor(temporary)
   const selected = skipFullScans
     ? targetedControls
-    : [...targetedControls, ...currentFullScanControls]
+    : [targetedControls[0], ...currentFullScanControls, ...targetedControls.slice(1)]
   if (listOnly) {
     process.stdout.write(`${JSON.stringify({
       schema: 'yoko.crm.authoritative-ci-control-inventory.v1',
@@ -291,12 +304,9 @@ function main() {
   assertExecutionProofOutputAbsent(proofOutput)
   assertCleanWorktree(root, 'before authoritative controls')
   const identity = captureExecutionProofIdentity()
-  const executions = []
+  let executions = []
   try {
-    selected.forEach((control) => {
-      run(control, identity)
-      executions.push({ id: control[0], status: 'PASS' })
-    })
+    executions = executeControlSequence(selected, identity)
     if (proofOutput) writeExecutionProof(proofOutput, executions, identity)
     process.stdout.write(`authoritative architecture CI: PASS (${selected.length}/${selected.length})\n`)
   } finally {
