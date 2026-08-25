@@ -168,6 +168,76 @@ function accessModuleTarget(relativePath, specifier, accessModulePath) {
   return resolved === accessModulePath || resolved + '.mjs' === accessModulePath
 }
 
+const MODULE_EXTENSIONS = ['.mjs', '.js', '.cjs', '.ts', '.tsx', '.jsx']
+
+function resolveTrackedModuleTarget(relativePath, specifier, trackedPaths) {
+  if (!specifier?.startsWith('.')) return null
+  const base = canonicalModulePath(relativePath, specifier)
+  const candidates = [base, ...MODULE_EXTENSIONS.map((extension) => base + extension), ...MODULE_EXTENSIONS.map((extension) => base + '/index' + extension)]
+  const matches = [...new Set(candidates.filter((candidate) => trackedPaths.has(candidate)))]
+  assert(matches.length <= 1, 'tracked module edge resolves ambiguously: ' + relativePath + '#' + specifier)
+  return matches[0] ?? null
+}
+
+function sourceModuleEdges(sourceFile, relativePath, trackedPaths) {
+  const edges = []
+  const add = (kind, node) => {
+    const specifier = moduleSpecifierText(node)
+    const target = resolveTrackedModuleTarget(relativePath, specifier, trackedPaths)
+    if (target) edges.push({ source: relativePath, target, kind, specifier })
+  }
+  const visit = (node) => {
+    if (ts.isImportDeclaration(node)) add('static_import', node.moduleSpecifier)
+    if (ts.isExportDeclaration(node) && node.moduleSpecifier) add('static_reexport', node.moduleSpecifier)
+    if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) add('import_equals', node.moduleReference.expression)
+    if (ts.isCallExpression(node)
+      && (node.expression.kind === ts.SyntaxKind.ImportKeyword
+        || ts.isIdentifier(node.expression) && node.expression.text === 'require')) add('literal_dynamic_import', node.arguments[0])
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  return edges
+}
+
+function propertyAccessParts(expression) {
+  if (ts.isPropertyAccessExpression(expression)) return { object: expression.expression, property: expression.name.text }
+  if (ts.isElementAccessExpression(expression)) {
+    const property = moduleSpecifierText(expression.argumentExpression)
+    return property === null ? null : { object: expression.expression, property }
+  }
+  return null
+}
+
+function isModuleExports(expression) {
+  const access = propertyAccessParts(expression)
+  return Boolean(access && ts.isIdentifier(access.object) && access.object.text === 'module' && access.property === 'exports')
+}
+
+function isCommonJsExportTarget(expression) {
+  if (isModuleExports(expression)) return true
+  const access = propertyAccessParts(expression)
+  return Boolean(access && (ts.isIdentifier(access.object) && access.object.text === 'exports' || isModuleExports(access.object)))
+}
+
+function moduleExportKinds(sourceFile) {
+  const exports = []
+  const visit = (node) => {
+    if (ts.isExportDeclaration(node) || ts.isExportAssignment(node) || node.kind === ts.SyntaxKind.NamespaceExportDeclaration) {
+      exports.push(ts.SyntaxKind[node.kind])
+    } else if (node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)) {
+      exports.push(ts.SyntaxKind[node.kind])
+    } else if (ts.isBinaryExpression(node)
+      && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment
+      && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+      && isCommonJsExportTarget(node.left)) {
+      exports.push('CommonJsExportAssignment')
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  return exports
+}
+
 function validateAuthorityAccessDeclaration(value) {
   const access = value?.current_live?.authority_access
   assert(access && access.module === OWNERSHIP_VALIDATOR_PATH && Array.isArray(access.capabilities)
@@ -192,9 +262,8 @@ function validateAuthorityAccessDeclaration(value) {
 
 function sourceImports(sourceFile, relativePath, accessModulePath, exported, capabilities) {
   const importedCapabilities = new Set()
-  const importedCapabilityBindings = new Map()
   const allowedRawRanges = []
-  const collectImports = (node) => {
+  const visit = (node) => {
     if (ts.isImportDeclaration(node) && accessModuleTarget(relativePath, moduleSpecifierText(node.moduleSpecifier), accessModulePath)) {
       allowedRawRanges.push([node.moduleSpecifier.getStart(sourceFile), node.moduleSpecifier.getEnd()])
       const bindings = node.importClause?.namedBindings
@@ -202,46 +271,12 @@ function sourceImports(sourceFile, relativePath, accessModulePath, exported, cap
       for (const element of bindings.elements) {
         const importedName = (element.propertyName ?? element.name).text
         assert(exported.has(importedName), 'unauthorized canonical authority capability import: ' + relativePath + '#' + importedName)
-        if (capabilities.has(importedName)) {
-          importedCapabilities.add(importedName)
-          importedCapabilityBindings.set(element.name.text, importedName)
-        }
+        if (capabilities.has(importedName)) importedCapabilities.add(importedName)
       }
     }
-    ts.forEachChild(node, collectImports)
+    ts.forEachChild(node, visit)
   }
-  collectImports(sourceFile)
-
-  const unwrappedIdentifier = (expression) => {
-    let current = expression
-    while (ts.isParenthesizedExpression(current)
-      || ts.isAsExpression(current)
-      || ts.isTypeAssertionExpression(current)
-      || ts.isNonNullExpression(current)
-      || ts.isSatisfiesExpression(current)) current = current.expression
-    return ts.isIdentifier(current) ? current.text : null
-  }
-  const rejectImportedBindingExport = (localName) => {
-    const capability = importedCapabilityBindings.get(localName)
-    if (capability) throw new Error('canonical authority capability re-export forbidden: ' + relativePath + '#' + capability)
-  }
-  const validateExports = (node) => {
-    if (ts.isExportDeclaration(node) && accessModuleTarget(relativePath, moduleSpecifierText(node.moduleSpecifier), accessModulePath)) {
-      throw new Error('canonical authority capability re-export forbidden: ' + relativePath)
-    }
-    if (ts.isExportDeclaration(node) && !node.moduleSpecifier && node.exportClause && ts.isNamedExports(node.exportClause)) {
-      for (const element of node.exportClause.elements) rejectImportedBindingExport((element.propertyName ?? element.name).text)
-    }
-    if (ts.isExportAssignment(node)) rejectImportedBindingExport(unwrappedIdentifier(node.expression))
-    if (ts.isCallExpression(node)
-      && (node.expression.kind === ts.SyntaxKind.ImportKeyword
-        || ts.isIdentifier(node.expression) && node.expression.text === 'require')
-      && accessModuleTarget(relativePath, moduleSpecifierText(node.arguments[0]), accessModulePath)) {
-      throw new Error('canonical authority access requires a static direct import: ' + relativePath)
-    }
-    ts.forEachChild(node, validateExports)
-  }
-  validateExports(sourceFile)
+  visit(sourceFile)
   return { allowedRawRanges, importedCapabilities }
 }
 
@@ -263,6 +298,7 @@ export function discoverExecutablePathOwnershipConsumers(repositoryRoot, declara
   const value = declaration ?? JSON.parse(readFileSync(path.join(repositoryRoot, CURRENT_DEPENDENCY_PATH), 'utf8'))
   const { accessModulePath, capabilities, nonAuthorityExports } = validateAuthorityAccessDeclaration(value)
   const relativePaths = repositoryTrackedJavaScriptSources(repositoryRoot)
+  const trackedPaths = new Set(relativePaths)
   assert(relativePaths.includes(accessModulePath), 'canonical authority access module missing: ' + accessModulePath)
   const sources = parseTrackedSources(repositoryRoot, relativePaths)
   const exported = exportedNames(sources.get(accessModulePath).sourceFile)
@@ -274,14 +310,27 @@ export function discoverExecutablePathOwnershipConsumers(repositoryRoot, declara
   assert(undeclaredExports.length === 0, 'canonical authority module undeclared exports: ' + undeclaredExports.join(', '))
   assert(missingExports.length === 0, 'canonical authority module declared exports missing: ' + missingExports.join(', '))
   const consumers = []
+  const moduleEdges = []
   for (const relativePath of relativePaths) {
     const { sourceFile, sourceText } = sources.get(relativePath)
     const { allowedRawRanges, importedCapabilities } = sourceImports(sourceFile, relativePath, accessModulePath, exported, capabilities)
     assertNoRawAuthorityBypass(relativePath, sourceText, allowedRawRanges)
-    if (relativePath !== accessModulePath && importedCapabilities.size > 0) consumers.push({
-      path: relativePath,
-      capabilities: [...importedCapabilities].sort(),
-    })
+    const currentModuleEdges = sourceModuleEdges(sourceFile, relativePath, trackedPaths)
+    for (const edge of currentModuleEdges) {
+      assert(edge.target !== accessModulePath || edge.kind === 'static_import', 'canonical authority access requires a static direct import: ' + relativePath)
+    }
+    moduleEdges.push(...currentModuleEdges)
+    if (relativePath !== accessModulePath && importedCapabilities.size > 0) {
+      const exportKinds = moduleExportKinds(sourceFile)
+      assert(exportKinds.length === 0, 'authority consumer has module export: ' + relativePath + '#' + exportKinds.join(','))
+      consumers.push({ path: relativePath, capabilities: [...importedCapabilities].sort(), terminal_leaf: true })
+    }
+  }
+  const consumerPaths = new Set(consumers.map(({ path: consumerPath }) => consumerPath))
+  for (const edge of moduleEdges) {
+    if (consumerPaths.has(edge.target) && edge.source !== edge.target) {
+      throw new Error('authority terminal consumer has inbound tracked module edge: ' + edge.target + '<-' + edge.source + '#' + edge.kind)
+    }
   }
   return consumers
 }
@@ -295,7 +344,8 @@ export function validateExecutablePathOwnershipConsumerClosure(value, repository
   for (const consumer of declared) {
     assert(consumer && typeof consumer.role === 'string' && consumer.role.length > 0
       && typeof consumer.path === 'string' && consumer.path.length > 0
-      && Array.isArray(consumer.capabilities) && consumer.capabilities.length > 0,
+      && Array.isArray(consumer.capabilities) && consumer.capabilities.length > 0
+      && consumer.terminal_leaf === true,
     'executable ownership current consumer declaration malformed')
     assert(!roles.has(consumer.role), 'executable ownership current consumer role duplicated: ' + consumer.role)
     assert(!declaredByPath.has(consumer.path), 'executable ownership current consumer path duplicated: ' + consumer.path)

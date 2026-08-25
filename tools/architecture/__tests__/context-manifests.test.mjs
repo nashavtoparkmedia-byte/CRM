@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { readCurrentOwnershipDependencies } from '../validate-executable-path-ownership.mjs';
-import { validateContexts, verifyContextIndex } from '../validate-context-manifests.mjs';
+import { validateContexts, verifyContextIndex } from '../enrich-context-manifests.mjs';
 
 const repositoryRoot = new URL('../../../', import.meta.url);
 const load = async (relative) => JSON.parse(await readFile(new URL(relative, repositoryRoot), 'utf8'));

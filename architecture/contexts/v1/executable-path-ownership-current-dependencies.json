@@ -82,7 +82,8 @@
         "path": "tools/architecture/__tests__/context-manifests.test.mjs",
         "capabilities": [
           "readCurrentOwnershipDependencies"
-        ]
+        ],
+        "terminal_leaf": true
       },
       {
         "role": "context_manifest_generator",
@@ -90,7 +91,8 @@
         "capabilities": [
           "readCurrentOwnershipCoverage",
           "readCurrentOwnershipDependencies"
-        ]
+        ],
+        "terminal_leaf": true
       },
       {
         "role": "negative_and_regression_control",
@@ -100,7 +102,8 @@
           "readCurrentOwnershipDependencies",
           "readHistoricalOwnershipBaseline",
           "readReviewedOwnershipDecisions"
-        ]
+        ],
+        "terminal_leaf": true
       },
       {
         "role": "context_manifest_validator",
@@ -108,7 +111,8 @@
         "capabilities": [
           "readCurrentOwnershipCoverage",
           "readCurrentOwnershipDependencies"
-        ]
+        ],
+        "terminal_leaf": true
       },
       {
         "role": "independent_source_critic",
@@ -116,7 +120,8 @@
         "capabilities": [
           "readCurrentOwnershipCoverage",
           "readCurrentOwnershipDependencies"
-        ]
+        ],
+        "terminal_leaf": true
       }
     ],
     "authority_direction": [

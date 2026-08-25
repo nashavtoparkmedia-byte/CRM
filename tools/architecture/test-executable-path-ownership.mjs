@@ -506,7 +506,7 @@ async function dependencyClosureFixture() {
       path: 'tools/architecture/direct-consumer.mjs',
       role: 'direct_consumer',
       capability: capabilityNames[0],
-      body: (specifier, capability) => 'import { ' + capability + ' } from ' + JSON.stringify(specifier) + '\n' + capability + '()\nexport const harmlessDiagnostic = true\n',
+      body: (specifier, capability) => 'import { ' + capability + ' } from ' + JSON.stringify(specifier) + '\n' + capability + '()\n',
     },
     {
       path: 'tools/architecture/alias-consumer.mjs',
@@ -519,6 +519,12 @@ async function dependencyClosureFixture() {
       role: 'assignment_consumer',
       capability: capabilityNames[0],
       body: (specifier, capability) => 'import { ' + capability + ' as x } from ' + JSON.stringify(specifier) + '\nlet y\ny = x\ny()\n',
+    },
+    {
+      path: 'tools/architecture/object-consumer.mjs',
+      role: 'object_consumer',
+      capability: capabilityNames[0],
+      body: (specifier, capability) => 'import { ' + capability + ' } from ' + JSON.stringify(specifier) + '\nconst readers = { load: ' + capability + ' }\nreaders.load()\n',
     },
     {
       path: 'tools/architecture/wrapper-consumer.mjs',
@@ -539,6 +545,7 @@ async function dependencyClosureFixture() {
     role: consumer.role,
     path: consumer.path,
     capabilities: [consumer.capability],
+    terminal_leaf: true,
   }))
   return { accessPath, accessSpecifier, capabilityContract, capabilityNames, consumers, declaration, diagnosticPath, fixture, git }
 }
@@ -553,7 +560,7 @@ try {
   )
   const discoveredByPath = new Map(discovered.map((consumer) => [consumer.path, consumer.capabilities]))
   for (const consumer of closurePositive.consumers) {
-    assert.deepEqual(discoveredByPath.get(consumer.path), [consumer.capability], 'aliases, local assignment, wrappers, and harmless exports must not affect structural consumer identity')
+    assert.deepEqual(discoveredByPath.get(consumer.path), [consumer.capability], 'aliases, local assignment, object storage, and wrappers must not affect structural consumer identity')
   }
   assert.equal(discoveredByPath.has(closurePositive.diagnosticPath), false, 'diagnostic metadata without a raw authority identity must remain a non-consumer')
 } finally {
@@ -566,6 +573,7 @@ try {
     role: 'declared_without_capability_import',
     path: closureStale.diagnosticPath,
     capabilities: [closureStale.capabilityNames[0]],
+    terminal_leaf: true,
   })
   assert.throws(
     () => validateExecutablePathOwnershipConsumerClosure(closureStale.declaration, closureStale.fixture),
@@ -574,6 +582,18 @@ try {
   )
 } finally {
   await rm(closureStale.fixture, { force: true, recursive: true })
+}
+
+const closureNonTerminalDeclaration = await dependencyClosureFixture()
+try {
+  delete closureNonTerminalDeclaration.declaration.current_live.consumers[0].terminal_leaf
+  assert.throws(
+    () => validateExecutablePathOwnershipConsumerClosure(closureNonTerminalDeclaration.declaration, closureNonTerminalDeclaration.fixture),
+    /current consumer declaration malformed/,
+    'every declared authority consumer must explicitly be a terminal leaf',
+  )
+} finally {
+  await rm(closureNonTerminalDeclaration.fixture, { force: true, recursive: true })
 }
 
 const closureUndeclared = await dependencyClosureFixture()
@@ -705,76 +725,63 @@ try {
   await rm(closureCapabilityDrift.fixture, { force: true, recursive: true })
 }
 
-const closureReviewerBarrel = await dependencyClosureFixture()
-try {
-  const reexportPath = 'tools/architecture/capability-barrel.mjs'
-  const downstreamPath = 'tools/architecture/downstream-via-barrel.mjs'
-  await writeFile(
-    path.join(closureReviewerBarrel.fixture, reexportPath),
-    'import { ' + closureReviewerBarrel.capabilityNames[0] + ' } from ' + JSON.stringify(closureReviewerBarrel.accessSpecifier) + '\nexport { ' + closureReviewerBarrel.capabilityNames[0] + ' }\n',
-  )
-  await writeFile(
-    path.join(closureReviewerBarrel.fixture, downstreamPath),
-    'import { ' + closureReviewerBarrel.capabilityNames[0] + ' as loadAuthority } from "./capability-barrel.mjs"\nawait loadAuthority()\n',
-  )
-  await closureReviewerBarrel.git('add', reexportPath, downstreamPath)
-  assert.throws(
-    () => discoverExecutablePathOwnershipConsumers(closureReviewerBarrel.fixture, closureReviewerBarrel.declaration),
-    /canonical authority capability re-export forbidden: tools\/architecture\/capability-barrel\.mjs/,
-    'the exact reviewer import-then-export barrel attack must fail before a downstream consumer can be hidden',
-  )
-} finally {
-  await rm(closureReviewerBarrel.fixture, { force: true, recursive: true })
-}
-
-async function assertCapabilityReexportRejected(name, barrelBody, expectedFailure = null) {
+async function assertTerminalConsumerExportRejected(name, exportBody) {
   const fixture = await dependencyClosureFixture()
   try {
-    const reexportPath = 'tools/architecture/' + name + '.mjs'
-    await writeFile(path.join(fixture.fixture, reexportPath), barrelBody(fixture.accessSpecifier, fixture.capabilityNames[0]))
-    await fixture.git('add', reexportPath)
+    const consumerPath = 'tools/architecture/' + name + '.mjs'
+    const body = 'import { ' + fixture.capabilityNames[0] + ' as x } from ' + JSON.stringify(fixture.accessSpecifier) + '\n' + exportBody
+    await writeFile(path.join(fixture.fixture, consumerPath), body)
+    await fixture.git('add', consumerPath)
     assert.throws(
       () => discoverExecutablePathOwnershipConsumers(fixture.fixture, fixture.declaration),
-      expectedFailure ?? new RegExp('canonical authority capability re-export forbidden: tools/architecture/' + name + '\\.mjs'),
-      name + ' must fail closed',
+      new RegExp('authority consumer has module export: tools/architecture/' + name + '\\.mjs'),
+      name + ' must fail solely because an authority consumer has a module export',
     )
   } finally {
     await rm(fixture.fixture, { force: true, recursive: true })
   }
 }
 
-await assertCapabilityReexportRejected(
-  'aliased-import-reexport',
-  (specifier, capability) => 'import { ' + capability + ' as x } from ' + JSON.stringify(specifier) + '\nexport { x }\n',
-)
-await assertCapabilityReexportRejected(
-  'direct-reexport',
-  (specifier, capability) => 'export { ' + capability + ' } from ' + JSON.stringify(specifier) + '\n',
-)
-await assertCapabilityReexportRejected(
-  'renamed-direct-reexport',
-  (specifier, capability) => 'export { ' + capability + ' as loadCoverage } from ' + JSON.stringify(specifier) + '\n',
-)
-await assertCapabilityReexportRejected(
-  'export-star-reexport',
-  (specifier) => 'export * from ' + JSON.stringify(specifier) + '\n',
-)
-await assertCapabilityReexportRejected(
-  'namespace-reexport',
-  (specifier) => 'export * as ownershipAuthority from ' + JSON.stringify(specifier) + '\n',
-)
-await assertCapabilityReexportRejected(
-  'namespace-import',
-  (specifier) => 'import * as ownershipAuthority from ' + JSON.stringify(specifier) + '\nexport { ownershipAuthority }\n',
-  /canonical authority access requires direct named imports: tools\/architecture\/namespace-import\.mjs/,
-)
-await assertCapabilityReexportRejected(
-  'default-imported-capability-export',
-  (specifier, capability) => 'import { ' + capability + ' as loadCoverage } from ' + JSON.stringify(specifier) + '\nexport default (loadCoverage)\n',
-)
-process.stdout.write('structural authority regression matrix: PASS (17/17)\n')
-process.stdout.write('reviewer_barrel_bypass_rejected=true\n')
-process.stdout.write('downstream_barrel_cannot_become_hidden_consumer=true\n')
+await assertTerminalConsumerExportRejected('reviewer-named-reexport', 'export { x }\n')
+await assertTerminalConsumerExportRejected('reviewer-exported-const-alias', 'export const forwardedCoverage = x\n')
+await assertTerminalConsumerExportRejected('exported-wrapper', 'export function forwarded() { return x() }\n')
+await assertTerminalConsumerExportRejected('default-export', 'export default x\n')
+await assertTerminalConsumerExportRejected('exported-object', 'export const forwarded = { load: x }\n')
+await assertTerminalConsumerExportRejected('unrelated-export', 'export class HarmlessDiagnostic {}\n')
+await assertTerminalConsumerExportRejected('export-star', 'export * from "./non-consumer-diagnostic.mjs"\n')
+await assertTerminalConsumerExportRejected('commonjs-module-export', 'module.exports = x\n')
+await assertTerminalConsumerExportRejected('commonjs-property-export', 'exports.forwarded = x\n')
+
+async function assertTerminalConsumerInboundRejected(name, inboundBody, edgeKind) {
+  const fixture = await dependencyClosureFixture()
+  try {
+    const inboundPath = 'tools/architecture/' + name + '.mjs'
+    await writeFile(path.join(fixture.fixture, inboundPath), inboundBody('./direct-consumer.mjs'))
+    await fixture.git('add', inboundPath)
+    assert.throws(
+      () => discoverExecutablePathOwnershipConsumers(fixture.fixture, fixture.declaration),
+      new RegExp('authority terminal consumer has inbound tracked module edge: tools/architecture/direct-consumer\\.mjs<-tools/architecture/' + name + '\\.mjs#' + edgeKind),
+      name + ' must fail because a terminal authority consumer has an inbound tracked module edge',
+    )
+  } finally {
+    await rm(fixture.fixture, { force: true, recursive: true })
+  }
+}
+
+await assertTerminalConsumerInboundRejected('static-inbound', (target) => 'import { anything } from ' + JSON.stringify(target) + '\n', 'static_import')
+await assertTerminalConsumerInboundRejected('side-effect-inbound', (target) => 'import ' + JSON.stringify(target) + '\n', 'static_import')
+await assertTerminalConsumerInboundRejected('reexport-inbound', (target) => 'export * from ' + JSON.stringify(target) + '\n', 'static_reexport')
+await assertTerminalConsumerInboundRejected('dynamic-inbound', (target) => 'await import(' + JSON.stringify(target) + ')\n', 'literal_dynamic_import')
+
+process.stdout.write('terminal-leaf structural adversarial matrix: PASS (21/21)\n')
+process.stdout.write('authority_consumer_zero_exports_enforced=true\n')
+process.stdout.write('authority_consumer_zero_inbound_edges_enforced=true\n')
+process.stdout.write('reviewer_named_reexport_rejected=true\n')
+process.stdout.write('reviewer_exported_const_alias_rejected=true\n')
+process.stdout.write('exported_wrapper_rejected_without_dataflow=true\n')
+process.stdout.write('harmless_export_from_authority_consumer_rejected=true\n')
+process.stdout.write('ordinary_nonconsumer_exports_allowed=true\n')
+process.stdout.write('arbitrary_js_dataflow_retired=true\n')
 
 const closureMissingModule = await dependencyClosureFixture()
 try {
@@ -808,10 +815,17 @@ assert.deepEqual(
 )
 const validatorSource = currentValidatorBytes.toString('utf8')
 assert.equal(validatorSource.includes('CURRENT_CONSUMERS'), false, 'the validator must not retain a duplicate authoritative consumer list')
-for (const retiredAnalyzerMarker of ['makeSemanticSourceAnalyzer', 'semanticProgram', 'getTypeChecker', 'CALLABLE_READER', 'CONSUMER_DISCOVERY_CACHE']) {
+for (const retiredAnalyzerMarker of [
+  'makeSemanticSourceAnalyzer', 'semanticProgram', 'getTypeChecker', 'CALLABLE_READER', 'CONSUMER_DISCOVERY_CACHE',
+  'importedCapabilityBindings', 'unwrappedIdentifier', 'rejectImportedBindingExport',
+]) {
   assert.equal(validatorSource.includes(retiredAnalyzerMarker), false, `retired arbitrary-JavaScript dataflow analyzer remains: ${retiredAnalyzerMarker}`)
 }
 assert.equal(validatorSource.includes('ts.isImportDeclaration'), true, 'structural direct-import validation missing')
+assert.equal(validatorSource.includes('moduleExportKinds'), true, 'generic terminal-consumer zero-export validation missing')
+assert.equal(validatorSource.includes('sourceModuleEdges'), true, 'generic terminal-consumer inbound-edge validation missing')
+assert.equal(currentDependencies.current_live.consumers.every((consumer) => consumer.terminal_leaf === true), true, 'canonical consumer declaration must mark every consumer as a terminal leaf')
+assert.equal(discoveredCurrentConsumers.every((consumer) => consumer.terminal_leaf === true), true, 'mechanically discovered consumers must all satisfy the terminal-leaf contract')
 for (const consumer of discoveredCurrentConsumers) {
   const consumerSource = await readFile(path.join(repositoryRoot, consumer.path), 'utf8')
   assert.equal(

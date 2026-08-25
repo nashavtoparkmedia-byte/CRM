@@ -112,7 +112,7 @@
     },
     "executable_path_ownership_validator": {
       "path": "tools/architecture/validate-executable-path-ownership.mjs",
-      "sha256": "b5b33c9f637d827286126955b2944480bbe29bf3df4dafae89df76d89d9d41ac"
+      "sha256": "e82936948a3210087a48b18b377fb9751d8be3de61c5682ffa14c171182fdf41"
     },
     "final_dependency_source_deriver": {
       "path": "tools/architecture/derive-final-dependency-source.mjs",
@@ -144,7 +144,7 @@
     },
     "verification_profile_enricher": {
       "path": "tools/architecture/enrich-context-manifests.mjs",
-      "sha256": "49fd002b8e1aee46396ebb0543c7f2ed22b1dee0e933019c8ba8ec69647d9814"
+      "sha256": "e723ffa74ba07caf2b386e3dabd9db24c7b6aeab131e5eb4bbf69f7a2e9311ef"
     },
     "write_sites": {
       "path": "architecture/evidence/v1/write-sites.json",
@@ -163,7 +163,7 @@
     },
     "executable_path_ownership_current_dependencies": {
       "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json",
-      "sha256": "46e8a0c291c47757268858850187397ec7608ab71abb603f0bd8f12adab5cb4e"
+      "sha256": "d1ea08837129abf2abeddbab86857e51f8a8a2bca820850407895e9beffa01d1"
     },
     "final_dependency_current": {
       "path": "architecture/contexts/v1/final-dependency-current.json",
