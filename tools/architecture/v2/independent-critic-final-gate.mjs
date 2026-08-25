@@ -7,8 +7,8 @@ import { existsSync, readFileSync } from 'node:fs'
 
 import { extractImports } from '../enforce-architecture.mjs'
 import {
-  COVERAGE_PATH,
-  CURRENT_DEPENDENCY_PATH,
+  readCurrentOwnershipCoverage,
+  readCurrentOwnershipDependencies,
   validateExecutablePathOwnershipCoverage,
   validateExecutablePathOwnershipDependencies,
   validateExecutablePathOwnershipProvenance,
@@ -338,8 +338,8 @@ const credentialFields = readJson('architecture/recovery/whole-project-dod/v2/CR
 const crossDomain = readJson('architecture/recovery/whole-project-dod/v2/CROSS_DOMAIN_CREDENTIAL_REVIEW_20260811.json')
 const productionSecretReview = readJson('architecture/recovery/whole-project-dod/v2/PRODUCTION_SECRET_READ_DISPOSITION_REVIEW_20260813.json')
 const lifecycleRegistry = readJson('architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json')
-const executableCoverage = readJson(COVERAGE_PATH)
-const executableOwnershipDependencies = readJson(CURRENT_DEPENDENCY_PATH)
+const executableCoverage = (await readCurrentOwnershipCoverage(root)).value
+const executableOwnershipDependencies = (await readCurrentOwnershipDependencies(root)).value
 const contextIndex = readJson('architecture/contexts/v1/context-index.json')
 const contextManifests = contextIndex.contexts.map((entry) => readJson(entry.path))
 

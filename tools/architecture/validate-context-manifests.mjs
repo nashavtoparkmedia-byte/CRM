@@ -5,8 +5,8 @@ import { fileURLToPath } from 'node:url';
 import { deriveCurrentDependencySource } from './derive-final-dependency-source.mjs';
 import { materializeFinalDependencyArtifact } from './materialize-final-dependency-artifact.mjs';
 import {
-  COVERAGE_PATH,
-  CURRENT_DEPENDENCY_PATH,
+  readCurrentOwnershipCoverage,
+  readCurrentOwnershipDependencies,
   validateExecutablePathOwnershipCoverage,
   validateExecutablePathOwnershipDependencies,
   validateExecutablePathOwnershipProvenance,
@@ -89,7 +89,6 @@ function dependencyCycles(manifests) {
 export function validateContexts(bundle) {
   const { decisions, inventory, dependencies, writes, ownership, index, manifests, foreignPlan, dependencyPlan, finalDependency, finalDependencySource, executableOwnershipDependencies } = bundle;
   validateExecutablePathOwnershipDependencies(executableOwnershipDependencies, { contextIndex: index });
-  assert(index.outputs?.executable_path_ownership_current_dependencies?.path === CURRENT_DEPENDENCY_PATH, 'context index does not declare executable ownership current dependencies');
   assert(decisions.schema === 'yoko.crm.context-decisions.v1' && decisions.milestone === 'CRM-ARCH-003', 'context decision identity mismatch');
   const contextIds = new Set(decisions.contexts.map((context) => context.id));
   assert(contextIds.size === decisions.contexts.length, 'duplicate context id');
@@ -226,10 +225,11 @@ export async function verifyCurrentDependencyTruth(repositoryRoot, finalDependen
 }
 
 export async function verifyExecutablePathOwnership(repositoryRoot, manifests) {
-  const [registry, coverage] = await Promise.all([
+  const [registry, coverageInput] = await Promise.all([
     readFile(path.join(repositoryRoot, 'architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json'), 'utf8').then(JSON.parse),
-    readFile(path.join(repositoryRoot, COVERAGE_PATH), 'utf8').then(JSON.parse),
+    readCurrentOwnershipCoverage(repositoryRoot),
   ]);
+  const coverage = coverageInput.value;
   const inventory = await inventoryTrackedSurfaces(repositoryRoot, { registry });
   const derived = validateExecutablePathOwnershipCoverage(inventory, manifests, coverage);
   await validateExecutablePathOwnershipProvenance(repositoryRoot, coverage, inventory, manifests);
@@ -271,6 +271,7 @@ async function loadJson(repositoryRoot, relative) {
 
 async function loadBundle(repositoryRoot) {
   const index = await loadJson(repositoryRoot, 'architecture/contexts/v1/context-index.json');
+  const executableOwnershipDependencies = (await readCurrentOwnershipDependencies(repositoryRoot)).value;
   return {
     decisions: await loadJson(repositoryRoot, 'architecture/contexts/v1/context-decisions.json'),
     inventory: await loadJson(repositoryRoot, 'architecture/evidence/v1/module-inventory.json'),
@@ -283,7 +284,7 @@ async function loadBundle(repositoryRoot) {
     dependencyPlan: await loadJson(repositoryRoot, 'architecture/contexts/v1/dependency-transition-plan.json'),
     finalDependency: await loadJson(repositoryRoot, 'architecture/contexts/v1/final-dependency-current.json'),
     finalDependencySource: await loadJson(repositoryRoot, 'architecture/contexts/v1/final-dependency-source.json'),
-    executableOwnershipDependencies: await loadJson(repositoryRoot, CURRENT_DEPENDENCY_PATH),
+    executableOwnershipDependencies,
   };
 }
 

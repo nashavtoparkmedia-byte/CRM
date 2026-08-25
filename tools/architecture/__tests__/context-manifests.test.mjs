@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
-import { CURRENT_DEPENDENCY_PATH } from '../validate-executable-path-ownership.mjs';
+import { readCurrentOwnershipDependencies } from '../validate-executable-path-ownership.mjs';
 import { validateContexts, verifyContextIndex } from '../validate-context-manifests.mjs';
 
 const repositoryRoot = new URL('../../../', import.meta.url);
@@ -24,7 +24,7 @@ const bundle = {
   dependencyPlan: await load('architecture/contexts/v1/dependency-transition-plan.json'),
   finalDependency: await load('architecture/contexts/v1/final-dependency-current.json'),
   finalDependencySource: await load('architecture/contexts/v1/final-dependency-source.json'),
-  executableOwnershipDependencies: await load(CURRENT_DEPENDENCY_PATH),
+  executableOwnershipDependencies: (await readCurrentOwnershipDependencies(repositoryRoot.pathname)).value,
 };
 
 test('bounded contexts cover modules, owned data, dependencies and foreign writes', async () => {

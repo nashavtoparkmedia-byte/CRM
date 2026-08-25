@@ -6,6 +6,49 @@
       "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
       "schema": "yoko.crm.executable-path-ownership-coverage.v1"
     },
+    "authority_access": {
+      "module": "tools/architecture/validate-executable-path-ownership.mjs",
+      "capabilities": [
+        {
+          "export": "readCurrentOwnershipCoverage",
+          "authority_use": "coverage_document",
+          "artifact_path": "architecture/contexts/v1/executable-path-ownership-coverage.json"
+        },
+        {
+          "export": "readCurrentOwnershipDependencies",
+          "authority_use": "dependency_manifest",
+          "artifact_path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json"
+        },
+        {
+          "export": "readHistoricalOwnershipBaseline",
+          "authority_use": "historical_baseline",
+          "artifact_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_COVERAGE_BASELINE_2108.json"
+        },
+        {
+          "export": "readReviewedOwnershipDecisions",
+          "authority_use": "reviewed_decisions",
+          "artifact_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json"
+        }
+      ],
+      "non_authority_exports": [
+        "INTERNAL_REVIEWER",
+        "INTERNAL_REVIEW_ROLE",
+        "REVIEWED_BASELINE_SCHEMA",
+        "REVIEWED_BASELINE_SHA256",
+        "REVIEWED_DECISION_SCHEMA",
+        "assertCleanExactCandidateCheckout",
+        "deriveExecutablePathOwnershipCoverage",
+        "deriveHistoricalExecutablePathOwnershipFixture",
+        "discoverExecutablePathOwnershipConsumers",
+        "materializeReviewedExecutablePathOwnershipCoverage",
+        "validateExecutablePathOwnershipConsumerClosure",
+        "validateExecutablePathOwnershipCoverage",
+        "validateExecutablePathOwnershipDependencies",
+        "validateExecutablePathOwnershipProvenance",
+        "validateHistoricalExecutablePathOwnershipFixtures",
+        "validateReviewedExactInventoryDecisions"
+      ]
+    },
     "derived_fields": {
       "tracked_executable_surfaces": "/source/tracked_executable_surfaces",
       "tracked_inventory_sha256": "/source/tracked_inventory_sha256",
@@ -34,61 +77,47 @@
       }
     ],
     "consumers": [
-        {
-          "role": "context_manifest_regression_control",
-          "path": "tools/architecture/__tests__/context-manifests.test.mjs",
-          "authority_uses": [
-            "dependency_manifest",
-            "ownership_validator_module"
-          ]
-        },
-        {
-          "role": "context_manifest_generator",
-          "path": "tools/architecture/generate-context-manifests.mjs",
-          "authority_uses": [
-            "coverage_document",
-            "dependency_manifest",
-            "ownership_validator_module"
-          ]
-        },
-        {
-          "role": "production_validator",
-          "path": "tools/architecture/validate-executable-path-ownership.mjs",
-          "authority_uses": [
-            "coverage_document",
-            "dependency_manifest",
-            "historical_baseline",
-            "reviewed_decisions"
-          ]
-        },
-        {
-          "role": "negative_and_regression_control",
-          "path": "tools/architecture/test-executable-path-ownership.mjs",
-          "authority_uses": [
-            "coverage_document",
-            "historical_baseline",
-            "ownership_validator_module",
-            "reviewed_decisions"
-          ]
-        },
-        {
-          "role": "context_manifest_validator",
-          "path": "tools/architecture/validate-context-manifests.mjs",
-          "authority_uses": [
-            "coverage_document",
-            "dependency_manifest",
-            "ownership_validator_module"
-          ]
-        },
-        {
-          "role": "independent_source_critic",
-          "path": "tools/architecture/v2/independent-critic-final-gate.mjs",
-          "authority_uses": [
-            "coverage_document",
-            "dependency_manifest",
-            "ownership_validator_module"
-          ]
-        }
+      {
+        "role": "context_manifest_regression_control",
+        "path": "tools/architecture/__tests__/context-manifests.test.mjs",
+        "capabilities": [
+          "readCurrentOwnershipDependencies"
+        ]
+      },
+      {
+        "role": "context_manifest_generator",
+        "path": "tools/architecture/generate-context-manifests.mjs",
+        "capabilities": [
+          "readCurrentOwnershipCoverage",
+          "readCurrentOwnershipDependencies"
+        ]
+      },
+      {
+        "role": "negative_and_regression_control",
+        "path": "tools/architecture/test-executable-path-ownership.mjs",
+        "capabilities": [
+          "readCurrentOwnershipCoverage",
+          "readCurrentOwnershipDependencies",
+          "readHistoricalOwnershipBaseline",
+          "readReviewedOwnershipDecisions"
+        ]
+      },
+      {
+        "role": "context_manifest_validator",
+        "path": "tools/architecture/validate-context-manifests.mjs",
+        "capabilities": [
+          "readCurrentOwnershipCoverage",
+          "readCurrentOwnershipDependencies"
+        ]
+      },
+      {
+        "role": "independent_source_critic",
+        "path": "tools/architecture/v2/independent-critic-final-gate.mjs",
+        "capabilities": [
+          "readCurrentOwnershipCoverage",
+          "readCurrentOwnershipDependencies"
+        ]
+      }
     ],
     "authority_direction": [
       "repository_tracked_paths_modes_and_lifecycle_metadata",
