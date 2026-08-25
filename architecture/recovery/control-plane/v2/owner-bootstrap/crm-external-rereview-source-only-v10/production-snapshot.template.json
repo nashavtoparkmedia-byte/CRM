@@ -11,7 +11,11 @@
     "tg_bot_patch_baseline_state": "ABSENT",
     "tg_bot_patch_baseline_manifest_file_sha256": "1bd1d5100cabeb37277262179ee1119b3dcd9154b9774947dcf218d38e4d19fe",
     "tg_bot_patch_baseline_manifest_sha256": "72397e9c7e3c728b94d1e5645da825ddd75216bfacd13212b4671fe15f206d56",
-    "outbox_catalog_sha256": "ef0bce36bca8283b491a966ff3886644a8887f4bded3deebbec7ce559ac2defe"
+    "outbox_catalog_sha256": "ef0bce36bca8283b491a966ff3886644a8887f4bded3deebbec7ce559ac2defe",
+    "sealed_gravity_compose_config_hash": "772ba8f19dc89133ea55ce65aa2d68550594ab61060eac0e373ae7936161b9f8",
+    "gravity_command": ["npm", "run", "start"],
+    "sealed_tg_bot_compose_config_hash": "00952518d668126c08950de087a7c46fa368cd8879590ad9c1584bb7c39b42e2",
+    "tg_bot_command": ["node", "start.js"]
   },
   "capture": {},
   "capture_transcript_sha256": "UNAVAILABLE"

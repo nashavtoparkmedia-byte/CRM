@@ -60,6 +60,13 @@ TG_PATCH_BASELINE_MANIFEST_FILE_SHA256 = "1bd1d5100cabeb37277262179ee1119b3dcd91
 TG_PATCH_BASELINE_MANIFEST_SHA256 = "72397e9c7e3c728b94d1e5645da825ddd75216bfacd13212b4671fe15f206d56"
 TG_DIFF_PROOF_CONTAINER = "yoko-crm-@COMMIT_SHORT16@-tg-diff-proof"
 PRIOR_TARGET_TAG = "yoko/crm-gravity-mvp:7aea2823efe50e13a156540993d424594025e403-profile-v1"
+TG_PREDECESSOR_REFERENCE = "crm/tg-bot:latest"
+RECOVERY_SOURCE_COMMIT = "08b9145945b296d494cd0184eb2d32da886710cd"
+RECOVERY_SOURCE_ARCHIVE_SHA256 = "e611c0192fd3592ce99410df002a3918ce849dfab5c9c1b4955b02f136f830b9"
+RECOVERY_SOURCE_PROFILE_ID = "crm-08b9145945b2-gravity-source-v1"
+RECOVERY_SOURCE_STATE_PATH = f"/var/lib/yoko-privileged-runtime/activation/{RECOVERY_SOURCE_PROFILE_ID}/state.v1.json"
+RECOVERY_SOURCE_GRAVITY_TAG = f"yoko/crm-gravity-mvp:{RECOVERY_SOURCE_COMMIT}-source-only-v1"
+RECOVERY_SOURCE_TG_TAG = f"yoko/crm-tg-bot:{RECOVERY_SOURCE_COMMIT}-public-capability-v1"
 PREVIEW_NETWORK = "yoko-crm-af9646f5-preview"
 PREVIEW_CONTAINER = "yoko-crm-af9646f5-postgres-preview"
 PREVIEW_MIGRATION_RUNNER = "yoko-crm-af9646f5-preview-migrate"
@@ -352,6 +359,60 @@ def _read_state(core: Any) -> dict[str, Any]:
     if not isinstance(value, dict) or value.get("schema") != STATE_SCHEMA or value.get("profile_id") != PROFILE_ID:
         raise core.RuntimeFault("ACTIVATION_STATE_INVALID", 78)
     return value
+
+
+def _read_replacement_recovery_state(core: Any, profile: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    """Read only the exact predecessor profile state authorized for repair.
+
+    Content-specific profiles deliberately have disjoint state roots.  The
+    replacement profile may therefore adopt only the exact failed 08b91459
+    transaction, and only while it is still in ROLLBACK_INTENT.  Installation
+    and self-check never call this function; adoption occurs lazily inside the
+    explicitly invoked rollback transaction.
+    """
+    target = core.mapped(RECOVERY_SOURCE_STATE_PATH)
+    try:
+        core.secure_file(RECOVERY_SOURCE_STATE_PATH, 0o600, maximum=2 * 1024 * 1024)
+        raw = target.read_bytes()
+        value = json.loads(raw.decode("ascii"))
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise core.RuntimeFault("REPLACEMENT_RECOVERY_STATE_UNAVAILABLE", 78) from exc
+    production_identity = value.get("production_identity") if isinstance(value, dict) else None
+    gravity_semantic = production_identity.get("gravity_semantic") if isinstance(production_identity, dict) else None
+    tg_semantic = production_identity.get("tg_bot_semantic") if isinstance(production_identity, dict) else None
+    recovery = profile["recovery"]
+    if (
+        not isinstance(value, dict)
+        or value.get("schema") != STATE_SCHEMA
+        or value.get("profile_id") != RECOVERY_SOURCE_PROFILE_ID
+        or value.get("phase") != "ROLLBACK_INTENT"
+        or any(str(key).startswith("replacement_recovery_") for key in value)
+        or value.get("accepted_commit") != RECOVERY_SOURCE_COMMIT
+        or value.get("accepted_archive_sha256") != RECOVERY_SOURCE_ARCHIVE_SHA256
+        or value.get("target_tag") != RECOVERY_SOURCE_GRAVITY_TAG
+        or value.get("tg_target_tag") != RECOVERY_SOURCE_TG_TAG
+        or not re.fullmatch(r"sha256:[0-9a-f]{64}", str(value.get("target_image_id", "")))
+        or not re.fullmatch(r"sha256:[0-9a-f]{64}", str(value.get("tg_target_image_id", "")))
+        or value.get("rollback_tag") != ROLLBACK_TAG
+        or value.get("rollback_image_id") != profile["production"]["gravity_image_id"]
+        or value.get("tg_rollback_tag") != TG_ROLLBACK_TAG
+        or value.get("tg_rollback_image_id") != profile["production"]["tg_bot_image_id"]
+        or value.get("database_identity_sha256") != recovery["database_identity_sha256"]
+        or value.get("migration_ledger_sha256") != recovery["migration_ledger_sha256"]
+        or not isinstance(production_identity, dict)
+        or not isinstance(gravity_semantic, dict)
+        or not isinstance(tg_semantic, dict)
+        or gravity_semantic.get("image_id") != profile["production"]["gravity_image_id"]
+        or gravity_semantic.get("command") != ["npm", "run", "start"]
+        or gravity_semantic.get("compose_labels", {}).get("com.docker.compose.config-hash")
+        != recovery["recovered_compose_config_hash"]
+        or tg_semantic.get("image_id") != profile["production"]["tg_bot_image_id"]
+        or tg_semantic.get("command") != profile["production"]["tg_bot_cmd"]
+        or tg_semantic.get("compose_labels", {}).get("com.docker.compose.config-hash")
+        != recovery["recovered_tg_bot_compose_config_hash"]
+    ):
+        raise core.RuntimeFault("REPLACEMENT_RECOVERY_STATE_IDENTITY_MISMATCH", 78)
+    return value, hashlib.sha256(raw).hexdigest()
 
 
 def _write_state(core: Any, value: dict[str, Any]) -> None:
@@ -2664,12 +2725,11 @@ def _write_fixed_file(core: Any, path: str, raw: bytes, mode: int) -> None:
 def _compose_overlay(gravity_image: str, tg_image: str, *, activate: bool) -> bytes:
     if any(not re.fullmatch(r"[a-z0-9][a-z0-9./:_-]+", image) or ".." in image or "//" in image for image in (gravity_image, tg_image)):
         raise RuntimeError("IMAGE_REFERENCE_INVALID")
-    command = "    command: [\"npm\", \"run\", \"start\"]\n" if activate else ""
     return (
         "services:\n"
         "  gravity-mvp:\n"
         f"    image: {gravity_image}\n"
-        f"{command}"
+        "    command: [\"npm\", \"run\", \"start\"]\n"
         "  tg-bot:\n"
         f"    image: {tg_image}\n"
     ).encode("ascii")
@@ -2742,8 +2802,8 @@ def _validate_dual_compose_projection(core: Any, profile: dict[str, Any], overla
     if _canonical(base_other) != _canonical(candidate_other):
         raise core.RuntimeFault("UNRELATED_COMPOSE_SERVICE_DRIFT", 74)
     expected_images = {
-        gravity_name: TARGET_TAG if activate else ROLLBACK_TAG,
-        tg_name: TG_TARGET_TAG if activate else TG_ROLLBACK_TAG,
+        gravity_name: TARGET_TAG if activate else PRIOR_TARGET_TAG,
+        tg_name: TG_TARGET_TAG if activate else TG_PREDECESSOR_REFERENCE,
     }
     for name in (gravity_name, tg_name):
         original = dict(base["services"][name])
@@ -2751,7 +2811,7 @@ def _validate_dual_compose_projection(core: Any, profile: dict[str, Any], overla
         if actual.get("image") != expected_images[name]:
             raise core.RuntimeFault("DUAL_SERVICE_COMPOSE_IMAGE_DRIFT", 74)
         actual["image"] = original.get("image")
-        if name == gravity_name and activate:
+        if name == gravity_name:
             if actual.get("command") != ["npm", "run", "start"]:
                 raise core.RuntimeFault("DUAL_SERVICE_COMPOSE_COMMAND_DRIFT", 74)
             if "command" in original:
@@ -2760,6 +2820,15 @@ def _validate_dual_compose_projection(core: Any, profile: dict[str, Any], overla
                 actual.pop("command", None)
         if _canonical(actual) != _canonical(original):
             raise core.RuntimeFault("DUAL_SERVICE_COMPOSE_PROJECTION_DRIFT", 74)
+
+
+def _verify_predecessor_compose_references(core: Any, profile: dict[str, Any]) -> None:
+    gravity = _image_inspect(core, PRIOR_TARGET_TAG)
+    tg_bot = _image_inspect(core, TG_PREDECESSOR_REFERENCE)
+    if gravity is None or gravity.get("Id") != profile["production"]["gravity_image_id"]:
+        raise core.RuntimeFault("GRAVITY_PREDECESSOR_REFERENCE_IDENTITY_DRIFT", 74)
+    if tg_bot is None or tg_bot.get("Id") != profile["production"]["tg_bot_image_id"]:
+        raise core.RuntimeFault("TG_BOT_PREDECESSOR_REFERENCE_IDENTITY_DRIFT", 74)
 
 
 def _preserved_service_semantics(semantic: dict[str, Any]) -> dict[str, Any]:
@@ -3036,7 +3105,7 @@ def _application_health(core: Any, profile: dict[str, Any], *, require_outbox: b
         time.sleep(min(APPLICATION_STABILIZATION_INTERVAL_SECONDS, remaining))
 
 
-def _rollback_application_health(core: Any, profile: dict[str, Any]) -> dict[str, Any]:
+def _rollback_application_health_once(core: Any, profile: dict[str, Any]) -> dict[str, Any]:
     """Prove the sealed predecessor is serving without applying target-only gates.
 
     The predecessor predates authenticated Redis infra health and the corrected
@@ -3064,6 +3133,47 @@ def _rollback_application_health(core: Any, profile: dict[str, Any]) -> dict[str
         "target_only_infrastructure_gate_applied": False,
         "target_only_outbox_gate_applied": False,
     }
+
+
+def _rollback_application_health(core: Any, profile: dict[str, Any]) -> dict[str, Any]:
+    started = time.monotonic()
+    deadline = started + APPLICATION_STABILIZATION_SECONDS
+    attempts = 0
+    consecutive_successes = 0
+    last_failure_code = "GRAVITY_ROLLBACK_STABILIZATION_NOT_STARTED"
+    while True:
+        if attempts and time.monotonic() >= deadline:
+            raise core.RuntimeFault("GRAVITY_ROLLBACK_APPLICATION_STABILIZATION_FAILED", 74, {
+                "attempts": attempts,
+                "consecutive_successes": consecutive_successes,
+                "last_failure_code": last_failure_code,
+                "required_consecutive_successes": APPLICATION_STABILIZATION_REQUIRED_SUCCESSES,
+                "timeout_seconds": APPLICATION_STABILIZATION_SECONDS,
+            })
+        attempts += 1
+        try:
+            evidence = _rollback_application_health_once(core, profile)
+            observed_at = time.monotonic()
+            if observed_at <= deadline:
+                consecutive_successes += 1
+                if consecutive_successes >= APPLICATION_STABILIZATION_REQUIRED_SUCCESSES:
+                    return {
+                        **evidence,
+                        "rollback_stabilization_attempts": attempts,
+                        "rollback_stabilization_consecutive_successes": consecutive_successes,
+                        "rollback_stabilization_elapsed_ms": int((observed_at - started) * 1000),
+                        "rollback_stabilization_timeout_seconds": APPLICATION_STABILIZATION_SECONDS,
+                    }
+                last_failure_code = "GRAVITY_ROLLBACK_STABILIZATION_INCOMPLETE"
+            else:
+                last_failure_code = "GRAVITY_ROLLBACK_STABILIZATION_DEADLINE_EXCEEDED"
+        except core.RuntimeFault as exc:
+            last_failure_code = exc.code
+            consecutive_successes = 0
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            continue
+        time.sleep(min(APPLICATION_STABILIZATION_INTERVAL_SECONDS, remaining))
 
 
 def _tg_bot_health(core: Any, profile: dict[str, Any], expected_sha256: str | None) -> dict[str, Any]:
@@ -3163,7 +3273,13 @@ def _rollback_impl(core: Any, policy: dict[str, Any], profile: dict[str, Any], s
     tg_expected = profile["production"]["tg_bot_image_id"]
     if rollback is None or rollback["Id"] != expected or tg_rollback is None or tg_rollback["Id"] != tg_expected:
         raise core.RuntimeFault("ROLLBACK_IMAGE_IDENTITY_MISMATCH", 74)
-    _write_fixed_file(core, ROLLBACK_OVERLAY, _compose_overlay(ROLLBACK_TAG, TG_ROLLBACK_TAG, activate=False), 0o400)
+    _verify_predecessor_compose_references(core, profile)
+    _write_fixed_file(
+        core,
+        ROLLBACK_OVERLAY,
+        _compose_overlay(PRIOR_TARGET_TAG, TG_PREDECESSOR_REFERENCE, activate=False),
+        0o400,
+    )
     _compose_up(core, profile, state, ROLLBACK_OVERLAY)
     gravity = core.container_projection(policy, "crm.container.gravity_mvp")
     tg_bot = core.container_projection(policy, "crm.container.telegram_bot")
@@ -3192,6 +3308,38 @@ def _rollback_impl(core: Any, policy: dict[str, Any], profile: dict[str, Any], s
         **rollback_health,
         **tg_health,
     }
+
+
+def _rollback_state_is_exact(
+    profile: dict[str, Any],
+    gravity: dict[str, Any],
+    tg_bot: dict[str, Any],
+    state: dict[str, Any],
+) -> bool:
+    return (
+        gravity.get("image_id") == profile["production"]["gravity_image_id"]
+        and gravity.get("running") is True
+        and gravity.get("health") == "healthy"
+        and tg_bot.get("image_id") == profile["production"]["tg_bot_image_id"]
+        and tg_bot.get("running") is True
+        and tg_bot.get("health") == "healthy"
+        and _rollback_semantics_compatibility(profile, state, gravity) == "EXACT"
+        and _rollback_tg_semantics_compatibility(profile, state, tg_bot) == "EXACT"
+    )
+
+
+def _restore_or_accept_rollback(
+    core: Any,
+    policy: dict[str, Any],
+    profile: dict[str, Any],
+    state: dict[str, Any],
+    gravity: dict[str, Any],
+    tg_bot: dict[str, Any],
+) -> tuple[dict[str, Any], bool]:
+    """Accept an exact predecessor or deterministically reconstruct it."""
+    if _rollback_state_is_exact(profile, gravity, tg_bot, state):
+        return _accept_existing_rollback(core, policy, profile, state, gravity, tg_bot), False
+    return _rollback_impl(core, policy, profile, state), True
 
 
 def _accept_existing_rollback(core: Any, policy: dict[str, Any], profile: dict[str, Any], state: dict[str, Any], gravity: dict[str, Any], tg_bot: dict[str, Any]) -> dict[str, Any]:
@@ -3253,6 +3401,41 @@ def _dual_service_image_state(
     return vector
 
 
+def _failure_identity(core: Any, failure: BaseException, fallback_code: str) -> dict[str, Any]:
+    if isinstance(failure, core.RuntimeFault):
+        details = failure.details if isinstance(failure.details, dict) else {}
+        return {"code": failure.code, "details": details}
+    return {"code": fallback_code, "details": {}}
+
+
+def _combined_activation_rollback_fault(
+    core: Any,
+    invocation: Any,
+    state: dict[str, Any],
+    activation_failure: dict[str, Any] | None,
+    rollback_failure: BaseException,
+    result: str,
+) -> Any:
+    activation = activation_failure or state.get("activation_failure_identity")
+    if not isinstance(activation, dict) or not isinstance(activation.get("code"), str):
+        activation = {"code": "LEGACY_ACTIVATION_FAILURE_UNAVAILABLE", "details": {}}
+    rollback = _failure_identity(core, rollback_failure, "INTERNAL_AUTOMATIC_ROLLBACK_FAILURE")
+    failed = {
+        **state,
+        "activation_failure": True,
+        "activation_failure_identity": activation,
+        "automatic_rollback_failure_identity": rollback,
+        "terminal_failure_status": "ACTIVATION_AND_AUTOMATIC_ROLLBACK_FAILED",
+        "automatic_rollback_failed_at": core.now(),
+    }
+    _write_terminal_state(core, invocation, state, result, failed)
+    return core.RuntimeFault("ACTIVATION_AND_AUTOMATIC_ROLLBACK_FAILED", 74, {
+        "activation_failure": activation,
+        "automatic_rollback_failure": rollback,
+        "terminal_status": "ACTIVATION_AND_AUTOMATIC_ROLLBACK_FAILED",
+    })
+
+
 def _complete_activation_rollback(
     core: Any,
     policy: dict[str, Any],
@@ -3261,6 +3444,7 @@ def _complete_activation_rollback(
     state: dict[str, Any],
     *,
     activation_recovery: bool,
+    activation_failure: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     if state.get("phase") == "RELEASE_ACTIVATION_ROLLBACK_INTENT":
         intent = state
@@ -3269,17 +3453,18 @@ def _complete_activation_rollback(
             **state,
             "phase": "RELEASE_ACTIVATION_ROLLBACK_INTENT",
             "activation_failure": True,
+            "activation_failure_identity": activation_failure or {
+                "code": "LEGACY_ACTIVATION_FAILURE_UNAVAILABLE",
+                "details": {},
+            },
             "activation_recovery": activation_recovery,
             "activation_rollback_intent_at": core.now(),
         }
         intent = _write_terminal_state(core, invocation, state, "activation_rollback_intent", intent)
     gravity = core.container_projection(policy, "crm.container.gravity_mvp")
     tg_bot = core.container_projection(policy, "crm.container.telegram_bot")
-    vector = _dual_service_image_state(core, profile, intent, gravity, tg_bot)
-    if vector == ("old", "old") and gravity["running"] and gravity["health"] == "healthy" and tg_bot["running"] and tg_bot["health"] == "healthy":
-        rollback = _accept_existing_rollback(core, policy, profile, intent, gravity, tg_bot)
-    else:
-        rollback = _rollback_impl(core, policy, profile, intent)
+    _dual_service_image_state(core, profile, intent, gravity, tg_bot)
+    rollback, _ = _restore_or_accept_rollback(core, policy, profile, intent, gravity, tg_bot)
     rolled = {
         **intent,
         "phase": "ROLLED_BACK",
@@ -3315,9 +3500,12 @@ def _release_activate(core: Any, policy: dict[str, Any], profile: dict[str, Any]
                     core, policy, profile, invocation, state,
                     activation_recovery=bool(state.get("activation_recovery")),
                 )
-            except Exception:
-                _audit(core, invocation, state, "activation_rollback_recovery_failed", _read_state(core))
-                raise core.RuntimeFault("ACTIVATION_AND_AUTOMATIC_ROLLBACK_FAILED", 74)
+            except Exception as rollback_failure:
+                current = _read_state(core)
+                raise _combined_activation_rollback_fault(
+                    core, invocation, current, current.get("activation_failure_identity"),
+                    rollback_failure, "activation_rollback_recovery_failed",
+                )
             return {
                 "profile_id": PROFILE_ID,
                 "status": "ROLLED_BACK_RECOVERED",
@@ -3367,20 +3555,25 @@ def _release_activate(core: Any, policy: dict[str, Any], profile: dict[str, Any]
                     next_state = _write_terminal_state(core, invocation, state, "recovered_ok", next_state)
                     return {"profile_id": PROFILE_ID, "status": "ACTIVATED_RECOVERED", "postcheck": postcheck, "production_mutated": False, "automatic_rollback": False}
                 except Exception as activation_failure:
+                    activation_identity = _failure_identity(core, activation_failure, "INTERNAL_ACTIVATION_FAILURE")
                     try:
                         rollback, rolled = _complete_activation_rollback(
-                            core, policy, profile, invocation, state, activation_recovery=True
+                            core, policy, profile, invocation, state, activation_recovery=True,
+                            activation_failure=activation_identity,
                         )
-                    except Exception:
-                        _audit(core, invocation, state, "recovery_failed_rollback_failed", _read_state(core))
-                        raise core.RuntimeFault("ACTIVATION_AND_AUTOMATIC_ROLLBACK_FAILED", 74)
-                    failure_code = (
-                        activation_failure.code
-                        if isinstance(activation_failure, core.RuntimeFault)
-                        else "INTERNAL_ACTIVATION_FAILURE"
-                    )
+                    except Exception as rollback_failure:
+                        if (
+                            isinstance(rollback_failure, core.RuntimeFault)
+                            and rollback_failure.code == "ACTIVATION_AND_AUTOMATIC_ROLLBACK_FAILED"
+                        ):
+                            raise
+                        raise _combined_activation_rollback_fault(
+                            core, invocation, _read_state(core), activation_identity,
+                            rollback_failure, "recovery_failed_rollback_failed",
+                        )
                     raise core.RuntimeFault("ACTIVATION_FAILED_AUTOMATIC_ROLLBACK_OK", 74, {
-                        "activation_failure_code": failure_code,
+                        "activation_failure_code": activation_identity["code"],
+                        "activation_failure": activation_identity,
                         "rollback": rollback,
                     })
             if vector in {("target", "old"), ("old", "target")}:
@@ -3388,9 +3581,11 @@ def _release_activate(core: Any, policy: dict[str, Any], profile: dict[str, Any]
                     rollback, rolled = _complete_activation_rollback(
                         core, policy, profile, invocation, state, activation_recovery=True
                     )
-                except Exception:
-                    _audit(core, invocation, state, "mixed_recovery_rollback_failed", _read_state(core))
-                    raise core.RuntimeFault("ACTIVATION_AND_AUTOMATIC_ROLLBACK_FAILED", 74)
+                except Exception as rollback_failure:
+                    raise _combined_activation_rollback_fault(
+                        core, invocation, _read_state(core), state.get("activation_failure_identity"),
+                        rollback_failure, "mixed_recovery_rollback_failed",
+                    )
                 return {
                     "profile_id": PROFILE_ID,
                     "status": "MIXED_STATE_ROLLED_BACK_RECOVERED",
@@ -3415,20 +3610,25 @@ def _release_activate(core: Any, policy: dict[str, Any], profile: dict[str, Any]
             next_state = _write_terminal_state(core, invocation, intent, "ok", next_state)
             return {"profile_id": PROFILE_ID, "status": "ACTIVATED", "postcheck": postcheck, "production_mutated": True, "automatic_rollback": False}
         except Exception as activation_failure:
+            activation_identity = _failure_identity(core, activation_failure, "INTERNAL_ACTIVATION_FAILURE")
             try:
                 rollback, rolled = _complete_activation_rollback(
-                    core, policy, profile, invocation, intent, activation_recovery=False
+                    core, policy, profile, invocation, intent, activation_recovery=False,
+                    activation_failure=activation_identity,
                 )
-            except Exception:
-                _audit(core, invocation, intent, "failed_rollback_failed", _read_state(core))
-                raise core.RuntimeFault("ACTIVATION_AND_AUTOMATIC_ROLLBACK_FAILED", 74)
-            failure_code = (
-                activation_failure.code
-                if isinstance(activation_failure, core.RuntimeFault)
-                else "INTERNAL_ACTIVATION_FAILURE"
-            )
+            except Exception as rollback_failure:
+                if (
+                    isinstance(rollback_failure, core.RuntimeFault)
+                    and rollback_failure.code == "ACTIVATION_AND_AUTOMATIC_ROLLBACK_FAILED"
+                ):
+                    raise
+                raise _combined_activation_rollback_fault(
+                    core, invocation, _read_state(core), activation_identity,
+                    rollback_failure, "failed_rollback_failed",
+                )
             raise core.RuntimeFault("ACTIVATION_FAILED_AUTOMATIC_ROLLBACK_OK", 74, {
-                "activation_failure_code": failure_code,
+                "activation_failure_code": activation_identity["code"],
+                "activation_failure": activation_identity,
                 "rollback": rollback,
             })
 
@@ -3437,6 +3637,22 @@ def _rollback(core: Any, policy: dict[str, Any], profile: dict[str, Any], invoca
     with _lock(core):
         state = _read_state(core)
         _reconcile_terminal_audit(core, state)
+        if state.get("phase") == "UNINITIALIZED":
+            if core.audit_status()["state"] not in {"EMPTY", "VALID"}:
+                raise core.RuntimeFault("AUDIT_MUTATION_DISABLED", 78)
+            source_state, source_sha256 = _read_replacement_recovery_state(core, profile)
+            source_state.pop("terminal_audit_receipt", None)
+            imported = {
+                **source_state,
+                "profile_id": PROFILE_ID,
+                "replacement_recovery_source_profile_id": RECOVERY_SOURCE_PROFILE_ID,
+                "replacement_recovery_source_commit": RECOVERY_SOURCE_COMMIT,
+                "replacement_recovery_source_state_sha256": source_sha256,
+                "replacement_recovery_imported_at": core.now(),
+            }
+            state = _write_terminal_state(
+                core, invocation, state, "replacement_recovery_state_imported", imported,
+            )
         if state.get("phase") == "ROLLED_BACK":
             gravity = core.container_projection(policy, "crm.container.gravity_mvp")
             tg_bot = core.container_projection(policy, "crm.container.telegram_bot")
@@ -3446,12 +3662,11 @@ def _rollback(core: Any, policy: dict[str, Any], profile: dict[str, Any], invoca
         recovering = state.get("phase") == "ROLLBACK_INTENT"
         if state.get("phase") not in {"ACTIVATED", "RELEASE_ACTIVATION_INTENT", "RELEASE_ACTIVATION_ROLLBACK_INTENT", "ROLLBACK_INTENT"}:
             raise core.RuntimeFault("ROLLBACK_NOT_AVAILABLE_IN_CURRENT_PHASE", 77)
-        _verify_gravity_candidate_image(core, profile)
         if core.audit_status()["state"] not in {"EMPTY", "VALID"}:
             raise core.RuntimeFault("AUDIT_MUTATION_DISABLED", 78)
         gravity = core.container_projection(policy, "crm.container.gravity_mvp")
         tg_bot = core.container_projection(policy, "crm.container.telegram_bot")
-        vector = _dual_service_image_state(core, profile, state, gravity, tg_bot)
+        _dual_service_image_state(core, profile, state, gravity, tg_bot)
         if recovering:
             intent = state
         else:
@@ -3459,15 +3674,9 @@ def _rollback(core: Any, policy: dict[str, Any], profile: dict[str, Any], invoca
             intent = _write_terminal_state(core, invocation, state, "intent", intent)
         production_mutated = False
         try:
-            if vector == ("old", "old"):
-                if gravity["running"] and gravity["health"] == "healthy" and tg_bot["running"] and tg_bot["health"] == "healthy":
-                    result = _accept_existing_rollback(core, policy, profile, intent, gravity, tg_bot)
-                else:
-                    result = _rollback_impl(core, policy, profile, intent)
-                    production_mutated = True
-            else:
-                result = _rollback_impl(core, policy, profile, intent)
-                production_mutated = True
+            result, production_mutated = _restore_or_accept_rollback(
+                core, policy, profile, intent, gravity, tg_bot,
+            )
             next_state = {**intent, "phase": "ROLLED_BACK", "rollback_completed_at": core.now(), "rollback_reason": "EXPLICIT_PROFILE_CALL"}
             next_state = _write_terminal_state(core, invocation, intent, "ok", next_state)
             return {"profile_id": PROFILE_ID, "status": "ROLLED_BACK", "postcheck": result, "production_mutated": production_mutated}

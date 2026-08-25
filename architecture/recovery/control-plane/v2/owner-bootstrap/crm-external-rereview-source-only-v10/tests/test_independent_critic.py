@@ -171,13 +171,13 @@ class InternalAdversarialReplayTests(unittest.TestCase):
         files = {
             "payload/install.sh": b"#!/bin/sh\nexit 0\n",
             f"payload/{self.validator.NEW_DEB_NAME}": deb,
-            f"payload/{self.validator.OLD_DEB_NAME}": b"old debian package\n",
             "payload/review/human-manifest.md": b"reviewed\n",
             "payload/review/installation-procedure.md": b"install\n",
             "payload/review/rollback-analysis.md": b"rollback\n",
         }
         review = {
             "schema": "yoko.crm.owner-bootstrap-review-manifest.v2",
+            "previous_state": self.validator.PREDECESSOR_REVIEW_IDENTITY,
             "new_package": {
                 "path": self.validator.NEW_DEB_NAME,
                 "sha256": hashlib.sha256(deb).hexdigest(),
@@ -196,6 +196,7 @@ class InternalAdversarialReplayTests(unittest.TestCase):
             }
         payload = {
             "schema": "yoko.crm.owner-bootstrap-payload.v1",
+            "previous_package": self.validator.PREDECESSOR_PACKAGE,
             "files": payload_files,
         }
         files["payload/payload-manifest.json"] = (

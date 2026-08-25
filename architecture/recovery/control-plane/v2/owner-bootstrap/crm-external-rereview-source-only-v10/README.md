@@ -2,10 +2,11 @@
 
 This external staging tree prepares a deterministic same-version, same-ABI
 replacement for the installed `yoko-privileged-runtime` `2.0.0-10` package.
-It is not an authorization to install or deploy anything. The exact `2.0.0-9`
-package remains the rollback bridge.
+It is not an authorization to install or deploy anything. The exact installed
+`2.0.0-10` package for profile `crm-08b9145945b2-gravity-source-v1` remains
+the rollback bridge.
 
-The successor preserves these accepted 2.0.0-9 files byte-for-byte:
+The successor preserves these accepted Runtime files byte-for-byte:
 
 - Runtime core SHA-256 `0cdeeb4b…57a`
 - policy SHA-256 `8727373b…0e0`
@@ -20,12 +21,12 @@ mutation implementation.
 
 ## Seal after final acceptance
 
-The historical predecessor package is intentionally not duplicated in this
-source directory. When working from the repository, hydrate
-`inputs/yoko-privileged-runtime_2.0.0-9_all.deb` from the exact tracked
-`../crm-7aea2823-gravity-outbox-stabilization-v2/dist/` artifact (SHA-256
-`0c259741…be83`) before building the bootstrap. Contract tests perform this
-exact-identity copy inside their disposable staging tree.
+The current 794-MB predecessor package is intentionally not duplicated in this
+source tree or bootstrap tar. Before mutation, the Owner installer requires its
+exact SHA-256 `6865eab3…54e` at the fixed root-owned content-addressed bootstrap
+store created by the already successful `08b91459…` installation. It copies
+that exact package into the successor store before `dpkg`, so an installer
+failure restores the current v10/profile rather than downgrading to v9.
 
 Use a clean worktree whose `HEAD` is the already accepted final commit. Fill an
 exact v2 acceptance record and a newly recaptured read-only production snapshot,
@@ -72,8 +73,7 @@ acceptance-record digest.
 Before it reads templates or runs any package helper, the sealer enumerates the
 complete Runtime v10 subtree in that same accepted commit. Every tracked staging
 file must be a regular single-link file with the accepted Git mode and exact Git
-blob bytes; extra staging files are rejected except for the separately
-SHA-pinned hydrated Runtime 2.0.0-9 package. The complete Git blob/SHA-256
+blob bytes, and every extra staging file is rejected. The complete Git blob/SHA-256
 inventory is copied into `SEALED_RELEASE.json`. Thus a clean accepted application
 checkout cannot be combined with an unreviewed builder, template, validator, or
 package source tree.

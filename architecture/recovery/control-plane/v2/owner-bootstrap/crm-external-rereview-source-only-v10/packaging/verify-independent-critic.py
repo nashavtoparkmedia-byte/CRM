@@ -79,10 +79,35 @@ ATTACK_COMMANDS: dict[str, tuple[tuple[str, ...], ...]] = {
 }
 BOOTSTRAP_MTIME = 1786492800
 NEW_DEB_NAME = "yoko-privileged-runtime_2.0.0-10_all.deb"
-OLD_DEB_NAME = "yoko-privileged-runtime_2.0.0-9_all.deb"
+PREDECESSOR_PACKAGE = {
+    "name": "yoko-privileged-runtime",
+    "version": "2.0.0-10",
+    "profile_id": "crm-08b9145945b2-gravity-source-v1",
+    "sha256": "6865eab377dda757d101259e7321268998b45ea8b27f6003de0cf7e191a9b54e",
+    "source": "/var/lib/yoko-privileged-runtime/activation-bootstraps/6865eab377dda757d101259e7321268998b45ea8b27f6003de0cf7e191a9b54e/yoko-privileged-runtime_2.0.0-10_all.deb",
+}
+PREDECESSOR_REVIEW_IDENTITY = {
+    "package_version": "2.0.0-10",
+    "profile_id": "crm-08b9145945b2-gravity-source-v1",
+    "runtime_sha256": "168d61b81f3defb748b69c523a3023bb983da37dbc8316d1e2a6705d88181fa1",
+    "core_sha256": "0cdeeb4ba43abe50f80fed1580ad7b0729bf83358932ece2974b3faedafed57a",
+    "profile_runtime_sha256": "e3a3142e6bc098a15dd62b75bf7c090a148ad64b4fe45d3d82499c2667de072f",
+    "policy_sha256": "8727373b0c6ec79c9abf82f1aaaa58abc2bae67e96aa96a602ac419f308db0e0",
+    "install_manifest_sha256": "7e22328cd89c752946d44e0a9557fd59f58f509ffea41754d4f5dddd98035549",
+    "profile_manifest_sha256": "ba87a9e11b74167b18a9b57299c6e6c89c3718d6637eb93bcbb540c5075a838e",
+    "profile_sha256": "0c6ba7ea34b083c2eef38255ac5c5e48eb566ec3024ac2a457bbb587a769565b",
+    "migration_sha256": "433b0d503f054ed6a8161a059e2650d5e401829dabe8c9d992a1d1763eef0016",
+    "source_archive_sha256": "e611c0192fd3592ce99410df002a3918ce849dfab5c9c1b4955b02f136f830b9",
+    "sudoers_sha256": "6e6b7cb2a088cc92fa7aee747adca46c64b4b96d1224be21117be5adef488c06",
+    "registry_sha256": "8ea5c3b7113e1dd2ad5a74b82a1fb0bf56643fd59774dccf37e8aa9eb67bd057",
+    "rollback_deb_sha256": PREDECESSOR_PACKAGE["sha256"],
+    "rollback_deb_source": PREDECESSOR_PACKAGE["source"],
+    "audit_state": "VALID",
+    "audit_records": 36,
+    "audit_last_digest": "7f7e4d739c9396c0d9757f0f2a60d57a50457048ce49cfd152ca46365306e344",
+}
 STREAM_CHUNK_BYTES = 1024 * 1024
 MAX_BOOTSTRAP_DOCUMENT_BYTES = 4 * 1024 * 1024
-MAX_ROLLBACK_DEB_BYTES = 64 * 1024 * 1024
 FULL_AUTHORITATIVE_CI_TIMEOUT_SECONDS = 4 * 60 * 60
 FRESH_WRITE_ANALYSIS_TIMEOUT_SECONDS = 15 * 60
 DEFAULT_ATTACK_COMMAND_TIMEOUT_SECONDS = 5 * 60
@@ -96,7 +121,6 @@ BOOTSTRAP_MODES = {
     "payload/review/package-manifest.json": 0o400,
     "payload/review/rollback-analysis.md": 0o400,
     f"payload/{NEW_DEB_NAME}": 0o400,
-    f"payload/{OLD_DEB_NAME}": 0o400,
 }
 
 
@@ -235,11 +259,7 @@ def validate_bootstrap_member_size(name: str, member_size: int, exact_deb_size: 
         if member_size != exact_deb_size:
             raise SystemExit("bootstrap tar does not contain the exact Debian package")
         return
-    maximum = (
-        MAX_ROLLBACK_DEB_BYTES
-        if name == f"payload/{OLD_DEB_NAME}"
-        else MAX_BOOTSTRAP_DOCUMENT_BYTES
-    )
+    maximum = MAX_BOOTSTRAP_DOCUMENT_BYTES
     if member_size < 0 or member_size > maximum:
         raise SystemExit("bootstrap tar member exceeded its exact bound")
 
@@ -325,9 +345,7 @@ def validate_bootstrap_tar(tar_path: Path, deb_path: Path) -> str:
                         source,
                         member.size,
                         exact_path=deb_path if member.name == f"payload/{NEW_DEB_NAME}" else None,
-                        capture=member.name not in {
-                            f"payload/{NEW_DEB_NAME}", f"payload/{OLD_DEB_NAME}",
-                        },
+                        capture=member.name != f"payload/{NEW_DEB_NAME}",
                     )
                     member_digests[member.name] = member_digest
                     if raw is not None:
@@ -344,15 +362,18 @@ def validate_bootstrap_tar(tar_path: Path, deb_path: Path) -> str:
     review = parse_json_bytes(content["payload/review/package-manifest.json"], "bootstrap review manifest")
     payload_files = payload.get("files")
     new_package = review.get("new_package")
+    previous_state = review.get("previous_state")
     if (
         payload.get("schema") != "yoko.crm.owner-bootstrap-payload.v1"
+        or payload.get("previous_package") != PREDECESSOR_PACKAGE
         or type(payload_files) is not dict
         or set(payload_files) != {
-            "install.sh", NEW_DEB_NAME, OLD_DEB_NAME,
+            "install.sh", NEW_DEB_NAME,
             "review/human-manifest.md", "review/installation-procedure.md",
             "review/package-manifest.json", "review/rollback-analysis.md",
         }
         or review.get("schema") != "yoko.crm.owner-bootstrap-review-manifest.v2"
+        or previous_state != PREDECESSOR_REVIEW_IDENTITY
         or type(new_package) is not dict
         or new_package.get("path") != NEW_DEB_NAME
         or new_package.get("sha256") != exact_deb_sha256

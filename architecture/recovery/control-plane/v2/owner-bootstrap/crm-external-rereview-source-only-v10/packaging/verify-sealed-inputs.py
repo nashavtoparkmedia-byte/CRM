@@ -29,7 +29,6 @@ INPUT_PATHS = (
     "inputs/source.tar.gz",
     "inputs/gravity-image.docker.tar",
     "inputs/migration.sql",
-    "inputs/yoko-privileged-runtime_2.0.0-9_all.deb",
     "packaging/92-yoko-privileged-runtime",
     "packaging/control",
     "packaging/postinst",

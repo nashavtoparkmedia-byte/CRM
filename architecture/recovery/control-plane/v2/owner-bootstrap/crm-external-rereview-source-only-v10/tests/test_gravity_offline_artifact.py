@@ -272,6 +272,9 @@ class GravityOfflineArtifactTests(unittest.TestCase):
                 self.runtime, "_accept_existing_rollback", return_value=rollback,
             ),
             mock.patch.object(
+                self.runtime, "_rollback_state_is_exact", return_value=True,
+            ),
+            mock.patch.object(
                 Core, "container_projection",
                 side_effect=[gravity, tg_bot], create=True,
             ),

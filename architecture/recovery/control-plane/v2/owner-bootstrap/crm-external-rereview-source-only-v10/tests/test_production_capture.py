@@ -279,6 +279,13 @@ class ProductionCaptureContractTests(unittest.TestCase):
         self.assertFalse(set(value["observed"]) & set(value["sealed_predecessor_authority"]))
         self.assertNotIn("tg_bot_patch_sha256", value["observed"])
         self.assertNotIn("outbox_catalog_sha256", value["observed"])
+        self.assertIn("rollback_recovery_required", value["observed"])
+        self.assertIn("gravity_runtime_semantics_status", value["observed"])
+        self.assertIn("tg_bot_runtime_semantics_status", value["observed"])
+        self.assertIn("sealed_gravity_compose_config_hash", value["sealed_predecessor_authority"])
+        self.assertIn("gravity_command", value["sealed_predecessor_authority"])
+        self.assertIn("sealed_tg_bot_compose_config_hash", value["sealed_predecessor_authority"])
+        self.assertIn("tg_bot_command", value["sealed_predecessor_authority"])
 
 
 if __name__ == "__main__":

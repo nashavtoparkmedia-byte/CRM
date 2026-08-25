@@ -1,8 +1,9 @@
 # YOKO CRM one-time source-only Owner bootstrap
 
-This payload upgrades Runtime package `2.0.0-9` to `2.0.0-10` without changing
-ABI `2.0.0`, the Runtime core, policy, or sudoers semantics. It installs one
-new checksum-pinned source-only Gravity profile with a fresh transaction state.
+This payload replaces Runtime package `2.0.0-10` in place without changing ABI
+`2.0.0`, the Runtime core, policy, or sudoers semantics. It installs one new
+checksum-pinned source-only Gravity profile with a fresh transaction state and
+can adopt only the sealed `08b91459…` `ROLLBACK_INTENT` for explicit recovery.
 
 Bootstrap itself does not invoke a profile, build or deploy an image, access
 PostgreSQL, restart a service, or mutate `/opt/crm`. `database-migrate` is

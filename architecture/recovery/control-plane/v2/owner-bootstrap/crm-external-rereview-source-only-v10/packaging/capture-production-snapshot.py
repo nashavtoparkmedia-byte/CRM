@@ -18,13 +18,13 @@ SUDO = "/usr/bin/sudo"
 HOST = "jvxthcorvm"
 RUNTIME_VERSION = "2.0.0"
 PACKAGE_VERSION = "2.0.0-10"
-PROFILE_ID = "crm-21fe6e911cad-gravity-source-v1"
+PROFILE_ID = "crm-08b9145945b2-gravity-source-v1"
 PREDECESSOR_COMMIT = "7aea2823efe50e13a156540993d424594025e403"
 PREDECESSOR_IMAGE = "sha256:baf442f880ebca808897a0131a662c603a9119f652cbbc3e47937286dec49179"
 TG_BOT_IMAGE = "sha256:0849c4c9912aecf3cb7c35b51abba22cdb1c85a385afa6c2746000d14b9835f6"
 POSTGRES_IMAGE = "sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229"
-AUDIT_RECORDS = 29
-AUDIT_DIGEST = "dc6fcbaa5c9ebf3f9717cb91fec69b873e4eeac52357bf44e20525252e46e3c0"
+AUDIT_RECORDS = 36
+AUDIT_DIGEST = "7f7e4d739c9396c0d9757f0f2a60d57a50457048ce49cfd152ca46365306e344"
 DATABASE_IDENTITY = "ed88dfeaad2a3dc2e759590d295992cd06531d4403d896ded00b21ea667be1c9"
 MIGRATION_LEDGER = "a50f1a8988f79c85059354d6b2d45e9e8ed07284fc27c78d98face6680f25dfc"
 CANONICAL_ACTIVE_INVENTORY = "a05eb3a3a6a0c78df2e68b150421a00f971b6e39b9346bb25f76733ed799d197"
@@ -33,8 +33,10 @@ CANONICAL_TARGET_NAME = "20260809140000_add_domain_outbox"
 CANONICAL_TARGET_CHECKSUM = "433b0d503f054ed6a8161a059e2650d5e401829dabe8c9d992a1d1763eef0016"
 SOURCE_MANIFEST = "ecfb0a8b6dc24121fb5c9efb58af28eb1f1626711ef1a6d977b0db29d05bdda3"
 COMPOSE_SHA = "84a9f46904a65a69afcf19d2e56162e026b29718da52c43160abfc5449f84cc1"
-GRAVITY_COMPOSE = "772ba8f19dc89133ea55ce65aa2d68550594ab61060eac0e373ae7936161b9f8"
-TG_COMPOSE = "00952518d668126c08950de087a7c46fa368cd8879590ad9c1584bb7c39b42e2"
+GRAVITY_COMPOSE = "b40621c86f1f56f76879329430086b2675b9e434dfc593fd28e8a5d60e5c269c"
+TG_COMPOSE = "cd3a0c2eb46ce09667a800c8527e106919c532602b0c077399d435ebb27ee7c6"
+SEALED_GRAVITY_COMPOSE = "772ba8f19dc89133ea55ce65aa2d68550594ab61060eac0e373ae7936161b9f8"
+SEALED_TG_COMPOSE = "00952518d668126c08950de087a7c46fa368cd8879590ad9c1584bb7c39b42e2"
 OUTBOX_CATALOG = "ef0bce36bca8283b491a966ff3886644a8887f4bded3deebbec7ce559ac2defe"
 TG_PATCH_BASELINE_STATE = "ABSENT"
 TG_BASELINE_MANIFEST_FILE_SHA = "1bd1d5100cabeb37277262179ee1119b3dcd9154b9774947dcf218d38e4d19fe"
@@ -118,12 +120,14 @@ OBSERVED_KEYS = {
     "tg_bot_entrypoint", "tg_bot_cmd", "tg_bot_declared_user", "tg_bot_working_dir",
     "postgres_container_id", "postgres_image_id", "database_identity_sha256",
     "migration_ledger_sha256", "outbox_catalog_state", "outbox_counts",
-    "secret_values_emitted", "production_mutated",
+    "rollback_recovery_required", "gravity_runtime_semantics_status",
+    "tg_bot_runtime_semantics_status", "secret_values_emitted", "production_mutated",
 }
 AUTHORITY_KEYS = {
     "schema", "source", "tg_bot_patch_path", "tg_bot_patch_baseline_state",
     "tg_bot_patch_baseline_manifest_file_sha256", "tg_bot_patch_baseline_manifest_sha256",
-    "outbox_catalog_sha256",
+    "outbox_catalog_sha256", "sealed_gravity_compose_config_hash", "gravity_command",
+    "sealed_tg_bot_compose_config_hash", "tg_bot_command",
 }
 CAPTURE_KEYS = {
     "schema", "started_at", "completed_at", "duration_seconds", "commands",
@@ -214,19 +218,22 @@ def validate_docker_evidence(evidence: dict[str, object], resource: str) -> None
     specifications: dict[str, dict[str, object]] = {
         "crm.container.gravity_mvp": {
             "name": "crm-gravity-mvp", "service": "gravity-mvp", "image": PREDECESSOR_IMAGE,
-            "config_image": "yoko/crm-gravity-mvp:7aea2823efe50e13a156540993d424594025e403-profile-v1",
-            "entrypoint": ["/usr/bin/tini", "--"], "cmd": ["npm", "run", "start"],
+            "config_image": "yoko/crm-gravity-mvp:rollback-baf442f880ebca808897a0131a662c603a9119f65",
+            "repo_digests": [f"yoko/crm-gravity-mvp@{PREDECESSOR_IMAGE}"],
+            "entrypoint": ["/usr/bin/tini", "--"], "cmd": ["sh", "-c", "npx prisma migrate deploy && npm run start"],
             "user": "app", "workdir": "/app", "compose": GRAVITY_COMPOSE,
         },
         "crm.container.telegram_bot": {
             "name": "crm-tg-bot", "service": "tg-bot", "image": TG_BOT_IMAGE,
-            "config_image": "crm/tg-bot:latest",
+            "config_image": "yoko/crm-tg-bot:rollback-0849c4c9912aecf3cb7c35b51abba22cdb1c85a385afa6c2746000d14b9835f6",
+            "repo_digests": [f"crm/tg-bot@{TG_BOT_IMAGE}", f"yoko/crm-tg-bot@{TG_BOT_IMAGE}"],
             "entrypoint": ["/usr/bin/tini", "--", "/usr/local/bin/tg-bot-entrypoint"],
             "cmd": ["node", "start.js"], "user": "", "workdir": "/app", "compose": TG_COMPOSE,
         },
         "crm.container.postgres": {
             "name": "crm-postgres", "service": "postgres", "image": POSTGRES_IMAGE,
             "config_image": "postgres:16-alpine", "entrypoint": ["docker-entrypoint.sh"],
+            "repo_digests": [f"postgres@{POSTGRES_IMAGE}"],
             "cmd": ["postgres"], "user": "", "workdir": "/", "compose": "b2d41ef4b67d60fa321dfbf67c251b4ef21e754537646e29cd3e4de2617d75ae",
         },
     }
@@ -299,7 +306,7 @@ def validate_docker_evidence(evidence: dict[str, object], resource: str) -> None
         or type(evidence["restart_count"]) is not int or evidence["restart_count"] != 0
         or evidence["image_metadata_status"] != "available"
         or type(evidence["container_id"]) is not str or not SHA64.fullmatch(evidence["container_id"])
-        or evidence["repo_digests"] != [f"{specification['config_image'].split(':', 1)[0]}@{specification['image']}"]
+        or evidence["repo_digests"] != specification["repo_digests"]
         or semantic["name"] != specification["name"] or semantic["image_id"] != specification["image"]
         or semantic["command"] != specification["cmd"] or semantic["entrypoint"] != specification["entrypoint"]
         or semantic["network_mode"] != "crm_internal" or semantic["network_names"] != ["crm_internal"]
@@ -587,7 +594,7 @@ def validate_projection(value: object, primitive: str, resource: str | None) -> 
         }
         projection = exact_dict(value, keys, "docker projection")
         specifications = {
-            "crm.container.gravity_mvp": ("crm-gravity-mvp", "gravity-mvp", PREDECESSOR_IMAGE, GRAVITY_COMPOSE, ["/usr/bin/tini", "--"], ["npm", "run", "start"], "app", "/app", PREDECESSOR_COMMIT),
+            "crm.container.gravity_mvp": ("crm-gravity-mvp", "gravity-mvp", PREDECESSOR_IMAGE, GRAVITY_COMPOSE, ["/usr/bin/tini", "--"], ["sh", "-c", "npx prisma migrate deploy && npm run start"], "app", "/app", PREDECESSOR_COMMIT),
             "crm.container.telegram_bot": ("crm-tg-bot", "tg-bot", TG_BOT_IMAGE, TG_COMPOSE, ["/usr/bin/tini", "--", "/usr/local/bin/tg-bot-entrypoint"], ["node", "start.js"], "", "/app", None),
             "crm.container.postgres": ("crm-postgres", "postgres", POSTGRES_IMAGE, "b2d41ef4b67d60fa321dfbf67c251b4ef21e754537646e29cd3e4de2617d75ae", ["docker-entrypoint.sh"], ["postgres"], "", "/", None),
         }
@@ -761,6 +768,9 @@ def build_snapshot(records: list[dict[str, object]], started: dt.datetime, compl
         "migration_ledger_sha256": database["migration_ledger_sha256"],
         "outbox_catalog_state": database["outbox_catalog_state"],
         "outbox_counts": database["outbox_counts"],
+        "rollback_recovery_required": True,
+        "gravity_runtime_semantics_status": "DRIFTED_ROLLBACK_ALIAS_COMMAND_AND_CONFIG",
+        "tg_bot_runtime_semantics_status": "DRIFTED_ROLLBACK_ALIAS_CONFIG",
         "secret_values_emitted": False,
         "production_mutated": False,
     }
@@ -772,6 +782,10 @@ def build_snapshot(records: list[dict[str, object]], started: dt.datetime, compl
         "tg_bot_patch_baseline_manifest_file_sha256": TG_BASELINE_MANIFEST_FILE_SHA,
         "tg_bot_patch_baseline_manifest_sha256": TG_BASELINE_MANIFEST_SHA,
         "outbox_catalog_sha256": OUTBOX_CATALOG,
+        "sealed_gravity_compose_config_hash": SEALED_GRAVITY_COMPOSE,
+        "gravity_command": ["npm", "run", "start"],
+        "sealed_tg_bot_compose_config_hash": SEALED_TG_COMPOSE,
+        "tg_bot_command": ["node", "start.js"],
     }
     snapshot: dict[str, object] = {
         "schema": "yoko.crm.source-only-production-snapshot.v3",

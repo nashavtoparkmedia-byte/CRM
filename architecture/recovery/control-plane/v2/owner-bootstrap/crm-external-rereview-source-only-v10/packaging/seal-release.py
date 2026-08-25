@@ -1107,7 +1107,7 @@ def bind_builder_source(repo: Path, commit: str, builder_root: Path) -> dict[str
         str(item["path"]).removeprefix(RUNTIME_SOURCE_PREFIX + "/")
         for item in rows
     }
-    admitted_hydrated_inputs = {"inputs/yoko-privileged-runtime_2.0.0-9_all.deb"}
+    admitted_hydrated_inputs: set[str] = set()
     for local in builder_root.rglob("*"):
         relative = local.relative_to(builder_root).as_posix()
         value = local.lstat()
@@ -1331,15 +1331,24 @@ def main() -> None:
         or snapshot_document["host"] != "jvxthcorvm"
         or snapshot["runtime_package_version"] != "2.0.0-10"
         or snapshot["runtime_abi"] != "2.0.0"
-        or snapshot["profile_id"] != "crm-21fe6e911cad-gravity-source-v1"
+        or snapshot["profile_id"] != "crm-08b9145945b2-gravity-source-v1"
         or snapshot["audit_state"] != "VALID"
-        or snapshot["audit_records"] != 29
-        or snapshot["audit_last_digest"] != "dc6fcbaa5c9ebf3f9717cb91fec69b873e4eeac52357bf44e20525252e46e3c0"
+        or snapshot["audit_records"] != 36
+        or snapshot["audit_last_digest"] != "7f7e4d739c9396c0d9757f0f2a60d57a50457048ce49cfd152ca46365306e344"
         or snapshot["gravity_image_id"] != PREDECESSOR_IMAGE
         or snapshot["gravity_oci_revision"] != PREDECESSOR_COMMIT
         or snapshot["gravity_running"] is not True
         or snapshot["gravity_health"] != "healthy"
         or snapshot["gravity_restart_count"] != 0
+        or snapshot["compose_config_hash"] != "b40621c86f1f56f76879329430086b2675b9e434dfc593fd28e8a5d60e5c269c"
+        or snapshot["tg_bot_compose_config_hash"] != "cd3a0c2eb46ce09667a800c8527e106919c532602b0c077399d435ebb27ee7c6"
+        or snapshot["rollback_recovery_required"] is not True
+        or snapshot["gravity_runtime_semantics_status"] != "DRIFTED_ROLLBACK_ALIAS_COMMAND_AND_CONFIG"
+        or snapshot["tg_bot_runtime_semantics_status"] != "DRIFTED_ROLLBACK_ALIAS_CONFIG"
+        or snapshot["sealed_gravity_compose_config_hash"] != "772ba8f19dc89133ea55ce65aa2d68550594ab61060eac0e373ae7936161b9f8"
+        or snapshot["gravity_command"] != ["npm", "run", "start"]
+        or snapshot["sealed_tg_bot_compose_config_hash"] != "00952518d668126c08950de087a7c46fa368cd8879590ad9c1584bb7c39b42e2"
+        or snapshot["tg_bot_command"] != ["node", "start.js"]
         or snapshot["tg_bot_image_id"] != TG_BOT_PREDECESSOR_IMAGE
         or snapshot["tg_bot_running"] is not True
         or snapshot["tg_bot_health"] != "healthy"
@@ -1357,7 +1366,7 @@ def main() -> None:
         or snapshot["secret_values_emitted"] is not False
         or snapshot["production_mutated"] is not False
     ):
-        raise SystemExit("production snapshot is not the accepted installed v10 control plane over the 7aea / baf442 production predecessor")
+        raise SystemExit("production snapshot is not the exact healthy 08b rollback-intent drift state over the sealed 7aea / baf442 predecessor")
     validate_tg_bot_baseline_manifest(repo, commit, snapshot)
     for key in ("audit_last_digest", "source_manifest_sha256", "compose_sha256", "compose_config_hash", "gravity_container_id", "tg_bot_container_id", "tg_bot_compose_config_hash", "database_identity_sha256", "migration_ledger_sha256", "outbox_catalog_sha256"):
         if not SHA64.fullmatch(str(snapshot[key])):
@@ -1488,10 +1497,16 @@ def main() -> None:
         "sequence_sha256": live_chronology_sha256,
     }
     production = profile["production"]
-    for key in ("source_manifest_sha256", "compose_sha256", "compose_config_hash", "gravity_container_id", "gravity_image_id", "tg_bot_container_id", "tg_bot_image_id", "tg_bot_compose_config_hash", "tg_bot_entrypoint", "tg_bot_cmd", "tg_bot_declared_user", "tg_bot_working_dir", "tg_bot_patch_baseline_state", "tg_bot_patch_baseline_manifest_file_sha256", "tg_bot_patch_baseline_manifest_sha256", "postgres_container_id", "postgres_image_id"):
+    for key in ("source_manifest_sha256", "compose_sha256", "gravity_container_id", "gravity_image_id", "tg_bot_container_id", "tg_bot_image_id", "tg_bot_entrypoint", "tg_bot_cmd", "tg_bot_declared_user", "tg_bot_working_dir", "tg_bot_patch_baseline_state", "tg_bot_patch_baseline_manifest_file_sha256", "tg_bot_patch_baseline_manifest_sha256", "postgres_container_id", "postgres_image_id"):
         production[key] = snapshot[key]
+    # The live snapshot intentionally captures the failed rollback overlay's
+    # drifted config identities. Runtime authority must retain the sealed
+    # predecessor identities it is required to reconstruct, never bless the
+    # drift merely because it is the current observation.
+    production["compose_config_hash"] = snapshot["sealed_gravity_compose_config_hash"]
+    production["tg_bot_compose_config_hash"] = snapshot["sealed_tg_bot_compose_config_hash"]
     recovery = profile["recovery"]
-    recovery.update({"prior_compose_config_hash": snapshot["compose_config_hash"], "recovered_gravity_container_id": snapshot["gravity_container_id"], "recovered_compose_config_hash": snapshot["compose_config_hash"], "prior_tg_bot_image_id": snapshot["tg_bot_image_id"], "prior_tg_bot_compose_config_hash": snapshot["tg_bot_compose_config_hash"], "recovered_tg_bot_container_id": snapshot["tg_bot_container_id"], "recovered_tg_bot_compose_config_hash": snapshot["tg_bot_compose_config_hash"], "database_identity_sha256": snapshot["database_identity_sha256"], "migration_ledger_sha256": snapshot["migration_ledger_sha256"], "preview_outbox_catalog_sha256": snapshot["outbox_catalog_sha256"]})
+    recovery.update({"prior_compose_config_hash": snapshot["sealed_gravity_compose_config_hash"], "recovered_gravity_container_id": snapshot["gravity_container_id"], "recovered_compose_config_hash": snapshot["sealed_gravity_compose_config_hash"], "prior_tg_bot_image_id": snapshot["tg_bot_image_id"], "prior_tg_bot_compose_config_hash": snapshot["sealed_tg_bot_compose_config_hash"], "recovered_tg_bot_container_id": snapshot["tg_bot_container_id"], "recovered_tg_bot_compose_config_hash": snapshot["sealed_tg_bot_compose_config_hash"], "database_identity_sha256": snapshot["database_identity_sha256"], "migration_ledger_sha256": snapshot["migration_ledger_sha256"], "preview_outbox_catalog_sha256": snapshot["outbox_catalog_sha256"]})
     (ROOT / "inputs/source.tar.gz").write_bytes(first)
     os.chmod(ROOT / "inputs/source.tar.gz", 0o400)
     write_json_atomic(ROOT / "src/profile.v1.json", profile, 0o444)

@@ -95,7 +95,7 @@ class StaticContractTests(unittest.TestCase):
         self.assertIn("validate_ci_execution_proof(", seal)
         self.assertIn("all exact 52 ordered PASS controls", seal)
 
-    def test_immutable_runtime_inputs_are_exact_v9_bytes(self) -> None:
+    def test_immutable_shared_runtime_inputs_remain_exact(self) -> None:
         self.assertEqual(sha(ROOT / "src/yoko-privileged-runtime-core.py"), CORE_SHA)
         self.assertEqual(sha(ROOT / "src/policy.v2.base.json"), POLICY_SHA)
         self.assertEqual(sha(ROOT / "packaging/92-yoko-privileged-runtime"), SUDOERS_SHA)
@@ -204,8 +204,13 @@ class StaticContractTests(unittest.TestCase):
         postinst = (ROOT / "templates/postinst.in").read_text()
         self.assertIn('test "$#" -eq 0', installer)
         self.assertIn("EXPECTED_HOST='jvxthcorvm'", installer)
-        self.assertIn("EXPECTED_AUDIT_RECORDS='29'", installer)
-        self.assertIn("EXPECTED_AUDIT_DIGEST='dc6fcbaa", installer)
+        self.assertIn("EXPECTED_AUDIT_RECORDS='36'", installer)
+        self.assertIn("EXPECTED_AUDIT_DIGEST='7f7e4d73", installer)
+        self.assertIn("OLD_PROFILE_ID='crm-08b9145945b2-gravity-source-v1'", installer)
+        self.assertIn("OLD_DEB_SHA='6865eab377dda757", installer)
+        self.assertIn('readonly OLD_DEB_SOURCE="$BOOTSTRAP_STORE/$OLD_DEB_SHA/', installer)
+        self.assertNotIn("assert v[", installer)
+        self.assertNotIn("2.0.0-9_all.deb", installer)
         for forbidden in ("curl ", "wget ", "git clone", "apt-get", "docker compose", "pg_dump", "psql "):
             self.assertNotIn(forbidden, installer)
         for denied in ("/bin/sh -c ':'", "/usr/bin/docker ps", "/usr/bin/dpkg --status sudo", "self-check unexpected", "fs-stat ../../../etc", "service-restart crm.container.unrelated"):
@@ -391,6 +396,308 @@ class RealDockerTgBaseReferenceTests(unittest.TestCase):
             self.assertEqual(derived.returncode, 0, derived.stderr.decode("utf-8", "replace"))
             value = json.loads(derived.stdout)[0]
             self.assertEqual((value.get("Config") or {}).get("Labels", {}).get("yoko.tg-bot.base-image"), "regression-pinned")
+
+    @unittest.skipUnless(os.environ.get("YOKO_RUNTIME_REAL_DOCKER") == "1", "real Docker regression is an explicit hosted gate")
+    def test_real_compose_failed_activation_and_rollback_restore_exact_predecessor_semantics(self) -> None:
+        base_reference = os.environ.get("YOKO_TG_REFERENCE_TEST_BASE", "")
+        self.assertRegex(base_reference, r"^[a-z0-9][a-z0-9./_-]*@sha256:[0-9a-f]{64}$")
+        server = self._docker("/usr/bin/docker", "version", "--format", "{{json .Server}}")
+        self.assertEqual(server.returncode, 0, server.stderr.decode("utf-8", "replace"))
+        loader = importlib.machinery.SourceFileLoader(
+            f"yoko_real_rollback_{os.getpid()}_{time.time_ns()}",
+            str(ROOT / "src/crm-activation-profile.py"),
+        )
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        self.assertIsNotNone(spec)
+        assert spec is not None
+        runtime = importlib.util.module_from_spec(spec)
+        sys.modules[loader.name] = runtime
+        loader.exec_module(runtime)
+        suffix = f"{os.getpid()}-{time.time_ns()}"
+        project = f"yokorollback{os.getpid()}{time.time_ns()}"
+        tags = {
+            "gravity_prior": f"yoko/rollback-fixture-gravity:{suffix}-prior",
+            "gravity_rollback": f"yoko/rollback-fixture-gravity:{suffix}-rollback",
+            "gravity_target": f"yoko/rollback-fixture-gravity:{suffix}-target",
+            "tg_prior": f"yoko/rollback-fixture-tg:{suffix}-prior",
+            "tg_rollback": f"yoko/rollback-fixture-tg:{suffix}-rollback",
+            "tg_target": f"yoko/rollback-fixture-tg:{suffix}-target",
+        }
+        names = {
+            "gravity": f"{project}-gravity",
+            "tg": f"{project}-tg",
+            "db": f"{project}-db",
+        }
+
+        def docker(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[bytes]:
+            return self._docker("/usr/bin/docker", *args, cwd=cwd)
+
+        def required(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[bytes]:
+            completed = docker(*args, cwd=cwd)
+            self.assertEqual(completed.returncode, 0, completed.stderr.decode("utf-8", "replace"))
+            return completed
+
+        with tempfile.TemporaryDirectory(prefix="yoko-real-rollback-") as temporary:
+            root = Path(temporary)
+            gravity_service = root / "gravity-service"
+            gravity_service.write_text(
+                "#!/bin/sh\n"
+                "while true; do\n"
+                "  { printf 'HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\nContent-Length: 21\\r\\nConnection: close\\r\\n\\r\\n{\"status\":\"degraded\"}'; } | /bin/busybox nc -l -p 3002\n"
+                "done\n",
+                encoding="ascii",
+            )
+            tg_service = root / "tg-service"
+            tg_service.write_text(
+                "#!/bin/sh\n"
+                "while true; do\n"
+                "  { printf 'HTTP/1.1 200 OK\\r\\nContent-Length: 2\\r\\nConnection: close\\r\\n\\r\\nOK'; } | /bin/busybox nc -l -p 3001\n"
+                "done\n",
+                encoding="ascii",
+            )
+            launcher = root / "launcher"
+            launcher.write_text("#!/bin/sh\nexec /usr/local/bin/gravity-service\n", encoding="ascii")
+            gravity_dockerfile = root / "Dockerfile.gravity"
+            gravity_dockerfile.write_text(
+                "ARG BASE\n"
+                "FROM ${BASE}\n"
+                "COPY --chmod=0755 gravity-service /usr/local/bin/gravity-service\n"
+                "COPY --chmod=0755 launcher /usr/local/bin/npm\n"
+                "COPY --chmod=0755 launcher /usr/local/bin/npx\n"
+                "ENTRYPOINT []\n"
+                "CMD [\"npx\",\"prisma\",\"migrate\",\"deploy\",\"&&\",\"npm\",\"run\",\"start\"]\n"
+                "HEALTHCHECK --interval=1s --timeout=1s --retries=10 CMD /bin/busybox wget -q -O - http://127.0.0.1:3002/ >/dev/null || exit 1\n",
+                encoding="ascii",
+            )
+            tg_dockerfile = root / "Dockerfile.tg"
+            tg_dockerfile.write_text(
+                "ARG BASE\n"
+                "FROM ${BASE}\n"
+                "COPY --chmod=0755 tg-service /usr/local/bin/tg-service\n"
+                "ENTRYPOINT []\n"
+                "CMD [\"/usr/local/bin/tg-service\"]\n"
+                "HEALTHCHECK --interval=1s --timeout=1s --retries=10 CMD /bin/busybox wget -q -O - http://127.0.0.1:3001/ >/dev/null || exit 1\n",
+                encoding="ascii",
+            )
+            for dockerfile, tag in (
+                (gravity_dockerfile, tags["gravity_prior"]),
+                (tg_dockerfile, tags["tg_prior"]),
+            ):
+                required(
+                    "build", "--pull=false", "--network", "none", "--no-cache",
+                    "--build-arg", f"BASE={base_reference}", "--tag", tag,
+                    "--file", str(dockerfile), str(root), cwd=root,
+                )
+            required("tag", tags["gravity_prior"], tags["gravity_rollback"])
+            required("tag", tags["tg_prior"], tags["tg_rollback"])
+            target_gravity = root / "Dockerfile.gravity-target"
+            target_gravity.write_text(
+                f"FROM {tags['gravity_prior']}\n"
+                "LABEL yoko.rollback-fixture=target-gravity\n"
+                "HEALTHCHECK --interval=1s --timeout=1s --retries=2 CMD exit 1\n",
+                encoding="ascii",
+            )
+            target_tg = root / "Dockerfile.tg-target"
+            target_tg.write_text(
+                f"FROM {tags['tg_prior']}\nLABEL yoko.rollback-fixture=target-tg\n",
+                encoding="ascii",
+            )
+            required("build", "--pull=false", "--network", "none", "--no-cache", "--tag", tags["gravity_target"], "--file", str(target_gravity), str(root), cwd=root)
+            required("build", "--pull=false", "--network", "none", "--no-cache", "--tag", tags["tg_target"], "--file", str(target_tg), str(root), cwd=root)
+
+            base = root / "compose.yml"
+            base.write_text(
+                "services:\n"
+                "  gravity-mvp:\n"
+                f"    image: {tags['gravity_prior']}\n"
+                f"    container_name: {names['gravity']}\n"
+                "    networks: [fixture]\n"
+                "  tg-bot:\n"
+                f"    image: {tags['tg_prior']}\n"
+                f"    container_name: {names['tg']}\n"
+                "    networks: [fixture]\n"
+                "  postgres:\n"
+                f"    image: {base_reference}\n"
+                f"    container_name: {names['db']}\n"
+                "    environment:\n"
+                "      POSTGRES_PASSWORD: fixture\n"
+                "    healthcheck:\n"
+                "      test: [\"CMD-SHELL\", \"pg_isready -U postgres\"]\n"
+                "      interval: 1s\n"
+                "      timeout: 1s\n"
+                "      retries: 20\n"
+                "    networks: [fixture]\n"
+                "networks:\n"
+                "  fixture: {}\n",
+                encoding="ascii",
+            )
+            predecessor = root / "predecessor.yml"
+            predecessor.write_bytes(
+                runtime._compose_overlay(
+                    tags["gravity_prior"], tags["tg_prior"], activate=False,
+                ),
+            )
+            target = root / "target.yml"
+            target.write_bytes(
+                runtime._compose_overlay(
+                    tags["gravity_target"], tags["tg_target"], activate=True,
+                ),
+            )
+            drift = root / "drift.yml"
+            drift.write_text(
+                "services:\n"
+                "  gravity-mvp:\n"
+                f"    image: {tags['gravity_rollback']}\n"
+                "  tg-bot:\n"
+                f"    image: {tags['tg_rollback']}\n",
+                encoding="ascii",
+            )
+
+            compose = ("compose", "--project-name", project, "--project-directory", str(root), "-f", str(base))
+            self.addCleanup(lambda: docker("image", "rm", *reversed(list(tags.values()))))
+            self.addCleanup(lambda: docker("network", "rm", f"{project}_fixture"))
+            self.addCleanup(lambda: docker("container", "rm", "--force", names["gravity"], names["tg"], names["db"]))
+            required(*compose, "up", "-d", "--wait", "--wait-timeout", "30", "postgres", cwd=root)
+            required(*compose, "-f", str(predecessor), "up", "-d", "--no-deps", "--no-build", "--pull", "never", "--force-recreate", "--wait", "--wait-timeout", "30", "gravity-mvp", "tg-bot", cwd=root)
+
+            def inspect(name: str) -> dict[str, object]:
+                return json.loads(required("container", "inspect", name).stdout)[0]
+
+            predecessor_gravity = inspect(names["gravity"])
+            predecessor_tg = inspect(names["tg"])
+            predecessor_db = inspect(names["db"])
+
+            def semantics(gravity: dict[str, object], tg: dict[str, object]) -> dict[str, object]:
+                return {
+                    "gravity": {
+                        "image": gravity["Image"],
+                        "command": gravity["Config"]["Cmd"],
+                        "config_hash": gravity["Config"]["Labels"]["com.docker.compose.config-hash"],
+                        "health": gravity["State"]["Health"]["Status"],
+                    },
+                    "tg": {
+                        "image": tg["Image"],
+                        "command": tg["Config"]["Cmd"],
+                        "config_hash": tg["Config"]["Labels"]["com.docker.compose.config-hash"],
+                        "health": tg["State"]["Health"]["Status"],
+                    },
+                }
+
+            predecessor_provenance = semantics(predecessor_gravity, predecessor_tg)
+            sentinel = required(
+                "exec", names["db"], "psql", "-U", "postgres", "-Atqc",
+                "CREATE TABLE yoko_rollback_fixture(id integer PRIMARY KEY, value text NOT NULL); "
+                "INSERT INTO yoko_rollback_fixture VALUES (1, 'unchanged'); "
+                "SELECT id::text || ':' || value FROM yoko_rollback_fixture ORDER BY id;",
+            ).stdout
+            database_digest = hashlib.sha256(sentinel).hexdigest()
+
+            state_path = root / "release-state.json"
+            audit_path = root / "release-audit.jsonl"
+            state = {"phase": "MIGRATED", "profile": "controlled-real-docker-fixture"}
+            state_path.write_text(json.dumps(state, sort_keys=True) + "\n", encoding="ascii")
+
+            def transition(phase: str, result: str) -> None:
+                nonlocal state
+                before = hashlib.sha256(json.dumps(state, sort_keys=True).encode("ascii")).hexdigest()
+                next_state = {**state, "phase": phase}
+                after = hashlib.sha256(json.dumps(next_state, sort_keys=True).encode("ascii")).hexdigest()
+                previous = "0" * 64
+                if audit_path.exists():
+                    previous = json.loads(audit_path.read_text(encoding="ascii").splitlines()[-1])["digest"]
+                body = {"previous": previous, "pre": before, "post": after, "result": result}
+                record = {**body, "digest": hashlib.sha256(json.dumps(body, sort_keys=True).encode("ascii")).hexdigest()}
+                with audit_path.open("a", encoding="ascii") as handle:
+                    handle.write(json.dumps(record, sort_keys=True) + "\n")
+                state = next_state
+                state_path.write_text(json.dumps(state, sort_keys=True) + "\n", encoding="ascii")
+
+            expected = {
+                "gravity_image": predecessor_gravity["Image"],
+                "gravity_command": predecessor_gravity["Config"]["Cmd"],
+                "gravity_config": predecessor_gravity["Config"]["Labels"]["com.docker.compose.config-hash"],
+                "tg_image": predecessor_tg["Image"],
+                "tg_command": predecessor_tg["Config"]["Cmd"],
+                "tg_config": predecessor_tg["Config"]["Labels"]["com.docker.compose.config-hash"],
+                "db_id": predecessor_db["Id"],
+                "db_image": predecessor_db["Image"],
+            }
+            self.assertEqual(expected["gravity_command"], ["npm", "run", "start"])
+            transition("RELEASE_ACTIVATION_INTENT", "activation_intent")
+            failed = docker(*compose, "-f", str(target), "up", "-d", "--no-deps", "--no-build", "--pull", "never", "--force-recreate", "--wait", "--wait-timeout", "10", "gravity-mvp", "tg-bot", cwd=root)
+            self.assertNotEqual(failed.returncode, 0, "forced activation failure unexpectedly passed")
+            transition("RELEASE_ACTIVATION_ROLLBACK_INTENT", "forced_activation_failure")
+
+            required(*compose, "-f", str(predecessor), "up", "-d", "--no-deps", "--no-build", "--pull", "never", "--force-recreate", "--wait", "--wait-timeout", "30", "gravity-mvp", "tg-bot", cwd=root)
+            rolled_gravity = inspect(names["gravity"])
+            rolled_tg = inspect(names["tg"])
+            rolled_db = inspect(names["db"])
+            transition("ROLLED_BACK", "automatic_rollback_exact")
+            self.assertEqual(rolled_gravity["Image"], expected["gravity_image"])
+            self.assertEqual(rolled_gravity["Config"]["Cmd"], expected["gravity_command"])
+            self.assertEqual(rolled_gravity["Config"]["Labels"]["com.docker.compose.config-hash"], expected["gravity_config"])
+            self.assertEqual(rolled_tg["Image"], expected["tg_image"])
+            self.assertEqual(rolled_tg["Config"]["Cmd"], expected["tg_command"])
+            self.assertEqual(rolled_tg["Config"]["Labels"]["com.docker.compose.config-hash"], expected["tg_config"])
+            self.assertEqual((rolled_db["Id"], rolled_db["Image"]), (expected["db_id"], expected["db_image"]))
+            self.assertEqual(semantics(rolled_gravity, rolled_tg), predecessor_provenance)
+            rolled_sentinel = required(
+                "exec", names["db"], "psql", "-U", "postgres", "-Atqc",
+                "SELECT id::text || ':' || value FROM yoko_rollback_fixture ORDER BY id;",
+            ).stdout
+            self.assertEqual(hashlib.sha256(rolled_sentinel).hexdigest(), database_digest)
+            required("exec", names["gravity"], "/bin/busybox", "wget", "-q", "-O", "-", "http://127.0.0.1:3002/")
+            required("exec", names["tg"], "/bin/busybox", "wget", "-q", "-O", "-", "http://127.0.0.1:3001/")
+
+            # Reproduce the production incident class: old image IDs are back,
+            # but rollback aliases plus the image Cmd produce semantic/config drift.
+            required(*compose, "-f", str(drift), "up", "-d", "--no-deps", "--no-build", "--pull", "never", "--force-recreate", "--wait", "--wait-timeout", "30", "gravity-mvp", "tg-bot", cwd=root)
+            drifted_gravity = inspect(names["gravity"])
+            drifted_tg = inspect(names["tg"])
+            self.assertEqual(drifted_gravity["Image"], expected["gravity_image"])
+            self.assertEqual(drifted_tg["Image"], expected["tg_image"])
+            self.assertNotEqual(drifted_gravity["Config"]["Cmd"], expected["gravity_command"])
+            self.assertNotEqual(drifted_gravity["Config"]["Labels"]["com.docker.compose.config-hash"], expected["gravity_config"])
+            self.assertNotEqual(drifted_tg["Config"]["Labels"]["com.docker.compose.config-hash"], expected["tg_config"])
+            transition("ROLLBACK_INTENT", "drifted_predecessor_detected")
+
+            required(*compose, "-f", str(predecessor), "up", "-d", "--no-deps", "--no-build", "--pull", "never", "--force-recreate", "--wait", "--wait-timeout", "30", "gravity-mvp", "tg-bot", cwd=root)
+            recovered_gravity = inspect(names["gravity"])
+            recovered_tg = inspect(names["tg"])
+            recovered_db = inspect(names["db"])
+            transition("ROLLED_BACK", "rollback_intent_recovery_exact")
+            self.assertEqual(recovered_gravity["Config"]["Cmd"], expected["gravity_command"])
+            self.assertEqual(recovered_gravity["Config"]["Labels"]["com.docker.compose.config-hash"], expected["gravity_config"])
+            self.assertEqual(recovered_tg["Config"]["Labels"]["com.docker.compose.config-hash"], expected["tg_config"])
+            self.assertEqual((recovered_db["Id"], recovered_db["Image"]), (expected["db_id"], expected["db_image"]))
+            self.assertEqual(semantics(recovered_gravity, recovered_tg), predecessor_provenance)
+            recovered_sentinel = required(
+                "exec", names["db"], "psql", "-U", "postgres", "-Atqc",
+                "SELECT id::text || ':' || value FROM yoko_rollback_fixture ORDER BY id;",
+            ).stdout
+            self.assertEqual(hashlib.sha256(recovered_sentinel).hexdigest(), database_digest)
+            self.assertEqual(recovered_gravity["State"]["Health"]["Status"], "healthy")
+            self.assertEqual(recovered_tg["State"]["Health"]["Status"], "healthy")
+            required("exec", names["gravity"], "/bin/busybox", "wget", "-q", "-O", "-", "http://127.0.0.1:3002/")
+            required("exec", names["tg"], "/bin/busybox", "wget", "-q", "-O", "-", "http://127.0.0.1:3001/")
+            audit = [json.loads(line) for line in audit_path.read_text(encoding="ascii").splitlines()]
+            previous = "0" * 64
+            for record in audit:
+                self.assertEqual(record["previous"], previous)
+                body = {key: record[key] for key in ("previous", "pre", "post", "result")}
+                self.assertEqual(record["digest"], hashlib.sha256(json.dumps(body, sort_keys=True).encode("ascii")).hexdigest())
+                previous = record["digest"]
+            self.assertEqual(state["phase"], "ROLLED_BACK")
+            self.assertEqual(len(audit), 5)
+            proof = {
+                "activation_failure": "FORCED_UNHEALTHY_TARGET",
+                "automatic_rollback": "EXACT_PREDECESSOR_RESTORED",
+                "rollback_intent_recovery": "EXACT_PREDECESSOR_RESTORED",
+                "database_identity_unchanged": True,
+                "application_probes": {"gravity": "PASS", "tg": "PASS"},
+                "terminal_state": "ROLLED_BACK",
+            }
+            self.assertRegex(hashlib.sha256(json.dumps(proof, sort_keys=True).encode("ascii")).hexdigest(), r"^[0-9a-f]{64}$")
 
 
 class HostedCiAcceptanceTests(unittest.TestCase):
@@ -818,15 +1125,10 @@ class SealedFixtureTests(unittest.TestCase):
             ignore=shutil.ignore_patterns(
                 "dist", "SEALED_RELEASE.json", "manifest.json", "OWNER_COMMAND.txt",
                 "__pycache__", "*.pyc", "*.pyo",
+                "yoko-privileged-runtime_2.0.0-9_all.deb",
             ),
         )
         (cls.stage / "dist").mkdir()
-        predecessor_deb = cls.stage / "inputs/yoko-privileged-runtime_2.0.0-9_all.deb"
-        if not predecessor_deb.exists():
-            source_deb = ROOT.parent / "crm-7aea2823-gravity-outbox-stabilization-v2/dist/yoko-privileged-runtime_2.0.0-9_all.deb"
-            if hashlib.sha256(source_deb.read_bytes()).hexdigest() != "0c259741b4b58992acb830806e42db79ec87730f1b568a21e2879483d739be83":
-                raise RuntimeError("tracked predecessor package identity mismatch")
-            shutil.copy2(source_deb, predecessor_deb)
         cls.repo = temp / "repo"
         subprocess.run([
             "/usr/bin/git", "-c", "gc.auto=0", "-c", "gc.autoDetach=false",
@@ -874,7 +1176,6 @@ class SealedFixtureTests(unittest.TestCase):
             ignore=shutil.ignore_patterns(
                 "dist", "SEALED_RELEASE.json", "manifest.json", "OWNER_COMMAND.txt",
                 "__pycache__", "*.pyc", "*.pyo",
-                "yoko-privileged-runtime_2.0.0-9_all.deb",
                 "source.tar.gz", "gravity-image.docker.tar", "sealed-inputs.v1.json",
                 "payload-manifest.json", "package-manifest.json",
                 "yoko-privileged-runtime_2.0.0-10_all.deb",
@@ -1052,13 +1353,13 @@ class SealedFixtureTests(unittest.TestCase):
         snapshot = {
             "runtime_package_version": "2.0.0-10",
             "runtime_abi": "2.0.0",
-            "profile_id": "crm-21fe6e911cad-gravity-source-v1",
+            "profile_id": "crm-08b9145945b2-gravity-source-v1",
             "audit_state": "VALID",
-            "audit_records": 29,
-            "audit_last_digest": "dc6fcbaa5c9ebf3f9717cb91fec69b873e4eeac52357bf44e20525252e46e3c0",
+            "audit_records": 36,
+            "audit_last_digest": "7f7e4d739c9396c0d9757f0f2a60d57a50457048ce49cfd152ca46365306e344",
             "source_manifest_sha256": "ecfb0a8b6dc24121fb5c9efb58af28eb1f1626711ef1a6d977b0db29d05bdda3",
             "compose_sha256": "84a9f46904a65a69afcf19d2e56162e026b29718da52c43160abfc5449f84cc1",
-            "compose_config_hash": "772ba8f19dc89133ea55ce65aa2d68550594ab61060eac0e373ae7936161b9f8",
+            "compose_config_hash": "b40621c86f1f56f76879329430086b2675b9e434dfc593fd28e8a5d60e5c269c",
             "gravity_container_id": "86f18322adbc640771849c22163d746b73cd06c72c656f1d93b5695623fcaa73",
             "gravity_image_id": fixture_sealer.PREDECESSOR_IMAGE,
             "gravity_oci_revision": fixture_sealer.PREDECESSOR_COMMIT,
@@ -1067,7 +1368,7 @@ class SealedFixtureTests(unittest.TestCase):
             "gravity_restart_count": 0,
             "tg_bot_container_id": "c3fae82f86726739c6e768cd524f5903a1d0a9a0e926f86d9cc559ac633c0f7a",
             "tg_bot_image_id": fixture_sealer.TG_BOT_PREDECESSOR_IMAGE,
-            "tg_bot_compose_config_hash": "00952518d668126c08950de087a7c46fa368cd8879590ad9c1584bb7c39b42e2",
+            "tg_bot_compose_config_hash": "cd3a0c2eb46ce09667a800c8527e106919c532602b0c077399d435ebb27ee7c6",
             "tg_bot_running": True,
             "tg_bot_health": "healthy",
             "tg_bot_restart_count": 0,
@@ -1086,6 +1387,13 @@ class SealedFixtureTests(unittest.TestCase):
             "outbox_catalog_state": "EXACT",
             "outbox_counts": {"dead_letter": 0, "over_attempt_limit": 0, "pending": 0, "processing": 0, "published": 5, "retry_wait": 0, "stale_claimed": 0, "total": 5},
             "outbox_catalog_sha256": "ef0bce36bca8283b491a966ff3886644a8887f4bded3deebbec7ce559ac2defe",
+            "rollback_recovery_required": True,
+            "gravity_runtime_semantics_status": "DRIFTED_ROLLBACK_ALIAS_COMMAND_AND_CONFIG",
+            "tg_bot_runtime_semantics_status": "DRIFTED_ROLLBACK_ALIAS_CONFIG",
+            "sealed_gravity_compose_config_hash": "772ba8f19dc89133ea55ce65aa2d68550594ab61060eac0e373ae7936161b9f8",
+            "gravity_command": ["npm", "run", "start"],
+            "sealed_tg_bot_compose_config_hash": "00952518d668126c08950de087a7c46fa368cd8879590ad9c1584bb7c39b42e2",
+            "tg_bot_command": ["node", "start.js"],
             "secret_values_emitted": False,
             "production_mutated": False,
         }
@@ -1162,7 +1470,9 @@ class SealedFixtureTests(unittest.TestCase):
         cls.root = temp / "extract"
         subprocess.run(["/usr/bin/dpkg-deb", "-x", str(cls.deb), str(cls.root)], check=True)
         for relative in ("usr/sbin", "var", "var/lib"):
-            (cls.root / relative).mkdir(parents=True, exist_ok=True)
+            directory = cls.root / relative
+            directory.mkdir(parents=True, exist_ok=True)
+            directory.chmod(0o755)
         shutil.copy2("/bin/true", cls.root / "usr/sbin/visudo")
         os.chmod(cls.root / "usr/sbin/visudo", 0o755)
         seal = json.loads((cls.stage / "SEALED_RELEASE.json").read_text())
@@ -1299,7 +1609,7 @@ class SealedFixtureTests(unittest.TestCase):
     def test_uninitialized_rollback_fails_closed_without_production(self) -> None:
         rolled = self.wrapper("rollback")
         self.assertNotEqual(rolled.returncode, 0)
-        self.assertEqual(json.loads(rolled.stdout)["errors"][0]["code"], "ROLLBACK_NOT_AVAILABLE_IN_CURRENT_PHASE")
+        self.assertEqual(json.loads(rolled.stdout)["errors"][0]["code"], "REPLACEMENT_RECOVERY_STATE_UNAVAILABLE")
 
     def test_profile_tamper_breaks_self_check(self) -> None:
         path = self.root / f"usr/local/share/yoko-privileged-runtime/profiles/{self.profile_id}/profile.v1.json"

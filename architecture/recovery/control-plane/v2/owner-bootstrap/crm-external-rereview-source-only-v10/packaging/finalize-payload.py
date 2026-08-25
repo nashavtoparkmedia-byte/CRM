@@ -15,26 +15,27 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PROFILE_ID = json.loads((ROOT / "src/profile.v1.json").read_text(encoding="ascii"))["profile_id"]
 NEW_DEB = ROOT / "dist/yoko-privileged-runtime_2.0.0-10_all.deb"
-OLD_DEB = ROOT / "inputs/yoko-privileged-runtime_2.0.0-9_all.deb"
 PAYLOAD = ROOT / "bundle/payload"
 REVIEW = PAYLOAD / "review"
 OLD = {
-    "package_version": "2.0.0-9",
-    "runtime_sha256": "40f7a2fc8d8c7f308aab932e70c1f98f461bb6b1c7f4b52ba715f59f54911fd3",
+    "package_version": "2.0.0-10",
+    "profile_id": "crm-08b9145945b2-gravity-source-v1",
+    "runtime_sha256": "168d61b81f3defb748b69c523a3023bb983da37dbc8316d1e2a6705d88181fa1",
     "core_sha256": "0cdeeb4ba43abe50f80fed1580ad7b0729bf83358932ece2974b3faedafed57a",
-    "profile_runtime_sha256": "b87c7b2e77e6ba900bb0d092b343ce132c04e9ea58dfdb8baf4e8f834c85f7ac",
+    "profile_runtime_sha256": "e3a3142e6bc098a15dd62b75bf7c090a148ad64b4fe45d3d82499c2667de072f",
     "policy_sha256": "8727373b0c6ec79c9abf82f1aaaa58abc2bae67e96aa96a602ac419f308db0e0",
-    "install_manifest_sha256": "eef2e269a00c2f6f51f8fe3844b1cb65c3c32b3ec478140059747d5d7799dd3b",
-    "profile_manifest_sha256": "6bb075ed5592c7d8aeb2ec6ce5c962eb50be5d1b82ae062e0314a17811e2859b",
-    "profile_sha256": "fac7a25ab76c938696b14e4d283bab107fe67654b1f74608ab96f86c8bed0167",
+    "install_manifest_sha256": "7e22328cd89c752946d44e0a9557fd59f58f509ffea41754d4f5dddd98035549",
+    "profile_manifest_sha256": "ba87a9e11b74167b18a9b57299c6e6c89c3718d6637eb93bcbb540c5075a838e",
+    "profile_sha256": "0c6ba7ea34b083c2eef38255ac5c5e48eb566ec3024ac2a457bbb587a769565b",
     "migration_sha256": "433b0d503f054ed6a8161a059e2650d5e401829dabe8c9d992a1d1763eef0016",
-    "source_archive_sha256": "be616b7d528bc111717d237bcd745a8b106302897e702be4b8af1b8643cba26d",
+    "source_archive_sha256": "e611c0192fd3592ce99410df002a3918ce849dfab5c9c1b4955b02f136f830b9",
     "sudoers_sha256": "6e6b7cb2a088cc92fa7aee747adca46c64b4b96d1224be21117be5adef488c06",
     "registry_sha256": "8ea5c3b7113e1dd2ad5a74b82a1fb0bf56643fd59774dccf37e8aa9eb67bd057",
-    "rollback_deb_sha256": "0c259741b4b58992acb830806e42db79ec87730f1b568a21e2879483d739be83",
+    "rollback_deb_sha256": "6865eab377dda757d101259e7321268998b45ea8b27f6003de0cf7e191a9b54e",
+    "rollback_deb_source": "/var/lib/yoko-privileged-runtime/activation-bootstraps/6865eab377dda757d101259e7321268998b45ea8b27f6003de0cf7e191a9b54e/yoko-privileged-runtime_2.0.0-10_all.deb",
     "audit_state": "VALID",
-    "audit_records": 29,
-    "audit_last_digest": "dc6fcbaa5c9ebf3f9717cb91fec69b873e4eeac52357bf44e20525252e46e3c0",
+    "audit_records": 36,
+    "audit_last_digest": "7f7e4d739c9396c0d9757f0f2a60d57a50457048ce49cfd152ca46365306e344",
 }
 
 
@@ -103,12 +104,10 @@ def main() -> None:
         ["/usr/bin/python3", "-I", str(ROOT / "packaging/verify-sealed-inputs.py"), "--phase", "payload"],
         check=True, stdout=subprocess.DEVNULL, timeout=300,
     )
-    for path in (NEW_DEB, OLD_DEB, PAYLOAD / "install.sh", REVIEW / "human-manifest.md", REVIEW / "installation-procedure.md", REVIEW / "rollback-analysis.md"):
+    for path in (NEW_DEB, PAYLOAD / "install.sh", REVIEW / "human-manifest.md", REVIEW / "installation-procedure.md", REVIEW / "rollback-analysis.md"):
         value = path.lstat()
         if path.is_symlink() or not stat.S_ISREG(value.st_mode) or value.st_nlink != 1:
             raise SystemExit(f"unsafe input: {path}")
-    if sha(OLD_DEB) != OLD["rollback_deb_sha256"]:
-        raise SystemExit("predecessor package identity mismatch")
     os.chmod(PAYLOAD, 0o700)
     os.chmod(REVIEW, 0o700)
     metadata = subprocess.run(
@@ -165,7 +164,6 @@ def main() -> None:
         "inputs/gravity-image.docker.tar",
         "inputs/sealed-inputs.v1.json",
         "inputs/migration.sql",
-        "inputs/yoko-privileged-runtime_2.0.0-9_all.deb",
         "packaging/92-yoko-privileged-runtime",
         "packaging/control",
         "packaging/postinst",
@@ -197,13 +195,11 @@ def main() -> None:
         "failure_marker": "YOKO_ACTIVATION_BOOTSTRAP_FAILED",
     }
     copy_exact(NEW_DEB, PAYLOAD / NEW_DEB.name, 0o400)
-    copy_exact(OLD_DEB, PAYLOAD / OLD_DEB.name, 0o400)
     write_json(REVIEW / "package-manifest.json", review_manifest)
 
     files: dict[str, dict[str, str]] = {}
     expected_modes = {
         "install.sh": 0o500,
-        OLD_DEB.name: 0o400,
         NEW_DEB.name: 0o400,
         "review/human-manifest.md": 0o400,
         "review/package-manifest.json": 0o400,
@@ -218,7 +214,13 @@ def main() -> None:
         "schema": "yoko.crm.owner-bootstrap-payload.v1",
         "profile_id": PROFILE_ID,
         "new_package": {"name": "yoko-privileged-runtime", "version": "2.0.0-10", "architecture": "all"},
-        "previous_package": {"name": "yoko-privileged-runtime", "version": "2.0.0-9", "sha256": OLD["rollback_deb_sha256"]},
+        "previous_package": {
+            "name": "yoko-privileged-runtime",
+            "version": "2.0.0-10",
+            "profile_id": OLD["profile_id"],
+            "sha256": OLD["rollback_deb_sha256"],
+            "source": OLD["rollback_deb_source"],
+        },
         "files": files,
     }
     write_json(PAYLOAD / "payload-manifest.json", payload_manifest)

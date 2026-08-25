@@ -101,7 +101,7 @@ def owner_command(tar_sha: str) -> str:
         "/usr/bin/tar --extract --file \"$root_tar\" --directory \"$stage\" --no-same-owner --no-same-permissions; "
         "/usr/bin/chown -R root:root \"$stage\"; /usr/bin/chmod 0700 \"$stage/payload\"; "
         "/usr/bin/chmod 0500 \"$stage/payload/install.sh\" \"$stage/payload/review\"; "
-        "/usr/bin/chmod 0400 \"$stage/payload/payload-manifest.json\" \"$stage/payload/yoko-privileged-runtime_2.0.0-9_all.deb\" \"$stage/payload/yoko-privileged-runtime_2.0.0-10_all.deb\" \"$stage/payload/review/human-manifest.md\" \"$stage/payload/review/package-manifest.json\" \"$stage/payload/review/installation-procedure.md\" \"$stage/payload/review/rollback-analysis.md\"; "
+        "/usr/bin/chmod 0400 \"$stage/payload/payload-manifest.json\" \"$stage/payload/yoko-privileged-runtime_2.0.0-10_all.deb\" \"$stage/payload/review/human-manifest.md\" \"$stage/payload/review/package-manifest.json\" \"$stage/payload/review/installation-procedure.md\" \"$stage/payload/review/rollback-analysis.md\"; "
         "cd \"$stage/payload\"; exec ./install.sh'"
     )
 
@@ -185,7 +185,12 @@ def main() -> None:
         "seal": seal,
         "bootstrap_tar": {"path": str(TAR), "sha256": tar_sha, "bytes": TAR.stat().st_size},
         "package": {"path": str(DEB), "sha256": deb_sha, "version": "2.0.0-10", "runtime_abi": "2.0.0"},
-        "predecessor_package": {"version": "2.0.0-9", "sha256": "0c259741b4b58992acb830806e42db79ec87730f1b568a21e2879483d739be83"},
+        "predecessor_package": {
+            "version": "2.0.0-10",
+            "profile_id": "crm-08b9145945b2-gravity-source-v1",
+            "sha256": "6865eab377dda757d101259e7321268998b45ea8b27f6003de0cf7e191a9b54e",
+            "source": "/var/lib/yoko-privileged-runtime/activation-bootstraps/6865eab377dda757d101259e7321268998b45ea8b27f6003de0cf7e191a9b54e/yoko-privileged-runtime_2.0.0-10_all.deb",
+        },
         "enabled_zero_argument_profiles": ["database-status", "release-preflight", "release-activate", "rollback"],
         "disabled_profiles": ["config-activate", "database-migrate"],
         "core_policy_sudoers_byte_identical": True,

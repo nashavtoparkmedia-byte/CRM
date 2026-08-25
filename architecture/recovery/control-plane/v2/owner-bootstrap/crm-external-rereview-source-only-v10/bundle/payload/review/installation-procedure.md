@@ -4,10 +4,13 @@ The exact-SHA Owner command copies the sealed tar into a root-only temporary
 file, verifies its digest, extracts it into a root-only directory and executes
 `install.sh` with zero arguments on host `jvxthcorvm`.
 
-The installer accepts only exact Runtime `2.0.0-9`, its installed identities,
-the valid 19-record audit ending `95668295…`, and the embedded predecessor
-package SHA. A root-owned guard blocks all release-profile calls throughout
-`dpkg`. Post-install checks prove Runtime `2.0.0-10`, the new profile identity,
+The installer accepts only exact Runtime `2.0.0-10` profile
+`crm-08b9145945b2-gravity-source-v1`, its installed identities, the valid
+36-record audit ending `7f7e4d73…`, and the exact predecessor package SHA at
+its fixed root-owned bootstrap-store path. It copies that package into the new
+content-addressed store before mutation. A root-owned guard blocks all
+release-profile calls throughout `dpkg`. Post-install checks prove Runtime
+`2.0.0-10`, the new profile identity,
 four enabled operations, disabled database migration, unchanged sudo boundary,
 unchanged audit and unchanged Docker provenance. The provenance comparison
 requires a complete inventory with an empty failure list and includes the
