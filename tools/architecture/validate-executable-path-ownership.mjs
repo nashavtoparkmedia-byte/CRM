@@ -10,6 +10,7 @@ import { inventoryTrackedSurfaces } from './v2/tracked-surface-inventory.mjs'
 const execFileAsync = promisify(execFile)
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 export const COVERAGE_PATH = 'architecture/contexts/v1/executable-path-ownership-coverage.json'
+export const CURRENT_DEPENDENCY_PATH = 'architecture/contexts/v1/executable-path-ownership-current-dependencies.json'
 export const REGISTRY_PATH = 'architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json'
 export const REVIEWED_DECISION_SCHEMA = 'yoko.crm.reviewed-executable-path-ownership-decisions.v1'
 export const REVIEWED_BASELINE_SCHEMA = 'yoko.crm.executable-path-ownership-coverage.v1'
@@ -31,6 +32,95 @@ const digest = (value) => createHash('sha256').update(JSON.stringify(stable(valu
 const byteDigest = (value) => createHash('sha256').update(value).digest('hex')
 const assert = (value, message) => { if (!value) throw new Error(message) }
 const contains = (ownerPath, candidatePath) => candidatePath === ownerPath || candidatePath.startsWith(`${ownerPath}/`)
+
+const CURRENT_DERIVATION_INPUTS = {
+  context_manifest_index: 'architecture/contexts/v1/context-index.json',
+  historical_baseline: REVIEWED_BASELINE_PATH,
+  lifecycle_registry: REGISTRY_PATH,
+  reviewed_decisions: REVIEWED_DECISION_PATH,
+  tracked_surface_inventory: 'tools/architecture/v2/tracked-surface-inventory.mjs',
+}
+const CURRENT_CONSUMERS = {
+  context_manifest_validator: 'tools/architecture/validate-context-manifests.mjs',
+  independent_source_critic: 'tools/architecture/v2/independent-critic-final-gate.mjs',
+  negative_and_regression_control: 'tools/architecture/test-executable-path-ownership.mjs',
+  production_validator: 'tools/architecture/validate-executable-path-ownership.mjs',
+}
+
+function exactRolePaths(records, expected, label) {
+  assert(Array.isArray(records), `${label} missing`)
+  const actual = new Map()
+  for (const record of records) {
+    assert(record && typeof record.role === 'string' && typeof record.path === 'string', `${label} entry malformed`)
+    assert(!actual.has(record.role), `${label} contains duplicate role: ${record.role}`)
+    actual.set(record.role, record.path)
+  }
+  assert(actual.size === Object.keys(expected).length, `${label} denominator mismatch`)
+  for (const [role, expectedPath] of Object.entries(expected)) {
+    assert(actual.get(role) === expectedPath, `${label} path mismatch: ${role}`)
+  }
+}
+
+export function validateExecutablePathOwnershipDependencies(value, options = {}) {
+  assert(value?.schema === 'yoko.crm.executable-path-ownership-current-dependencies.v1' && value.version === 1, 'executable ownership current dependency identity mismatch')
+  const current = value.current_live
+  assert(current && typeof current === 'object', 'executable ownership current dependency declaration missing')
+  assert(current.authority?.path === COVERAGE_PATH
+    && current.authority?.schema === 'yoko.crm.executable-path-ownership-coverage.v1', 'executable ownership current authority mismatch')
+  assert(JSON.stringify(current.derived_fields) === JSON.stringify({
+    tracked_executable_surfaces: '/source/tracked_executable_surfaces',
+    tracked_inventory_sha256: '/source/tracked_inventory_sha256',
+    coverage_sha256: '/coverage_sha256',
+  }), 'executable ownership current derived-field declaration mismatch')
+  exactRolePaths(current.derivation_inputs, CURRENT_DERIVATION_INPUTS, 'executable ownership current derivation inputs')
+  exactRolePaths(current.consumers, CURRENT_CONSUMERS, 'executable ownership current consumers')
+  assert(JSON.stringify(current.authority_direction) === JSON.stringify([
+    'repository_tracked_paths_modes_and_lifecycle_metadata',
+    'tracked_surface_inventory',
+    'reviewed_decisions_over_historical_baseline',
+    'materialized_coverage',
+    'validators',
+  ]), 'executable ownership authority direction mismatch')
+  assert(JSON.stringify(current.inventory_identity_inputs) === JSON.stringify([
+    'tracked_path', 'git_mode', 'lifecycle_and_registry_metadata', 'working_tree_deleted',
+  ]) && JSON.stringify(current.inventory_identity_excludes) === JSON.stringify([
+    'ordinary_unregistered_source_bytes',
+  ]), 'executable ownership inventory identity declaration mismatch')
+  const historical = value.historical_negative_fixtures
+  assert(Array.isArray(historical) && historical.length === 1, 'executable ownership historical fixture denominator mismatch')
+  const incident = historical[0]
+  assert(incident?.id === 'working_tree_deleted_aff0c11b'
+    && incident.schema === 'yoko.crm.executable-path-ownership-historical-incident.v1'
+    && SHA1.test(incident.candidate ?? '')
+    && SHA256.test(incident.clean_inventory_sha256 ?? '')
+    && incident.mutation?.kind === 'working_tree_deleted'
+    && typeof incident.mutation?.path === 'string' && incident.mutation.path.length > 0
+    && SHA256.test(incident.rejected_inventory_sha256 ?? '')
+    && incident.rejected_inventory_sha256 !== incident.clean_inventory_sha256
+    && incident.expected_failure === 'materialization requires a clean exact candidate checkout', 'executable ownership historical fixture malformed')
+  if (options.contextIndex) {
+    const indexed = options.contextIndex.outputs?.executable_path_ownership_current_dependencies
+    assert(indexed?.path === CURRENT_DEPENDENCY_PATH && SHA256.test(indexed.sha256 ?? ''), 'executable ownership current dependencies are absent from the context index')
+  }
+  return value
+}
+
+export async function loadExecutablePathOwnershipDependencies(repositoryRoot, options = {}) {
+  const relativePath = options.path ?? CURRENT_DEPENDENCY_PATH
+  assert(relativePath === CURRENT_DEPENDENCY_PATH, 'executable ownership current dependency path is not authoritative')
+  const bytes = await readFile(path.join(repositoryRoot, relativePath))
+  let value
+  try {
+    value = JSON.parse(bytes.toString('utf8'))
+  } catch {
+    throw new Error('executable ownership current dependency document malformed')
+  }
+  validateExecutablePathOwnershipDependencies(value, options)
+  if (options.contextIndex) {
+    assert(byteDigest(bytes) === options.contextIndex.outputs.executable_path_ownership_current_dependencies.sha256, 'executable ownership current dependency index hash drift')
+  }
+  return { bytes, value }
+}
 
 function dirtySourceSummary(statusBytes) {
   const counts = {
@@ -395,6 +485,7 @@ async function main() {
     readFile(path.join(root, COVERAGE_PATH)),
     readFile(path.join(root, 'architecture/contexts/v1/context-index.json'), 'utf8').then(JSON.parse),
   ])
+  await loadExecutablePathOwnershipDependencies(root, { contextIndex: index })
   const coverage = JSON.parse(coverageBytes.toString('utf8'))
   const manifests = await Promise.all(index.contexts.map(async (entry) => JSON.parse(await readFile(path.join(root, entry.path), 'utf8'))))
   const inventory = await inventoryTrackedSurfaces(root, { registry })

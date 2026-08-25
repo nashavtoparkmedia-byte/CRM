@@ -6,7 +6,12 @@ import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 
 import { extractImports } from '../enforce-architecture.mjs'
-import { validateExecutablePathOwnershipCoverage, validateExecutablePathOwnershipProvenance } from '../validate-executable-path-ownership.mjs'
+import {
+  CURRENT_DEPENDENCY_PATH,
+  validateExecutablePathOwnershipCoverage,
+  validateExecutablePathOwnershipDependencies,
+  validateExecutablePathOwnershipProvenance,
+} from '../validate-executable-path-ownership.mjs'
 import { CREDENTIAL_ENTITY_POLICIES, analyzeCredentialAccess } from './credential-analyzer.mjs'
 import { inventoryCredentialAccess } from './credential-inventory.mjs'
 import { authorizeMaintenanceWrite, validateCapabilityRegistry } from './maintenance-capability-policy.mjs'
@@ -333,6 +338,7 @@ const crossDomain = readJson('architecture/recovery/whole-project-dod/v2/CROSS_D
 const productionSecretReview = readJson('architecture/recovery/whole-project-dod/v2/PRODUCTION_SECRET_READ_DISPOSITION_REVIEW_20260813.json')
 const lifecycleRegistry = readJson('architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json')
 const executableCoverage = readJson('architecture/contexts/v1/executable-path-ownership-coverage.json')
+const executableOwnershipDependencies = readJson(CURRENT_DEPENDENCY_PATH)
 const contextIndex = readJson('architecture/contexts/v1/context-index.json')
 const contextManifests = contextIndex.contexts.map((entry) => readJson(entry.path))
 
@@ -364,6 +370,7 @@ const [trackedInventory, currentCredentialInventory] = await Promise.all([
   inventoryTrackedSurfaces(root, { registry: lifecycleRegistry }),
   inventoryCredentialAccess(root, { registry: lifecycleRegistry }),
 ])
+validateExecutablePathOwnershipDependencies(executableOwnershipDependencies, { contextIndex })
 const currentOwnership = validateExecutablePathOwnershipCoverage(trackedInventory, contextManifests, executableCoverage)
 await validateExecutablePathOwnershipProvenance(root, executableCoverage, trackedInventory, contextManifests)
 assert(

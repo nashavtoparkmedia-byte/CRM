@@ -23,6 +23,7 @@ const bundle = {
   dependencyPlan: await load('architecture/contexts/v1/dependency-transition-plan.json'),
   finalDependency: await load('architecture/contexts/v1/final-dependency-current.json'),
   finalDependencySource: await load('architecture/contexts/v1/final-dependency-source.json'),
+  executableOwnershipDependencies: await load('architecture/contexts/v1/executable-path-ownership-current-dependencies.json'),
 };
 
 test('bounded contexts cover modules, owned data, dependencies and foreign writes', async () => {
@@ -36,7 +37,17 @@ test('bounded contexts cover modules, owned data, dependencies and foreign write
     technicalModules: 27,
     ownedPaths: 87,
   });
-  assert.deepEqual(await verifyContextIndex(index, repositoryRoot.pathname), { verifiedControls: 17, verifiedEntrypoints: 45, verifiedManifests: 16, verifiedOutputs: 5 });
+  assert.deepEqual(await verifyContextIndex(index, repositoryRoot.pathname), { verifiedControls: 17, verifiedEntrypoints: 45, verifiedManifests: 16, verifiedOutputs: 6 });
+});
+
+test('missing or malformed executable ownership current dependency declaration fails closed', () => {
+  const missing = structuredClone(bundle);
+  delete missing.executableOwnershipDependencies.current_live.authority;
+  assert.throws(() => validateContexts(missing), /current authority mismatch/);
+
+  const hiddenConsumer = structuredClone(bundle);
+  hiddenConsumer.executableOwnershipDependencies.current_live.consumers.pop();
+  assert.throws(() => validateContexts(hiddenConsumer), /current consumers denominator mismatch/);
 });
 
 test('duplicate technical-module assignment fails closed', () => {

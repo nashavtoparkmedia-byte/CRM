@@ -79,7 +79,7 @@ async function main() {
     credentials: 'architecture/evidence/v1/credential-access.json',
   };
   const overridesRelative = 'architecture/contexts/v1/raw-write-owner-overrides.json';
-  const [decisionsInput, inventoryInput, dependencyInput, writesInput, ownershipInput, credentialInput, overridesInput, generatorBytes, finalDependencyBytes, finalDependencySourceBytes, existingIndexInput, executableCoverageBytes, executableOwnershipValidatorBytes, finalDependencyDeriverBytes] = await Promise.all([
+  const [decisionsInput, inventoryInput, dependencyInput, writesInput, ownershipInput, credentialInput, overridesInput, generatorBytes, finalDependencyBytes, finalDependencySourceBytes, existingIndexInput, executableCoverageBytes, executableOwnershipDependencyBytes, executableOwnershipValidatorBytes, finalDependencyDeriverBytes] = await Promise.all([
     loadJson(decisionsRelative),
     loadJson(evidenceRelatives.inventory),
     loadJson(evidenceRelatives.dependencies),
@@ -92,6 +92,7 @@ async function main() {
     readFile(path.join(repositoryRoot, 'architecture/contexts/v1/final-dependency-source.json')),
     loadJson('architecture/contexts/v1/context-index.json'),
     readFile(path.join(repositoryRoot, 'architecture/contexts/v1/executable-path-ownership-coverage.json')),
+    readFile(path.join(repositoryRoot, 'architecture/contexts/v1/executable-path-ownership-current-dependencies.json')),
     readFile(path.join(repositoryRoot, 'tools/architecture/validate-executable-path-ownership.mjs')),
     readFile(path.join(repositoryRoot, 'tools/architecture/derive-final-dependency-source.mjs')),
   ]);
@@ -279,6 +280,7 @@ async function main() {
       dependency_transition_plan: { path: 'architecture/contexts/v1/dependency-transition-plan.json', sha256: sha256(dependencyPlanBytes) },
       final_dependency_current: { path: 'architecture/contexts/v1/final-dependency-current.json', sha256: sha256(finalDependencyBytes) },
       final_dependency_source: { path: 'architecture/contexts/v1/final-dependency-source.json', sha256: sha256(finalDependencySourceBytes) },
+      executable_path_ownership_current_dependencies: { path: 'architecture/contexts/v1/executable-path-ownership-current-dependencies.json', sha256: sha256(executableOwnershipDependencyBytes) },
       executable_path_ownership_coverage: { path: 'architecture/contexts/v1/executable-path-ownership-coverage.json', sha256: sha256(executableCoverageBytes) },
       foreign_write_migration_plan: { path: 'architecture/contexts/v1/foreign-write-migration-plan.json', sha256: sha256(foreignPlanBytes) },
     },

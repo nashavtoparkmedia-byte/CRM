@@ -4,7 +4,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { deriveCurrentDependencySource } from './derive-final-dependency-source.mjs';
 import { materializeFinalDependencyArtifact } from './materialize-final-dependency-artifact.mjs';
-import { validateExecutablePathOwnershipCoverage, validateExecutablePathOwnershipProvenance } from './validate-executable-path-ownership.mjs';
+import {
+  CURRENT_DEPENDENCY_PATH,
+  validateExecutablePathOwnershipCoverage,
+  validateExecutablePathOwnershipDependencies,
+  validateExecutablePathOwnershipProvenance,
+} from './validate-executable-path-ownership.mjs';
 import { inventoryTrackedSurfaces } from './v2/tracked-surface-inventory.mjs';
 
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -81,7 +86,9 @@ function dependencyCycles(manifests) {
 }
 
 export function validateContexts(bundle) {
-  const { decisions, inventory, dependencies, writes, ownership, index, manifests, foreignPlan, dependencyPlan, finalDependency, finalDependencySource } = bundle;
+  const { decisions, inventory, dependencies, writes, ownership, index, manifests, foreignPlan, dependencyPlan, finalDependency, finalDependencySource, executableOwnershipDependencies } = bundle;
+  validateExecutablePathOwnershipDependencies(executableOwnershipDependencies, { contextIndex: index });
+  assert(index.outputs?.executable_path_ownership_current_dependencies?.path === CURRENT_DEPENDENCY_PATH, 'context index does not declare executable ownership current dependencies');
   assert(decisions.schema === 'yoko.crm.context-decisions.v1' && decisions.milestone === 'CRM-ARCH-003', 'context decision identity mismatch');
   const contextIds = new Set(decisions.contexts.map((context) => context.id));
   assert(contextIds.size === decisions.contexts.length, 'duplicate context id');
@@ -275,6 +282,7 @@ async function loadBundle(repositoryRoot) {
     dependencyPlan: await loadJson(repositoryRoot, 'architecture/contexts/v1/dependency-transition-plan.json'),
     finalDependency: await loadJson(repositoryRoot, 'architecture/contexts/v1/final-dependency-current.json'),
     finalDependencySource: await loadJson(repositoryRoot, 'architecture/contexts/v1/final-dependency-source.json'),
+    executableOwnershipDependencies: await loadJson(repositoryRoot, CURRENT_DEPENDENCY_PATH),
   };
 }
 

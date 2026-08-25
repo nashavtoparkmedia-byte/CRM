@@ -9,24 +9,21 @@ import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import {
   assertCleanExactCandidateCheckout,
+  CURRENT_DEPENDENCY_PATH,
   deriveExecutablePathOwnershipCoverage,
+  loadExecutablePathOwnershipDependencies,
   materializeReviewedExecutablePathOwnershipCoverage,
   REVIEWED_BASELINE_PATH,
   REVIEWED_BASELINE_SHA256,
   REVIEWED_DECISION_PATH,
   validateExecutablePathOwnershipProvenance,
   validateExecutablePathOwnershipCoverage,
+  validateExecutablePathOwnershipDependencies,
 } from './validate-executable-path-ownership.mjs'
 import { inventoryTrackedSurfaces } from './v2/tracked-surface-inventory.mjs'
 
 const execFileAsync = promisify(execFile)
 const sha256 = (value) => createHash('sha256').update(value).digest('hex')
-const stable = (value) => {
-  if (Array.isArray(value)) return value.map(stable)
-  if (!value || typeof value !== 'object') return value
-  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stable(value[key])]))
-}
-const stableDigest = (value) => sha256(JSON.stringify(stable(value)))
 
 const inventory = {
   schema: 'yoko.crm.tracked-executable-surface-inventory.v2',
@@ -61,6 +58,40 @@ const coverage = {
   },
 }
 assert.equal(validateExecutablePathOwnershipCoverage(inventory, manifests, coverage).records.length, 2)
+assert.throws(
+  () => validateExecutablePathOwnershipCoverage(inventory, manifests, null),
+  /coverage identity mismatch/,
+  'missing current authority must fail closed',
+)
+
+const adaptedInventory = structuredClone(inventory)
+adaptedInventory.surfaces.push({ path: 'legacy/next.sh', lifecycle: 'OPERATIONAL_SCRIPT', disposition: 'ACTIVE' })
+const adaptedDerived = deriveExecutablePathOwnershipCoverage(adaptedInventory, manifests, base)
+const adaptedCoverage = {
+  ...base,
+  source: {
+    tracked_executable_surfaces: adaptedDerived.tracked_executable_surfaces,
+    tracked_inventory_sha256: adaptedDerived.tracked_inventory_sha256,
+  },
+  coverage_sha256: adaptedDerived.coverage_sha256,
+  summary: {
+    context_owned_paths: adaptedDerived.context_owned_paths,
+    governed_exclusion_paths: adaptedDerived.governed_exclusion_paths,
+    tracked_executable_surfaces: adaptedDerived.tracked_executable_surfaces,
+  },
+}
+assert.equal(
+  validateExecutablePathOwnershipCoverage(adaptedInventory, manifests, adaptedCoverage).records.length,
+  3,
+  'a controlled live denominator change must consume the updated authority without synchronized test literals',
+)
+const adaptedMismatch = structuredClone(adaptedCoverage)
+adaptedMismatch.source.tracked_inventory_sha256 = '0'.repeat(64)
+assert.throws(
+  () => validateExecutablePathOwnershipCoverage(adaptedInventory, manifests, adaptedMismatch),
+  /source inventory drift/,
+  'an authoritative/live mismatch must remain fail-closed',
+)
 
 const parentChildOverlap = [
   { context: { id: 'parent_owner' }, owned_paths: ['app'] },
@@ -314,14 +345,15 @@ const staleAssignment = structuredClone(reviewedMigrationDrift)
 staleAssignment.assignments[0].path = 'archive/stale/migration.sql'
 assert.throws(() => materialize(staleAssignment), /stale reviewed exact inventory assignment/)
 
-async function gitFixture() {
+async function gitFixture(relativePath = 'tracked.txt', contents = 'accepted\n') {
   const fixture = await mkdtemp(path.join(os.tmpdir(), 'yoko-clean-materialization-'))
   const git = (...args) => execFileAsync('git', args, { cwd: fixture, encoding: 'utf8', maxBuffer: 1024 * 1024 })
   await git('init', '--quiet')
   await git('config', 'user.name', 'Yoko Materialization Fixture')
   await git('config', 'user.email', 'fixture@example.invalid')
-  await writeFile(path.join(fixture, 'tracked.txt'), 'accepted\n')
-  await git('add', 'tracked.txt')
+  await mkdir(path.join(fixture, path.dirname(relativePath)), { recursive: true })
+  await writeFile(path.join(fixture, relativePath), contents)
+  await git('add', relativePath)
   await git('commit', '--quiet', '-m', 'fixture')
   const candidate = (await git('rev-parse', 'HEAD^{commit}')).stdout.trim()
   return { candidate, fixture, git }
@@ -366,14 +398,37 @@ await assert.rejects(
   /clean exact candidate checkout; untracked_files=1; no source was cleaned or materialized/,
 )
 
+const byteDirectionFixture = await gitFixture('tools/ownership-probe.mjs', 'export const fixture = 1\n')
+const inventoryBeforeSourceByteChange = await inventoryTrackedSurfaces(byteDirectionFixture.fixture)
+await writeFile(path.join(byteDirectionFixture.fixture, 'tools/ownership-probe.mjs'), 'export const fixture = 2\n')
+const inventoryAfterSourceByteChange = await inventoryTrackedSurfaces(byteDirectionFixture.fixture)
+assert.deepEqual(
+  inventoryAfterSourceByteChange,
+  inventoryBeforeSourceByteChange,
+  'ordinary source bytes must not create an ownership-inventory fixed point; tracked path/mode/lifecycle remain the identity',
+)
+
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
-const [currentRegistry, currentCoverage, currentIndex, currentDecisionBytes, currentBaselineBytes] = await Promise.all([
+const [currentRegistry, currentIndex, currentDecisionBytes, currentBaselineBytes] = await Promise.all([
   readFile(path.join(repositoryRoot, 'architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json'), 'utf8').then(JSON.parse),
-  readFile(path.join(repositoryRoot, 'architecture/contexts/v1/executable-path-ownership-coverage.json'), 'utf8').then(JSON.parse),
   readFile(path.join(repositoryRoot, 'architecture/contexts/v1/context-index.json'), 'utf8').then(JSON.parse),
   readFile(path.join(repositoryRoot, REVIEWED_DECISION_PATH)),
   readFile(path.join(repositoryRoot, REVIEWED_BASELINE_PATH)),
 ])
+const { bytes: currentDependencyBytes, value: currentDependencies } = await loadExecutablePathOwnershipDependencies(repositoryRoot, { contextIndex: currentIndex })
+const currentCoverage = JSON.parse(await readFile(path.join(repositoryRoot, currentDependencies.current_live.authority.path), 'utf8'))
+assert.equal(sha256(currentDependencyBytes), currentIndex.outputs.executable_path_ownership_current_dependencies.sha256)
+
+const missingAuthorityDependencies = structuredClone(currentDependencies)
+delete missingAuthorityDependencies.current_live.authority
+assert.throws(() => validateExecutablePathOwnershipDependencies(missingAuthorityDependencies), /current authority mismatch/)
+const malformedConsumers = structuredClone(currentDependencies)
+malformedConsumers.current_live.consumers.pop()
+assert.throws(() => validateExecutablePathOwnershipDependencies(malformedConsumers), /current consumers denominator mismatch/)
+const historicalIncident = currentDependencies.historical_negative_fixtures[0]
+assert.equal(historicalIncident.mutation.kind, 'working_tree_deleted')
+assert.equal(historicalIncident.expected_failure, 'materialization requires a clean exact candidate checkout')
+
 const currentManifests = await Promise.all(currentIndex.contexts.map(async (entry) => JSON.parse(await readFile(path.join(repositoryRoot, entry.path), 'utf8'))))
 const [firstCleanInventory, secondCleanInventory] = await Promise.all([
   inventoryTrackedSurfaces(repositoryRoot, { registry: currentRegistry }),
@@ -381,19 +436,22 @@ const [firstCleanInventory, secondCleanInventory] = await Promise.all([
 ])
 assert.deepEqual(firstCleanInventory, secondCleanInventory, 'clean exact inventory must be deterministic across repeated derivations')
 assert.deepEqual(firstCleanInventory.controls.working_tree_deleted, [])
-assert.equal(firstCleanInventory.summary.tracked_executable_surfaces, 2188)
-assert.equal(stableDigest(firstCleanInventory), '5cd651f8f3212f4ed4e74f4a650aef1914810d4dabee446c10b93c857016d017')
-const historicalDirtyInventory = structuredClone(firstCleanInventory)
-historicalDirtyInventory.controls.working_tree_deleted = [
-  'architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/tests/test_tg_base_reference_real_docker.py',
-]
-assert.equal(
-  stableDigest(historicalDirtyInventory),
-  'aff0c11bf9048393d95bb4ca3d340ffc29a57aff3bdb6a6b43fd1bd71d77adb0',
-  'the historical deleted-worktree state must reproduce the exact rejected aff0c11b drift',
-)
+assert.equal(firstCleanInventory.summary.tracked_executable_surfaces, currentCoverage.source.tracked_executable_surfaces)
 const currentDerived = deriveExecutablePathOwnershipCoverage(firstCleanInventory, currentManifests, currentCoverage)
-assert.equal(currentDerived.coverage_sha256, '4f1d5b9fd6ac236d0ba5f2fc09ed6658fb23d783658defbbc12ea08c7e7debdf')
+assert.equal(currentDerived.tracked_inventory_sha256, currentCoverage.source.tracked_inventory_sha256)
+assert.equal(currentDerived.coverage_sha256, currentCoverage.coverage_sha256)
+
+for (const consumer of currentDependencies.current_live.consumers) {
+  const consumerSource = await readFile(path.join(repositoryRoot, consumer.path), 'utf8')
+  assert.equal(
+    new RegExp(`tracked_executable_surfaces\\s*,\\s*${currentCoverage.source.tracked_executable_surfaces}(?:\\D|$)`, 'u').test(consumerSource),
+    false,
+    `undeclared current-live ownership denominator literal remains in ${consumer.path}`,
+  )
+  for (const digestLiteral of [currentCoverage.source.tracked_inventory_sha256, currentCoverage.coverage_sha256]) {
+    assert.equal(consumerSource.includes(digestLiteral), false, `undeclared current-live ownership digest literal remains in ${consumer.path}`)
+  }
+}
 const currentDecisions = JSON.parse(currentDecisionBytes.toString('utf8'))
 const currentBaseline = JSON.parse(currentBaselineBytes.toString('utf8'))
 assert.equal(sha256(currentBaselineBytes), REVIEWED_BASELINE_SHA256)

@@ -1,0 +1,85 @@
+{
+  "schema": "yoko.crm.executable-path-ownership-current-dependencies.v1",
+  "version": 1,
+  "current_live": {
+    "authority": {
+      "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
+      "schema": "yoko.crm.executable-path-ownership-coverage.v1"
+    },
+    "derived_fields": {
+      "tracked_executable_surfaces": "/source/tracked_executable_surfaces",
+      "tracked_inventory_sha256": "/source/tracked_inventory_sha256",
+      "coverage_sha256": "/coverage_sha256"
+    },
+    "derivation_inputs": [
+      {
+        "role": "tracked_surface_inventory",
+        "path": "tools/architecture/v2/tracked-surface-inventory.mjs"
+      },
+      {
+        "role": "lifecycle_registry",
+        "path": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json"
+      },
+      {
+        "role": "context_manifest_index",
+        "path": "architecture/contexts/v1/context-index.json"
+      },
+      {
+        "role": "reviewed_decisions",
+        "path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json"
+      },
+      {
+        "role": "historical_baseline",
+        "path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_COVERAGE_BASELINE_2108.json"
+      }
+    ],
+    "consumers": [
+      {
+        "role": "production_validator",
+        "path": "tools/architecture/validate-executable-path-ownership.mjs"
+      },
+      {
+        "role": "negative_and_regression_control",
+        "path": "tools/architecture/test-executable-path-ownership.mjs"
+      },
+      {
+        "role": "context_manifest_validator",
+        "path": "tools/architecture/validate-context-manifests.mjs"
+      },
+      {
+        "role": "independent_source_critic",
+        "path": "tools/architecture/v2/independent-critic-final-gate.mjs"
+      }
+    ],
+    "authority_direction": [
+      "repository_tracked_paths_modes_and_lifecycle_metadata",
+      "tracked_surface_inventory",
+      "reviewed_decisions_over_historical_baseline",
+      "materialized_coverage",
+      "validators"
+    ],
+    "inventory_identity_inputs": [
+      "tracked_path",
+      "git_mode",
+      "lifecycle_and_registry_metadata",
+      "working_tree_deleted"
+    ],
+    "inventory_identity_excludes": [
+      "ordinary_unregistered_source_bytes"
+    ]
+  },
+  "historical_negative_fixtures": [
+    {
+      "id": "working_tree_deleted_aff0c11b",
+      "schema": "yoko.crm.executable-path-ownership-historical-incident.v1",
+      "candidate": "08b9145945b296d494cd0184eb2d32da886710cd",
+      "clean_inventory_sha256": "5cd651f8f3212f4ed4e74f4a650aef1914810d4dabee446c10b93c857016d017",
+      "mutation": {
+        "kind": "working_tree_deleted",
+        "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/tests/test_tg_base_reference_real_docker.py"
+      },
+      "rejected_inventory_sha256": "aff0c11bf9048393d95bb4ca3d340ffc29a57aff3bdb6a6b43fd1bd71d77adb0",
+      "expected_failure": "materialization requires a clean exact candidate checkout"
+    }
+  ]
+}
