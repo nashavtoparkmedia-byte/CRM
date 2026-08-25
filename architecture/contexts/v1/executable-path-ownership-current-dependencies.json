@@ -38,6 +38,7 @@
           "role": "context_manifest_regression_control",
           "path": "tools/architecture/__tests__/context-manifests.test.mjs",
           "authority_uses": [
+            "dependency_manifest",
             "ownership_validator_module"
           ]
         },
@@ -45,6 +46,8 @@
           "role": "context_manifest_generator",
           "path": "tools/architecture/generate-context-manifests.mjs",
           "authority_uses": [
+            "coverage_document",
+            "dependency_manifest",
             "ownership_validator_module"
           ]
         },
@@ -62,13 +65,18 @@
           "role": "negative_and_regression_control",
           "path": "tools/architecture/test-executable-path-ownership.mjs",
           "authority_uses": [
-            "ownership_validator_module"
+            "coverage_document",
+            "historical_baseline",
+            "ownership_validator_module",
+            "reviewed_decisions"
           ]
         },
         {
           "role": "context_manifest_validator",
           "path": "tools/architecture/validate-context-manifests.mjs",
           "authority_uses": [
+            "coverage_document",
+            "dependency_manifest",
             "ownership_validator_module"
           ]
         },
@@ -76,6 +84,8 @@
           "role": "independent_source_critic",
           "path": "tools/architecture/v2/independent-critic-final-gate.mjs",
           "authority_uses": [
+            "coverage_document",
+            "dependency_manifest",
             "ownership_validator_module"
           ]
         }

@@ -7,6 +7,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
+import ts from '../../gravity-mvp/node_modules/typescript/lib/typescript.js'
 import { classifyTrackedSurface, inventoryTrackedSurfaces } from './v2/tracked-surface-inventory.mjs'
 
 const execFileAsync = promisify(execFile)
@@ -64,108 +65,47 @@ const AUTHORITY_STRING_REFERENCES = new Map([
 ])
 export const OWNERSHIP_VALIDATOR_PATH = 'tools/architecture/validate-executable-path-ownership.mjs'
 const JAVASCRIPT_SOURCE = /\.(?:[cm]?js|jsx|ts|tsx)$/u
-const AUTHORITY_READ_IDENTIFIERS = new Set([
-  'createReadStream', 'load', 'loadJson', 'open', 'readFile', 'readFileSync', 'readJson',
-])
+const FILESYSTEM_MODULES = new Set(['fs', 'fs/promises', 'node:fs', 'node:fs/promises'])
+const FILESYSTEM_READ_EXPORTS = new Set(['createReadStream', 'open', 'readFile', 'readFileSync'])
+const PATH_MODULES = new Set(['node:path', 'path'])
+const PATH_BUILD_EXPORTS = new Set(['join', 'resolve'])
+const CONSUMER_DISCOVERY_CACHE = new Map()
 
-function javascriptTokens(source) {
-  const tokens = []
-  let index = 0
-  const identifierStart = /[A-Za-z_$]/u
-  const identifierPart = /[A-Za-z0-9_$]/u
-  while (index < source.length) {
-    const character = source[index]
-    const next = source[index + 1]
-    if (/\s/u.test(character)) { index += 1; continue }
-    if (character === '/' && next === '/') {
-      index += 2
-      while (index < source.length && source[index] !== '\n') index += 1
-      continue
-    }
-    if (character === '/' && next === '*') {
-      const end = source.indexOf('*/', index + 2)
-      index = end === -1 ? source.length : end + 2
-      continue
-    }
-    if (character === "'" || character === '"') {
-      const quote = character
-      let value = ''
-      index += 1
-      while (index < source.length) {
-        if (source[index] === '\\') {
-          value += source[index]
-          if (index + 1 < source.length) value += source[index + 1]
-          index += 2
-          continue
-        }
-        if (source[index] === quote) { index += 1; break }
-        value += source[index]
-        index += 1
-      }
-      tokens.push({ type: 'string', value })
-      continue
-    }
-    if (character === '`') {
-      let value = ''
-      let dynamic = false
-      index += 1
-      while (index < source.length) {
-        if (source[index] === '\\') {
-          value += source[index]
-          if (index + 1 < source.length) value += source[index + 1]
-          index += 2
-          continue
-        }
-        if (source[index] === '$' && source[index + 1] === '{') dynamic = true
-        if (source[index] === '`') { index += 1; break }
-        value += source[index]
-        index += 1
-      }
-      if (!dynamic) tokens.push({ type: 'string', value })
-      continue
-    }
-    if (identifierStart.test(character)) {
-      let value = character
-      index += 1
-      while (index < source.length && identifierPart.test(source[index])) value += source[index++]
-      tokens.push({ type: 'identifier', value })
-      continue
-    }
-    tokens.push({ type: 'punctuator', value: character })
-    index += 1
-  }
-  return tokens
+function moduleSpecifierText(node) {
+  return node && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) ? node.text : null
 }
 
-function staticModuleSpecifiers(tokens) {
-  const specifiers = []
-  for (let index = 0; index < tokens.length; index += 1) {
-    if (tokens[index].type !== 'identifier' || !['import', 'export'].includes(tokens[index].value)) continue
-    if (tokens[index + 1]?.type === 'string') { specifiers.push(tokens[index + 1].value); continue }
-    for (let cursor = index + 1; cursor < Math.min(tokens.length, index + 100); cursor += 1) {
-      if (tokens[cursor].value === ';' || (cursor > index + 1 && tokens[cursor].type === 'identifier' && ['import', 'export'].includes(tokens[cursor].value))) break
-      if (tokens[cursor].type === 'identifier' && tokens[cursor].value === 'from' && tokens[cursor + 1]?.type === 'string') {
-        specifiers.push(tokens[cursor + 1].value)
-        break
-      }
-    }
-  }
-  return specifiers
+function canonicalModulePath(relativePath, specifier) {
+  if (!specifier?.startsWith('.')) return null
+  return path.posix.normalize(path.posix.join(path.posix.dirname(relativePath), specifier))
 }
 
-function authorityStringIsConsumed(tokens, stringIndex) {
-  const directWindow = tokens.slice(Math.max(0, stringIndex - 16), stringIndex)
-  if (directWindow.some((token) => token.type === 'identifier' && AUTHORITY_READ_IDENTIFIERS.has(token.value))) return true
-  const assignedName = tokens[stringIndex - 2]?.type === 'identifier' && tokens[stringIndex - 1]?.value === '='
-    ? tokens[stringIndex - 2].value
-    : null
-  if (!assignedName) return false
-  for (let index = stringIndex + 1; index < tokens.length; index += 1) {
-    if (tokens[index].type !== 'identifier' || !AUTHORITY_READ_IDENTIFIERS.has(tokens[index].value)) continue
-    const callWindow = tokens.slice(index + 1, Math.min(tokens.length, index + 24))
-    if (callWindow.some((token) => token.type === 'identifier' && token.value === assignedName)) return true
-  }
-  return false
+function importDeclarationFor(node) {
+  let current = node
+  while (current && !ts.isImportDeclaration(current) && !ts.isExportDeclaration(current)) current = current.parent
+  return current ?? null
+}
+
+function variableDeclarationFor(node) {
+  let current = node.parent
+  while (current && (ts.isBindingElement(current) || ts.isObjectBindingPattern(current) || ts.isArrayBindingPattern(current))) current = current.parent
+  return current && ts.isVariableDeclaration(current) ? current : null
+}
+
+function propertyNameText(node) {
+  if (!node) return null
+  if (ts.isIdentifier(node) || ts.isStringLiteral(node) || ts.isNumericLiteral(node)) return node.text
+  return null
+}
+
+function unwrapExpression(node) {
+  let current = node
+  while (current && (ts.isParenthesizedExpression(current)
+    || ts.isAsExpression(current)
+    || ts.isTypeAssertionExpression(current)
+    || ts.isNonNullExpression(current)
+    || ts.isSatisfiesExpression(current))) current = current.expression
+  return current
 }
 
 function repositoryTrackedJavaScriptSources(repositoryRoot) {
@@ -173,27 +113,648 @@ function repositoryTrackedJavaScriptSources(repositoryRoot) {
   return output.toString('utf8').split('\0').filter((relativePath) => JAVASCRIPT_SOURCE.test(relativePath)).sort()
 }
 
+function trackedSourceSnapshot(repositoryRoot, relativePaths) {
+  const snapshot = createHash('sha256')
+  for (const relativePath of relativePaths) {
+    const bytes = readFileSync(path.join(repositoryRoot, relativePath))
+    snapshot.update(`${Buffer.byteLength(relativePath)}:`).update(relativePath)
+      .update(`:${bytes.length}:`).update(byteDigest(bytes)).update('\n')
+  }
+  return snapshot.digest('hex')
+}
+
+function semanticProgram(repositoryRoot, relativePaths) {
+  const options = {
+    allowJs: true,
+    allowNonTsExtensions: true,
+    checkJs: false,
+    jsx: ts.JsxEmit.Preserve,
+    module: ts.ModuleKind.ESNext,
+    noLib: true,
+    noResolve: true,
+    skipLibCheck: true,
+    target: ts.ScriptTarget.Latest,
+  }
+  const rootNames = relativePaths.map((relativePath) => path.join(repositoryRoot, relativePath))
+  const program = ts.createProgram(rootNames, options)
+  const relativeByAbsolute = new Map(rootNames.map((absolutePath, index) => [path.resolve(absolutePath), relativePaths[index]]))
+  const sources = new Map()
+  const failures = []
+  for (const sourceFile of program.getSourceFiles()) {
+    const relativePath = relativeByAbsolute.get(path.resolve(sourceFile.fileName))
+    if (!relativePath) continue
+    sources.set(relativePath, sourceFile)
+    for (const diagnostic of sourceFile.parseDiagnostics ?? []) {
+      const position = sourceFile.getLineAndCharacterOfPosition(diagnostic.start ?? 0)
+      failures.push(`${relativePath}:${position.line + 1}:${position.character + 1}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, ' ')}`)
+    }
+  }
+  for (const relativePath of relativePaths) assert(sources.has(relativePath), `consumer discovery parser omitted tracked source: ${relativePath}`)
+  assert(failures.length === 0, `consumer discovery parse failure:\n${failures.join('\n')}`)
+  return { checker: program.getTypeChecker(), sources }
+}
+
+function makeAuthorityExportResolver(sources, checker) {
+  const extensions = ['', '.mjs', '.js', '.cjs', '.ts', '.tsx', '.jsx']
+  const cache = new Map()
+  const active = new Set()
+  const symbolAt = (identifier) => checker.getSymbolAtLocation(identifier) ?? null
+
+  function trackedModule(fromPath, specifier) {
+    if (!specifier?.startsWith('.')) return null
+    const base = path.posix.normalize(path.posix.join(path.posix.dirname(fromPath), specifier))
+    for (const candidate of extensions.flatMap((extension) => [`${base}${extension}`, `${base}/index${extension}`])) {
+      if (sources.has(candidate)) return candidate
+    }
+    return null
+  }
+
+  function declarationModule(declaration) {
+    const imported = importDeclarationFor(declaration)
+    if (!imported) return null
+    return moduleSpecifierText(imported.moduleSpecifier)
+  }
+
+  function expressionAuthority(fromPath, expression, seenSymbols = new Set()) {
+    const node = unwrapExpression(expression)
+    if (!node) return null
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return AUTHORITY_STRING_REFERENCES.get(node.text) ?? null
+    if (ts.isIdentifier(node)) {
+      const symbol = symbolAt(node)
+      if (!symbol || seenSymbols.has(symbol)) return null
+      const nextSeen = new Set(seenSymbols).add(symbol)
+      for (const declaration of symbol.declarations ?? []) {
+        if (ts.isImportClause(declaration) && declaration.name) {
+          const target = trackedModule(fromPath, declarationModule(declaration))
+          if (target) {
+            const authorityUse = exportedAuthority(target, 'default')
+            if (authorityUse) return authorityUse
+          }
+        }
+        if (ts.isImportSpecifier(declaration)) {
+          const target = trackedModule(fromPath, declarationModule(declaration))
+          const importedName = propertyNameText(declaration.propertyName ?? declaration.name)
+          if (target && importedName) {
+            const authorityUse = exportedAuthority(target, importedName)
+            if (authorityUse) return authorityUse
+          }
+        }
+        if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
+          const authorityUse = expressionAuthority(fromPath, declaration.initializer, nextSeen)
+          if (authorityUse) return authorityUse
+        }
+      }
+      return null
+    }
+    if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)) {
+      for (const declaration of symbolAt(node.expression)?.declarations ?? []) {
+        if (!ts.isNamespaceImport(declaration)) continue
+        const target = trackedModule(fromPath, declarationModule(declaration))
+        if (target) {
+          const authorityUse = exportedAuthority(target, node.name.text)
+          if (authorityUse) return authorityUse
+        }
+      }
+    }
+    return null
+  }
+
+  function exportedAuthority(modulePath, exportName) {
+    const key = `${modulePath}\0${exportName}`
+    if (cache.has(key)) return cache.get(key)
+    if (active.has(key)) return null
+    active.add(key)
+    const sourceFile = sources.get(modulePath)
+    const matches = new Set()
+    for (const statement of sourceFile?.statements ?? []) {
+      if (exportName === 'default' && ts.isExportAssignment(statement) && !statement.isExportEquals) {
+        const authorityUse = expressionAuthority(modulePath, statement.expression)
+        if (authorityUse) matches.add(authorityUse)
+      }
+      if (ts.isVariableStatement(statement)
+        && statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)) {
+        for (const declaration of statement.declarationList.declarations) {
+          if (ts.isIdentifier(declaration.name) && declaration.name.text === exportName && declaration.initializer) {
+            const authorityUse = expressionAuthority(modulePath, declaration.initializer)
+            if (authorityUse) matches.add(authorityUse)
+          }
+        }
+      }
+      if (!ts.isExportDeclaration(statement)) continue
+      const target = trackedModule(modulePath, moduleSpecifierText(statement.moduleSpecifier))
+      if (!statement.exportClause && target) {
+        const authorityUse = exportedAuthority(target, exportName)
+        if (authorityUse) matches.add(authorityUse)
+        continue
+      }
+      if (!statement.exportClause || !ts.isNamedExports(statement.exportClause)) continue
+      for (const element of statement.exportClause.elements) {
+        if (element.name.text !== exportName) continue
+        const localName = propertyNameText(element.propertyName ?? element.name)
+        if (target && localName) {
+          const authorityUse = exportedAuthority(target, localName)
+          if (authorityUse) matches.add(authorityUse)
+        } else if (!target && localName) {
+          const authorityUse = expressionAuthority(modulePath, element.propertyName ?? element.name)
+          if (authorityUse) matches.add(authorityUse)
+        }
+      }
+    }
+    active.delete(key)
+    assert(matches.size <= 1, `ambiguous imported authority export: ${modulePath}#${exportName}`)
+    const result = [...matches][0] ?? null
+    cache.set(key, result)
+    return result
+  }
+
+  return {
+    importedAuthority(fromPath, specifier, exportName) {
+      const target = trackedModule(fromPath, specifier)
+      return target ? exportedAuthority(target, exportName) : null
+    },
+  }
+}
+
+function makeSemanticSourceAnalyzer(relativePath, sourceFile, checker, authorityExports) {
+  const authorityUseForPath = (value) => AUTHORITY_STRING_REFERENCES.get(value) ?? null
+  const substitutionsKey = (symbol, substitutions) => substitutions.get(symbol)
+  const symbolAt = (identifier) => checker.getSymbolAtLocation(identifier) ?? null
+  const hasDeclaredSymbol = (identifier) => (symbolAt(identifier)?.declarations ?? []).length > 0
+  const declarationsFor = (identifier) => symbolAt(identifier)?.declarations ?? []
+  const sourceLocation = (node) => {
+    const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
+    return `${relativePath}:${position.line + 1}:${position.character + 1}`
+  }
+
+  function isUnshadowedRequireCall(node, expectedModules) {
+    const call = unwrapExpression(node)
+    if (!call || !ts.isCallExpression(call) || call.arguments.length !== 1 || !ts.isIdentifier(call.expression) || call.expression.text !== 'require') return false
+    if (hasDeclaredSymbol(call.expression)) return false
+    const specifier = moduleSpecifierText(call.arguments[0])
+    return specifier !== null && expectedModules.has(specifier)
+  }
+
+  function importBinding(node) {
+    const declaration = importDeclarationFor(node)
+    if (!declaration || !ts.isImportDeclaration(declaration)) return null
+    return { declaration, specifier: moduleSpecifierText(declaration.moduleSpecifier) }
+  }
+
+  function bindingElementProperty(declaration) {
+    if (!ts.isBindingElement(declaration)) return null
+    return propertyNameText(declaration.propertyName ?? declaration.name)
+  }
+
+  function variableInitializer(declaration) {
+    if (ts.isVariableDeclaration(declaration)) return declaration.initializer ?? null
+    if (ts.isBindingElement(declaration)) return variableDeclarationFor(declaration)?.initializer ?? null
+    return null
+  }
+
+  function bindingResolvesToNamespace(identifier, modules, seen = new Set()) {
+    const expression = unwrapExpression(identifier)
+    if (!expression) return false
+    if (isUnshadowedRequireCall(expression, modules)) return true
+    if (ts.isPropertyAccessExpression(expression)
+      && (modules === FILESYSTEM_MODULES && expression.name.text === 'promises'
+        || modules === PATH_MODULES && ['posix', 'win32'].includes(expression.name.text))
+      && bindingResolvesToNamespace(expression.expression, modules, seen)) return true
+    if (!ts.isIdentifier(expression)) return false
+    const symbol = symbolAt(expression)
+    if (!symbol || seen.has(symbol)) return false
+    seen.add(symbol)
+    for (const declaration of symbol.declarations ?? []) {
+      const imported = importBinding(declaration)
+      if (imported && modules.has(imported.specifier)
+        && (ts.isNamespaceImport(declaration) || ts.isImportClause(declaration))) return true
+      if (imported && modules.has(imported.specifier) && ts.isImportSpecifier(declaration)
+        && modules === FILESYSTEM_MODULES && propertyNameText(declaration.propertyName ?? declaration.name) === 'promises') return true
+      if (ts.isBindingElement(declaration) && modules === FILESYSTEM_MODULES
+        && bindingElementProperty(declaration) === 'promises'
+        && isUnshadowedRequireCall(variableInitializer(declaration), modules)) return true
+      if (ts.isVariableDeclaration(declaration) && declaration.initializer
+        && bindingResolvesToNamespace(declaration.initializer, modules, seen)) return true
+    }
+    return false
+  }
+
+  function bindingResolvesToExport(identifier, modules, exports, seen = new Set()) {
+    const expression = unwrapExpression(identifier)
+    if (!expression) return false
+    if (ts.isPropertyAccessExpression(expression)) {
+      return exports.has(expression.name.text) && bindingResolvesToNamespace(expression.expression, modules, seen)
+    }
+    if (ts.isElementAccessExpression(expression)
+      && (ts.isStringLiteral(expression.argumentExpression) || ts.isNoSubstitutionTemplateLiteral(expression.argumentExpression))) {
+      return exports.has(expression.argumentExpression.text) && bindingResolvesToNamespace(expression.expression, modules, seen)
+    }
+    if (!ts.isIdentifier(expression)) return false
+    const symbol = symbolAt(expression)
+    if (!symbol || seen.has(symbol)) return false
+    seen.add(symbol)
+    for (const declaration of symbol.declarations ?? []) {
+      const imported = importBinding(declaration)
+      if (imported && modules.has(imported.specifier) && ts.isImportSpecifier(declaration)
+        && exports.has(propertyNameText(declaration.propertyName ?? declaration.name))) return true
+      if (ts.isBindingElement(declaration)) {
+        const property = bindingElementProperty(declaration)
+        if (property && exports.has(property) && isUnshadowedRequireCall(variableInitializer(declaration), modules)) return true
+      }
+      if (ts.isVariableDeclaration(declaration) && declaration.initializer
+        && bindingResolvesToExport(declaration.initializer, modules, exports, seen)) return true
+    }
+    return false
+  }
+
+  const isFilesystemReader = (expression) => bindingResolvesToExport(expression, FILESYSTEM_MODULES, FILESYSTEM_READ_EXPORTS)
+  const isPathBuilder = (expression) => bindingResolvesToExport(expression, PATH_MODULES, PATH_BUILD_EXPORTS)
+
+  function expressionReferencesFilesystemReader(expression, seen = new Set()) {
+    const node = unwrapExpression(expression)
+    if (!node) return false
+    if (isFilesystemReader(node)) return true
+    if (ts.isIdentifier(node)) {
+      const symbol = symbolAt(node)
+      if (!symbol || seen.has(symbol)) return false
+      const nextSeen = new Set(seen).add(symbol)
+      return (symbol.declarations ?? []).some((declaration) => {
+        const initializer = variableInitializer(declaration)
+        return initializer ? expressionReferencesFilesystemReader(initializer, nextSeen) : false
+      })
+    }
+    if (ts.isConditionalExpression(node)) return expressionReferencesFilesystemReader(node.whenTrue, seen)
+      || expressionReferencesFilesystemReader(node.whenFalse, seen)
+    if (ts.isBinaryExpression(node)) return expressionReferencesFilesystemReader(node.left, seen)
+      || expressionReferencesFilesystemReader(node.right, seen)
+    if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) return expressionReferencesFilesystemReader(node.body, seen)
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+      && ['apply', 'bind', 'call'].includes(node.expression.name.text)) return expressionReferencesFilesystemReader(node.expression.expression, seen)
+    if (ts.isElementAccessExpression(node) && (ts.isStringLiteral(node.argumentExpression) || ts.isNoSubstitutionTemplateLiteral(node.argumentExpression))
+      && FILESYSTEM_READ_EXPORTS.has(node.argumentExpression.text)) return bindingResolvesToNamespace(node.expression, FILESYSTEM_MODULES)
+    return false
+  }
+
+  function importedAuthority(identifier) {
+    if (!ts.isIdentifier(identifier)) return null
+    for (const declaration of declarationsFor(identifier)) {
+      const imported = importBinding(declaration)
+      if (imported && ts.isImportClause(declaration) && declaration.name) {
+        const authorityUse = authorityExports.importedAuthority(relativePath, imported.specifier, 'default')
+        if (authorityUse) return authorityUse
+      }
+      if (imported && ts.isImportSpecifier(declaration)) {
+        const authorityUse = authorityExports.importedAuthority(
+          relativePath, imported.specifier, propertyNameText(declaration.propertyName ?? declaration.name),
+        )
+        if (authorityUse) return authorityUse
+      }
+    }
+    return null
+  }
+
+  function canonicalImportedExport(identifier) {
+    if (!ts.isIdentifier(identifier)) return null
+    for (const declaration of declarationsFor(identifier)) {
+      const imported = importBinding(declaration)
+      if (imported && ts.isImportSpecifier(declaration)
+        && canonicalModulePath(relativePath, imported.specifier) === OWNERSHIP_VALIDATOR_PATH) {
+        return propertyNameText(declaration.propertyName ?? declaration.name)
+      }
+    }
+    return null
+  }
+
+  function loadedDependencyAuthorityProjection(expression) {
+    const properties = []
+    let base = unwrapExpression(expression)
+    while (base && ts.isPropertyAccessExpression(base)) {
+      properties.unshift(base.name.text)
+      base = unwrapExpression(base.expression)
+    }
+    if (!base || !ts.isIdentifier(base)
+      || JSON.stringify(properties) !== JSON.stringify(['current_live', 'authority', 'path'])) return null
+    for (const declaration of declarationsFor(base)) {
+      let initializer = unwrapExpression(variableInitializer(declaration))
+      if (initializer && ts.isAwaitExpression(initializer)) initializer = unwrapExpression(initializer.expression)
+      if (initializer && ts.isCallExpression(initializer)
+        && canonicalImportedExport(unwrapExpression(initializer.expression)) === 'loadExecutablePathOwnershipDependencies') return 'coverage_document'
+    }
+    return null
+  }
+
+  function importedNamespaceAuthority(expression) {
+    const node = unwrapExpression(expression)
+    if (!node || !ts.isPropertyAccessExpression(node)) return null
+    if (!ts.isIdentifier(node.expression)) return null
+    for (const declaration of declarationsFor(node.expression)) {
+      const imported = importBinding(declaration)
+      if (imported && ts.isNamespaceImport(declaration)) {
+        const authorityUse = authorityExports.importedAuthority(relativePath, imported.specifier, node.name.text)
+        if (authorityUse) return authorityUse
+      }
+    }
+    return null
+  }
+
+  function localObjectProperty(expression, seen = new Set()) {
+    const node = unwrapExpression(expression)
+    if (!node || !ts.isPropertyAccessExpression(node)) return null
+    const property = node.name.text
+    let object = unwrapExpression(node.expression)
+    if (ts.isIdentifier(object)) {
+      const symbol = symbolAt(object)
+      if (!symbol || seen.has(symbol)) return null
+      seen.add(symbol)
+      const declaration = (symbol.declarations ?? []).find((candidate) => ts.isVariableDeclaration(candidate) && candidate.initializer)
+      object = unwrapExpression(declaration?.initializer)
+    }
+    if (!object || !ts.isObjectLiteralExpression(object)) return null
+    for (const member of object.properties) {
+      if (ts.isPropertyAssignment(member) && propertyNameText(member.name) === property) return member.initializer
+      if (ts.isShorthandPropertyAssignment(member) && member.name.text === property) return member.name
+    }
+    return null
+  }
+
+  const none = () => ({ exact: true, uses: new Set() })
+  const target = (authorityUse) => ({ exact: true, uses: new Set([authorityUse]) })
+  const union = (values) => ({
+    exact: values.every((value) => value.exact),
+    uses: new Set(values.flatMap((value) => [...value.uses])),
+  })
+
+  function resolveAuthorityExpression(expression, substitutions = new Map(), seen = new Set()) {
+    const node = unwrapExpression(expression)
+    if (!node) return none()
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+      const authorityUse = authorityUseForPath(node.text)
+      return authorityUse ? target(authorityUse) : none()
+    }
+    if (ts.isIdentifier(node)) {
+      const symbol = symbolAt(node)
+      if (symbol) {
+        if (seen.has(symbol)) return none()
+        const nextSeen = new Set(seen).add(symbol)
+        const substitution = substitutionsKey(symbol, substitutions)
+        if (substitution) return resolveAuthorityExpression(substitution, substitutions, nextSeen)
+        const imported = importedAuthority(node)
+        if (imported) return target(imported)
+        for (const declaration of symbol.declarations ?? []) {
+          const initializer = variableInitializer(declaration)
+          if (initializer) {
+            const resolved = resolveAuthorityExpression(initializer, substitutions, nextSeen)
+            if (resolved.uses.size > 0) return resolved
+          }
+        }
+      }
+      return none()
+    }
+    const namespaceAuthority = importedNamespaceAuthority(node)
+    if (namespaceAuthority) return target(namespaceAuthority)
+    const projectedAuthority = loadedDependencyAuthorityProjection(node)
+    if (projectedAuthority) return target(projectedAuthority)
+    const propertyValue = localObjectProperty(node)
+    if (propertyValue) return resolveAuthorityExpression(propertyValue, substitutions, seen)
+    if (ts.isAwaitExpression(node)) return resolveAuthorityExpression(node.expression, substitutions, seen)
+    if (ts.isConditionalExpression(node)) {
+      const branches = [
+        resolveAuthorityExpression(node.whenTrue, substitutions, seen),
+        resolveAuthorityExpression(node.whenFalse, substitutions, seen),
+      ]
+      if (branches.some((branch) => branch.uses.size > 0)) {
+        return { exact: branches.every((branch) => branch.exact), uses: union(branches).uses }
+      }
+      return none()
+    }
+    if (ts.isBinaryExpression(node) && [ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.BarBarToken].includes(node.operatorToken.kind)) {
+      const alternatives = [
+        resolveAuthorityExpression(node.left, substitutions, seen),
+        resolveAuthorityExpression(node.right, substitutions, seen),
+      ]
+      return alternatives.some((alternative) => alternative.uses.size > 0) ? union(alternatives) : none()
+    }
+    if (ts.isCallExpression(node) && isPathBuilder(node.expression)) {
+      const argumentsResolved = node.arguments.map((argument) => resolveAuthorityExpression(argument, substitutions, seen))
+      const withAuthority = argumentsResolved.map((value, index) => ({ index, value })).filter(({ value }) => value.uses.size > 0)
+      if (withAuthority.length === 0) return none()
+      const last = withAuthority.at(-1)
+      return {
+        exact: withAuthority.length === 1 && last.value.exact && last.index === node.arguments.length - 1,
+        uses: union(argumentsResolved).uses,
+      }
+    }
+    if (ts.isNewExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'URL' && !hasDeclaredSymbol(node.expression)) {
+      const first = resolveAuthorityExpression(node.arguments?.[0], substitutions, seen)
+      return first.uses.size > 0 ? first : none()
+    }
+    if (ts.isTemplateExpression(node)) {
+      const spans = node.templateSpans.map((span) => resolveAuthorityExpression(span.expression, substitutions, seen))
+      const merged = union(spans)
+      if (merged.uses.size === 0) return none()
+      const authorityIndexes = spans.map((value, index) => ({ index, value })).filter(({ value }) => value.uses.size > 0)
+      return {
+        exact: merged.exact && authorityIndexes.length === 1 && authorityIndexes[0].index === spans.length - 1
+          && node.templateSpans.at(-1).literal.text === '',
+        uses: merged.uses,
+      }
+    }
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+      const left = resolveAuthorityExpression(node.left, substitutions, seen)
+      const right = resolveAuthorityExpression(node.right, substitutions, seen)
+      if (left.uses.size === 0 && right.uses.size === 0) return none()
+      const rightIsEmpty = (ts.isStringLiteral(node.right) || ts.isNoSubstitutionTemplateLiteral(node.right)) && node.right.text === ''
+      return {
+        exact: right.exact && right.uses.size > 0 && left.uses.size === 0
+          || left.exact && left.uses.size > 0 && right.uses.size === 0 && rightIsEmpty,
+        uses: union([left, right]).uses,
+      }
+    }
+    return none()
+  }
+
+  function expressionReferencesAuthority(expression, substitutions = new Map(), seen = new Set()) {
+    const node = unwrapExpression(expression)
+    if (!node) return false
+    if (ts.isCallExpression(node) && (isFilesystemReader(node.expression)
+      || ts.isPropertyAccessExpression(node.expression)
+        && ts.isIdentifier(node.expression.expression)
+        && node.expression.expression.text === 'JSON'
+        && node.expression.name.text === 'parse'
+        && !hasDeclaredSymbol(node.expression.expression))) return false
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return authorityUseForPath(node.text) !== null
+    if (ts.isIdentifier(node)) {
+      const symbol = symbolAt(node)
+      if (!symbol || seen.has(symbol)) return false
+      const nextSeen = new Set(seen).add(symbol)
+      const substitution = substitutionsKey(symbol, substitutions)
+      if (substitution) return expressionReferencesAuthority(substitution, substitutions, nextSeen)
+      if (importedAuthority(node)) return true
+      return (symbol.declarations ?? []).some((declaration) => {
+        const initializer = variableInitializer(declaration)
+        return initializer ? expressionReferencesAuthority(initializer, substitutions, nextSeen) : false
+      })
+    }
+    if (importedNamespaceAuthority(node)) return true
+    if (loadedDependencyAuthorityProjection(node)) return true
+    const propertyValue = localObjectProperty(node)
+    if (propertyValue) return expressionReferencesAuthority(propertyValue, substitutions, seen)
+    let referenced = false
+    ts.forEachChild(node, (child) => { if (!referenced && expressionReferencesAuthority(child, substitutions, seen)) referenced = true })
+    return referenced
+  }
+
+  function localFunction(expression, seen = new Set()) {
+    const node = unwrapExpression(expression)
+    if (!node) return null
+    if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) return node
+    if (!ts.isIdentifier(node)) return null
+    const symbol = symbolAt(node)
+    if (!symbol || seen.has(symbol)) return null
+    seen.add(symbol)
+    for (const declaration of symbol.declarations ?? []) {
+      if (ts.isFunctionDeclaration(declaration) && declaration.body) return declaration
+      if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
+        const resolved = localFunction(declaration.initializer, seen)
+        if (resolved) return resolved
+      }
+    }
+    return null
+  }
+
+  function readUsesFromCall(call, substitutions = new Map(), activeFunctions = new Set()) {
+    if (isFilesystemReader(call.expression)) {
+      assert(call.arguments.length > 0, `authority consumer filesystem read has no path argument: ${sourceLocation(call)}`)
+      const resolved = resolveAuthorityExpression(call.arguments[0], substitutions)
+      if (resolved.uses.size > 0) {
+        assert(resolved.exact, `unsupported authority path expression in filesystem read: ${sourceLocation(call)}`)
+        return resolved.uses
+      }
+      assert(!expressionReferencesAuthority(call.arguments[0], substitutions), `unsupported authority dataflow into filesystem read: ${sourceLocation(call)}`)
+      return new Set()
+    }
+    const relevantArguments = call.arguments.some((argument) => expressionReferencesAuthority(argument, substitutions))
+    const functionNode = localFunction(call.expression)
+    if (!functionNode || activeFunctions.has(functionNode)) {
+      assert(!relevantArguments || !expressionReferencesFilesystemReader(call.expression), `unsupported filesystem reader binding for authority call: ${sourceLocation(call)}`)
+      return new Set()
+    }
+    if (!relevantArguments) return new Set()
+    assert(functionNode.parameters.every((parameter) => ts.isIdentifier(parameter.name)), `unsupported authority wrapper parameter pattern: ${relativePath}`)
+    const nestedSubstitutions = new Map(substitutions)
+    functionNode.parameters.forEach((parameter, index) => {
+      const symbol = symbolAt(parameter.name)
+      if (symbol && call.arguments[index]) nestedSubstitutions.set(symbol, call.arguments[index])
+    })
+    const uses = new Set()
+    const nextActive = new Set(activeFunctions).add(functionNode)
+    const visit = (node) => {
+      if (ts.isCallExpression(node)) for (const authorityUse of readUsesFromCall(node, nestedSubstitutions, nextActive)) uses.add(authorityUse)
+      ts.forEachChild(node, visit)
+    }
+    if (functionNode.body) visit(functionNode.body)
+    return uses
+  }
+
+  function consumesOwnershipValidator(authorityUses) {
+    const referencedOutside = (symbol, declaration, acceptReference) => {
+      let referenced = false
+      const visit = (node) => {
+        if (referenced) return
+        if (ts.isIdentifier(node) && node !== declaration.name && symbolAt(node) === symbol && acceptReference(node)) referenced = true
+        ts.forEachChild(node, visit)
+      }
+      visit(sourceFile)
+      return referenced
+    }
+    for (const statement of sourceFile.statements) {
+      if (!ts.isImportDeclaration(statement)
+        || canonicalModulePath(relativePath, moduleSpecifierText(statement.moduleSpecifier)) !== OWNERSHIP_VALIDATOR_PATH
+        || !statement.importClause) continue
+      const bindings = statement.importClause.namedBindings
+      if (bindings && ts.isNamedImports(bindings)) {
+        for (const element of bindings.elements) {
+          const symbol = symbolAt(element.name)
+          if (!symbol) continue
+          const authorityUse = importedAuthority(element.name)
+          if (authorityUse && authorityUses.has(authorityUse)) return true
+          if (!authorityUse && referencedOutside(symbol, element, () => true)) return true
+        }
+      }
+      if (bindings && ts.isNamespaceImport(bindings)) {
+        const symbol = symbolAt(bindings.name)
+        if (symbol && referencedOutside(symbol, bindings, (reference) => {
+          const parent = reference.parent
+          if (!ts.isPropertyAccessExpression(parent) || parent.expression !== reference) return true
+          const authorityUse = authorityExports.importedAuthority(relativePath, moduleSpecifierText(statement.moduleSpecifier), parent.name.text)
+          return authorityUse ? authorityUses.has(authorityUse) : true
+        })) return true
+      }
+      if (statement.importClause.name) {
+        const symbol = symbolAt(statement.importClause.name)
+        const authorityUse = importedAuthority(statement.importClause.name)
+        if (symbol && (authorityUse
+          ? authorityUses.has(authorityUse)
+          : referencedOutside(symbol, statement.importClause, () => true))) return true
+      }
+    }
+    return false
+  }
+
+  function authoritySeeds() {
+    let imported = false
+    let literal = false
+    const visit = (node) => {
+      if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
+        && authorityUseForPath(node.text)) literal = true
+      if (ts.isImportSpecifier(node) && importedAuthority(node.name)) literal = true
+      if (ts.isImportClause(node) && node.name && importedAuthority(node.name)) literal = true
+      if (ts.isPropertyAccessExpression(node) && importedNamespaceAuthority(node)) literal = true
+      if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node))
+        && canonicalModulePath(relativePath, moduleSpecifierText(node.moduleSpecifier)) === OWNERSHIP_VALIDATOR_PATH) imported = true
+      if (ts.isCallExpression(node) && isUnshadowedRequireCall(node, new Set([
+        path.posix.relative(path.posix.dirname(relativePath), OWNERSHIP_VALIDATOR_PATH),
+        `./${path.posix.relative(path.posix.dirname(relativePath), OWNERSHIP_VALIDATOR_PATH)}`,
+      ]))) imported = true
+      ts.forEachChild(node, visit)
+    }
+    visit(sourceFile)
+    return { imported, literal }
+  }
+
+  const authorityUses = new Set()
+  const seeds = authoritySeeds()
+  if (!seeds.imported && !seeds.literal) return []
+  const visit = (node) => {
+    if (ts.isCallExpression(node)) for (const authorityUse of readUsesFromCall(node)) authorityUses.add(authorityUse)
+    ts.forEachChild(node, visit)
+  }
+  visit(sourceFile)
+  if (seeds.imported && consumesOwnershipValidator(authorityUses)) authorityUses.add('ownership_validator_module')
+  return [...authorityUses].sort()
+}
+
 export function discoverExecutablePathOwnershipConsumers(repositoryRoot) {
+  assert(ts.version === '5.9.3', `consumer discovery parser version mismatch: ${ts.version}`)
+  const relativePaths = repositoryTrackedJavaScriptSources(repositoryRoot)
+  const snapshot = trackedSourceSnapshot(repositoryRoot, relativePaths)
+  const cacheKey = path.resolve(repositoryRoot)
+  const cached = CONSUMER_DISCOVERY_CACHE.get(cacheKey)
+  if (cached?.snapshot === snapshot) return cached.consumers.map((consumer) => ({
+    path: consumer.path,
+    authority_uses: [...consumer.authority_uses],
+  }))
   const consumers = []
-  for (const relativePath of repositoryTrackedJavaScriptSources(repositoryRoot)) {
-    const source = readFileSync(path.join(repositoryRoot, relativePath), 'utf8')
-    const tokens = javascriptTokens(source)
-    const authorityUses = new Set()
-    for (const [authorityPath, authorityUse] of AUTHORITY_STRING_REFERENCES) {
-      if (tokens.some((token, index) => token.type === 'string' && token.value === authorityPath
-        && (relativePath === OWNERSHIP_VALIDATOR_PATH || authorityStringIsConsumed(tokens, index)))) authorityUses.add(authorityUse)
-    }
-    for (const specifier of staticModuleSpecifiers(tokens)) {
-      if (!specifier.startsWith('.')) continue
-      const importedPath = path.posix.normalize(path.posix.join(path.posix.dirname(relativePath), specifier))
-      if (importedPath === OWNERSHIP_VALIDATOR_PATH) authorityUses.add('ownership_validator_module')
-    }
-    if (authorityUses.size > 0) consumers.push({
+  const parsed = semanticProgram(repositoryRoot, relativePaths)
+  const authorityExports = makeAuthorityExportResolver(parsed.sources, parsed.checker)
+  for (const relativePath of relativePaths) {
+    const authorityUses = makeSemanticSourceAnalyzer(relativePath, parsed.sources.get(relativePath), parsed.checker, authorityExports)
+    if (authorityUses.length > 0) consumers.push({
       path: relativePath,
-      authority_uses: [...authorityUses].sort(),
+      authority_uses: authorityUses,
     })
   }
-  return consumers
+  CONSUMER_DISCOVERY_CACHE.set(cacheKey, { consumers, snapshot })
+  return consumers.map((consumer) => ({ path: consumer.path, authority_uses: [...consumer.authority_uses] }))
 }
 
 export function validateExecutablePathOwnershipConsumerClosure(value, repositoryRoot = root) {
@@ -742,13 +1303,13 @@ async function main() {
     const decisionPath = path.resolve(root, decisionArgument)
     const decisionRegistryPath = repositoryRelative(decisionPath)
     assert(decisionRegistryPath === REVIEWED_DECISION_PATH, `materialization requires authoritative reviewed decisions at ${REVIEWED_DECISION_PATH}`)
-    const decisionBytes = await readFile(decisionPath)
+    const decisionBytes = await readFile(path.join(root, REVIEWED_DECISION_PATH))
     const decisions = JSON.parse(decisionBytes.toString('utf8'))
     assert(typeof decisions.baseline?.coverage_path === 'string' && decisions.baseline.coverage_path.length > 0, 'reviewed executable ownership baseline path missing')
     const baselinePath = path.resolve(root, decisions.baseline.coverage_path)
     const baselineCoveragePath = repositoryRelative(baselinePath)
     assert(baselineCoveragePath === REVIEWED_BASELINE_PATH, `materialization requires authoritative baseline at ${REVIEWED_BASELINE_PATH}`)
-    const baselineBytes = await readFile(baselinePath)
+    const baselineBytes = await readFile(path.join(root, REVIEWED_BASELINE_PATH))
     assert(byteDigest(baselineBytes) === REVIEWED_BASELINE_SHA256, 'reviewed executable ownership baseline trust anchor mismatch')
     const baselineCoverage = JSON.parse(baselineBytes.toString('utf8'))
     assert(baselineCoverage.schema === REVIEWED_BASELINE_SCHEMA && baselineCoverage.version === 1, 'reviewed executable ownership baseline identity mismatch')

@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { mkdtemp, mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, unlink, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
@@ -488,8 +488,8 @@ async function dependencyClosureFixture() {
   const consumerPath = 'tools/architecture/current-consumer.mjs'
   const nonConsumerPath = 'tools/architecture/non-consumer-diagnostic.mjs'
   await mkdir(path.join(fixture, 'tools/architecture'), { recursive: true })
-  await writeFile(path.join(fixture, validatorPath), `export const coverage = '${currentDependencies.current_live.authority.path}'\n`)
-  await writeFile(path.join(fixture, consumerPath), "import './validate-executable-path-ownership.mjs'\n")
+  await writeFile(path.join(fixture, validatorPath), `import { readFileSync } from 'node:fs'\nexport const COVERAGE_PATH = '${currentDependencies.current_live.authority.path}'\nexport const coverageBytes = readFileSync(COVERAGE_PATH)\n`)
+  await writeFile(path.join(fixture, consumerPath), "import { readFileSync } from 'node:fs'\nimport { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nreadFileSync(COVERAGE_PATH)\n")
   await writeFile(path.join(fixture, nonConsumerPath), `// ${currentDependencies.current_live.authority.path}\nexport const expectedDiagnostic = '${currentDependencies.current_live.authority.path}'\n`)
   await git('add', validatorPath, consumerPath, nonConsumerPath)
   await git('commit', '--quiet', '-m', 'closure fixture')
@@ -497,7 +497,7 @@ async function dependencyClosureFixture() {
     current_live: {
       consumers: [
         { role: 'fixture_validator', path: validatorPath, authority_uses: ['coverage_document'] },
-        { role: 'fixture_consumer', path: consumerPath, authority_uses: ['ownership_validator_module'] },
+        { role: 'fixture_consumer', path: consumerPath, authority_uses: ['coverage_document', 'ownership_validator_module'] },
       ],
     },
   }
@@ -505,48 +505,201 @@ async function dependencyClosureFixture() {
 }
 
 const closurePositive = await dependencyClosureFixture()
-assert.deepEqual(
-  validateExecutablePathOwnershipConsumerClosure(closurePositive.declaration, closurePositive.fixture),
-  discoverExecutablePathOwnershipConsumers(closurePositive.fixture),
-  'declared and real current-authority consumers must close in both directions',
-)
+try {
+  assert.deepEqual(
+    validateExecutablePathOwnershipConsumerClosure(closurePositive.declaration, closurePositive.fixture),
+    discoverExecutablePathOwnershipConsumers(closurePositive.fixture),
+    'declared and real current-authority consumers must close in both directions',
+  )
+} finally {
+  await rm(closurePositive.fixture, { force: true, recursive: true })
+}
 
 const closureUndeclared = await dependencyClosureFixture()
 const rogueConsumerPath = 'tools/architecture/undeclared-current-consumer.mjs'
-await writeFile(path.join(closureUndeclared.fixture, rogueConsumerPath), `import { readFileSync } from 'node:fs'\nexport const authority = readFileSync('${currentDependencies.current_live.authority.path}')\n`)
-await closureUndeclared.git('add', rogueConsumerPath)
-assert.throws(
-  () => validateExecutablePathOwnershipConsumerClosure(closureUndeclared.declaration, closureUndeclared.fixture),
-  /undeclared current consumers: tools\/architecture\/undeclared-current-consumer\.mjs/,
-  'a tracked current-authority consumer outside the canonical declaration must fail',
-)
+try {
+  await writeFile(path.join(closureUndeclared.fixture, rogueConsumerPath), `import { readFileSync } from 'node:fs'\nexport const authority = readFileSync('${currentDependencies.current_live.authority.path}')\n`)
+  await closureUndeclared.git('add', rogueConsumerPath)
+  assert.throws(
+    () => validateExecutablePathOwnershipConsumerClosure(closureUndeclared.declaration, closureUndeclared.fixture),
+    /undeclared current consumers: tools\/architecture\/undeclared-current-consumer\.mjs/,
+    'a tracked current-authority consumer outside the canonical declaration must fail',
+  )
+} finally {
+  await rm(closureUndeclared.fixture, { force: true, recursive: true })
+}
+
+const closureCacheInvalidation = await dependencyClosureFixture()
+try {
+  discoverExecutablePathOwnershipConsumers(closureCacheInvalidation.fixture)
+  await writeFile(path.join(closureCacheInvalidation.fixture, rogueConsumerPath), `import { readFileSync } from 'node:fs'\nexport const authority = readFileSync('${currentDependencies.current_live.authority.path}')\n`)
+  await closureCacheInvalidation.git('add', rogueConsumerPath)
+  assert.throws(
+    () => validateExecutablePathOwnershipConsumerClosure(closureCacheInvalidation.declaration, closureCacheInvalidation.fixture),
+    /undeclared current consumers: tools\/architecture\/undeclared-current-consumer\.mjs/,
+    'consumer discovery cache must invalidate on exact tracked source changes',
+  )
+} finally {
+  await rm(closureCacheInvalidation.fixture, { force: true, recursive: true })
+}
 
 const closureStale = await dependencyClosureFixture()
-closureStale.declaration.current_live.consumers.push({
-  role: 'removed_consumer',
-  path: 'tools/architecture/removed-consumer.mjs',
-  authority_uses: ['coverage_document'],
-})
-assert.throws(
-  () => validateExecutablePathOwnershipConsumerClosure(closureStale.declaration, closureStale.fixture),
-  /stale declared consumers: tools\/architecture\/removed-consumer\.mjs/,
-  'a declared consumer that is absent from tracked source must fail',
-)
+try {
+  closureStale.declaration.current_live.consumers.push({
+    role: 'removed_consumer',
+    path: 'tools/architecture/removed-consumer.mjs',
+    authority_uses: ['coverage_document'],
+  })
+  assert.throws(
+    () => validateExecutablePathOwnershipConsumerClosure(closureStale.declaration, closureStale.fixture),
+    /stale declared consumers: tools\/architecture\/removed-consumer\.mjs/,
+    'a declared consumer that is absent from tracked source must fail',
+  )
+} finally {
+  await rm(closureStale.fixture, { force: true, recursive: true })
+}
 
 const closureAdded = await dependencyClosureFixture()
 const addedConsumerPath = 'tools/architecture/legitimate-current-consumer.mjs'
-await writeFile(path.join(closureAdded.fixture, addedConsumerPath), "import './validate-executable-path-ownership.mjs'\n")
-await closureAdded.git('add', addedConsumerPath)
-closureAdded.declaration.current_live.consumers.push({
-  role: 'legitimate_consumer',
-  path: addedConsumerPath,
-  authority_uses: ['ownership_validator_module'],
+try {
+  await writeFile(path.join(closureAdded.fixture, addedConsumerPath), "import { readFileSync } from 'node:fs'\nimport { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nreadFileSync(COVERAGE_PATH)\n")
+  await closureAdded.git('add', addedConsumerPath)
+  closureAdded.declaration.current_live.consumers.push({
+    role: 'legitimate_consumer',
+    path: addedConsumerPath,
+    authority_uses: ['coverage_document', 'ownership_validator_module'],
+  })
+  assert.deepEqual(
+    validateExecutablePathOwnershipConsumerClosure(closureAdded.declaration, closureAdded.fixture),
+    discoverExecutablePathOwnershipConsumers(closureAdded.fixture),
+    'a legitimate registered consumer must become visible deterministically',
+  )
+} finally {
+  await rm(closureAdded.fixture, { force: true, recursive: true })
+}
+
+async function semanticDiscoveryFixture(files) {
+  const fixture = await mkdtemp(path.join(os.tmpdir(), 'yoko-ownership-semantic-discovery-'))
+  const git = (...args) => execFileAsync('git', args, { cwd: fixture, encoding: 'utf8', maxBuffer: 1024 * 1024 })
+  await git('init', '--quiet')
+  await git('config', 'user.name', 'Yoko Semantic Discovery Fixture')
+  await git('config', 'user.email', 'fixture@example.invalid')
+  await mkdir(path.join(fixture, 'tools/architecture'), { recursive: true })
+  const validatorPath = 'tools/architecture/validate-executable-path-ownership.mjs'
+  const validator = [
+    `export const COVERAGE_PATH = '${currentDependencies.current_live.authority.path}'`,
+    `export const CURRENT_DEPENDENCY_PATH = '${CURRENT_DEPENDENCY_PATH}'`,
+    `export const REVIEWED_DECISION_PATH = '${REVIEWED_DECISION_PATH}'`,
+    `export const REVIEWED_BASELINE_PATH = '${REVIEWED_BASELINE_PATH}'`,
+    '',
+  ].join('\n')
+  await writeFile(path.join(fixture, validatorPath), validator)
+  for (const [relativePath, source] of Object.entries(files)) {
+    await mkdir(path.dirname(path.join(fixture, relativePath)), { recursive: true })
+    await writeFile(path.join(fixture, relativePath), source)
+  }
+  await git('add', '.')
+  await git('commit', '--quiet', '-m', 'semantic discovery fixture')
+  return { fixture, validatorPath }
+}
+
+const distancePadding = Array.from({ length: 80 }, (_, index) => `const padding_${index} = ${index}`).join('\n')
+const semanticMatrix = await semanticDiscoveryFixture({
+  'tools/architecture/true-normal.mjs': `import { readFileSync } from 'node:fs'\nreadFileSync('${currentDependencies.current_live.authority.path}')\n`,
+  'tools/architecture/true-aliased-distance.mjs': `import { readFileSync as slurp } from 'node:fs'\nimport { CURRENT_DEPENDENCY_PATH } from './validate-executable-path-ownership.mjs'\n${distancePadding}\nconst firstAlias = CURRENT_DEPENDENCY_PATH\nconst secondAlias = firstAlias\nslurp(secondAlias)\n`,
+  'tools/architecture/true-namespace.mjs': `import * as fs from 'node:fs'\nfs.readFileSync('${REVIEWED_DECISION_PATH}')\n`,
+  'tools/architecture/true-commonjs.cjs': `const { readFileSync: slurp } = require('fs')\nslurp('${REVIEWED_BASELINE_PATH}')\n`,
+  'tools/architecture/true-commonjs-namespace.cjs': `const fs = require('node:fs')\nfs.readFileSync('${currentDependencies.current_live.authority.path}')\n`,
+  'tools/architecture/true-promises-namespace.mjs': `import { promises as fs } from 'node:fs'\nawait fs.readFile('${CURRENT_DEPENDENCY_PATH}')\n`,
+  'tools/architecture/true-alias-dataflow.mjs': `import { readFile as fetchBytes } from 'node:fs/promises'\nimport { join as assemble } from 'node:path'\nimport { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nconst authorityAlias = COVERAGE_PATH\nconst targetAlias = assemble('/repository', authorityAlias)\nawait fetchBytes(targetAlias)\n`,
+  'tools/architecture/true-object-alias.mjs': `import { readFileSync } from 'node:fs'\nimport { CURRENT_DEPENDENCY_PATH } from './validate-executable-path-ownership.mjs'\nconst paths = { target: CURRENT_DEPENDENCY_PATH, diagnostic: 'current dependency' }\nreadFileSync(paths.target)\n`,
+  'tools/architecture/true-wrapper.mjs': `import { readFile } from 'node:fs/promises'\nimport { CURRENT_DEPENDENCY_PATH } from './validate-executable-path-ownership.mjs'\nconst load = async (relative) => readFile(new URL(relative, 'file:///repository/'))\nawait load(CURRENT_DEPENDENCY_PATH)\n`,
+  'tools/architecture/true-imported-metadata.mjs': `import { readFileSync } from 'node:fs'\nimport { authorityMetadata } from './false-exported-metadata.mjs'\nreadFileSync(authorityMetadata)\n`,
+  'tools/architecture/true-reexport-reader.mjs': `import { readFileSync } from 'node:fs'\nimport { forwardedAuthority } from './false-metadata-reexport.mjs'\nreadFileSync(forwardedAuthority)\n`,
+  'tools/architecture/true-default-imported-metadata.mjs': `import { readFileSync } from 'node:fs'\nimport authorityPath from './false-default-metadata.mjs'\nreadFileSync(authorityPath)\n`,
+  'tools/architecture/false-read-plus-diagnostic.mjs': `import { readFileSync } from 'node:fs'\nreadFileSync('/tmp/unrelated.json')\nexport const diagnostic = '${currentDependencies.current_live.authority.path}'\n`,
+  'tools/architecture/false-object-diagnostic.mjs': `import { readFileSync } from 'node:fs'\nconst paths = { target: '/tmp/unrelated.json', diagnostic: '${currentDependencies.current_live.authority.path}' }\nreadFileSync(paths.target)\n`,
+  'tools/architecture/false-exported-metadata.mjs': `export const authorityMetadata = '${CURRENT_DEPENDENCY_PATH}'\n`,
+  'tools/architecture/false-metadata-reexport.mjs': `export { authorityMetadata as forwardedAuthority } from './false-exported-metadata.mjs'\n`,
+  'tools/architecture/false-default-metadata.mjs': `export default '${REVIEWED_DECISION_PATH}'\n`,
+  'tools/architecture/false-error-message.mjs': `console.error('${REVIEWED_DECISION_PATH}')\n`,
+  'tools/architecture/false-comment.mjs': `// ${REVIEWED_BASELINE_PATH}\nexport const harmless = true\n`,
+  'tools/architecture/false-unrelated-read.mjs': `import { readFileSync } from 'node:fs'\nreadFileSync('/tmp/not-authority.json')\n`,
+  'tools/architecture/false-similar-local-function.mjs': `function readFileSync(value) { return value }\nreadFileSync('${currentDependencies.current_live.authority.path}')\n`,
+  'tools/architecture/false-shadowed-reader.mjs': `const readFileSync = (...values) => values\nreadFileSync('${CURRENT_DEPENDENCY_PATH}')\n`,
+  'tools/architecture/false-shadowed-require.cjs': `const require = () => ({ readFileSync: (value) => value })\nconst { readFileSync } = require('fs')\nreadFileSync('${CURRENT_DEPENDENCY_PATH}')\n`,
 })
-assert.deepEqual(
-  validateExecutablePathOwnershipConsumerClosure(closureAdded.declaration, closureAdded.fixture),
-  discoverExecutablePathOwnershipConsumers(closureAdded.fixture),
-  'a legitimate registered consumer must become visible deterministically',
-)
+try {
+  const semanticConsumers = new Map(discoverExecutablePathOwnershipConsumers(semanticMatrix.fixture)
+    .map((consumer) => [consumer.path, consumer.authority_uses]))
+  assert.deepEqual(semanticConsumers.get('tools/architecture/true-normal.mjs'), ['coverage_document'], 'normal named filesystem reader must be detected')
+  assert.deepEqual(semanticConsumers.get('tools/architecture/true-aliased-distance.mjs'), ['dependency_manifest', 'ownership_validator_module'], 'aliased filesystem reader must be detected independently of token distance')
+  assert.deepEqual(semanticConsumers.get('tools/architecture/true-namespace.mjs'), ['reviewed_decisions'], 'filesystem namespace reader must be detected')
+  assert.deepEqual(semanticConsumers.get('tools/architecture/true-commonjs.cjs'), ['historical_baseline'], 'supported CommonJS filesystem alias must be detected')
+  assert.deepEqual(semanticConsumers.get('tools/architecture/true-commonjs-namespace.cjs'), ['coverage_document'], 'supported CommonJS filesystem namespace must be detected')
+  assert.deepEqual(semanticConsumers.get('tools/architecture/true-promises-namespace.mjs'), ['dependency_manifest'], 'filesystem promises namespace must be detected')
+  assert.deepEqual(semanticConsumers.get('tools/architecture/true-alias-dataflow.mjs'), ['coverage_document', 'ownership_validator_module'], 'local path aliases must preserve authority dataflow')
+  assert.deepEqual(semanticConsumers.get('tools/architecture/true-object-alias.mjs'), ['dependency_manifest', 'ownership_validator_module'], 'selected local object properties must preserve authority dataflow')
+  assert.deepEqual(semanticConsumers.get('tools/architecture/true-wrapper.mjs'), ['dependency_manifest', 'ownership_validator_module'], 'local deterministic reader wrappers must preserve authority dataflow')
+  assert.deepEqual(semanticConsumers.get('tools/architecture/true-imported-metadata.mjs'), ['dependency_manifest'], 'a tracked imported authority constant must preserve authority dataflow')
+  assert.deepEqual(semanticConsumers.get('tools/architecture/true-reexport-reader.mjs'), ['dependency_manifest'], 'a tracked named re-export must preserve authority dataflow')
+  assert.deepEqual(semanticConsumers.get('tools/architecture/true-default-imported-metadata.mjs'), ['reviewed_decisions'], 'a tracked default authority export must preserve authority dataflow')
+  for (const falsePath of [
+    semanticMatrix.validatorPath,
+    'tools/architecture/false-read-plus-diagnostic.mjs',
+    'tools/architecture/false-object-diagnostic.mjs',
+    'tools/architecture/false-exported-metadata.mjs',
+    'tools/architecture/false-metadata-reexport.mjs',
+    'tools/architecture/false-default-metadata.mjs',
+    'tools/architecture/false-error-message.mjs',
+    'tools/architecture/false-comment.mjs',
+    'tools/architecture/false-unrelated-read.mjs',
+    'tools/architecture/false-similar-local-function.mjs',
+    'tools/architecture/false-shadowed-reader.mjs',
+    'tools/architecture/false-shadowed-require.cjs',
+  ]) assert.equal(semanticConsumers.has(falsePath), false, `diagnostic/non-fs source must not become an authority consumer: ${falsePath}`)
+} finally {
+  await rm(semanticMatrix.fixture, { force: true, recursive: true })
+}
+
+const unsupportedSemantic = await semanticDiscoveryFixture({
+  'tools/architecture/unsupported-authority-reader.mjs': `import { readFileSync } from 'node:fs'\nimport { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nconst choosePath = (record) => record.authority\nreadFileSync(choosePath({ authority: COVERAGE_PATH }))\n`,
+})
+try {
+  assert.throws(
+    () => discoverExecutablePathOwnershipConsumers(unsupportedSemantic.fixture),
+    /unsupported authority dataflow into filesystem read: tools\/architecture\/unsupported-authority-reader\.mjs/,
+    'an unhandled relevant authority expression must fail closed',
+  )
+} finally {
+  await rm(unsupportedSemantic.fixture, { force: true, recursive: true })
+}
+
+const unsupportedReaderBinding = await semanticDiscoveryFixture({
+  'tools/architecture/unsupported-reader-binding.mjs': `import { readFileSync } from 'node:fs'\nimport { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nconst reader = globalThis.useFs ? readFileSync : () => null\nreader(COVERAGE_PATH)\n`,
+})
+try {
+  assert.throws(
+    () => discoverExecutablePathOwnershipConsumers(unsupportedReaderBinding.fixture),
+    /unsupported filesystem reader binding for authority call: tools\/architecture\/unsupported-reader-binding\.mjs/,
+    'an unhandled filesystem reader alias must fail closed',
+  )
+} finally {
+  await rm(unsupportedReaderBinding.fixture, { force: true, recursive: true })
+}
+
+const malformedSemantic = await semanticDiscoveryFixture({
+  'tools/architecture/malformed-consumer.mjs': "import { readFileSync from 'node:fs'\n",
+})
+try {
+  assert.throws(
+    () => discoverExecutablePathOwnershipConsumers(malformedSemantic.fixture),
+    /consumer discovery parse failure:\ntools\/architecture\/malformed-consumer\.mjs:/,
+    'tracked source parser failures must fail closed',
+  )
+} finally {
+  await rm(malformedSemantic.fixture, { force: true, recursive: true })
+}
 
 const currentManifests = await Promise.all(currentIndex.contexts.map(async (entry) => JSON.parse(await readFile(path.join(repositoryRoot, entry.path), 'utf8'))))
 const [firstCleanInventory, secondCleanInventory] = await Promise.all([
@@ -568,6 +721,9 @@ assert.deepEqual(
 )
 const validatorSource = await readFile(path.join(repositoryRoot, 'tools/architecture/validate-executable-path-ownership.mjs'), 'utf8')
 assert.equal(validatorSource.includes('CURRENT_CONSUMERS'), false, 'the validator must not retain a duplicate authoritative consumer list')
+for (const obsoleteHeuristic of ['AUTHORITY_READ_IDENTIFIERS', 'authorityStringIsConsumed', 'javascriptTokens', 'stringIndex - 16']) {
+  assert.equal(validatorSource.includes(obsoleteHeuristic), false, `obsolete token-window consumer heuristic remains: ${obsoleteHeuristic}`)
+}
 for (const consumer of discoveredCurrentConsumers) {
   const consumerSource = await readFile(path.join(repositoryRoot, consumer.path), 'utf8')
   assert.equal(
