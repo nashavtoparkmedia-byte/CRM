@@ -112,7 +112,7 @@
     },
     "executable_path_ownership_validator": {
       "path": "tools/architecture/validate-executable-path-ownership.mjs",
-      "sha256": "5671b4b21ae3b57ad9d1c048fcd08c82b81a96e524a4264073b1855902e445ef"
+      "sha256": "b5b33c9f637d827286126955b2944480bbe29bf3df4dafae89df76d89d9d41ac"
     },
     "final_dependency_source_deriver": {
       "path": "tools/architecture/derive-final-dependency-source.mjs",

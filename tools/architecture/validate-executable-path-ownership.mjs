@@ -192,8 +192,9 @@ function validateAuthorityAccessDeclaration(value) {
 
 function sourceImports(sourceFile, relativePath, accessModulePath, exported, capabilities) {
   const importedCapabilities = new Set()
+  const importedCapabilityBindings = new Map()
   const allowedRawRanges = []
-  const visit = (node) => {
+  const collectImports = (node) => {
     if (ts.isImportDeclaration(node) && accessModuleTarget(relativePath, moduleSpecifierText(node.moduleSpecifier), accessModulePath)) {
       allowedRawRanges.push([node.moduleSpecifier.getStart(sourceFile), node.moduleSpecifier.getEnd()])
       const bindings = node.importClause?.namedBindings
@@ -201,21 +202,46 @@ function sourceImports(sourceFile, relativePath, accessModulePath, exported, cap
       for (const element of bindings.elements) {
         const importedName = (element.propertyName ?? element.name).text
         assert(exported.has(importedName), 'unauthorized canonical authority capability import: ' + relativePath + '#' + importedName)
-        if (capabilities.has(importedName)) importedCapabilities.add(importedName)
+        if (capabilities.has(importedName)) {
+          importedCapabilities.add(importedName)
+          importedCapabilityBindings.set(element.name.text, importedName)
+        }
       }
     }
+    ts.forEachChild(node, collectImports)
+  }
+  collectImports(sourceFile)
+
+  const unwrappedIdentifier = (expression) => {
+    let current = expression
+    while (ts.isParenthesizedExpression(current)
+      || ts.isAsExpression(current)
+      || ts.isTypeAssertionExpression(current)
+      || ts.isNonNullExpression(current)
+      || ts.isSatisfiesExpression(current)) current = current.expression
+    return ts.isIdentifier(current) ? current.text : null
+  }
+  const rejectImportedBindingExport = (localName) => {
+    const capability = importedCapabilityBindings.get(localName)
+    if (capability) throw new Error('canonical authority capability re-export forbidden: ' + relativePath + '#' + capability)
+  }
+  const validateExports = (node) => {
     if (ts.isExportDeclaration(node) && accessModuleTarget(relativePath, moduleSpecifierText(node.moduleSpecifier), accessModulePath)) {
       throw new Error('canonical authority capability re-export forbidden: ' + relativePath)
     }
+    if (ts.isExportDeclaration(node) && !node.moduleSpecifier && node.exportClause && ts.isNamedExports(node.exportClause)) {
+      for (const element of node.exportClause.elements) rejectImportedBindingExport((element.propertyName ?? element.name).text)
+    }
+    if (ts.isExportAssignment(node)) rejectImportedBindingExport(unwrappedIdentifier(node.expression))
     if (ts.isCallExpression(node)
       && (node.expression.kind === ts.SyntaxKind.ImportKeyword
         || ts.isIdentifier(node.expression) && node.expression.text === 'require')
       && accessModuleTarget(relativePath, moduleSpecifierText(node.arguments[0]), accessModulePath)) {
       throw new Error('canonical authority access requires a static direct import: ' + relativePath)
     }
-    ts.forEachChild(node, visit)
+    ts.forEachChild(node, validateExports)
   }
-  visit(sourceFile)
+  validateExports(sourceFile)
   return { allowedRawRanges, importedCapabilities }
 }
 

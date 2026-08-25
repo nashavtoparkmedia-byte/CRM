@@ -506,7 +506,13 @@ async function dependencyClosureFixture() {
       path: 'tools/architecture/direct-consumer.mjs',
       role: 'direct_consumer',
       capability: capabilityNames[0],
-      body: (specifier, capability) => 'import { ' + capability + ' } from ' + JSON.stringify(specifier) + '\n' + capability + '()\n',
+      body: (specifier, capability) => 'import { ' + capability + ' } from ' + JSON.stringify(specifier) + '\n' + capability + '()\nexport const harmlessDiagnostic = true\n',
+    },
+    {
+      path: 'tools/architecture/alias-consumer.mjs',
+      role: 'alias_consumer',
+      capability: capabilityNames[0],
+      body: (specifier, capability) => 'import { ' + capability + ' as loadCoverage } from ' + JSON.stringify(specifier) + '\nloadCoverage()\n',
     },
     {
       path: 'tools/architecture/assignment-consumer.mjs',
@@ -515,10 +521,10 @@ async function dependencyClosureFixture() {
       body: (specifier, capability) => 'import { ' + capability + ' as x } from ' + JSON.stringify(specifier) + '\nlet y\ny = x\ny()\n',
     },
     {
-      path: 'tools/architecture/object-consumer.mjs',
-      role: 'object_consumer',
+      path: 'tools/architecture/wrapper-consumer.mjs',
+      role: 'wrapper_consumer',
       capability: capabilityNames[0],
-      body: (specifier, capability) => 'import { ' + capability + ' } from ' + JSON.stringify(specifier) + '\nconst readers = { load: ' + capability + ' }\nreaders.load()\n',
+      body: (specifier, capability) => 'import { ' + capability + ' } from ' + JSON.stringify(specifier) + '\nconst load = () => ' + capability + '()\nload()\n',
     },
   ]
   const accessSpecifier = './' + path.posix.basename(accessPath)
@@ -547,7 +553,7 @@ try {
   )
   const discoveredByPath = new Map(discovered.map((consumer) => [consumer.path, consumer.capabilities]))
   for (const consumer of closurePositive.consumers) {
-    assert.deepEqual(discoveredByPath.get(consumer.path), [consumer.capability], 'local assignment/object flow must not affect structural consumer identity')
+    assert.deepEqual(discoveredByPath.get(consumer.path), [consumer.capability], 'aliases, local assignment, wrappers, and harmless exports must not affect structural consumer identity')
   }
   assert.equal(discoveredByPath.has(closurePositive.diagnosticPath), false, 'diagnostic metadata without a raw authority identity must remain a non-consumer')
 } finally {
@@ -699,22 +705,76 @@ try {
   await rm(closureCapabilityDrift.fixture, { force: true, recursive: true })
 }
 
-const closureReexport = await dependencyClosureFixture()
+const closureReviewerBarrel = await dependencyClosureFixture()
 try {
   const reexportPath = 'tools/architecture/capability-barrel.mjs'
+  const downstreamPath = 'tools/architecture/downstream-via-barrel.mjs'
   await writeFile(
-    path.join(closureReexport.fixture, reexportPath),
-    'export { ' + closureReexport.capabilityNames[0] + ' } from ' + JSON.stringify(closureReexport.accessSpecifier) + '\n',
+    path.join(closureReviewerBarrel.fixture, reexportPath),
+    'import { ' + closureReviewerBarrel.capabilityNames[0] + ' } from ' + JSON.stringify(closureReviewerBarrel.accessSpecifier) + '\nexport { ' + closureReviewerBarrel.capabilityNames[0] + ' }\n',
   )
-  await closureReexport.git('add', reexportPath)
+  await writeFile(
+    path.join(closureReviewerBarrel.fixture, downstreamPath),
+    'import { ' + closureReviewerBarrel.capabilityNames[0] + ' as loadAuthority } from "./capability-barrel.mjs"\nawait loadAuthority()\n',
+  )
+  await closureReviewerBarrel.git('add', reexportPath, downstreamPath)
   assert.throws(
-    () => discoverExecutablePathOwnershipConsumers(closureReexport.fixture, closureReexport.declaration),
+    () => discoverExecutablePathOwnershipConsumers(closureReviewerBarrel.fixture, closureReviewerBarrel.declaration),
     /canonical authority capability re-export forbidden: tools\/architecture\/capability-barrel\.mjs/,
-    'capability barrels and re-exports must fail',
+    'the exact reviewer import-then-export barrel attack must fail before a downstream consumer can be hidden',
   )
 } finally {
-  await rm(closureReexport.fixture, { force: true, recursive: true })
+  await rm(closureReviewerBarrel.fixture, { force: true, recursive: true })
 }
+
+async function assertCapabilityReexportRejected(name, barrelBody, expectedFailure = null) {
+  const fixture = await dependencyClosureFixture()
+  try {
+    const reexportPath = 'tools/architecture/' + name + '.mjs'
+    await writeFile(path.join(fixture.fixture, reexportPath), barrelBody(fixture.accessSpecifier, fixture.capabilityNames[0]))
+    await fixture.git('add', reexportPath)
+    assert.throws(
+      () => discoverExecutablePathOwnershipConsumers(fixture.fixture, fixture.declaration),
+      expectedFailure ?? new RegExp('canonical authority capability re-export forbidden: tools/architecture/' + name + '\\.mjs'),
+      name + ' must fail closed',
+    )
+  } finally {
+    await rm(fixture.fixture, { force: true, recursive: true })
+  }
+}
+
+await assertCapabilityReexportRejected(
+  'aliased-import-reexport',
+  (specifier, capability) => 'import { ' + capability + ' as x } from ' + JSON.stringify(specifier) + '\nexport { x }\n',
+)
+await assertCapabilityReexportRejected(
+  'direct-reexport',
+  (specifier, capability) => 'export { ' + capability + ' } from ' + JSON.stringify(specifier) + '\n',
+)
+await assertCapabilityReexportRejected(
+  'renamed-direct-reexport',
+  (specifier, capability) => 'export { ' + capability + ' as loadCoverage } from ' + JSON.stringify(specifier) + '\n',
+)
+await assertCapabilityReexportRejected(
+  'export-star-reexport',
+  (specifier) => 'export * from ' + JSON.stringify(specifier) + '\n',
+)
+await assertCapabilityReexportRejected(
+  'namespace-reexport',
+  (specifier) => 'export * as ownershipAuthority from ' + JSON.stringify(specifier) + '\n',
+)
+await assertCapabilityReexportRejected(
+  'namespace-import',
+  (specifier) => 'import * as ownershipAuthority from ' + JSON.stringify(specifier) + '\nexport { ownershipAuthority }\n',
+  /canonical authority access requires direct named imports: tools\/architecture\/namespace-import\.mjs/,
+)
+await assertCapabilityReexportRejected(
+  'default-imported-capability-export',
+  (specifier, capability) => 'import { ' + capability + ' as loadCoverage } from ' + JSON.stringify(specifier) + '\nexport default (loadCoverage)\n',
+)
+process.stdout.write('structural authority regression matrix: PASS (17/17)\n')
+process.stdout.write('reviewer_barrel_bypass_rejected=true\n')
+process.stdout.write('downstream_barrel_cannot_become_hidden_consumer=true\n')
 
 const closureMissingModule = await dependencyClosureFixture()
 try {
