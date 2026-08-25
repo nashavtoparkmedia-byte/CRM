@@ -5,8 +5,9 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync
 import { readFile, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { isBuiltin } from 'node:module'
 import { promisify } from 'node:util'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import ts from '../../gravity-mvp/node_modules/typescript/lib/typescript.js'
 import { classifyTrackedSurface, inventoryTrackedSurfaces } from './v2/tracked-surface-inventory.mjs'
 
@@ -58,7 +59,7 @@ function exactRolePaths(records, expected, label) {
   }
 }
 
-const JAVASCRIPT_SOURCE = /\.(?:[cm]?js|jsx|ts|tsx)$/u
+const JAVASCRIPT_SOURCE = /\.(?:[cm]?js|jsx|[cm]?ts|tsx)$/u
 const AUTHORITY_CAPABILITY_CONTRACT = [
   { export: 'readCurrentOwnershipCoverage', authority_use: 'coverage_document', artifact_path: COVERAGE_PATH },
   { export: 'readCurrentOwnershipDependencies', authority_use: 'dependency_manifest', artifact_path: CURRENT_DEPENDENCY_PATH },
@@ -95,6 +96,12 @@ function moduleSpecifierText(node) {
   return node && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) ? node.text : null
 }
 
+function assertPlainModuleSpecifierLiteral(sourceFile, node, specifier, label) {
+  const raw = node.getText(sourceFile)
+  assert(raw.length >= 2 && raw.slice(1, -1) === specifier,
+    'acceptance module specifier escape spelling forbidden: ' + label)
+}
+
 function repositoryTrackedJavaScriptSources(repositoryRoot) {
   const output = execFileSync('git', ['-C', repositoryRoot, 'ls-files', '-z'], { encoding: 'buffer', maxBuffer: 64 * 1024 * 1024 })
   return output.toString('utf8').split('\0').filter((relativePath) => JAVASCRIPT_SOURCE.test(relativePath)).sort()
@@ -109,7 +116,7 @@ function parseTrackedSources(repositoryRoot, relativePaths) {
       ? sourceBytes.subarray(2).toString('utf16le')
       : sourceBytes.toString('utf8')
     const sourceFile = ts.createSourceFile(relativePath, sourceText, ts.ScriptTarget.Latest, true)
-    sources.set(relativePath, { sourceFile, sourceText })
+    sources.set(relativePath, { sourceBytes, sourceFile, sourceText })
     for (const diagnostic of sourceFile.parseDiagnostics ?? []) {
       const position = sourceFile.getLineAndCharacterOfPosition(diagnostic.start ?? 0)
       failures.push(relativePath + ':' + (position.line + 1) + ':' + (position.character + 1) + ': ' + ts.flattenDiagnosticMessageText(diagnostic.messageText, ' '))
@@ -157,41 +164,162 @@ function assertNoRawAuthorityExports(sourceFile, sourceText) {
   }
 }
 
-const MODULE_EXTENSIONS = ['.mjs', '.js', '.cjs', '.ts', '.tsx', '.jsx']
+const MODULE_EXTENSIONS = ['.mjs', '.js', '.cjs', '.mts', '.ts', '.cts', '.tsx', '.jsx']
+const LOCAL_SPECIFIER = /^(?:\.\/|(?:\.\.\/)+)/u
+const NODE_BUILTIN_SPECIFIER = /^node:[a-z0-9_][a-z0-9_./-]*$/u
+const ORDINARY_PACKAGE_SPECIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9._-]+)*$/u
+const SCOPED_PACKAGE_SPECIFIER = /^@[A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9][A-Za-z0-9._-]*(?:\/[A-Za-z0-9._-]+)*$/u
+const URL_SCHEME_SPECIFIER = /^[A-Za-z][A-Za-z0-9+.-]*:/u
+const FROZEN_NON_LITERAL_DYNAMIC_IMPORT = {
+  path: 'architecture/recovery/whole-project-dod/v2/continuation/PER_FILE_LOCALIZATION_PROBE.mjs',
+  sha256: 'd963f6be67c828b8c26db1eddd3cdc33452a4960148e8f691644715deb20b056',
+  expression: 'analyzerUrl',
+}
+const COMPUTED_REQUIRE_INVENTORY_SHA256 = '783a0ab77149d5652b69b3589458c836c4ec75e9c28e8677c72471d5c99e196a'
+const COMPUTED_PRISMA_CLIENT_LOADERS = new Set([
+  'gravity-mvp/scripts/cleanup_stale_ai_sessions.js',
+  'gravity-mvp/scripts/smoke_ai_persistence.js',
+])
+const FROZEN_BROWSER_REQUIRE = {
+  path: 'gravity-mvp/src/lib/whatsapp/WhatsAppService.ts',
+  sha256: '967d048235b0449643962b3e34252b72c42449c9a861c4d31329269aba821cc8',
+  specifier: 'WAWebCollections',
+}
+const EXPLICIT_LOCAL_ALIAS_CONTRACTS = [
+  {
+    kind: 'prefix', specifier: '@/', importer_prefix: 'gravity-mvp/', target_root: 'gravity-mvp/src',
+    config_path: 'gravity-mvp/tsconfig.json', config_key: '@/*', config_target: './src/*',
+  },
+  {
+    kind: 'prefix', specifier: '@/', importer_prefix: 'tg-bot/tg-bot-frontend/', target_root: 'tg-bot/tg-bot-frontend',
+    config_path: 'tg-bot/tg-bot-frontend/jsconfig.json', config_key: '@/*', config_target: './*',
+  },
+  {
+    kind: 'exact', specifier: '@avito/db', importer_prefix: 'avito-worker/', target_root: 'avito-worker/_shared/db/src/index.ts',
+    config_path: 'avito-worker/tsconfig.json', config_key: '@avito/db', config_target: '_shared/db/src/index.ts',
+  },
+  {
+    kind: 'exact', specifier: '@avito/shared', importer_prefix: 'avito-worker/', target_root: 'avito-worker/_shared/shared/src/index.ts',
+    config_path: 'avito-worker/tsconfig.json', config_key: '@avito/shared', config_target: '_shared/shared/src/index.ts',
+  },
+]
 
-function trackedModuleSpecifierIdentity(repositoryRoot, relativePath, specifier, trackedPaths) {
-  const claimedLocal = typeof specifier === 'string'
-    && (specifier.startsWith('./') || specifier.startsWith('../') || specifier.startsWith('/') || specifier.startsWith('file:'))
-  if (!claimedLocal) {
-    return { kind: 'non_local', target: null, has_search: false, has_hash: false }
+function validateRepositoryAliasInventory(repositoryRoot, trackedPaths) {
+  const allowedPathMappings = new Set(EXPLICIT_LOCAL_ALIAS_CONTRACTS.map((contract) => JSON.stringify([
+    contract.config_path, contract.config_key, contract.config_target,
+  ])))
+  for (const relativePath of [...trackedPaths].sort()) {
+    if (/(?:^|\/)(?:tsconfig|jsconfig)[^/]*\.json$/u.test(relativePath)) {
+      const parsed = ts.parseConfigFileTextToJson(relativePath, readFileSync(path.join(repositoryRoot, relativePath), 'utf8'))
+      assert(!parsed.error, 'acceptance alias config parse failure: ' + relativePath)
+      const mappings = parsed.config?.compilerOptions?.paths ?? {}
+      assert(mappings && typeof mappings === 'object' && !Array.isArray(mappings),
+        'acceptance alias paths config malformed: ' + relativePath)
+      for (const [specifier, targets] of Object.entries(mappings)) {
+        assert(Array.isArray(targets) && targets.length === 1 && typeof targets[0] === 'string'
+          && allowedPathMappings.has(JSON.stringify([relativePath, specifier, targets[0]])),
+        'acceptance unreviewed local alias mapping forbidden: ' + relativePath + '#' + specifier)
+      }
+      const baseUrl = parsed.config?.compilerOptions?.baseUrl
+      const allowedBaseUrl = relativePath === 'avito-worker/tsconfig.json' || relativePath === 'tg-bot/tg-bot-frontend/jsconfig.json'
+      assert(baseUrl === undefined || allowedBaseUrl && baseUrl === '.',
+        'acceptance unreviewed baseUrl resolution forbidden: ' + relativePath)
+      assert(parsed.config?.extends === undefined && parsed.config?.compilerOptions?.rootDirs === undefined,
+        'acceptance inherited/merged module resolution forbidden: ' + relativePath)
+    }
+    if (relativePath.endsWith('/package.json') || relativePath === 'package.json') {
+      const packageManifest = JSON.parse(readFileSync(path.join(repositoryRoot, relativePath), 'utf8'))
+      assert(!packageManifest.imports || Object.keys(packageManifest.imports).length === 0,
+        'acceptance package import map forbidden without explicit contract: ' + relativePath)
+      assert(packageManifest.exports === undefined,
+        'acceptance package self-reference map forbidden without explicit contract: ' + relativePath)
+    }
   }
-  let resolvedUrl
-  try {
-    resolvedUrl = new URL(specifier, pathToFileURL(path.resolve(repositoryRoot, relativePath)))
-  } catch {
-    return { kind: 'unsupported_local', target: null, has_search: false, has_hash: false }
+}
+
+function canonicalRelativeModuleBase(relativePath, specifier) {
+  assert(LOCAL_SPECIFIER.test(specifier), 'acceptance local module specifier must be canonical relative: ' + relativePath + '#' + specifier)
+  assert(!/[?#%\\]/u.test(specifier), 'acceptance local module specifier contains forbidden URL/path syntax: ' + relativePath + '#' + specifier)
+  const segments = specifier.split('/')
+  let bodyIndex = 0
+  if (segments[0] === '.') bodyIndex = 1
+  else while (segments[bodyIndex] === '..') bodyIndex += 1
+  assert(bodyIndex < segments.length
+    && segments.slice(bodyIndex).every((segment) => segment.length > 0 && segment !== '.' && segment !== '..'),
+  'acceptance local module specifier is noncanonical: ' + relativePath + '#' + specifier)
+  const importerDirectory = path.posix.dirname(relativePath)
+  const base = path.posix.normalize(path.posix.join(importerDirectory, specifier))
+  assert(base !== '..' && !base.startsWith('../') && !path.posix.isAbsolute(base),
+    'acceptance local module specifier escapes repository: ' + relativePath + '#' + specifier)
+  const relative = path.posix.relative(importerDirectory, base)
+  const canonical = relative.startsWith('../') ? relative : './' + relative
+  assert(specifier === canonical,
+    'acceptance local module specifier spelling is noncanonical: ' + relativePath + '#' + specifier + '!=' + canonical)
+  return base
+}
+
+function assertCanonicalAliasTail(relativePath, specifier, tail) {
+  assert(tail.length > 0 && !/[?#%\\]/u.test(tail),
+    'acceptance local alias specifier contains forbidden URL/path syntax: ' + relativePath + '#' + specifier)
+  assert(tail.split('/').every((segment) => segment.length > 0 && segment !== '.' && segment !== '..'),
+    'acceptance local alias specifier is noncanonical: ' + relativePath + '#' + specifier)
+}
+
+function assertAliasConfig(repositoryRoot, trackedPaths, contract, verifiedConfigs) {
+  const key = contract.config_path + '#' + contract.config_key
+  if (verifiedConfigs.has(key)) return
+  assert(trackedPaths.has(contract.config_path), 'acceptance local alias config is not tracked: ' + key)
+  const config = JSON.parse(readFileSync(path.join(repositoryRoot, contract.config_path), 'utf8'))
+  const targets = config?.compilerOptions?.paths?.[contract.config_key]
+  assert(Array.isArray(targets) && targets.length === 1 && targets[0] === contract.config_target,
+    'acceptance local alias config drift: ' + key)
+  verifiedConfigs.add(key)
+}
+
+function explicitLocalAliasBase(repositoryRoot, relativePath, specifier, trackedPaths, verifiedConfigs) {
+  let contract = EXPLICIT_LOCAL_ALIAS_CONTRACTS.find((candidate) => relativePath.startsWith(candidate.importer_prefix)
+    && (candidate.kind === 'exact' ? specifier === candidate.specifier : specifier.startsWith(candidate.specifier)))
+  let targetRoot = contract?.target_root
+  if (!contract && specifier.startsWith('@/')) {
+    const snapshot = /^(architecture\/migrations\/v1\/provenance\/snapshot\/[^/]+\/files\/gravity-mvp)\//u.exec(relativePath)
+    if (snapshot) {
+      contract = EXPLICIT_LOCAL_ALIAS_CONTRACTS[0]
+      targetRoot = snapshot[1] + '/src'
+    }
   }
-  if (resolvedUrl.protocol !== 'file:') {
-    return { kind: 'unsupported_local', target: null, has_search: false, has_hash: false }
+  if (!contract) return null
+  assertAliasConfig(repositoryRoot, trackedPaths, contract, verifiedConfigs)
+  if (contract.kind === 'exact') return { base: targetRoot, kind: 'explicit_local_alias' }
+  const tail = specifier.slice(contract.specifier.length)
+  assertCanonicalAliasTail(relativePath, specifier, tail)
+  return { base: path.posix.join(targetRoot, tail), kind: 'explicit_local_alias' }
+}
+
+function acceptanceLiteralSpecifier(repositoryRoot, relativePath, specifier, trackedPaths, verifiedConfigs) {
+  assert(typeof specifier === 'string' && specifier.length > 0,
+    'acceptance module specifier must be a nonempty literal: ' + relativePath)
+  if (specifier.startsWith('node:')) {
+    assert(NODE_BUILTIN_SPECIFIER.test(specifier) && isBuiltin(specifier),
+      'acceptance Node builtin specifier is noncanonical: ' + relativePath + '#' + specifier)
+    return { kind: 'builtin', base: null }
   }
-  const withoutSearch = new URL(resolvedUrl.href)
-  const withoutHash = new URL(resolvedUrl.href)
-  withoutSearch.search = ''
-  withoutHash.hash = ''
-  const hasSearch = withoutSearch.href !== resolvedUrl.href
-  const hasHash = withoutHash.href !== resolvedUrl.href
-  let absoluteTarget
-  try {
-    absoluteTarget = fileURLToPath(resolvedUrl)
-  } catch {
-    return { kind: 'unsupported_local', target: null, has_search: hasSearch, has_hash: hasHash }
+  if (LOCAL_SPECIFIER.test(specifier)) {
+    return { kind: 'relative', base: canonicalRelativeModuleBase(relativePath, specifier) }
   }
-  const repositoryPath = path.resolve(repositoryRoot)
-  const platformRelative = path.relative(repositoryPath, absoluteTarget)
-  if (path.isAbsolute(platformRelative) || platformRelative === '..' || platformRelative.startsWith(`..${path.sep}`)) {
-    return { kind: 'outside_repository', target: null, has_search: hasSearch, has_hash: hasHash }
-  }
-  const base = platformRelative.split(path.sep).join('/')
+  const alias = explicitLocalAliasBase(repositoryRoot, relativePath, specifier, trackedPaths, verifiedConfigs)
+  if (alias) return alias
+  assert(!specifier.startsWith('@/'), 'acceptance unsupported local alias forbidden: ' + relativePath + '#' + specifier)
+  assert(!specifier.startsWith('/') && !URL_SCHEME_SPECIFIER.test(specifier),
+    'acceptance URL/absolute module specifier forbidden: ' + relativePath + '#' + specifier)
+  assert(!specifier.startsWith('#'), 'acceptance package-import alias forbidden: ' + relativePath + '#' + specifier)
+  assert(ORDINARY_PACKAGE_SPECIFIER.test(specifier) || SCOPED_PACKAGE_SPECIFIER.test(specifier),
+    'acceptance package module specifier is noncanonical: ' + relativePath + '#' + specifier)
+  assert(!specifier.split('/').some((segment) => segment === '.' || segment === '..'),
+    'acceptance package module specifier contains a dot segment: ' + relativePath + '#' + specifier)
+  return { kind: specifier.startsWith('@') ? 'scoped_package' : 'package', base: null }
+}
+
+function resolveTrackedCanonicalTarget(relativePath, specifier, base, trackedPaths) {
   const candidates = [
     base,
     ...MODULE_EXTENSIONS.map((extension) => base + extension),
@@ -199,41 +327,197 @@ function trackedModuleSpecifierIdentity(repositoryRoot, relativePath, specifier,
   ]
   const matches = [...new Set(candidates.filter((candidate) => trackedPaths.has(candidate)))]
   assert(matches.length <= 1, 'tracked module edge resolves ambiguously: ' + relativePath + '#' + specifier)
-  return {
-    kind: matches.length === 1 ? 'tracked_local' : 'untracked_local',
-    target: matches[0] ?? null,
-    has_search: hasSearch,
-    has_hash: hasHash,
-  }
+  return matches[0] ?? null
 }
 
-function sourceModuleEdges(sourceFile, repositoryRoot, relativePath, trackedPaths) {
-  const edges = []
-  const add = (kind, specifierNode, declarationNode) => {
-    const specifier = moduleSpecifierText(specifierNode)
-    const identity = trackedModuleSpecifierIdentity(repositoryRoot, relativePath, specifier, trackedPaths)
-    if (identity.target) edges.push({
-      source: relativePath,
-      target: identity.target,
-      kind,
-      specifier,
-      declarationNode,
-      specifierNode,
-      has_search: identity.has_search,
-      has_hash: identity.has_hash,
-    })
+function protectedModuleStems(protectedPaths) {
+  return new Set([...protectedPaths].map((protectedPath) => path.posix.basename(protectedPath, path.posix.extname(protectedPath))))
+}
+
+function validateBoundedComputedRequire(relativePath, sourceFile, argument, protectedStems) {
+  const pathJoin = ts.isCallExpression(argument)
+    && ts.isPropertyAccessExpression(argument.expression)
+    && ts.isIdentifier(argument.expression.expression)
+    && argument.expression.expression.text === 'path'
+    && argument.expression.name.text === 'join'
+  assert(pathJoin && argument.arguments.length >= 2,
+    'acceptance nonliteral require forbidden: ' + relativePath + '#' + argument.getText(sourceFile))
+  const literalNodes = argument.arguments.slice(1)
+  const literalArguments = literalNodes.map(moduleSpecifierText)
+  assert(literalArguments.every((value) => value !== null),
+    'acceptance computed require requires literal path.join suffixes: ' + relativePath)
+  for (const [index, value] of literalArguments.entries()) {
+    assertPlainModuleSpecifierLiteral(sourceFile, literalNodes[index], value, relativePath + '#computed-require')
+    assert(!/[?#%\\]/u.test(value) && !URL_SCHEME_SPECIFIER.test(value) && !path.posix.isAbsolute(value),
+      'acceptance computed require suffix is noncanonical: ' + relativePath + '#' + value)
   }
+  const tail = literalArguments.at(-1)
+  const tailSegments = tail.split('/')
+  assert(tailSegments.every((segment) => segment.length > 0 && segment !== '.' && segment !== '..'),
+    'acceptance computed require tail is noncanonical: ' + relativePath + '#' + tail)
+  const tailBase = path.posix.basename(tail)
+  const tailStem = path.posix.basename(tailBase, path.posix.extname(tailBase))
+  if (tailBase.endsWith('.js')) {
+    assert(!protectedStems.has(tailStem),
+      'acceptance computed require can address protected module: ' + relativePath + '#' + tail)
+    return literalArguments
+  }
+  assert(COMPUTED_PRISMA_CLIENT_LOADERS.has(relativePath)
+    && JSON.stringify(literalArguments) === JSON.stringify(['..', 'node_modules', '@prisma', 'client']),
+  'acceptance computed require is outside bounded loader grammar: ' + relativePath + '#' + tail)
+  return literalArguments
+}
+
+function directRequireLoaderNames(sourceFile, sourceSha256) {
+  const createRequireFactories = new Set()
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteralLike(statement.moduleSpecifier)
+      || !['module', 'node:module'].includes(statement.moduleSpecifier.text)) continue
+    const bindings = statement.importClause?.namedBindings
+    if (!bindings || !ts.isNamedImports(bindings)) continue
+    for (const binding of bindings.elements) {
+      if (!binding.isTypeOnly && (binding.propertyName ?? binding.name).text === 'createRequire') {
+        createRequireFactories.add(binding.name.text)
+      }
+    }
+  }
+  const loaders = new Set(['require'])
   const visit = (node) => {
-    if (ts.isImportDeclaration(node)) add('static_import', node.moduleSpecifier, node)
-    if (ts.isExportDeclaration(node) && node.moduleSpecifier) add('static_reexport', node.moduleSpecifier, node)
-    if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) add('import_equals', node.moduleReference.expression, node)
-    if (ts.isCallExpression(node)
-      && (node.expression.kind === ts.SyntaxKind.ImportKeyword
-        || ts.isIdentifier(node.expression) && node.expression.text === 'require')) add('literal_dynamic_import', node.arguments[0], node)
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer
+      && ts.isCallExpression(node.initializer) && ts.isIdentifier(node.initializer.expression)
+      && createRequireFactories.has(node.initializer.expression.text)) {
+      loaders.add(node.name.text)
+    }
     ts.forEachChild(node, visit)
   }
   visit(sourceFile)
-  return edges
+  const customLoaders = new Set([...loaders].filter((loader) => loader !== 'require'))
+  const validateUse = (node) => {
+    if (ts.isIdentifier(node) && createRequireFactories.has(node.text)) {
+      const importBinding = ts.isImportSpecifier(node.parent) && node.parent.name === node
+      const factoryCall = ts.isCallExpression(node.parent) && node.parent.expression === node
+        && ts.isVariableDeclaration(node.parent.parent) && node.parent.parent.initializer === node.parent
+        && ts.isIdentifier(node.parent.parent.name) && loaders.has(node.parent.parent.name.text)
+      assert(importBinding || factoryCall,
+        'acceptance createRequire factory use must directly declare a reviewed loader: ' + sourceFile.fileName)
+    }
+    if (ts.isPropertyAccessExpression(node) && node.name.text === 'createRequire') {
+      throw new Error('acceptance property-based createRequire factory forbidden: ' + sourceFile.fileName)
+    }
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'createRequire'
+      && !createRequireFactories.has(node.expression.text)) {
+      throw new Error('acceptance unbound createRequire factory forbidden: ' + sourceFile.fileName)
+    }
+    if (ts.isPropertyAccessExpression(node) && node.name.text === 'require') {
+      const directModuleRequire = ts.isIdentifier(node.expression) && node.expression.text === 'module'
+        && ts.isCallExpression(node.parent) && node.parent.expression === node
+      const frozenBrowserRequire = sourceFile.fileName === FROZEN_BROWSER_REQUIRE.path
+        && sourceSha256 === FROZEN_BROWSER_REQUIRE.sha256
+        && ts.isCallExpression(node.parent) && node.parent.expression === node
+        && node.parent.arguments.length === 1
+        && moduleSpecifierText(node.parent.arguments[0]) === FROZEN_BROWSER_REQUIRE.specifier
+      assert(directModuleRequire || frozenBrowserRequire,
+        'acceptance property-based require loader forbidden: ' + sourceFile.fileName)
+    }
+    if (ts.isElementAccessExpression(node) && moduleSpecifierText(node.argumentExpression) === 'require') {
+      throw new Error('acceptance element-access require loader forbidden: ' + sourceFile.fileName)
+    }
+    if (ts.isIdentifier(node) && node.text === 'require') {
+      const directCall = ts.isCallExpression(node.parent) && node.parent.expression === node
+      const reviewedProperty = ts.isPropertyAccessExpression(node.parent) && node.parent.expression === node
+        && ['cache', 'main', 'resolve'].includes(node.parent.name.text)
+      const loaderDeclaration = ts.isVariableDeclaration(node.parent) && node.parent.name === node
+        && node.parent.initializer && ts.isCallExpression(node.parent.initializer)
+        && ts.isIdentifier(node.parent.initializer.expression)
+        && createRequireFactories.has(node.parent.initializer.expression.text)
+      const nonReferenceName = (ts.isMethodDeclaration(node.parent) || ts.isPropertyAccessExpression(node.parent)) && node.parent.name === node
+      assert(directCall || reviewedProperty || loaderDeclaration || nonReferenceName,
+        'acceptance require loader callable value-flow forbidden: ' + sourceFile.fileName)
+    }
+    if (ts.isIdentifier(node) && customLoaders.has(node.text)) {
+      const loaderDeclaration = ts.isVariableDeclaration(node.parent) && node.parent.name === node
+      const loaderCall = ts.isCallExpression(node.parent) && node.parent.expression === node
+      assert(loaderDeclaration || loaderCall,
+        'acceptance require loader aliasing forbidden: ' + sourceFile.fileName + '#' + node.text)
+    }
+    ts.forEachChild(node, validateUse)
+  }
+  validateUse(sourceFile)
+  return loaders
+}
+
+function validateAcceptanceSourceLanguage(repositoryRoot, sources, relativePaths, trackedPaths, protectedPaths) {
+  const edgesBySource = new Map(relativePaths.map((relativePath) => [relativePath, []]))
+  const protectedStems = protectedModuleStems(protectedPaths)
+  const verifiedConfigs = new Set()
+  const computedRequires = []
+  let frozenDynamicImports = 0
+  for (const relativePath of relativePaths) {
+    const { sourceBytes, sourceFile } = sources.get(relativePath)
+    const edges = edgesBySource.get(relativePath)
+    const requireLoaders = directRequireLoaderNames(sourceFile, byteDigest(sourceBytes))
+    const addLiteral = (kind, specifierNode, declarationNode) => {
+      const specifier = moduleSpecifierText(specifierNode)
+      assert(specifier !== null, 'acceptance module specifier must be literal: ' + relativePath + '#' + kind)
+      assertPlainModuleSpecifierLiteral(sourceFile, specifierNode, specifier, relativePath + '#' + kind)
+      const policy = acceptanceLiteralSpecifier(repositoryRoot, relativePath, specifier, trackedPaths, verifiedConfigs)
+      if (policy.base === null) return
+      const target = resolveTrackedCanonicalTarget(relativePath, specifier, policy.base, trackedPaths)
+      if (!target) return
+      if (protectedPaths.has(target)) {
+        assert(policy.kind === 'relative', 'protected module edge requires canonical relative specifier: ' + relativePath + '#' + specifier)
+        const canonicalTarget = path.posix.relative(path.posix.dirname(relativePath), target)
+        const canonicalSpecifier = canonicalTarget.startsWith('../') ? canonicalTarget : './' + canonicalTarget
+        assert(specifier === canonicalSpecifier,
+          'protected module edge requires exact canonical relative specifier: ' + relativePath + '#' + specifier)
+      }
+      edges.push({ source: relativePath, target, kind, specifier, declarationNode, specifierNode })
+    }
+    const visit = (node) => {
+      if (ts.isImportDeclaration(node)) addLiteral('static_import', node.moduleSpecifier, node)
+      if (ts.isExportDeclaration(node) && node.moduleSpecifier) addLiteral('static_reexport', node.moduleSpecifier, node)
+      if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) {
+        addLiteral('import_equals', node.moduleReference.expression, node)
+      }
+      if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+        const argument = node.arguments[0]
+        const specifier = moduleSpecifierText(argument)
+        if (specifier === null) {
+          assert(relativePath === FROZEN_NON_LITERAL_DYNAMIC_IMPORT.path
+            && byteDigest(sourceBytes) === FROZEN_NON_LITERAL_DYNAMIC_IMPORT.sha256
+            && argument?.getText(sourceFile) === FROZEN_NON_LITERAL_DYNAMIC_IMPORT.expression,
+          'acceptance nonliteral dynamic import forbidden: ' + relativePath + '#' + (argument?.getText(sourceFile) ?? '<missing>'))
+          frozenDynamicImports += 1
+        } else addLiteral('literal_dynamic_import', argument, node)
+      }
+      const directRequireCall = ts.isCallExpression(node) && ts.isIdentifier(node.expression) && requireLoaders.has(node.expression.text)
+      const moduleRequireCall = ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+        && ts.isIdentifier(node.expression.expression) && node.expression.expression.text === 'module'
+        && node.expression.name.text === 'require'
+      if (directRequireCall || moduleRequireCall) {
+        const argument = node.arguments[0]
+        if (moduleSpecifierText(argument) === null) {
+          const suffixes = validateBoundedComputedRequire(relativePath, sourceFile, argument, protectedStems)
+          computedRequires.push({
+            path: relativePath,
+            source_sha256: byteDigest(sourceBytes),
+            expression: argument?.getText(sourceFile) ?? '<missing>',
+            suffixes,
+          })
+        } else addLiteral('literal_require', argument, node)
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(sourceFile)
+  }
+  if (trackedPaths.has(FROZEN_NON_LITERAL_DYNAMIC_IMPORT.path)) {
+    assert(frozenDynamicImports === 1, 'frozen nonliteral dynamic import denominator mismatch')
+  }
+  if (computedRequires.length > 0) {
+    assert(digest(computedRequires) === COMPUTED_REQUIRE_INVENTORY_SHA256,
+      'acceptance computed require inventory drift')
+  }
+  return edgesBySource
 }
 
 function propertyAccessParts(expression) {
@@ -314,13 +598,6 @@ function sourceImports(sourceFile, relativePath, accessModulePath, exported, cap
   return { allowedRawRanges, importedCapabilities }
 }
 
-function qualifierKind(edge) {
-  if (edge.has_search && edge.has_hash) return 'query+fragment'
-  if (edge.has_search) return 'query'
-  if (edge.has_hash) return 'fragment'
-  return null
-}
-
 function assertNoRawAuthorityBypass(relativePath, sourceText, allowedRawRanges) {
   if (relativePath === OWNERSHIP_VALIDATOR_PATH) return
   const protectedTokens = new Set(AUTHORITY_CAPABILITY_CONTRACT.flatMap(({ artifact_path: artifactPath }) => [artifactPath, path.posix.basename(artifactPath)]))
@@ -339,9 +616,14 @@ export function discoverExecutablePathOwnershipConsumers(repositoryRoot, declara
   const value = declaration ?? JSON.parse(readFileSync(path.join(repositoryRoot, CURRENT_DEPENDENCY_PATH), 'utf8'))
   const { accessModulePath, capabilities, nonAuthorityExports } = validateAuthorityAccessDeclaration(value)
   const relativePaths = repositoryTrackedJavaScriptSources(repositoryRoot)
-  const trackedPaths = new Set(relativePaths)
+  const trackedPaths = new Set(execFileSync('git', ['-C', repositoryRoot, 'ls-files', '-z'], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).split('\0').filter(Boolean))
+  validateRepositoryAliasInventory(repositoryRoot, trackedPaths)
   assert(relativePaths.includes(accessModulePath), 'canonical authority access module missing: ' + accessModulePath)
   const sources = parseTrackedSources(repositoryRoot, relativePaths)
+  const declaredConsumers = value?.current_live?.consumers
+  assert(Array.isArray(declaredConsumers), 'executable ownership current consumers missing')
+  const protectedPaths = new Set([accessModulePath, ...declaredConsumers.map(({ path: consumerPath }) => consumerPath)])
+  const edgesBySource = validateAcceptanceSourceLanguage(repositoryRoot, sources, relativePaths, trackedPaths, protectedPaths)
   const exported = exportedNames(sources.get(accessModulePath).sourceFile)
   assertNoRawAuthorityExports(sources.get(accessModulePath).sourceFile, sources.get(accessModulePath).sourceText)
   for (const capability of capabilities.keys()) assert(exported.has(capability), 'canonical authority capability export missing: ' + capability)
@@ -354,10 +636,8 @@ export function discoverExecutablePathOwnershipConsumers(repositoryRoot, declara
   const moduleEdges = []
   for (const relativePath of relativePaths) {
     const { sourceFile, sourceText } = sources.get(relativePath)
-    const currentModuleEdges = sourceModuleEdges(sourceFile, repositoryRoot, relativePath, trackedPaths)
+    const currentModuleEdges = edgesBySource.get(relativePath)
     for (const edge of currentModuleEdges) {
-      const qualifier = edge.target === accessModulePath ? qualifierKind(edge) : null
-      assert(!qualifier, 'qualified canonical authority module edge forbidden: ' + relativePath + '#' + edge.kind + '#' + qualifier)
       assert(edge.target !== accessModulePath || edge.kind === 'static_import', 'canonical authority access requires a static direct import: ' + relativePath)
     }
     const { allowedRawRanges, importedCapabilities } = sourceImports(
@@ -374,8 +654,6 @@ export function discoverExecutablePathOwnershipConsumers(repositoryRoot, declara
   const consumerPaths = new Set(consumers.map(({ path: consumerPath }) => consumerPath))
   for (const edge of moduleEdges) {
     if (consumerPaths.has(edge.target) && edge.source !== edge.target) {
-      const qualifier = qualifierKind(edge)
-      assert(!qualifier, 'qualified authority terminal consumer inbound edge forbidden: ' + edge.target + '<-' + edge.source + '#' + edge.kind + '#' + qualifier)
       throw new Error('authority terminal consumer has inbound tracked module edge: ' + edge.target + '<-' + edge.source + '#' + edge.kind)
     }
   }

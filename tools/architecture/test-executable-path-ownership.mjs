@@ -550,62 +550,43 @@ async function dependencyClosureFixture() {
   return { accessPath, accessSpecifier, capabilityContract, capabilityNames, consumers, declaration, diagnosticPath, fixture, git }
 }
 
-const moduleIdentityResults = []
+const sourceGrammarMatrix = []
+const sourceGrammarRejected = []
+const governedEdgeForms = new Set()
 
-async function assertQualifiedAuthorityEdgeRejected(name, sourceBody, qualifier, options = {}) {
+async function assertSourceGrammarRejected(name, sourceBody, specifierFor, options = {}) {
   const fixture = await dependencyClosureFixture()
   try {
-    const sourcePath = 'tools/architecture/' + name + '.mjs'
-    const specifier = options.specifier?.(fixture) ?? fixture.accessSpecifier + options.suffix
+    const sourcePath = options.sourcePath ?? 'tools/architecture/' + name + '.mjs'
+    const specifier = typeof specifierFor === 'function' ? specifierFor(fixture) : specifierFor
+    await mkdir(path.dirname(path.join(fixture.fixture, sourcePath)), { recursive: true })
     await writeFile(path.join(fixture.fixture, sourcePath), sourceBody(specifier, fixture.capabilityNames[0]))
     if (options.runtimeExecutes === true) {
       const executed = await execFileAsync(process.execPath, [path.join(fixture.fixture, sourcePath)], { encoding: 'utf8' })
-      assert.equal(executed.stdout, fixture.capabilityContract[0].artifact_path, name + ' must reproduce the Node-valid reviewer import')
+      assert.equal(executed.stdout, fixture.capabilityContract[0].artifact_path, name + ' must reproduce the Node-valid reviewer edge')
     }
     await fixture.git('add', sourcePath)
     assert.throws(
       () => discoverExecutablePathOwnershipConsumers(fixture.fixture, fixture.declaration),
-      new RegExp('qualified canonical authority module edge forbidden: tools/architecture/' + name + '\\.mjs#.+#' + qualifier.replace('+', '\\+')),
-      name + ' must fail closed on a qualified canonical authority edge',
+      /acceptance /,
+      name + ' must fail at acceptance source-language validation',
     )
-    moduleIdentityResults.push(name)
+    sourceGrammarMatrix.push(name)
+    sourceGrammarRejected.push(name)
+    if (options.edgeForm) governedEdgeForms.add(options.edgeForm)
   } finally {
     await rm(fixture.fixture, { force: true, recursive: true })
   }
 }
 
-async function assertAuthoritySpecifierRecognized(name, specifierFor) {
+async function assertSourceGrammarAllowed(name, sourcePath, sourceBody) {
   const fixture = await dependencyClosureFixture()
   try {
-    const consumer = fixture.consumers[0]
-    const specifier = specifierFor(fixture)
-    await writeFile(path.join(fixture.fixture, consumer.path), consumer.body(specifier, consumer.capability))
-    const executed = await execFileAsync(process.execPath, [path.join(fixture.fixture, consumer.path)], { encoding: 'utf8' })
-    assert.equal(executed.stdout, '', name + ' must execute through the same Node local-module identity')
-    const discovered = validateExecutablePathOwnershipConsumerClosure(fixture.declaration, fixture.fixture)
-    assert.deepEqual(
-      discovered.find(({ path: consumerPath }) => consumerPath === consumer.path)?.capabilities,
-      [consumer.capability],
-      name + ' must resolve to the canonical authority target',
-    )
-    moduleIdentityResults.push(name)
-  } finally {
-    await rm(fixture.fixture, { force: true, recursive: true })
-  }
-}
-
-async function assertNonAuthoritySpecifierUnaffected(name, sourceBody, options = {}) {
-  const fixture = await dependencyClosureFixture()
-  try {
-    const sourcePath = 'tools/architecture/' + name + '.mjs'
+    await mkdir(path.dirname(path.join(fixture.fixture, sourcePath)), { recursive: true })
     await writeFile(path.join(fixture.fixture, sourcePath), sourceBody(fixture))
-    if (options.runtimeExecutes === true) {
-      const executed = await execFileAsync(process.execPath, [path.join(fixture.fixture, sourcePath)], { encoding: 'utf8' })
-      assert.equal(executed.stdout, 'ownership coverage authority healthy')
-    }
     await fixture.git('add', sourcePath)
     validateExecutablePathOwnershipConsumerClosure(fixture.declaration, fixture.fixture)
-    moduleIdentityResults.push(name)
+    sourceGrammarMatrix.push(name)
   } finally {
     await rm(fixture.fixture, { force: true, recursive: true })
   }
@@ -624,114 +605,180 @@ try {
     assert.deepEqual(discoveredByPath.get(consumer.path), [consumer.capability], 'aliases, local assignment, object storage, and wrappers must not affect structural consumer identity')
   }
   assert.equal(discoveredByPath.has(closurePositive.diagnosticPath), false, 'diagnostic metadata without a raw authority identity must remain a non-consumer')
-  moduleIdentityResults.push('exact-ordinary-relative-authority-import')
+  sourceGrammarMatrix.push('allowed-canonical-dot-relative')
 } finally {
   await rm(closurePositive.fixture, { force: true, recursive: true })
 }
 
-await assertQualifiedAuthorityEdgeRejected(
-  'reviewer-query-counterexample',
-  (specifier, capability) => 'import { ' + capability + ' } from ' + JSON.stringify(specifier) + '\nprocess.stdout.write(' + capability + '())\n',
-  'query',
-  { suffix: '?authority-bypass', runtimeExecutes: true },
+await assertSourceGrammarAllowed(
+  'allowed-canonical-parent-relative',
+  'tools/architecture/nested/parent-relative.mjs',
+  () => 'import { diagnostic } from "../non-consumer-diagnostic.mjs"\nvoid diagnostic\n',
 )
-await assertQualifiedAuthorityEdgeRejected(
-  'fragment-qualified-authority',
-  (specifier, capability) => 'import { ' + capability + ' } from ' + JSON.stringify(specifier) + '\n' + capability + '()\n',
-  'fragment',
-  { suffix: '#authority-bypass' },
+await assertSourceGrammarAllowed(
+  'allowed-canonical-grandparent-relative',
+  'tools/architecture/nested/deeper/grandparent-relative.mjs',
+  () => 'import { diagnostic } from "../../non-consumer-diagnostic.mjs"\nvoid diagnostic\n',
 )
-await assertQualifiedAuthorityEdgeRejected(
-  'combined-qualified-authority',
-  (specifier, capability) => 'import { ' + capability + ' } from ' + JSON.stringify(specifier) + '\n' + capability + '()\n',
-  'query+fragment',
-  { suffix: '?authority-bypass#fragment' },
-)
-await assertQualifiedAuthorityEdgeRejected(
-  'aliased-query-qualified-authority',
-  (specifier, capability) => 'import { ' + capability + ' as hiddenAuthority } from ' + JSON.stringify(specifier) + '\nhiddenAuthority()\n',
-  'query',
-  { suffix: '?aliased' },
-)
-await assertQualifiedAuthorityEdgeRejected(
-  'side-effect-query-qualified-authority',
-  (specifier) => 'import ' + JSON.stringify(specifier) + '\n',
-  'query',
-  { suffix: '?side-effect' },
-)
-await assertQualifiedAuthorityEdgeRejected(
-  'reexport-query-qualified-authority',
-  (specifier, capability) => 'export { ' + capability + ' } from ' + JSON.stringify(specifier) + '\n',
-  'query',
-  { suffix: '?reexport' },
-)
-await assertAuthoritySpecifierRecognized(
-  'ordinary-parent-relative-normalization',
-  (fixture) => '../architecture/' + path.posix.basename(fixture.accessPath),
-)
-await assertAuthoritySpecifierRecognized(
-  'dot-segment-equivalent-authority',
-  (fixture) => './not-present/../' + path.posix.basename(fixture.accessPath),
-)
-await assertAuthoritySpecifierRecognized(
-  'file-url-equivalent-authority',
+await assertSourceGrammarAllowed('allowed-node-builtin', 'tools/architecture/allowed-node-builtin.mjs', () => "import 'node:path'\n")
+await assertSourceGrammarAllowed('allowed-bare-package', 'tools/architecture/allowed-bare-package.mjs', () => "import 'typescript'\n")
+await assertSourceGrammarAllowed('allowed-scoped-package', 'tools/architecture/allowed-scoped-package.mjs', () => "import '@scope/package'\n")
+
+const namedAuthorityImport = (specifier, capability) => 'import { ' + capability + ' } from ' + JSON.stringify(specifier) + '\nprocess.stdout.write(' + capability + '())\n'
+const diagnosticImport = (specifier) => 'import { diagnostic } from ' + JSON.stringify(specifier) + '\nvoid diagnostic\n'
+const sideEffectImport = (specifier) => 'import ' + JSON.stringify(specifier) + '\n'
+const reexport = (specifier) => 'export { diagnostic } from ' + JSON.stringify(specifier) + '\n'
+const dynamicImport = (specifier) => 'await import(' + JSON.stringify(specifier) + ')\n'
+
+await assertSourceGrammarRejected('reject-lowercase-file-url', namedAuthorityImport,
   (fixture) => pathToFileURL(path.join(fixture.fixture, fixture.accessPath)).href,
-)
-await assertAuthoritySpecifierRecognized(
-  'percent-encoded-equivalent-authority',
-  (fixture) => fixture.accessSpecifier.replace('ownership', '%6Fwnership'),
-)
-await assertNonAuthoritySpecifierUnaffected(
-  'unrelated-ordinary-module',
-  () => 'import { diagnostic } from "./non-consumer-diagnostic.mjs"\nvoid diagnostic\n',
-)
-await assertNonAuthoritySpecifierUnaffected(
-  'harmless-qualified-string',
-  (fixture) => 'export const text = ' + JSON.stringify(fixture.accessSpecifier + '?not-an-import#still-a-string') + '\n',
-)
-await assertNonAuthoritySpecifierUnaffected(
-  'query-qualified-nonauthority-module',
-  () => 'import { diagnostic } from "./non-consumer-diagnostic.mjs?view"\nprocess.stdout.write(diagnostic)\n',
-  { runtimeExecutes: true },
-)
-await assertQualifiedAuthorityEdgeRejected(
-  'empty-query-qualified-authority',
-  (specifier, capability) => 'import { ' + capability + ' } from ' + JSON.stringify(specifier) + '\n',
-  'query',
-  { suffix: '?' },
-)
-await assertQualifiedAuthorityEdgeRejected(
-  'empty-fragment-qualified-authority',
-  (specifier, capability) => 'import { ' + capability + ' } from ' + JSON.stringify(specifier) + '\n',
-  'fragment',
-  { suffix: '#' },
-)
-await assertQualifiedAuthorityEdgeRejected(
-  'dynamic-query-qualified-authority',
-  (specifier) => 'await import(' + JSON.stringify(specifier) + ')\n',
-  'query',
-  { suffix: '?dynamic' },
-)
-await assertAuthoritySpecifierRecognized(
-  'absolute-path-equivalent-authority',
-  (fixture) => path.join(fixture.fixture, fixture.accessPath),
-)
-await assertQualifiedAuthorityEdgeRejected(
-  'file-url-query-qualified-authority',
-  (specifier, capability) => 'import { ' + capability + ' } from ' + JSON.stringify(specifier) + '\n',
-  'query',
-  {
-    specifier: (fixture) => pathToFileURL(path.join(fixture.fixture, fixture.accessPath)).href + '?file-url-query',
-  },
-)
-await assertAuthoritySpecifierRecognized(
-  'encoded-dot-segment-equivalent-authority',
-  (fixture) => './not-present/%2e%2e/' + path.posix.basename(fixture.accessPath),
-)
-await assertAuthoritySpecifierRecognized(
-  'localhost-file-url-equivalent-authority',
+  { runtimeExecutes: true, edgeForm: 'static_import' })
+await assertSourceGrammarRejected('reject-uppercase-file-url', namedAuthorityImport,
+  (fixture) => pathToFileURL(path.join(fixture.fixture, fixture.accessPath)).href.replace(/^file:/u, 'FILE:'),
+  { runtimeExecutes: true, edgeForm: 'static_import' })
+await assertSourceGrammarRejected('reject-mixedcase-file-url', namedAuthorityImport,
+  (fixture) => pathToFileURL(path.join(fixture.fixture, fixture.accessPath)).href.replace(/^file:/u, 'FiLe:'),
+  { edgeForm: 'static_import' })
+await assertSourceGrammarRejected('reject-localhost-file-url', namedAuthorityImport,
   (fixture) => pathToFileURL(path.join(fixture.fixture, fixture.accessPath)).href.replace('file:///', 'file://localhost/'),
-)
+  { edgeForm: 'static_import' })
+await assertSourceGrammarRejected('reject-absolute-path', namedAuthorityImport,
+  (fixture) => path.join(fixture.fixture, fixture.accessPath), { edgeForm: 'static_import' })
+await assertSourceGrammarRejected('reviewer-query-counterexample', namedAuthorityImport,
+  (fixture) => fixture.accessSpecifier + '?authority-bypass', { runtimeExecutes: true, edgeForm: 'static_import' })
+await assertSourceGrammarRejected('reject-fragment', reexport,
+  (fixture) => fixture.accessSpecifier + '#fragment', { edgeForm: 'export_from' })
+await assertSourceGrammarRejected('reject-query-fragment', dynamicImport,
+  (fixture) => fixture.accessSpecifier + '?query#fragment', { edgeForm: 'dynamic_import' })
+await assertSourceGrammarRejected('reject-empty-query', sideEffectImport,
+  (fixture) => fixture.accessSpecifier + '?', { edgeForm: 'side_effect_import' })
+await assertSourceGrammarRejected('reject-empty-fragment', diagnosticImport,
+  (fixture) => fixture.accessSpecifier + '#', { edgeForm: 'static_import' })
+await assertSourceGrammarRejected('reject-percent-encoded', diagnosticImport,
+  (fixture) => fixture.accessSpecifier.replace('ownership', '%6Fwnership'), { edgeForm: 'static_import' })
+await assertSourceGrammarRejected('reject-backslash', diagnosticImport,
+  '.\\non-consumer-diagnostic.mjs', { edgeForm: 'static_import' })
+await assertSourceGrammarRejected('reject-duplicate-separator', diagnosticImport,
+  './nested//module.mjs', { edgeForm: 'static_import' })
+await assertSourceGrammarRejected('reject-internal-dot', diagnosticImport,
+  './nested/./module.mjs', { edgeForm: 'static_import' })
+await assertSourceGrammarRejected('reject-internal-dotdot', diagnosticImport,
+  './nested/../non-consumer-diagnostic.mjs', { edgeForm: 'static_import' })
+await assertSourceGrammarRejected('reject-noncanonical-equivalent-relative', diagnosticImport,
+  '../architecture/non-consumer-diagnostic.mjs', { edgeForm: 'static_import' })
+await assertSourceGrammarRejected('reject-unsupported-url-scheme', diagnosticImport,
+  'https://example.invalid/module.mjs', { edgeForm: 'static_import' })
+await assertSourceGrammarRejected('reject-unsupported-package-import-alias', diagnosticImport,
+  '#ownership-diagnostic', { edgeForm: 'static_import' })
+
+const nonliteralDynamic = await dependencyClosureFixture()
+try {
+  const sourcePath = 'tools/architecture/reject-nonliteral-dynamic.mjs'
+  await writeFile(path.join(nonliteralDynamic.fixture, sourcePath), "const target = './non-consumer-diagnostic.mjs'\nawait import(target)\n")
+  await nonliteralDynamic.git('add', sourcePath)
+  assert.throws(
+    () => discoverExecutablePathOwnershipConsumers(nonliteralDynamic.fixture, nonliteralDynamic.declaration),
+    /acceptance nonliteral dynamic import forbidden/,
+    'nonliteral dynamic import must fail without arbitrary JavaScript dataflow',
+  )
+  sourceGrammarMatrix.push('reject-nonliteral-dynamic')
+  sourceGrammarRejected.push('reject-nonliteral-dynamic')
+  governedEdgeForms.add('dynamic_import')
+} finally {
+  await rm(nonliteralDynamic.fixture, { force: true, recursive: true })
+}
+
+const escapedLiteral = await dependencyClosureFixture()
+try {
+  const sourcePath = 'tools/architecture/escaped-literal-counterexample.mjs'
+  await writeFile(path.join(escapedLiteral.fixture, sourcePath),
+    'import { ' + escapedLiteral.capabilityNames[0] + ' } from "./validate-executable-path-\\u006fwnership.mjs"\nprocess.stdout.write(' + escapedLiteral.capabilityNames[0] + '())\n')
+  const executed = await execFileAsync(process.execPath, [path.join(escapedLiteral.fixture, sourcePath)], { encoding: 'utf8' })
+  assert.equal(executed.stdout, escapedLiteral.capabilityContract[0].artifact_path)
+  await escapedLiteral.git('add', sourcePath)
+  assert.throws(
+    () => discoverExecutablePathOwnershipConsumers(escapedLiteral.fixture, escapedLiteral.declaration),
+    /acceptance module specifier escape spelling forbidden/,
+    'raw JavaScript escape spelling must not be normalized into the acceptance grammar',
+  )
+} finally {
+  await rm(escapedLiteral.fixture, { force: true, recursive: true })
+}
+
+const explicitAlias = await dependencyClosureFixture()
+try {
+  await mkdir(path.join(explicitAlias.fixture, 'gravity-mvp/src/lib'), { recursive: true })
+  await writeFile(path.join(explicitAlias.fixture, 'gravity-mvp/tsconfig.json'), JSON.stringify({
+    compilerOptions: { paths: { '@/*': ['./src/*'] } },
+  }))
+  await writeFile(path.join(explicitAlias.fixture, 'gravity-mvp/src/lib/alias-target.ts'), 'export const aliasTarget = true\n')
+  await writeFile(path.join(explicitAlias.fixture, 'gravity-mvp/src/alias-consumer.ts'), "import { aliasTarget } from '@/lib/alias-target'\nvoid aliasTarget\n")
+  await explicitAlias.git('add', 'gravity-mvp')
+  validateExecutablePathOwnershipConsumerClosure(explicitAlias.declaration, explicitAlias.fixture)
+} finally {
+  await rm(explicitAlias.fixture, { force: true, recursive: true })
+}
+
+const unreviewedAlias = await dependencyClosureFixture()
+try {
+  await writeFile(path.join(unreviewedAlias.fixture, 'tsconfig.json'), JSON.stringify({
+    compilerOptions: { paths: { '#authority': ['./tools/architecture/validate-executable-path-ownership.mjs'] } },
+  }))
+  await unreviewedAlias.git('add', 'tsconfig.json')
+  assert.throws(
+    () => discoverExecutablePathOwnershipConsumers(unreviewedAlias.fixture, unreviewedAlias.declaration),
+    /acceptance unreviewed local alias mapping forbidden/,
+    'a newly introduced repository alias mapping must fail before source-edge discovery',
+  )
+} finally {
+  await rm(unreviewedAlias.fixture, { force: true, recursive: true })
+}
+
+const createRequireAlias = await dependencyClosureFixture()
+try {
+  const sourcePath = 'tools/architecture/create-require-alias.mjs'
+  const authorityUrl = pathToFileURL(path.join(createRequireAlias.fixture, createRequireAlias.accessPath)).href
+  await writeFile(path.join(createRequireAlias.fixture, sourcePath),
+    "import { createRequire } from 'node:module'\nconst load = createRequire(import.meta.url)\nload(" + JSON.stringify(authorityUrl) + ')\n')
+  await createRequireAlias.git('add', sourcePath)
+  assert.throws(
+    () => discoverExecutablePathOwnershipConsumers(createRequireAlias.fixture, createRequireAlias.declaration),
+    /acceptance URL\/absolute module specifier forbidden/,
+    'a direct createRequire loader alias must use the same source-language grammar',
+  )
+} finally {
+  await rm(createRequireAlias.fixture, { force: true, recursive: true })
+}
+
+const aliasedRequireLoader = await dependencyClosureFixture()
+try {
+  const sourcePath = 'tools/architecture/aliased-require-loader.mjs'
+  await writeFile(path.join(aliasedRequireLoader.fixture, sourcePath),
+    "import { createRequire } from 'node:module'\nconst load = createRequire(import.meta.url)\nconst hiddenLoad = load\nhiddenLoad('./non-consumer-diagnostic.mjs')\n")
+  await aliasedRequireLoader.git('add', sourcePath)
+  assert.throws(
+    () => discoverExecutablePathOwnershipConsumers(aliasedRequireLoader.fixture, aliasedRequireLoader.declaration),
+    /acceptance require loader aliasing forbidden/,
+    'a reviewed createRequire loader cannot be hidden behind callable value-flow',
+  )
+} finally {
+  await rm(aliasedRequireLoader.fixture, { force: true, recursive: true })
+}
+
+const computedRequireDrift = await dependencyClosureFixture()
+try {
+  const sourcePath = 'tools/architecture/computed-require-drift.mjs'
+  await writeFile(path.join(computedRequireDrift.fixture, sourcePath),
+    "import { createRequire } from 'node:module'\nimport path from 'node:path'\nconst load = createRequire(import.meta.url)\nload(path.join(process.cwd(), 'harmless.js'))\n")
+  await computedRequireDrift.git('add', sourcePath)
+  assert.throws(
+    () => discoverExecutablePathOwnershipConsumers(computedRequireDrift.fixture, computedRequireDrift.declaration),
+    /acceptance computed require inventory drift/,
+    'computed require inventory must remain exact and fail closed without arbitrary value-flow',
+  )
+} finally {
+  await rm(computedRequireDrift.fixture, { force: true, recursive: true })
+}
 
 const closureStale = await dependencyClosureFixture()
 try {
@@ -918,21 +965,20 @@ await assertTerminalConsumerExportRejected('export-star', 'export * from "./non-
 await assertTerminalConsumerExportRejected('commonjs-module-export', 'module.exports = x\n')
 await assertTerminalConsumerExportRejected('commonjs-property-export', 'exports.forwarded = x\n')
 
-async function assertTerminalConsumerInboundRejected(name, inboundBody, edgeKind, qualifier = null) {
+async function assertTerminalConsumerInboundRejected(name, inboundBody, edgeKind, grammarFailure = false) {
   const fixture = await dependencyClosureFixture()
   try {
     const inboundPath = 'tools/architecture/' + name + '.mjs'
     await writeFile(path.join(fixture.fixture, inboundPath), inboundBody('./direct-consumer.mjs'))
     await fixture.git('add', inboundPath)
-    const failure = qualifier === null
-      ? 'authority terminal consumer has inbound tracked module edge: tools/architecture/direct-consumer\\.mjs<-tools/architecture/' + name + '\\.mjs#' + edgeKind
-      : 'qualified authority terminal consumer inbound edge forbidden: tools/architecture/direct-consumer\\.mjs<-tools/architecture/' + name + '\\.mjs#' + edgeKind + '#' + qualifier.replace('+', '\\+')
+    const failure = grammarFailure
+      ? 'acceptance '
+      : 'authority terminal consumer has inbound tracked module edge: tools/architecture/direct-consumer\\.mjs<-tools/architecture/' + name + '\\.mjs#' + edgeKind
     assert.throws(
       () => discoverExecutablePathOwnershipConsumers(fixture.fixture, fixture.declaration),
       new RegExp(failure),
       name + ' must fail because a terminal authority consumer has an inbound tracked module edge',
     )
-    if (name === 'static-inbound' || qualifier !== null) moduleIdentityResults.push(name)
   } finally {
     await rm(fixture.fixture, { force: true, recursive: true })
   }
@@ -942,24 +988,35 @@ await assertTerminalConsumerInboundRejected('static-inbound', (target) => 'impor
 await assertTerminalConsumerInboundRejected('side-effect-inbound', (target) => 'import ' + JSON.stringify(target) + '\n', 'static_import')
 await assertTerminalConsumerInboundRejected('reexport-inbound', (target) => 'export * from ' + JSON.stringify(target) + '\n', 'static_reexport')
 await assertTerminalConsumerInboundRejected('dynamic-inbound', (target) => 'await import(' + JSON.stringify(target) + ')\n', 'literal_dynamic_import')
-await assertTerminalConsumerInboundRejected('query-qualified-inbound', (target) => 'import { anything } from ' + JSON.stringify(target + '?query') + '\n', 'static_import', 'query')
-await assertTerminalConsumerInboundRejected('fragment-qualified-inbound', (target) => 'import { anything } from ' + JSON.stringify(target + '#fragment') + '\n', 'static_import', 'fragment')
-await assertTerminalConsumerInboundRejected('combined-qualified-inbound', (target) => 'import { anything } from ' + JSON.stringify(target + '?query#fragment') + '\n', 'static_import', 'query+fragment')
-await assertTerminalConsumerInboundRejected('side-effect-query-qualified-inbound', (target) => 'import ' + JSON.stringify(target + '?side-effect') + '\n', 'static_import', 'query')
-await assertTerminalConsumerInboundRejected('dynamic-query-qualified-inbound', (target) => 'await import(' + JSON.stringify(target + '?dynamic') + ')\n', 'literal_dynamic_import', 'query')
+await assertTerminalConsumerInboundRejected('module-require-inbound', (target) => 'module.require(' + JSON.stringify(target) + ')\n', 'literal_require')
+await assertTerminalConsumerInboundRejected('query-qualified-inbound', (target) => 'import { anything } from ' + JSON.stringify(target + '?query') + '\n', 'static_import', true)
+await assertTerminalConsumerInboundRejected('fragment-qualified-inbound', (target) => 'import { anything } from ' + JSON.stringify(target + '#fragment') + '\n', 'static_import', true)
+await assertTerminalConsumerInboundRejected('combined-qualified-inbound', (target) => 'import { anything } from ' + JSON.stringify(target + '?query#fragment') + '\n', 'static_import', true)
+await assertTerminalConsumerInboundRejected('side-effect-query-qualified-inbound', (target) => 'import ' + JSON.stringify(target + '?side-effect') + '\n', 'static_import', true)
+await assertTerminalConsumerInboundRejected('dynamic-query-qualified-inbound', (target) => 'await import(' + JSON.stringify(target + '?dynamic') + ')\n', 'literal_dynamic_import', true)
 
-assert.equal(moduleIdentityResults.length, 27, 'module-specifier identity adversarial denominator drift')
-assert.equal(new Set(moduleIdentityResults).size, moduleIdentityResults.length, 'module-specifier identity adversarial cases must be unique')
-process.stdout.write('terminal-leaf structural adversarial matrix: PASS (21/21)\n')
-process.stdout.write('module-specifier identity adversarial matrix: PASS (' + moduleIdentityResults.length + '/' + moduleIdentityResults.length + ')\n')
+assert.equal(sourceGrammarMatrix.length, 25, 'acceptance source-language grammar matrix denominator drift')
+assert.equal(sourceGrammarRejected.length, 19, 'acceptance source-language rejection matrix denominator drift')
+assert.equal(new Set(sourceGrammarMatrix).size, sourceGrammarMatrix.length, 'acceptance source-language cases must be unique')
+assert.deepEqual([...governedEdgeForms].sort(), ['dynamic_import', 'export_from', 'side_effect_import', 'static_import'])
+process.stdout.write('terminal-leaf structural adversarial matrix: PASS (22/22)\n')
+process.stdout.write('acceptance source-language grammar matrix: PASS (' + sourceGrammarMatrix.length + '/' + sourceGrammarMatrix.length + ')\n')
+process.stdout.write('uppercase_FILE_reviewer_counterexample_node_executes=true\n')
+process.stdout.write('uppercase_FILE_reviewer_counterexample_rejected=true\n')
 process.stdout.write('query_qualified_authority_import_rejected=true\n')
 process.stdout.write('fragment_qualified_authority_import_rejected=true\n')
 process.stdout.write('combined_qualified_authority_import_rejected=true\n')
 process.stdout.write('query_qualified_terminal_inbound_rejected=true\n')
 process.stdout.write('fragment_qualified_terminal_inbound_rejected=true\n')
-process.stdout.write('canonical_target_identity_shared_across_structural_checks=true\n')
 process.stdout.write('reviewer_query_counterexample_node_executes=true\n')
 process.stdout.write('reviewer_query_counterexample_rejected=true\n')
+process.stdout.write('canonical_acceptance_import_grammar_enforced=true\n')
+process.stdout.write('file_url_imports_forbidden=true\n')
+process.stdout.write('case_variant_file_url_imports_forbidden=true\n')
+process.stdout.write('query_fragment_imports_forbidden=true\n')
+process.stdout.write('noncanonical_relative_imports_forbidden=true\n')
+process.stdout.write('authority_edges_require_canonical_relative_specifier=true\n')
+process.stdout.write('terminal_inbound_edges_require_canonical_relative_specifier=true\n')
 process.stdout.write('authority_consumer_zero_exports_enforced=true\n')
 process.stdout.write('authority_consumer_zero_inbound_edges_enforced=true\n')
 process.stdout.write('terminal_leaf_zero_exports_preserved=true\n')
@@ -970,6 +1027,7 @@ process.stdout.write('exported_wrapper_rejected_without_dataflow=true\n')
 process.stdout.write('harmless_export_from_authority_consumer_rejected=true\n')
 process.stdout.write('ordinary_nonconsumer_exports_allowed=true\n')
 process.stdout.write('arbitrary_js_dataflow_retired=true\n')
+process.stdout.write('node_equivalent_identity_enumeration_retired=true\n')
 
 const closureMissingModule = await dependencyClosureFixture()
 try {
@@ -1011,7 +1069,9 @@ for (const retiredAnalyzerMarker of [
 }
 assert.equal(validatorSource.includes('ts.isImportDeclaration'), true, 'structural direct-import validation missing')
 assert.equal(validatorSource.includes('moduleExportKinds'), true, 'generic terminal-consumer zero-export validation missing')
-assert.equal(validatorSource.includes('sourceModuleEdges'), true, 'generic terminal-consumer inbound-edge validation missing')
+assert.equal(validatorSource.includes('validateAcceptanceSourceLanguage'), true, 'repository-wide source-language validation missing')
+assert.equal(validatorSource.includes('trackedModuleSpecifierIdentity'), false, 'retired Node-equivalent module-identity resolver remains')
+assert.equal(validatorSource.includes('pathToFileURL'), false, 'retired WHATWG file-URL target resolver remains')
 assert.equal(currentDependencies.current_live.consumers.every((consumer) => consumer.terminal_leaf === true), true, 'canonical consumer declaration must mark every consumer as a terminal leaf')
 assert.equal(discoveredCurrentConsumers.every((consumer) => consumer.terminal_leaf === true), true, 'mechanically discovered consumers must all satisfy the terminal-leaf contract')
 for (const consumer of discoveredCurrentConsumers) {
