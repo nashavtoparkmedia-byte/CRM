@@ -67,8 +67,21 @@ export const OWNERSHIP_VALIDATOR_PATH = 'tools/architecture/validate-executable-
 const JAVASCRIPT_SOURCE = /\.(?:[cm]?js|jsx|ts|tsx)$/u
 const FILESYSTEM_MODULES = new Set(['fs', 'fs/promises', 'node:fs', 'node:fs/promises'])
 const FILESYSTEM_READ_EXPORTS = new Set(['createReadStream', 'open', 'readFile', 'readFileSync'])
+const FILESYSTEM_PROVEN_NON_READER_EXPORTS = new Set([
+  'appendFile', 'appendFileSync', 'mkdir', 'mkdirSync', 'mkdtemp', 'mkdtempSync',
+  'rm', 'rmSync', 'unlink', 'unlinkSync', 'writeFile', 'writeFileSync',
+])
 const PATH_MODULES = new Set(['node:path', 'path'])
 const PATH_BUILD_EXPORTS = new Set(['join', 'resolve'])
+const ASSERT_MODULES = new Set(['assert', 'assert/strict', 'node:assert', 'node:assert/strict'])
+const TEST_MODULES = new Set(['node:test'])
+const GLOBAL_PROVEN_NON_READER_METHODS = new Map([
+  ['Array', new Set(['isArray'])],
+  ['Buffer', new Set(['from', 'isBuffer'])],
+  ['JSON', new Set(['parse', 'stringify'])],
+  ['Object', new Set(['entries', 'fromEntries', 'hasOwn', 'keys', 'values'])],
+  ['console', new Set(['debug', 'error', 'info', 'log', 'warn'])],
+])
 const CONSUMER_DISCOVERY_CACHE = new Map()
 
 function moduleSpecifierText(node) {
@@ -278,12 +291,53 @@ function makeAuthorityExportResolver(sources, checker) {
 function makeSemanticSourceAnalyzer(relativePath, sourceFile, checker, authorityExports) {
   const authorityUseForPath = (value) => AUTHORITY_STRING_REFERENCES.get(value) ?? null
   const substitutionsKey = (symbol, substitutions) => substitutions.get(symbol)
-  const symbolAt = (identifier) => checker.getSymbolAtLocation(identifier) ?? null
+  const symbolAt = (identifier) => ts.isIdentifier(identifier)
+    && ts.isShorthandPropertyAssignment(identifier.parent)
+    && identifier.parent.name === identifier
+    ? checker.getShorthandAssignmentValueSymbol(identifier.parent) ?? checker.getSymbolAtLocation(identifier) ?? null
+    : checker.getSymbolAtLocation(identifier) ?? null
   const hasDeclaredSymbol = (identifier) => (symbolAt(identifier)?.declarations ?? []).length > 0
   const declarationsFor = (identifier) => symbolAt(identifier)?.declarations ?? []
   const sourceLocation = (node) => {
     const position = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
     return `${relativePath}:${position.line + 1}:${position.character + 1}`
+  }
+  const assignmentCache = new Map()
+
+  function assignmentsForSymbol(symbol) {
+    if (assignmentCache.has(symbol)) return assignmentCache.get(symbol)
+    const assignments = []
+    const visit = (node) => {
+      if (ts.isBinaryExpression(node)
+        && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment
+        && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+        && ts.isIdentifier(unwrapExpression(node.left))
+        && symbolAt(unwrapExpression(node.left)) === symbol) assignments.push(node)
+      if ((ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node))
+        && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(node.operator)
+        && ts.isIdentifier(unwrapExpression(node.operand))
+        && symbolAt(unwrapExpression(node.operand)) === symbol) assignments.push(node)
+      ts.forEachChild(node, visit)
+    }
+    visit(sourceFile)
+    assignmentCache.set(symbol, assignments)
+    return assignments
+  }
+
+  function directStatement(node) {
+    let current = node
+    while (current?.parent && !ts.isSourceFile(current.parent) && !ts.isBlock(current.parent)) current = current.parent
+    return current?.parent && (ts.isSourceFile(current.parent) || ts.isBlock(current.parent)) ? current : null
+  }
+
+  function deterministicAssignmentValue(assignment, useNode) {
+    if (!ts.isBinaryExpression(assignment) || assignment.operatorToken.kind !== ts.SyntaxKind.EqualsToken
+      || !ts.isExpressionStatement(assignment.parent)) return null
+    const assignmentStatement = directStatement(assignment)
+    const useStatement = directStatement(useNode)
+    if (!assignmentStatement || !useStatement || assignmentStatement.parent !== useStatement.parent) return null
+    const statements = assignmentStatement.parent.statements
+    return statements.indexOf(assignmentStatement) < statements.indexOf(useStatement) ? assignment.right : null
   }
 
   function isUnshadowedRequireCall(node, expectedModules) {
@@ -322,6 +376,7 @@ function makeSemanticSourceAnalyzer(relativePath, sourceFile, checker, authority
     if (!ts.isIdentifier(expression)) return false
     const symbol = symbolAt(expression)
     if (!symbol || seen.has(symbol)) return false
+    if (assignmentsForSymbol(symbol).length > 0) return false
     seen.add(symbol)
     for (const declaration of symbol.declarations ?? []) {
       const imported = importBinding(declaration)
@@ -351,6 +406,7 @@ function makeSemanticSourceAnalyzer(relativePath, sourceFile, checker, authority
     if (!ts.isIdentifier(expression)) return false
     const symbol = symbolAt(expression)
     if (!symbol || seen.has(symbol)) return false
+    if (assignmentsForSymbol(symbol).length > 0) return false
     seen.add(symbol)
     for (const declaration of symbol.declarations ?? []) {
       const imported = importBinding(declaration)
@@ -369,29 +425,66 @@ function makeSemanticSourceAnalyzer(relativePath, sourceFile, checker, authority
   const isFilesystemReader = (expression) => bindingResolvesToExport(expression, FILESYSTEM_MODULES, FILESYSTEM_READ_EXPORTS)
   const isPathBuilder = (expression) => bindingResolvesToExport(expression, PATH_MODULES, PATH_BUILD_EXPORTS)
 
-  function expressionReferencesFilesystemReader(expression, seen = new Set()) {
+  const CALLABLE_READER = 'PROVEN_FILESYSTEM_READER'
+  const CALLABLE_NON_READER = 'PROVEN_NON_FILESYSTEM_READER'
+  const CALLABLE_LOCAL = 'PROVEN_LOCAL_FUNCTION'
+  const CALLABLE_UNKNOWN = 'UNKNOWN_RELEVANT_CALLABLE'
+  const callable = (kind, functionNode = null) => ({ functionNode, kind })
+
+  function isProvenNonReader(expression) {
     const node = unwrapExpression(expression)
     if (!node) return false
-    if (isFilesystemReader(node)) return true
+    if (isPathBuilder(node)
+      || bindingResolvesToExport(node, FILESYSTEM_MODULES, FILESYSTEM_PROVEN_NON_READER_EXPORTS)
+      || bindingResolvesToNamespace(node, ASSERT_MODULES)
+      || bindingResolvesToNamespace(node, TEST_MODULES)) return true
+    if ((ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node))) {
+      const receiver = unwrapExpression(node.expression)
+      const property = ts.isPropertyAccessExpression(node)
+        ? node.name.text
+        : propertyNameText(unwrapExpression(node.argumentExpression))
+      if (receiver && bindingResolvesToNamespace(receiver, ASSERT_MODULES)) return true
+      if (receiver && bindingResolvesToNamespace(receiver, TEST_MODULES)) return true
+      if (receiver && ts.isIdentifier(receiver) && !hasDeclaredSymbol(receiver)
+        && GLOBAL_PROVEN_NON_READER_METHODS.get(receiver.text)?.has(property)) return true
+    }
+    return false
+  }
+
+  function resolveCallableExpression(expression, useNode, seen = new Set(), substitutions = new Map()) {
+    const node = unwrapExpression(expression)
+    if (!node) return callable(CALLABLE_UNKNOWN)
+    if (isFilesystemReader(node)) return callable(CALLABLE_READER)
+    if (isProvenNonReader(node)) return callable(CALLABLE_NON_READER)
+    if (ts.isArrowFunction(node) || ts.isFunctionExpression(node) || ts.isMethodDeclaration(node)) return callable(CALLABLE_LOCAL, node)
     if (ts.isIdentifier(node)) {
       const symbol = symbolAt(node)
-      if (!symbol || seen.has(symbol)) return false
+      if (!symbol || seen.has(symbol)) return callable(CALLABLE_UNKNOWN)
       const nextSeen = new Set(seen).add(symbol)
-      return (symbol.declarations ?? []).some((declaration) => {
-        const initializer = variableInitializer(declaration)
-        return initializer ? expressionReferencesFilesystemReader(initializer, nextSeen) : false
-      })
+      const substitution = substitutionsKey(symbol, substitutions)
+      if (substitution) return resolveCallableExpression(substitution, useNode, nextSeen, substitutions)
+      const functionDeclarations = (symbol.declarations ?? []).filter((declaration) => ts.isFunctionDeclaration(declaration) && declaration.body)
+      if (functionDeclarations.length === 1 && assignmentsForSymbol(symbol).length === 0) return callable(CALLABLE_LOCAL, functionDeclarations[0])
+      if (functionDeclarations.length > 0) return callable(CALLABLE_UNKNOWN)
+      const value = localIdentifierValue(node, useNode, nextSeen)
+      return value.status === 'resolved'
+        ? resolveCallableExpression(value.value, useNode, nextSeen, substitutions)
+        : callable(CALLABLE_UNKNOWN)
     }
-    if (ts.isConditionalExpression(node)) return expressionReferencesFilesystemReader(node.whenTrue, seen)
-      || expressionReferencesFilesystemReader(node.whenFalse, seen)
-    if (ts.isBinaryExpression(node)) return expressionReferencesFilesystemReader(node.left, seen)
-      || expressionReferencesFilesystemReader(node.right, seen)
-    if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) return expressionReferencesFilesystemReader(node.body, seen)
-    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
-      && ['apply', 'bind', 'call'].includes(node.expression.name.text)) return expressionReferencesFilesystemReader(node.expression.expression, seen)
-    if (ts.isElementAccessExpression(node) && (ts.isStringLiteral(node.argumentExpression) || ts.isNoSubstitutionTemplateLiteral(node.argumentExpression))
-      && FILESYSTEM_READ_EXPORTS.has(node.argumentExpression.text)) return bindingResolvesToNamespace(node.expression, FILESYSTEM_MODULES)
-    return false
+    const property = localObjectPropertyResult(node, useNode, seen)
+    if (property.status === 'resolved') return resolveCallableExpression(property.value, useNode, seen, substitutions)
+    if (property.status === 'unknown') return callable(CALLABLE_UNKNOWN)
+    if (ts.isConditionalExpression(node)) {
+      const branches = [
+        resolveCallableExpression(node.whenTrue, useNode, seen, substitutions),
+        resolveCallableExpression(node.whenFalse, useNode, seen, substitutions),
+      ]
+      if (branches.every((branch) => branch.kind === CALLABLE_READER)) return callable(CALLABLE_READER)
+      if (branches.every((branch) => branch.kind === CALLABLE_NON_READER)) return callable(CALLABLE_NON_READER)
+      if (branches.every((branch) => branch.kind === CALLABLE_LOCAL
+        && branch.functionNode === branches[0].functionNode)) return branches[0]
+    }
+    return callable(CALLABLE_UNKNOWN)
   }
 
   function importedAuthority(identifier) {
@@ -456,24 +549,146 @@ function makeSemanticSourceAnalyzer(relativePath, sourceFile, checker, authority
     return null
   }
 
-  function localObjectProperty(expression, seen = new Set()) {
+  const resolvedLocalValue = (value) => ({ status: 'resolved', value })
+  const absentLocalValue = () => ({ status: 'absent', value: null })
+  const unknownLocalValue = () => ({ status: 'unknown', value: null })
+  const propertyMutationCache = new Map()
+
+  function localIdentifierValue(identifier, useNode, seen = new Set()) {
+    const symbol = symbolAt(identifier)
+    if (!symbol) return absentLocalValue()
+    const declarations = symbol.declarations ?? []
+    const localVariables = declarations.filter((declaration) => ts.isVariableDeclaration(declaration) && ts.isIdentifier(declaration.name))
+    const bindings = declarations.filter((declaration) => ts.isBindingElement(declaration))
+    const assignments = assignmentsForSymbol(symbol)
+    const initialized = localVariables.filter((declaration) => declaration.initializer)
+    if (assignments.length > 0) {
+      if (initialized.length > 0 || bindings.length > 0 || localVariables.length !== 1 || assignments.length !== 1) return unknownLocalValue()
+      const value = deterministicAssignmentValue(assignments[0], useNode)
+      return value ? resolvedLocalValue(value) : unknownLocalValue()
+    }
+    if (initialized.length === 1 && localVariables.length === 1) return resolvedLocalValue(initialized[0].initializer)
+    if (bindings.length === 1 && localVariables.length === 0) {
+      const binding = bindings[0]
+      if (!ts.isObjectBindingPattern(binding.parent) || binding.dotDotDotToken) return unknownLocalValue()
+      const property = bindingElementProperty(binding)
+      const initializer = variableDeclarationFor(binding)?.initializer
+      if (!property || !initializer) return unknownLocalValue()
+      return localObjectPropertyByName(initializer, property, useNode, seen)
+    }
+    if (localVariables.length > 0 || bindings.length > 0) return unknownLocalValue()
+    return absentLocalValue()
+  }
+
+  function localObjectIdentity(expression, seen = new Set()) {
     const node = unwrapExpression(expression)
-    if (!node || !ts.isPropertyAccessExpression(node)) return null
-    const property = node.name.text
-    let object = unwrapExpression(node.expression)
-    if (ts.isIdentifier(object)) {
-      const symbol = symbolAt(object)
-      if (!symbol || seen.has(symbol)) return null
-      seen.add(symbol)
-      const declaration = (symbol.declarations ?? []).find((candidate) => ts.isVariableDeclaration(candidate) && candidate.initializer)
-      object = unwrapExpression(declaration?.initializer)
+    if (!node) return absentLocalValue()
+    if (ts.isObjectLiteralExpression(node)) return resolvedLocalValue(node)
+    if (ts.isCallExpression(node)) {
+      const returned = deterministicLocalReturnExpression(node, seen)
+      return returned ? localObjectIdentity(returned, seen) : absentLocalValue()
     }
-    if (!object || !ts.isObjectLiteralExpression(object)) return null
-    for (const member of object.properties) {
-      if (ts.isPropertyAssignment(member) && propertyNameText(member.name) === property) return member.initializer
-      if (ts.isShorthandPropertyAssignment(member) && member.name.text === property) return member.name
+    if (!ts.isIdentifier(node)) return absentLocalValue()
+    const symbol = symbolAt(node)
+    if (!symbol) return absentLocalValue()
+    if (seen.has(symbol) || assignmentsForSymbol(symbol).length > 0) return unknownLocalValue()
+    const nextSeen = new Set(seen).add(symbol)
+    const declarations = (symbol.declarations ?? []).filter((declaration) => ts.isVariableDeclaration(declaration)
+      && ts.isIdentifier(declaration.name) && declaration.initializer)
+    if (declarations.length === 0) return absentLocalValue()
+    if (declarations.length !== 1) return unknownLocalValue()
+    const nested = localObjectIdentity(declarations[0].initializer, nextSeen)
+    return nested.status === 'absent' ? unknownLocalValue() : nested
+  }
+
+  function deterministicLocalReturnExpression(call, seen = new Set()) {
+    const classification = resolveCallableExpression(call.expression, call, seen)
+    if (classification.kind !== CALLABLE_LOCAL || !classification.functionNode
+      || classification.functionNode.parameters.length !== 0) return null
+    const body = classification.functionNode.body
+    if (!body) return null
+    if (!ts.isBlock(body)) return body
+    if (body.statements.length !== 1 || !ts.isReturnStatement(body.statements[0])) return null
+    return body.statements[0].expression ?? null
+  }
+
+  function objectPropertyIsMutated(objectLiteral, property) {
+    let byProperty = propertyMutationCache.get(objectLiteral)
+    if (!byProperty) {
+      byProperty = new Map()
+      propertyMutationCache.set(objectLiteral, byProperty)
     }
-    return null
+    if (byProperty.has(property)) return byProperty.get(property)
+    let mutated = false
+    const visit = (node) => {
+      if (mutated) return
+      let target = null
+      if (ts.isBinaryExpression(node)
+        && node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment
+        && node.operatorToken.kind <= ts.SyntaxKind.LastAssignment) target = unwrapExpression(node.left)
+      if ((ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node))
+        && [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(node.operator)) target = unwrapExpression(node.operand)
+      if (target && (ts.isPropertyAccessExpression(target) || ts.isElementAccessExpression(target))) {
+        const targetProperty = ts.isPropertyAccessExpression(target)
+          ? target.name.text
+          : propertyNameText(unwrapExpression(target.argumentExpression))
+        const identity = localObjectIdentity(target.expression)
+        if (identity.status === 'resolved' && identity.value === objectLiteral
+          && (targetProperty === null || targetProperty === property)) mutated = true
+      }
+      if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+        && ts.isIdentifier(node.expression.expression) && node.expression.expression.text === 'Object'
+        && !hasDeclaredSymbol(node.expression.expression) && node.expression.name.text === 'assign'
+        && node.arguments.length > 0) {
+        const identity = localObjectIdentity(node.arguments[0])
+        if (identity.status === 'resolved' && identity.value === objectLiteral) mutated = true
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(sourceFile)
+    byProperty.set(property, mutated)
+    return mutated
+  }
+
+  function localObjectPropertyByName(objectExpression, property, useNode, seen = new Set()) {
+    const identity = localObjectIdentity(objectExpression, seen)
+    if (identity.status !== 'resolved') return identity.status === 'unknown' ? unknownLocalValue() : absentLocalValue()
+    const objectLiteral = identity.value
+    if (objectPropertyIsMutated(objectLiteral, property)) return unknownLocalValue()
+    const matches = []
+    let hasUnsupportedMember = false
+    for (const member of objectLiteral.properties) {
+      if (ts.isSpreadAssignment(member) || propertyNameText(member.name) === null) {
+        hasUnsupportedMember = true
+        continue
+      }
+      if (propertyNameText(member.name) !== property) continue
+      if (ts.isPropertyAssignment(member)) matches.push(member.initializer)
+      else if (ts.isShorthandPropertyAssignment(member)) matches.push(member.name)
+      else if (ts.isMethodDeclaration(member) && member.body) matches.push(member)
+      else hasUnsupportedMember = true
+    }
+    if (matches.length === 1 && !hasUnsupportedMember) return resolvedLocalValue(matches[0])
+    if (matches.length > 0 || hasUnsupportedMember) return unknownLocalValue()
+    return absentLocalValue()
+  }
+
+  function localObjectPropertyResult(expression, useNode, seen = new Set()) {
+    const node = unwrapExpression(expression)
+    if (!node || (!ts.isPropertyAccessExpression(node) && !ts.isElementAccessExpression(node))) return absentLocalValue()
+    const property = ts.isPropertyAccessExpression(node)
+      ? node.name.text
+      : propertyNameText(unwrapExpression(node.argumentExpression))
+    if (property === null) {
+      const identity = localObjectIdentity(node.expression, seen)
+      return identity.status === 'absent' ? absentLocalValue() : unknownLocalValue()
+    }
+    return localObjectPropertyByName(node.expression, property, useNode, seen)
+  }
+
+  function localObjectProperty(expression, seen = new Set()) {
+    const result = localObjectPropertyResult(expression, expression, seen)
+    return result.status === 'resolved' ? result.value : null
   }
 
   const none = () => ({ exact: true, uses: new Set() })
@@ -603,26 +818,9 @@ function makeSemanticSourceAnalyzer(relativePath, sourceFile, checker, authority
     return referenced
   }
 
-  function localFunction(expression, seen = new Set()) {
-    const node = unwrapExpression(expression)
-    if (!node) return null
-    if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) return node
-    if (!ts.isIdentifier(node)) return null
-    const symbol = symbolAt(node)
-    if (!symbol || seen.has(symbol)) return null
-    seen.add(symbol)
-    for (const declaration of symbol.declarations ?? []) {
-      if (ts.isFunctionDeclaration(declaration) && declaration.body) return declaration
-      if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
-        const resolved = localFunction(declaration.initializer, seen)
-        if (resolved) return resolved
-      }
-    }
-    return null
-  }
-
   function readUsesFromCall(call, substitutions = new Map(), activeFunctions = new Set()) {
-    if (isFilesystemReader(call.expression)) {
+    const classification = resolveCallableExpression(call.expression, call, new Set(), substitutions)
+    if (classification.kind === CALLABLE_READER) {
       assert(call.arguments.length > 0, `authority consumer filesystem read has no path argument: ${sourceLocation(call)}`)
       const resolved = resolveAuthorityExpression(call.arguments[0], substitutions)
       if (resolved.uses.size > 0) {
@@ -632,14 +830,14 @@ function makeSemanticSourceAnalyzer(relativePath, sourceFile, checker, authority
       assert(!expressionReferencesAuthority(call.arguments[0], substitutions), `unsupported authority dataflow into filesystem read: ${sourceLocation(call)}`)
       return new Set()
     }
-    const relevantArguments = call.arguments.some((argument) => expressionReferencesAuthority(argument, substitutions))
-    const functionNode = localFunction(call.expression)
-    if (!functionNode || activeFunctions.has(functionNode)) {
-      assert(!relevantArguments || !expressionReferencesFilesystemReader(call.expression), `unsupported filesystem reader binding for authority call: ${sourceLocation(call)}`)
-      return new Set()
-    }
-    if (!relevantArguments) return new Set()
-    assert(functionNode.parameters.every((parameter) => ts.isIdentifier(parameter.name)), `unsupported authority wrapper parameter pattern: ${relativePath}`)
+    const relevantArguments = call.arguments.some((argument) => resolveAuthorityExpression(argument, substitutions).uses.size > 0)
+    if (classification.kind === CALLABLE_NON_READER || !relevantArguments) return new Set()
+    assert(classification.kind !== CALLABLE_UNKNOWN,
+      `unsupported relevant callable dataflow: ${sourceLocation(call)}; classification=${CALLABLE_UNKNOWN}`)
+    const functionNode = classification.functionNode
+    assert(classification.kind === CALLABLE_LOCAL && functionNode && !activeFunctions.has(functionNode),
+      `unsupported relevant callable dataflow: ${sourceLocation(call)}; classification=${CALLABLE_UNKNOWN}`)
+    assert(functionNode.parameters.every((parameter) => ts.isIdentifier(parameter.name)), `unsupported authority wrapper parameter pattern: ${sourceLocation(functionNode)}`)
     const nestedSubstitutions = new Map(substitutions)
     functionNode.parameters.forEach((parameter, index) => {
       const symbol = symbolAt(parameter.name)

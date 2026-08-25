@@ -611,9 +611,21 @@ const semanticMatrix = await semanticDiscoveryFixture({
   'tools/architecture/true-commonjs.cjs': `const { readFileSync: slurp } = require('fs')\nslurp('${REVIEWED_BASELINE_PATH}')\n`,
   'tools/architecture/true-commonjs-namespace.cjs': `const fs = require('node:fs')\nfs.readFileSync('${currentDependencies.current_live.authority.path}')\n`,
   'tools/architecture/true-promises-namespace.mjs': `import { promises as fs } from 'node:fs'\nawait fs.readFile('${CURRENT_DEPENDENCY_PATH}')\n`,
+  'tools/architecture/true-direct-callable-alias.mjs': `import { readFileSync } from 'node:fs'\nimport { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nconst load = readFileSync\nload(COVERAGE_PATH)\n`,
+  'tools/architecture/true-object-bound-reviewer.mjs': `import { readFileSync } from 'node:fs'\nimport { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nconst readers = { load: readFileSync }\nreaders.load(COVERAGE_PATH)\n`,
+  'tools/architecture/true-object-bound-property-independent.mjs': `import { readFileSync } from 'node:fs'\nimport { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nconst readers = { banana: readFileSync }\nreaders.banana(COVERAGE_PATH)\n`,
+  'tools/architecture/true-object-shorthand.mjs': `import { readFileSync } from 'node:fs'\nimport { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nconst readers = { readFileSync }\nreaders.readFileSync(COVERAGE_PATH)\n`,
+  'tools/architecture/true-callable-object-alias.mjs': `import { readFileSync } from 'node:fs'\nimport { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nconst readers = { load: readFileSync }\nconst alias = readers\nalias.load(COVERAGE_PATH)\n`,
+  'tools/architecture/true-callable-destructured.mjs': `import { readFileSync } from 'node:fs'\nimport { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nconst readers = { load: readFileSync }\nconst { load } = readers\nload(COVERAGE_PATH)\n`,
+  'tools/architecture/true-callable-renamed-destructured.mjs': `import { readFileSync } from 'node:fs'\nimport { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nconst readers = { load: readFileSync }\nconst { load: slurp } = readers\nslurp(COVERAGE_PATH)\n`,
+  'tools/architecture/true-callable-property-extraction.mjs': `import { readFileSync } from 'node:fs'\nimport { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nconst readers = { load: readFileSync }\nconst extracted = readers.load\nextracted(COVERAGE_PATH)\n`,
+  'tools/architecture/true-callable-deterministic-assignment.mjs': `import { readFileSync } from 'node:fs'\nimport { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nlet load\nload = readFileSync\nload(COVERAGE_PATH)\n`,
   'tools/architecture/true-alias-dataflow.mjs': `import { readFile as fetchBytes } from 'node:fs/promises'\nimport { join as assemble } from 'node:path'\nimport { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nconst authorityAlias = COVERAGE_PATH\nconst targetAlias = assemble('/repository', authorityAlias)\nawait fetchBytes(targetAlias)\n`,
   'tools/architecture/true-object-alias.mjs': `import { readFileSync } from 'node:fs'\nimport { CURRENT_DEPENDENCY_PATH } from './validate-executable-path-ownership.mjs'\nconst paths = { target: CURRENT_DEPENDENCY_PATH, diagnostic: 'current dependency' }\nreadFileSync(paths.target)\n`,
   'tools/architecture/true-wrapper.mjs': `import { readFile } from 'node:fs/promises'\nimport { CURRENT_DEPENDENCY_PATH } from './validate-executable-path-ownership.mjs'\nconst load = async (relative) => readFile(new URL(relative, 'file:///repository/'))\nawait load(CURRENT_DEPENDENCY_PATH)\n`,
+  'tools/architecture/true-object-wrapper.mjs': `import { readFileSync } from 'node:fs'\nimport { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nconst readers = { load: readFileSync }\nconst load = (value) => readers.load(value)\nload(COVERAGE_PATH)\n`,
+  'tools/architecture/true-nested-wrapper.mjs': `import { readFileSync } from 'node:fs'\nimport { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nconst inner = (value) => readFileSync(value)\nconst outer = (value) => inner(value)\nouter(COVERAGE_PATH)\n`,
+  'tools/architecture/true-callable-parameter-wrapper.mjs': `import { readFileSync } from 'node:fs'\nimport { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nconst invoke = (reader, value) => reader(value)\ninvoke(readFileSync, COVERAGE_PATH)\n`,
   'tools/architecture/true-imported-metadata.mjs': `import { readFileSync } from 'node:fs'\nimport { authorityMetadata } from './false-exported-metadata.mjs'\nreadFileSync(authorityMetadata)\n`,
   'tools/architecture/true-reexport-reader.mjs': `import { readFileSync } from 'node:fs'\nimport { forwardedAuthority } from './false-metadata-reexport.mjs'\nreadFileSync(forwardedAuthority)\n`,
   'tools/architecture/true-default-imported-metadata.mjs': `import { readFileSync } from 'node:fs'\nimport authorityPath from './false-default-metadata.mjs'\nreadFileSync(authorityPath)\n`,
@@ -625,6 +637,12 @@ const semanticMatrix = await semanticDiscoveryFixture({
   'tools/architecture/false-error-message.mjs': `console.error('${REVIEWED_DECISION_PATH}')\n`,
   'tools/architecture/false-comment.mjs': `// ${REVIEWED_BASELINE_PATH}\nexport const harmless = true\n`,
   'tools/architecture/false-unrelated-read.mjs': `import { readFileSync } from 'node:fs'\nreadFileSync('/tmp/not-authority.json')\n`,
+  'tools/architecture/false-object-non-reader.mjs': `import { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nconst readers = { load: console.log }\nreaders.load(COVERAGE_PATH)\n`,
+  'tools/architecture/false-same-property-local-non-reader.mjs': `import { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nconst someKnownNonReader = (value) => value\nconst load = someKnownNonReader\nconst readers = { load }\nreaders.load(COVERAGE_PATH)\n`,
+  'tools/architecture/false-reader-other-path.mjs': `import { readFileSync } from 'node:fs'\nimport { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nconst readers = { load: readFileSync }\nreaders.load('/tmp/not-authority.json')\nconsole.log(COVERAGE_PATH)\n`,
+  'tools/architecture/false-authority-property-metadata.mjs': `import { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nconst meta = { path: COVERAGE_PATH }\nexport { meta }\n`,
+  'tools/architecture/false-reader-object-diagnostic.mjs': `import { readFileSync } from 'node:fs'\nimport { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nconst readers = { load: readFileSync }\nconsole.log(COVERAGE_PATH)\nexport { readers }\n`,
+  'tools/architecture/false-local-non-reader.mjs': `import { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nfunction note(value) { return value }\nnote(COVERAGE_PATH)\n`,
   'tools/architecture/false-similar-local-function.mjs': `function readFileSync(value) { return value }\nreadFileSync('${currentDependencies.current_live.authority.path}')\n`,
   'tools/architecture/false-shadowed-reader.mjs': `const readFileSync = (...values) => values\nreadFileSync('${CURRENT_DEPENDENCY_PATH}')\n`,
   'tools/architecture/false-shadowed-require.cjs': `const require = () => ({ readFileSync: (value) => value })\nconst { readFileSync } = require('fs')\nreadFileSync('${CURRENT_DEPENDENCY_PATH}')\n`,
@@ -638,9 +656,21 @@ try {
   assert.deepEqual(semanticConsumers.get('tools/architecture/true-commonjs.cjs'), ['historical_baseline'], 'supported CommonJS filesystem alias must be detected')
   assert.deepEqual(semanticConsumers.get('tools/architecture/true-commonjs-namespace.cjs'), ['coverage_document'], 'supported CommonJS filesystem namespace must be detected')
   assert.deepEqual(semanticConsumers.get('tools/architecture/true-promises-namespace.mjs'), ['dependency_manifest'], 'filesystem promises namespace must be detected')
+  assert.deepEqual(semanticConsumers.get('tools/architecture/true-direct-callable-alias.mjs'), ['coverage_document', 'ownership_validator_module'], 'a filesystem reader must flow through a direct callable alias')
+  assert.deepEqual(semanticConsumers.get('tools/architecture/true-object-bound-reviewer.mjs'), ['coverage_document', 'ownership_validator_module'], 'the exact independent-reviewer object-bound reader must be detected')
+  assert.deepEqual(semanticConsumers.get('tools/architecture/true-object-bound-property-independent.mjs'), ['coverage_document', 'ownership_validator_module'], 'object-bound reader identity must not depend on the property name')
+  assert.deepEqual(semanticConsumers.get('tools/architecture/true-object-shorthand.mjs'), ['coverage_document', 'ownership_validator_module'], 'an object shorthand property must preserve reader identity')
+  assert.deepEqual(semanticConsumers.get('tools/architecture/true-callable-object-alias.mjs'), ['coverage_document', 'ownership_validator_module'], 'an object alias must preserve bound reader identity')
+  assert.deepEqual(semanticConsumers.get('tools/architecture/true-callable-destructured.mjs'), ['coverage_document', 'ownership_validator_module'], 'destructuring must preserve bound reader identity')
+  assert.deepEqual(semanticConsumers.get('tools/architecture/true-callable-renamed-destructured.mjs'), ['coverage_document', 'ownership_validator_module'], 'renamed destructuring must preserve bound reader identity')
+  assert.deepEqual(semanticConsumers.get('tools/architecture/true-callable-property-extraction.mjs'), ['coverage_document', 'ownership_validator_module'], 'property extraction must preserve bound reader identity')
+  assert.deepEqual(semanticConsumers.get('tools/architecture/true-callable-deterministic-assignment.mjs'), ['coverage_document', 'ownership_validator_module'], 'a single deterministic assignment must preserve reader identity')
   assert.deepEqual(semanticConsumers.get('tools/architecture/true-alias-dataflow.mjs'), ['coverage_document', 'ownership_validator_module'], 'local path aliases must preserve authority dataflow')
   assert.deepEqual(semanticConsumers.get('tools/architecture/true-object-alias.mjs'), ['dependency_manifest', 'ownership_validator_module'], 'selected local object properties must preserve authority dataflow')
   assert.deepEqual(semanticConsumers.get('tools/architecture/true-wrapper.mjs'), ['dependency_manifest', 'ownership_validator_module'], 'local deterministic reader wrappers must preserve authority dataflow')
+  assert.deepEqual(semanticConsumers.get('tools/architecture/true-object-wrapper.mjs'), ['coverage_document', 'ownership_validator_module'], 'a wrapper around an object-bound reader must preserve authority dataflow')
+  assert.deepEqual(semanticConsumers.get('tools/architecture/true-nested-wrapper.mjs'), ['coverage_document', 'ownership_validator_module'], 'bounded nested wrappers must preserve authority dataflow')
+  assert.deepEqual(semanticConsumers.get('tools/architecture/true-callable-parameter-wrapper.mjs'), ['coverage_document', 'ownership_validator_module'], 'a reader passed through a bounded callable parameter must preserve identity')
   assert.deepEqual(semanticConsumers.get('tools/architecture/true-imported-metadata.mjs'), ['dependency_manifest'], 'a tracked imported authority constant must preserve authority dataflow')
   assert.deepEqual(semanticConsumers.get('tools/architecture/true-reexport-reader.mjs'), ['dependency_manifest'], 'a tracked named re-export must preserve authority dataflow')
   assert.deepEqual(semanticConsumers.get('tools/architecture/true-default-imported-metadata.mjs'), ['reviewed_decisions'], 'a tracked default authority export must preserve authority dataflow')
@@ -654,12 +684,47 @@ try {
     'tools/architecture/false-error-message.mjs',
     'tools/architecture/false-comment.mjs',
     'tools/architecture/false-unrelated-read.mjs',
+    'tools/architecture/false-object-non-reader.mjs',
+    'tools/architecture/false-same-property-local-non-reader.mjs',
+    'tools/architecture/false-reader-other-path.mjs',
+    'tools/architecture/false-authority-property-metadata.mjs',
+    'tools/architecture/false-reader-object-diagnostic.mjs',
+    'tools/architecture/false-local-non-reader.mjs',
     'tools/architecture/false-similar-local-function.mjs',
     'tools/architecture/false-shadowed-reader.mjs',
     'tools/architecture/false-shadowed-require.cjs',
   ]) assert.equal(semanticConsumers.has(falsePath), false, `diagnostic/non-fs source must not become an authority consumer: ${falsePath}`)
 } finally {
   await rm(semanticMatrix.fixture, { force: true, recursive: true })
+}
+
+const callableCacheInvalidation = await semanticDiscoveryFixture({
+  'tools/architecture/cache-callable.mjs': `import { readFileSync } from 'node:fs'\nimport { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nconst readers = { load: readFileSync }\nreaders.load(COVERAGE_PATH)\n`,
+})
+const cacheCallablePath = 'tools/architecture/cache-callable.mjs'
+try {
+  assert.deepEqual(
+    new Map(discoverExecutablePathOwnershipConsumers(callableCacheInvalidation.fixture)
+      .map((consumer) => [consumer.path, consumer.authority_uses])).get(cacheCallablePath),
+    ['coverage_document', 'ownership_validator_module'],
+    'the initial object-bound reader identity must be cached only for the exact tracked source bytes',
+  )
+  await writeFile(path.join(callableCacheInvalidation.fixture, cacheCallablePath), `import { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nconst readers = { load: console.log }\nreaders.load(COVERAGE_PATH)\n`)
+  assert.equal(
+    new Map(discoverExecutablePathOwnershipConsumers(callableCacheInvalidation.fixture)
+      .map((consumer) => [consumer.path, consumer.authority_uses])).has(cacheCallablePath),
+    false,
+    'a source-byte change from reader to proven non-reader must invalidate cached object-property identity',
+  )
+  await writeFile(path.join(callableCacheInvalidation.fixture, cacheCallablePath), `import { readFileSync } from 'node:fs'\nimport { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nconst readers = { load: readFileSync }\nconst wrapper = (value) => readers.load(value)\nwrapper(COVERAGE_PATH)\n`)
+  assert.deepEqual(
+    new Map(discoverExecutablePathOwnershipConsumers(callableCacheInvalidation.fixture)
+      .map((consumer) => [consumer.path, consumer.authority_uses])).get(cacheCallablePath),
+    ['coverage_document', 'ownership_validator_module'],
+    'a second source-byte change must invalidate the prior non-reader proof and recompute the wrapper summary',
+  )
+} finally {
+  await rm(callableCacheInvalidation.fixture, { force: true, recursive: true })
 }
 
 const unsupportedSemantic = await semanticDiscoveryFixture({
@@ -681,11 +746,63 @@ const unsupportedReaderBinding = await semanticDiscoveryFixture({
 try {
   assert.throws(
     () => discoverExecutablePathOwnershipConsumers(unsupportedReaderBinding.fixture),
-    /unsupported filesystem reader binding for authority call: tools\/architecture\/unsupported-reader-binding\.mjs/,
+    /unsupported relevant callable dataflow: tools\/architecture\/unsupported-reader-binding\.mjs/,
     'an unhandled filesystem reader alias must fail closed',
   )
 } finally {
   await rm(unsupportedReaderBinding.fixture, { force: true, recursive: true })
+}
+
+const unsupportedDynamicCallable = await semanticDiscoveryFixture({
+  'tools/architecture/unsupported-dynamic-callable.mjs': `import { readFileSync } from 'node:fs'\nimport { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nconst readers = { load: readFileSync }\nconst key = globalThis.readerKey\nreaders[key](COVERAGE_PATH)\n`,
+})
+try {
+  assert.throws(
+    () => discoverExecutablePathOwnershipConsumers(unsupportedDynamicCallable.fixture),
+    /unsupported relevant callable dataflow: tools\/architecture\/unsupported-dynamic-callable\.mjs/,
+    'an authority-tainted invocation through unresolved dynamic property dispatch must fail closed',
+  )
+} finally {
+  await rm(unsupportedDynamicCallable.fixture, { force: true, recursive: true })
+}
+
+const unsupportedMutableCallable = await semanticDiscoveryFixture({
+  'tools/architecture/unsupported-mutable-callable.mjs': `import { readFileSync } from 'node:fs'\nimport { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nlet load = readFileSync\nif (globalThis.useLogger) load = console.log\nload(COVERAGE_PATH)\n`,
+})
+try {
+  assert.throws(
+    () => discoverExecutablePathOwnershipConsumers(unsupportedMutableCallable.fixture),
+    /unsupported relevant callable dataflow: tools\/architecture\/unsupported-mutable-callable\.mjs/,
+    'an authority-tainted invocation through a conditionally reassigned callable must fail closed',
+  )
+} finally {
+  await rm(unsupportedMutableCallable.fixture, { force: true, recursive: true })
+}
+
+const unsupportedMutatedProperty = await semanticDiscoveryFixture({
+  'tools/architecture/unsupported-mutated-property.mjs': `import { readFileSync } from 'node:fs'\nimport { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nconst readers = { load: readFileSync }\nif (globalThis.useLogger) readers.load = console.log\nreaders.load(COVERAGE_PATH)\n`,
+})
+try {
+  assert.throws(
+    () => discoverExecutablePathOwnershipConsumers(unsupportedMutatedProperty.fixture),
+    /unsupported relevant callable dataflow: tools\/architecture\/unsupported-mutated-property\.mjs/,
+    'an authority-tainted invocation through a mutated object property must fail closed',
+  )
+} finally {
+  await rm(unsupportedMutatedProperty.fixture, { force: true, recursive: true })
+}
+
+const unsupportedDynamicWrapper = await semanticDiscoveryFixture({
+  'tools/architecture/unsupported-dynamic-wrapper.mjs': `import { readFileSync } from 'node:fs'\nimport { COVERAGE_PATH } from './validate-executable-path-ownership.mjs'\nconst readers = { load: readFileSync }\nconst invoke = (value, key) => readers[key](value)\ninvoke(COVERAGE_PATH, globalThis.readerKey)\n`,
+})
+try {
+  assert.throws(
+    () => discoverExecutablePathOwnershipConsumers(unsupportedDynamicWrapper.fixture),
+    /unsupported relevant callable dataflow: tools\/architecture\/unsupported-dynamic-wrapper\.mjs/,
+    'a local wrapper containing unresolved authority-tainted dynamic dispatch must fail closed',
+  )
+} finally {
+  await rm(unsupportedDynamicWrapper.fixture, { force: true, recursive: true })
 }
 
 const malformedSemantic = await semanticDiscoveryFixture({
@@ -723,6 +840,9 @@ const validatorSource = await readFile(path.join(repositoryRoot, 'tools/architec
 assert.equal(validatorSource.includes('CURRENT_CONSUMERS'), false, 'the validator must not retain a duplicate authoritative consumer list')
 for (const obsoleteHeuristic of ['AUTHORITY_READ_IDENTIFIERS', 'authorityStringIsConsumed', 'javascriptTokens', 'stringIndex - 16']) {
   assert.equal(validatorSource.includes(obsoleteHeuristic), false, `obsolete token-window consumer heuristic remains: ${obsoleteHeuristic}`)
+}
+for (const forbiddenCallableShortcut of ["property === 'load'", 'banana', 'CALLABLE_UNKNOWN = CALLABLE_READER']) {
+  assert.equal(validatorSource.includes(forbiddenCallableShortcut), false, `callable-flow one-off or unknown-as-reader shortcut remains: ${forbiddenCallableShortcut}`)
 }
 for (const consumer of discoveredCurrentConsumers) {
   const consumerSource = await readFile(path.join(repositoryRoot, consumer.path), 'utf8')
