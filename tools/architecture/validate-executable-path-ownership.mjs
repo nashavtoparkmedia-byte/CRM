@@ -1,11 +1,13 @@
 #!/usr/bin/env node
-import { execFile } from 'node:child_process'
+import { execFile, execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
+import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
-import { inventoryTrackedSurfaces } from './v2/tracked-surface-inventory.mjs'
+import { classifyTrackedSurface, inventoryTrackedSurfaces } from './v2/tracked-surface-inventory.mjs'
 
 const execFileAsync = promisify(execFile)
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
@@ -40,13 +42,6 @@ const CURRENT_DERIVATION_INPUTS = {
   reviewed_decisions: REVIEWED_DECISION_PATH,
   tracked_surface_inventory: 'tools/architecture/v2/tracked-surface-inventory.mjs',
 }
-const CURRENT_CONSUMERS = {
-  context_manifest_validator: 'tools/architecture/validate-context-manifests.mjs',
-  independent_source_critic: 'tools/architecture/v2/independent-critic-final-gate.mjs',
-  negative_and_regression_control: 'tools/architecture/test-executable-path-ownership.mjs',
-  production_validator: 'tools/architecture/validate-executable-path-ownership.mjs',
-}
-
 function exactRolePaths(records, expected, label) {
   assert(Array.isArray(records), `${label} missing`)
   const actual = new Map()
@@ -61,6 +56,269 @@ function exactRolePaths(records, expected, label) {
   }
 }
 
+const AUTHORITY_STRING_REFERENCES = new Map([
+  [COVERAGE_PATH, 'coverage_document'],
+  [CURRENT_DEPENDENCY_PATH, 'dependency_manifest'],
+  [REVIEWED_DECISION_PATH, 'reviewed_decisions'],
+  [REVIEWED_BASELINE_PATH, 'historical_baseline'],
+])
+export const OWNERSHIP_VALIDATOR_PATH = 'tools/architecture/validate-executable-path-ownership.mjs'
+const JAVASCRIPT_SOURCE = /\.(?:[cm]?js|jsx|ts|tsx)$/u
+const AUTHORITY_READ_IDENTIFIERS = new Set([
+  'createReadStream', 'load', 'loadJson', 'open', 'readFile', 'readFileSync', 'readJson',
+])
+
+function javascriptTokens(source) {
+  const tokens = []
+  let index = 0
+  const identifierStart = /[A-Za-z_$]/u
+  const identifierPart = /[A-Za-z0-9_$]/u
+  while (index < source.length) {
+    const character = source[index]
+    const next = source[index + 1]
+    if (/\s/u.test(character)) { index += 1; continue }
+    if (character === '/' && next === '/') {
+      index += 2
+      while (index < source.length && source[index] !== '\n') index += 1
+      continue
+    }
+    if (character === '/' && next === '*') {
+      const end = source.indexOf('*/', index + 2)
+      index = end === -1 ? source.length : end + 2
+      continue
+    }
+    if (character === "'" || character === '"') {
+      const quote = character
+      let value = ''
+      index += 1
+      while (index < source.length) {
+        if (source[index] === '\\') {
+          value += source[index]
+          if (index + 1 < source.length) value += source[index + 1]
+          index += 2
+          continue
+        }
+        if (source[index] === quote) { index += 1; break }
+        value += source[index]
+        index += 1
+      }
+      tokens.push({ type: 'string', value })
+      continue
+    }
+    if (character === '`') {
+      let value = ''
+      let dynamic = false
+      index += 1
+      while (index < source.length) {
+        if (source[index] === '\\') {
+          value += source[index]
+          if (index + 1 < source.length) value += source[index + 1]
+          index += 2
+          continue
+        }
+        if (source[index] === '$' && source[index + 1] === '{') dynamic = true
+        if (source[index] === '`') { index += 1; break }
+        value += source[index]
+        index += 1
+      }
+      if (!dynamic) tokens.push({ type: 'string', value })
+      continue
+    }
+    if (identifierStart.test(character)) {
+      let value = character
+      index += 1
+      while (index < source.length && identifierPart.test(source[index])) value += source[index++]
+      tokens.push({ type: 'identifier', value })
+      continue
+    }
+    tokens.push({ type: 'punctuator', value: character })
+    index += 1
+  }
+  return tokens
+}
+
+function staticModuleSpecifiers(tokens) {
+  const specifiers = []
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (tokens[index].type !== 'identifier' || !['import', 'export'].includes(tokens[index].value)) continue
+    if (tokens[index + 1]?.type === 'string') { specifiers.push(tokens[index + 1].value); continue }
+    for (let cursor = index + 1; cursor < Math.min(tokens.length, index + 100); cursor += 1) {
+      if (tokens[cursor].value === ';' || (cursor > index + 1 && tokens[cursor].type === 'identifier' && ['import', 'export'].includes(tokens[cursor].value))) break
+      if (tokens[cursor].type === 'identifier' && tokens[cursor].value === 'from' && tokens[cursor + 1]?.type === 'string') {
+        specifiers.push(tokens[cursor + 1].value)
+        break
+      }
+    }
+  }
+  return specifiers
+}
+
+function authorityStringIsConsumed(tokens, stringIndex) {
+  const directWindow = tokens.slice(Math.max(0, stringIndex - 16), stringIndex)
+  if (directWindow.some((token) => token.type === 'identifier' && AUTHORITY_READ_IDENTIFIERS.has(token.value))) return true
+  const assignedName = tokens[stringIndex - 2]?.type === 'identifier' && tokens[stringIndex - 1]?.value === '='
+    ? tokens[stringIndex - 2].value
+    : null
+  if (!assignedName) return false
+  for (let index = stringIndex + 1; index < tokens.length; index += 1) {
+    if (tokens[index].type !== 'identifier' || !AUTHORITY_READ_IDENTIFIERS.has(tokens[index].value)) continue
+    const callWindow = tokens.slice(index + 1, Math.min(tokens.length, index + 24))
+    if (callWindow.some((token) => token.type === 'identifier' && token.value === assignedName)) return true
+  }
+  return false
+}
+
+function repositoryTrackedJavaScriptSources(repositoryRoot) {
+  const output = execFileSync('git', ['-C', repositoryRoot, 'ls-files', '-z'], { encoding: 'buffer', maxBuffer: 64 * 1024 * 1024 })
+  return output.toString('utf8').split('\0').filter((relativePath) => JAVASCRIPT_SOURCE.test(relativePath)).sort()
+}
+
+export function discoverExecutablePathOwnershipConsumers(repositoryRoot) {
+  const consumers = []
+  for (const relativePath of repositoryTrackedJavaScriptSources(repositoryRoot)) {
+    const source = readFileSync(path.join(repositoryRoot, relativePath), 'utf8')
+    const tokens = javascriptTokens(source)
+    const authorityUses = new Set()
+    for (const [authorityPath, authorityUse] of AUTHORITY_STRING_REFERENCES) {
+      if (tokens.some((token, index) => token.type === 'string' && token.value === authorityPath
+        && (relativePath === OWNERSHIP_VALIDATOR_PATH || authorityStringIsConsumed(tokens, index)))) authorityUses.add(authorityUse)
+    }
+    for (const specifier of staticModuleSpecifiers(tokens)) {
+      if (!specifier.startsWith('.')) continue
+      const importedPath = path.posix.normalize(path.posix.join(path.posix.dirname(relativePath), specifier))
+      if (importedPath === OWNERSHIP_VALIDATOR_PATH) authorityUses.add('ownership_validator_module')
+    }
+    if (authorityUses.size > 0) consumers.push({
+      path: relativePath,
+      authority_uses: [...authorityUses].sort(),
+    })
+  }
+  return consumers
+}
+
+export function validateExecutablePathOwnershipConsumerClosure(value, repositoryRoot = root) {
+  const declared = value?.current_live?.consumers
+  assert(Array.isArray(declared) && declared.length > 0, 'executable ownership current consumers missing')
+  const declaredByPath = new Map()
+  const roles = new Set()
+  for (const consumer of declared) {
+    assert(consumer && typeof consumer.role === 'string' && consumer.role.length > 0
+      && typeof consumer.path === 'string' && consumer.path.length > 0
+      && Array.isArray(consumer.authority_uses) && consumer.authority_uses.length > 0,
+    'executable ownership current consumer declaration malformed')
+    assert(!roles.has(consumer.role), `executable ownership current consumer role duplicated: ${consumer.role}`)
+    assert(!declaredByPath.has(consumer.path), `executable ownership current consumer path duplicated: ${consumer.path}`)
+    roles.add(consumer.role)
+    declaredByPath.set(consumer.path, [...consumer.authority_uses].sort())
+  }
+  const discovered = discoverExecutablePathOwnershipConsumers(repositoryRoot)
+  const discoveredByPath = new Map(discovered.map((consumer) => [consumer.path, consumer.authority_uses]))
+  const undeclared = discovered.filter((consumer) => !declaredByPath.has(consumer.path)).map((consumer) => consumer.path)
+  const stale = [...declaredByPath.keys()].filter((consumerPath) => !discoveredByPath.has(consumerPath))
+  assert(undeclared.length === 0, `executable ownership undeclared current consumers: ${undeclared.join(', ')}`)
+  assert(stale.length === 0, `executable ownership stale declared consumers: ${stale.join(', ')}`)
+  for (const [consumerPath, declaredUses] of declaredByPath) {
+    assert(JSON.stringify(declaredUses) === JSON.stringify(discoveredByPath.get(consumerPath)), `executable ownership consumer authority uses drift: ${consumerPath}`)
+  }
+  return discovered
+}
+
+function gitObject(repositoryRoot, args, encoding = 'utf8') {
+  return execFileSync('git', ['-C', repositoryRoot, ...args], { encoding, maxBuffer: 64 * 1024 * 1024 })
+}
+
+function historicalScopedInventory(commit, tree, historicalPath, controls, surfaces) {
+  return {
+    schema: 'yoko.crm.executable-path-ownership-historical-scoped-inventory.v1',
+    version: 1,
+    source: { commit, tree, exact_paths: [historicalPath] },
+    controls,
+    surfaces,
+  }
+}
+
+export function deriveHistoricalExecutablePathOwnershipFixture(repositoryRoot, incident) {
+  assert(incident?.schema === 'yoko.crm.executable-path-ownership-historical-working-tree-deletion.v2'
+    && SHA1.test(incident.candidate ?? '')
+    && typeof incident.path === 'string' && incident.path.length > 0,
+  'executable ownership historical fixture malformed')
+  assert(gitObject(repositoryRoot, ['cat-file', '-t', incident.candidate]).trim() === 'commit', 'executable ownership historical candidate is not a commit')
+  const candidateTree = gitObject(repositoryRoot, ['rev-parse', `${incident.candidate}^{tree}`]).trim()
+  const beforeEntry = gitObject(repositoryRoot, ['ls-tree', '-z', incident.candidate, '--', incident.path], 'buffer')
+  assert(beforeEntry.length > 0, `executable ownership historical path missing from before commit: ${incident.path}`)
+  const entryMatch = /^([0-7]{6}) blob ([0-9a-f]{40})\t([^\0]+)\0$/u.exec(beforeEntry.toString('utf8'))
+  assert(entryMatch && entryMatch[3] === incident.path, `executable ownership historical before-path identity mismatch: ${incident.path}`)
+  const [gitMode, blobOid] = [entryMatch[1], entryMatch[2]]
+  const sourceBytes = gitObject(repositoryRoot, ['cat-file', 'blob', blobOid], 'buffer')
+  const classified = classifyTrackedSurface(incident.path, null, {
+    gitMode,
+    hasShebang: sourceBytes[0] === 0x23 && sourceBytes[1] === 0x21,
+  })
+  assert(classified !== null, `executable ownership historical path is not an executable surface: ${incident.path}`)
+  const surface = { ...classified, git_mode: gitMode, blob_oid: blobOid, source_sha256: byteDigest(sourceBytes) }
+  const temporary = mkdtempSync(path.join(os.tmpdir(), 'yoko-historical-working-tree-deletion-'))
+  try {
+    const alternateWorktree = path.join(temporary, 'worktree')
+    const alternateIndex = path.join(temporary, 'index')
+    const historicalWorktreePath = path.join(alternateWorktree, incident.path)
+    mkdirSync(path.dirname(historicalWorktreePath), { recursive: true })
+    writeFileSync(historicalWorktreePath, sourceBytes)
+    const gitDirectory = gitObject(repositoryRoot, ['rev-parse', '--absolute-git-dir']).trim()
+    const environment = { ...process.env, GIT_INDEX_FILE: alternateIndex }
+    const fixtureGit = (args, encoding = 'buffer') => execFileSync(
+      'git', ['--git-dir', gitDirectory, '--work-tree', alternateWorktree, ...args],
+      { encoding, env: environment, maxBuffer: 64 * 1024 * 1024 },
+    )
+    fixtureGit(['read-tree', incident.candidate])
+    const cleanDeleted = fixtureGit(['ls-files', '--deleted', '-z', '--', incident.path])
+    assert(cleanDeleted.length === 0, 'executable ownership historical clean path is unexpectedly deleted')
+    unlinkSync(historicalWorktreePath)
+    const deleted = fixtureGit(['ls-files', '--deleted', '-z', '--', incident.path]).toString('utf8')
+    assert(deleted === `${incident.path}\0`, `executable ownership historical working-tree deletion did not reproduce exactly: ${incident.path}`)
+  } finally {
+    rmSync(temporary, { recursive: true, force: true })
+  }
+  const cleanInventory = historicalScopedInventory(
+    incident.candidate, candidateTree, incident.path,
+    { working_tree_deleted: [], committed_deletion: false }, [surface],
+  )
+  const workingTreeDeletedInventory = historicalScopedInventory(
+    incident.candidate, candidateTree, incident.path,
+    { working_tree_deleted: [incident.path], committed_deletion: false }, [],
+  )
+  const mutationProvenance = {
+    schema: 'yoko.crm.executable-path-ownership-historical-working-tree-mutation.v1',
+    candidate: incident.candidate,
+    candidate_tree: candidateTree,
+    mutation: { kind: 'working_tree_deleted', path: incident.path },
+    indexed_source: { git_mode: gitMode, blob_oid: blobOid, source_sha256: surface.source_sha256 },
+    reproduced_git_deleted_paths: [incident.path],
+  }
+  return {
+    candidate_tree: candidateTree,
+    git_mode: gitMode,
+    blob_oid: blobOid,
+    source_sha256: surface.source_sha256,
+    clean_inventory_sha256: digest(cleanInventory),
+    working_tree_deleted_inventory_sha256: digest(workingTreeDeletedInventory),
+    mutation_provenance_sha256: digest(mutationProvenance),
+  }
+}
+
+export function validateHistoricalExecutablePathOwnershipFixtures(value, repositoryRoot = root) {
+  const historical = value?.historical_negative_fixtures
+  assert(Array.isArray(historical) && historical.length === 1, 'executable ownership historical fixture denominator mismatch')
+  const incident = historical[0]
+  const derived = deriveHistoricalExecutablePathOwnershipFixture(repositoryRoot, incident)
+  assert(incident.mutation?.kind === 'working_tree_deleted'
+    && incident.expected_failure === 'materialization requires a clean exact candidate checkout',
+  'executable ownership historical fixture semantics malformed')
+  assert(incident.expected && Object.keys(derived).every((key) => incident.expected[key] === derived[key])
+    && Object.keys(incident.expected).length === Object.keys(derived).length,
+  'executable ownership historical fixture exact reproduction mismatch')
+  return derived
+}
+
 export function validateExecutablePathOwnershipDependencies(value, options = {}) {
   assert(value?.schema === 'yoko.crm.executable-path-ownership-current-dependencies.v1' && value.version === 1, 'executable ownership current dependency identity mismatch')
   const current = value.current_live
@@ -73,7 +331,7 @@ export function validateExecutablePathOwnershipDependencies(value, options = {})
     coverage_sha256: '/coverage_sha256',
   }), 'executable ownership current derived-field declaration mismatch')
   exactRolePaths(current.derivation_inputs, CURRENT_DERIVATION_INPUTS, 'executable ownership current derivation inputs')
-  exactRolePaths(current.consumers, CURRENT_CONSUMERS, 'executable ownership current consumers')
+  validateExecutablePathOwnershipConsumerClosure(value, options.repositoryRoot ?? root)
   assert(JSON.stringify(current.authority_direction) === JSON.stringify([
     'repository_tracked_paths_modes_and_lifecycle_metadata',
     'tracked_surface_inventory',
@@ -86,18 +344,7 @@ export function validateExecutablePathOwnershipDependencies(value, options = {})
   ]) && JSON.stringify(current.inventory_identity_excludes) === JSON.stringify([
     'ordinary_unregistered_source_bytes',
   ]), 'executable ownership inventory identity declaration mismatch')
-  const historical = value.historical_negative_fixtures
-  assert(Array.isArray(historical) && historical.length === 1, 'executable ownership historical fixture denominator mismatch')
-  const incident = historical[0]
-  assert(incident?.id === 'working_tree_deleted_aff0c11b'
-    && incident.schema === 'yoko.crm.executable-path-ownership-historical-incident.v1'
-    && SHA1.test(incident.candidate ?? '')
-    && SHA256.test(incident.clean_inventory_sha256 ?? '')
-    && incident.mutation?.kind === 'working_tree_deleted'
-    && typeof incident.mutation?.path === 'string' && incident.mutation.path.length > 0
-    && SHA256.test(incident.rejected_inventory_sha256 ?? '')
-    && incident.rejected_inventory_sha256 !== incident.clean_inventory_sha256
-    && incident.expected_failure === 'materialization requires a clean exact candidate checkout', 'executable ownership historical fixture malformed')
+  validateHistoricalExecutablePathOwnershipFixtures(value, options.repositoryRoot ?? root)
   if (options.contextIndex) {
     const indexed = options.contextIndex.outputs?.executable_path_ownership_current_dependencies
     assert(indexed?.path === CURRENT_DEPENDENCY_PATH && SHA256.test(indexed.sha256 ?? ''), 'executable ownership current dependencies are absent from the context index')
@@ -115,7 +362,7 @@ export async function loadExecutablePathOwnershipDependencies(repositoryRoot, op
   } catch {
     throw new Error('executable ownership current dependency document malformed')
   }
-  validateExecutablePathOwnershipDependencies(value, options)
+  validateExecutablePathOwnershipDependencies(value, { ...options, repositoryRoot })
   if (options.contextIndex) {
     assert(byteDigest(bytes) === options.contextIndex.outputs.executable_path_ownership_current_dependencies.sha256, 'executable ownership current dependency index hash drift')
   }

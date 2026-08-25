@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { deriveCurrentDependencySource } from './derive-final-dependency-source.mjs';
 import { materializeFinalDependencyArtifact } from './materialize-final-dependency-artifact.mjs';
 import {
+  COVERAGE_PATH,
   CURRENT_DEPENDENCY_PATH,
   validateExecutablePathOwnershipCoverage,
   validateExecutablePathOwnershipDependencies,
@@ -227,7 +228,7 @@ export async function verifyCurrentDependencyTruth(repositoryRoot, finalDependen
 export async function verifyExecutablePathOwnership(repositoryRoot, manifests) {
   const [registry, coverage] = await Promise.all([
     readFile(path.join(repositoryRoot, 'architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json'), 'utf8').then(JSON.parse),
-    readFile(path.join(repositoryRoot, 'architecture/contexts/v1/executable-path-ownership-coverage.json'), 'utf8').then(JSON.parse),
+    readFile(path.join(repositoryRoot, COVERAGE_PATH), 'utf8').then(JSON.parse),
   ]);
   const inventory = await inventoryTrackedSurfaces(repositoryRoot, { registry });
   const derived = validateExecutablePathOwnershipCoverage(inventory, manifests, coverage);

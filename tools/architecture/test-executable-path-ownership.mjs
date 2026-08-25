@@ -11,6 +11,8 @@ import {
   assertCleanExactCandidateCheckout,
   CURRENT_DEPENDENCY_PATH,
   deriveExecutablePathOwnershipCoverage,
+  deriveHistoricalExecutablePathOwnershipFixture,
+  discoverExecutablePathOwnershipConsumers,
   loadExecutablePathOwnershipDependencies,
   materializeReviewedExecutablePathOwnershipCoverage,
   REVIEWED_BASELINE_PATH,
@@ -18,7 +20,9 @@ import {
   REVIEWED_DECISION_PATH,
   validateExecutablePathOwnershipProvenance,
   validateExecutablePathOwnershipCoverage,
+  validateExecutablePathOwnershipConsumerClosure,
   validateExecutablePathOwnershipDependencies,
+  validateHistoricalExecutablePathOwnershipFixtures,
 } from './validate-executable-path-ownership.mjs'
 import { inventoryTrackedSurfaces } from './v2/tracked-surface-inventory.mjs'
 
@@ -424,10 +428,125 @@ delete missingAuthorityDependencies.current_live.authority
 assert.throws(() => validateExecutablePathOwnershipDependencies(missingAuthorityDependencies), /current authority mismatch/)
 const malformedConsumers = structuredClone(currentDependencies)
 malformedConsumers.current_live.consumers.pop()
-assert.throws(() => validateExecutablePathOwnershipDependencies(malformedConsumers), /current consumers denominator mismatch/)
+assert.throws(() => validateExecutablePathOwnershipDependencies(malformedConsumers), /undeclared current consumers/)
 const historicalIncident = currentDependencies.historical_negative_fixtures[0]
 assert.equal(historicalIncident.mutation.kind, 'working_tree_deleted')
 assert.equal(historicalIncident.expected_failure, 'materialization requires a clean exact candidate checkout')
+const reproducedHistorical = validateHistoricalExecutablePathOwnershipFixtures(currentDependencies, repositoryRoot)
+assert.deepEqual(reproducedHistorical, historicalIncident.expected, 'the tracked historical fixture must reproduce exactly from pinned Git objects')
+
+const randomHistoricalHashes = structuredClone(currentDependencies)
+randomHistoricalHashes.historical_negative_fixtures[0].expected.clean_inventory_sha256 = 'a'.repeat(64)
+randomHistoricalHashes.historical_negative_fixtures[0].expected.mutation_provenance_sha256 = 'b'.repeat(64)
+assert.throws(
+  () => validateHistoricalExecutablePathOwnershipFixtures(randomHistoricalHashes, repositoryRoot),
+  /exact reproduction mismatch/,
+  'syntactically valid but incorrect historical hashes must fail',
+)
+const wrongHistoricalCommit = structuredClone(currentDependencies)
+wrongHistoricalCommit.historical_negative_fixtures[0].candidate = historicalIncident.expected.candidate_tree
+assert.throws(
+  () => validateHistoricalExecutablePathOwnershipFixtures(wrongHistoricalCommit, repositoryRoot),
+  /historical candidate is not a commit/,
+  'a wrong Git object type must fail before accepting fixture identities',
+)
+const missingHistoricalPath = structuredClone(currentDependencies)
+missingHistoricalPath.historical_negative_fixtures[0].path = 'deploy/pm2/does-not-exist.js'
+assert.throws(
+  () => validateHistoricalExecutablePathOwnershipFixtures(missingHistoricalPath, repositoryRoot),
+  /historical path missing from before commit/,
+  'a missing historical path must fail',
+)
+const wrongHistoricalPath = structuredClone(currentDependencies)
+wrongHistoricalPath.historical_negative_fixtures[0].path = 'tools/architecture/generate-context-manifests.mjs'
+assert.throws(
+  () => validateHistoricalExecutablePathOwnershipFixtures(wrongHistoricalPath, repositoryRoot),
+  /exact reproduction mismatch/,
+  'a different real path from the same pinned repository state must fail the pinned identities',
+)
+const malformedHistoricalFixture = structuredClone(currentDependencies)
+malformedHistoricalFixture.historical_negative_fixtures[0].schema = 'malformed.fixture.v1'
+assert.throws(
+  () => validateHistoricalExecutablePathOwnershipFixtures(malformedHistoricalFixture, repositoryRoot),
+  /historical fixture malformed/,
+)
+const changedCurrentLive = structuredClone(currentDependencies)
+changedCurrentLive.current_live.derived_fields.coverage_sha256 = '/different/current/location'
+assert.deepEqual(
+  deriveHistoricalExecutablePathOwnershipFixture(repositoryRoot, changedCurrentLive.historical_negative_fixtures[0]),
+  reproducedHistorical,
+  'current-live authority changes must not redefine the pinned historical fixture',
+)
+
+async function dependencyClosureFixture() {
+  const fixture = await mkdtemp(path.join(os.tmpdir(), 'yoko-ownership-consumer-closure-'))
+  const git = (...args) => execFileAsync('git', args, { cwd: fixture, encoding: 'utf8', maxBuffer: 1024 * 1024 })
+  await git('init', '--quiet')
+  await git('config', 'user.name', 'Yoko Ownership Closure Fixture')
+  await git('config', 'user.email', 'fixture@example.invalid')
+  const validatorPath = 'tools/architecture/validate-executable-path-ownership.mjs'
+  const consumerPath = 'tools/architecture/current-consumer.mjs'
+  const nonConsumerPath = 'tools/architecture/non-consumer-diagnostic.mjs'
+  await mkdir(path.join(fixture, 'tools/architecture'), { recursive: true })
+  await writeFile(path.join(fixture, validatorPath), `export const coverage = '${currentDependencies.current_live.authority.path}'\n`)
+  await writeFile(path.join(fixture, consumerPath), "import './validate-executable-path-ownership.mjs'\n")
+  await writeFile(path.join(fixture, nonConsumerPath), `// ${currentDependencies.current_live.authority.path}\nexport const expectedDiagnostic = '${currentDependencies.current_live.authority.path}'\n`)
+  await git('add', validatorPath, consumerPath, nonConsumerPath)
+  await git('commit', '--quiet', '-m', 'closure fixture')
+  const declaration = {
+    current_live: {
+      consumers: [
+        { role: 'fixture_validator', path: validatorPath, authority_uses: ['coverage_document'] },
+        { role: 'fixture_consumer', path: consumerPath, authority_uses: ['ownership_validator_module'] },
+      ],
+    },
+  }
+  return { consumerPath, declaration, fixture, git, validatorPath }
+}
+
+const closurePositive = await dependencyClosureFixture()
+assert.deepEqual(
+  validateExecutablePathOwnershipConsumerClosure(closurePositive.declaration, closurePositive.fixture),
+  discoverExecutablePathOwnershipConsumers(closurePositive.fixture),
+  'declared and real current-authority consumers must close in both directions',
+)
+
+const closureUndeclared = await dependencyClosureFixture()
+const rogueConsumerPath = 'tools/architecture/undeclared-current-consumer.mjs'
+await writeFile(path.join(closureUndeclared.fixture, rogueConsumerPath), `import { readFileSync } from 'node:fs'\nexport const authority = readFileSync('${currentDependencies.current_live.authority.path}')\n`)
+await closureUndeclared.git('add', rogueConsumerPath)
+assert.throws(
+  () => validateExecutablePathOwnershipConsumerClosure(closureUndeclared.declaration, closureUndeclared.fixture),
+  /undeclared current consumers: tools\/architecture\/undeclared-current-consumer\.mjs/,
+  'a tracked current-authority consumer outside the canonical declaration must fail',
+)
+
+const closureStale = await dependencyClosureFixture()
+closureStale.declaration.current_live.consumers.push({
+  role: 'removed_consumer',
+  path: 'tools/architecture/removed-consumer.mjs',
+  authority_uses: ['coverage_document'],
+})
+assert.throws(
+  () => validateExecutablePathOwnershipConsumerClosure(closureStale.declaration, closureStale.fixture),
+  /stale declared consumers: tools\/architecture\/removed-consumer\.mjs/,
+  'a declared consumer that is absent from tracked source must fail',
+)
+
+const closureAdded = await dependencyClosureFixture()
+const addedConsumerPath = 'tools/architecture/legitimate-current-consumer.mjs'
+await writeFile(path.join(closureAdded.fixture, addedConsumerPath), "import './validate-executable-path-ownership.mjs'\n")
+await closureAdded.git('add', addedConsumerPath)
+closureAdded.declaration.current_live.consumers.push({
+  role: 'legitimate_consumer',
+  path: addedConsumerPath,
+  authority_uses: ['ownership_validator_module'],
+})
+assert.deepEqual(
+  validateExecutablePathOwnershipConsumerClosure(closureAdded.declaration, closureAdded.fixture),
+  discoverExecutablePathOwnershipConsumers(closureAdded.fixture),
+  'a legitimate registered consumer must become visible deterministically',
+)
 
 const currentManifests = await Promise.all(currentIndex.contexts.map(async (entry) => JSON.parse(await readFile(path.join(repositoryRoot, entry.path), 'utf8'))))
 const [firstCleanInventory, secondCleanInventory] = await Promise.all([
@@ -441,7 +560,15 @@ const currentDerived = deriveExecutablePathOwnershipCoverage(firstCleanInventory
 assert.equal(currentDerived.tracked_inventory_sha256, currentCoverage.source.tracked_inventory_sha256)
 assert.equal(currentDerived.coverage_sha256, currentCoverage.coverage_sha256)
 
-for (const consumer of currentDependencies.current_live.consumers) {
+const discoveredCurrentConsumers = discoverExecutablePathOwnershipConsumers(repositoryRoot)
+assert.deepEqual(
+  discoveredCurrentConsumers.map(({ path: consumerPath }) => consumerPath).sort(),
+  currentDependencies.current_live.consumers.map(({ path: consumerPath }) => consumerPath).sort(),
+  'the canonical declaration must exactly cover every mechanically discovered current authority consumer',
+)
+const validatorSource = await readFile(path.join(repositoryRoot, 'tools/architecture/validate-executable-path-ownership.mjs'), 'utf8')
+assert.equal(validatorSource.includes('CURRENT_CONSUMERS'), false, 'the validator must not retain a duplicate authoritative consumer list')
+for (const consumer of discoveredCurrentConsumers) {
   const consumerSource = await readFile(path.join(repositoryRoot, consumer.path), 'utf8')
   assert.equal(
     new RegExp(`tracked_executable_surfaces\\s*,\\s*${currentCoverage.source.tracked_executable_surfaces}(?:\\D|$)`, 'u').test(consumerSource),

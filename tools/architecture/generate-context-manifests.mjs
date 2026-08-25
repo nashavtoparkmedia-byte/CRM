@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { COVERAGE_PATH, CURRENT_DEPENDENCY_PATH, OWNERSHIP_VALIDATOR_PATH } from './validate-executable-path-ownership.mjs';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const contextsRoot = path.join(repositoryRoot, 'architecture/contexts/v1');
@@ -91,9 +92,9 @@ async function main() {
     readFile(path.join(repositoryRoot, 'architecture/contexts/v1/final-dependency-current.json')),
     readFile(path.join(repositoryRoot, 'architecture/contexts/v1/final-dependency-source.json')),
     loadJson('architecture/contexts/v1/context-index.json'),
-    readFile(path.join(repositoryRoot, 'architecture/contexts/v1/executable-path-ownership-coverage.json')),
-    readFile(path.join(repositoryRoot, 'architecture/contexts/v1/executable-path-ownership-current-dependencies.json')),
-    readFile(path.join(repositoryRoot, 'tools/architecture/validate-executable-path-ownership.mjs')),
+    readFile(path.join(repositoryRoot, COVERAGE_PATH)),
+    readFile(path.join(repositoryRoot, CURRENT_DEPENDENCY_PATH)),
+    readFile(path.join(repositoryRoot, OWNERSHIP_VALIDATOR_PATH)),
     readFile(path.join(repositoryRoot, 'tools/architecture/derive-final-dependency-source.mjs')),
   ]);
   const decisions = decisionsInput.document;
@@ -264,7 +265,7 @@ async function main() {
     credential_access: { path: evidenceRelatives.credentials, sha256: sha256(credentialInput.bytes) },
     dependency_graph: { path: evidenceRelatives.dependencies, sha256: sha256(dependencyInput.bytes) },
     generator: { path: 'tools/architecture/generate-context-manifests.mjs', sha256: sha256(generatorBytes) },
-    executable_path_ownership_validator: { path: 'tools/architecture/validate-executable-path-ownership.mjs', sha256: sha256(executableOwnershipValidatorBytes) },
+    executable_path_ownership_validator: { path: OWNERSHIP_VALIDATOR_PATH, sha256: sha256(executableOwnershipValidatorBytes) },
     final_dependency_source_deriver: { path: 'tools/architecture/derive-final-dependency-source.mjs', sha256: sha256(finalDependencyDeriverBytes) },
     module_inventory: { path: evidenceRelatives.inventory, sha256: sha256(inventoryInput.bytes) },
     ownership_candidates: { path: evidenceRelatives.ownership, sha256: sha256(ownershipInput.bytes) },
@@ -280,8 +281,8 @@ async function main() {
       dependency_transition_plan: { path: 'architecture/contexts/v1/dependency-transition-plan.json', sha256: sha256(dependencyPlanBytes) },
       final_dependency_current: { path: 'architecture/contexts/v1/final-dependency-current.json', sha256: sha256(finalDependencyBytes) },
       final_dependency_source: { path: 'architecture/contexts/v1/final-dependency-source.json', sha256: sha256(finalDependencySourceBytes) },
-      executable_path_ownership_current_dependencies: { path: 'architecture/contexts/v1/executable-path-ownership-current-dependencies.json', sha256: sha256(executableOwnershipDependencyBytes) },
-      executable_path_ownership_coverage: { path: 'architecture/contexts/v1/executable-path-ownership-coverage.json', sha256: sha256(executableCoverageBytes) },
+      executable_path_ownership_current_dependencies: { path: CURRENT_DEPENDENCY_PATH, sha256: sha256(executableOwnershipDependencyBytes) },
+      executable_path_ownership_coverage: { path: COVERAGE_PATH, sha256: sha256(executableCoverageBytes) },
       foreign_write_migration_plan: { path: 'architecture/contexts/v1/foreign-write-migration-plan.json', sha256: sha256(foreignPlanBytes) },
     },
     schema: 'yoko.crm.context-index.v1',

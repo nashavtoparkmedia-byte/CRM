@@ -34,22 +34,51 @@
       }
     ],
     "consumers": [
-      {
-        "role": "production_validator",
-        "path": "tools/architecture/validate-executable-path-ownership.mjs"
-      },
-      {
-        "role": "negative_and_regression_control",
-        "path": "tools/architecture/test-executable-path-ownership.mjs"
-      },
-      {
-        "role": "context_manifest_validator",
-        "path": "tools/architecture/validate-context-manifests.mjs"
-      },
-      {
-        "role": "independent_source_critic",
-        "path": "tools/architecture/v2/independent-critic-final-gate.mjs"
-      }
+        {
+          "role": "context_manifest_regression_control",
+          "path": "tools/architecture/__tests__/context-manifests.test.mjs",
+          "authority_uses": [
+            "ownership_validator_module"
+          ]
+        },
+        {
+          "role": "context_manifest_generator",
+          "path": "tools/architecture/generate-context-manifests.mjs",
+          "authority_uses": [
+            "ownership_validator_module"
+          ]
+        },
+        {
+          "role": "production_validator",
+          "path": "tools/architecture/validate-executable-path-ownership.mjs",
+          "authority_uses": [
+            "coverage_document",
+            "dependency_manifest",
+            "historical_baseline",
+            "reviewed_decisions"
+          ]
+        },
+        {
+          "role": "negative_and_regression_control",
+          "path": "tools/architecture/test-executable-path-ownership.mjs",
+          "authority_uses": [
+            "ownership_validator_module"
+          ]
+        },
+        {
+          "role": "context_manifest_validator",
+          "path": "tools/architecture/validate-context-manifests.mjs",
+          "authority_uses": [
+            "ownership_validator_module"
+          ]
+        },
+        {
+          "role": "independent_source_critic",
+          "path": "tools/architecture/v2/independent-critic-final-gate.mjs",
+          "authority_uses": [
+            "ownership_validator_module"
+          ]
+        }
     ],
     "authority_direction": [
       "repository_tracked_paths_modes_and_lifecycle_metadata",
@@ -70,15 +99,22 @@
   },
   "historical_negative_fixtures": [
     {
-      "id": "working_tree_deleted_aff0c11b",
-      "schema": "yoko.crm.executable-path-ownership-historical-incident.v1",
-      "candidate": "08b9145945b296d494cd0184eb2d32da886710cd",
-      "clean_inventory_sha256": "5cd651f8f3212f4ed4e74f4a650aef1914810d4dabee446c10b93c857016d017",
+      "id": "working_tree_deleted_pinned_repository_state_v2",
+      "schema": "yoko.crm.executable-path-ownership-historical-working-tree-deletion.v2",
+      "candidate": "7aea2823efe50e13a156540993d424594025e403",
+      "path": "tools/architecture/validate-context-manifests.mjs",
       "mutation": {
-        "kind": "working_tree_deleted",
-        "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/tests/test_tg_base_reference_real_docker.py"
+        "kind": "working_tree_deleted"
       },
-      "rejected_inventory_sha256": "aff0c11bf9048393d95bb4ca3d340ffc29a57aff3bdb6a6b43fd1bd71d77adb0",
+      "expected": {
+        "candidate_tree": "dbb380be0775d41b246248a9fe8fbf99bcb38d22",
+        "git_mode": "100644",
+        "blob_oid": "1c67aade24afd509818ffc6e303f94cc274e2b11",
+        "source_sha256": "3ddc60842b4bd5da1d2e2dd472efcc0473c054b1afd108edbad09ee73a45846a",
+        "clean_inventory_sha256": "b3c2d8d9d8fed6859df119dcfb35cc38c075d6eabcf42f600371eb99e3a43d62",
+        "working_tree_deleted_inventory_sha256": "00920323e3ed16cb19231b1342b9d1a3e5a255834fe96c455f50f29afdd65490",
+        "mutation_provenance_sha256": "b19a2f890d401bc2fb4fa32163a87e3138f8e7814915b7b97519796c64c60fd0"
+      },
       "expected_failure": "materialization requires a clean exact candidate checkout"
     }
   ]
