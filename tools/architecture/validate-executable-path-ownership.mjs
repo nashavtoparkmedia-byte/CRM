@@ -6,7 +6,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import ts from '../../gravity-mvp/node_modules/typescript/lib/typescript.js'
 import { classifyTrackedSurface, inventoryTrackedSurfaces } from './v2/tracked-surface-inventory.mjs'
 
@@ -95,11 +95,6 @@ function moduleSpecifierText(node) {
   return node && (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) ? node.text : null
 }
 
-function canonicalModulePath(relativePath, specifier) {
-  if (!specifier?.startsWith('.')) return null
-  return path.posix.normalize(path.posix.join(path.posix.dirname(relativePath), specifier))
-}
-
 function repositoryTrackedJavaScriptSources(repositoryRoot) {
   const output = execFileSync('git', ['-C', repositoryRoot, 'ls-files', '-z'], { encoding: 'buffer', maxBuffer: 64 * 1024 * 1024 })
   return output.toString('utf8').split('\0').filter((relativePath) => JAVASCRIPT_SOURCE.test(relativePath)).sort()
@@ -162,37 +157,79 @@ function assertNoRawAuthorityExports(sourceFile, sourceText) {
   }
 }
 
-function accessModuleTarget(relativePath, specifier, accessModulePath) {
-  if (!specifier?.startsWith('.')) return false
-  const resolved = canonicalModulePath(relativePath, specifier)
-  return resolved === accessModulePath || resolved + '.mjs' === accessModulePath
-}
-
 const MODULE_EXTENSIONS = ['.mjs', '.js', '.cjs', '.ts', '.tsx', '.jsx']
 
-function resolveTrackedModuleTarget(relativePath, specifier, trackedPaths) {
-  if (!specifier?.startsWith('.')) return null
-  const base = canonicalModulePath(relativePath, specifier)
-  const candidates = [base, ...MODULE_EXTENSIONS.map((extension) => base + extension), ...MODULE_EXTENSIONS.map((extension) => base + '/index' + extension)]
+function trackedModuleSpecifierIdentity(repositoryRoot, relativePath, specifier, trackedPaths) {
+  const claimedLocal = typeof specifier === 'string'
+    && (specifier.startsWith('./') || specifier.startsWith('../') || specifier.startsWith('/') || specifier.startsWith('file:'))
+  if (!claimedLocal) {
+    return { kind: 'non_local', target: null, has_search: false, has_hash: false }
+  }
+  let resolvedUrl
+  try {
+    resolvedUrl = new URL(specifier, pathToFileURL(path.resolve(repositoryRoot, relativePath)))
+  } catch {
+    return { kind: 'unsupported_local', target: null, has_search: false, has_hash: false }
+  }
+  if (resolvedUrl.protocol !== 'file:') {
+    return { kind: 'unsupported_local', target: null, has_search: false, has_hash: false }
+  }
+  const withoutSearch = new URL(resolvedUrl.href)
+  const withoutHash = new URL(resolvedUrl.href)
+  withoutSearch.search = ''
+  withoutHash.hash = ''
+  const hasSearch = withoutSearch.href !== resolvedUrl.href
+  const hasHash = withoutHash.href !== resolvedUrl.href
+  let absoluteTarget
+  try {
+    absoluteTarget = fileURLToPath(resolvedUrl)
+  } catch {
+    return { kind: 'unsupported_local', target: null, has_search: hasSearch, has_hash: hasHash }
+  }
+  const repositoryPath = path.resolve(repositoryRoot)
+  const platformRelative = path.relative(repositoryPath, absoluteTarget)
+  if (path.isAbsolute(platformRelative) || platformRelative === '..' || platformRelative.startsWith(`..${path.sep}`)) {
+    return { kind: 'outside_repository', target: null, has_search: hasSearch, has_hash: hasHash }
+  }
+  const base = platformRelative.split(path.sep).join('/')
+  const candidates = [
+    base,
+    ...MODULE_EXTENSIONS.map((extension) => base + extension),
+    ...MODULE_EXTENSIONS.map((extension) => path.posix.join(base, 'index' + extension)),
+  ]
   const matches = [...new Set(candidates.filter((candidate) => trackedPaths.has(candidate)))]
   assert(matches.length <= 1, 'tracked module edge resolves ambiguously: ' + relativePath + '#' + specifier)
-  return matches[0] ?? null
+  return {
+    kind: matches.length === 1 ? 'tracked_local' : 'untracked_local',
+    target: matches[0] ?? null,
+    has_search: hasSearch,
+    has_hash: hasHash,
+  }
 }
 
-function sourceModuleEdges(sourceFile, relativePath, trackedPaths) {
+function sourceModuleEdges(sourceFile, repositoryRoot, relativePath, trackedPaths) {
   const edges = []
-  const add = (kind, node) => {
-    const specifier = moduleSpecifierText(node)
-    const target = resolveTrackedModuleTarget(relativePath, specifier, trackedPaths)
-    if (target) edges.push({ source: relativePath, target, kind, specifier })
+  const add = (kind, specifierNode, declarationNode) => {
+    const specifier = moduleSpecifierText(specifierNode)
+    const identity = trackedModuleSpecifierIdentity(repositoryRoot, relativePath, specifier, trackedPaths)
+    if (identity.target) edges.push({
+      source: relativePath,
+      target: identity.target,
+      kind,
+      specifier,
+      declarationNode,
+      specifierNode,
+      has_search: identity.has_search,
+      has_hash: identity.has_hash,
+    })
   }
   const visit = (node) => {
-    if (ts.isImportDeclaration(node)) add('static_import', node.moduleSpecifier)
-    if (ts.isExportDeclaration(node) && node.moduleSpecifier) add('static_reexport', node.moduleSpecifier)
-    if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) add('import_equals', node.moduleReference.expression)
+    if (ts.isImportDeclaration(node)) add('static_import', node.moduleSpecifier, node)
+    if (ts.isExportDeclaration(node) && node.moduleSpecifier) add('static_reexport', node.moduleSpecifier, node)
+    if (ts.isImportEqualsDeclaration(node) && ts.isExternalModuleReference(node.moduleReference)) add('import_equals', node.moduleReference.expression, node)
     if (ts.isCallExpression(node)
       && (node.expression.kind === ts.SyntaxKind.ImportKeyword
-        || ts.isIdentifier(node.expression) && node.expression.text === 'require')) add('literal_dynamic_import', node.arguments[0])
+        || ts.isIdentifier(node.expression) && node.expression.text === 'require')) add('literal_dynamic_import', node.arguments[0], node)
     ts.forEachChild(node, visit)
   }
   visit(sourceFile)
@@ -260,24 +297,28 @@ function validateAuthorityAccessDeclaration(value) {
   return { accessModulePath: access.module, capabilities: expected, nonAuthorityExports: new Set(access.non_authority_exports) }
 }
 
-function sourceImports(sourceFile, relativePath, accessModulePath, exported, capabilities) {
+function sourceImports(sourceFile, relativePath, accessModulePath, exported, capabilities, moduleEdges) {
   const importedCapabilities = new Set()
   const allowedRawRanges = []
-  const visit = (node) => {
-    if (ts.isImportDeclaration(node) && accessModuleTarget(relativePath, moduleSpecifierText(node.moduleSpecifier), accessModulePath)) {
-      allowedRawRanges.push([node.moduleSpecifier.getStart(sourceFile), node.moduleSpecifier.getEnd()])
-      const bindings = node.importClause?.namedBindings
-      assert(node.importClause && !node.importClause.name && bindings && ts.isNamedImports(bindings), 'canonical authority access requires direct named imports: ' + relativePath)
-      for (const element of bindings.elements) {
-        const importedName = (element.propertyName ?? element.name).text
-        assert(exported.has(importedName), 'unauthorized canonical authority capability import: ' + relativePath + '#' + importedName)
-        if (capabilities.has(importedName)) importedCapabilities.add(importedName)
-      }
+  for (const edge of moduleEdges.filter((candidate) => candidate.kind === 'static_import' && candidate.target === accessModulePath)) {
+    const node = edge.declarationNode
+    allowedRawRanges.push([edge.specifierNode.getStart(sourceFile), edge.specifierNode.getEnd()])
+    const bindings = node.importClause?.namedBindings
+    assert(node.importClause && !node.importClause.name && bindings && ts.isNamedImports(bindings), 'canonical authority access requires direct named imports: ' + relativePath)
+    for (const element of bindings.elements) {
+      const importedName = (element.propertyName ?? element.name).text
+      assert(exported.has(importedName), 'unauthorized canonical authority capability import: ' + relativePath + '#' + importedName)
+      if (capabilities.has(importedName)) importedCapabilities.add(importedName)
     }
-    ts.forEachChild(node, visit)
   }
-  visit(sourceFile)
   return { allowedRawRanges, importedCapabilities }
+}
+
+function qualifierKind(edge) {
+  if (edge.has_search && edge.has_hash) return 'query+fragment'
+  if (edge.has_search) return 'query'
+  if (edge.has_hash) return 'fragment'
+  return null
 }
 
 function assertNoRawAuthorityBypass(relativePath, sourceText, allowedRawRanges) {
@@ -313,12 +354,16 @@ export function discoverExecutablePathOwnershipConsumers(repositoryRoot, declara
   const moduleEdges = []
   for (const relativePath of relativePaths) {
     const { sourceFile, sourceText } = sources.get(relativePath)
-    const { allowedRawRanges, importedCapabilities } = sourceImports(sourceFile, relativePath, accessModulePath, exported, capabilities)
-    assertNoRawAuthorityBypass(relativePath, sourceText, allowedRawRanges)
-    const currentModuleEdges = sourceModuleEdges(sourceFile, relativePath, trackedPaths)
+    const currentModuleEdges = sourceModuleEdges(sourceFile, repositoryRoot, relativePath, trackedPaths)
     for (const edge of currentModuleEdges) {
+      const qualifier = edge.target === accessModulePath ? qualifierKind(edge) : null
+      assert(!qualifier, 'qualified canonical authority module edge forbidden: ' + relativePath + '#' + edge.kind + '#' + qualifier)
       assert(edge.target !== accessModulePath || edge.kind === 'static_import', 'canonical authority access requires a static direct import: ' + relativePath)
     }
+    const { allowedRawRanges, importedCapabilities } = sourceImports(
+      sourceFile, relativePath, accessModulePath, exported, capabilities, currentModuleEdges,
+    )
+    assertNoRawAuthorityBypass(relativePath, sourceText, allowedRawRanges)
     moduleEdges.push(...currentModuleEdges)
     if (relativePath !== accessModulePath && importedCapabilities.size > 0) {
       const exportKinds = moduleExportKinds(sourceFile)
@@ -329,6 +374,8 @@ export function discoverExecutablePathOwnershipConsumers(repositoryRoot, declara
   const consumerPaths = new Set(consumers.map(({ path: consumerPath }) => consumerPath))
   for (const edge of moduleEdges) {
     if (consumerPaths.has(edge.target) && edge.source !== edge.target) {
+      const qualifier = qualifierKind(edge)
+      assert(!qualifier, 'qualified authority terminal consumer inbound edge forbidden: ' + edge.target + '<-' + edge.source + '#' + edge.kind + '#' + qualifier)
       throw new Error('authority terminal consumer has inbound tracked module edge: ' + edge.target + '<-' + edge.source + '#' + edge.kind)
     }
   }
