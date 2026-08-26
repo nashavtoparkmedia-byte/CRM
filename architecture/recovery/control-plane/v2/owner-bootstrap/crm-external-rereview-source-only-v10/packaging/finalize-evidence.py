@@ -1,5 +1,5 @@
 #!/usr/bin/python3 -I
-"""Materialize exact-SHA Owner evidence after a separate internal review."""
+"""Materialize exact-SHA Owner evidence after independent bootstrap review."""
 from __future__ import annotations
 
 import argparse
@@ -17,7 +17,7 @@ DEB = ROOT / "dist/yoko-privileged-runtime_2.0.0-10_all.deb"
 SEAL = ROOT / "SEALED_RELEASE.json"
 SEALED_INPUT_VERIFIER = ROOT / "packaging/verify-sealed-inputs.py"
 INTERNAL_REVIEW_VERIFIER = ROOT / "packaging/verify-independent-critic.py"
-INTERNAL_REVIEW_VERIFICATION_TIMEOUT_SECONDS = 6 * 60 * 60
+INTERNAL_REVIEW_VERIFICATION_TIMEOUT_SECONDS = 30 * 60
 
 
 def sha(path: Path) -> str:
@@ -101,21 +101,21 @@ def owner_command(tar_sha: str) -> str:
         "/usr/bin/tar --extract --file \"$root_tar\" --directory \"$stage\" --no-same-owner --no-same-permissions; "
         "/usr/bin/chown -R root:root \"$stage\"; /usr/bin/chmod 0700 \"$stage/payload\"; "
         "/usr/bin/chmod 0500 \"$stage/payload/install.sh\" \"$stage/payload/review\"; "
-        "/usr/bin/chmod 0400 \"$stage/payload/payload-manifest.json\" \"$stage/payload/yoko-privileged-runtime_2.0.0-10_all.deb\" \"$stage/payload/review/human-manifest.md\" \"$stage/payload/review/package-manifest.json\" \"$stage/payload/review/installation-procedure.md\" \"$stage/payload/review/rollback-analysis.md\"; "
+        "/usr/bin/chmod 0400 \"$stage/payload/payload-manifest.json\" \"$stage/payload/yoko-privileged-runtime_2.0.0-10_all.deb\" \"$stage/payload/yoko-privileged-runtime_2.0.0-10_predecessor-observability-v1_all.deb\" \"$stage/payload/review/human-manifest.md\" \"$stage/payload/review/package-manifest.json\" \"$stage/payload/review/installation-procedure.md\" \"$stage/payload/review/rollback-analysis.md\"; "
         "cd \"$stage/payload\"; exec ./install.sh'"
     )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--critic", choices=("PENDING", "PASS"), default="PENDING")
+    parser.add_argument("--bootstrap-review", "--critic", dest="bootstrap_review", choices=("PENDING", "PASS"), default="PENDING")
     parser.add_argument("--review-artifact", type=Path)
     parser.add_argument("--source-repo", type=Path)
     args = parser.parse_args()
-    if args.critic == "PASS" and (args.review_artifact is None or args.source_repo is None):
-        raise SystemExit("internal critic PASS requires a separate review artifact and exact source checkout")
-    if args.critic == "PENDING" and (args.review_artifact is not None or args.source_repo is not None):
-        raise SystemExit("internal review inputs are valid only with critic PASS")
+    if args.bootstrap_review == "PASS" and (args.review_artifact is None or args.source_repo is None):
+        raise SystemExit("bootstrap review PASS requires a separate review artifact and exact source checkout")
+    if args.bootstrap_review == "PENDING" and (args.review_artifact is not None or args.source_repo is not None):
+        raise SystemExit("review inputs are valid only with bootstrap review PASS")
     sealed_input_verification = verify_sealed_release()
     seal = json.loads(SEAL.read_text(encoding="ascii"))
     review = json.loads((ROOT / "bundle/payload/review/package-manifest.json").read_text(encoding="ascii"))
@@ -124,11 +124,11 @@ def main() -> None:
         raise SystemExit("package review identity mismatch")
     review_artifact_sha256 = None
     review_verification = None
-    if args.critic == "PASS":
+    if args.bootstrap_review == "PASS":
         assert args.review_artifact is not None and args.source_repo is not None
         completed = subprocess.run(
             [
-                "/usr/bin/python3", "-I", str(INTERNAL_REVIEW_VERIFIER), "--verify-review",
+                "/usr/bin/python3", "-I", str(INTERNAL_REVIEW_VERIFIER), "--verify-bootstrap-review",
                 "--source-repo", str(args.source_repo),
                 "--seal", str(SEAL),
                 "--tar", str(TAR),
@@ -141,31 +141,32 @@ def main() -> None:
         try:
             review_verification = json.loads(completed.stdout)
         except (UnicodeError, ValueError) as exc:
-            raise SystemExit("internal review verifier did not emit exact JSON") from exc
+            raise SystemExit("bootstrap review verifier did not emit exact JSON") from exc
         expected_keys = {
-            "schema", "status", "reviewer_assertion", "reviewed_at",
-            "internal_review_artifact_sha256", "sealed_release_sha256",
+            "schema", "status", "verdict", "reviewer_assertion", "reviewed_at",
+            "independent_review_artifact_sha256", "sealed_release_sha256",
             "bootstrap_tar_sha256", "debian_package_sha256",
-            "hosted_authoritative_ci_sha256", "attack_catalog_sha256",
-            "attack_execution_catalog_sha256", "attacks", "validator",
-            "external_project_rereview_satisfied",
+            "direct_rollback_package_sha256", "qualification", "scope",
+            "predecessor_acceptance_reopened", "full_replay_executed",
         }
         if (
             completed.stderr
             or type(review_verification) is not dict
             or set(review_verification) != expected_keys
-            or review_verification.get("schema") != "yoko.crm.internal-runtime-bootstrap-review-verification.v1"
+            or review_verification.get("schema") != "yoko.crm.bootstrap-transition-independent-runtime-review-verification.v1"
             or review_verification.get("status") != "PASS"
+            or review_verification.get("verdict") != "PASS"
             or review_verification.get("sealed_release_sha256") != sha(SEAL)
             or review_verification.get("bootstrap_tar_sha256") != tar_sha
             or review_verification.get("debian_package_sha256") != deb_sha
-            or review_verification.get("external_project_rereview_satisfied") is not False
+            or review_verification.get("direct_rollback_package_sha256") != "b97642ffc3a95be862943212802ab38bea3280b16597209fe56fa4a2c8dafa43"
+            or review_verification.get("predecessor_acceptance_reopened") is not False
+            or review_verification.get("full_replay_executed") is not False
         ):
-            raise SystemExit("internal review mechanical verification did not authorize this release")
-        review_artifact_sha256 = review_verification["internal_review_artifact_sha256"]
-    # The eight-attack rerun is intentionally long-running. Recheck every
-    # sealed input and deterministic output immediately before materializing
-    # the Owner boundary candidate or authorization.
+            raise SystemExit("bootstrap transition review verification did not authorize this release")
+        review_artifact_sha256 = review_verification["independent_review_artifact_sha256"]
+    # Recheck every sealed input and deterministic output immediately before
+    # materializing the Owner boundary candidate or authorization.
     final_sealed_input_verification = verify_sealed_release()
     if final_sealed_input_verification != sealed_input_verification:
         raise SystemExit("sealed release changed during final evidence verification")
@@ -174,34 +175,40 @@ def main() -> None:
     write(
         ROOT / "OWNER_COMMAND.txt",
         (
-            "AUTHORIZED AFTER SEPARATE INTERNAL REVIEW; FINAL OWNER ACCEPTANCE REQUIRED\n"
-            if args.critic == "PASS"
-            else "NOT AUTHORIZED: SEPARATE INTERNAL REVIEW PENDING\nCANDIDATE ONLY; DO NOT EXECUTE\n"
+            "AUTHORIZED AFTER INDEPENDENT BOOTSTRAP RUNTIME REVIEW; FINAL OWNER ACCEPTANCE REQUIRED\n"
+            if args.bootstrap_review == "PASS"
+            else "NOT AUTHORIZED: INDEPENDENT BOOTSTRAP RUNTIME REVIEW PENDING\nCANDIDATE ONLY; DO NOT EXECUTE\n"
         ) + command + "\n",
     )
     manifest = {
         "schema": "yoko.crm.source-only-owner-bootstrap.v1",
-        "status": "ACCEPTED_WAITING_FOR_OWNER" if args.critic == "PASS" else "SEALED_INTERNAL_REVIEW_PENDING_NOT_AUTHORIZED",
+        "status": "ACCEPTED_WAITING_FOR_OWNER" if args.bootstrap_review == "PASS" else "SEALED_BOOTSTRAP_REVIEW_PENDING_NOT_AUTHORIZED",
         "seal": seal,
         "bootstrap_tar": {"path": str(TAR), "sha256": tar_sha, "bytes": TAR.stat().st_size},
         "package": {"path": str(DEB), "sha256": deb_sha, "version": "2.0.0-10", "runtime_abi": "2.0.0"},
         "predecessor_package": {
             "version": "2.0.0-10",
             "profile_id": "crm-08b9145945b2-gravity-source-v1",
-            "sha256": "6865eab377dda757d101259e7321268998b45ea8b27f6003de0cf7e191a9b54e",
-            "source": "/var/lib/yoko-privileged-runtime/activation-bootstraps/6865eab377dda757d101259e7321268998b45ea8b27f6003de0cf7e191a9b54e/yoko-privileged-runtime_2.0.0-10_all.deb",
+            "source_commit": "2b8811281a505c8dc20303bc83c3781087a3c746",
+            "sha256": "b97642ffc3a95be862943212802ab38bea3280b16597209fe56fa4a2c8dafa43",
+            "payload_path": "yoko-privileged-runtime_2.0.0-10_predecessor-observability-v1_all.deb",
+            "store_path": "/var/lib/yoko-privileged-runtime/activation-bootstraps/b97642ffc3a95be862943212802ab38bea3280b16597209fe56fa4a2c8dafa43/yoko-privileged-runtime_2.0.0-10_predecessor-observability-v1_all.deb",
         },
         "enabled_zero_argument_profiles": ["database-status", "release-preflight", "release-activate", "rollback"],
+        "enabled_zero_argument_read_only_profiles": ["predecessor-observe"],
         "disabled_profiles": ["config-activate", "database-migrate"],
-        "core_policy_sudoers_byte_identical": True,
+        "policy_byte_identical": True,
+        "core_sudoers_delta": "ONE_ZERO_ARGUMENT_READ_ONLY_PREDECESSOR_OBSERVE",
         "bootstrap_production_mutation": False,
         "bootstrap_profile_invocation": False,
-        "owner_command_authorized": args.critic == "PASS",
-        "owner_command": command if args.critic == "PASS" else None,
-        "internal_review_artifact_sha256": review_artifact_sha256,
-        "internal_review_verification": review_verification,
+        "owner_command_authorized": args.bootstrap_review == "PASS",
+        "owner_command": command if args.bootstrap_review == "PASS" else None,
+        "bootstrap_transition_independent_review_artifact_sha256": review_artifact_sha256,
+        "bootstrap_transition_independent_review_verification": review_verification,
         "self_issued_review_accepted": False,
         "external_project_rereview_satisfied": False,
+        "predecessor_acceptance_reopened": False,
+        "full_replay_executed": False,
         "sealed_input_verification": final_sealed_input_verification,
     }
     write(ROOT / "manifest.json", json.dumps(manifest, indent=2, sort_keys=True) + "\n")

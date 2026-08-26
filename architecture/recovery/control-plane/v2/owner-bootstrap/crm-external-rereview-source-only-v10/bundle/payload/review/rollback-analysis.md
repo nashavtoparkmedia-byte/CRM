@@ -1,9 +1,12 @@
 # Rollback analysis
 
-Before any release-profile invocation, an ordinary bootstrap failure reinstalls
-the exact stored Runtime `2.0.0-10` package for profile
-`crm-08b9145945b2-gravity-source-v1` and proves its executable, policy, install
-manifest, sudoers, profile, self-check and audit identity. Power-loss
+Before any release-profile invocation, a post-`dpkg` bootstrap failure
+reinstalls exact predecessor-observability package `b97642ff…` from source
+`2b881128…` for profile `crm-08b9145945b2-gravity-source-v1` and proves its
+wrapper, core, observer, policy, install manifest, sudoers, profile, self-check,
+capabilities, audit, content-addressed store and unchanged application
+provenance. The historical package `6865eab3…` is not this bootstrap's direct
+rollback target. Power-loss
 recovery is handled by rerunning the same checksum-pinned Owner command; the
 root guard remains fail closed until exact reconciliation succeeds.
 

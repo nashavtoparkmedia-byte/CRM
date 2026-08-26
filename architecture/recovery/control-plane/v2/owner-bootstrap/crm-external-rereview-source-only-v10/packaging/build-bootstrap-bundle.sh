@@ -12,14 +12,15 @@ EPOCH=1786492800
 
 expected='install.sh
 payload-manifest.json
-yoko-privileged-runtime_2.0.0-10_all.deb'
+yoko-privileged-runtime_2.0.0-10_all.deb
+yoko-privileged-runtime_2.0.0-10_predecessor-observability-v1_all.deb'
 actual=$(/usr/bin/find "$PAYLOAD" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | /usr/bin/sort)
 test "$actual" = "$expected"
 test "$(/usr/bin/find "$PAYLOAD" -mindepth 1 -maxdepth 1 -type d -printf '%f\n')" = 'review'
 test ! -L "$PAYLOAD"
 test "$(/usr/bin/stat -c '%a' "$PAYLOAD")" = '700'
 test "$(/usr/bin/stat -c '%a' "$PAYLOAD/install.sh")" = '500'
-for file in payload-manifest.json yoko-privileged-runtime_2.0.0-10_all.deb; do
+for file in payload-manifest.json yoko-privileged-runtime_2.0.0-10_all.deb yoko-privileged-runtime_2.0.0-10_predecessor-observability-v1_all.deb; do
     test ! -L "$PAYLOAD/$file"
     test "$(/usr/bin/stat -c '%a' "$PAYLOAD/$file")" = '400'
 done

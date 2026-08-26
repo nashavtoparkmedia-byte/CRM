@@ -18,7 +18,9 @@ RUNTIME_ABI = "2.0.0"
 PACKAGE_VERSION = "2.0.0-10"
 TEST_ENV = "YOKO_PRIVILEGED_RUNTIME_TEST_ROOT"
 CORE_PATH = "/usr/local/libexec/yoko-privileged-runtime/core-2.0.0.py"
-CORE_SHA256 = "0cdeeb4ba43abe50f80fed1580ad7b0729bf83358932ece2974b3faedafed57a"
+CORE_SHA256 = "@CORE_SHA256@"
+PREDECESSOR_OBSERVABILITY_PATH = "/usr/local/libexec/yoko-privileged-runtime/predecessor-observability-v1.py"
+PREDECESSOR_OBSERVABILITY_SHA256 = "@PREDECESSOR_OBSERVABILITY_SHA256@"
 PROFILE_RUNTIME_PATH = "/usr/local/libexec/yoko-privileged-runtime/@PROFILE_ID@.py"
 PROFILE_MANIFEST_PATH = "/usr/local/share/yoko-privileged-runtime/profiles/@PROFILE_ID@/manifest.v1.json"
 PROFILE_MANIFEST_SHA256 = "@OVERLAY_MANIFEST_SHA256@"
@@ -115,6 +117,13 @@ def _load_core(root: Path | None) -> ModuleType:
     return _load("yoko_privileged_runtime_core_2_0_0", target)
 
 
+def _load_predecessor_observability(root: Path | None) -> ModuleType:
+    target = _secure_file(PREDECESSOR_OBSERVABILITY_PATH, 0o444, root, 4 * 1024 * 1024)
+    if _sha(target, 4 * 1024 * 1024) != PREDECESSOR_OBSERVABILITY_SHA256:
+        raise RuntimeError("PREDECESSOR_OBSERVABILITY_IDENTITY_MISMATCH")
+    return _load("yoko_predecessor_observability_v1", target)
+
+
 def _overlay_identity(core: ModuleType, root: Path | None) -> tuple[dict[str, str], dict[str, Any]]:
     target = _secure_file(PROFILE_MANIFEST_PATH, 0o444, root, 256 * 1024)
     if _sha(target, 256 * 1024) != PROFILE_MANIFEST_SHA256:
@@ -165,7 +174,7 @@ def _overlay_identity(core: ModuleType, root: Path | None) -> tuple[dict[str, st
     return output, manifest
 
 
-def _dispatch(core: ModuleType, profile_runtime: ModuleType, policy: dict[str, Any], invocation: Any, overlay: dict[str, str]) -> dict[str, Any]:
+def _dispatch(core: ModuleType, profile_runtime: ModuleType, predecessor_observability: ModuleType, policy: dict[str, Any], invocation: Any, overlay: dict[str, str]) -> dict[str, Any]:
     if invocation.primitive == "version":
         result = core.dispatch(policy, invocation)
         result.update({"package_version": PACKAGE_VERSION, "activation_profile": PROFILE_ID})
@@ -184,6 +193,7 @@ def _dispatch(core: ModuleType, profile_runtime: ModuleType, policy: dict[str, A
         }
         result["activation_profile_id"] = PROFILE_ID
         result["activation_profile_manifest_sha256"] = PROFILE_MANIFEST_SHA256
+        result["enabled_read_only_profiles"] = ["predecessor-observe"]
         return result
     if invocation.primitive == "self-check":
         result = core.self_check(policy)
@@ -193,6 +203,7 @@ def _dispatch(core: ModuleType, profile_runtime: ModuleType, policy: dict[str, A
             "activation_profile_manifest_sha256": PROFILE_MANIFEST_SHA256,
             "activation_profile_identity": overlay,
             "profile_argument_shape": "ZERO_ARGUMENT_ONLY",
+            "predecessor_observability_sha256": PREDECESSOR_OBSERVABILITY_SHA256,
         })
         return result
     if invocation.primitive == "recovery-status":
@@ -203,6 +214,8 @@ def _dispatch(core: ModuleType, profile_runtime: ModuleType, policy: dict[str, A
             "activation_profile_manifest_sha256": PROFILE_MANIFEST_SHA256,
         })
         return result
+    if invocation.primitive == "predecessor-observe":
+        return predecessor_observability.observe(core, policy)
     if invocation.primitive in {"database-status", "release-preflight", "release-activate", "rollback"}:
         guard = _mapped(BOOTSTRAP_GUARD, _root())
         if guard.exists():
@@ -241,9 +254,10 @@ def main(argv: list[str]) -> int:
         core.verify_caller(policy)
         invocation = core.parse_cli(argv)
         overlay, _ = _overlay_identity(core, root)
+        predecessor_observability = _load_predecessor_observability(root)
         profile_target = _mapped(PROFILE_RUNTIME_PATH, root)
         profile_runtime = _load("yoko_crm_activation_profile_v1", profile_target)
-        evidence = _dispatch(core, profile_runtime, policy, invocation, overlay)
+        evidence = _dispatch(core, profile_runtime, predecessor_observability, policy, invocation, overlay)
         warnings = []
         if core.audit_status()["state"] == "INVALID":
             warnings.append("AUDIT_DEGRADED_READONLY")

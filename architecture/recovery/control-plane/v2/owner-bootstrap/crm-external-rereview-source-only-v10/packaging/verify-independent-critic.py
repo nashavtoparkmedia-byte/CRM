@@ -34,6 +34,25 @@ SHA40 = re.compile(r"[0-9a-f]{40}")
 SHA64 = re.compile(r"[0-9a-f]{64}")
 UTC_SECOND = re.compile(r"20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")
 MAX_INTERNAL_REVIEW_AGE = timedelta(hours=24)
+RUNTIME_SOURCE_PREFIX = "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10"
+TRANSITION_VALIDATOR_RELATIVE = VALIDATOR_RELATIVE
+TRANSITION_TEST_RELATIVE = "tests/test_builder_contract.py"
+TRANSITION_EVIDENCE_SCHEMA = "yoko.crm.bootstrap-transition-review-evidence.v1"
+TRANSITION_REVIEW_SCHEMA = "yoko.crm.bootstrap-transition-independent-runtime-review.v1"
+TRANSITION_VERIFICATION_SCHEMA = "yoko.crm.bootstrap-transition-independent-runtime-review-verification.v1"
+MAX_TRANSITION_REVIEW_AGE = timedelta(hours=24)
+TRANSITION_TARGETED_TESTS = (
+    "exact_observability_prestate_accepted",
+    "historical_only_prestate_rejected_without_mutation",
+    "mixed_and_wrong_identity_prestates_rejected_without_mutation",
+    "forced_post_mutation_failure_restores_exact_observability_runtime",
+    "rollback_self_check_audit_store_and_provenance_verified",
+    "successor_retry_is_idempotent",
+    "power_loss_guard_reconciliation_is_idempotent",
+    "wrong_or_substituted_direct_rollback_deb_rejected",
+    "payload_and_successor_identity_substitution_rejected",
+    "transition_scope_preserves_zero_argument_boundary",
+)
 ATTACK_IDS = (
     "clean-checkout-ci",
     "raw-credential-synthetic-bypass",
@@ -79,29 +98,36 @@ ATTACK_COMMANDS: dict[str, tuple[tuple[str, ...], ...]] = {
 }
 BOOTSTRAP_MTIME = 1786492800
 NEW_DEB_NAME = "yoko-privileged-runtime_2.0.0-10_all.deb"
+ROLLBACK_DEB_NAME = "yoko-privileged-runtime_2.0.0-10_predecessor-observability-v1_all.deb"
 PREDECESSOR_PACKAGE = {
     "name": "yoko-privileged-runtime",
     "version": "2.0.0-10",
     "profile_id": "crm-08b9145945b2-gravity-source-v1",
-    "sha256": "6865eab377dda757d101259e7321268998b45ea8b27f6003de0cf7e191a9b54e",
-    "source": "/var/lib/yoko-privileged-runtime/activation-bootstraps/6865eab377dda757d101259e7321268998b45ea8b27f6003de0cf7e191a9b54e/yoko-privileged-runtime_2.0.0-10_all.deb",
+    "source_commit": "2b8811281a505c8dc20303bc83c3781087a3c746",
+    "sha256": "b97642ffc3a95be862943212802ab38bea3280b16597209fe56fa4a2c8dafa43",
+    "payload_path": ROLLBACK_DEB_NAME,
+    "store_path": "/var/lib/yoko-privileged-runtime/activation-bootstraps/b97642ffc3a95be862943212802ab38bea3280b16597209fe56fa4a2c8dafa43/yoko-privileged-runtime_2.0.0-10_predecessor-observability-v1_all.deb",
 }
 PREDECESSOR_REVIEW_IDENTITY = {
     "package_version": "2.0.0-10",
     "profile_id": "crm-08b9145945b2-gravity-source-v1",
-    "runtime_sha256": "168d61b81f3defb748b69c523a3023bb983da37dbc8316d1e2a6705d88181fa1",
-    "core_sha256": "0cdeeb4ba43abe50f80fed1580ad7b0729bf83358932ece2974b3faedafed57a",
+    "source_commit": "2b8811281a505c8dc20303bc83c3781087a3c746",
+    "runtime_sha256": "46bf3016e1582834e3e18bec3e148dc0f59073103be70a7fd628785f22daf8c7",
+    "core_sha256": "0f97bafbfe5b430fa7994119b1fc76fead4bdbee26766c730d9e399551ebdffa",
+    "observer_sha256": "b5ea36c50e12b0fe6c171896258ddfc00a9d2666778735cae6a9b2a8df6d4084",
     "profile_runtime_sha256": "e3a3142e6bc098a15dd62b75bf7c090a148ad64b4fe45d3d82499c2667de072f",
     "policy_sha256": "8727373b0c6ec79c9abf82f1aaaa58abc2bae67e96aa96a602ac419f308db0e0",
-    "install_manifest_sha256": "7e22328cd89c752946d44e0a9557fd59f58f509ffea41754d4f5dddd98035549",
-    "profile_manifest_sha256": "ba87a9e11b74167b18a9b57299c6e6c89c3718d6637eb93bcbb540c5075a838e",
+    "install_manifest_sha256": "571206c1cbaed74fd33f7a7ae1c92361f0be959705459e330127d7b2537e5e4f",
+    "profile_manifest_sha256": "0c948717cf6665cf443e37d2d742dfb99beb3961485506cfbb6cc6a4cd6eeb82",
     "profile_sha256": "0c6ba7ea34b083c2eef38255ac5c5e48eb566ec3024ac2a457bbb587a769565b",
     "migration_sha256": "433b0d503f054ed6a8161a059e2650d5e401829dabe8c9d992a1d1763eef0016",
     "source_archive_sha256": "e611c0192fd3592ce99410df002a3918ce849dfab5c9c1b4955b02f136f830b9",
-    "sudoers_sha256": "6e6b7cb2a088cc92fa7aee747adca46c64b4b96d1224be21117be5adef488c06",
+    "sudoers_sha256": "3022dcfc323706da81e760255dd1ab43f9b8662ee699aa8b58fbe6e714cc69d7",
     "registry_sha256": "8ea5c3b7113e1dd2ad5a74b82a1fb0bf56643fd59774dccf37e8aa9eb67bd057",
     "rollback_deb_sha256": PREDECESSOR_PACKAGE["sha256"],
-    "rollback_deb_source": PREDECESSOR_PACKAGE["source"],
+    "rollback_deb_payload_path": PREDECESSOR_PACKAGE["payload_path"],
+    "rollback_deb_store_path": PREDECESSOR_PACKAGE["store_path"],
+    "rollback_provenance_sha256": "e5dc2ea647ae08b588b699f02bad5eb1ddc3db818aca53bb1240dbbc676c6153",
     "audit_state": "VALID",
     "audit_records": 36,
     "audit_last_digest": "7f7e4d739c9396c0d9757f0f2a60d57a50457048ce49cfd152ca46365306e344",
@@ -121,6 +147,7 @@ BOOTSTRAP_MODES = {
     "payload/review/package-manifest.json": 0o400,
     "payload/review/rollback-analysis.md": 0o400,
     f"payload/{NEW_DEB_NAME}": 0o400,
+    f"payload/{ROLLBACK_DEB_NAME}": 0o400,
 }
 
 
@@ -250,13 +277,22 @@ def expected_bindings(
         "production_snapshot_sha256": seal["production_snapshot_sha256"],
         "sealed_release_sha256": sha(seal_path),
         "debian_package": {"sha256": sha(deb_path), "bytes": deb_path.stat().st_size},
+        "direct_rollback_package": {
+            "sha256": PREDECESSOR_PACKAGE["sha256"],
+            "source_commit": PREDECESSOR_PACKAGE["source_commit"],
+        },
         "bootstrap_tar": {"sha256": sha(tar_path), "bytes": tar_path.stat().st_size},
     }
 
 
-def validate_bootstrap_member_size(name: str, member_size: int, exact_deb_size: int) -> None:
-    if name == f"payload/{NEW_DEB_NAME}":
-        if member_size != exact_deb_size:
+def validate_bootstrap_member_size(
+    name: str, member_size: int, exact_deb_size: int, exact_rollback_size: int | None = None,
+) -> None:
+    exact_sizes = {f"payload/{NEW_DEB_NAME}": exact_deb_size}
+    if exact_rollback_size is not None:
+        exact_sizes[f"payload/{ROLLBACK_DEB_NAME}"] = exact_rollback_size
+    if name in exact_sizes:
+        if member_size != exact_sizes[name]:
             raise SystemExit("bootstrap tar does not contain the exact Debian package")
         return
     maximum = MAX_BOOTSTRAP_DOCUMENT_BYTES
@@ -298,9 +334,13 @@ def consume_bootstrap_member(
     return digest.hexdigest(), bytes(captured) if captured is not None else None
 
 
-def validate_bootstrap_tar(tar_path: Path, deb_path: Path) -> str:
+def validate_bootstrap_tar(
+    tar_path: Path, deb_path: Path, rollback_path: Path | None = None,
+) -> str:
+    rollback = rollback_path or ROOT / "inputs" / ROLLBACK_DEB_NAME
     try:
         exact_deb_size = deb_path.stat().st_size
+        exact_rollback_size = rollback.stat().st_size
         with tarfile.open(tar_path, mode="r:") as archive:
             members = archive.getmembers()
             if (
@@ -337,15 +377,23 @@ def validate_bootstrap_tar(tar_path: Path, deb_path: Path) -> str:
                     "bytes": member.size,
                 }
                 if not expected_directory:
-                    validate_bootstrap_member_size(member.name, member.size, exact_deb_size)
+                    validate_bootstrap_member_size(
+                        member.name, member.size, exact_deb_size, exact_rollback_size,
+                    )
                     source = archive.extractfile(member)
                     if source is None:
                         raise SystemExit("bootstrap tar member is unavailable")
                     member_digest, raw = consume_bootstrap_member(
                         source,
                         member.size,
-                        exact_path=deb_path if member.name == f"payload/{NEW_DEB_NAME}" else None,
-                        capture=member.name != f"payload/{NEW_DEB_NAME}",
+                        exact_path=(
+                            deb_path if member.name == f"payload/{NEW_DEB_NAME}"
+                            else rollback if member.name == f"payload/{ROLLBACK_DEB_NAME}"
+                            else None
+                        ),
+                        capture=member.name not in {
+                            f"payload/{NEW_DEB_NAME}", f"payload/{ROLLBACK_DEB_NAME}",
+                        },
                     )
                     member_digests[member.name] = member_digest
                     if raw is not None:
@@ -358,6 +406,8 @@ def validate_bootstrap_tar(tar_path: Path, deb_path: Path) -> str:
     exact_deb_sha256 = sha(deb_path)
     if member_digests[f"payload/{NEW_DEB_NAME}"] != exact_deb_sha256:
         raise SystemExit("bootstrap tar does not contain the exact Debian package")
+    if member_digests[f"payload/{ROLLBACK_DEB_NAME}"] != PREDECESSOR_PACKAGE["sha256"]:
+        raise SystemExit("bootstrap tar does not contain the exact direct rollback package")
     payload = parse_json_bytes(content["payload/payload-manifest.json"], "bootstrap payload manifest")
     review = parse_json_bytes(content["payload/review/package-manifest.json"], "bootstrap review manifest")
     payload_files = payload.get("files")
@@ -368,11 +418,11 @@ def validate_bootstrap_tar(tar_path: Path, deb_path: Path) -> str:
         or payload.get("previous_package") != PREDECESSOR_PACKAGE
         or type(payload_files) is not dict
         or set(payload_files) != {
-            "install.sh", NEW_DEB_NAME,
+            "install.sh", NEW_DEB_NAME, ROLLBACK_DEB_NAME,
             "review/human-manifest.md", "review/installation-procedure.md",
             "review/package-manifest.json", "review/rollback-analysis.md",
         }
-        or review.get("schema") != "yoko.crm.owner-bootstrap-review-manifest.v2"
+        or review.get("schema") != "yoko.crm.owner-bootstrap-review-manifest.v3"
         or previous_state != PREDECESSOR_REVIEW_IDENTITY
         or type(new_package) is not dict
         or new_package.get("path") != NEW_DEB_NAME
@@ -613,6 +663,152 @@ def validate_internal_review(
     return value
 
 
+def transition_validator_identity() -> dict[str, object]:
+    catalog = list(TRANSITION_TARGETED_TESTS)
+    return {
+        "schema": "yoko.crm.bootstrap-transition-review-validator.v1",
+        "path": TRANSITION_VALIDATOR_RELATIVE,
+        "sha256": sha(ROOT / TRANSITION_VALIDATOR_RELATIVE),
+        "test_path": TRANSITION_TEST_RELATIVE,
+        "test_sha256": sha(ROOT / TRANSITION_TEST_RELATIVE),
+        "inventory_validator_path": VALIDATOR_RELATIVE,
+        "inventory_validator_sha256": sha(ROOT / VALIDATOR_RELATIVE),
+        "catalog": catalog,
+        "catalog_sha256": digest_bytes(canonical_bytes(catalog)),
+    }
+
+
+def transition_exact_bindings(source_repo: Path, seal_path: Path, tar_path: Path, deb_path: Path) -> dict[str, object]:
+    seal = json.loads(seal_path.read_text(encoding="ascii"))
+    if (
+        type(seal) is not dict
+        or seal.get("schema") != "yoko.crm.source-only-release-seal.v2"
+        or seal.get("status") != "SEALED"
+        or not isinstance(seal.get("commit"), str)
+        or not SHA40.fullmatch(seal["commit"])
+        or not isinstance(seal.get("tree"), str)
+        or not SHA40.fullmatch(seal["tree"])
+    ):
+        raise SystemExit("bootstrap transition review requires an exact sealed release")
+    if (
+        git(source_repo, "rev-parse", "HEAD^{commit}") != seal["commit"]
+        or git(source_repo, "rev-parse", "HEAD^{tree}") != seal["tree"]
+        or git(source_repo, "status", "--porcelain", "--untracked-files=all")
+    ):
+        raise SystemExit("bootstrap transition review source is not the exact clean sealed checkout")
+    for relative in (TRANSITION_VALIDATOR_RELATIVE, TRANSITION_TEST_RELATIVE, VALIDATOR_RELATIVE):
+        if sha(source_repo / RUNTIME_SOURCE_PREFIX / relative) != sha(ROOT / relative):
+            raise SystemExit("bootstrap transition review source/validator binding mismatch")
+    rollback = ROOT / "inputs" / ROLLBACK_DEB_NAME
+    if sha(rollback) != PREDECESSOR_PACKAGE["sha256"]:
+        raise SystemExit("direct rollback package identity mismatch")
+    provenance = seal.get("direct_rollback_provenance")
+    if (
+        type(provenance) is not dict
+        or provenance.get("source_commit") != PREDECESSOR_PACKAGE["source_commit"]
+        or provenance.get("package", {}).get("sha256") != PREDECESSOR_PACKAGE["sha256"]
+        or provenance.get("direct_rollback") is not True
+        or provenance.get("historical_package_is_direct_rollback") is not False
+    ):
+        raise SystemExit("seal does not bind the exact direct rollback provenance")
+    inventory_sha256 = validate_bootstrap_tar(tar_path, deb_path, rollback)
+    bindings = expected_bindings(seal, seal_path, tar_path, deb_path)
+    bindings.update({
+        "bootstrap_inventory_sha256": inventory_sha256,
+        "direct_rollback_package": {
+            "path": f"inputs/{ROLLBACK_DEB_NAME}",
+            "sha256": PREDECESSOR_PACKAGE["sha256"],
+            "bytes": rollback.stat().st_size,
+            "source_commit": PREDECESSOR_PACKAGE["source_commit"],
+        },
+    })
+    return bindings
+
+
+def transition_run_targeted_tests(source_repo: Path) -> dict[str, object]:
+    completed = subprocess.run(
+        [
+            "/usr/bin/python3", "-I", "-B", str(ROOT / TRANSITION_TEST_RELATIVE),
+            "BootstrapTransitionTests", "-q",
+        ],
+        cwd=source_repo,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=20 * 60,
+    )
+    if completed.returncode != 0:
+        sys.stderr.buffer.write(completed.stdout)
+        sys.stderr.buffer.write(completed.stderr)
+        raise SystemExit("bounded bootstrap transition qualification failed")
+    return {
+        "status": "PASS",
+        "count": len(TRANSITION_TARGETED_TESTS),
+        "catalog": list(TRANSITION_TARGETED_TESTS),
+        "catalog_sha256": digest_bytes(canonical_bytes(list(TRANSITION_TARGETED_TESTS))),
+        "test_source_sha256": sha(ROOT / TRANSITION_TEST_RELATIVE),
+    }
+
+
+def transition_build_evidence(bindings: dict[str, object], qualification: dict[str, object]) -> dict[str, object]:
+    return {
+        "schema": TRANSITION_EVIDENCE_SCHEMA,
+        "role": "BOUNDED_BOOTSTRAP_TRANSITION_EVIDENCE_ONLY",
+        "scope": "NARROW_RELEASE_TRANSITION_INTEGRATION_DEFECT",
+        "bindings": bindings,
+        "validator": transition_validator_identity(),
+        "qualification": qualification,
+        "reviewer_verdict": None,
+        "owner_authorization": False,
+        "production_mutation": False,
+        "predecessor_acceptance_reopened": False,
+        "full_replay_executed": False,
+    }
+
+
+def transition_read_review(path: Path) -> dict[str, Any]:
+    return read_json(path, "independent bootstrap transition review")
+
+
+def transition_validate_review(
+    review: dict[str, Any], bindings: dict[str, object], qualification: dict[str, object],
+) -> None:
+    expected_keys = {
+        "schema", "verdict", "reviewer_assertion", "reviewed_at", "separation_assertion",
+        "scope", "bindings", "validator", "qualification", "residual_findings",
+        "repository_mutated_by_reviewer", "production_mutated_by_reviewer",
+        "predecessor_acceptance_reopened", "full_replay_executed",
+    }
+    reviewer = review.get("reviewer_assertion")
+    reviewed_at = review.get("reviewed_at")
+    if (
+        set(review) != expected_keys
+        or review.get("schema") != TRANSITION_REVIEW_SCHEMA
+        or review.get("verdict") != "PASS"
+        or not isinstance(reviewer, str)
+        or not re.fullmatch(r"INDEPENDENT_[A-Z0-9_.:-]{3,120}", reviewer)
+        or reviewer in {"INDEPENDENT_EXECUTOR", "INDEPENDENT_SELF_REVIEW"}
+        or review.get("separation_assertion") != "NOT_THE_REPAIR_EXECUTOR_AND_NOT_THE_PREDECESSOR_REVIEWER"
+        or review.get("scope") != "NARROW_RELEASE_TRANSITION_INTEGRATION_DEFECT"
+        or review.get("bindings") != bindings
+        or review.get("validator") != transition_validator_identity()
+        or review.get("qualification") != qualification
+        or review.get("residual_findings") != []
+        or review.get("repository_mutated_by_reviewer") is not False
+        or review.get("production_mutated_by_reviewer") is not False
+        or review.get("predecessor_acceptance_reopened") is not False
+        or review.get("full_replay_executed") is not False
+        or not isinstance(reviewed_at, str)
+        or not UTC_SECOND.fullmatch(reviewed_at)
+    ):
+        raise SystemExit("independent bootstrap transition review is not exact")
+    timestamp = datetime.strptime(reviewed_at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    age = datetime.now(timezone.utc) - timestamp
+    if age < -timedelta(minutes=5) or age > MAX_TRANSITION_REVIEW_AGE:
+        raise SystemExit("independent bootstrap transition review is stale or future-dated")
+
+
+
+
 def release_inputs_unchanged(
     initial: dict[str, str], seal_path: Path, tar_path: Path, deb_path: Path,
 ) -> None:
@@ -626,6 +822,8 @@ def main() -> None:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--replay-evidence", action="store_true")
     mode.add_argument("--verify-review", action="store_true")
+    mode.add_argument("--bootstrap-review-evidence", action="store_true")
+    mode.add_argument("--verify-bootstrap-review", action="store_true")
     parser.add_argument("--source-repo", type=Path, required=True)
     parser.add_argument("--seal", type=Path, required=True)
     parser.add_argument("--tar", type=Path, required=True)
@@ -637,6 +835,42 @@ def main() -> None:
     tar_path = args.tar.resolve(strict=True)
     deb_path = args.deb.resolve(strict=True)
     repo = args.source_repo.resolve(strict=True)
+    if args.bootstrap_review_evidence or args.verify_bootstrap_review:
+        if args.verify_bootstrap_review != (args.review_artifact is not None):
+            raise SystemExit("--review-artifact is required only with --verify-bootstrap-review")
+        bindings = transition_exact_bindings(repo, seal_path, tar_path, deb_path)
+        qualification = transition_run_targeted_tests(repo)
+        if args.bootstrap_review_evidence:
+            print(json.dumps(
+                transition_build_evidence(bindings, qualification),
+                sort_keys=True, separators=(",", ":"),
+            ))
+            return
+        assert args.review_artifact is not None
+        review_path = args.review_artifact.resolve(strict=True)
+        review_initial_sha256 = sha(review_path)
+        review = transition_read_review(review_path)
+        transition_validate_review(review, bindings, qualification)
+        if sha(review_path) != review_initial_sha256:
+            raise SystemExit("independent bootstrap transition review changed during verification")
+        result = {
+            "schema": TRANSITION_VERIFICATION_SCHEMA,
+            "status": "PASS",
+            "verdict": "PASS",
+            "reviewer_assertion": review["reviewer_assertion"],
+            "reviewed_at": review["reviewed_at"],
+            "independent_review_artifact_sha256": review_initial_sha256,
+            "sealed_release_sha256": bindings["sealed_release_sha256"],
+            "bootstrap_tar_sha256": bindings["bootstrap_tar"]["sha256"],
+            "debian_package_sha256": bindings["debian_package"]["sha256"],
+            "direct_rollback_package_sha256": PREDECESSOR_PACKAGE["sha256"],
+            "qualification": qualification,
+            "scope": "NARROW_RELEASE_TRANSITION_INTEGRATION_DEFECT",
+            "predecessor_acceptance_reopened": False,
+            "full_replay_executed": False,
+        }
+        print(json.dumps(result, sort_keys=True, separators=(",", ":")))
+        return
     initial = {"seal": sha(seal_path), "tar": sha(tar_path), "deb": sha(deb_path)}
     seal = read_json(seal_path, "sealed release")
     bindings = expected_bindings(seal, seal_path, tar_path, deb_path)

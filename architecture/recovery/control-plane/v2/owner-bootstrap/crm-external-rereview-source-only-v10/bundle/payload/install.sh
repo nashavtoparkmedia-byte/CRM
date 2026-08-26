@@ -7,25 +7,31 @@ readonly EXPECTED_HOST='jvxthcorvm'
 EXPECTED_DIR=$(/bin/pwd -P)
 readonly EXPECTED_DIR
 readonly NEW_DEB='yoko-privileged-runtime_2.0.0-10_all.deb'
-readonly OLD_DEB='yoko-privileged-runtime_2.0.0-10_08b9145945b2_all.deb'
-readonly OLD_DEB_SHA='6865eab377dda757d101259e7321268998b45ea8b27f6003de0cf7e191a9b54e'
+readonly OLD_DEB='yoko-privileged-runtime_2.0.0-10_predecessor-observability-v1_all.deb'
+readonly OLD_DEB_SHA='b97642ffc3a95be862943212802ab38bea3280b16597209fe56fa4a2c8dafa43'
 readonly OLD_PROFILE_ID='crm-08b9145945b2-gravity-source-v1'
-readonly OLD_RUNTIME_SHA='168d61b81f3defb748b69c523a3023bb983da37dbc8316d1e2a6705d88181fa1'
+readonly OLD_RUNTIME_SHA='46bf3016e1582834e3e18bec3e148dc0f59073103be70a7fd628785f22daf8c7'
+readonly OLD_CORE_SHA='0f97bafbfe5b430fa7994119b1fc76fead4bdbee26766c730d9e399551ebdffa'
+readonly OLD_OBSERVER_SHA='b5ea36c50e12b0fe6c171896258ddfc00a9d2666778735cae6a9b2a8df6d4084'
 readonly OLD_PROFILE_RUNTIME_SHA='e3a3142e6bc098a15dd62b75bf7c090a148ad64b4fe45d3d82499c2667de072f'
-readonly OLD_PROFILE_MANIFEST_SHA='ba87a9e11b74167b18a9b57299c6e6c89c3718d6637eb93bcbb540c5075a838e'
+readonly OLD_PROFILE_MANIFEST_SHA='0c948717cf6665cf443e37d2d742dfb99beb3961485506cfbb6cc6a4cd6eeb82'
 readonly OLD_POLICY_SHA='8727373b0c6ec79c9abf82f1aaaa58abc2bae67e96aa96a602ac419f308db0e0'
-readonly OLD_INSTALL_MANIFEST_SHA='7e22328cd89c752946d44e0a9557fd59f58f509ffea41754d4f5dddd98035549'
+readonly OLD_INSTALL_MANIFEST_SHA='571206c1cbaed74fd33f7a7ae1c92361f0be959705459e330127d7b2537e5e4f'
 readonly EXPECTED_AUDIT_RECORDS='36'
 readonly EXPECTED_AUDIT_DIGEST='7f7e4d739c9396c0d9757f0f2a60d57a50457048ce49cfd152ca46365306e344'
-readonly OLD_SUDOERS_SHA='6e6b7cb2a088cc92fa7aee747adca46c64b4b96d1224be21117be5adef488c06'
+readonly OLD_SUDOERS_SHA='3022dcfc323706da81e760255dd1ab43f9b8662ee699aa8b58fbe6e714cc69d7'
+readonly OLD_REGISTRY_SHA='8ea5c3b7113e1dd2ad5a74b82a1fb0bf56643fd59774dccf37e8aa9eb67bd057'
 readonly BOOTSTRAP_STORE='/var/lib/yoko-privileged-runtime/activation-bootstraps'
-readonly OLD_DEB_SOURCE="$BOOTSTRAP_STORE/$OLD_DEB_SHA/yoko-privileged-runtime_2.0.0-10_all.deb"
+readonly OLD_DEB_SOURCE="$EXPECTED_DIR/$OLD_DEB"
+readonly OLD_DEB_STORE="$BOOTSTRAP_STORE/$OLD_DEB_SHA"
+readonly OLD_DEB_STORED="$OLD_DEB_STORE/$OLD_DEB"
 readonly INSTALL_LOG='/var/lib/yoko-privileged-runtime/activation-bootstrap-install.log'
 readonly BOOTSTRAP_GUARD='/var/lib/yoko-privileged-runtime/activation-bootstrap-installing.v1'
 
 new_attempted=0
 rollback_ok=false
 guard_owned=0
+previous_tmp=''
 
 marker_failed() {
     printf '%s\n' "{\"schema\":\"yoko.crm.owner-bootstrap-result.v1\",\"ok\":false,\"marker\":\"YOKO_ACTIVATION_BOOTSTRAP_FAILED\",\"rollback_restored\":$rollback_ok,\"production_mutation\":false}"
@@ -35,21 +41,29 @@ marker_failed() {
 old_identity() {
     test "$(/usr/bin/dpkg-query -W -f='${db:Status-Abbrev} ${Version}' yoko-privileged-runtime 2>/dev/null)" = 'ii  2.0.0-10' || return 1
     test "$(/usr/bin/sha256sum /usr/local/sbin/yoko-privileged-runtime | /usr/bin/cut -d ' ' -f 1)" = "$OLD_RUNTIME_SHA" || return 1
+    test "$(/usr/bin/sha256sum /usr/local/libexec/yoko-privileged-runtime/core-2.0.0.py | /usr/bin/cut -d ' ' -f 1)" = "$OLD_CORE_SHA" || return 1
+    test "$(/usr/bin/sha256sum /usr/local/libexec/yoko-privileged-runtime/predecessor-observability-v1.py | /usr/bin/cut -d ' ' -f 1)" = "$OLD_OBSERVER_SHA" || return 1
     test "$(/usr/bin/sha256sum "/usr/local/libexec/yoko-privileged-runtime/$OLD_PROFILE_ID.py" | /usr/bin/cut -d ' ' -f 1)" = "$OLD_PROFILE_RUNTIME_SHA" || return 1
     test "$(/usr/bin/sha256sum "/usr/local/share/yoko-privileged-runtime/profiles/$OLD_PROFILE_ID/manifest.v1.json" | /usr/bin/cut -d ' ' -f 1)" = "$OLD_PROFILE_MANIFEST_SHA" || return 1
     test "$(/usr/bin/sha256sum /usr/local/share/yoko-privileged-runtime/policy.v2.json | /usr/bin/cut -d ' ' -f 1)" = "$OLD_POLICY_SHA" || return 1
     test "$(/usr/bin/sha256sum /usr/local/share/yoko-privileged-runtime/install-manifest.v1.json | /usr/bin/cut -d ' ' -f 1)" = "$OLD_INSTALL_MANIFEST_SHA" || return 1
     test "$(/usr/bin/sha256sum /etc/sudoers.d/92-yoko-privileged-runtime | /usr/bin/cut -d ' ' -f 1)" = "$OLD_SUDOERS_SHA" || return 1
-    /usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n /usr/local/sbin/yoko-privileged-runtime self-check \
-        | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("runtime_version")=="2.0.0" and e.get("package_version")=="2.0.0-10" and e.get("activation_profile_id")==sys.argv[1] and e.get("profile_argument_shape")=="ZERO_ARGUMENT_ONLY" else 1)' "$OLD_PROFILE_ID" || return 1
+    self_check=$(/usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n /usr/local/sbin/yoko-privileged-runtime self-check) || return 1
+    /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); expected_installed={"/etc/sudoers.d/92-yoko-privileged-runtime":sys.argv[8],"/usr/local/libexec/yoko-privileged-runtime/core-2.0.0.py":sys.argv[3],"/usr/local/libexec/yoko-privileged-runtime/predecessor-observability-v1.py":sys.argv[4],"/usr/local/sbin/yoko-privileged-runtime":sys.argv[2],"/usr/local/share/yoko-privileged-runtime/policy.v2.json":sys.argv[7]}; valid=v.get("ok") is True and e.get("runtime_version")=="2.0.0" and e.get("package_version")=="2.0.0-10" and e.get("activation_profile_id")==sys.argv[1] and e.get("profile_argument_shape")=="ZERO_ARGUMENT_ONLY" and e.get("activation_profile_manifest_sha256")==sys.argv[6] and e.get("predecessor_observability_sha256")==sys.argv[4] and e.get("registry_sha256")==sys.argv[9] and e.get("installed_identity")==expected_installed and e.get("generic_command_execution") is False and e.get("arbitrary_paths") is False and e.get("docker_socket_delegated") is False; raise SystemExit(0 if valid else 1)' "$OLD_PROFILE_ID" "$OLD_RUNTIME_SHA" "$OLD_CORE_SHA" "$OLD_OBSERVER_SHA" "$OLD_PROFILE_RUNTIME_SHA" "$OLD_PROFILE_MANIFEST_SHA" "$OLD_POLICY_SHA" "$OLD_SUDOERS_SHA" "$OLD_REGISTRY_SHA" <<<"$self_check" || return 1
+    capabilities_exact "$OLD_PROFILE_ID" || return 1
+}
+
+capabilities_exact() {
+    expected_profile=$1
+    capabilities=$(/usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n /usr/local/sbin/yoko-privileged-runtime capabilities) || return 1
+    /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); resources=e.get("resources",{}); valid=v.get("ok") is True and e.get("activation_profile_id")==sys.argv[1] and e.get("enabled_activation_profiles")==["database-status","release-preflight","release-activate","rollback"] and e.get("enabled_read_only_profiles")==["predecessor-observe"] and set(e.get("disabled_profiles",[]))=={"config-activation","database-migration"} and e.get("generic_command_execution") is False and e.get("arbitrary_paths") is False and e.get("arbitrary_package_install") is False and isinstance(resources,dict) and all(isinstance(r,dict) and "service-restart" not in r.get("operations",[]) for r in resources.values()); raise SystemExit(0 if valid else 1)' "$expected_profile" <<<"$capabilities" || return 1
 }
 
 new_identity() {
     test "$(/usr/bin/dpkg-query -W -f='${db:Status-Abbrev} ${Version}' yoko-privileged-runtime 2>/dev/null)" = 'ii  2.0.0-10' || return 1
     self_check=$(/usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n /usr/local/sbin/yoko-privileged-runtime self-check) || return 1
     /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("package_version")=="2.0.0-10" and e.get("activation_profile_id")==sys.argv[1] and e.get("profile_argument_shape")=="ZERO_ARGUMENT_ONLY" else 1)' "$PROFILE_ID" <<<"$self_check" || return 1
-    capabilities=$(/usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n /usr/local/sbin/yoko-privileged-runtime capabilities) || return 1
-    /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); resources=e.get("resources",{}); valid=v.get("ok") is True and e.get("enabled_activation_profiles")==["database-status","release-preflight","release-activate","rollback"] and set(e.get("disabled_profiles",[]))=={"config-activation","database-migration"} and e.get("generic_command_execution") is False and e.get("arbitrary_paths") is False and e.get("arbitrary_package_install") is False and isinstance(resources,dict) and all(isinstance(r,dict) and "service-restart" not in r.get("operations",[]) for r in resources.values()); raise SystemExit(0 if valid else 1)' <<<"$capabilities" || return 1
+    capabilities_exact "$PROFILE_ID" || return 1
 }
 
 audit_exact() {
@@ -90,8 +104,14 @@ print(json.dumps(identity,separators=(",",":"),sort_keys=True))
 }
 
 rollback_previous() {
-    /usr/bin/dpkg --install "$store/$OLD_DEB" >>"$INSTALL_LOG" 2>&1 || return 1
+    /usr/bin/dpkg --install "$OLD_DEB_STORED" >>"$INSTALL_LOG" 2>&1 || return 1
     old_identity || return 1
+    audit_exact || return 1
+    old_store_exact || return 1
+    restored=$(/usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n /usr/local/sbin/yoko-privileged-runtime docker-provenance) || return 1
+    restored_provenance_identity=$(provenance_identity <<<"$restored") || return 1
+    test -n "$pre_provenance_identity" || return 1
+    test "$restored_provenance_identity" = "$pre_provenance_identity" || return 1
 }
 
 guard_exact() {
@@ -108,10 +128,28 @@ clear_guard() {
     fi
 }
 
+cleanup_previous_tmp() {
+    if [ -n "$previous_tmp" ] && [ -e "$previous_tmp" ]; then
+        [[ "$previous_tmp" =~ ^/var/lib/yoko-privileged-runtime/activation-bootstraps/\.previous-[0-9a-f]{64}\.[A-Za-z0-9]{8}$ ]] || return 1
+        test -d "$previous_tmp" || return 1
+        test ! -L "$previous_tmp" || return 1
+        unexpected=$(/usr/bin/find "$previous_tmp" -mindepth 1 -maxdepth 1 ! -name "$OLD_DEB" -print -quit)
+        test -z "$unexpected" || return 1
+        if [ -e "$previous_tmp/$OLD_DEB" ]; then
+            test -f "$previous_tmp/$OLD_DEB" || return 1
+            test ! -L "$previous_tmp/$OLD_DEB" || return 1
+            /usr/bin/unlink "$previous_tmp/$OLD_DEB" || return 1
+        fi
+        /usr/bin/rmdir "$previous_tmp" || return 1
+    fi
+    previous_tmp=''
+}
+
 on_exit() {
     rc=$?
     trap - EXIT
     if [ "$rc" -ne 0 ]; then
+        cleanup_previous_tmp || true
         if [ "$new_attempted" -eq 1 ]; then
             if rollback_previous; then
                 rollback_ok=true
@@ -134,7 +172,7 @@ test "$(/bin/hostname)" = "$EXPECTED_HOST"
 /usr/bin/python3 -I - "$EXPECTED_DIR" "$PROFILE_ID" <<'PY'
 import hashlib,json,os,pathlib,stat,sys
 root=pathlib.Path(sys.argv[1])
-expected={"install.sh":0o500,"payload-manifest.json":0o400,"yoko-privileged-runtime_2.0.0-10_all.deb":0o400,"review/human-manifest.md":0o400,"review/package-manifest.json":0o400,"review/installation-procedure.md":0o400,"review/rollback-analysis.md":0o400}
+expected={"install.sh":0o500,"payload-manifest.json":0o400,"yoko-privileged-runtime_2.0.0-10_all.deb":0o400,"yoko-privileged-runtime_2.0.0-10_predecessor-observability-v1_all.deb":0o400,"review/human-manifest.md":0o400,"review/package-manifest.json":0o400,"review/installation-procedure.md":0o400,"review/rollback-analysis.md":0o400}
 observed={str(item.relative_to(root)) for item in root.rglob('*') if item.is_file()}
 observed_dirs={str(item.relative_to(root)) for item in root.rglob('*') if item.is_dir()}
 if observed != set(expected) or observed_dirs != {"review"}: raise SystemExit('payload file set mismatch')
@@ -144,7 +182,7 @@ manifest=json.loads((root/'payload-manifest.json').read_text(encoding='ascii'))
 if set(manifest)!={"schema","profile_id","new_package","previous_package","files"}: raise SystemExit('manifest keys')
 if manifest["schema"]!='yoko.crm.owner-bootstrap-payload.v1' or manifest["profile_id"]!=sys.argv[2]: raise SystemExit('manifest identity')
 if manifest["new_package"]!={"name":"yoko-privileged-runtime","version":"2.0.0-10","architecture":"all"}: raise SystemExit('manifest successor identity')
-if manifest["previous_package"]!={"name":"yoko-privileged-runtime","version":"2.0.0-10","profile_id":"crm-08b9145945b2-gravity-source-v1","sha256":"6865eab377dda757d101259e7321268998b45ea8b27f6003de0cf7e191a9b54e","source":"/var/lib/yoko-privileged-runtime/activation-bootstraps/6865eab377dda757d101259e7321268998b45ea8b27f6003de0cf7e191a9b54e/yoko-privileged-runtime_2.0.0-10_all.deb"}: raise SystemExit('manifest predecessor identity')
+if manifest["previous_package"]!={"name":"yoko-privileged-runtime","version":"2.0.0-10","profile_id":"crm-08b9145945b2-gravity-source-v1","source_commit":"2b8811281a505c8dc20303bc83c3781087a3c746","sha256":"b97642ffc3a95be862943212802ab38bea3280b16597209fe56fa4a2c8dafa43","payload_path":"yoko-privileged-runtime_2.0.0-10_predecessor-observability-v1_all.deb","store_path":"/var/lib/yoko-privileged-runtime/activation-bootstraps/b97642ffc3a95be862943212802ab38bea3280b16597209fe56fa4a2c8dafa43/yoko-privileged-runtime_2.0.0-10_predecessor-observability-v1_all.deb"}: raise SystemExit('manifest predecessor identity')
 if set(manifest["files"]) != set(expected)-{"payload-manifest.json"}: raise SystemExit('manifest files')
 for name,mode in expected.items():
     path=root/name
@@ -158,9 +196,6 @@ PY
 test "$(/usr/bin/dpkg-deb -f "$EXPECTED_DIR/$NEW_DEB" Package)" = 'yoko-privileged-runtime'
 test "$(/usr/bin/dpkg-deb -f "$EXPECTED_DIR/$NEW_DEB" Version)" = '2.0.0-10'
 test "$(/usr/bin/dpkg-deb -f "$EXPECTED_DIR/$NEW_DEB" Architecture)" = 'all'
-test -d "$BOOTSTRAP_STORE/$OLD_DEB_SHA"
-test ! -L "$BOOTSTRAP_STORE/$OLD_DEB_SHA"
-test "$(/usr/bin/stat -c '%u:%g:%a' "$BOOTSTRAP_STORE/$OLD_DEB_SHA")" = '0:0:700'
 test -f "$OLD_DEB_SOURCE"
 test ! -L "$OLD_DEB_SOURCE"
 test "$(/usr/bin/stat -c '%u:%g:%a:%h' "$OLD_DEB_SOURCE")" = '0:0:400:1'
@@ -183,7 +218,7 @@ if [ -e "$store" ]; then
     test -d "$store"
     test ! -L "$store"
     test "$(/usr/bin/stat -c '%u:%g:%a' "$store")" = '0:0:700'
-    unexpected=$(/usr/bin/find "$store" -mindepth 1 -maxdepth 1 ! -name "$OLD_DEB" ! -name "$NEW_DEB" -print -quit)
+    unexpected=$(/usr/bin/find "$store" -mindepth 1 -maxdepth 1 ! -name "$NEW_DEB" -print -quit)
     test -z "$unexpected"
     store_present=1
 fi
@@ -198,13 +233,24 @@ stored_file_exact() {
     test "$(/usr/bin/sha256sum "$path" | /usr/bin/cut -d ' ' -f 1)" = "$expected_sha" || return 1
 }
 
+old_store_exact() {
+    test -d "$OLD_DEB_STORE" || return 1
+    test ! -L "$OLD_DEB_STORE" || return 1
+    test "$(/usr/bin/stat -c '%u:%g:%a' "$OLD_DEB_STORE")" = '0:0:700' || return 1
+    test -z "$(/usr/bin/find "$OLD_DEB_STORE" -mindepth 1 -maxdepth 1 ! -name "$OLD_DEB" -print -quit)" || return 1
+    test -f "$OLD_DEB_STORED" || return 1
+    test ! -L "$OLD_DEB_STORED" || return 1
+    test "$(/usr/bin/stat -c '%u:%g:%a:%h' "$OLD_DEB_STORED")" = '0:0:400:1' || return 1
+    test "$(/usr/bin/sha256sum "$OLD_DEB_STORED" | /usr/bin/cut -d ' ' -f 1)" = "$OLD_DEB_SHA" || return 1
+}
+
 if [ "$installed_version" != '2.0.0-10' ]; then
     exit 1
 fi
 if new_identity; then
     if audit_exact && [ "$store_present" -eq 1 ] \
         && stored_file_exact "$NEW_DEB" "$new_sha" \
-        && stored_file_exact "$OLD_DEB" "$OLD_DEB_SHA"; then
+        && old_store_exact; then
         if [ -e "$BOOTSTRAP_GUARD" ]; then
             guard_exact
             guard_owned=1
@@ -227,6 +273,17 @@ audit_before=$(/usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n /usr/local/sbin
 /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("state")=="VALID" and e.get("record_count")==int(sys.argv[2]) and e.get("last_digest")==sys.argv[1] else 1)' "$EXPECTED_AUDIT_DIGEST" "$EXPECTED_AUDIT_RECORDS" <<<"$audit_before"
 
 /usr/bin/install -d -o root -g root -m 0700 "$BOOTSTRAP_STORE"
+if [ -e "$OLD_DEB_STORE" ]; then
+    old_store_exact
+else
+    previous_tmp=$(/usr/bin/mktemp -d "$BOOTSTRAP_STORE/.previous-$OLD_DEB_SHA.XXXXXXXX")
+    /usr/bin/chmod 0700 "$previous_tmp"
+    /usr/bin/install -o root -g root -m 0400 "$OLD_DEB_SOURCE" "$previous_tmp/$OLD_DEB"
+    test "$(/usr/bin/sha256sum "$previous_tmp/$OLD_DEB" | /usr/bin/cut -d ' ' -f 1)" = "$OLD_DEB_SHA"
+    /usr/bin/mv -T "$previous_tmp" "$OLD_DEB_STORE"
+    previous_tmp=''
+fi
+old_store_exact
 if [ "$store_present" -eq 0 ]; then
     /usr/bin/install -d -o root -g root -m 0700 "$store"
 fi
@@ -251,7 +308,6 @@ reconcile_stored_file() {
 }
 
 reconcile_stored_file "$NEW_DEB" "$new_sha"
-reconcile_stored_file "$OLD_DEB" "$OLD_DEB_SHA" "$OLD_DEB_SOURCE"
 
 /usr/bin/install -o root -g root -m 0600 /dev/null "$INSTALL_LOG"
 /usr/bin/install -d -o root -g root -m 0700 /var/lib/yoko-privileged-runtime

@@ -34,6 +34,12 @@ TG_BOT_BASELINE_STATE = "ABSENT"
 TG_BOT_BASELINE_MANIFEST_PATH = "architecture/migrations/v1/provenance/root-broker/20260808T122923Z/runtime-manifests/runtime-content-manifest.v1.sanitized.json"
 TG_BOT_BASELINE_MANIFEST_FILE_SHA256 = "1bd1d5100cabeb37277262179ee1119b3dcd9154b9774947dcf218d38e4d19fe"
 TG_BOT_BASELINE_MANIFEST_SHA256 = "72397e9c7e3c728b94d1e5645da825ddd75216bfacd13212b4671fe15f206d56"
+TG_BOT_BASELINE_OBSERVATIONAL_CONTAINER_ID = "c3fae82f86726739c6e768cd524f5903a1d0a9a0e926f86d9cc559ac633c0f7a"
+ACCEPTED_PREDECESSOR_RELEASE_CRITICAL_IDENTITY_SHA256 = "0385b32004178250be0d887ab27da40483a5952d1a12284c6c16f62d7207261a"
+DIRECT_ROLLBACK_DEB_NAME = "yoko-privileged-runtime_2.0.0-10_predecessor-observability-v1_all.deb"
+DIRECT_ROLLBACK_DEB_SHA256 = "b97642ffc3a95be862943212802ab38bea3280b16597209fe56fa4a2c8dafa43"
+DIRECT_ROLLBACK_SOURCE_COMMIT = "2b8811281a505c8dc20303bc83c3781087a3c746"
+DIRECT_ROLLBACK_PROVENANCE_SHA256 = "e5dc2ea647ae08b588b699f02bad5eb1ddc3db818aca53bb1240dbbc676c6153"
 SHA40 = re.compile(r"[0-9a-f]{40}")
 SHA64 = re.compile(r"[0-9a-f]{64}")
 GITHUB_REPOSITORY = "nashavtoparkmedia-byte/CRM"
@@ -1038,6 +1044,98 @@ def exact_accepted_commit_input(
     return supplied
 
 
+def copy_exact_external_input(source: Path, destination: Path, expected_sha256: str) -> dict[str, object]:
+    try:
+        descriptor = os.open(source, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+    except OSError as exc:
+        raise SystemExit(f"unsafe external release input: {source}") from exc
+    temporary = destination.with_name(destination.name + ".new")
+    temporary.unlink(missing_ok=True)
+    digest = hashlib.sha256()
+    total = 0
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1 or before.st_size < 1:
+            raise SystemExit(f"unsafe external release input: {source}")
+        output = os.open(
+            temporary,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC | os.O_NOFOLLOW,
+            0o400,
+        )
+        with os.fdopen(output, "wb") as writer:
+            while chunk := os.read(descriptor, 1024 * 1024):
+                digest.update(chunk)
+                total += len(chunk)
+                writer.write(chunk)
+            writer.flush()
+            os.fsync(writer.fileno())
+        after = os.fstat(descriptor)
+        stable = ("st_dev", "st_ino", "st_mode", "st_nlink", "st_size", "st_mtime_ns", "st_ctime_ns")
+        if total != before.st_size or any(getattr(before, key) != getattr(after, key) for key in stable):
+            raise SystemExit(f"external release input changed while copying: {source}")
+        if digest.hexdigest() != expected_sha256:
+            raise SystemExit(f"external release input SHA-256 mismatch: {source}")
+        os.chmod(temporary, 0o400)
+        os.replace(temporary, destination)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
+    finally:
+        os.close(descriptor)
+    return {"path": str(destination.relative_to(ROOT)), "sha256": expected_sha256, "bytes": total, "mode": "0400"}
+
+
+def stage_direct_rollback_inputs(package: Path, provenance_path: Path) -> dict[str, object]:
+    provenance_raw = provenance_path.resolve(strict=True).read_bytes()
+    if sha(provenance_raw) != DIRECT_ROLLBACK_PROVENANCE_SHA256:
+        raise SystemExit("direct rollback provenance SHA-256 mismatch")
+    provenance = strict_json_bytes(provenance_raw, "direct rollback provenance")
+    expected_installed = {
+        "/etc/sudoers.d/92-yoko-privileged-runtime": "3022dcfc323706da81e760255dd1ab43f9b8662ee699aa8b58fbe6e714cc69d7",
+        "/usr/local/libexec/yoko-privileged-runtime/core-2.0.0.py": "0f97bafbfe5b430fa7994119b1fc76fead4bdbee26766c730d9e399551ebdffa",
+        "/usr/local/libexec/yoko-privileged-runtime/crm-08b9145945b2-gravity-source-v1.py": "e3a3142e6bc098a15dd62b75bf7c090a148ad64b4fe45d3d82499c2667de072f",
+        "/usr/local/libexec/yoko-privileged-runtime/predecessor-observability-v1.py": "b5ea36c50e12b0fe6c171896258ddfc00a9d2666778735cae6a9b2a8df6d4084",
+        "/usr/local/sbin/yoko-privileged-runtime": "46bf3016e1582834e3e18bec3e148dc0f59073103be70a7fd628785f22daf8c7",
+        "/usr/local/share/yoko-privileged-runtime/install-manifest.v1.json": "571206c1cbaed74fd33f7a7ae1c92361f0be959705459e330127d7b2537e5e4f",
+        "/usr/local/share/yoko-privileged-runtime/policy.v2.json": "8727373b0c6ec79c9abf82f1aaaa58abc2bae67e96aa96a602ac419f308db0e0",
+        "/usr/local/share/yoko-privileged-runtime/profiles/crm-08b9145945b2-gravity-source-v1/manifest.v1.json": "0c948717cf6665cf443e37d2d742dfb99beb3961485506cfbb6cc6a4cd6eeb82",
+    }
+    if (
+        provenance.get("schema") != "yoko.crm.predecessor-observability-package.v1"
+        or provenance.get("source_commit") != DIRECT_ROLLBACK_SOURCE_COMMIT
+        or provenance.get("installed_files") != expected_installed
+        or provenance.get("package", {}).get("sha256") != DIRECT_ROLLBACK_DEB_SHA256
+        or provenance.get("package", {}).get("name") != "yoko-privileged-runtime"
+        or provenance.get("package", {}).get("version") != "2.0.0-10"
+        or provenance.get("package", {}).get("architecture") != "all"
+    ):
+        raise SystemExit("direct rollback provenance does not bind the exact observability successor")
+    metadata = subprocess.run(
+        ["/usr/bin/dpkg-deb", "-f", str(package.resolve(strict=True)), "Package", "Version", "Architecture"],
+        check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30,
+    ).stdout.splitlines()
+    if metadata != ["Package: yoko-privileged-runtime", "Version: 2.0.0-10", "Architecture: all"]:
+        raise SystemExit("direct rollback Debian metadata mismatch")
+    inputs = ROOT / "inputs"
+    inputs.mkdir(mode=0o700, exist_ok=True)
+    os.chmod(inputs, 0o700)
+    package_identity = copy_exact_external_input(
+        package.resolve(strict=True), inputs / DIRECT_ROLLBACK_DEB_NAME, DIRECT_ROLLBACK_DEB_SHA256,
+    )
+    provenance_identity = copy_exact_external_input(
+        provenance_path.resolve(strict=True), inputs / "predecessor-observability-package-manifest.json",
+        DIRECT_ROLLBACK_PROVENANCE_SHA256,
+    )
+    return {
+        "schema": "yoko.crm.direct-bootstrap-rollback-provenance.v1",
+        "source_commit": DIRECT_ROLLBACK_SOURCE_COMMIT,
+        "package": package_identity,
+        "provenance_manifest": provenance_identity,
+        "direct_rollback": True,
+        "historical_package_is_direct_rollback": False,
+    }
+
+
 def bind_builder_source(repo: Path, commit: str, builder_root: Path) -> dict[str, object]:
     """Require every tracked Runtime v10 source byte to come from the accepted commit.
 
@@ -1202,7 +1300,13 @@ def validate_tg_bot_baseline_manifest(repo: Path, commit: str, snapshot: dict[st
         raise SystemExit("Telegram predecessor filesystem manifest record structure drift")
     paths = [row["path"] for row in records]
     if (
-        container.get("container_id") != snapshot["tg_bot_container_id"]
+        # The manifest is byte-pinned evidence derived from the immutable
+        # predecessor image.  Its source container ID is category-C
+        # observational provenance, not the identity of a later container
+        # recreated from that same image.  The fresh snapshot independently
+        # binds the current container and the accepted release-critical
+        # recreation identity.
+        container.get("container_id") != TG_BOT_BASELINE_OBSERVATIONAL_CONTAINER_ID
         or container.get("image_id") != TG_BOT_PREDECESSOR_IMAGE
         or container.get("started_at") != "2026-08-05T09:48:11.147093533Z"
         or container.get("roots") != ["/app", "/usr/local/bin/tg-bot-entrypoint"]
@@ -1282,6 +1386,8 @@ def main() -> None:
     parser.add_argument("--migration-authority", type=Path, required=True)
     parser.add_argument("--predecessor-attestation", type=Path, required=True)
     parser.add_argument("--gravity-artifact-zip", type=Path, required=True)
+    parser.add_argument("--direct-rollback-package", type=Path, required=True)
+    parser.add_argument("--direct-rollback-provenance", type=Path, required=True)
     args = parser.parse_args()
     repo = args.source_repo.resolve(strict=True)
     commit = str(run(repo, "rev-parse", f"{args.commit}^{{commit}}"))
@@ -1294,6 +1400,9 @@ def main() -> None:
     if not SHA40.fullmatch(accepted_parent_commit):
         raise SystemExit("accepted commit parent is not a full SHA-1 commit")
     accepted_builder_source = bind_builder_source(repo, commit, ROOT)
+    direct_rollback_provenance = stage_direct_rollback_inputs(
+        args.direct_rollback_package, args.direct_rollback_provenance,
+    )
 
     accepted_raw = strict_json_bytes(
         args.acceptance_record.resolve(strict=True).read_bytes(), "acceptance record",
@@ -1363,6 +1472,7 @@ def main() -> None:
         or snapshot["tg_bot_patch_baseline_manifest_sha256"] != TG_BOT_BASELINE_MANIFEST_SHA256
         or snapshot["outbox_catalog_state"] != "EXACT"
         or not accepted_outbox_counts(snapshot["outbox_counts"])
+        or snapshot["predecessor_release_critical_identity_sha256"] != ACCEPTED_PREDECESSOR_RELEASE_CRITICAL_IDENTITY_SHA256
         or snapshot["secret_values_emitted"] is not False
         or snapshot["production_mutated"] is not False
     ):
@@ -1394,7 +1504,13 @@ def main() -> None:
     if sha(tg_patch) != TG_BOT_PATCH_SHA256:
         raise SystemExit("accepted Telegram capability patch identity mismatch")
     recipe = tg_bot_patch_recipe(commit, sha(first), profile_id)
-    tokens = {"PROFILE_ID": profile_id, "FINAL_COMMIT": commit, "COMMIT_SHORT16": commit[:16]}
+    tokens = {
+        "PROFILE_ID": profile_id,
+        "FINAL_COMMIT": commit,
+        "COMMIT_SHORT16": commit[:16],
+        "CORE_SHA256": sha((ROOT / "src/yoko-privileged-runtime-core.py").read_bytes()),
+        "PREDECESSOR_OBSERVABILITY_SHA256": sha((ROOT / "src/predecessor-observability-v1.py").read_bytes()),
+    }
     render(ROOT / "templates/yoko-privileged-runtime.in", ROOT / "src/yoko-privileged-runtime", tokens, 0o755)
     render(ROOT / "templates/crm-activation-profile.py.in", ROOT / "src/crm-activation-profile.py", tokens, 0o444)
     render(ROOT / "templates/postinst.in", ROOT / "packaging/postinst", tokens, 0o755)
@@ -1551,12 +1667,14 @@ def main() -> None:
         "commit": commit,
         "tree": tree,
         "accepted_builder_source": accepted_builder_source,
+        "direct_rollback_provenance": direct_rollback_provenance,
         "archive_sha256": sha(first),
         "archive_inventory": inventory,
         "acceptance_record_sha256": sha(args.acceptance_record.read_bytes()),
         "hosted_authoritative_ci": accepted["authoritative_ci"],
         "gravity_image_artifact": gravity_artifact,
         "production_snapshot_sha256": sha(args.production_snapshot.read_bytes()),
+        "accepted_predecessor_release_critical_identity_sha256": snapshot["predecessor_release_critical_identity_sha256"],
         "migration_authority_sha256": sha(authority_bytes),
         "predecessor_attestation_sha256": sha(attestation_bytes),
         "canonical_migration_inventory_digest": authority["inventory_digest"],

@@ -14,16 +14,16 @@
     "coverage_sha256": "429a48c9d257408025bbc273a4d6f1413ed78196549ed889118422b6caba5730"
   },
   "current": {
-    "tracked_inventory_sha256": "2e0fb3e89212fea913b2eb73a9394ad89a53c566799d171294eb25a33d6fd2ac",
-    "tracked_executable_surfaces": 2189,
-    "coverage_sha256": "58ceb09c0b264d387c00a1020f19a97d077de16acecfbdedc2f346e1a193432b"
+    "tracked_inventory_sha256": "3c14c62f6e133784d0f074a231e52d02246db2523ee20b97a6eb312234482f48",
+    "tracked_executable_surfaces": 2196,
+    "coverage_sha256": "5ce7f1ab363d99243b44762c7a05d177928e602dda66dcd34fe78ffe415419a5"
   },
   "exact_inventory_changes": [
     {
       "exclusion": "architecture_recovery",
       "inventory_kind": "exact_runtime_inventory",
       "review_decision": "APPROVED_EXACT_INVENTORY_TRANSITION",
-      "review_rationale": "Internal executor review reconciled all eighteen baseline paths to the fifteen current runtime-classified evidence paths; three named v10 packaging utilities are now explicitly reviewed operational surfaces.",
+      "review_rationale": "Internal executor review reconciled all eighteen baseline paths to the sixteen current runtime-classified evidence paths; three named v10 packaging utilities and the new package tar auditor are explicitly reviewed operational surfaces, while the exact predecessor-observation Runtime module remains source-hash-bound to the architecture recovery evidence owner.",
       "previous_inventory": {
         "path_count": 18,
         "path_sha256": "e0d8b8fb360869f5df8c911f74ec571ee76eb39cbb3ca794b1e1a69158a9999e"
@@ -49,8 +49,8 @@
         "architecture/recovery/whole-project-dod/v2/continuation/PER_FILE_LOCALIZATION_PROBE.mjs"
       ],
       "current_inventory": {
-        "path_count": 15,
-        "path_sha256": "24e51a0c7934316c54b89abbc29c9ca65022b80be0de88bb9347fea70c5fd340"
+        "path_count": 16,
+        "path_sha256": "8733f45135acd16ec0f0c4dd1665385e61f3e976218c2ddb0ee4e3bb40da7319"
       }
     },
     {
@@ -201,12 +201,22 @@
       "review_rationale": "Internal executor review confirms this exact current source path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
     },
     {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/predecessor-observability-v1.py",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "architecture_recovery",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "b5ea36c50e12b0fe6c171896258ddfc00a9d2666778735cae6a9b2a8df6d4084",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact current source path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
       "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/yoko-privileged-runtime-core.py",
       "lifecycle": "APPLICATION_RUNTIME",
       "functional_owner": "architecture_recovery_evidence",
       "exclusion": "architecture_recovery",
       "inventory_kind": "exact_runtime_inventory",
-      "source_sha256": "0cdeeb4ba43abe50f80fed1580ad7b0729bf83358932ece2974b3faedafed57a",
+      "source_sha256": "0f97bafbfe5b430fa7994119b1fc76fead4bdbee26766c730d9e399551ebdffa",
       "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
       "review_rationale": "Internal executor review confirms this exact current source path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
     },

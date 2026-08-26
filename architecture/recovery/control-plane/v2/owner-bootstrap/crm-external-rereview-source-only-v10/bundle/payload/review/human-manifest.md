@@ -28,13 +28,18 @@ A bare PASS assertion or any missing, forged, partial, drifted, extra-staging,
 or post-seal-mutated identity is rejected.
 
 Owner authorization additionally requires a review artifact authored by a
-separate internal reviewer and a fresh mechanical replay of the exact fixed
-eight-attack catalog against the clean accepted source checkout, with exact
-seal, package, tar and hosted-CI bindings. The builder itself emits only
-non-authorizing replay evidence and cannot create the review decision. Reviewer
-identity is an explicit process assertion, not a fabricated cryptographic
-claim. The later fresh external project re-review after normal READY is a
-separate gate.
+separate bootstrap Runtime reviewer and a fresh mechanical run of the bounded
+ten-test transition catalog against the clean repaired checkout, with exact
+seal, successor package, bootstrap tar and embedded direct rollback package
+bindings. The builder itself emits only non-authorizing evidence and cannot
+create the review decision. This narrow gate does not reopen the accepted
+application predecessor or start the historical full replay.
+
+The bootstrap accepts only the installed predecessor-observability successor
+from source `2b881128…` and carries exact package `b97642ff…` as its direct
+rollback artifact. It places that DEB in the root-private content-addressed
+store before `dpkg`; any later failure restores and verifies that exact state.
+The historical `6865eab3…` package is not a direct final-bootstrap rollback.
 
 The application predecessor is the accepted `7aea2823…` image
 `sha256:baf442f8…`. Release preflight must seal that image as rollback before

@@ -57,9 +57,14 @@ class InternalAdversarialReplayTests(unittest.TestCase):
         self.directory = Path(self.temporary.name)
         self.tar = self.directory / "bootstrap.tar"
         self.deb = self.directory / "runtime.deb"
+        self.rollback = self.directory / "rollback.deb"
         self.seal_path = self.directory / "SEALED_RELEASE.json"
         self.tar.write_bytes(b"exact bootstrap tar\n")
         self.deb.write_bytes(b"exact debian package\n")
+        self.rollback.write_bytes(b"exact direct rollback package\n")
+        rollback_sha = hashlib.sha256(self.rollback.read_bytes()).hexdigest()
+        self.validator.PREDECESSOR_PACKAGE["sha256"] = rollback_sha
+        self.validator.PREDECESSOR_REVIEW_IDENTITY["rollback_deb_sha256"] = rollback_sha
         commit = "a" * 40
         tree = "b" * 40
         self.hosted = {
@@ -171,12 +176,13 @@ class InternalAdversarialReplayTests(unittest.TestCase):
         files = {
             "payload/install.sh": b"#!/bin/sh\nexit 0\n",
             f"payload/{self.validator.NEW_DEB_NAME}": deb,
+            f"payload/{self.validator.ROLLBACK_DEB_NAME}": self.rollback.read_bytes(),
             "payload/review/human-manifest.md": b"reviewed\n",
             "payload/review/installation-procedure.md": b"install\n",
             "payload/review/rollback-analysis.md": b"rollback\n",
         }
         review = {
-            "schema": "yoko.crm.owner-bootstrap-review-manifest.v2",
+            "schema": "yoko.crm.owner-bootstrap-review-manifest.v3",
             "previous_state": self.validator.PREDECESSOR_REVIEW_IDENTITY,
             "new_package": {
                 "path": self.validator.NEW_DEB_NAME,
@@ -350,11 +356,11 @@ class InternalAdversarialReplayTests(unittest.TestCase):
 
     def test_exact_bootstrap_tar_inventory_and_embedded_deb_are_consumed(self) -> None:
         self.write_bootstrap_tar()
-        inventory_sha = self.validator.validate_bootstrap_tar(self.tar, self.deb)
+        inventory_sha = self.validator.validate_bootstrap_tar(self.tar, self.deb, self.rollback)
         self.assertRegex(inventory_sha, r"^[0-9a-f]{64}$")
         self.write_bootstrap_tar(embedded_deb=b"substituted debian package\n")
         with self.assertRaisesRegex(SystemExit, "exact Debian package"):
-            self.validator.validate_bootstrap_tar(self.tar, self.deb)
+            self.validator.validate_bootstrap_tar(self.tar, self.deb, self.rollback)
 
     def test_large_exact_new_deb_has_a_streamed_exact_size_contract(self) -> None:
         formerly_rejected_size = 256 * 1024 * 1024 + 1
@@ -390,7 +396,7 @@ class InternalAdversarialReplayTests(unittest.TestCase):
     def test_bootstrap_tar_link_metadata_fails_closed(self) -> None:
         self.write_bootstrap_tar(symlink_member="payload/review/human-manifest.md")
         with self.assertRaisesRegex(SystemExit, "member metadata"):
-            self.validator.validate_bootstrap_tar(self.tar, self.deb)
+            self.validator.validate_bootstrap_tar(self.tar, self.deb, self.rollback)
 
     def test_internal_replay_process_environment_excludes_ambient_injection(self) -> None:
         with mock.patch.dict(os.environ, {
@@ -420,7 +426,7 @@ class InternalAdversarialReplayTests(unittest.TestCase):
         self.assertLess(rerun, materialize)
         self.assertGreaterEqual(source.count("release_inputs_unchanged("), 3)
 
-    def test_exhaustive_replay_has_bounded_multi_hour_timeouts(self) -> None:
+    def test_legacy_replay_and_bounded_transition_review_have_explicit_timeouts(self) -> None:
         self.assertEqual(
             self.validator.FULL_AUTHORITATIVE_CI_TIMEOUT_SECONDS,
             4 * 60 * 60,
@@ -435,7 +441,7 @@ class InternalAdversarialReplayTests(unittest.TestCase):
         )
         self.assertEqual(
             self.finalizer.INTERNAL_REVIEW_VERIFICATION_TIMEOUT_SECONDS,
-            6 * 60 * 60,
+            30 * 60,
         )
 
     def test_full_ci_replay_timeout_fails_closed_without_uncaught_traceback(self) -> None:

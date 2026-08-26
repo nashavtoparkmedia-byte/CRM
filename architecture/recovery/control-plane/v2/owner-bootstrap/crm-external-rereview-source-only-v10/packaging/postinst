@@ -5,7 +5,7 @@ case "${1:-}" in
     configure)
         /usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n /usr/local/sbin/yoko-privileged-runtime self-check >/dev/null
         /usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n /usr/local/sbin/yoko-privileged-runtime capabilities \
-            | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v["evidence"]; assert v["ok"] and e["activation_profile_id"] == "@PROFILE_ID@" and e["enabled_activation_profiles"] == ["database-status","release-preflight","release-activate","rollback"] and "database-migration" in e["disabled_profiles"]'
+            | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v["evidence"]; assert v["ok"] and e["activation_profile_id"] == "@PROFILE_ID@" and e["enabled_activation_profiles"] == ["database-status","release-preflight","release-activate","rollback"] and e["enabled_read_only_profiles"] == ["predecessor-observe"] and "database-migration" in e["disabled_profiles"]'
         if /usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n /bin/sh -c ':' >/dev/null 2>&1; then
             echo 'effective sudo probe unexpectedly allowed a shell' >&2
             exit 1
@@ -22,12 +22,16 @@ case "${1:-}" in
             echo 'effective sudo probe unexpectedly allowed extra arguments' >&2
             exit 1
         fi
-        for verb in database-status release-preflight database-migrate release-activate rollback; do
+        for verb in predecessor-observe database-status release-preflight database-migrate release-activate rollback; do
             if /usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n /usr/local/sbin/yoko-privileged-runtime "$verb" unexpected >/dev/null 2>&1; then
                 echo 'effective sudo probe unexpectedly allowed profile arguments' >&2
                 exit 1
             fi
         done
+        if /usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n /usr/local/sbin/yoko-privileged-runtime predecessor-observe crm.container.telegram_bot >/dev/null 2>&1; then
+            echo 'effective sudo probe unexpectedly allowed an observation resource argument' >&2
+            exit 1
+        fi
         if /usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n /usr/local/sbin/yoko-privileged-runtime fs-stat ../../../etc >/dev/null 2>&1; then
             echo 'effective sudo probe unexpectedly allowed arbitrary filesystem input' >&2
             exit 1

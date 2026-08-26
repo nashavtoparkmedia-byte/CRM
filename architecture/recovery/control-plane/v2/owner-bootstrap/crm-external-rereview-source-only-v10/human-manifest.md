@@ -23,13 +23,13 @@ sealed. Every transitive build input and both deterministic output identities
 are sealed. Any identity, hash, conclusion, count, catalog, staging entry or
 post-seal mutation drift fails closed.
 
-The executor can emit non-authorizing eight-attack replay evidence, but cannot
-emit an internal reviewer decision. A separate internal reviewer authors the
-exact review artifact with an explicit (non-cryptographic) identity and
-separation assertion. Finalization mechanically reruns the exact eight attacks
-against the clean accepted source and binds that review to the seal, hosted
-attestation, Debian package and bootstrap tar. This internal gate is distinct
-from the new external project re-review required after normal READY.
+For the curator-approved release-transition repair, the executor can emit only
+non-authorizing evidence for the bounded ten-test bootstrap catalog. A separate
+bootstrap Runtime reviewer authors the exact review artifact with explicit
+separation, no-mutation, no-predecessor-reopen and no-full-replay assertions.
+Finalization mechanically reruns only that catalog and binds the decision to
+the repaired source/tree, seal, successor Debian package, bootstrap tar and
+embedded direct rollback package `b97642ff…` from source `2b881128…`.
 
 The builder pins both the exact 62-row active migration name/checksum map and
 its semantic order. `database-status` exposes live timestamp-ordered rows; any

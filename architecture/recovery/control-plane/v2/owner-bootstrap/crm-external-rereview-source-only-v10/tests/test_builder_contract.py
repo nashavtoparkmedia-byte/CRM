@@ -9,6 +9,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
@@ -20,9 +21,10 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CORE_SHA = "0cdeeb4ba43abe50f80fed1580ad7b0729bf83358932ece2974b3faedafed57a"
+CORE_SHA = "0f97bafbfe5b430fa7994119b1fc76fead4bdbee26766c730d9e399551ebdffa"
+OBSERVABILITY_SHA = "b5ea36c50e12b0fe6c171896258ddfc00a9d2666778735cae6a9b2a8df6d4084"
 POLICY_SHA = "8727373b0c6ec79c9abf82f1aaaa58abc2bae67e96aa96a602ac419f308db0e0"
-SUDOERS_SHA = "6e6b7cb2a088cc92fa7aee747adca46c64b4b96d1224be21117be5adef488c06"
+SUDOERS_SHA = "3022dcfc323706da81e760255dd1ab43f9b8662ee699aa8b58fbe6e714cc69d7"
 TG_PATCH_PATH = "tg-bot/src/public-bot-maintenance.js"
 MIGRATION_AUTHORITY_PATH = "architecture/migrations/v1/production-migration-authority.json"
 PREDECESSOR_ATTESTATION_PATH = "architecture/migrations/v1/predecessor-runtime-migration-inventory.json"
@@ -97,6 +99,7 @@ class StaticContractTests(unittest.TestCase):
 
     def test_immutable_shared_runtime_inputs_remain_exact(self) -> None:
         self.assertEqual(sha(ROOT / "src/yoko-privileged-runtime-core.py"), CORE_SHA)
+        self.assertEqual(sha(ROOT / "src/predecessor-observability-v1.py"), OBSERVABILITY_SHA)
         self.assertEqual(sha(ROOT / "src/policy.v2.base.json"), POLICY_SHA)
         self.assertEqual(sha(ROOT / "packaging/92-yoko-privileged-runtime"), SUDOERS_SHA)
 
@@ -207,14 +210,17 @@ class StaticContractTests(unittest.TestCase):
         self.assertIn("EXPECTED_AUDIT_RECORDS='36'", installer)
         self.assertIn("EXPECTED_AUDIT_DIGEST='7f7e4d73", installer)
         self.assertIn("OLD_PROFILE_ID='crm-08b9145945b2-gravity-source-v1'", installer)
-        self.assertIn("OLD_DEB_SHA='6865eab377dda757", installer)
-        self.assertIn('readonly OLD_DEB_SOURCE="$BOOTSTRAP_STORE/$OLD_DEB_SHA/', installer)
+        self.assertIn("OLD_DEB_SHA='b97642ffc3a95be8", installer)
+        self.assertIn('readonly OLD_DEB_SOURCE="$EXPECTED_DIR/$OLD_DEB"', installer)
+        self.assertIn('readonly OLD_DEB_STORED="$OLD_DEB_STORE/$OLD_DEB"', installer)
+        self.assertIn('/usr/bin/dpkg --install "$OLD_DEB_STORED"', installer)
         self.assertNotIn("assert v[", installer)
         self.assertNotIn("2.0.0-9_all.deb", installer)
         for forbidden in ("curl ", "wget ", "git clone", "apt-get", "docker compose", "pg_dump", "psql "):
             self.assertNotIn(forbidden, installer)
-        for denied in ("/bin/sh -c ':'", "/usr/bin/docker ps", "/usr/bin/dpkg --status sudo", "self-check unexpected", "fs-stat ../../../etc", "service-restart crm.container.unrelated"):
+        for denied in ("/bin/sh -c ':'", "/usr/bin/docker ps", "/usr/bin/dpkg --status sudo", "self-check unexpected", "predecessor-observe crm.container.telegram_bot", "fs-stat ../../../etc", "service-restart crm.container.unrelated"):
             self.assertIn(denied, postinst)
+        self.assertIn("predecessor-observe", (ROOT / "packaging/92-yoko-privileged-runtime").read_text())
         self.assertNotIn("NOPASSWD: ALL", (ROOT / "packaging/92-yoko-privileged-runtime").read_text())
 
     def test_installer_requires_complete_provenance_and_full_identity(self) -> None:
@@ -294,13 +300,12 @@ class StaticContractTests(unittest.TestCase):
     def test_internal_critic_cannot_self_issue_its_review(self) -> None:
         finalizer = (ROOT / "packaging/finalize-evidence.py").read_text()
         critic = (ROOT / "packaging/verify-independent-critic.py").read_text()
-        self.assertIn('verify-independent-critic.py', finalizer)
-        self.assertIn('"--verify-review"', finalizer)
-        self.assertIn('yoko.crm.internal-runtime-bootstrap-review-verification.v1', finalizer)
+        self.assertIn('--verify-bootstrap-review', finalizer)
+        self.assertIn('yoko.crm.bootstrap-transition-independent-runtime-review-verification.v1', finalizer)
         self.assertIn('review_verification.get("sealed_release_sha256") != sha(SEAL)', finalizer)
         self.assertIn('"self_issued_review_accepted": False', finalizer)
-        self.assertIn('mode.add_argument("--replay-evidence"', critic)
-        self.assertIn('mode.add_argument("--verify-review"', critic)
+        self.assertIn('mode.add_argument("--bootstrap-review-evidence"', critic)
+        self.assertIn('mode.add_argument("--verify-bootstrap-review"', critic)
         self.assertNotIn('def build_critic_artifact', critic)
         self.assertNotIn('def build_internal_review', critic)
         self.assertNotIn('REVIEWER =', critic)
@@ -825,10 +830,10 @@ class HostedCiAcceptanceTests(unittest.TestCase):
             with self.assertRaisesRegex(SystemExit, "invalid"):
                 self.sealer.load_exact(path, {"schema"})
 
-    def test_tg_predecessor_absence_is_bound_to_exact_container_manifest(self) -> None:
+    def test_tg_predecessor_absence_is_bound_to_immutable_image_manifest_not_live_container_id(self) -> None:
         manifest = (repository_root() / self.sealer.TG_BOT_BASELINE_MANIFEST_PATH).read_bytes()
         snapshot = {
-            "tg_bot_container_id": "c3fae82f86726739c6e768cd524f5903a1d0a9a0e926f86d9cc559ac633c0f7a",
+            "tg_bot_container_id": "cb801c0f404669df1dc736f3e6889b4dad93a131015389e22881c772ceb682e1",
             "tg_bot_patch_baseline_manifest_file_sha256": self.sealer.TG_BOT_BASELINE_MANIFEST_FILE_SHA256,
             "tg_bot_patch_baseline_manifest_sha256": self.sealer.TG_BOT_BASELINE_MANIFEST_SHA256,
         }
@@ -839,12 +844,19 @@ class HostedCiAcceptanceTests(unittest.TestCase):
             self.sealer.git_blob = lambda _repo, _commit, _path: manifest + b"\n"
             with self.assertRaisesRegex(SystemExit, "filesystem manifest identity drift"):
                 self.sealer.validate_tg_bot_baseline_manifest(Path("/unused"), "0" * 40, snapshot)
-            wrong_container = dict(snapshot, tg_bot_container_id="1" * 64)
             self.sealer.git_blob = lambda _repo, _commit, _path: manifest
-            with self.assertRaisesRegex(SystemExit, "exact proven absent-file state"):
-                self.sealer.validate_tg_bot_baseline_manifest(Path("/unused"), "0" * 40, wrong_container)
+            recreated_container = dict(snapshot, tg_bot_container_id="1" * 64)
+            self.sealer.validate_tg_bot_baseline_manifest(Path("/unused"), "0" * 40, recreated_container)
         finally:
             self.sealer.git_blob = original_git_blob
+
+    def test_seal_binds_independently_accepted_predecessor_release_identity(self) -> None:
+        seal = (ROOT / "packaging/seal-release.py").read_text()
+        self.assertIn(
+            'snapshot["predecessor_release_critical_identity_sha256"] != ACCEPTED_PREDECESSOR_RELEASE_CRITICAL_IDENTITY_SHA256',
+            seal,
+        )
+        self.assertIn('"accepted_predecessor_release_critical_identity_sha256"', seal)
 
     def test_migration_authority_input_is_exact_accepted_commit_blob(self) -> None:
         authority_path = repository_root() / MIGRATION_AUTHORITY_PATH
@@ -1129,6 +1141,71 @@ class SealedFixtureTests(unittest.TestCase):
             ),
         )
         (cls.stage / "dist").mkdir()
+        # The production rollback artifact is intentionally external and too
+        # large for source control. Exercise the exact same hash/provenance
+        # binding with a disposable valid Debian package in this isolated
+        # sealer fixture, then bind those fixture hashes into its accepted Git
+        # commit before the sealer inventories any source byte.
+        rollback_root = temp / "rollback-package-root"
+        (rollback_root / "DEBIAN").mkdir(parents=True)
+        (rollback_root / "DEBIAN/control").write_text(
+            "Package: yoko-privileged-runtime\nVersion: 2.0.0-10\n"
+            "Architecture: all\nMaintainer: Test <test@example.invalid>\n"
+            "Description: bounded direct rollback fixture\n",
+            encoding="ascii",
+        )
+        cls.direct_rollback_package = temp / "direct-rollback.deb"
+        subprocess.run(
+            ["/usr/bin/dpkg-deb", "--build", "--root-owner-group", str(rollback_root), str(cls.direct_rollback_package)],
+            check=True, stdout=subprocess.DEVNULL, timeout=60,
+        )
+        fixture_rollback_sha = hashlib.sha256(cls.direct_rollback_package.read_bytes()).hexdigest()
+        installed_files = {
+            "/etc/sudoers.d/92-yoko-privileged-runtime": "3022dcfc323706da81e760255dd1ab43f9b8662ee699aa8b58fbe6e714cc69d7",
+            "/usr/local/libexec/yoko-privileged-runtime/core-2.0.0.py": "0f97bafbfe5b430fa7994119b1fc76fead4bdbee26766c730d9e399551ebdffa",
+            "/usr/local/libexec/yoko-privileged-runtime/crm-08b9145945b2-gravity-source-v1.py": "e3a3142e6bc098a15dd62b75bf7c090a148ad64b4fe45d3d82499c2667de072f",
+            "/usr/local/libexec/yoko-privileged-runtime/predecessor-observability-v1.py": "b5ea36c50e12b0fe6c171896258ddfc00a9d2666778735cae6a9b2a8df6d4084",
+            "/usr/local/sbin/yoko-privileged-runtime": "46bf3016e1582834e3e18bec3e148dc0f59073103be70a7fd628785f22daf8c7",
+            "/usr/local/share/yoko-privileged-runtime/install-manifest.v1.json": "571206c1cbaed74fd33f7a7ae1c92361f0be959705459e330127d7b2537e5e4f",
+            "/usr/local/share/yoko-privileged-runtime/policy.v2.json": "8727373b0c6ec79c9abf82f1aaaa58abc2bae67e96aa96a602ac419f308db0e0",
+            "/usr/local/share/yoko-privileged-runtime/profiles/crm-08b9145945b2-gravity-source-v1/manifest.v1.json": "0c948717cf6665cf443e37d2d742dfb99beb3961485506cfbb6cc6a4cd6eeb82",
+        }
+        rollback_provenance = {
+            "schema": "yoko.crm.predecessor-observability-package.v1",
+            "source_commit": "2b8811281a505c8dc20303bc83c3781087a3c746",
+            "package": {
+                "name": "yoko-privileged-runtime", "version": "2.0.0-10",
+                "architecture": "all", "sha256": fixture_rollback_sha,
+            },
+            "installed_files": installed_files,
+            "privilege_delta": {
+                "arbitrary_paths": False, "arguments": "NONE",
+                "command": "/usr/local/sbin/yoko-privileged-runtime predecessor-observe",
+                "docker_socket_delegated": False, "generic_docker": False,
+                "production_mutation": False, "shell": False,
+            },
+        }
+        cls.direct_rollback_provenance = temp / "direct-rollback-provenance.json"
+        cls.direct_rollback_provenance.write_text(
+            json.dumps(rollback_provenance, sort_keys=True) + "\n", encoding="ascii",
+        )
+        fixture_provenance_sha = hashlib.sha256(cls.direct_rollback_provenance.read_bytes()).hexdigest()
+        replacements = {
+            "b97642ffc3a95be862943212802ab38bea3280b16597209fe56fa4a2c8dafa43": fixture_rollback_sha,
+            "e5dc2ea647ae08b588b699f02bad5eb1ddc3db818aca53bb1240dbbc676c6153": fixture_provenance_sha,
+        }
+        for path in cls.stage.rglob("*"):
+            if not path.is_file():
+                continue
+            raw = path.read_bytes()
+            replaced = raw
+            for source, destination in replacements.items():
+                replaced = replaced.replace(source.encode("ascii"), destination.encode("ascii"))
+            if replaced != raw:
+                mode = stat.S_IMODE(path.stat().st_mode)
+                os.chmod(path, mode | stat.S_IWUSR)
+                path.write_bytes(replaced)
+                os.chmod(path, mode)
         cls.repo = temp / "repo"
         subprocess.run([
             "/usr/bin/git", "-c", "gc.auto=0", "-c", "gc.autoDetach=false",
@@ -1384,6 +1461,7 @@ class SealedFixtureTests(unittest.TestCase):
             "postgres_image_id": "sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229",
             "database_identity_sha256": "ed88dfeaad2a3dc2e759590d295992cd06531d4403d896ded00b21ea667be1c9",
             "migration_ledger_sha256": "a50f1a8988f79c85059354d6b2d45e9e8ed07284fc27c78d98face6680f25dfc",
+            "predecessor_release_critical_identity_sha256": fixture_sealer.ACCEPTED_PREDECESSOR_RELEASE_CRITICAL_IDENTITY_SHA256,
             "outbox_catalog_state": "EXACT",
             "outbox_counts": {"dead_letter": 0, "over_attempt_limit": 0, "pending": 0, "processing": 0, "published": 5, "retry_wait": 0, "stale_claimed": 0, "total": 5},
             "outbox_catalog_sha256": "ef0bce36bca8283b491a966ff3886644a8887f4bded3deebbec7ce559ac2defe",
@@ -1461,6 +1539,8 @@ class SealedFixtureTests(unittest.TestCase):
             "--migration-authority", str(cls.authority),
             "--predecessor-attestation", str(cls.attestation),
             "--gravity-artifact-zip", str(cls.gravity_artifact),
+            "--direct-rollback-package", str(cls.direct_rollback_package),
+            "--direct-rollback-provenance", str(cls.direct_rollback_provenance),
         ]
         try:
             fixture_sealer.main()
@@ -2313,6 +2393,350 @@ class ProtectedMessagesPostdeployProbeTests(unittest.TestCase):
         self.assertGreater(postcheck_at, -1)
         self.assertGreater(failure_at, postcheck_at)
         self.assertGreater(rollback_at, failure_at)
+
+
+INSTALLER = ROOT / "templates/install.sh.in"
+ROLLBACK_NAME = "yoko-privileged-runtime_2.0.0-10_predecessor-observability-v1_all.deb"
+ROLLBACK_SHA = "b97642ffc3a95be862943212802ab38bea3280b16597209fe56fa4a2c8dafa43"
+NEW_NAME = "yoko-privileged-runtime_2.0.0-10_all.deb"
+NEW_SHA = "a" * 64
+AUDIT_DIGEST = "7f7e4d739c9396c0d9757f0f2a60d57a50457048ce49cfd152ca46365306e344"
+OBSERVABILITY = {
+    "wrapper": "46bf3016e1582834e3e18bec3e148dc0f59073103be70a7fd628785f22daf8c7",
+    "core": "0f97bafbfe5b430fa7994119b1fc76fead4bdbee26766c730d9e399551ebdffa",
+    "observer": "b5ea36c50e12b0fe6c171896258ddfc00a9d2666778735cae6a9b2a8df6d4084",
+    "profile_runtime": "e3a3142e6bc098a15dd62b75bf7c090a148ad64b4fe45d3d82499c2667de072f",
+    "profile_manifest": "0c948717cf6665cf443e37d2d742dfb99beb3961485506cfbb6cc6a4cd6eeb82",
+    "policy": "8727373b0c6ec79c9abf82f1aaaa58abc2bae67e96aa96a602ac419f308db0e0",
+    "install_manifest": "571206c1cbaed74fd33f7a7ae1c92361f0be959705459e330127d7b2537e5e4f",
+    "sudoers": "3022dcfc323706da81e760255dd1ab43f9b8662ee699aa8b58fbe6e714cc69d7",
+    "registry": "8ea5c3b7113e1dd2ad5a74b82a1fb0bf56643fd59774dccf37e8aa9eb67bd057",
+}
+HISTORICAL = {
+    **OBSERVABILITY,
+    "wrapper": "168d61b81f3defb748b69c523a3023bb983da37dbc8316d1e2a6705d88181fa1",
+    "core": "0cdeeb4ba43abe50f80fed1580ad7b0729bf83358932ece2974b3faedafed57a",
+    "observer": "0" * 64,
+    "profile_manifest": "ba87a9e11b74167b18a9b57299c6e6c89c3718d6637eb93bcbb540c5075a838e",
+    "install_manifest": "7e22328cd89c752946d44e0a9557fd59f58f509ffea41754d4f5dddd98035549",
+    "sudoers": "6e6b7cb2a088cc92fa7aee747adca46c64b4b96d1224be21117be5adef488c06",
+}
+
+
+def canonical(value: object) -> bytes:
+    return json.dumps(value, sort_keys=True, separators=(",", ":")).encode("ascii")
+
+
+class InstallerSandbox:
+    def __init__(self, state: str = "observability", rollback_bytes: bytes = b"rollback-good\n") -> None:
+        self.temporary = tempfile.TemporaryDirectory(prefix="yoko-bootstrap-transition-")
+        self.base = Path(self.temporary.name)
+        self.state = self.base / "state"
+        self.state.write_text(state + "\n", encoding="ascii")
+        self.calls = self.base / "calls.log"
+        self.dpkg_calls = self.base / "dpkg.log"
+        self.bad_identity = self.base / "bad-identity"
+        self.force_post_failure = self.base / "force-post-failure"
+        self.bad_metadata = self.base / "bad-metadata"
+        self.root_mount = self.base / "root"
+        self.varlib_mount = self.base / "varlib"
+        self.fake = self.base / "fake"
+        self.payload = self.root_mount / "yoko-crm-bootstrap-stage.ABCDEF12/payload"
+        self.review = self.payload / "review"
+        self.review.mkdir(parents=True)
+        (self.varlib_mount / "yoko-privileged-runtime").mkdir(parents=True)
+        os.chmod(self.varlib_mount / "yoko-privileged-runtime", 0o700)
+        self.fake.mkdir()
+        shutil.copyfile(INSTALLER, self.payload / "install.sh")
+        (self.payload / NEW_NAME).write_bytes(b"successor-package\n")
+        (self.payload / ROLLBACK_NAME).write_bytes(rollback_bytes)
+        for name in ("human-manifest.md", "package-manifest.json", "installation-procedure.md", "rollback-analysis.md"):
+            (self.review / name).write_text(name + "\n", encoding="ascii")
+        self._write_payload_manifest()
+        os.chmod(self.payload, 0o700)
+        os.chmod(self.review, 0o500)
+        for item in self.payload.iterdir():
+            if item.is_file():
+                os.chmod(item, 0o500 if item.name == "install.sh" else 0o400)
+        for item in self.review.iterdir():
+            os.chmod(item, 0o400)
+        self._write_fakes()
+
+    def close(self) -> None:
+        self.temporary.cleanup()
+
+    def _write_payload_manifest(self) -> None:
+        files: dict[str, dict[str, str]] = {}
+        for path in sorted(item for item in self.payload.rglob("*") if item.is_file() and item.name != "payload-manifest.json"):
+            relative = path.relative_to(self.payload).as_posix()
+            mode = 0o500 if relative == "install.sh" else 0o400
+            files[relative] = {"sha256": hashlib.sha256(path.read_bytes()).hexdigest(), "mode": format(mode, "04o")}
+        manifest = {
+            "schema": "yoko.crm.owner-bootstrap-payload.v1",
+            "profile_id": "@PROFILE_ID@",
+            "new_package": {"name": "yoko-privileged-runtime", "version": "2.0.0-10", "architecture": "all"},
+            "previous_package": {
+                "name": "yoko-privileged-runtime",
+                "version": "2.0.0-10",
+                "profile_id": "crm-08b9145945b2-gravity-source-v1",
+                "source_commit": "2b8811281a505c8dc20303bc83c3781087a3c746",
+                "sha256": ROLLBACK_SHA,
+                "payload_path": ROLLBACK_NAME,
+                "store_path": f"/var/lib/yoko-privileged-runtime/activation-bootstraps/{ROLLBACK_SHA}/{ROLLBACK_NAME}",
+            },
+            "files": files,
+        }
+        path = self.payload / "payload-manifest.json"
+        path.write_text(json.dumps(manifest, sort_keys=True) + "\n", encoding="ascii")
+
+    def _write_executable(self, name: str, value: str) -> None:
+        path = self.fake / name
+        path.write_text(value, encoding="utf-8")
+        os.chmod(path, 0o755)
+
+    def _write_fakes(self) -> None:
+        hashes = json.dumps({"observability": OBSERVABILITY, "historical": HISTORICAL}, sort_keys=True)
+        self._write_executable("id", "#!/bin/sh\nprintf '0\\n'\n")
+        self._write_executable("hostname", "#!/bin/sh\nprintf 'jvxthcorvm\\n'\n")
+        self._write_executable(
+            "dpkg-query",
+            "#!/bin/sh\nstate=$(cat \"$YOKO_TEST_STATE_DIR/state\")\n"
+            "case \"$state\" in missing) exit 1;; esac\n"
+            "case \"$*\" in *Status-Abbrev*) printf 'ii  2.0.0-10';; *) printf '2.0.0-10';; esac\n",
+        )
+        self._write_executable(
+            "dpkg-deb",
+            "#!/bin/sh\n"
+            "test ! -e \"$YOKO_TEST_STATE_DIR/bad-metadata\" || { printf 'wrong\\n'; exit 0; }\n"
+            "case \"${3:-}\" in Package) printf 'yoko-privileged-runtime\\n';; Version) printf '2.0.0-10\\n';; Architecture) printf 'all\\n';; *) exit 2;; esac\n",
+        )
+        self._write_executable(
+            "sha256sum",
+            "#!/usr/bin/python3\n"
+            "import json,os,pathlib,sys\n"
+            f"values={hashes}\n"
+            "root=pathlib.Path(os.environ['YOKO_TEST_STATE_DIR']); path=sys.argv[-1]; state=(root/'state').read_text().strip(); bad=(root/'bad-identity').read_text().strip() if (root/'bad-identity').exists() else ''\n"
+            "base=pathlib.Path(path).name\n"
+            f"if base=='{NEW_NAME}': digest='{NEW_SHA}'\n"
+            f"elif base=='{ROLLBACK_NAME}': digest='{ROLLBACK_SHA}' if pathlib.Path(path).read_bytes()==b'rollback-good\\n' else '0'*64\n"
+            "else:\n"
+            " key='wrapper' if path.endswith('/yoko-privileged-runtime') else 'core' if path.endswith('/core-2.0.0.py') else 'observer' if path.endswith('/predecessor-observability-v1.py') else 'profile_runtime' if path.endswith('gravity-source-v1.py') else 'profile_manifest' if path.endswith('/manifest.v1.json') else 'policy' if path.endswith('/policy.v2.json') else 'install_manifest' if path.endswith('/install-manifest.v1.json') else 'sudoers'\n"
+            " selected='historical' if state=='historical' else 'observability'; digest=values[selected][key]; digest='0'*64 if bad==key else digest\n"
+            "print(digest+'  '+path)\n",
+        )
+        self._write_executable(
+            "dpkg",
+            "#!/bin/sh\n"
+            "path=${2:-}; printf '%s\\n' \"$path\" >>\"$YOKO_TEST_STATE_DIR/dpkg.log\"\n"
+            f"case \"$path\" in *{ROLLBACK_NAME}) printf 'observability\\n' >\"$YOKO_TEST_STATE_DIR/state\";; *) if test -e \"$YOKO_TEST_STATE_DIR/force-post-failure\"; then printf 'new_bad\\n'; else printf 'new\\n'; fi >\"$YOKO_TEST_STATE_DIR/state\";; esac\n",
+        )
+        self._write_executable(
+            "runuser",
+            "#!/usr/bin/python3\n"
+            "import hashlib,json,os,pathlib,sys\n"
+            "root=pathlib.Path(os.environ['YOKO_TEST_STATE_DIR']); state=(root/'state').read_text().strip(); primitive=sys.argv[-1]; (root/'calls.log').open('a').write(primitive+'\\n')\n"
+            f"obs={json.dumps(OBSERVABILITY, sort_keys=True)}\n"
+            "profile='@PROFILE_ID@' if state=='new' else 'wrong-new-profile' if state=='new_bad' else 'crm-08b9145945b2-gravity-source-v1'\n"
+            "if primitive=='self-check':\n"
+            " installed={'/etc/sudoers.d/92-yoko-privileged-runtime':obs['sudoers'],'/usr/local/libexec/yoko-privileged-runtime/core-2.0.0.py':obs['core'],'/usr/local/libexec/yoko-privileged-runtime/predecessor-observability-v1.py':obs['observer'],'/usr/local/sbin/yoko-privileged-runtime':obs['wrapper'],'/usr/local/share/yoko-privileged-runtime/policy.v2.json':obs['policy']}\n"
+            " evidence={'runtime_version':'2.0.0','package_version':'2.0.0-10','activation_profile_id':profile,'profile_argument_shape':'ZERO_ARGUMENT_ONLY','activation_profile_manifest_sha256':obs['profile_manifest'],'predecessor_observability_sha256':obs['observer'],'registry_sha256':obs['registry'],'installed_identity':installed,'generic_command_execution':False,'arbitrary_paths':False,'docker_socket_delegated':False}\n"
+            "elif primitive=='capabilities': evidence={'activation_profile_id':profile,'enabled_activation_profiles':['database-status','release-preflight','release-activate','rollback'],'enabled_read_only_profiles':['predecessor-observe'],'disabled_profiles':{'config-activation':'disabled','database-migration':'disabled'},'generic_command_execution':False,'arbitrary_paths':False,'arbitrary_package_install':False,'resources':{}}\n"
+            f"elif primitive=='audit-status': evidence={{'state':'VALID','record_count':36,'last_digest':'{AUDIT_DIGEST}'}}\n"
+            "elif primitive=='docker-provenance':\n"
+            " semantic={'name':'crm-gravity-mvp','image_id':'sha256:'+'2'*64}; body={'records':[semantic],'schema':'yoko.ai-calls.production-semantic-identity.v1'}; fingerprint=hashlib.sha256(json.dumps(body,sort_keys=True,separators=(',',':')).encode('ascii')).hexdigest(); record={'name':'crm-gravity-mvp','container_id':'1'*64,'image_id':'sha256:'+'2'*64,'status':'running','started_at':'2026-08-27T00:00:00Z','restart_count':0,'semantic':semantic}; evidence={'complete':True,'failures':[],'records':[record],'semantic':{**body,'fingerprint_sha256':fingerprint}}\n"
+            "else: raise SystemExit(2)\n"
+            "print(json.dumps({'ok':True,'evidence':evidence},sort_keys=True,separators=(',',':')))\n",
+        )
+
+    def run(self) -> subprocess.CompletedProcess[str]:
+        environment = dict(os.environ, YOKO_TEST_STATE_DIR=str(self.base))
+        inner = """
+set -eu
+mount --make-rprivate /
+mount --bind "$1" /root
+mount --bind "$2" /var/lib
+mount --bind "$3/dpkg-query" /usr/bin/dpkg-query
+mount --bind "$3/dpkg-deb" /usr/bin/dpkg-deb
+mount --bind "$3/dpkg" /usr/bin/dpkg
+mount --bind "$3/sha256sum" /usr/bin/sha256sum
+mount --bind "$3/runuser" /usr/sbin/runuser
+mount --bind "$3/id" /usr/bin/id
+mount --bind "$3/hostname" /bin/hostname
+cd /root/yoko-crm-bootstrap-stage.ABCDEF12/payload
+./install.sh
+"""
+        unprivileged = subprocess.run(
+            ["/usr/bin/unshare", "-Ur", "-m", "/bin/bash", "-c", inner, "sandbox", str(self.root_mount), str(self.varlib_mount), str(self.fake)],
+            env=environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=90,
+        )
+        if (
+            unprivileged.returncode == 0
+            or "unshare: write failed /proc/self/uid_map: Operation not permitted" not in unprivileged.stderr
+            or not Path("/usr/bin/sudo").is_file()
+        ):
+            return unprivileged
+        # GitHub's hosted Ubuntu runner disables unprivileged user-namespace
+        # mappings. Its documented passwordless test sudo remains bounded here
+        # to one fresh mount namespace, a clean environment and fixed paths;
+        # mount propagation is made private before any bind. Nothing from this
+        # harness is shipped in the Runtime privilege boundary.
+        privileged_inner = """
+set -eu
+case "$4:$5" in *[!0-9:]*|:*|*:) exit 125;; esac
+fixture_root=$1
+fixture_varlib=$2
+fixture_base=$YOKO_TEST_STATE_DIR
+fixture_uid=$4
+fixture_gid=$5
+test "$fixture_root" = "$fixture_base/root"
+test "$fixture_varlib" = "$fixture_base/varlib"
+restore_fixture_ownership() {
+    rc=$?
+    if ! /usr/bin/chown -R "$fixture_uid:$fixture_gid" -- "$fixture_base"; then rc=125; fi
+    trap - EXIT
+    exit "$rc"
+}
+trap restore_fixture_ownership EXIT
+/usr/bin/chown -R 0:0 -- "$fixture_base"
+""" + inner
+        return subprocess.run(
+            [
+                "/usr/bin/sudo", "-n", "/usr/bin/env", "-i",
+                "PATH=/usr/sbin:/usr/bin:/sbin:/bin",
+                f"YOKO_TEST_STATE_DIR={self.base}",
+                "/usr/bin/unshare", "-m", "--fork", "/bin/bash", "-c", privileged_inner,
+                "sandbox", str(self.root_mount), str(self.varlib_mount), str(self.fake),
+                str(os.getuid()), str(os.getgid()),
+            ],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=90,
+        )
+
+    def dpkg_log(self) -> list[str]:
+        return self.dpkg_calls.read_text(encoding="utf-8").splitlines() if self.dpkg_calls.exists() else []
+
+    def guard(self) -> Path:
+        return self.varlib_mount / "yoko-privileged-runtime/activation-bootstrap-installing.v1"
+
+
+class BootstrapTransitionTests(unittest.TestCase):
+    def sandbox(self, *args: object, **kwargs: object) -> InstallerSandbox:
+        value = InstallerSandbox(*args, **kwargs)
+        self.addCleanup(value.close)
+        return value
+
+    def test_exact_observability_prestate_accepted(self) -> None:
+        box = self.sandbox()
+        result = box.run()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('"status":"INSTALLED"', result.stdout)
+        self.assertEqual(len(box.dpkg_log()), 1)
+        self.assertTrue(box.dpkg_log()[0].endswith(NEW_NAME))
+        self.assertFalse(box.guard().exists())
+        stored = box.varlib_mount / f"yoko-privileged-runtime/activation-bootstraps/{ROLLBACK_SHA}/{ROLLBACK_NAME}"
+        self.assertEqual(stored.read_bytes(), b"rollback-good\n")
+        self.assertEqual(stat.S_IMODE(stored.stat().st_mode), 0o400)
+
+    def test_historical_only_prestate_rejected_without_mutation(self) -> None:
+        box = self.sandbox("historical")
+        result = box.run()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(box.dpkg_log(), [])
+        self.assertFalse(box.guard().exists())
+        self.assertIn('"production_mutation":false', result.stdout)
+
+    def test_mixed_and_wrong_identity_prestates_rejected_without_mutation(self) -> None:
+        for identity in ("wrapper", "profile_manifest", "install_manifest", "sudoers", "core", "observer"):
+            with self.subTest(identity=identity):
+                box = self.sandbox()
+                box.bad_identity.write_text(identity + "\n", encoding="ascii")
+                result = box.run()
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(box.dpkg_log(), [])
+                self.assertFalse(box.guard().exists())
+
+    def test_forced_post_mutation_failure_restores_exact_observability_runtime(self) -> None:
+        box = self.sandbox()
+        box.force_post_failure.touch()
+        result = box.run()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(len(box.dpkg_log()), 2)
+        self.assertTrue(box.dpkg_log()[0].endswith(NEW_NAME))
+        self.assertTrue(box.dpkg_log()[1].endswith(ROLLBACK_NAME))
+        self.assertEqual(box.state.read_text(encoding="ascii").strip(), "observability")
+        self.assertIn('"rollback_restored":true', result.stdout)
+        self.assertFalse(box.guard().exists())
+
+    def test_rollback_self_check_audit_store_and_provenance_verified(self) -> None:
+        box = self.sandbox()
+        box.force_post_failure.touch()
+        result = box.run()
+        self.assertNotEqual(result.returncode, 0)
+        calls = box.calls.read_text(encoding="utf-8").splitlines()
+        self.assertGreaterEqual(calls.count("self-check"), 2)
+        self.assertGreaterEqual(calls.count("audit-status"), 2)
+        self.assertGreaterEqual(calls.count("docker-provenance"), 2)
+        self.assertIn('"production_mutation":false', result.stdout)
+
+    def test_successor_retry_is_idempotent(self) -> None:
+        box = self.sandbox()
+        first = box.run()
+        self.assertEqual(first.returncode, 0, first.stderr)
+        second = box.run()
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertIn('"status":"ALREADY_INSTALLED"', second.stdout)
+        self.assertEqual(len(box.dpkg_log()), 1)
+
+    def test_power_loss_guard_reconciliation_is_idempotent(self) -> None:
+        box = self.sandbox()
+        self.assertEqual(box.run().returncode, 0)
+        # Crash after guard creation but before dpkg: exact old state retries
+        # the intended install and clears the same guard.
+        box.state.write_text("observability\n", encoding="ascii")
+        box.guard().write_bytes(b"")
+        os.chmod(box.guard(), 0o400)
+        second = box.run()
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertFalse(box.guard().exists())
+        self.assertEqual(len(box.dpkg_log()), 2)
+        # Crash after successful dpkg but before guard unlink: exact successor
+        # state only reconciles the guard and never reinstalls either package.
+        box.guard().write_bytes(b"")
+        os.chmod(box.guard(), 0o400)
+        third = box.run()
+        self.assertEqual(third.returncode, 0, third.stderr)
+        self.assertFalse(box.guard().exists())
+        self.assertEqual(len(box.dpkg_log()), 2)
+
+    def test_wrong_or_substituted_direct_rollback_deb_rejected(self) -> None:
+        box = self.sandbox(rollback_bytes=b"rollback-substituted\n")
+        result = box.run()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(box.dpkg_log(), [])
+        self.assertFalse(box.guard().exists())
+
+    def test_payload_and_successor_identity_substitution_rejected(self) -> None:
+        box = self.sandbox()
+        box.bad_metadata.touch()
+        metadata = box.run()
+        self.assertNotEqual(metadata.returncode, 0)
+        self.assertEqual(box.dpkg_log(), [])
+        second = self.sandbox()
+        (second.payload / "unexpected").write_text("substitution\n", encoding="ascii")
+        os.chmod(second.payload / "unexpected", 0o400)
+        inventory = second.run()
+        self.assertNotEqual(inventory.returncode, 0)
+        self.assertEqual(second.dpkg_log(), [])
+
+    def test_transition_scope_preserves_zero_argument_boundary(self) -> None:
+        installer = INSTALLER.read_text(encoding="utf-8")
+        self.assertIn('test "$#" -eq 0', installer)
+        self.assertIn("OLD_DEB_SHA='" + ROLLBACK_SHA + "'", installer)
+        self.assertIn('/usr/bin/dpkg --install "$OLD_DEB_STORED"', installer)
+        self.assertNotIn("6865eab377dda757d101259e7321268998b45ea8b27f6003de0cf7e191a9b54e", installer)
+        for forbidden in ("/bin/sh -c", "docker.sock", "docker ps", "curl ", "wget ", "apt-get", "git clone"):
+            self.assertNotIn(forbidden, installer)
+
+
 
 
 if __name__ == "__main__":
