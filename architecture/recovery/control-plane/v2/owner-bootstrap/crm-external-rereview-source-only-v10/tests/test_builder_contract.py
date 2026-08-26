@@ -20,9 +20,10 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CORE_SHA = "0cdeeb4ba43abe50f80fed1580ad7b0729bf83358932ece2974b3faedafed57a"
+CORE_SHA = "0f97bafbfe5b430fa7994119b1fc76fead4bdbee26766c730d9e399551ebdffa"
+OBSERVABILITY_SHA = "b5ea36c50e12b0fe6c171896258ddfc00a9d2666778735cae6a9b2a8df6d4084"
 POLICY_SHA = "8727373b0c6ec79c9abf82f1aaaa58abc2bae67e96aa96a602ac419f308db0e0"
-SUDOERS_SHA = "6e6b7cb2a088cc92fa7aee747adca46c64b4b96d1224be21117be5adef488c06"
+SUDOERS_SHA = "3022dcfc323706da81e760255dd1ab43f9b8662ee699aa8b58fbe6e714cc69d7"
 TG_PATCH_PATH = "tg-bot/src/public-bot-maintenance.js"
 MIGRATION_AUTHORITY_PATH = "architecture/migrations/v1/production-migration-authority.json"
 PREDECESSOR_ATTESTATION_PATH = "architecture/migrations/v1/predecessor-runtime-migration-inventory.json"
@@ -97,6 +98,7 @@ class StaticContractTests(unittest.TestCase):
 
     def test_immutable_shared_runtime_inputs_remain_exact(self) -> None:
         self.assertEqual(sha(ROOT / "src/yoko-privileged-runtime-core.py"), CORE_SHA)
+        self.assertEqual(sha(ROOT / "src/predecessor-observability-v1.py"), OBSERVABILITY_SHA)
         self.assertEqual(sha(ROOT / "src/policy.v2.base.json"), POLICY_SHA)
         self.assertEqual(sha(ROOT / "packaging/92-yoko-privileged-runtime"), SUDOERS_SHA)
 
@@ -213,8 +215,9 @@ class StaticContractTests(unittest.TestCase):
         self.assertNotIn("2.0.0-9_all.deb", installer)
         for forbidden in ("curl ", "wget ", "git clone", "apt-get", "docker compose", "pg_dump", "psql "):
             self.assertNotIn(forbidden, installer)
-        for denied in ("/bin/sh -c ':'", "/usr/bin/docker ps", "/usr/bin/dpkg --status sudo", "self-check unexpected", "fs-stat ../../../etc", "service-restart crm.container.unrelated"):
+        for denied in ("/bin/sh -c ':'", "/usr/bin/docker ps", "/usr/bin/dpkg --status sudo", "self-check unexpected", "predecessor-observe crm.container.telegram_bot", "fs-stat ../../../etc", "service-restart crm.container.unrelated"):
             self.assertIn(denied, postinst)
+        self.assertIn("predecessor-observe", (ROOT / "packaging/92-yoko-privileged-runtime").read_text())
         self.assertNotIn("NOPASSWD: ALL", (ROOT / "packaging/92-yoko-privileged-runtime").read_text())
 
     def test_installer_requires_complete_provenance_and_full_identity(self) -> None:

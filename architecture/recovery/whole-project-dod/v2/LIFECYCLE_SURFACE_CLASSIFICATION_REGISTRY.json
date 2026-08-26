@@ -843,6 +843,33 @@
       "functional_owner": "platform_engineering"
     },
     {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/packaging/predecessor-observability-v1/audit-data-tar.py",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Finite build-time package-member auditor for the predecessor-observability artifact. It reads only a staged Debian data tar stream and grants no installation, deployment, service-mutation, database, or business-data authority.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/packaging/predecessor-observability-v1/build-package.sh",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Deterministic build control for the bounded predecessor-observability Runtime package. It only produces a local artifact and grants no installation, deployment, service-mutation, database, or business-data authority.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/packaging/predecessor-observability-v1/install-package.sh.in",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Bounded Owner installer template for one read-only predecessor-observation Runtime primitive. It requires an explicit Owner invocation, preserves production service identity, has exact-package rollback, and gains no install or production-mutation authority from classification.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
       "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/packaging/seal-release.py",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",

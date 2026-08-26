@@ -16,6 +16,7 @@ fi
 for file in \
     "$PROJECT_ROOT/src/yoko-privileged-runtime" \
     "$PROJECT_ROOT/src/yoko-privileged-runtime-core.py" \
+    "$PROJECT_ROOT/src/predecessor-observability-v1.py" \
     "$PROJECT_ROOT/src/crm-activation-profile.py" \
     "$PROJECT_ROOT/src/policy.v2.base.json" \
     "$PROJECT_ROOT/src/profile.v1.json" \
@@ -32,7 +33,7 @@ for file in \
     fi
 done
 
-/usr/bin/python3 -I -m py_compile "$PROJECT_ROOT/src/yoko-privileged-runtime" "$PROJECT_ROOT/src/yoko-privileged-runtime-core.py" "$PROJECT_ROOT/src/crm-activation-profile.py"
+/usr/bin/python3 -I -m py_compile "$PROJECT_ROOT/src/yoko-privileged-runtime" "$PROJECT_ROOT/src/yoko-privileged-runtime-core.py" "$PROJECT_ROOT/src/predecessor-observability-v1.py" "$PROJECT_ROOT/src/crm-activation-profile.py"
 /usr/sbin/visudo -cf "$PROJECT_ROOT/packaging/92-yoko-privileged-runtime" >/dev/null
 /usr/bin/python3 -I -c 'import json,sys; json.load(open(sys.argv[1],encoding="ascii")); json.load(open(sys.argv[2],encoding="ascii"))' "$PROJECT_ROOT/src/policy.v2.base.json" "$PROJECT_ROOT/src/profile.v1.json"
 
@@ -53,6 +54,7 @@ stage() {
     /usr/bin/install -m 0644 "$PROJECT_ROOT/packaging/control" "$root/DEBIAN/control"
     /usr/bin/install -m 0755 "$PROJECT_ROOT/packaging/postinst" "$root/DEBIAN/postinst"
     /usr/bin/install -m 0444 "$PROJECT_ROOT/src/yoko-privileged-runtime-core.py" "$libexec/core-2.0.0.py"
+    /usr/bin/install -m 0444 "$PROJECT_ROOT/src/predecessor-observability-v1.py" "$libexec/predecessor-observability-v1.py"
     /usr/bin/install -m 0444 "$PROJECT_ROOT/src/crm-activation-profile.py" "$libexec/$PROFILE_ID.py"
     /usr/bin/install -m 0444 "$PROJECT_ROOT/src/profile.v1.json" "$profile/profile.v1.json"
     /usr/bin/install -m 0444 "$PROJECT_ROOT/inputs/source.tar.gz" "$profile/source.tar.gz"
@@ -84,10 +86,12 @@ PY
     exe_sha=$(/usr/bin/sha256sum "$root/usr/local/sbin/yoko-privileged-runtime" | /usr/bin/cut -d ' ' -f 1)
     policy_sha=$(/usr/bin/sha256sum "$root/usr/local/share/yoko-privileged-runtime/policy.v2.json" | /usr/bin/cut -d ' ' -f 1)
     sudoers_sha=$(/usr/bin/sha256sum "$root/etc/sudoers.d/92-yoko-privileged-runtime" | /usr/bin/cut -d ' ' -f 1)
-    /usr/bin/python3 -I - "$root/usr/local/share/yoko-privileged-runtime/install-manifest.v1.json" "$exe_sha" "$policy_sha" "$sudoers_sha" <<'PY'
+    core_sha=$(/usr/bin/sha256sum "$root/usr/local/libexec/yoko-privileged-runtime/core-2.0.0.py" | /usr/bin/cut -d ' ' -f 1)
+    observation_sha=$(/usr/bin/sha256sum "$root/usr/local/libexec/yoko-privileged-runtime/predecessor-observability-v1.py" | /usr/bin/cut -d ' ' -f 1)
+    /usr/bin/python3 -I - "$root/usr/local/share/yoko-privileged-runtime/install-manifest.v1.json" "$exe_sha" "$core_sha" "$observation_sha" "$policy_sha" "$sudoers_sha" <<'PY'
 import json,pathlib,sys
-destination,executable,policy,sudoers=sys.argv[1:]
-value={"schema":"yoko.privileged-runtime.install-manifest.v1","runtime_version":"2.0.0","files":{"/usr/local/sbin/yoko-privileged-runtime":{"sha256":executable,"mode":"0755"},"/usr/local/share/yoko-privileged-runtime/policy.v2.json":{"sha256":policy,"mode":"0444"},"/etc/sudoers.d/92-yoko-privileged-runtime":{"sha256":sudoers,"mode":"0440"}}}
+destination,executable,core,observation,policy,sudoers=sys.argv[1:]
+value={"schema":"yoko.privileged-runtime.install-manifest.v1","runtime_version":"2.0.0","files":{"/usr/local/sbin/yoko-privileged-runtime":{"sha256":executable,"mode":"0755"},"/usr/local/libexec/yoko-privileged-runtime/core-2.0.0.py":{"sha256":core,"mode":"0444"},"/usr/local/libexec/yoko-privileged-runtime/predecessor-observability-v1.py":{"sha256":observation,"mode":"0444"},"/usr/local/share/yoko-privileged-runtime/policy.v2.json":{"sha256":policy,"mode":"0444"},"/etc/sudoers.d/92-yoko-privileged-runtime":{"sha256":sudoers,"mode":"0440"}}}
 pathlib.Path(destination).write_text(json.dumps(value,sort_keys=True,separators=(',',':'))+'\n',encoding='ascii')
 PY
     /usr/bin/chmod 0444 "$root/usr/local/share/yoko-privileged-runtime/install-manifest.v1.json"

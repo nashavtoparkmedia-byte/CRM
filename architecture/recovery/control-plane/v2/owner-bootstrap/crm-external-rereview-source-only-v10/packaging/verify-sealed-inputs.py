@@ -23,6 +23,7 @@ INPUT_PATHS = (
     "templates/install.sh.in",
     "src/yoko-privileged-runtime",
     "src/yoko-privileged-runtime-core.py",
+    "src/predecessor-observability-v1.py",
     "src/crm-activation-profile.py",
     "src/policy.v2.base.json",
     "src/profile.v1.json",

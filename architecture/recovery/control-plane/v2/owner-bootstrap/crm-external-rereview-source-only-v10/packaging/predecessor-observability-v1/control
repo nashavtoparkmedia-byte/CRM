@@ -1,0 +1,10 @@
+Package: yoko-privileged-runtime
+Version: 2.0.0-10
+Section: admin
+Priority: optional
+Architecture: all
+Depends: python3 (>= 3.10), sudo (>= 1.9.9), util-linux, docker-ce-cli
+Maintainer: YOKO Control Plane <noreply@example.invalid>
+Description: Narrow predecessor observation extension for YOKO Runtime V2
+ This same-version interim package preserves the installed activation profile
+ and adds one integrity-pinned, zero-argument, read-only predecessor observer.

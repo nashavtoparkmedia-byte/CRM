@@ -1,0 +1,229 @@
+#!/bin/sh
+set -eu
+
+PACKAGE_PATH='@PACKAGE_PATH@'
+PACKAGE_SHA256='@PACKAGE_SHA256@'
+SOURCE_COMMIT='@SOURCE_COMMIT@'
+PROFILE_ID='crm-08b9145945b2-gravity-source-v1'
+RUNTIME='/usr/local/sbin/yoko-privileged-runtime'
+CORE='/usr/local/libexec/yoko-privileged-runtime/core-2.0.0.py'
+OBSERVER='/usr/local/libexec/yoko-privileged-runtime/predecessor-observability-v1.py'
+POLICY='/usr/local/share/yoko-privileged-runtime/policy.v2.json'
+SUDOERS='/etc/sudoers.d/92-yoko-privileged-runtime'
+INSTALL_MANIFEST='/usr/local/share/yoko-privileged-runtime/install-manifest.v1.json'
+PROFILE_RUNTIME="/usr/local/libexec/yoko-privileged-runtime/$PROFILE_ID.py"
+PROFILE_MANIFEST="/usr/local/share/yoko-privileged-runtime/profiles/$PROFILE_ID/manifest.v1.json"
+ROLLBACK_DEB='/var/lib/yoko-privileged-runtime/activation-bootstraps/6865eab377dda757d101259e7321268998b45ea8b27f6003de0cf7e191a9b54e/yoko-privileged-runtime_2.0.0-10_all.deb'
+ROLLBACK_DEB_SHA256='6865eab377dda757d101259e7321268998b45ea8b27f6003de0cf7e191a9b54e'
+
+OLD_RUNTIME_SHA256='168d61b81f3defb748b69c523a3023bb983da37dbc8316d1e2a6705d88181fa1'
+OLD_CORE_SHA256='0cdeeb4ba43abe50f80fed1580ad7b0729bf83358932ece2974b3faedafed57a'
+OLD_POLICY_SHA256='8727373b0c6ec79c9abf82f1aaaa58abc2bae67e96aa96a602ac419f308db0e0'
+OLD_SUDOERS_SHA256='6e6b7cb2a088cc92fa7aee747adca46c64b4b96d1224be21117be5adef488c06'
+OLD_INSTALL_MANIFEST_SHA256='7e22328cd89c752946d44e0a9557fd59f58f509ffea41754d4f5dddd98035549'
+OLD_PROFILE_RUNTIME_SHA256='e3a3142e6bc098a15dd62b75bf7c090a148ad64b4fe45d3d82499c2667de072f'
+OLD_PROFILE_MANIFEST_SHA256='ba87a9e11b74167b18a9b57299c6e6c89c3718d6637eb93bcbb540c5075a838e'
+
+PREVIOUS_RUNTIME_SHA256='544e6d5ace56ab737475ad316e17f6ac12a15ed7706c7f25f1bf97639c2ab7bc'
+PREVIOUS_CORE_SHA256='0f97bafbfe5b430fa7994119b1fc76fead4bdbee26766c730d9e399551ebdffa'
+PREVIOUS_OBSERVER_SHA256='b870bb3cf1ad35cabd1c58c189232af5c01d683687ffca1d55a86ceb397afa59'
+PREVIOUS_SUDOERS_SHA256='3022dcfc323706da81e760255dd1ab43f9b8662ee699aa8b58fbe6e714cc69d7'
+PREVIOUS_INSTALL_MANIFEST_SHA256='93ce5ed5dfe77b5f094e04523a4c71641d3a3621dcb0fbf98061e716e34c0db5'
+PREVIOUS_PROFILE_MANIFEST_SHA256='0c948717cf6665cf443e37d2d742dfb99beb3961485506cfbb6cc6a4cd6eeb82'
+
+NEW_RUNTIME_SHA256='@NEW_RUNTIME_SHA256@'
+NEW_CORE_SHA256='@NEW_CORE_SHA256@'
+NEW_OBSERVER_SHA256='@NEW_OBSERVER_SHA256@'
+NEW_POLICY_SHA256='@NEW_POLICY_SHA256@'
+NEW_SUDOERS_SHA256='@NEW_SUDOERS_SHA256@'
+NEW_INSTALL_MANIFEST_SHA256='@NEW_INSTALL_MANIFEST_SHA256@'
+NEW_PROFILE_RUNTIME_SHA256='@NEW_PROFILE_RUNTIME_SHA256@'
+NEW_PROFILE_MANIFEST_SHA256='@NEW_PROFILE_MANIFEST_SHA256@'
+
+if [ "$(/usr/bin/id -u)" != 0 ]; then
+    echo 'OWNER_ROOT_REQUIRED' >&2
+    exit 77
+fi
+
+hash_is() {
+    path=$1
+    expected=$2
+    [ -f "$path" ] && [ ! -L "$path" ] && [ "$(/usr/bin/stat -c '%h' "$path")" = 1 ] \
+        && [ "$(/usr/bin/sha256sum "$path" | /usr/bin/cut -d ' ' -f 1)" = "$expected" ]
+}
+
+package_identity_ok() {
+    hash_is "$PACKAGE_PATH" "$PACKAGE_SHA256" \
+        && [ "$(/usr/bin/dpkg-deb -f "$PACKAGE_PATH" Package)" = 'yoko-privileged-runtime' ] \
+        && [ "$(/usr/bin/dpkg-deb -f "$PACKAGE_PATH" Version)" = '2.0.0-10' ] \
+        && [ "$(/usr/bin/dpkg-deb -f "$PACKAGE_PATH" Architecture)" = 'all' ]
+}
+
+old_state_ok() {
+    [ "$(/usr/bin/dpkg-query -W -f='${Status} ${Version}\n' yoko-privileged-runtime 2>/dev/null)" = 'install ok installed 2.0.0-10' ] \
+        && hash_is "$RUNTIME" "$OLD_RUNTIME_SHA256" \
+        && hash_is "$CORE" "$OLD_CORE_SHA256" \
+        && hash_is "$POLICY" "$OLD_POLICY_SHA256" \
+        && hash_is "$SUDOERS" "$OLD_SUDOERS_SHA256" \
+        && hash_is "$INSTALL_MANIFEST" "$OLD_INSTALL_MANIFEST_SHA256" \
+        && hash_is "$PROFILE_RUNTIME" "$OLD_PROFILE_RUNTIME_SHA256" \
+        && hash_is "$PROFILE_MANIFEST" "$OLD_PROFILE_MANIFEST_SHA256" \
+        && [ ! -e "$OBSERVER" ]
+}
+
+previous_state_ok() {
+    [ "$(/usr/bin/dpkg-query -W -f='${Status} ${Version}\n' yoko-privileged-runtime 2>/dev/null)" = 'install ok installed 2.0.0-10' ] \
+        && hash_is "$RUNTIME" "$PREVIOUS_RUNTIME_SHA256" \
+        && hash_is "$CORE" "$PREVIOUS_CORE_SHA256" \
+        && hash_is "$OBSERVER" "$PREVIOUS_OBSERVER_SHA256" \
+        && hash_is "$POLICY" "$OLD_POLICY_SHA256" \
+        && hash_is "$SUDOERS" "$PREVIOUS_SUDOERS_SHA256" \
+        && hash_is "$INSTALL_MANIFEST" "$PREVIOUS_INSTALL_MANIFEST_SHA256" \
+        && hash_is "$PROFILE_RUNTIME" "$OLD_PROFILE_RUNTIME_SHA256" \
+        && hash_is "$PROFILE_MANIFEST" "$PREVIOUS_PROFILE_MANIFEST_SHA256"
+}
+
+new_state_ok() {
+    [ "$(/usr/bin/dpkg-query -W -f='${Status} ${Version}\n' yoko-privileged-runtime 2>/dev/null)" = 'install ok installed 2.0.0-10' ] \
+        && hash_is "$RUNTIME" "$NEW_RUNTIME_SHA256" \
+        && hash_is "$CORE" "$NEW_CORE_SHA256" \
+        && hash_is "$OBSERVER" "$NEW_OBSERVER_SHA256" \
+        && hash_is "$POLICY" "$NEW_POLICY_SHA256" \
+        && hash_is "$SUDOERS" "$NEW_SUDOERS_SHA256" \
+        && hash_is "$INSTALL_MANIFEST" "$NEW_INSTALL_MANIFEST_SHA256" \
+        && hash_is "$PROFILE_RUNTIME" "$NEW_PROFILE_RUNTIME_SHA256" \
+        && hash_is "$PROFILE_MANIFEST" "$NEW_PROFILE_MANIFEST_SHA256"
+}
+
+runtime_self_check() {
+    /usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n "$RUNTIME" self-check \
+        | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v["evidence"]; assert v["ok"] is True and e["package_version"] == "2.0.0-10" and e["activation_profile_id"] == "crm-08b9145945b2-gravity-source-v1" and e["predecessor_observability_sha256"] == "@NEW_OBSERVER_SHA256@" and e["arbitrary_paths"] is False and e["docker_socket_delegated"] is False and e["generic_command_execution"] is False'
+}
+
+old_runtime_self_check() {
+    /usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n "$RUNTIME" self-check \
+        | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v["evidence"]; assert v["ok"] is True and e["package_version"] == "2.0.0-10" and e["activation_profile_id"] == "crm-08b9145945b2-gravity-source-v1" and e["arbitrary_paths"] is False and e["docker_socket_delegated"] is False and e["generic_command_execution"] is False'
+}
+
+previous_runtime_self_check() {
+    /usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n "$RUNTIME" self-check \
+        | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v["evidence"]; assert v["ok"] is True and e["package_version"] == "2.0.0-10" and e["activation_profile_id"] == "crm-08b9145945b2-gravity-source-v1" and e["predecessor_observability_sha256"] == "b870bb3cf1ad35cabd1c58c189232af5c01d683687ffca1d55a86ceb397afa59" and e["arbitrary_paths"] is False and e["docker_socket_delegated"] is False and e["generic_command_execution"] is False'
+}
+
+capture_service() {
+    resource=$1
+    destination=$2
+    raw="$destination.raw"
+    /usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n "$RUNTIME" docker-inspect "$resource" > "$raw"
+    /usr/bin/python3 -I - "$raw" "$destination" "$resource" <<'PY'
+import json,pathlib,sys
+source,destination,resource=sys.argv[1:]
+value=json.loads(pathlib.Path(source).read_text(encoding='ascii'))
+assert value['ok'] is True and value['primitive']=='docker-inspect' and value['resource']==resource
+e=value['evidence']
+projection={
+    'logical_resource':e['logical_resource'],'container_id':e['container_id'],
+    'image_id':e['image_id'],'created':e['created'],'started_at':e['started_at'],
+    'restart_count':e['restart_count'],'mounts':e['mounts'],'entrypoint':e['entrypoint'],
+    'cmd':e['cmd'],'working_dir':e['working_dir'],'declared_user':e['declared_user'],
+    'compose_config_hash':e['compose_labels']['com.docker.compose.config-hash'],
+}
+pathlib.Path(destination).write_text(json.dumps(projection,sort_keys=True,separators=(',',':'))+'\n',encoding='ascii')
+PY
+    /usr/bin/unlink "$raw"
+}
+
+capture_production_identity() {
+    prefix=$1
+    capture_service 'crm.container.gravity_mvp' "$prefix.gravity.json"
+    capture_service 'crm.container.telegram_bot' "$prefix.telegram.json"
+}
+
+compare_production_identity() {
+    /usr/bin/cmp "$1.gravity.json" "$2.gravity.json" >/dev/null \
+        && /usr/bin/cmp "$1.telegram.json" "$2.telegram.json" >/dev/null
+}
+
+rollback_exact() {
+    if ! hash_is "$ROLLBACK_DEB" "$ROLLBACK_DEB_SHA256"; then
+        echo 'ROLLBACK_PACKAGE_IDENTITY_INVALID' >&2
+        return 1
+    fi
+    /usr/bin/dpkg --install "$ROLLBACK_DEB" >/dev/null
+    old_state_ok && old_runtime_self_check
+}
+
+if ! package_identity_ok; then
+    echo 'OBSERVABILITY_PACKAGE_IDENTITY_INVALID' >&2
+    exit 78
+fi
+if ! hash_is "$ROLLBACK_DEB" "$ROLLBACK_DEB_SHA256"; then
+    echo 'ROLLBACK_PACKAGE_NOT_EXACT' >&2
+    exit 78
+fi
+if new_state_ok; then
+    runtime_self_check
+    echo "PREDECESSOR_OBSERVABILITY_ALREADY_INSTALLED source=$SOURCE_COMMIT package=$PACKAGE_SHA256"
+    exit 0
+fi
+if previous_state_ok; then
+    if ! previous_runtime_self_check; then
+        echo 'INSTALLED_RUNTIME_PREVIOUS_SELF_CHECK_FAILED' >&2
+        exit 78
+    fi
+elif old_state_ok; then
+    if ! old_runtime_self_check; then
+        echo 'INSTALLED_RUNTIME_ORIGINAL_SELF_CHECK_FAILED' >&2
+        exit 78
+    fi
+else
+    echo 'INSTALLED_RUNTIME_PRESTATE_MISMATCH' >&2
+    exit 78
+fi
+
+WORK=$(/usr/bin/mktemp -d /var/tmp/yoko-predecessor-observability-install.XXXXXX)
+cleanup() {
+    case "$WORK" in
+        /var/tmp/yoko-predecessor-observability-install.*)
+            /usr/bin/find "$WORK" -type f -exec /usr/bin/unlink {} \;
+            /usr/bin/rmdir "$WORK"
+            ;;
+        *) exit 1 ;;
+    esac
+}
+trap cleanup EXIT HUP INT TERM
+
+rollback_after_failure() {
+    rollback_exact \
+        && capture_production_identity "$WORK/rolled-back" \
+        && compare_production_identity "$WORK/before" "$WORK/rolled-back"
+}
+
+capture_production_identity "$WORK/before"
+if ! /usr/bin/dpkg --install "$PACKAGE_PATH" >/dev/null; then
+    if rollback_after_failure; then
+        echo 'OBSERVABILITY_INSTALL_FAILED_ROLLED_BACK' >&2
+    else
+        echo 'OBSERVABILITY_INSTALL_FAILED_ROLLBACK_FAILED' >&2
+    fi
+    exit 74
+fi
+if ! new_state_ok || ! runtime_self_check; then
+    if rollback_after_failure; then
+        echo 'OBSERVABILITY_INSTALL_VERIFICATION_FAILED_ROLLED_BACK' >&2
+    else
+        echo 'OBSERVABILITY_INSTALL_VERIFICATION_FAILED_ROLLBACK_FAILED' >&2
+    fi
+    exit 74
+fi
+capture_production_identity "$WORK/after"
+if ! compare_production_identity "$WORK/before" "$WORK/after"; then
+    if rollback_after_failure; then
+        echo 'PRODUCTION_IDENTITY_CHANGED_DURING_CONTROL_PLANE_INSTALL_ROLLED_BACK' >&2
+    else
+        echo 'PRODUCTION_IDENTITY_CHANGED_AND_CONTROL_PLANE_ROLLBACK_FAILED' >&2
+    fi
+    exit 74
+fi
+
+echo "PREDECESSOR_OBSERVABILITY_INSTALLED source=$SOURCE_COMMIT package=$PACKAGE_SHA256 production_mutated=false"

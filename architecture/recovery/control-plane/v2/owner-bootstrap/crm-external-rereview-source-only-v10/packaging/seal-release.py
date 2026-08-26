@@ -1394,7 +1394,13 @@ def main() -> None:
     if sha(tg_patch) != TG_BOT_PATCH_SHA256:
         raise SystemExit("accepted Telegram capability patch identity mismatch")
     recipe = tg_bot_patch_recipe(commit, sha(first), profile_id)
-    tokens = {"PROFILE_ID": profile_id, "FINAL_COMMIT": commit, "COMMIT_SHORT16": commit[:16]}
+    tokens = {
+        "PROFILE_ID": profile_id,
+        "FINAL_COMMIT": commit,
+        "COMMIT_SHORT16": commit[:16],
+        "CORE_SHA256": sha((ROOT / "src/yoko-privileged-runtime-core.py").read_bytes()),
+        "PREDECESSOR_OBSERVABILITY_SHA256": sha((ROOT / "src/predecessor-observability-v1.py").read_bytes()),
+    }
     render(ROOT / "templates/yoko-privileged-runtime.in", ROOT / "src/yoko-privileged-runtime", tokens, 0o755)
     render(ROOT / "templates/crm-activation-profile.py.in", ROOT / "src/crm-activation-profile.py", tokens, 0o444)
     render(ROOT / "templates/postinst.in", ROOT / "packaging/postinst", tokens, 0o755)

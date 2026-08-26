@@ -194,6 +194,7 @@ class ProductionCaptureContractTests(unittest.TestCase):
         self.assertEqual(capture.COMMANDS, (
             ("version", None),
             ("self-check", None),
+            ("predecessor-observe", None),
             ("audit-status", None),
             ("docker-inspect", "crm.container.gravity_mvp"),
             ("docker-inspect", "crm.container.telegram_bot"),

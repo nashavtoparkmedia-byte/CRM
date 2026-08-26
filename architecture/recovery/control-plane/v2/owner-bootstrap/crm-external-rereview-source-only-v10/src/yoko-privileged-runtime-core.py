@@ -29,6 +29,8 @@ POLICY_SCHEMA = "yoko.privileged-runtime.policy.v2"
 INSTALL_SCHEMA = "yoko.privileged-runtime.install-manifest.v1"
 TEST_ENV = "YOKO_PRIVILEGED_RUNTIME_TEST_ROOT"
 SELF = "/usr/local/sbin/yoko-privileged-runtime"
+CORE = "/usr/local/libexec/yoko-privileged-runtime/core-2.0.0.py"
+PREDECESSOR_OBSERVABILITY = "/usr/local/libexec/yoko-privileged-runtime/predecessor-observability-v1.py"
 POLICY = "/usr/local/share/yoko-privileged-runtime/policy.v2.json"
 INSTALL_MANIFEST = "/usr/local/share/yoko-privileged-runtime/install-manifest.v1.json"
 SUDOERS = "/etc/sudoers.d/92-yoko-privileged-runtime"
@@ -410,7 +412,7 @@ def parse_cli(argv: list[str]) -> Invocation:
     if len(argv) < 2:
         raise RuntimeFault("INPUT_INVALID", 64)
     command = argv[1:]
-    zero = {"version", "self-check", "capabilities", "policy-status", "registry-status", "audit-status", "storage-status", "docker-provenance", "recovery-status"}
+    zero = {"version", "self-check", "capabilities", "policy-status", "registry-status", "audit-status", "storage-status", "docker-provenance", "recovery-status", "predecessor-observe"}
     one = {"fs-stat", "fs-tree", "snapshot-manifest", "git-index", "docker-inspect", "service-status", "service-health", "service-restart"}
     disabled = {"release-preflight", "release-activate", "config-activate", "database-status", "database-migrate", "rollback"}
     if len(command) == 1 and command[0] in zero:
@@ -985,7 +987,13 @@ def installed_identity() -> dict[str, Any]:
     if not isinstance(manifest, dict) or manifest.get("schema") != INSTALL_SCHEMA or manifest.get("runtime_version") != VERSION:
         raise RuntimeFault("INSTALL_MANIFEST_INVALID", 78)
     files = manifest.get("files")
-    required = {SELF: 0o755, POLICY: 0o444, SUDOERS: 0o440}
+    required = {
+        SELF: 0o755,
+        CORE: 0o444,
+        PREDECESSOR_OBSERVABILITY: 0o444,
+        POLICY: 0o444,
+        SUDOERS: 0o440,
+    }
     if not isinstance(files, dict) or set(files) != set(required):
         raise RuntimeFault("INSTALL_MANIFEST_INVALID", 78)
     output = {}

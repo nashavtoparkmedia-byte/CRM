@@ -19,6 +19,7 @@ HOST = "jvxthcorvm"
 RUNTIME_VERSION = "2.0.0"
 PACKAGE_VERSION = "2.0.0-10"
 PROFILE_ID = "crm-08b9145945b2-gravity-source-v1"
+PREDECESSOR_OBSERVABILITY_SHA = "b5ea36c50e12b0fe6c171896258ddfc00a9d2666778735cae6a9b2a8df6d4084"
 PREDECESSOR_COMMIT = "7aea2823efe50e13a156540993d424594025e403"
 PREDECESSOR_IMAGE = "sha256:baf442f880ebca808897a0131a662c603a9119f652cbbc3e47937286dec49179"
 TG_BOT_IMAGE = "sha256:0849c4c9912aecf3cb7c35b51abba22cdb1c85a385afa6c2746000d14b9835f6"
@@ -51,6 +52,7 @@ MAX_FUTURE_SKEW_SECONDS = 5
 COMMANDS: tuple[tuple[str, str | None], ...] = (
     ("version", None),
     ("self-check", None),
+    ("predecessor-observe", None),
     ("audit-status", None),
     ("docker-inspect", "crm.container.gravity_mvp"),
     ("docker-inspect", "crm.container.telegram_bot"),
@@ -69,7 +71,7 @@ SELF_CHECK_KEYS = {
     "activation_profile_manifest_sha256", "arbitrary_paths", "audit",
     "docker_socket_delegated", "generic_command_execution", "installed_identity",
     "package_version", "policy_sha256", "profile_argument_shape", "registry_sha256",
-    "runtime_version",
+    "runtime_version", "predecessor_observability_sha256",
 }
 DOCKER_KEYS = {
     "cmd", "compose_labels", "config_image", "container_id", "created",
@@ -122,6 +124,7 @@ OBSERVED_KEYS = {
     "migration_ledger_sha256", "outbox_catalog_state", "outbox_counts",
     "rollback_recovery_required", "gravity_runtime_semantics_status",
     "tg_bot_runtime_semantics_status", "secret_values_emitted", "production_mutated",
+    "predecessor_release_critical_identity_sha256", "predecessor_recreation_observation",
 }
 AUTHORITY_KEYS = {
     "schema", "source", "tg_bot_patch_path", "tg_bot_patch_baseline_state",
@@ -142,8 +145,20 @@ COMMAND_RECORD_KEYS = {
 CROSS_CHECKS = [
     "runtime-identity", "profile-identity", "audit-chain", "gravity-runtime",
     "telegram-runtime", "postgres-runtime", "database-container", "database-ledger",
-    "repository-manifest", "outbox-state", "read-only-no-secrets",
+    "repository-manifest", "outbox-state", "predecessor-recreation-config",
+    "read-only-no-secrets",
 ]
+
+PREDECESSOR_KEYS = {
+    "schema", "state_partition", "compose_source", "services", "volumes",
+    "networks", "secret_values_emitted", "production_mutated",
+    "read_only_primitives", "release_critical_identity_sha256",
+}
+PREDECESSOR_SERVICE_KEYS = {
+    "logical_resource", "compose_service", "container", "image", "execution",
+    "environment", "mounts", "network_attachments", "published_ports",
+    "host_config", "lifecycle", "compose",
+}
 
 
 class CaptureError(ValueError):
@@ -156,6 +171,10 @@ def canonical(value: object) -> bytes:
 
 def digest(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
+
+
+def compact_digest(value: object) -> str:
+    return digest(json.dumps(value, sort_keys=True, separators=(",", ":")).encode("ascii"))
 
 
 def reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -211,6 +230,214 @@ def validate_sha_map(value: object, label: str) -> None:
     for path, identity in value.items():
         if not isinstance(path, str) or not path.startswith("/") or not isinstance(identity, str) or not SHA64.fullmatch(identity):
             raise CaptureError(f"invalid {label}")
+
+
+def validate_name_list(value: object, label: str, *, environment: bool = False) -> list[str]:
+    if type(value) is not list or value != sorted(value) or len(value) != len(set(value)):
+        raise CaptureError(f"invalid {label}")
+    pattern = r"[A-Za-z_][A-Za-z0-9_]{0,127}" if environment else r"[A-Za-z0-9][A-Za-z0-9_.:@/+\-]{0,1023}"
+    if any(not isinstance(item, str) or not re.fullmatch(pattern, item) for item in value):
+        raise CaptureError(f"invalid {label}")
+    return value
+
+
+def predecessor_release_critical_service(service: dict[str, object]) -> dict[str, object]:
+    output = {
+        key: value
+        for key, value in service.items()
+        if key not in {"container", "network_attachments"}
+    }
+    container = exact_dict(service["container"], {"id", "name", "created"}, "predecessor container")
+    output["container_name"] = container["name"]
+    attachments = service["network_attachments"]
+    if type(attachments) is not list:
+        raise CaptureError("invalid predecessor network attachments")
+    output["network_attachments"] = [
+        {key: value for key, value in attachment.items() if key != "observational_endpoint"}
+        for attachment in attachments
+    ]
+    image = dict(exact_dict(service["image"], {
+        "id", "configured_reference", "base_compose_reference",
+        "base_compose_reference_matches_container", "repository_digests", "created", "platform",
+    }, "predecessor image"))
+    image.pop("created")
+    output["image"] = image
+    return output
+
+
+def validate_predecessor_evidence(value: object) -> dict[str, object]:
+    evidence = exact_dict(value, PREDECESSOR_KEYS, "predecessor observation")
+    if (
+        evidence["schema"] != "yoko.crm.predecessor-recreation-observation.v1"
+        or evidence["state_partition"] != {
+            "release_critical_recreation_configuration": "BOUND",
+            "mutable_application_runtime_state": "PRESERVED_NOT_CONTENT_HASHED",
+            "observational_ephemeral_metadata": "RECORDED_SEPARATELY",
+        }
+        or evidence["secret_values_emitted"] is not False
+        or evidence["production_mutated"] is not False
+        or evidence["read_only_primitives"] != [
+            "docker compose config", "docker compose config --hash",
+            "docker container inspect", "docker image inspect",
+            "docker network inspect", "docker volume inspect",
+        ]
+    ):
+        raise CaptureError("predecessor observation safety contract mismatch")
+    source = exact_dict(evidence["compose_source"], {
+        "project", "project_directory", "compose_file", "compose_file_sha256",
+        "environment_file", "environment_file_plaintext_emitted",
+        "environment_file_digest_emitted", "environment_binding",
+    }, "predecessor compose source")
+    if (
+        source["project"] != "crm" or source["project_directory"] != "/opt/crm/deploy"
+        or source["compose_file"] != "/opt/crm/deploy/docker-compose.production.yml"
+        or source["compose_file_sha256"] != COMPOSE_SHA
+        or source["environment_file"] != "/opt/crm/.env.production"
+        or source["environment_file_plaintext_emitted"] is not False
+        or source["environment_file_digest_emitted"] is not False
+        or source["environment_binding"] != "ROOT_INTERNAL_EXACT_EQUALITY_TO_RESOLVED_SERVICES"
+    ):
+        raise CaptureError("predecessor compose source mismatch")
+
+    services = evidence["services"]
+    if type(services) is not list or len(services) != 2:
+        raise CaptureError("predecessor service inventory mismatch")
+    specifications = (
+        ("crm.container.gravity_mvp", "gravity-mvp", "crm-gravity-mvp", PREDECESSOR_IMAGE,
+         ["/usr/bin/tini", "--"], ["sh", "-c", "npx prisma migrate deploy && npm run start"], "app", GRAVITY_COMPOSE),
+        ("crm.container.telegram_bot", "tg-bot", "crm-tg-bot", TG_BOT_IMAGE,
+         ["/usr/bin/tini", "--", "/usr/local/bin/tg-bot-entrypoint"], ["node", "start.js"], "", TG_COMPOSE),
+    )
+    for service, specification in zip(services, specifications):
+        service = exact_dict(service, PREDECESSOR_SERVICE_KEYS, "predecessor service")
+        logical, compose_service, container_name, image_id, entrypoint, command, user, creation_hash = specification
+        container = exact_dict(service["container"], {"id", "name", "created"}, "predecessor container")
+        image = exact_dict(service["image"], {
+            "id", "configured_reference", "base_compose_reference",
+            "base_compose_reference_matches_container", "repository_digests", "created", "platform",
+        }, "predecessor image")
+        execution = exact_dict(service["execution"], {
+            "entrypoint", "command", "working_directory", "user",
+        }, "predecessor execution")
+        environment = exact_dict(service["environment"], {
+            "effective_key_set", "compose_key_set", "image_default_key_set",
+            "docker_injected_key_set", "effective_values_match_resolved_compose_and_image",
+            "binding_method", "plaintext_values_emitted", "value_digests_emitted",
+        }, "predecessor environment")
+        compose = exact_dict(service["compose"], {
+            "project", "service", "container_creation_config_hash", "base_resolved_config_hash",
+            "base_matches_container_creation", "config_hash_binding_method", "labels",
+            "secret_free_resolved_service_shape",
+        }, "predecessor compose")
+        labels = exact_dict(compose["labels"], {
+            "com.docker.compose.project", "com.docker.compose.service",
+            "com.docker.compose.config-hash", "com.docker.compose.image",
+            "com.docker.compose.version",
+        }, "predecessor compose labels")
+        shape = exact_dict(compose["secret_free_resolved_service_shape"], {
+            "declared_field_set", "environment_keys", "plaintext_values_emitted",
+        }, "predecessor resolved service shape")
+        if (
+            service["logical_resource"] != logical or service["compose_service"] != compose_service
+            or container["name"] != container_name
+            or not isinstance(container["id"], str) or not SHA64.fullmatch(container["id"])
+            or not isinstance(container["created"], str) or len(container["created"]) > 40
+            or image["id"] != image_id or not isinstance(image["configured_reference"], str)
+            or not isinstance(image["base_compose_reference"], str)
+            or type(image["base_compose_reference_matches_container"]) is not bool
+            or not isinstance(image["created"], str) or len(image["created"]) > 40
+            or exact_dict(image["platform"], {"os", "architecture"}, "predecessor platform") != {"os": "linux", "architecture": "amd64"}
+            or execution != {"entrypoint": entrypoint, "command": command, "working_directory": "/app", "user": user}
+            or environment["effective_values_match_resolved_compose_and_image"] is not True
+            or environment["binding_method"] != "ROOT_INTERNAL_EXACT_EQUALITY_NO_VALUE_DIGEST"
+            or environment["plaintext_values_emitted"] is not False
+            or environment["value_digests_emitted"] is not False
+            or compose["project"] != "crm" or compose["service"] != compose_service
+            or compose["container_creation_config_hash"] != creation_hash
+            or labels["com.docker.compose.config-hash"] != creation_hash
+            or labels["com.docker.compose.project"] != "crm"
+            or labels["com.docker.compose.service"] != compose_service
+            or not isinstance(compose["base_resolved_config_hash"], str)
+            or not SHA64.fullmatch(compose["base_resolved_config_hash"])
+            or type(compose["base_matches_container_creation"]) is not bool
+            or compose["config_hash_binding_method"] != "DOCKER_COMPOSE_CONFIG_HASH"
+            or shape["plaintext_values_emitted"] is not False
+        ):
+            raise CaptureError("predecessor release-critical service mismatch")
+        for key in ("effective_key_set", "compose_key_set", "image_default_key_set", "docker_injected_key_set"):
+            validate_name_list(environment[key], f"predecessor {key}", environment=True)
+        validate_name_list(shape["declared_field_set"], "predecessor declared field set")
+        validate_name_list(shape["environment_keys"], "predecessor resolved environment keys", environment=True)
+        validate_name_list(image["repository_digests"], "predecessor repository digests")
+        mounts = service["mounts"]
+        if type(mounts) is not list or any(type(item) is not dict for item in mounts):
+            raise CaptureError("invalid predecessor mounts")
+        attachments = service["network_attachments"]
+        if type(attachments) is not list or not attachments:
+            raise CaptureError("invalid predecessor network attachments")
+        for attachment in attachments:
+            attachment = exact_dict(attachment, {
+                "name", "network_id", "aliases", "dns_names", "driver_options",
+                "observational_endpoint",
+            }, "predecessor network attachment")
+            if not isinstance(attachment["network_id"], str) or not SHA64.fullmatch(attachment["network_id"]):
+                raise CaptureError("invalid predecessor network identity")
+            exact_dict(attachment["observational_endpoint"], {
+                "endpoint_id", "mac_address", "gateway", "ip_address", "ip_prefix_len", "ipv6_gateway",
+                "global_ipv6_address", "global_ipv6_prefix_len",
+            }, "predecessor observational endpoint")
+        host = exact_dict(service["host_config"], {
+            "scalars", "cap_add", "cap_drop", "security_options", "devices",
+            "device_requests", "extra_hosts", "dns", "dns_options", "dns_search",
+            "ulimits", "restart_policy", "sysctls", "tmpfs",
+        }, "predecessor host config")
+        scalars = host["scalars"]
+        restart = host["restart_policy"]
+        lifecycle = exact_dict(service["lifecycle"], {
+            "healthcheck", "stop_signal", "stop_timeout_seconds", "init",
+        }, "predecessor lifecycle")
+        if (
+            type(scalars) is not dict or scalars.get("Privileged") is not False
+            or scalars.get("ReadonlyRootfs") is not False or scalars.get("NetworkMode") != "crm_internal"
+            or restart != {"name": "unless-stopped", "maximum_retry_count": 0}
+            or type(lifecycle["stop_timeout_seconds"]) is not int
+            or lifecycle["init"] not in (None, True, False)
+        ):
+            raise CaptureError("predecessor host/lifecycle configuration mismatch")
+        health = lifecycle["healthcheck"]
+        if health is not None:
+            health = exact_dict(health, {
+                "test_form", "test_argument_count", "test_plaintext_emitted",
+                "interval_nanoseconds", "timeout_nanoseconds", "start_period_nanoseconds",
+                "start_interval_nanoseconds", "retries",
+            }, "predecessor healthcheck")
+            if health["test_plaintext_emitted"] is not False or health["test_form"] not in {"NONE", "CMD", "CMD-SHELL"}:
+                raise CaptureError("predecessor healthcheck exposed plaintext")
+
+    telegram_mounts = services[1]["mounts"]
+    if {
+        "type": "volume", "target": "/app/data", "read_write": True,
+        "propagation": "", "name": "crm_tg_bot_data",
+    } not in telegram_mounts:
+        raise CaptureError("telegram persistent-volume contract mismatch")
+    volumes = evidence["volumes"]
+    networks = evidence["networks"]
+    if (
+        type(volumes) is not list or not any(type(item) is dict and item.get("name") == "crm_tg_bot_data" for item in volumes)
+        or type(networks) is not list or not networks
+    ):
+        raise CaptureError("predecessor volume/network inventory mismatch")
+    identity = evidence["release_critical_identity_sha256"]
+    expected_identity = compact_digest({
+        "schema": evidence["schema"],
+        "compose_source": source,
+        "services": [predecessor_release_critical_service(service) for service in services],
+        "volumes": volumes,
+        "networks": networks,
+    })
+    if identity != expected_identity:
+        raise CaptureError("predecessor release-critical identity mismatch")
+    return evidence
 
 
 def validate_docker_evidence(evidence: dict[str, object], resource: str) -> None:
@@ -398,6 +625,7 @@ def validate_response(value: object, primitive: str, resource: str | None) -> di
             or evidence["docker_socket_delegated"] is not False
             or evidence["generic_command_execution"] is not False
             or evidence["profile_argument_shape"] != "ZERO_ARGUMENT_ONLY"
+            or evidence["predecessor_observability_sha256"] != PREDECESSOR_OBSERVABILITY_SHA
             or not isinstance(evidence["activation_profile_manifest_sha256"], str)
             or not SHA64.fullmatch(evidence["activation_profile_manifest_sha256"])
             or not isinstance(evidence["policy_sha256"], str) or not SHA64.fullmatch(evidence["policy_sha256"])
@@ -405,6 +633,8 @@ def validate_response(value: object, primitive: str, resource: str | None) -> di
             or audit != {"last_digest": AUDIT_DIGEST, "record_count": AUDIT_RECORDS, "state": "VALID"}
         ):
             raise CaptureError("self-check evidence mismatch")
+    elif primitive == "predecessor-observe":
+        validate_predecessor_evidence(evidence)
     elif primitive == "audit-status":
         evidence = exact_dict(evidence, {"last_digest", "record_count", "state"}, "audit evidence")
         if evidence != {"last_digest": AUDIT_DIGEST, "record_count": AUDIT_RECORDS, "state": "VALID"}:
@@ -506,7 +736,7 @@ def validate_response(value: object, primitive: str, resource: str | None) -> di
 
 def project_response(response: dict[str, object], primitive: str, resource: str | None) -> dict[str, object]:
     evidence = response["evidence"]
-    if primitive in {"version", "audit-status", "database-status"}:
+    if primitive in {"version", "audit-status", "database-status", "predecessor-observe"}:
         return evidence  # already a small exact allowlist
     if primitive == "self-check":
         return {
@@ -515,6 +745,7 @@ def project_response(response: dict[str, object], primitive: str, resource: str 
                 "activation_profile_id", "activation_profile_manifest_sha256", "arbitrary_paths",
                 "audit", "docker_socket_delegated", "generic_command_execution", "package_version",
                 "policy_sha256", "profile_argument_shape", "registry_sha256", "runtime_version",
+                "predecessor_observability_sha256",
             )
         }
     if primitive == "docker-inspect":
@@ -565,6 +796,7 @@ def validate_projection(value: object, primitive: str, resource: str | None) -> 
             "activation_profile_id", "activation_profile_manifest_sha256", "arbitrary_paths", "audit",
             "docker_socket_delegated", "generic_command_execution", "package_version", "policy_sha256",
             "profile_argument_shape", "registry_sha256", "runtime_version",
+            "predecessor_observability_sha256",
         }
         projection = exact_dict(value, keys, "self-check projection")
         audit = exact_dict(projection["audit"], {"last_digest", "record_count", "state"}, "self-check audit projection")
@@ -573,6 +805,7 @@ def validate_projection(value: object, primitive: str, resource: str | None) -> 
             or projection["runtime_version"] != RUNTIME_VERSION or projection["arbitrary_paths"] is not False
             or projection["docker_socket_delegated"] is not False or projection["generic_command_execution"] is not False
             or projection["profile_argument_shape"] != "ZERO_ARGUMENT_ONLY"
+            or projection["predecessor_observability_sha256"] != PREDECESSOR_OBSERVABILITY_SHA
             or audit != {"last_digest": AUDIT_DIGEST, "record_count": AUDIT_RECORDS, "state": "VALID"}
         ):
             raise CaptureError("self-check projection mismatch")
@@ -580,6 +813,8 @@ def validate_projection(value: object, primitive: str, resource: str | None) -> 
             if not isinstance(projection[key], str) or not SHA64.fullmatch(projection[key]):
                 raise CaptureError("self-check projection digest mismatch")
         return projection
+    if primitive == "predecessor-observe":
+        return validate_predecessor_evidence(value)
     if primitive == "audit-status":
         projection = exact_dict(value, {"last_digest", "record_count", "state"}, "audit projection")
         if projection != {"last_digest": AUDIT_DIGEST, "record_count": AUDIT_RECORDS, "state": "VALID"}:
@@ -693,6 +928,7 @@ def build_snapshot(records: list[dict[str, object]], started: dt.datetime, compl
 
     version = response_evidence(responses, "version")
     self_check = response_evidence(responses, "self-check")
+    predecessor = response_evidence(responses, "predecessor-observe")
     audit = response_evidence(responses, "audit-status")
     gravity = response_evidence(responses, "docker-inspect", "crm.container.gravity_mvp")
     telegram = response_evidence(responses, "docker-inspect", "crm.container.telegram_bot")
@@ -721,6 +957,25 @@ def build_snapshot(records: list[dict[str, object]], started: dt.datetime, compl
         or database["postgres_image_id"] != postgres["image_id"]
     ):
         raise CaptureError("container, revision, compose, or database identity drift")
+    predecessor_services = {
+        service["logical_resource"]: service
+        for service in predecessor["services"]
+    }
+    predecessor_gravity = predecessor_services.get("crm.container.gravity_mvp")
+    predecessor_telegram = predecessor_services.get("crm.container.telegram_bot")
+    if (
+        type(predecessor_gravity) is not dict or type(predecessor_telegram) is not dict
+        or predecessor_gravity["container"]["id"] != gravity["container_id"]
+        or predecessor_gravity["image"]["id"] != gravity["image_id"]
+        or predecessor_gravity["compose"]["container_creation_config_hash"] != gravity["compose_config_hash"]
+        or predecessor_telegram["container"]["id"] != telegram["container_id"]
+        or predecessor_telegram["image"]["id"] != telegram["image_id"]
+        or predecessor_telegram["compose"]["container_creation_config_hash"] != telegram["compose_config_hash"]
+        or predecessor["compose_source"]["compose_file_sha256"] != repository["compose_entry"]["sha256"]
+        or predecessor["secret_values_emitted"] is not False
+        or predecessor["production_mutated"] is not False
+    ):
+        raise CaptureError("predecessor observation cross-consistency mismatch")
 
     cross_consistency = {"status": "PASS", "checks": CROSS_CHECKS}
     capture: dict[str, object] = {
@@ -771,6 +1026,8 @@ def build_snapshot(records: list[dict[str, object]], started: dt.datetime, compl
         "rollback_recovery_required": True,
         "gravity_runtime_semantics_status": "DRIFTED_ROLLBACK_ALIAS_COMMAND_AND_CONFIG",
         "tg_bot_runtime_semantics_status": "DRIFTED_ROLLBACK_ALIAS_CONFIG",
+        "predecessor_release_critical_identity_sha256": predecessor["release_critical_identity_sha256"],
+        "predecessor_recreation_observation": predecessor,
         "secret_values_emitted": False,
         "production_mutated": False,
     }

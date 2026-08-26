@@ -6,18 +6,19 @@ It is not an authorization to install or deploy anything. The exact installed
 `2.0.0-10` package for profile `crm-08b9145945b2-gravity-source-v1` remains
 the rollback bridge.
 
-The successor preserves these accepted Runtime files byte-for-byte:
+The successor preserves the accepted policy byte-for-byte at SHA-256
+`8727373b…0e0`. It extends the core and sudoers allowlist only for one
+integrity-pinned, zero-argument `predecessor-observe` operation. That operation
+has fixed project resources and fixed read-only Compose/inspect commands; it
+accepts no path, Docker command, socket, shell, or other caller input.
 
-- Runtime core SHA-256 `0cdeeb4b…57a`
-- policy SHA-256 `8727373b…0e0`
-- sudoers SHA-256 `6e6b7cb2…c06`
-
-It installs a new content-specific profile with fresh state. The only enabled
+It installs a new content-specific profile with fresh state. The enabled
 zero-argument release operations are `database-status`, `release-preflight`,
-`release-activate`, and `rollback`. `database-migrate` and `config-activate`
-are disabled. The historical outbox migration artifact remains installed only
-as immutable database compatibility evidence; the wrapper cannot dispatch its
-mutation implementation.
+`release-activate`, and `rollback`; the separate enabled read-only operation is
+`predecessor-observe`. `database-migrate` and `config-activate` are disabled.
+The historical outbox migration artifact remains installed only as immutable
+database compatibility evidence; the wrapper cannot dispatch its mutation
+implementation.
 
 ## Seal after final acceptance
 
@@ -84,8 +85,12 @@ production snapshot that is not the installed Runtime 2.0.0-10 control plane
 over the healthy `baf442f8…` image at revision `7aea2823…`. The capture CLI
 accepts no arguments and invokes
 only the exact finite `sudo -n yoko-privileged-runtime` read-only plan: version,
-self-check, audit status, exact Gravity/TG/Postgres inspections, the production
-repository snapshot manifest, and database status. Its duplicate-key-safe v2
+self-check, the bounded predecessor recreation observation, audit status, exact
+Gravity/TG/Postgres inspections, the production repository snapshot manifest,
+and database status. The predecessor observation binds category-A recreation
+configuration, records category-C container/endpoint facts separately, and
+preserves category-B named-volume contents without hashing them. Its
+duplicate-key-safe v2
 transcript retains every bounded canonical Runtime response and its SHA-256,
 derives a separate secret-minimized projection, cross-checks container/database/
 audit identities, and is accepted by the sealer only within 15 minutes of the
