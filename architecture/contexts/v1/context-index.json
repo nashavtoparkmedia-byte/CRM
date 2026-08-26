@@ -112,7 +112,7 @@
     },
     "executable_path_ownership_validator": {
       "path": "tools/architecture/validate-executable-path-ownership.mjs",
-      "sha256": "c63907b76d2f26b64b294eb8eaaef7e60d4efc7e0aeb36128d8abd52c699ce4c"
+      "sha256": "4e1b6b8e936309f9cdf5ccbe9f47b9c27609e2a6072c0ad123862c95a20330d5"
     },
     "final_dependency_source_deriver": {
       "path": "tools/architecture/derive-final-dependency-source.mjs",
@@ -120,7 +120,7 @@
     },
     "generator": {
       "path": "tools/architecture/generate-context-manifests.mjs",
-      "sha256": "d0c9474b446745e2779f1898a520d130c6f9de450948361dce7877831b10b5cc"
+      "sha256": "51627b1bd4cc99dc441622db331885721ce93e480870085a597da5341dd05bdb"
     },
     "lifecycle_surface_registry": {
       "path": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
@@ -144,7 +144,7 @@
     },
     "verification_profile_enricher": {
       "path": "tools/architecture/enrich-context-manifests.mjs",
-      "sha256": "e723ffa74ba07caf2b386e3dabd9db24c7b6aeab131e5eb4bbf69f7a2e9311ef"
+      "sha256": "519d641e071d202786604e4422bacdc67f86ff57afb6b253e3fd049ffaded3fa"
     },
     "write_sites": {
       "path": "architecture/evidence/v1/write-sites.json",
@@ -163,7 +163,7 @@
     },
     "executable_path_ownership_current_dependencies": {
       "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json",
-      "sha256": "d1ea08837129abf2abeddbab86857e51f8a8a2bca820850407895e9beffa01d1"
+      "sha256": "e99543897d33929246515e29beb7d1bde64bce26aa09ba550d7ff7e1c7822d77"
     },
     "final_dependency_current": {
       "path": "architecture/contexts/v1/final-dependency-current.json",

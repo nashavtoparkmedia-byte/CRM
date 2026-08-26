@@ -1,18 +1,12 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 
 import { extractImports } from '../enforce-architecture.mjs'
-import {
-  readCurrentOwnershipCoverage,
-  readCurrentOwnershipDependencies,
-  validateExecutablePathOwnershipCoverage,
-  validateExecutablePathOwnershipDependencies,
-  validateExecutablePathOwnershipProvenance,
-} from '../validate-executable-path-ownership.mjs'
 import { CREDENTIAL_ENTITY_POLICIES, analyzeCredentialAccess } from './credential-analyzer.mjs'
 import { inventoryCredentialAccess } from './credential-inventory.mjs'
 import { authorizeMaintenanceWrite, validateCapabilityRegistry } from './maintenance-capability-policy.mjs'
@@ -338,10 +332,7 @@ const credentialFields = readJson('architecture/recovery/whole-project-dod/v2/CR
 const crossDomain = readJson('architecture/recovery/whole-project-dod/v2/CROSS_DOMAIN_CREDENTIAL_REVIEW_20260811.json')
 const productionSecretReview = readJson('architecture/recovery/whole-project-dod/v2/PRODUCTION_SECRET_READ_DISPOSITION_REVIEW_20260813.json')
 const lifecycleRegistry = readJson('architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json')
-const executableCoverage = (await readCurrentOwnershipCoverage(root)).value
-const executableOwnershipDependencies = (await readCurrentOwnershipDependencies(root)).value
 const contextIndex = readJson('architecture/contexts/v1/context-index.json')
-const contextManifests = contextIndex.contexts.map((entry) => readJson(entry.path))
 
 assert.equal(baseline.execution.complete, true, 'accepted authoritative scan incomplete')
 assert.equal(baseline.execution.worker_failures, 0, 'accepted authoritative scan has worker failures')
@@ -371,11 +362,20 @@ const [trackedInventory, currentCredentialInventory] = await Promise.all([
   inventoryTrackedSurfaces(root, { registry: lifecycleRegistry }),
   inventoryCredentialAccess(root, { registry: lifecycleRegistry }),
 ])
-validateExecutablePathOwnershipDependencies(executableOwnershipDependencies, { contextIndex })
-const currentOwnership = validateExecutablePathOwnershipCoverage(trackedInventory, contextManifests, executableCoverage)
-await validateExecutablePathOwnershipProvenance(root, executableCoverage, trackedInventory, contextManifests)
+const authorityProcess = spawnSync(process.execPath, ['tools/architecture/validate-executable-path-ownership.mjs', '--validate'], {
+  cwd: root,
+  encoding: 'utf8',
+  maxBuffer: 4 * 1024 * 1024,
+})
+assert.equal(authorityProcess.status, 0, `single executable ownership authority failed: ${authorityProcess.stderr}`)
+const authorityResult = JSON.parse(authorityProcess.stdout)
+assert.equal(authorityResult.schema, 'yoko.crm.single-authority-process-result.v1')
+assert.equal(authorityResult.operation, 'validate')
+assert.equal(authorityResult.authority_capability_exports, 0)
+assert.equal(authorityResult.raw_authority_reader_module_api_removed, true)
+assert.equal(authorityResult.historical_fixture_verified, true)
 assert(
-  currentOwnership.tracked_executable_surfaces >= baseline.summary.tracked_executable_surfaces,
+  authorityResult.tracked_executable_surfaces >= baseline.summary.tracked_executable_surfaces,
   'current executable denominator shrank below the accepted write baseline',
 )
 
@@ -752,7 +752,7 @@ assert.equal(existsSync(`${root}gravity-mvp/src/lib/ai-call`), true, 'protected 
 
 console.log([
   'independent final-gate critic: PASS',
-  `(current executable denominator ${currentOwnership.tracked_executable_surfaces}`,
+  `(current executable denominator ${authorityResult.tracked_executable_surfaces}`,
   `write ambiguity reviews ${triageRecords.length}`,
   `public credential-risk reviews ${publicRiskRecords.length}`,
   `credential ambiguity reviews ${ambiguityRecords.length}`,

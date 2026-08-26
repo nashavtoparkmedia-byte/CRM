@@ -7,16 +7,16 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { deriveCurrentDependencySource } from './derive-final-dependency-source.mjs'
 import { materializeFinalDependencyArtifact } from './materialize-final-dependency-artifact.mjs'
-import {
-  validateExecutablePathOwnershipCoverage,
-  validateExecutablePathOwnershipDependencies,
-} from './validate-executable-path-ownership.mjs'
 
 const defaultRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const defaultIndexRelative = 'architecture/contexts/v1/context-index.json'
 const sha256 = (value) => createHash('sha256').update(value).digest('hex')
 const SHA256 = /^[0-9a-f]{64}$/u
 const WRITE_MIGRATION_CLASSES = new Set(['FOREIGN', 'LEGACY', 'SHARED_AMBIGUOUS'])
+const AUTHORITY_OWNED_OUTPUTS = new Set([
+  'executable_path_ownership_coverage',
+  'executable_path_ownership_current_dependencies',
+])
 const VERIFICATION_COMMAND = /^node tools\/architecture\/[a-z0-9./-]+\.mjs$/u
 const stable = (value) => {
   if (Array.isArray(value)) return value.map(stable)
@@ -74,8 +74,7 @@ function dependencyCycles(manifests) {
 }
 
 export function validateContexts(bundle) {
-  const { decisions, inventory, dependencies, writes, ownership, index, manifests, foreignPlan, dependencyPlan, finalDependency, finalDependencySource, executableOwnershipDependencies } = bundle
-  validateExecutablePathOwnershipDependencies(executableOwnershipDependencies, { contextIndex: index })
+  const { decisions, inventory, dependencies, writes, ownership, index, manifests, foreignPlan, dependencyPlan, finalDependency, finalDependencySource } = bundle
   assert(decisions.schema === 'yoko.crm.context-decisions.v1' && decisions.milestone === 'CRM-ARCH-003', 'context decision identity mismatch')
   const contextIds = new Set(decisions.contexts.map((context) => context.id))
   assert(contextIds.size === decisions.contexts.length, 'duplicate context id')
@@ -211,10 +210,6 @@ export async function verifyCurrentDependencyTruth(repositoryRoot, finalDependen
   return derived.observed
 }
 
-export function verifyExecutablePathOwnership(manifests, coverage, inventory) {
-  return validateExecutablePathOwnershipCoverage(inventory, manifests, coverage)
-}
-
 export async function verifyContextIndex(index, repositoryRoot) {
   let controls = 0
   for (const control of Object.values(index.controls)) {
@@ -236,7 +231,8 @@ export async function verifyContextIndex(index, repositoryRoot) {
     manifests += 1
   }
   let outputs = 0
-  for (const output of Object.values(index.outputs)) {
+  for (const [id, output] of Object.entries(index.outputs)) {
+    if (AUTHORITY_OWNED_OUTPUTS.has(id)) continue
     const bytes = await readFile(path.join(repositoryRoot, output.path))
     assert(SHA256.test(output.sha256) && sha256(bytes) === output.sha256, `output hash mismatch: ${output.path}`)
     outputs += 1
@@ -334,7 +330,8 @@ function exactReferences(index) {
   const rows = [
     ...index.contexts.map((entry) => ({ category: 'context', id: entry.context, entry })),
     ...Object.keys(index.controls).sort().map((id) => ({ category: 'control', id, entry: index.controls[id] })),
-    ...Object.keys(index.outputs).sort().map((id) => ({ category: 'output', id, entry: index.outputs[id] })),
+    ...Object.keys(index.outputs).filter((id) => !AUTHORITY_OWNED_OUTPUTS.has(id)).sort()
+      .map((id) => ({ category: 'output', id, entry: index.outputs[id] })),
   ]
   const identities = new Set()
   for (const { category, id, entry } of rows) {
