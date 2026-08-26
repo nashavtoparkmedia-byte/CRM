@@ -1,0 +1,38 @@
+{
+  "schema": "yoko.crm.release-governance-checkpoint.v1",
+  "captured_at": "2026-08-26T10:02:20Z",
+  "repository": "nashavtoparkmedia-byte/CRM",
+  "pull_request": {
+    "number": 70,
+    "state": "OPEN",
+    "merged": false,
+    "head_branch": "codex/external-rereview-remediation-20260813",
+    "head_sha": "50d095f639c6a70e72508f8de87c7308986c828d",
+    "head_tree": "758f930b027364fafdb3fcaed224f1da35ef526d",
+    "base_branch": "main",
+    "base_sha": "66b1d37c6adf94dd501b586f3eea6422339c8fcb"
+  },
+  "qualified_candidate": {
+    "commit": "50d095f639c6a70e72508f8de87c7308986c828d",
+    "tree": "758f930b027364fafdb3fcaed224f1da35ef526d",
+    "architecture_run_id": 32940438347,
+    "architecture_run_attempt": 1,
+    "architecture_conclusion": "success",
+    "gravity_artifact_id": 9599166334,
+    "gravity_artifact_sha256": "f8ef8afdbb4cda9c7aa54a2757e978a948fcd8cae7231ba3b630479d24f23814"
+  },
+  "current_predecessor": {
+    "telegram_container_id": "cb801c0f404669df1dc736f3e6889b4dad93a131015389e22881c772ceb682e1",
+    "telegram_image_id": "sha256:0849c4c9912aecf3cb7c35b51abba22cdb1c85a385afa6c2746000d14b9835f6",
+    "state": "BLOCKED_CURRENT_PREDECESSOR_STATE_NOT_SEALABLE",
+    "missing_capability": "finite secret-safe release-critical predecessor recreation observation"
+  },
+  "governance": {
+    "base_main_sha": "66b1d37c6adf94dd501b586f3eea6422339c8fcb",
+    "branch": "codex/release-governance-v1",
+    "separate_from_pull_request_70": true
+  },
+  "production_mutated": false,
+  "pull_request_merged": false,
+  "owner_command_executed": false
+}
