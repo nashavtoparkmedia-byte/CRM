@@ -7,16 +7,16 @@
     "role": "SOL_HIGH_INTERNAL_REVIEW",
     "external_acceptance": false,
     "independent_acceptance": false,
-    "decision": "Internal remediation materialization records the exact baseline-to-current ownership assignments and exact-inventory transitions enumerated below; the current denominator includes the separately qualified Runtime rollback regression test under the existing repository-operations ownership rule, and the declared current-dependency manifest prevents test-source literals from becoming a second authority; this artifact is not external or independent acceptance."
+    "decision": "Internal remediation materialization records the exact baseline-to-current ownership assignments and exact-inventory transitions enumerated below; the current denominator includes the separately qualified Runtime rollback and transition-identity regression tests under the existing architecture-recovery ownership rule, and the declared current-dependency manifest prevents test-source literals from becoming a second authority; this artifact is not external or independent acceptance."
   },
   "baseline": {
     "coverage_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_COVERAGE_BASELINE_2108.json",
     "coverage_sha256": "429a48c9d257408025bbc273a4d6f1413ed78196549ed889118422b6caba5730"
   },
   "current": {
-    "tracked_inventory_sha256": "3c14c62f6e133784d0f074a231e52d02246db2523ee20b97a6eb312234482f48",
-    "tracked_executable_surfaces": 2196,
-    "coverage_sha256": "5ce7f1ab363d99243b44762c7a05d177928e602dda66dcd34fe78ffe415419a5"
+    "tracked_inventory_sha256": "64c20da3edba4687524e9d89f24cc5c29dcf55f6c431c44b529d08158e4067c0",
+    "tracked_executable_surfaces": 2197,
+    "coverage_sha256": "a7cf33db6bab3ae05494c157afc05167d4787df0b5bd359ac79ebaf89e1f7785"
   },
   "exact_inventory_changes": [
     {
@@ -196,7 +196,7 @@
       "functional_owner": "architecture_recovery_evidence",
       "exclusion": "architecture_recovery",
       "inventory_kind": "exact_runtime_inventory",
-      "source_sha256": "f1b3d1f545100e834aaf42677b7e970c03906a8d038404b1e7b9cef11266b384",
+      "source_sha256": "c1cab32a59c8eb13536c4086a038ad79ef18ac3345eb5582eea11933094a7ffb",
       "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
       "review_rationale": "Internal executor review confirms this exact current source path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
     },

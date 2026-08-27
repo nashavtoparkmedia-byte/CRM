@@ -4,15 +4,15 @@ The exact-SHA Owner command copies the sealed tar into a root-only temporary
 file, verifies its digest, extracts it into a root-only directory and executes
 `install.sh` with zero arguments on host `jvxthcorvm`.
 
-The installer accepts only the exact installed predecessor-observability
-Runtime from source `2b881128…`: package `b97642ff…`, profile
-`crm-08b9145945b2-gravity-source-v1`, wrapper/core/observer/profile/install
+The installer accepts only the exact installed Runtime from source
+`ae2082d…`: package `9c23ae1a…`, profile
+`crm-ae2082d852e3-gravity-source-v1`, wrapper/core/observer/profile/install
 manifest/sudoers identities, exact self-check and capabilities, and the valid
-36-record audit ending `7f7e4d73…`. The exact `b97642ff…` DEB is embedded in
+36-record audit ending `7f7e4d73…`. The exact `9c23ae1a…` DEB is embedded in
 the sealed payload and atomically installed into its fixed root-private
 content-addressed store before any `dpkg`. A root-owned guard blocks all
 release-profile calls throughout `dpkg`. Post-install checks prove Runtime
-`2.0.0-10`, the new profile identity,
+`2.0.0-11`, the new profile identity,
 four enabled operations, disabled database migration, unchanged sudo boundary,
 unchanged audit and unchanged Docker provenance. The provenance comparison
 requires a complete inventory with an empty failure list and includes the

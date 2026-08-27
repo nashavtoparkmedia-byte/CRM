@@ -3,7 +3,7 @@ set -eu
 
 PROJECT_ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
 DIST="$PROJECT_ROOT/dist"
-PACKAGE="yoko-privileged-runtime_2.0.0-10_all.deb"
+PACKAGE="yoko-privileged-runtime_2.0.0-11_all.deb"
 EPOCH=1786492800
 PROFILE_ID=$(/usr/bin/python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1],encoding="ascii"))["profile_id"])' "$PROJECT_ROOT/src/profile.v1.json")
 
@@ -70,7 +70,7 @@ for raw in sys.argv[2:]:
     path=pathlib.Path(raw)
     installed='/usr/' + str(path).split('/usr/',1)[1]
     files[installed]={"sha256":hashlib.sha256(path.read_bytes()).hexdigest(),"mode":"0444"}
-value={"schema":"yoko.crm.activation-profile-install-manifest.v1","runtime_abi":"2.0.0","package_version":"2.0.0-10","profile_id":pathlib.Path(destination).parent.name,"files":files}
+value={"schema":"yoko.crm.activation-profile-install-manifest.v1","runtime_abi":"2.0.0","package_version":"2.0.0-11","profile_id":pathlib.Path(destination).parent.name,"files":files}
 destination.write_text(json.dumps(value,sort_keys=True,separators=(',',':'))+'\n',encoding='ascii')
 PY
     /usr/bin/chmod 0444 "$profile/manifest.v1.json"

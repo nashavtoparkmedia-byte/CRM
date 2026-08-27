@@ -45,7 +45,7 @@ PREVIEW_POSTGRES_ENV = ACTIVATION_ROOT + "/preview-postgres.env"
 BACKUP_ROOT = ACTIVATION_ROOT + "/backup"
 BACKUP_PATH = BACKUP_ROOT + "/pre-migration.dump"
 DOCKER = "/usr/bin/docker"
-PROFILE_SCHEMA = "yoko.crm.activation-profile.v1"
+PROFILE_SCHEMA = "yoko.crm.activation-profile.v2"
 STATE_SCHEMA = "yoko.crm.activation-state.v1"
 TARGET_TAG = "yoko/crm-gravity-mvp:@FINAL_COMMIT@-source-only-v1"
 ROLLBACK_TAG = "yoko/crm-gravity-mvp:rollback-baf442f880ebca808897a0131a662c603a9119f65"
@@ -60,13 +60,6 @@ TG_PATCH_BASELINE_MANIFEST_FILE_SHA256 = "1bd1d5100cabeb37277262179ee1119b3dcd91
 TG_PATCH_BASELINE_MANIFEST_SHA256 = "72397e9c7e3c728b94d1e5645da825ddd75216bfacd13212b4671fe15f206d56"
 TG_DIFF_PROOF_CONTAINER = "yoko-crm-@COMMIT_SHORT16@-tg-diff-proof"
 PRIOR_TARGET_TAG = "yoko/crm-gravity-mvp:7aea2823efe50e13a156540993d424594025e403-profile-v1"
-TG_PREDECESSOR_REFERENCE = "crm/tg-bot:latest"
-RECOVERY_SOURCE_COMMIT = "08b9145945b296d494cd0184eb2d32da886710cd"
-RECOVERY_SOURCE_ARCHIVE_SHA256 = "e611c0192fd3592ce99410df002a3918ce849dfab5c9c1b4955b02f136f830b9"
-RECOVERY_SOURCE_PROFILE_ID = "crm-08b9145945b2-gravity-source-v1"
-RECOVERY_SOURCE_STATE_PATH = f"/var/lib/yoko-privileged-runtime/activation/{RECOVERY_SOURCE_PROFILE_ID}/state.v1.json"
-RECOVERY_SOURCE_GRAVITY_TAG = f"yoko/crm-gravity-mvp:{RECOVERY_SOURCE_COMMIT}-source-only-v1"
-RECOVERY_SOURCE_TG_TAG = f"yoko/crm-tg-bot:{RECOVERY_SOURCE_COMMIT}-public-capability-v1"
 PREVIEW_NETWORK = "yoko-crm-af9646f5-preview"
 PREVIEW_CONTAINER = "yoko-crm-af9646f5-postgres-preview"
 PREVIEW_MIGRATION_RUNNER = "yoko-crm-af9646f5-preview-migrate"
@@ -124,7 +117,9 @@ def _load_profile(core: Any) -> dict[str, Any]:
         raise core.RuntimeFault("ACTIVATION_PROFILE_INVALID", 78) from exc
     required = {
         "schema", "profile_id", "host", "runtime_abi", "package_version",
-        "accepted_source", "production", "migration", "recovery", "limits",
+        "accepted_source", "deployment", "transition_invariants",
+        "pre_activation_live_prestate", "post_activation_target",
+        "migration", "rollback_recovery", "limits",
         "enabled_zero_argument_profiles", "disabled_profiles", "negative_properties",
     }
     if (
@@ -134,7 +129,7 @@ def _load_profile(core: Any) -> dict[str, Any]:
         or profile.get("schema") != PROFILE_SCHEMA
         or profile.get("profile_id") != PROFILE_ID
         or profile.get("runtime_abi") != core.VERSION
-        or profile.get("package_version") != "2.0.0-10"
+        or profile.get("package_version") != "2.0.0-11"
         or profile.get("host") != "jvxthcorvm"
         or profile.get("enabled_zero_argument_profiles") != [
             "database-status", "release-preflight", "release-activate", "rollback"
@@ -182,11 +177,76 @@ def _load_profile(core: Any) -> dict[str, Any]:
         or not isinstance(gravity_artifact.get("github_artifact"), dict)
     ):
         raise core.RuntimeFault("ACTIVATION_PROFILE_INVALID", 78)
-    for key in (
-        "source_manifest_sha256", "compose_sha256"
+    deployment = profile.get("deployment")
+    invariants = profile.get("transition_invariants")
+    prestate = profile.get("pre_activation_live_prestate")
+    target = profile.get("post_activation_target")
+    if (
+        not isinstance(deployment, dict)
+        or set(deployment) != {
+            "compose_path", "environment_path", "compose_project", "compose_service",
+            "tg_bot_compose_service", "gravity_container", "tg_bot_container",
+            "postgres_container", "network",
+        }
+        or deployment != {
+            "compose_path": "/opt/crm/deploy/docker-compose.production.yml",
+            "environment_path": "/opt/crm/.env.production",
+            "compose_project": "crm", "compose_service": "gravity-mvp",
+            "tg_bot_compose_service": "tg-bot", "gravity_container": "crm-gravity-mvp",
+            "tg_bot_container": "crm-tg-bot", "postgres_container": "crm-postgres",
+            "network": "crm_internal",
+        }
+        or not isinstance(invariants, dict)
+        or set(invariants) != {
+            "compose_sha256", "tg_bot_entrypoint", "tg_bot_cmd", "tg_bot_declared_user",
+            "tg_bot_working_dir", "tg_bot_patch_uid", "tg_bot_patch_gid", "tg_bot_patch_mode",
+            "tg_bot_patch_baseline_state", "tg_bot_patch_baseline_manifest_file_sha256",
+            "tg_bot_patch_baseline_manifest_sha256", "postgres_container_id", "postgres_image_id",
+        }
+        or not SHA256.fullmatch(str(invariants.get("compose_sha256", "")))
+        or invariants.get("tg_bot_entrypoint") != ["/usr/bin/tini", "--", "/usr/local/bin/tg-bot-entrypoint"]
+        or invariants.get("tg_bot_cmd") != ["node", "start.js"]
+        or invariants.get("tg_bot_declared_user") != ""
+        or invariants.get("tg_bot_working_dir") != "/app"
+        or invariants.get("tg_bot_patch_uid") != 0
+        or invariants.get("tg_bot_patch_gid") != 0
+        or invariants.get("tg_bot_patch_mode") != "0644"
+        or invariants.get("tg_bot_patch_baseline_state") != TG_PATCH_BASELINE_STATE
+        or invariants.get("tg_bot_patch_baseline_manifest_file_sha256") != TG_PATCH_BASELINE_MANIFEST_FILE_SHA256
+        or invariants.get("tg_bot_patch_baseline_manifest_sha256") != TG_PATCH_BASELINE_MANIFEST_SHA256
+        or not re.fullmatch(r"sha256:[0-9a-f]{64}", str(invariants.get("postgres_image_id", "")))
+        or not SHA256.fullmatch(str(invariants.get("postgres_container_id", "")))
+        or not isinstance(prestate, dict)
+        or set(prestate) != {
+            "authority", "predecessor_release_critical_identity_sha256", "source_manifest_sha256",
+            "gravity_container_id", "gravity_image_id", "gravity_compose_config_hash",
+            "tg_bot_container_id", "tg_bot_image_id", "tg_bot_compose_config_hash",
+        }
+        or prestate.get("authority") != "INDEPENDENTLY_ACCEPTED_CURRENT_PREDECESSOR"
+        or prestate.get("predecessor_release_critical_identity_sha256")
+        != "0385b32004178250be0d887ab27da40483a5952d1a12284c6c16f62d7207261a"
+        or any(not SHA256.fullmatch(str(prestate.get(key, ""))) for key in (
+            "predecessor_release_critical_identity_sha256", "source_manifest_sha256",
+            "gravity_container_id", "gravity_compose_config_hash", "tg_bot_container_id",
+            "tg_bot_compose_config_hash",
+        ))
+        or any(not re.fullmatch(r"sha256:[0-9a-f]{64}", str(prestate.get(key, ""))) for key in (
+            "gravity_image_id", "tg_bot_image_id",
+        ))
+        or not isinstance(target, dict)
+        or set(target) != {
+            "authority", "compose_config_hash_binding", "gravity_image_reference",
+            "gravity_command", "tg_bot_image_reference", "tg_bot_patch_sha256",
+        }
+        or target.get("authority") != "SEALED_CANDIDATE_DERIVED"
+        or target.get("compose_config_hash_binding")
+        != "DERIVED_FROM_EXACT_SEALED_ACTIVATION_OVERLAY_DURING_PREFLIGHT"
+        or target.get("gravity_image_reference") != TARGET_TAG
+        or target.get("gravity_command") != ["npm", "run", "start"]
+        or target.get("tg_bot_image_reference") != TG_TARGET_TAG
+        or target.get("tg_bot_patch_sha256") != TG_PATCH_TARGET_SHA256
     ):
-        if not SHA256.fullmatch(str(profile["production"].get(key, ""))):
-            raise core.RuntimeFault("ACTIVATION_PROFILE_INVALID", 78)
+        raise core.RuntimeFault("ACTIVATION_PROFILE_INVALID", 78)
     accepted_ledger = profile["migration"].get("accepted_production_ledger")
     accepted_predecessor = profile["migration"].get("accepted_predecessor_map")
     accepted_chronology = profile["migration"].get("accepted_live_chronology")
@@ -243,29 +303,28 @@ def _load_profile(core: Any) -> dict[str, Any]:
         or chronology_authority.get("sequence_sha256") != _digest(accepted_chronology)
     ):
         raise core.RuntimeFault("ACTIVATION_PROFILE_INVALID", 78)
-    recovery = profile.get("recovery")
+    recovery = profile.get("rollback_recovery")
     if (
         not isinstance(recovery, dict)
         or set(recovery) != {
-            "predecessor_package_version", "prior_source_commit",
+            "authority", "predecessor_package_version", "prior_source_commit",
             "prior_source_archive_sha256", "prior_target_tag",
-            "prior_target_image_id", "prior_compose_config_hash",
-            "recovered_gravity_container_id", "recovered_compose_config_hash",
-            "prior_tg_bot_image_id", "prior_tg_bot_compose_config_hash",
-            "recovered_tg_bot_container_id", "recovered_tg_bot_compose_config_hash",
+            "gravity_image_reference", "gravity_image_id", "gravity_compose_config_hash",
+            "tg_bot_image_reference", "tg_bot_image_id", "tg_bot_compose_config_hash",
             "database_identity_sha256",
             "migration_ledger_sha256", "backup_sha256", "backup_bytes",
             "preview_outbox_catalog_sha256",
         }
+        or recovery.get("authority") != "EXACT_ACCEPTED_PRE_ACTIVATION_PREDECESSOR"
         or recovery.get("predecessor_package_version") != "2.0.0-9"
         or recovery.get("prior_source_commit") != "7aea2823efe50e13a156540993d424594025e403"
         or recovery.get("prior_target_tag") != PRIOR_TARGET_TAG
-        or not re.fullmatch(r"sha256:[0-9a-f]{64}", str(recovery.get("prior_target_image_id", "")))
-        or recovery.get("recovered_gravity_container_id") != profile["production"].get("gravity_container_id")
-        or recovery.get("recovered_compose_config_hash") != profile["production"].get("compose_config_hash")
-        or recovery.get("prior_tg_bot_image_id") != TG_BASE_IMAGE
-        or recovery.get("recovered_tg_bot_container_id") != profile["production"].get("tg_bot_container_id")
-        or recovery.get("recovered_tg_bot_compose_config_hash") != profile["production"].get("tg_bot_compose_config_hash")
+        or recovery.get("gravity_image_reference") != ROLLBACK_TAG
+        or recovery.get("tg_bot_image_reference") != TG_ROLLBACK_TAG
+        or recovery.get("gravity_image_id") != prestate.get("gravity_image_id")
+        or recovery.get("gravity_compose_config_hash") != prestate.get("gravity_compose_config_hash")
+        or recovery.get("tg_bot_image_id") != prestate.get("tg_bot_image_id")
+        or recovery.get("tg_bot_compose_config_hash") != prestate.get("tg_bot_compose_config_hash")
         or isinstance(recovery.get("backup_bytes"), bool)
         or not isinstance(recovery.get("backup_bytes"), int)
         or recovery["backup_bytes"] < 1024
@@ -274,35 +333,19 @@ def _load_profile(core: Any) -> dict[str, Any]:
             for key in (
                 "prior_source_archive_sha256", "database_identity_sha256",
                 "migration_ledger_sha256", "backup_sha256",
-                "preview_outbox_catalog_sha256", "prior_compose_config_hash",
-                "recovered_compose_config_hash",
-                "prior_tg_bot_compose_config_hash", "recovered_tg_bot_compose_config_hash",
+                "preview_outbox_catalog_sha256", "gravity_compose_config_hash",
+                "tg_bot_compose_config_hash",
             )
         )
     ):
         raise core.RuntimeFault("ACTIVATION_PROFILE_INVALID", 78)
-    production = profile["production"]
     if (
         source.get("tg_bot_patch_source_path") != "tg-bot/src/public-bot-maintenance.js"
         or source.get("archive_prefix") != ""
         or source.get("tg_bot_patch_destination_path") != TG_PATCH_DESTINATION
         or source.get("tg_bot_patch_sha256") != TG_PATCH_TARGET_SHA256
         or source.get("tg_bot_patch_baseline_state") != TG_PATCH_BASELINE_STATE
-        or production.get("tg_bot_compose_service") != "tg-bot"
-        or production.get("tg_bot_container") != "crm-tg-bot"
-        or production.get("tg_bot_image_id") != TG_BASE_IMAGE
-        or production.get("tg_bot_entrypoint") != ["/usr/bin/tini", "--", "/usr/local/bin/tg-bot-entrypoint"]
-        or production.get("tg_bot_cmd") != ["node", "start.js"]
-        or production.get("tg_bot_declared_user") != ""
-        or production.get("tg_bot_working_dir") != "/app"
-        or production.get("tg_bot_patch_uid") != 0
-        or production.get("tg_bot_patch_gid") != 0
-        or production.get("tg_bot_patch_mode") != "0644"
-        or production.get("tg_bot_patch_baseline_state") != TG_PATCH_BASELINE_STATE
-        or production.get("tg_bot_patch_baseline_manifest_file_sha256") != TG_PATCH_BASELINE_MANIFEST_FILE_SHA256
-        or production.get("tg_bot_patch_baseline_manifest_sha256") != TG_PATCH_BASELINE_MANIFEST_SHA256
-        or not SHA256.fullmatch(str(production.get("tg_bot_container_id", "")))
-        or not SHA256.fullmatch(str(production.get("tg_bot_compose_config_hash", "")))
+        or prestate.get("tg_bot_image_id") != TG_BASE_IMAGE
     ):
         raise core.RuntimeFault("ACTIVATION_PROFILE_INVALID", 78)
     return profile
@@ -359,60 +402,6 @@ def _read_state(core: Any) -> dict[str, Any]:
     if not isinstance(value, dict) or value.get("schema") != STATE_SCHEMA or value.get("profile_id") != PROFILE_ID:
         raise core.RuntimeFault("ACTIVATION_STATE_INVALID", 78)
     return value
-
-
-def _read_replacement_recovery_state(core: Any, profile: dict[str, Any]) -> tuple[dict[str, Any], str]:
-    """Read only the exact predecessor profile state authorized for repair.
-
-    Content-specific profiles deliberately have disjoint state roots.  The
-    replacement profile may therefore adopt only the exact failed 08b91459
-    transaction, and only while it is still in ROLLBACK_INTENT.  Installation
-    and self-check never call this function; adoption occurs lazily inside the
-    explicitly invoked rollback transaction.
-    """
-    target = core.mapped(RECOVERY_SOURCE_STATE_PATH)
-    try:
-        core.secure_file(RECOVERY_SOURCE_STATE_PATH, 0o600, maximum=2 * 1024 * 1024)
-        raw = target.read_bytes()
-        value = json.loads(raw.decode("ascii"))
-    except (OSError, UnicodeError, ValueError) as exc:
-        raise core.RuntimeFault("REPLACEMENT_RECOVERY_STATE_UNAVAILABLE", 78) from exc
-    production_identity = value.get("production_identity") if isinstance(value, dict) else None
-    gravity_semantic = production_identity.get("gravity_semantic") if isinstance(production_identity, dict) else None
-    tg_semantic = production_identity.get("tg_bot_semantic") if isinstance(production_identity, dict) else None
-    recovery = profile["recovery"]
-    if (
-        not isinstance(value, dict)
-        or value.get("schema") != STATE_SCHEMA
-        or value.get("profile_id") != RECOVERY_SOURCE_PROFILE_ID
-        or value.get("phase") != "ROLLBACK_INTENT"
-        or any(str(key).startswith("replacement_recovery_") for key in value)
-        or value.get("accepted_commit") != RECOVERY_SOURCE_COMMIT
-        or value.get("accepted_archive_sha256") != RECOVERY_SOURCE_ARCHIVE_SHA256
-        or value.get("target_tag") != RECOVERY_SOURCE_GRAVITY_TAG
-        or value.get("tg_target_tag") != RECOVERY_SOURCE_TG_TAG
-        or not re.fullmatch(r"sha256:[0-9a-f]{64}", str(value.get("target_image_id", "")))
-        or not re.fullmatch(r"sha256:[0-9a-f]{64}", str(value.get("tg_target_image_id", "")))
-        or value.get("rollback_tag") != ROLLBACK_TAG
-        or value.get("rollback_image_id") != profile["production"]["gravity_image_id"]
-        or value.get("tg_rollback_tag") != TG_ROLLBACK_TAG
-        or value.get("tg_rollback_image_id") != profile["production"]["tg_bot_image_id"]
-        or value.get("database_identity_sha256") != recovery["database_identity_sha256"]
-        or value.get("migration_ledger_sha256") != recovery["migration_ledger_sha256"]
-        or not isinstance(production_identity, dict)
-        or not isinstance(gravity_semantic, dict)
-        or not isinstance(tg_semantic, dict)
-        or gravity_semantic.get("image_id") != profile["production"]["gravity_image_id"]
-        or gravity_semantic.get("command") != ["npm", "run", "start"]
-        or gravity_semantic.get("compose_labels", {}).get("com.docker.compose.config-hash")
-        != recovery["recovered_compose_config_hash"]
-        or tg_semantic.get("image_id") != profile["production"]["tg_bot_image_id"]
-        or tg_semantic.get("command") != profile["production"]["tg_bot_cmd"]
-        or tg_semantic.get("compose_labels", {}).get("com.docker.compose.config-hash")
-        != recovery["recovered_tg_bot_compose_config_hash"]
-    ):
-        raise core.RuntimeFault("REPLACEMENT_RECOVERY_STATE_IDENTITY_MISMATCH", 78)
-    return value, hashlib.sha256(raw).hexdigest()
 
 
 def _write_state(core: Any, value: dict[str, Any]) -> None:
@@ -553,15 +542,16 @@ def _container_environment(core: Any, name: str) -> dict[str, str]:
 
 
 def _postgres_identity(core: Any, profile: dict[str, Any], container: str | None = None) -> dict[str, Any]:
-    production = profile["production"]
-    name = container or production["postgres_container"]
+    deployment = profile["deployment"]
+    invariants = profile["transition_invariants"]
+    name = container or deployment["postgres_container"]
     raw = _raw_container(core, name)
     state = raw.get("State") or {}
     if not state.get("Running") or (container is None and (state.get("Health") or {}).get("Status") != "healthy"):
         raise core.RuntimeFault("POSTGRES_NOT_HEALTHY", 74)
     if container is None and (
-        raw.get("Id") != production["postgres_container_id"]
-        or raw.get("Image") != production["postgres_image_id"]
+        raw.get("Id") != invariants["postgres_container_id"]
+        or raw.get("Image") != invariants["postgres_image_id"]
     ):
         raise core.RuntimeFault("POSTGRES_IDENTITY_DRIFT", 74)
     environment = _container_environment(core, name)
@@ -1215,13 +1205,13 @@ def _tg_patch_file_probe(core: Any, container: str) -> dict[str, Any]:
 
 
 def _expected_tg_patch_metadata(profile: dict[str, Any], sha256: str) -> dict[str, Any]:
-    production = profile["production"]
+    invariants = profile["transition_invariants"]
     return {
         "state": "PRESENT",
         "sha256": sha256,
-        "uid": production["tg_bot_patch_uid"],
-        "gid": production["tg_bot_patch_gid"],
-        "mode": production["tg_bot_patch_mode"],
+        "uid": invariants["tg_bot_patch_uid"],
+        "gid": invariants["tg_bot_patch_gid"],
+        "mode": invariants["tg_bot_patch_mode"],
         "size": profile["accepted_source"]["tg_bot_patch_size"],
     }
 
@@ -1273,7 +1263,8 @@ def _pinned_provenance(core: Any, policy: dict[str, Any]) -> dict[str, Any]:
 
 def _unrelated_runtime_identity(core: Any, policy: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any]:
     provenance = _pinned_provenance(core, policy)
-    target_names = {profile["production"]["gravity_container"], profile["production"]["tg_bot_container"]}
+    deployment = profile["deployment"]
+    target_names = {deployment["gravity_container"], deployment["tg_bot_container"]}
     unrelated = [item for item in provenance["semantic"]["records"] if item["name"] not in target_names]
     unrelated_runtime = sorted(
         (item["name"], item["container_id"], item["image_id"], item["status"], item["started_at"], item["restart_count"])
@@ -1288,50 +1279,52 @@ def _unrelated_runtime_identity(core: Any, policy: dict[str, Any], profile: dict
 
 def _assert_unrelated_runtime_unchanged(core: Any, policy: dict[str, Any], profile: dict[str, Any], state: dict[str, Any]) -> None:
     current = _unrelated_runtime_identity(core, policy, profile)
-    original = state.get("production_identity")
+    original = state.get("pre_activation_live_identity")
     if not isinstance(original, dict) or any(original.get(key) != value for key, value in current.items()):
         raise core.RuntimeFault("UNRELATED_CONTAINER_OR_PROVENANCE_DRIFT", 74)
 
 
 def _production_preflight_identity(core: Any, policy: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any]:
-    production = profile["production"]
-    compose = _secure_host_file(core, production["compose_path"], 0o644, 4 * 1024 * 1024)
-    environment = _secure_host_file(core, production["environment_path"], 0o600, 4 * 1024 * 1024)
-    if _sha_file(compose, 4 * 1024 * 1024) != production["compose_sha256"]:
+    deployment = profile["deployment"]
+    invariants = profile["transition_invariants"]
+    prestate = profile["pre_activation_live_prestate"]
+    compose = _secure_host_file(core, deployment["compose_path"], 0o644, 4 * 1024 * 1024)
+    environment = _secure_host_file(core, deployment["environment_path"], 0o600, 4 * 1024 * 1024)
+    if _sha_file(compose, 4 * 1024 * 1024) != invariants["compose_sha256"]:
         raise core.RuntimeFault("PRODUCTION_COMPOSE_IDENTITY_DRIFT", 74)
     gravity = core.container_projection(policy, "crm.container.gravity_mvp")
     if (
-        gravity["container_id"] != production["gravity_container_id"]
-        or gravity["image_id"] != production["gravity_image_id"]
+        gravity["container_id"] != prestate["gravity_container_id"]
+        or gravity["image_id"] != prestate["gravity_image_id"]
         or not gravity["running"]
         or gravity["health"] != "healthy"
         or gravity["restart_count"] != 0
-        or gravity["compose_labels"].get("com.docker.compose.config-hash") != production["compose_config_hash"]
+        or gravity["compose_labels"].get("com.docker.compose.config-hash") != prestate["gravity_compose_config_hash"]
     ):
         raise core.RuntimeFault("PRODUCTION_GRAVITY_IDENTITY_DRIFT", 74)
     tg_bot = core.container_projection(policy, "crm.container.telegram_bot")
     if (
-        tg_bot["container_id"] != production["tg_bot_container_id"]
-        or tg_bot["image_id"] != production["tg_bot_image_id"]
+        tg_bot["container_id"] != prestate["tg_bot_container_id"]
+        or tg_bot["image_id"] != prestate["tg_bot_image_id"]
         or not tg_bot["running"]
         or tg_bot["health"] != "healthy"
         or tg_bot["restart_count"] != 0
-        or tg_bot["compose_labels"].get("com.docker.compose.config-hash") != production["tg_bot_compose_config_hash"]
-        or tg_bot["entrypoint"] != production["tg_bot_entrypoint"]
-        or tg_bot["cmd"] != production["tg_bot_cmd"]
-        or tg_bot["declared_user"] != production["tg_bot_declared_user"]
-        or tg_bot["working_dir"] != production["tg_bot_working_dir"]
+        or tg_bot["compose_labels"].get("com.docker.compose.config-hash") != prestate["tg_bot_compose_config_hash"]
+        or tg_bot["entrypoint"] != invariants["tg_bot_entrypoint"]
+        or tg_bot["cmd"] != invariants["tg_bot_cmd"]
+        or tg_bot["declared_user"] != invariants["tg_bot_declared_user"]
+        or tg_bot["working_dir"] != invariants["tg_bot_working_dir"]
     ):
         raise core.RuntimeFault("PRODUCTION_TG_BOT_IDENTITY_DRIFT", 74)
-    tg_patch = _tg_patch_file_probe(core, production["tg_bot_container"])
+    tg_patch = _tg_patch_file_probe(core, deployment["tg_bot_container"])
     _validate_tg_patch_absent(core, tg_patch, "PRODUCTION_TG_PATCH_BASELINE_DRIFT")
     manifest = core.tree_manifest(policy, core.Invocation("fs-tree", "crm.repo.production"))
-    if manifest["manifest_sha256"] != production["source_manifest_sha256"]:
+    if manifest["manifest_sha256"] != prestate["source_manifest_sha256"]:
         raise core.RuntimeFault("PRODUCTION_SOURCE_IDENTITY_DRIFT", 74)
     postgres = _postgres_identity(core, profile)
     unrelated_identity = _unrelated_runtime_identity(core, policy, profile)
     return {
-        "compose_sha256": production["compose_sha256"],
+        "compose_sha256": invariants["compose_sha256"],
         "environment_sha256": _sha_file(environment, 4 * 1024 * 1024),
         "production_source_manifest_sha256": manifest["manifest_sha256"],
         "gravity_semantic": gravity["semantic"],
@@ -1646,8 +1639,9 @@ def _seal_rollback_tag(core: Any, expected: str, rollback_tag: str, *, prefix: s
 
 
 def _seal_rollback_images(core: Any, profile: dict[str, Any]) -> None:
-    _seal_rollback_tag(core, profile["production"]["gravity_image_id"], ROLLBACK_TAG, prefix="GRAVITY")
-    _seal_rollback_tag(core, profile["production"]["tg_bot_image_id"], TG_ROLLBACK_TAG, prefix="TG_BOT")
+    recovery = profile["rollback_recovery"]
+    _seal_rollback_tag(core, recovery["gravity_image_id"], ROLLBACK_TAG, prefix="GRAVITY")
+    _seal_rollback_tag(core, recovery["tg_bot_image_id"], TG_ROLLBACK_TAG, prefix="TG_BOT")
 
 
 def _audit(core: Any, invocation: Any, state: dict[str, Any], result: str, post: dict[str, Any]) -> None:
@@ -1746,123 +1740,6 @@ def _write_terminal_state(core: Any, invocation: Any, pre: dict[str, Any], resul
     return terminal
 
 
-def _release_retry_preflight(
-    core: Any,
-    policy: dict[str, Any],
-    profile: dict[str, Any],
-    invocation: Any,
-    state: dict[str, Any],
-) -> dict[str, Any]:
-    recovery = profile["recovery"]
-    preview = state.get("preview_proof")
-    prior_target = _image_inspect(core, PRIOR_TARGET_TAG)
-    rollback = _image_inspect(core, ROLLBACK_TAG)
-    if (
-        state.get("phase") != "ROLLED_BACK"
-        or state.get("accepted_commit") != recovery["prior_source_commit"]
-        or state.get("accepted_archive_sha256") != recovery["prior_source_archive_sha256"]
-        or state.get("target_tag") != PRIOR_TARGET_TAG
-        or state.get("target_image_id") != recovery["prior_target_image_id"]
-        or prior_target is None
-        or prior_target["Id"] != recovery["prior_target_image_id"]
-        or state.get("rollback_tag") != ROLLBACK_TAG
-        or state.get("rollback_image_id") != profile["production"]["gravity_image_id"]
-        or rollback is None
-        or rollback["Id"] != profile["production"]["gravity_image_id"]
-        or state.get("database_identity_sha256") != recovery["database_identity_sha256"]
-        or state.get("migration_ledger_sha256") != recovery["migration_ledger_sha256"]
-        or state.get("backup_sha256") != recovery["backup_sha256"]
-        or state.get("backup_bytes") != recovery["backup_bytes"]
-        or state.get("restore_verified") is not True
-        or state.get("rollback_image_schema_compatible") is not True
-        or not isinstance(state.get("migration_completed_at"), str)
-        or not state["migration_completed_at"]
-        or not isinstance(state.get("rollback_completed_at"), str)
-        or not state["rollback_completed_at"]
-        or state.get("activation_failure") is not True
-        or not isinstance(preview, dict)
-        or set(preview) != {"migration_ledger_sha256", "outbox_catalog_sha256"}
-        or preview.get("migration_ledger_sha256") != recovery["migration_ledger_sha256"]
-        or preview.get("outbox_catalog_sha256") != recovery["preview_outbox_catalog_sha256"]
-    ):
-        raise core.RuntimeFault("ROLLED_BACK_RETRY_STATE_INVALID", 78)
-    verified_backup = _verify_recovery_backup(core, profile, state)
-    if (
-        verified_backup["sha256"] != recovery["backup_sha256"]
-        or verified_backup["bytes"] != recovery["backup_bytes"]
-    ):
-        raise core.RuntimeFault("ROLLED_BACK_RETRY_BACKUP_DRIFT", 74)
-    database, _ = _database_status(core, profile)
-    if (
-        database["migration_state"] != "APPROVED_OUTBOX_APPLIED"
-        or database["database_identity_sha256"] != recovery["database_identity_sha256"]
-        or database["migration_ledger_sha256"] != recovery["migration_ledger_sha256"]
-    ):
-        raise core.RuntimeFault("ROLLED_BACK_RETRY_DATABASE_DRIFT", 74)
-    inventory = _archive_inventory(core, profile)
-    production = _production_preflight_identity(core, policy, profile)
-    storage = _storage_guard(core, profile, int(profile["limits"]["preflight_working_bytes"]))
-    prior_state_digest = _digest(state)
-    intent = {
-        **state,
-        "phase": "RETRY_PREFLIGHT_INTENT",
-        "retry_source_state_digest": prior_state_digest,
-    }
-    _audit(core, invocation, state, "retry_intent", intent)
-    try:
-        context = _extract_source(core, profile)
-        target_image_id = _build_candidate(core, profile, context)
-        tg_target_image_id = _build_tg_candidate(core, profile)
-        _seal_rollback_images(core, profile)
-        next_state = {
-            "schema": STATE_SCHEMA,
-            "profile_id": PROFILE_ID,
-            "phase": "MIGRATED",
-            "accepted_commit": profile["accepted_source"]["commit"],
-            "accepted_archive_sha256": profile["accepted_source"]["archive_sha256"],
-            "target_image_id": target_image_id,
-            "target_tag": TARGET_TAG,
-            "rollback_image_id": profile["production"]["gravity_image_id"],
-            "rollback_tag": ROLLBACK_TAG,
-            "tg_target_image_id": tg_target_image_id,
-            "tg_target_tag": TG_TARGET_TAG,
-            "tg_rollback_image_id": profile["production"]["tg_bot_image_id"],
-            "tg_rollback_tag": TG_ROLLBACK_TAG,
-            "production_identity": production,
-            "database_identity_sha256": database["database_identity_sha256"],
-            "migration_ledger_sha256": database["migration_ledger_sha256"],
-            "preflight_completed_at": core.now(),
-            "backup_sha256": recovery["backup_sha256"],
-            "backup_bytes": recovery["backup_bytes"],
-            "restore_verified": True,
-            "preview_proof": dict(preview),
-            "rollback_image_schema_compatible": True,
-            "migration_completed_at": state["migration_completed_at"],
-            "retry_from_package_version": recovery["predecessor_package_version"],
-            "retry_source_state_digest": prior_state_digest,
-            "retry_storage_guard": storage,
-        }
-        next_state = _write_terminal_state(core, invocation, intent, "retry_ok", next_state)
-    except Exception:
-        _audit(core, invocation, intent, "retry_failed", _read_state(core))
-        raise
-    return {
-        "profile_id": PROFILE_ID,
-        "status": "PREFLIGHT_READY_DATABASE_ALREADY_MIGRATED",
-        "archive_inventory": inventory,
-        "target_image_id": next_state["target_image_id"],
-        "rollback_image_id": next_state["rollback_image_id"],
-        "tg_target_image_id": next_state["tg_target_image_id"],
-        "tg_rollback_image_id": next_state["tg_rollback_image_id"],
-        "database_identity_sha256": next_state["database_identity_sha256"],
-        "database_migration_state": database["migration_state"],
-        "backup": verified_backup,
-        "storage": storage,
-        "production_mutation": False,
-        "production_database_mutation": False,
-    }
-
-
 def _release_preflight(core: Any, policy: dict[str, Any], profile: dict[str, Any], invocation: Any) -> dict[str, Any]:
     with _lock(core):
         state = _read_state(core)
@@ -1872,8 +1749,11 @@ def _release_preflight(core: Any, policy: dict[str, Any], profile: dict[str, Any
             rollback = _image_inspect(core, ROLLBACK_TAG)
             tg_target = _image_inspect(core, TG_TARGET_TAG)
             tg_rollback = _image_inspect(core, TG_ROLLBACK_TAG)
-            if target is None or target["Id"] != state.get("target_image_id") or rollback is None or rollback["Id"] != profile["production"]["gravity_image_id"] or tg_target is None or tg_target["Id"] != state.get("tg_target_image_id") or tg_rollback is None or tg_rollback["Id"] != profile["production"]["tg_bot_image_id"]:
+            if target is None or target["Id"] != state.get("target_image_id") or rollback is None or rollback["Id"] != profile["rollback_recovery"]["gravity_image_id"] or tg_target is None or tg_target["Id"] != state.get("tg_target_image_id") or tg_rollback is None or tg_rollback["Id"] != profile["rollback_recovery"]["tg_bot_image_id"]:
                 raise core.RuntimeFault("SEALED_RELEASE_IDENTITY_DRIFT", 74)
+            current_domains = _derive_transition_identity_domains(core, profile, state)
+            if any(state.get(key) != value for key, value in current_domains.items()):
+                raise core.RuntimeFault("TRANSITION_IDENTITY_CHANGED_SINCE_PREFLIGHT", 74)
             return {
                 "profile_id": PROFILE_ID,
                 "status": "ALREADY_PREFLIGHTED",
@@ -1902,6 +1782,9 @@ def _release_preflight(core: Any, policy: dict[str, Any], profile: dict[str, Any
             target_image_id = _build_candidate(core, profile, context)
             tg_target_image_id = _build_tg_candidate(core, profile)
             _seal_rollback_images(core, profile)
+            domains = _derive_transition_identity_domains(
+                core, profile, {"pre_activation_live_identity": production},
+            )
             next_state = {
                 "schema": STATE_SCHEMA,
                 "profile_id": PROFILE_ID,
@@ -1910,13 +1793,14 @@ def _release_preflight(core: Any, policy: dict[str, Any], profile: dict[str, Any
                 "accepted_archive_sha256": profile["accepted_source"]["archive_sha256"],
                 "target_image_id": target_image_id,
                 "target_tag": TARGET_TAG,
-                "rollback_image_id": profile["production"]["gravity_image_id"],
+                "rollback_image_id": profile["rollback_recovery"]["gravity_image_id"],
                 "rollback_tag": ROLLBACK_TAG,
                 "tg_target_image_id": tg_target_image_id,
                 "tg_target_tag": TG_TARGET_TAG,
-                "tg_rollback_image_id": profile["production"]["tg_bot_image_id"],
+                "tg_rollback_image_id": profile["rollback_recovery"]["tg_bot_image_id"],
                 "tg_rollback_tag": TG_ROLLBACK_TAG,
-                "production_identity": production,
+                "pre_activation_live_identity": production,
+                **domains,
                 "database_identity_sha256": database["database_identity_sha256"],
                 "migration_ledger_sha256": database["migration_ledger_sha256"],
                 "migration_completed_at": "SOURCE_ONLY_NO_DATABASE_MUTATION",
@@ -1934,6 +1818,8 @@ def _release_preflight(core: Any, policy: dict[str, Any], profile: dict[str, Any
             "rollback_image_id": next_state["rollback_image_id"],
             "tg_target_image_id": next_state["tg_target_image_id"],
             "tg_rollback_image_id": next_state["tg_rollback_image_id"],
+            "post_activation_target_identity": next_state["post_activation_target_identity"],
+            "rollback_recovery_identity": next_state["rollback_recovery_identity"],
             "database_identity_sha256": next_state["database_identity_sha256"],
             "storage": storage,
             "production_mutation": False,
@@ -1979,7 +1865,7 @@ def _create_backup(core: Any, profile: dict[str, Any], identity: dict[str, Any])
             try:
                 completed = _required_success(
                     core,
-                    [DOCKER, "run", "--name", BACKUP_LIST_RUNNER, "--label", f"yoko.activation.profile={PROFILE_ID}", "--label", f"yoko.activation.runner={BACKUP_LIST_RUNNER}", "--network", "none", "-i", profile["production"]["postgres_image_id"], "pg_restore", "--list"],
+                    [DOCKER, "run", "--name", BACKUP_LIST_RUNNER, "--label", f"yoko.activation.profile={PROFILE_ID}", "--label", f"yoko.activation.runner={BACKUP_LIST_RUNNER}", "--network", "none", "-i", profile["transition_invariants"]["postgres_image_id"], "pg_restore", "--list"],
                     timeout=120,
                     code="BACKUP_LIST_VERIFY_FAILED",
                     stdin_fd=read_fd,
@@ -2061,7 +1947,7 @@ def _start_preview(core: Any, profile: dict[str, Any]) -> dict[str, Any]:
     try:
         _required_success(
             core,
-            [DOCKER, "run", "-d", "--name", PREVIEW_CONTAINER, "--network", PREVIEW_NETWORK, "--label", f"yoko.activation.profile={PROFILE_ID}", "--tmpfs", "/var/lib/postgresql/data:rw,noexec,nosuid,nodev,size=8589934592", "--env-file", PREVIEW_POSTGRES_ENV, profile["production"]["postgres_image_id"]],
+            [DOCKER, "run", "-d", "--name", PREVIEW_CONTAINER, "--network", PREVIEW_NETWORK, "--label", f"yoko.activation.profile={PROFILE_ID}", "--tmpfs", "/var/lib/postgresql/data:rw,noexec,nosuid,nodev,size=8589934592", "--env-file", PREVIEW_POSTGRES_ENV, profile["transition_invariants"]["postgres_image_id"]],
             timeout=120,
             code="PREVIEW_POSTGRES_START_FAILED",
         )
@@ -2076,7 +1962,7 @@ def _start_preview(core: Any, profile: dict[str, Any]) -> dict[str, Any]:
     else:
         raise core.RuntimeFault("PREVIEW_POSTGRES_NOT_READY", 74)
     raw = _raw_container(core, PREVIEW_CONTAINER)
-    if raw.get("Image") != profile["production"]["postgres_image_id"]:
+    if raw.get("Image") != profile["transition_invariants"]["postgres_image_id"]:
         raise core.RuntimeFault("PREVIEW_POSTGRES_IMAGE_MISMATCH", 74)
     ports = (raw.get("NetworkSettings") or {}).get("Ports") or {}
     if any(value for value in ports.values()):
@@ -2104,7 +1990,7 @@ def _database_url(user: str, password: str, host: str, database: str) -> str:
 
 
 def _production_database_url(core: Any, profile: dict[str, Any], identity: dict[str, Any]) -> str:
-    value = _container_environment(core, profile["production"]["gravity_container"]).get("DATABASE_URL", "")
+    value = _container_environment(core, profile["deployment"]["gravity_container"]).get("DATABASE_URL", "")
     try:
         parsed = urllib.parse.urlsplit(value)
     except ValueError as exc:
@@ -2232,7 +2118,7 @@ def _prepare_production_runners(core: Any, profile: dict[str, Any], image_id: st
                     DOCKER, "create", "--name", runner,
                     "--label", f"yoko.activation.profile={PROFILE_ID}",
                     "--label", f"yoko.activation.runner={runner}",
-                    "--network", profile["production"]["network"],
+                    "--network", profile["deployment"]["network"],
                     "--entrypoint", "/app/node_modules/.bin/prisma",
                     "--env-file", MIGRATION_ENV,
                     image_id, *_production_runner_command(runner),
@@ -2251,7 +2137,7 @@ def _prepare_production_runners(core: Any, profile: dict[str, Any], image_id: st
             if (
                 raw.get("Image") != image_id
                 or config.get("Image") != image_id
-                or host_config.get("NetworkMode") != profile["production"]["network"]
+                or host_config.get("NetworkMode") != profile["deployment"]["network"]
                 or database_urls != [database_url]
             ):
                 raise core.RuntimeFault("PRODUCTION_RUNNER_IDENTITY_INVALID", 74)
@@ -2422,7 +2308,7 @@ def _verify_preview_after_migration(core: Any, profile: dict[str, Any], preview:
 def _prove_old_image_compatibility(core: Any, profile: dict[str, Any], preview: dict[str, Any]) -> None:
     url = _database_url(preview["user"], preview["password"], PREVIEW_CONTAINER, preview["database"])
     _run_candidate_migration(
-        core, profile, profile["production"]["gravity_image_id"], url,
+        core, profile, profile["rollback_recovery"]["gravity_image_id"], url,
         PREVIEW_NETWORK, ROLLBACK_PROOF_RUNNER,
         code="ROLLBACK_IMAGE_SCHEMA_COMPATIBILITY_FAILED",
     )
@@ -2725,23 +2611,25 @@ def _write_fixed_file(core: Any, path: str, raw: bytes, mode: int) -> None:
 def _compose_overlay(gravity_image: str, tg_image: str, *, activate: bool) -> bytes:
     if any(not re.fullmatch(r"[a-z0-9][a-z0-9./:_-]+", image) or ".." in image or "//" in image for image in (gravity_image, tg_image)):
         raise RuntimeError("IMAGE_REFERENCE_INVALID")
+    gravity_command = "    command: [\"npm\", \"run\", \"start\"]\n" if activate else ""
     return (
         "services:\n"
         "  gravity-mvp:\n"
         f"    image: {gravity_image}\n"
-        "    command: [\"npm\", \"run\", \"start\"]\n"
+        f"{gravity_command}"
         "  tg-bot:\n"
         f"    image: {tg_image}\n"
     ).encode("ascii")
 
 
 def _validate_production_compose_inputs(core: Any, profile: dict[str, Any], state: dict[str, Any]) -> None:
-    production = profile["production"]
-    compose = _secure_host_file(core, production["compose_path"], 0o644, 4 * 1024 * 1024)
-    environment = _secure_host_file(core, production["environment_path"], 0o600, 4 * 1024 * 1024)
-    production_identity = state.get("production_identity")
+    deployment = profile["deployment"]
+    invariants = profile["transition_invariants"]
+    compose = _secure_host_file(core, deployment["compose_path"], 0o644, 4 * 1024 * 1024)
+    environment = _secure_host_file(core, deployment["environment_path"], 0o600, 4 * 1024 * 1024)
+    production_identity = state.get("pre_activation_live_identity")
     if (
-        _sha_file(compose, 4 * 1024 * 1024) != production["compose_sha256"]
+        _sha_file(compose, 4 * 1024 * 1024) != invariants["compose_sha256"]
         or not isinstance(production_identity, dict)
         or not SHA256.fullmatch(str(production_identity.get("environment_sha256", "")))
         or _sha_file(environment, 4 * 1024 * 1024) != production_identity["environment_sha256"]
@@ -2751,12 +2639,12 @@ def _validate_production_compose_inputs(core: Any, profile: dict[str, Any], stat
 
 def _compose_up(core: Any, profile: dict[str, Any], state: dict[str, Any], overlay: str) -> None:
     _validate_production_compose_inputs(core, profile, state)
-    production = profile["production"]
+    deployment = profile["deployment"]
     args = [
         DOCKER, "compose",
         "--project-directory", "/opt/crm/deploy",
-        "--env-file", production["environment_path"],
-        "-f", production["compose_path"],
+        "--env-file", deployment["environment_path"],
+        "-f", deployment["compose_path"],
         "-f", overlay,
     ]
     _validate_dual_compose_projection(core, profile, args, overlay == ACTIVATE_OVERLAY)
@@ -2765,7 +2653,7 @@ def _compose_up(core: Any, profile: dict[str, Any], state: dict[str, Any], overl
     try:
         _required_success(
             core,
-            [*args, "up", "-d", "--no-deps", "--no-build", "--pull", "never", "--force-recreate", "--wait", "--wait-timeout", "180", production["compose_service"], production["tg_bot_compose_service"]],
+            [*args, "up", "-d", "--no-deps", "--no-build", "--pull", "never", "--force-recreate", "--wait", "--wait-timeout", "180", deployment["compose_service"], deployment["tg_bot_compose_service"]],
             timeout=int(profile["limits"]["activation_timeout_seconds"]),
             code="DUAL_SERVICE_COMPOSE_ACTIVATION_FAILED",
             stdout_fd=fd,
@@ -2788,13 +2676,77 @@ def _compose_config_json(core: Any, args: list[str]) -> dict[str, Any]:
     return value
 
 
+def _compose_service_hash(core: Any, args: list[str], service: str) -> str:
+    completed = _required_success(
+        core, [*args, "config", "--hash", service], timeout=60,
+        code="TRANSITION_COMPOSE_HASH_DERIVATION_FAILED",
+    )
+    try:
+        output = completed.stdout.decode("ascii").strip().split()
+    except UnicodeError as exc:
+        raise core.RuntimeFault("TRANSITION_COMPOSE_HASH_DERIVATION_INVALID", 74) from exc
+    if len(output) != 2 or output[0] != service or not SHA256.fullmatch(output[1]):
+        raise core.RuntimeFault("TRANSITION_COMPOSE_HASH_DERIVATION_INVALID", 74)
+    return output[1]
+
+
+def _transition_compose_args(profile: dict[str, Any], overlay: str) -> list[str]:
+    deployment = profile["deployment"]
+    return [
+        DOCKER, "compose", "--project-directory", "/opt/crm/deploy",
+        "--env-file", deployment["environment_path"],
+        "-f", deployment["compose_path"], "-f", overlay,
+    ]
+
+
+def _derive_transition_identity_domains(core: Any, profile: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
+    """Bind target and recovery hashes without treating either as live prestate."""
+    _validate_production_compose_inputs(core, profile, state)
+    _write_fixed_file(core, ACTIVATE_OVERLAY, _compose_overlay(TARGET_TAG, TG_TARGET_TAG, activate=True), 0o400)
+    _write_fixed_file(core, ROLLBACK_OVERLAY, _compose_overlay(ROLLBACK_TAG, TG_ROLLBACK_TAG, activate=False), 0o400)
+    deployment = profile["deployment"]
+    prestate = profile["pre_activation_live_prestate"]
+    recovery = profile["rollback_recovery"]
+    activate_args = _transition_compose_args(profile, ACTIVATE_OVERLAY)
+    rollback_args = _transition_compose_args(profile, ROLLBACK_OVERLAY)
+    _validate_dual_compose_projection(core, profile, activate_args, True)
+    _validate_dual_compose_projection(core, profile, rollback_args, False)
+    target = {
+        "authority": "SEALED_CANDIDATE_DERIVED",
+        "gravity_compose_config_hash": _compose_service_hash(core, activate_args, deployment["compose_service"]),
+        "tg_bot_compose_config_hash": _compose_service_hash(core, activate_args, deployment["tg_bot_compose_service"]),
+    }
+    restored = {
+        "authority": "EXACT_ACCEPTED_PRE_ACTIVATION_PREDECESSOR",
+        "gravity_compose_config_hash": _compose_service_hash(core, rollback_args, deployment["compose_service"]),
+        "tg_bot_compose_config_hash": _compose_service_hash(core, rollback_args, deployment["tg_bot_compose_service"]),
+    }
+    if (
+        restored["gravity_compose_config_hash"] != recovery["gravity_compose_config_hash"]
+        or restored["tg_bot_compose_config_hash"] != recovery["tg_bot_compose_config_hash"]
+        or recovery["gravity_compose_config_hash"] != prestate["gravity_compose_config_hash"]
+        or recovery["tg_bot_compose_config_hash"] != prestate["tg_bot_compose_config_hash"]
+    ):
+        raise core.RuntimeFault("ROLLBACK_RECOVERY_IDENTITY_DERIVATION_MISMATCH", 74)
+    if (
+        target["gravity_compose_config_hash"] == prestate["gravity_compose_config_hash"]
+        or target["tg_bot_compose_config_hash"] == prestate["tg_bot_compose_config_hash"]
+    ):
+        raise core.RuntimeFault("TRANSITION_IDENTITY_DOMAIN_ALIAS", 78)
+    _validate_production_compose_inputs(core, profile, state)
+    return {
+        "post_activation_target_identity": target,
+        "rollback_recovery_identity": restored,
+    }
+
+
 def _validate_dual_compose_projection(core: Any, profile: dict[str, Any], overlay_args: list[str], activate: bool) -> None:
-    production = profile["production"]
+    deployment = profile["deployment"]
     base_args = overlay_args[:-2]
     base = _compose_config_json(core, base_args)
     candidate = _compose_config_json(core, overlay_args)
-    gravity_name = production["compose_service"]
-    tg_name = production["tg_bot_compose_service"]
+    gravity_name = deployment["compose_service"]
+    tg_name = deployment["tg_bot_compose_service"]
     if gravity_name != "gravity-mvp" or tg_name != "tg-bot" or set(base["services"]) != set(candidate["services"]):
         raise core.RuntimeFault("DUAL_SERVICE_COMPOSE_PROJECTION_DRIFT", 74)
     base_other = {key: value for key, value in base["services"].items() if key not in {gravity_name, tg_name}}
@@ -2802,8 +2754,8 @@ def _validate_dual_compose_projection(core: Any, profile: dict[str, Any], overla
     if _canonical(base_other) != _canonical(candidate_other):
         raise core.RuntimeFault("UNRELATED_COMPOSE_SERVICE_DRIFT", 74)
     expected_images = {
-        gravity_name: TARGET_TAG if activate else PRIOR_TARGET_TAG,
-        tg_name: TG_TARGET_TAG if activate else TG_PREDECESSOR_REFERENCE,
+        gravity_name: TARGET_TAG if activate else ROLLBACK_TAG,
+        tg_name: TG_TARGET_TAG if activate else TG_ROLLBACK_TAG,
     }
     for name in (gravity_name, tg_name):
         original = dict(base["services"][name])
@@ -2811,7 +2763,7 @@ def _validate_dual_compose_projection(core: Any, profile: dict[str, Any], overla
         if actual.get("image") != expected_images[name]:
             raise core.RuntimeFault("DUAL_SERVICE_COMPOSE_IMAGE_DRIFT", 74)
         actual["image"] = original.get("image")
-        if name == gravity_name:
+        if name == gravity_name and activate:
             if actual.get("command") != ["npm", "run", "start"]:
                 raise core.RuntimeFault("DUAL_SERVICE_COMPOSE_COMMAND_DRIFT", 74)
             if "command" in original:
@@ -2823,11 +2775,12 @@ def _validate_dual_compose_projection(core: Any, profile: dict[str, Any], overla
 
 
 def _verify_predecessor_compose_references(core: Any, profile: dict[str, Any]) -> None:
-    gravity = _image_inspect(core, PRIOR_TARGET_TAG)
-    tg_bot = _image_inspect(core, TG_PREDECESSOR_REFERENCE)
-    if gravity is None or gravity.get("Id") != profile["production"]["gravity_image_id"]:
+    recovery = profile["rollback_recovery"]
+    gravity = _image_inspect(core, recovery["gravity_image_reference"])
+    tg_bot = _image_inspect(core, recovery["tg_bot_image_reference"])
+    if gravity is None or gravity.get("Id") != recovery["gravity_image_id"]:
         raise core.RuntimeFault("GRAVITY_PREDECESSOR_REFERENCE_IDENTITY_DRIFT", 74)
-    if tg_bot is None or tg_bot.get("Id") != profile["production"]["tg_bot_image_id"]:
+    if tg_bot is None or tg_bot.get("Id") != recovery["tg_bot_image_id"]:
         raise core.RuntimeFault("TG_BOT_PREDECESSOR_REFERENCE_IDENTITY_DRIFT", 74)
 
 
@@ -2849,24 +2802,24 @@ def _rollback_semantics_compatibility(
     gravity: dict[str, Any],
 ) -> str | None:
     """Accept only the exact predecessor runtime semantics captured by v8."""
-    original = state.get("production_identity", {}).get("gravity_semantic")
+    original = state.get("pre_activation_live_identity", {}).get("gravity_semantic")
     current = gravity.get("semantic")
     if (
         not isinstance(original, dict)
         or not isinstance(current, dict)
         or _preserved_gravity_semantics(current) != _preserved_gravity_semantics(original)
         or current.get("command") != original.get("command")
-        or original.get("image_id") != profile["production"]["gravity_image_id"]
-        or current.get("image_id") != profile["production"]["gravity_image_id"]
+        or original.get("image_id") != profile["rollback_recovery"]["gravity_image_id"]
+        or current.get("image_id") != profile["rollback_recovery"]["gravity_image_id"]
     ):
         return None
 
-    production = profile["production"]
-    recovery = profile["recovery"]
+    deployment = profile["deployment"]
+    recovery = profile["rollback_recovery"]
     recovered_labels = {
-        "com.docker.compose.config-hash": recovery["recovered_compose_config_hash"],
-        "com.docker.compose.project": production["compose_project"],
-        "com.docker.compose.service": production["compose_service"],
+        "com.docker.compose.config-hash": recovery["gravity_compose_config_hash"],
+        "com.docker.compose.project": deployment["compose_project"],
+        "com.docker.compose.service": deployment["compose_service"],
     }
     original_labels = original.get("compose_labels")
     current_labels = current.get("compose_labels")
@@ -2880,26 +2833,26 @@ def _rollback_tg_semantics_compatibility(
     state: dict[str, Any],
     tg_bot: dict[str, Any],
 ) -> str | None:
-    original = state.get("production_identity", {}).get("tg_bot_semantic")
+    original = state.get("pre_activation_live_identity", {}).get("tg_bot_semantic")
     current = tg_bot.get("semantic")
     if (
         not isinstance(original, dict)
         or not isinstance(current, dict)
         or _preserved_service_semantics(current) != _preserved_service_semantics(original)
         or current.get("command") != original.get("command")
-        or original.get("image_id") != profile["production"]["tg_bot_image_id"]
-        or current.get("image_id") != profile["production"]["tg_bot_image_id"]
-        or tg_bot.get("entrypoint") != profile["production"]["tg_bot_entrypoint"]
-        or tg_bot.get("cmd") != profile["production"]["tg_bot_cmd"]
-        or tg_bot.get("declared_user") != profile["production"]["tg_bot_declared_user"]
-        or tg_bot.get("working_dir") != profile["production"]["tg_bot_working_dir"]
+        or original.get("image_id") != profile["rollback_recovery"]["tg_bot_image_id"]
+        or current.get("image_id") != profile["rollback_recovery"]["tg_bot_image_id"]
+        or tg_bot.get("entrypoint") != profile["transition_invariants"]["tg_bot_entrypoint"]
+        or tg_bot.get("cmd") != profile["transition_invariants"]["tg_bot_cmd"]
+        or tg_bot.get("declared_user") != profile["transition_invariants"]["tg_bot_declared_user"]
+        or tg_bot.get("working_dir") != profile["transition_invariants"]["tg_bot_working_dir"]
     ):
         return None
-    production = profile["production"]
+    deployment = profile["deployment"]
     recovered_labels = {
-        "com.docker.compose.config-hash": profile["recovery"]["recovered_tg_bot_compose_config_hash"],
-        "com.docker.compose.project": production["compose_project"],
-        "com.docker.compose.service": production["tg_bot_compose_service"],
+        "com.docker.compose.config-hash": profile["rollback_recovery"]["tg_bot_compose_config_hash"],
+        "com.docker.compose.project": deployment["compose_project"],
+        "com.docker.compose.service": deployment["tg_bot_compose_service"],
     }
     if original.get("compose_labels") == recovered_labels and current.get("compose_labels") == recovered_labels:
         return "EXACT"
@@ -2974,7 +2927,7 @@ def _protected_messages_health_probe_script(origin: str = "http://127.0.0.1:3002
 
 
 def _application_health_once(core: Any, profile: dict[str, Any], *, require_outbox: bool) -> dict[str, Any]:
-    container = profile["production"]["gravity_container"]
+    container = profile["deployment"]["gravity_container"]
     script = _protected_messages_health_probe_script()
     completed = _run(core, [DOCKER, "exec", container, "node", "-e", script], timeout=15)
     if completed.returncode != 0:
@@ -3116,7 +3069,7 @@ def _rollback_application_health_once(core: Any, profile: dict[str, Any]) -> dic
     image, process semantics and the exact migrated database are checked by the
     surrounding rollback path.
     """
-    container = profile["production"]["gravity_container"]
+    container = profile["deployment"]["gravity_container"]
     script = (
         "const h=require('http');const q=h.get('http://127.0.0.1:3002/api/health',"
         "r=>{let b='';r.setEncoding('utf8');r.on('data',c=>{b+=c;if(b.length>1048576)q.destroy()});"
@@ -3177,7 +3130,7 @@ def _rollback_application_health(core: Any, profile: dict[str, Any]) -> dict[str
 
 
 def _tg_bot_health(core: Any, profile: dict[str, Any], expected_sha256: str | None) -> dict[str, Any]:
-    container = profile["production"]["tg_bot_container"]
+    container = profile["deployment"]["tg_bot_container"]
     script = (
         "const n=require('net');const s=n.connect(3001,'127.0.0.1');"
         "s.setTimeout(10000);s.on('connect',()=>{s.destroy();process.exit(0)});"
@@ -3203,7 +3156,15 @@ def _tg_bot_health(core: Any, profile: dict[str, Any], expected_sha256: str | No
 def _activation_postcheck(core: Any, policy: dict[str, Any], profile: dict[str, Any], state: dict[str, Any], *, expected_image: str, expected_semantic: dict[str, Any]) -> dict[str, Any]:
     gravity = core.container_projection(policy, "crm.container.gravity_mvp")
     tg_bot = core.container_projection(policy, "crm.container.telegram_bot")
-    if gravity["image_id"] != expected_image or not gravity["running"] or gravity["health"] != "healthy":
+    target = state.get("post_activation_target_identity")
+    if not isinstance(target, dict):
+        raise core.RuntimeFault("POST_ACTIVATION_TARGET_IDENTITY_MISSING", 78)
+    if (
+        gravity["image_id"] != expected_image
+        or gravity["compose_labels"].get("com.docker.compose.config-hash")
+        != target.get("gravity_compose_config_hash")
+        or not gravity["running"] or gravity["health"] != "healthy"
+    ):
         raise core.RuntimeFault("GRAVITY_ACTIVATION_IDENTITY_OR_HEALTH_FAILED", 74)
     if _preserved_gravity_semantics(gravity["semantic"]) != _preserved_gravity_semantics(expected_semantic):
         raise core.RuntimeFault("GRAVITY_ACTIVATION_SEMANTIC_DRIFT", 74)
@@ -3216,15 +3177,17 @@ def _activation_postcheck(core: Any, policy: dict[str, Any], profile: dict[str, 
         raise core.RuntimeFault("GRAVITY_ACTIVATION_PROCESS_CONTRACT_FAILED", 74)
     if (
         tg_bot["image_id"] != state.get("tg_target_image_id")
+        or tg_bot["compose_labels"].get("com.docker.compose.config-hash")
+        != target.get("tg_bot_compose_config_hash")
         or not tg_bot["running"]
         or tg_bot["health"] != "healthy"
         or tg_bot["restart_count"] != 0
         or _preserved_service_semantics(tg_bot["semantic"])
-        != _preserved_service_semantics(state["production_identity"]["tg_bot_semantic"])
-        or tg_bot["cmd"] != profile["production"]["tg_bot_cmd"]
-        or tg_bot["entrypoint"] != profile["production"]["tg_bot_entrypoint"]
-        or tg_bot["declared_user"] != profile["production"]["tg_bot_declared_user"]
-        or tg_bot["working_dir"] != profile["production"]["tg_bot_working_dir"]
+        != _preserved_service_semantics(state["pre_activation_live_identity"]["tg_bot_semantic"])
+        or tg_bot["cmd"] != profile["transition_invariants"]["tg_bot_cmd"]
+        or tg_bot["entrypoint"] != profile["transition_invariants"]["tg_bot_entrypoint"]
+        or tg_bot["declared_user"] != profile["transition_invariants"]["tg_bot_declared_user"]
+        or tg_bot["working_dir"] != profile["transition_invariants"]["tg_bot_working_dir"]
     ):
         raise core.RuntimeFault("TG_BOT_ACTIVATION_IDENTITY_OR_SEMANTIC_FAILED", 74)
     database, _ = _database_status(core, profile)
@@ -3254,7 +3217,7 @@ def _activation_postcheck(core: Any, policy: dict[str, Any], profile: dict[str, 
 
 def _rollback_database_postcheck(core: Any, profile: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
     database, _ = _database_status(core, profile)
-    recovery = profile["recovery"]
+    recovery = profile["rollback_recovery"]
     if (
         database["migration_state"] != "APPROVED_OUTBOX_APPLIED"
         or database["database_identity_sha256"] != recovery["database_identity_sha256"]
@@ -3269,15 +3232,15 @@ def _rollback_database_postcheck(core: Any, profile: dict[str, Any], state: dict
 def _rollback_impl(core: Any, policy: dict[str, Any], profile: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
     rollback = _image_inspect(core, ROLLBACK_TAG)
     tg_rollback = _image_inspect(core, TG_ROLLBACK_TAG)
-    expected = profile["production"]["gravity_image_id"]
-    tg_expected = profile["production"]["tg_bot_image_id"]
+    expected = profile["rollback_recovery"]["gravity_image_id"]
+    tg_expected = profile["rollback_recovery"]["tg_bot_image_id"]
     if rollback is None or rollback["Id"] != expected or tg_rollback is None or tg_rollback["Id"] != tg_expected:
         raise core.RuntimeFault("ROLLBACK_IMAGE_IDENTITY_MISMATCH", 74)
     _verify_predecessor_compose_references(core, profile)
     _write_fixed_file(
         core,
         ROLLBACK_OVERLAY,
-        _compose_overlay(PRIOR_TARGET_TAG, TG_PREDECESSOR_REFERENCE, activate=False),
+        _compose_overlay(ROLLBACK_TAG, TG_ROLLBACK_TAG, activate=False),
         0o400,
     )
     _compose_up(core, profile, state, ROLLBACK_OVERLAY)
@@ -3317,10 +3280,10 @@ def _rollback_state_is_exact(
     state: dict[str, Any],
 ) -> bool:
     return (
-        gravity.get("image_id") == profile["production"]["gravity_image_id"]
+        gravity.get("image_id") == profile["rollback_recovery"]["gravity_image_id"]
         and gravity.get("running") is True
         and gravity.get("health") == "healthy"
-        and tg_bot.get("image_id") == profile["production"]["tg_bot_image_id"]
+        and tg_bot.get("image_id") == profile["rollback_recovery"]["tg_bot_image_id"]
         and tg_bot.get("running") is True
         and tg_bot.get("health") == "healthy"
         and _rollback_semantics_compatibility(profile, state, gravity) == "EXACT"
@@ -3344,10 +3307,10 @@ def _restore_or_accept_rollback(
 
 def _accept_existing_rollback(core: Any, policy: dict[str, Any], profile: dict[str, Any], state: dict[str, Any], gravity: dict[str, Any], tg_bot: dict[str, Any]) -> dict[str, Any]:
     if (
-        gravity.get("image_id") != profile["production"]["gravity_image_id"]
+        gravity.get("image_id") != profile["rollback_recovery"]["gravity_image_id"]
         or not gravity.get("running")
         or gravity.get("health") != "healthy"
-        or tg_bot.get("image_id") != profile["production"]["tg_bot_image_id"]
+        or tg_bot.get("image_id") != profile["rollback_recovery"]["tg_bot_image_id"]
         or not tg_bot.get("running")
         or tg_bot.get("health") != "healthy"
     ):
@@ -3393,8 +3356,8 @@ def _dual_service_image_state(
         return "unknown"
 
     vector = (
-        classify(gravity.get("image_id"), profile["production"]["gravity_image_id"], state.get("target_image_id")),
-        classify(tg_bot.get("image_id"), profile["production"]["tg_bot_image_id"], state.get("tg_target_image_id")),
+        classify(gravity.get("image_id"), profile["rollback_recovery"]["gravity_image_id"], state.get("target_image_id")),
+        classify(tg_bot.get("image_id"), profile["rollback_recovery"]["tg_bot_image_id"], state.get("tg_target_image_id")),
     )
     if "unknown" in vector:
         raise core.RuntimeFault("DUAL_SERVICE_SOURCE_IDENTITY_DRIFT", 74)
@@ -3483,10 +3446,13 @@ def _release_activate(core: Any, policy: dict[str, Any], profile: dict[str, Any]
         _reconcile_terminal_audit(core, state)
         if state.get("phase") == "ACTIVATED":
             _validate_production_compose_inputs(core, profile, state)
+            current_domains = _derive_transition_identity_domains(core, profile, state)
+            if any(state.get(key) != value for key, value in current_domains.items()):
+                raise core.RuntimeFault("TRANSITION_IDENTITY_CHANGED_SINCE_PREFLIGHT", 74)
             postcheck = _activation_postcheck(
                 core, policy, profile, state,
                 expected_image=state["target_image_id"],
-                expected_semantic=state["production_identity"]["gravity_semantic"],
+                expected_semantic=state["pre_activation_live_identity"]["gravity_semantic"],
             )
             return {"profile_id": PROFILE_ID, "status": "ALREADY_ACTIVATED", "postcheck": postcheck, "production_mutated": False}
         if state.get("phase") == "RELEASE_ACTIVATION_ROLLBACK_INTENT":
@@ -3527,15 +3493,18 @@ def _release_activate(core: Any, policy: dict[str, Any], profile: dict[str, Any]
         _validate_production_compose_inputs(core, profile, state)
         if not recovering:
             current_production = _production_preflight_identity(core, policy, profile)
-            if _digest(current_production) != _digest(state["production_identity"]):
+            if _digest(current_production) != _digest(state["pre_activation_live_identity"]):
                 raise core.RuntimeFault("PRODUCTION_IDENTITY_CHANGED_SINCE_PREFLIGHT", 74)
+        current_domains = _derive_transition_identity_domains(core, profile, state)
+        if any(state.get(key) != value for key, value in current_domains.items()):
+            raise core.RuntimeFault("TRANSITION_IDENTITY_CHANGED_SINCE_PREFLIGHT", 74)
         target = _verify_gravity_candidate_image(core, profile)
         tg_target = _image_inspect(core, TG_TARGET_TAG)
         rollback_image = _image_inspect(core, ROLLBACK_TAG)
         tg_rollback_image = _image_inspect(core, TG_ROLLBACK_TAG)
         if target is None or target["Id"] != state.get("target_image_id") or tg_target is None or tg_target["Id"] != state.get("tg_target_image_id"):
             raise core.RuntimeFault("TARGET_IMAGE_IDENTITY_DRIFT", 74)
-        if rollback_image is None or rollback_image["Id"] != profile["production"]["gravity_image_id"] or tg_rollback_image is None or tg_rollback_image["Id"] != profile["production"]["tg_bot_image_id"]:
+        if rollback_image is None or rollback_image["Id"] != profile["rollback_recovery"]["gravity_image_id"] or tg_rollback_image is None or tg_rollback_image["Id"] != profile["rollback_recovery"]["tg_bot_image_id"]:
             raise core.RuntimeFault("ROLLBACK_IMAGE_IDENTITY_DRIFT", 74)
         _verify_tg_candidate_image(core, profile, tg_target)
         _tg_image_file_probe(core, profile, TG_TARGET_TAG)
@@ -3549,7 +3518,7 @@ def _release_activate(core: Any, policy: dict[str, Any], profile: dict[str, Any]
                     postcheck = _activation_postcheck(
                         core, policy, profile, state,
                         expected_image=state["target_image_id"],
-                        expected_semantic=state["production_identity"]["gravity_semantic"],
+                        expected_semantic=state["pre_activation_live_identity"]["gravity_semantic"],
                     )
                     next_state = {**state, "phase": "ACTIVATED", "activation_completed_at": core.now(), "activated_container_id": postcheck["gravity_container_id"], "activated_tg_bot_container_id": postcheck["tg_bot_container_id"]}
                     next_state = _write_terminal_state(core, invocation, state, "recovered_ok", next_state)
@@ -3604,7 +3573,7 @@ def _release_activate(core: Any, policy: dict[str, Any], profile: dict[str, Any]
             postcheck = _activation_postcheck(
                 core, policy, profile, state,
                 expected_image=state["target_image_id"],
-                expected_semantic=state["production_identity"]["gravity_semantic"],
+                expected_semantic=state["pre_activation_live_identity"]["gravity_semantic"],
             )
             next_state = {**state, "phase": "ACTIVATED", "activation_completed_at": core.now(), "activated_container_id": postcheck["gravity_container_id"], "activated_tg_bot_container_id": postcheck["tg_bot_container_id"]}
             next_state = _write_terminal_state(core, invocation, intent, "ok", next_state)
@@ -3638,21 +3607,9 @@ def _rollback(core: Any, policy: dict[str, Any], profile: dict[str, Any], invoca
         state = _read_state(core)
         _reconcile_terminal_audit(core, state)
         if state.get("phase") == "UNINITIALIZED":
-            if core.audit_status()["state"] not in {"EMPTY", "VALID"}:
-                raise core.RuntimeFault("AUDIT_MUTATION_DISABLED", 78)
-            source_state, source_sha256 = _read_replacement_recovery_state(core, profile)
-            source_state.pop("terminal_audit_receipt", None)
-            imported = {
-                **source_state,
-                "profile_id": PROFILE_ID,
-                "replacement_recovery_source_profile_id": RECOVERY_SOURCE_PROFILE_ID,
-                "replacement_recovery_source_commit": RECOVERY_SOURCE_COMMIT,
-                "replacement_recovery_source_state_sha256": source_sha256,
-                "replacement_recovery_imported_at": core.now(),
-            }
-            state = _write_terminal_state(
-                core, invocation, state, "replacement_recovery_state_imported", imported,
-            )
+            # A new strategy profile must never import historical control-plane
+            # state and reinterpret it as the current accepted predecessor.
+            raise core.RuntimeFault("ROLLBACK_NOT_AVAILABLE_BEFORE_PREFLIGHT", 77)
         if state.get("phase") == "ROLLED_BACK":
             gravity = core.container_projection(policy, "crm.container.gravity_mvp")
             tg_bot = core.container_projection(policy, "crm.container.telegram_bot")

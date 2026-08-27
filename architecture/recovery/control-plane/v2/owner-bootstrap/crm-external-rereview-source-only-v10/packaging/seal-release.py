@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Seal one already accepted, clean, source-only commit into Runtime 2.0.0-10."""
+"""Seal one accepted, clean strategy-repair commit into Runtime 2.0.0-11."""
 from __future__ import annotations
 
 import argparse
@@ -36,10 +36,12 @@ TG_BOT_BASELINE_MANIFEST_FILE_SHA256 = "1bd1d5100cabeb37277262179ee1119b3dcd9154
 TG_BOT_BASELINE_MANIFEST_SHA256 = "72397e9c7e3c728b94d1e5645da825ddd75216bfacd13212b4671fe15f206d56"
 TG_BOT_BASELINE_OBSERVATIONAL_CONTAINER_ID = "c3fae82f86726739c6e768cd524f5903a1d0a9a0e926f86d9cc559ac633c0f7a"
 ACCEPTED_PREDECESSOR_RELEASE_CRITICAL_IDENTITY_SHA256 = "0385b32004178250be0d887ab27da40483a5952d1a12284c6c16f62d7207261a"
-DIRECT_ROLLBACK_DEB_NAME = "yoko-privileged-runtime_2.0.0-10_predecessor-observability-v1_all.deb"
-DIRECT_ROLLBACK_DEB_SHA256 = "b97642ffc3a95be862943212802ab38bea3280b16597209fe56fa4a2c8dafa43"
-DIRECT_ROLLBACK_SOURCE_COMMIT = "2b8811281a505c8dc20303bc83c3781087a3c746"
-DIRECT_ROLLBACK_PROVENANCE_SHA256 = "e5dc2ea647ae08b588b699f02bad5eb1ddc3db818aca53bb1240dbbc676c6153"
+DIRECT_ROLLBACK_DEB_NAME = "yoko-privileged-runtime_2.0.0-10_all.deb"
+DIRECT_ROLLBACK_DEB_SHA256 = "9c23ae1ad93da8db9eee1111f6b177e6d32be48e6505a96b6d66dc2633febe6a"
+DIRECT_ROLLBACK_SOURCE_COMMIT = "ae2082d852e3f9c1b9dc774993955f65f5bd097d"
+DIRECT_ROLLBACK_SOURCE_TREE = "0053965a53e434f5d0c56e80abfec2ab2c9b15c0"
+DIRECT_ROLLBACK_PROFILE_ID = "crm-ae2082d852e3-gravity-source-v1"
+DIRECT_ROLLBACK_PROVENANCE_SHA256 = "3c9aaa7f9faaf445db691b7db034d3a2c4ac316b80c773a6679bd8020303e0be"
 SHA40 = re.compile(r"[0-9a-f]{40}")
 SHA64 = re.compile(r"[0-9a-f]{64}")
 GITHUB_REPOSITORY = "nashavtoparkmedia-byte/CRM"
@@ -1093,23 +1095,24 @@ def stage_direct_rollback_inputs(package: Path, provenance_path: Path) -> dict[s
     expected_installed = {
         "/etc/sudoers.d/92-yoko-privileged-runtime": "3022dcfc323706da81e760255dd1ab43f9b8662ee699aa8b58fbe6e714cc69d7",
         "/usr/local/libexec/yoko-privileged-runtime/core-2.0.0.py": "0f97bafbfe5b430fa7994119b1fc76fead4bdbee26766c730d9e399551ebdffa",
-        "/usr/local/libexec/yoko-privileged-runtime/crm-08b9145945b2-gravity-source-v1.py": "e3a3142e6bc098a15dd62b75bf7c090a148ad64b4fe45d3d82499c2667de072f",
+        "/usr/local/libexec/yoko-privileged-runtime/crm-ae2082d852e3-gravity-source-v1.py": "ae69315dd38cd8d39ae9ea7947529aed7685d961de4524822a21fb6bb9ac114e",
         "/usr/local/libexec/yoko-privileged-runtime/predecessor-observability-v1.py": "b5ea36c50e12b0fe6c171896258ddfc00a9d2666778735cae6a9b2a8df6d4084",
-        "/usr/local/sbin/yoko-privileged-runtime": "46bf3016e1582834e3e18bec3e148dc0f59073103be70a7fd628785f22daf8c7",
-        "/usr/local/share/yoko-privileged-runtime/install-manifest.v1.json": "571206c1cbaed74fd33f7a7ae1c92361f0be959705459e330127d7b2537e5e4f",
+        "/usr/local/sbin/yoko-privileged-runtime": "44a49a00e98e1ca7315bab70e20e436432f38a3b2f4934259fa419c35138f5ba",
+        "/usr/local/share/yoko-privileged-runtime/install-manifest.v1.json": "9ee1e7970b25d1944c58b5c6dff74e3ef8368bb389a29857e64750753aa8042a",
         "/usr/local/share/yoko-privileged-runtime/policy.v2.json": "8727373b0c6ec79c9abf82f1aaaa58abc2bae67e96aa96a602ac419f308db0e0",
-        "/usr/local/share/yoko-privileged-runtime/profiles/crm-08b9145945b2-gravity-source-v1/manifest.v1.json": "0c948717cf6665cf443e37d2d742dfb99beb3961485506cfbb6cc6a4cd6eeb82",
+        "/usr/local/share/yoko-privileged-runtime/profiles/crm-ae2082d852e3-gravity-source-v1/manifest.v1.json": "67615b6b20209c8bdcc96a4fbe4a02c6f78b58f5c96ac147e1311c7c6155c572",
     }
     if (
-        provenance.get("schema") != "yoko.crm.predecessor-observability-package.v1"
-        or provenance.get("source_commit") != DIRECT_ROLLBACK_SOURCE_COMMIT
-        or provenance.get("installed_files") != expected_installed
-        or provenance.get("package", {}).get("sha256") != DIRECT_ROLLBACK_DEB_SHA256
-        or provenance.get("package", {}).get("name") != "yoko-privileged-runtime"
-        or provenance.get("package", {}).get("version") != "2.0.0-10"
-        or provenance.get("package", {}).get("architecture") != "all"
+        provenance.get("schema") != "yoko.crm.source-only-release-seal.v2"
+        or provenance.get("status") != "SEALED"
+        or provenance.get("commit") != DIRECT_ROLLBACK_SOURCE_COMMIT
+        or provenance.get("tree") != DIRECT_ROLLBACK_SOURCE_TREE
+        or provenance.get("profile_id") != DIRECT_ROLLBACK_PROFILE_ID
+        or provenance.get("package_version") != "2.0.0-10"
+        or provenance.get("runtime_abi") != "2.0.0"
+        or provenance.get("built_artifacts", {}).get("deb", {}).get("sha256") != DIRECT_ROLLBACK_DEB_SHA256
     ):
-        raise SystemExit("direct rollback provenance does not bind the exact observability successor")
+        raise SystemExit("direct rollback provenance does not bind the exact installed ae2082d Runtime")
     metadata = subprocess.run(
         ["/usr/bin/dpkg-deb", "-f", str(package.resolve(strict=True)), "Package", "Version", "Architecture"],
         check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30,
@@ -1123,14 +1126,17 @@ def stage_direct_rollback_inputs(package: Path, provenance_path: Path) -> dict[s
         package.resolve(strict=True), inputs / DIRECT_ROLLBACK_DEB_NAME, DIRECT_ROLLBACK_DEB_SHA256,
     )
     provenance_identity = copy_exact_external_input(
-        provenance_path.resolve(strict=True), inputs / "predecessor-observability-package-manifest.json",
+        provenance_path.resolve(strict=True), inputs / "immediate-runtime-rollback-seal.json",
         DIRECT_ROLLBACK_PROVENANCE_SHA256,
     )
     return {
-        "schema": "yoko.crm.direct-bootstrap-rollback-provenance.v1",
+        "schema": "yoko.crm.direct-bootstrap-rollback-provenance.v2",
         "source_commit": DIRECT_ROLLBACK_SOURCE_COMMIT,
+        "source_tree": DIRECT_ROLLBACK_SOURCE_TREE,
+        "profile_id": DIRECT_ROLLBACK_PROFILE_ID,
         "package": package_identity,
-        "provenance_manifest": provenance_identity,
+        "prior_seal": provenance_identity,
+        "installed_identity": expected_installed,
         "direct_rollback": True,
         "historical_package_is_direct_rollback": False,
     }
@@ -1440,7 +1446,7 @@ def main() -> None:
         or snapshot_document["host"] != "jvxthcorvm"
         or snapshot["runtime_package_version"] != "2.0.0-10"
         or snapshot["runtime_abi"] != "2.0.0"
-        or snapshot["profile_id"] != "crm-08b9145945b2-gravity-source-v1"
+        or snapshot["profile_id"] != DIRECT_ROLLBACK_PROFILE_ID
         or snapshot["audit_state"] != "VALID"
         or snapshot["audit_records"] != 36
         or snapshot["audit_last_digest"] != "7f7e4d739c9396c0d9757f0f2a60d57a50457048ce49cfd152ca46365306e344"
@@ -1454,9 +1460,7 @@ def main() -> None:
         or snapshot["rollback_recovery_required"] is not True
         or snapshot["gravity_runtime_semantics_status"] != "DRIFTED_ROLLBACK_ALIAS_COMMAND_AND_CONFIG"
         or snapshot["tg_bot_runtime_semantics_status"] != "DRIFTED_ROLLBACK_ALIAS_CONFIG"
-        or snapshot["sealed_gravity_compose_config_hash"] != "772ba8f19dc89133ea55ce65aa2d68550594ab61060eac0e373ae7936161b9f8"
         or snapshot["gravity_command"] != ["npm", "run", "start"]
-        or snapshot["sealed_tg_bot_compose_config_hash"] != "00952518d668126c08950de087a7c46fa368cd8879590ad9c1584bb7c39b42e2"
         or snapshot["tg_bot_command"] != ["node", "start.js"]
         or snapshot["tg_bot_image_id"] != TG_BOT_PREDECESSOR_IMAGE
         or snapshot["tg_bot_running"] is not True
@@ -1612,17 +1616,45 @@ def main() -> None:
         "current_target_appended": authority["current_target"]["name"],
         "sequence_sha256": live_chronology_sha256,
     }
-    production = profile["production"]
-    for key in ("source_manifest_sha256", "compose_sha256", "gravity_container_id", "gravity_image_id", "tg_bot_container_id", "tg_bot_image_id", "tg_bot_entrypoint", "tg_bot_cmd", "tg_bot_declared_user", "tg_bot_working_dir", "tg_bot_patch_baseline_state", "tg_bot_patch_baseline_manifest_file_sha256", "tg_bot_patch_baseline_manifest_sha256", "postgres_container_id", "postgres_image_id"):
-        production[key] = snapshot[key]
-    # The live snapshot intentionally captures the failed rollback overlay's
-    # drifted config identities. Runtime authority must retain the sealed
-    # predecessor identities it is required to reconstruct, never bless the
-    # drift merely because it is the current observation.
-    production["compose_config_hash"] = snapshot["sealed_gravity_compose_config_hash"]
-    production["tg_bot_compose_config_hash"] = snapshot["sealed_tg_bot_compose_config_hash"]
-    recovery = profile["recovery"]
-    recovery.update({"prior_compose_config_hash": snapshot["sealed_gravity_compose_config_hash"], "recovered_gravity_container_id": snapshot["gravity_container_id"], "recovered_compose_config_hash": snapshot["sealed_gravity_compose_config_hash"], "prior_tg_bot_image_id": snapshot["tg_bot_image_id"], "prior_tg_bot_compose_config_hash": snapshot["sealed_tg_bot_compose_config_hash"], "recovered_tg_bot_container_id": snapshot["tg_bot_container_id"], "recovered_tg_bot_compose_config_hash": snapshot["sealed_tg_bot_compose_config_hash"], "database_identity_sha256": snapshot["database_identity_sha256"], "migration_ledger_sha256": snapshot["migration_ledger_sha256"], "preview_outbox_catalog_sha256": snapshot["outbox_catalog_sha256"]})
+    invariants = profile["transition_invariants"]
+    invariants.update({
+        "compose_sha256": snapshot["compose_sha256"],
+        "tg_bot_entrypoint": snapshot["tg_bot_entrypoint"],
+        "tg_bot_cmd": snapshot["tg_bot_cmd"],
+        "tg_bot_declared_user": snapshot["tg_bot_declared_user"],
+        "tg_bot_working_dir": snapshot["tg_bot_working_dir"],
+        "tg_bot_patch_baseline_state": snapshot["tg_bot_patch_baseline_state"],
+        "tg_bot_patch_baseline_manifest_file_sha256": snapshot["tg_bot_patch_baseline_manifest_file_sha256"],
+        "tg_bot_patch_baseline_manifest_sha256": snapshot["tg_bot_patch_baseline_manifest_sha256"],
+        "postgres_container_id": snapshot["postgres_container_id"],
+        "postgres_image_id": snapshot["postgres_image_id"],
+    })
+    prestate = profile["pre_activation_live_prestate"]
+    prestate.update({
+        "predecessor_release_critical_identity_sha256": snapshot["predecessor_release_critical_identity_sha256"],
+        "source_manifest_sha256": snapshot["source_manifest_sha256"],
+        "gravity_container_id": snapshot["gravity_container_id"],
+        "gravity_image_id": snapshot["gravity_image_id"],
+        "gravity_compose_config_hash": snapshot["compose_config_hash"],
+        "tg_bot_container_id": snapshot["tg_bot_container_id"],
+        "tg_bot_image_id": snapshot["tg_bot_image_id"],
+        "tg_bot_compose_config_hash": snapshot["tg_bot_compose_config_hash"],
+    })
+    target = profile["post_activation_target"]
+    target.update({
+        "gravity_image_reference": f"yoko/crm-gravity-mvp:{commit}-source-only-v1",
+        "tg_bot_image_reference": f"yoko/crm-tg-bot:{commit}-public-capability-v1",
+    })
+    recovery = profile["rollback_recovery"]
+    recovery.update({
+        "gravity_image_id": snapshot["gravity_image_id"],
+        "gravity_compose_config_hash": snapshot["compose_config_hash"],
+        "tg_bot_image_id": snapshot["tg_bot_image_id"],
+        "tg_bot_compose_config_hash": snapshot["tg_bot_compose_config_hash"],
+        "database_identity_sha256": snapshot["database_identity_sha256"],
+        "migration_ledger_sha256": snapshot["migration_ledger_sha256"],
+        "preview_outbox_catalog_sha256": snapshot["outbox_catalog_sha256"],
+    })
     (ROOT / "inputs/source.tar.gz").write_bytes(first)
     os.chmod(ROOT / "inputs/source.tar.gz", 0o400)
     write_json_atomic(ROOT / "src/profile.v1.json", profile, 0o444)
@@ -1661,7 +1693,7 @@ def main() -> None:
     sealed = {
         "schema": "yoko.crm.source-only-release-seal.v2",
         "status": "SEALING_BUILD_OUTPUTS",
-        "package_version": "2.0.0-10",
+        "package_version": "2.0.0-11",
         "runtime_abi": "2.0.0",
         "profile_id": profile_id,
         "commit": commit,
@@ -1697,8 +1729,8 @@ def main() -> None:
     for script in ("build-package.sh", "build-bootstrap-bundle.sh"):
         subprocess.run([str(ROOT / "packaging" / script)], check=True, timeout=1800)
     sealed["built_artifacts"] = {
-        "deb": verifier.artifact_identity(ROOT / "dist/yoko-privileged-runtime_2.0.0-10_all.deb"),
-        "bootstrap_tar": verifier.artifact_identity(ROOT / "dist/yoko-crm-source-only-runtime-2.0.0-10.tar"),
+        "deb": verifier.artifact_identity(ROOT / "dist/yoko-privileged-runtime_2.0.0-11_all.deb"),
+        "bootstrap_tar": verifier.artifact_identity(ROOT / "dist/yoko-crm-source-only-runtime-2.0.0-11.tar"),
     }
     sealed["status"] = "SEALED"
     write_json_atomic(seal_path, sealed, 0o600)

@@ -36,12 +36,30 @@ UTC_SECOND = re.compile(r"20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2
 MAX_INTERNAL_REVIEW_AGE = timedelta(hours=24)
 RUNTIME_SOURCE_PREFIX = "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10"
 TRANSITION_VALIDATOR_RELATIVE = VALIDATOR_RELATIVE
-TRANSITION_TEST_RELATIVE = "tests/test_builder_contract.py"
-TRANSITION_EVIDENCE_SCHEMA = "yoko.crm.bootstrap-transition-review-evidence.v1"
-TRANSITION_REVIEW_SCHEMA = "yoko.crm.bootstrap-transition-independent-runtime-review.v1"
-TRANSITION_VERIFICATION_SCHEMA = "yoko.crm.bootstrap-transition-independent-runtime-review-verification.v1"
+TRANSITION_TESTS = (
+    ("tests/test_transition_identity_model.py", "TransitionIdentityModelTests"),
+    ("tests/test_rollback_control.py", "RollbackControlTests"),
+    ("tests/test_builder_contract.py", "BootstrapTransitionTests"),
+)
+TRANSITION_EVIDENCE_SCHEMA = "yoko.crm.transition-identity-strategy-review-evidence.v1"
+TRANSITION_REVIEW_SCHEMA = "yoko.crm.transition-identity-strategy-independent-runtime-review.v1"
+TRANSITION_VERIFICATION_SCHEMA = "yoko.crm.transition-identity-strategy-independent-runtime-review-verification.v1"
 MAX_TRANSITION_REVIEW_AGE = timedelta(hours=24)
 TRANSITION_TARGETED_TESTS = (
+    "schema_has_three_non_aliasing_transition_domains",
+    "preflight_accepts_predecessor_when_target_is_deliberately_different",
+    "wrong_predecessor_hash_fails_before_any_mutation",
+    "target_and_recovery_hashes_are_derived_into_distinct_state_domains",
+    "prestate_target_alias_is_rejected",
+    "rollback_verifies_exact_prestate_hash_not_target_hash",
+    "activation_postcheck_requires_derived_target_hashes",
+    "rollback_overlay_reconstructs_exact_live_prestate_without_target_command",
+    "predecessor_references_are_exact_image_bound",
+    "semantically_drifted_old_images_are_reconstructed_not_accepted",
+    "exact_old_images_and_semantics_are_idempotently_accepted",
+    "combined_failure_preserves_both_machine_identities_and_terminal_status",
+    "rollback_health_requires_two_consecutive_stabilized_successes",
+    "uninitialized_rollback_never_imports_historical_transition_state",
     "exact_observability_prestate_accepted",
     "historical_only_prestate_rejected_without_mutation",
     "mixed_and_wrong_identity_prestates_rejected_without_mutation",
@@ -97,37 +115,38 @@ ATTACK_COMMANDS: dict[str, tuple[tuple[str, ...], ...]] = {
     ),
 }
 BOOTSTRAP_MTIME = 1786492800
-NEW_DEB_NAME = "yoko-privileged-runtime_2.0.0-10_all.deb"
-ROLLBACK_DEB_NAME = "yoko-privileged-runtime_2.0.0-10_predecessor-observability-v1_all.deb"
+NEW_DEB_NAME = "yoko-privileged-runtime_2.0.0-11_all.deb"
+ROLLBACK_DEB_NAME = "yoko-privileged-runtime_2.0.0-10_all.deb"
 PREDECESSOR_PACKAGE = {
     "name": "yoko-privileged-runtime",
     "version": "2.0.0-10",
-    "profile_id": "crm-08b9145945b2-gravity-source-v1",
-    "source_commit": "2b8811281a505c8dc20303bc83c3781087a3c746",
-    "sha256": "b97642ffc3a95be862943212802ab38bea3280b16597209fe56fa4a2c8dafa43",
+    "profile_id": "crm-ae2082d852e3-gravity-source-v1",
+    "source_commit": "ae2082d852e3f9c1b9dc774993955f65f5bd097d",
+    "sha256": "9c23ae1ad93da8db9eee1111f6b177e6d32be48e6505a96b6d66dc2633febe6a",
     "payload_path": ROLLBACK_DEB_NAME,
-    "store_path": "/var/lib/yoko-privileged-runtime/activation-bootstraps/b97642ffc3a95be862943212802ab38bea3280b16597209fe56fa4a2c8dafa43/yoko-privileged-runtime_2.0.0-10_predecessor-observability-v1_all.deb",
+    "store_path": "/var/lib/yoko-privileged-runtime/activation-bootstraps/9c23ae1ad93da8db9eee1111f6b177e6d32be48e6505a96b6d66dc2633febe6a/yoko-privileged-runtime_2.0.0-10_all.deb",
 }
 PREDECESSOR_REVIEW_IDENTITY = {
     "package_version": "2.0.0-10",
-    "profile_id": "crm-08b9145945b2-gravity-source-v1",
-    "source_commit": "2b8811281a505c8dc20303bc83c3781087a3c746",
-    "runtime_sha256": "46bf3016e1582834e3e18bec3e148dc0f59073103be70a7fd628785f22daf8c7",
+    "profile_id": "crm-ae2082d852e3-gravity-source-v1",
+    "source_commit": "ae2082d852e3f9c1b9dc774993955f65f5bd097d",
+    "source_tree": "0053965a53e434f5d0c56e80abfec2ab2c9b15c0",
+    "runtime_sha256": "44a49a00e98e1ca7315bab70e20e436432f38a3b2f4934259fa419c35138f5ba",
     "core_sha256": "0f97bafbfe5b430fa7994119b1fc76fead4bdbee26766c730d9e399551ebdffa",
     "observer_sha256": "b5ea36c50e12b0fe6c171896258ddfc00a9d2666778735cae6a9b2a8df6d4084",
-    "profile_runtime_sha256": "e3a3142e6bc098a15dd62b75bf7c090a148ad64b4fe45d3d82499c2667de072f",
+    "profile_runtime_sha256": "ae69315dd38cd8d39ae9ea7947529aed7685d961de4524822a21fb6bb9ac114e",
     "policy_sha256": "8727373b0c6ec79c9abf82f1aaaa58abc2bae67e96aa96a602ac419f308db0e0",
-    "install_manifest_sha256": "571206c1cbaed74fd33f7a7ae1c92361f0be959705459e330127d7b2537e5e4f",
-    "profile_manifest_sha256": "0c948717cf6665cf443e37d2d742dfb99beb3961485506cfbb6cc6a4cd6eeb82",
-    "profile_sha256": "0c6ba7ea34b083c2eef38255ac5c5e48eb566ec3024ac2a457bbb587a769565b",
+    "install_manifest_sha256": "9ee1e7970b25d1944c58b5c6dff74e3ef8368bb389a29857e64750753aa8042a",
+    "profile_manifest_sha256": "67615b6b20209c8bdcc96a4fbe4a02c6f78b58f5c96ac147e1311c7c6155c572",
+    "profile_sha256": "f958936b7ac352ac9bee96fe602b8158caa7cdbcad92b0a9277605233aab2076",
     "migration_sha256": "433b0d503f054ed6a8161a059e2650d5e401829dabe8c9d992a1d1763eef0016",
-    "source_archive_sha256": "e611c0192fd3592ce99410df002a3918ce849dfab5c9c1b4955b02f136f830b9",
+    "source_archive_sha256": "f40e331dbb84609e6550ea060a1dd03041809c6418da5f4b9df39e6c630d9826",
     "sudoers_sha256": "3022dcfc323706da81e760255dd1ab43f9b8662ee699aa8b58fbe6e714cc69d7",
     "registry_sha256": "8ea5c3b7113e1dd2ad5a74b82a1fb0bf56643fd59774dccf37e8aa9eb67bd057",
     "rollback_deb_sha256": PREDECESSOR_PACKAGE["sha256"],
     "rollback_deb_payload_path": PREDECESSOR_PACKAGE["payload_path"],
     "rollback_deb_store_path": PREDECESSOR_PACKAGE["store_path"],
-    "rollback_provenance_sha256": "e5dc2ea647ae08b588b699f02bad5eb1ddc3db818aca53bb1240dbbc676c6153",
+    "rollback_provenance_sha256": "3c9aaa7f9faaf445db691b7db034d3a2c4ac316b80c773a6679bd8020303e0be",
     "audit_state": "VALID",
     "audit_records": 36,
     "audit_last_digest": "7f7e4d739c9396c0d9757f0f2a60d57a50457048ce49cfd152ca46365306e344",
@@ -428,6 +447,10 @@ def validate_bootstrap_tar(
         or new_package.get("path") != NEW_DEB_NAME
         or new_package.get("sha256") != exact_deb_sha256
         or new_package.get("bytes") != exact_deb_size
+        or new_package.get("name") != "yoko-privileged-runtime"
+        or new_package.get("version") != "2.0.0-11"
+        or new_package.get("runtime_abi") != "2.0.0"
+        or new_package.get("architecture") != "all"
     ):
         raise SystemExit("bootstrap tar package/review manifests are not exact")
     for relative, recorded in payload_files.items():
@@ -666,11 +689,13 @@ def validate_internal_review(
 def transition_validator_identity() -> dict[str, object]:
     catalog = list(TRANSITION_TARGETED_TESTS)
     return {
-        "schema": "yoko.crm.bootstrap-transition-review-validator.v1",
+        "schema": "yoko.crm.transition-identity-strategy-review-validator.v1",
         "path": TRANSITION_VALIDATOR_RELATIVE,
         "sha256": sha(ROOT / TRANSITION_VALIDATOR_RELATIVE),
-        "test_path": TRANSITION_TEST_RELATIVE,
-        "test_sha256": sha(ROOT / TRANSITION_TEST_RELATIVE),
+        "tests": [
+            {"path": path, "class": test_class, "sha256": sha(ROOT / path)}
+            for path, test_class in TRANSITION_TESTS
+        ],
         "inventory_validator_path": VALIDATOR_RELATIVE,
         "inventory_validator_sha256": sha(ROOT / VALIDATOR_RELATIVE),
         "catalog": catalog,
@@ -696,7 +721,11 @@ def transition_exact_bindings(source_repo: Path, seal_path: Path, tar_path: Path
         or git(source_repo, "status", "--porcelain", "--untracked-files=all")
     ):
         raise SystemExit("bootstrap transition review source is not the exact clean sealed checkout")
-    for relative in (TRANSITION_VALIDATOR_RELATIVE, TRANSITION_TEST_RELATIVE, VALIDATOR_RELATIVE):
+    for relative in (
+        TRANSITION_VALIDATOR_RELATIVE,
+        VALIDATOR_RELATIVE,
+        *(path for path, _test_class in TRANSITION_TESTS),
+    ):
         if sha(source_repo / RUNTIME_SOURCE_PREFIX / relative) != sha(ROOT / relative):
             raise SystemExit("bootstrap transition review source/validator binding mismatch")
     rollback = ROOT / "inputs" / ROLLBACK_DEB_NAME
@@ -705,8 +734,27 @@ def transition_exact_bindings(source_repo: Path, seal_path: Path, tar_path: Path
     provenance = seal.get("direct_rollback_provenance")
     if (
         type(provenance) is not dict
+        or set(provenance) != {
+            "schema", "source_commit", "source_tree", "profile_id", "package",
+            "prior_seal", "installed_identity", "direct_rollback",
+            "historical_package_is_direct_rollback",
+        }
+        or provenance.get("schema") != "yoko.crm.direct-bootstrap-rollback-provenance.v2"
         or provenance.get("source_commit") != PREDECESSOR_PACKAGE["source_commit"]
+        or provenance.get("source_tree") != PREDECESSOR_REVIEW_IDENTITY["source_tree"]
+        or provenance.get("profile_id") != PREDECESSOR_PACKAGE["profile_id"]
         or provenance.get("package", {}).get("sha256") != PREDECESSOR_PACKAGE["sha256"]
+        or provenance.get("prior_seal", {}).get("sha256") != PREDECESSOR_REVIEW_IDENTITY["rollback_provenance_sha256"]
+        or provenance.get("installed_identity") != {
+            "/etc/sudoers.d/92-yoko-privileged-runtime": PREDECESSOR_REVIEW_IDENTITY["sudoers_sha256"],
+            "/usr/local/libexec/yoko-privileged-runtime/core-2.0.0.py": PREDECESSOR_REVIEW_IDENTITY["core_sha256"],
+            "/usr/local/libexec/yoko-privileged-runtime/crm-ae2082d852e3-gravity-source-v1.py": PREDECESSOR_REVIEW_IDENTITY["profile_runtime_sha256"],
+            "/usr/local/libexec/yoko-privileged-runtime/predecessor-observability-v1.py": PREDECESSOR_REVIEW_IDENTITY["observer_sha256"],
+            "/usr/local/sbin/yoko-privileged-runtime": PREDECESSOR_REVIEW_IDENTITY["runtime_sha256"],
+            "/usr/local/share/yoko-privileged-runtime/install-manifest.v1.json": PREDECESSOR_REVIEW_IDENTITY["install_manifest_sha256"],
+            "/usr/local/share/yoko-privileged-runtime/policy.v2.json": PREDECESSOR_REVIEW_IDENTITY["policy_sha256"],
+            "/usr/local/share/yoko-privileged-runtime/profiles/crm-ae2082d852e3-gravity-source-v1/manifest.v1.json": PREDECESSOR_REVIEW_IDENTITY["profile_manifest_sha256"],
+        }
         or provenance.get("direct_rollback") is not True
         or provenance.get("historical_package_is_direct_rollback") is not False
     ):
@@ -726,34 +774,34 @@ def transition_exact_bindings(source_repo: Path, seal_path: Path, tar_path: Path
 
 
 def transition_run_targeted_tests(source_repo: Path) -> dict[str, object]:
-    completed = subprocess.run(
-        [
-            "/usr/bin/python3", "-I", "-B", str(ROOT / TRANSITION_TEST_RELATIVE),
-            "BootstrapTransitionTests", "-q",
-        ],
-        cwd=source_repo,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        timeout=20 * 60,
-    )
-    if completed.returncode != 0:
-        sys.stderr.buffer.write(completed.stdout)
-        sys.stderr.buffer.write(completed.stderr)
-        raise SystemExit("bounded bootstrap transition qualification failed")
+    sources: dict[str, str] = {}
+    for relative, test_class in TRANSITION_TESTS:
+        completed = subprocess.run(
+            ["/usr/bin/python3", "-I", "-B", str(ROOT / relative), test_class, "-q"],
+            cwd=source_repo,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=20 * 60,
+        )
+        if completed.returncode != 0:
+            sys.stderr.buffer.write(completed.stdout)
+            sys.stderr.buffer.write(completed.stderr)
+            raise SystemExit("bounded transition-identity strategy qualification failed")
+        sources[relative] = sha(ROOT / relative)
     return {
         "status": "PASS",
         "count": len(TRANSITION_TARGETED_TESTS),
         "catalog": list(TRANSITION_TARGETED_TESTS),
         "catalog_sha256": digest_bytes(canonical_bytes(list(TRANSITION_TARGETED_TESTS))),
-        "test_source_sha256": sha(ROOT / TRANSITION_TEST_RELATIVE),
+        "test_sources": sources,
     }
 
 
 def transition_build_evidence(bindings: dict[str, object], qualification: dict[str, object]) -> dict[str, object]:
     return {
         "schema": TRANSITION_EVIDENCE_SCHEMA,
-        "role": "BOUNDED_BOOTSTRAP_TRANSITION_EVIDENCE_ONLY",
-        "scope": "NARROW_RELEASE_TRANSITION_INTEGRATION_DEFECT",
+        "role": "BOUNDED_TRANSITION_IDENTITY_STRATEGY_EVIDENCE_ONLY",
+        "scope": "TRANSITION_IDENTITY_STRATEGY_REPAIR",
         "bindings": bindings,
         "validator": transition_validator_identity(),
         "qualification": qualification,
@@ -788,7 +836,7 @@ def transition_validate_review(
         or not re.fullmatch(r"INDEPENDENT_[A-Z0-9_.:-]{3,120}", reviewer)
         or reviewer in {"INDEPENDENT_EXECUTOR", "INDEPENDENT_SELF_REVIEW"}
         or review.get("separation_assertion") != "NOT_THE_REPAIR_EXECUTOR_AND_NOT_THE_PREDECESSOR_REVIEWER"
-        or review.get("scope") != "NARROW_RELEASE_TRANSITION_INTEGRATION_DEFECT"
+        or review.get("scope") != "TRANSITION_IDENTITY_STRATEGY_REPAIR"
         or review.get("bindings") != bindings
         or review.get("validator") != transition_validator_identity()
         or review.get("qualification") != qualification
@@ -865,7 +913,7 @@ def main() -> None:
             "debian_package_sha256": bindings["debian_package"]["sha256"],
             "direct_rollback_package_sha256": PREDECESSOR_PACKAGE["sha256"],
             "qualification": qualification,
-            "scope": "NARROW_RELEASE_TRANSITION_INTEGRATION_DEFECT",
+            "scope": "TRANSITION_IDENTITY_STRATEGY_REPAIR",
             "predecessor_acceptance_reopened": False,
             "full_replay_executed": False,
         }

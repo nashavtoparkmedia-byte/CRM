@@ -14,32 +14,33 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILE_ID = json.loads((ROOT / "src/profile.v1.json").read_text(encoding="ascii"))["profile_id"]
-NEW_DEB = ROOT / "dist/yoko-privileged-runtime_2.0.0-10_all.deb"
-ROLLBACK_DEB_NAME = "yoko-privileged-runtime_2.0.0-10_predecessor-observability-v1_all.deb"
+NEW_DEB = ROOT / "dist/yoko-privileged-runtime_2.0.0-11_all.deb"
+ROLLBACK_DEB_NAME = "yoko-privileged-runtime_2.0.0-10_all.deb"
 ROLLBACK_DEB = ROOT / "inputs" / ROLLBACK_DEB_NAME
-ROLLBACK_PROVENANCE = ROOT / "inputs/predecessor-observability-package-manifest.json"
+ROLLBACK_PROVENANCE = ROOT / "inputs/immediate-runtime-rollback-seal.json"
 PAYLOAD = ROOT / "bundle/payload"
 REVIEW = PAYLOAD / "review"
 OLD = {
     "package_version": "2.0.0-10",
-    "profile_id": "crm-08b9145945b2-gravity-source-v1",
-    "source_commit": "2b8811281a505c8dc20303bc83c3781087a3c746",
-    "runtime_sha256": "46bf3016e1582834e3e18bec3e148dc0f59073103be70a7fd628785f22daf8c7",
+    "profile_id": "crm-ae2082d852e3-gravity-source-v1",
+    "source_commit": "ae2082d852e3f9c1b9dc774993955f65f5bd097d",
+    "source_tree": "0053965a53e434f5d0c56e80abfec2ab2c9b15c0",
+    "runtime_sha256": "44a49a00e98e1ca7315bab70e20e436432f38a3b2f4934259fa419c35138f5ba",
     "core_sha256": "0f97bafbfe5b430fa7994119b1fc76fead4bdbee26766c730d9e399551ebdffa",
     "observer_sha256": "b5ea36c50e12b0fe6c171896258ddfc00a9d2666778735cae6a9b2a8df6d4084",
-    "profile_runtime_sha256": "e3a3142e6bc098a15dd62b75bf7c090a148ad64b4fe45d3d82499c2667de072f",
+    "profile_runtime_sha256": "ae69315dd38cd8d39ae9ea7947529aed7685d961de4524822a21fb6bb9ac114e",
     "policy_sha256": "8727373b0c6ec79c9abf82f1aaaa58abc2bae67e96aa96a602ac419f308db0e0",
-    "install_manifest_sha256": "571206c1cbaed74fd33f7a7ae1c92361f0be959705459e330127d7b2537e5e4f",
-    "profile_manifest_sha256": "0c948717cf6665cf443e37d2d742dfb99beb3961485506cfbb6cc6a4cd6eeb82",
-    "profile_sha256": "0c6ba7ea34b083c2eef38255ac5c5e48eb566ec3024ac2a457bbb587a769565b",
+    "install_manifest_sha256": "9ee1e7970b25d1944c58b5c6dff74e3ef8368bb389a29857e64750753aa8042a",
+    "profile_manifest_sha256": "67615b6b20209c8bdcc96a4fbe4a02c6f78b58f5c96ac147e1311c7c6155c572",
+    "profile_sha256": "f958936b7ac352ac9bee96fe602b8158caa7cdbcad92b0a9277605233aab2076",
     "migration_sha256": "433b0d503f054ed6a8161a059e2650d5e401829dabe8c9d992a1d1763eef0016",
-    "source_archive_sha256": "e611c0192fd3592ce99410df002a3918ce849dfab5c9c1b4955b02f136f830b9",
+    "source_archive_sha256": "f40e331dbb84609e6550ea060a1dd03041809c6418da5f4b9df39e6c630d9826",
     "sudoers_sha256": "3022dcfc323706da81e760255dd1ab43f9b8662ee699aa8b58fbe6e714cc69d7",
     "registry_sha256": "8ea5c3b7113e1dd2ad5a74b82a1fb0bf56643fd59774dccf37e8aa9eb67bd057",
-    "rollback_deb_sha256": "b97642ffc3a95be862943212802ab38bea3280b16597209fe56fa4a2c8dafa43",
+    "rollback_deb_sha256": "9c23ae1ad93da8db9eee1111f6b177e6d32be48e6505a96b6d66dc2633febe6a",
     "rollback_deb_payload_path": ROLLBACK_DEB_NAME,
-    "rollback_deb_store_path": "/var/lib/yoko-privileged-runtime/activation-bootstraps/b97642ffc3a95be862943212802ab38bea3280b16597209fe56fa4a2c8dafa43/yoko-privileged-runtime_2.0.0-10_predecessor-observability-v1_all.deb",
-    "rollback_provenance_sha256": "e5dc2ea647ae08b588b699f02bad5eb1ddc3db818aca53bb1240dbbc676c6153",
+    "rollback_deb_store_path": "/var/lib/yoko-privileged-runtime/activation-bootstraps/9c23ae1ad93da8db9eee1111f6b177e6d32be48e6505a96b6d66dc2633febe6a/yoko-privileged-runtime_2.0.0-10_all.deb",
+    "rollback_provenance_sha256": "3c9aaa7f9faaf445db691b7db034d3a2c4ac316b80c773a6679bd8020303e0be",
     "audit_state": "VALID",
     "audit_records": 36,
     "audit_last_digest": "7f7e4d739c9396c0d9757f0f2a60d57a50457048ce49cfd152ca46365306e344",
@@ -125,37 +126,27 @@ def main() -> None:
         text=True,
         timeout=30,
     ).stdout.splitlines()
-    if metadata != ["Package: yoko-privileged-runtime", "Version: 2.0.0-10", "Architecture: all"]:
+    if metadata != ["Package: yoko-privileged-runtime", "Version: 2.0.0-11", "Architecture: all"]:
         raise SystemExit("successor package metadata mismatch")
     rollback_metadata = subprocess.run(
         ["/usr/bin/dpkg-deb", "-f", str(ROLLBACK_DEB), "Package", "Version", "Architecture"],
         check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         text=True, timeout=30,
     ).stdout.splitlines()
-    if rollback_metadata != metadata or sha(ROLLBACK_DEB) != OLD["rollback_deb_sha256"]:
+    if rollback_metadata != ["Package: yoko-privileged-runtime", "Version: 2.0.0-10", "Architecture: all"] or sha(ROLLBACK_DEB) != OLD["rollback_deb_sha256"]:
         raise SystemExit("direct rollback package identity mismatch")
     if sha(ROLLBACK_PROVENANCE) != OLD["rollback_provenance_sha256"]:
         raise SystemExit("direct rollback provenance identity mismatch")
     provenance = json.loads(ROLLBACK_PROVENANCE.read_text(encoding="ascii"))
     if (
-        provenance.get("schema") != "yoko.crm.predecessor-observability-package.v1"
-        or provenance.get("source_commit") != OLD["source_commit"]
-        or provenance.get("package", {}).get("sha256") != OLD["rollback_deb_sha256"]
-        or provenance.get("installed_files", {}).get("/usr/local/sbin/yoko-privileged-runtime") != OLD["runtime_sha256"]
-        or provenance.get("installed_files", {}).get("/usr/local/libexec/yoko-privileged-runtime/core-2.0.0.py") != OLD["core_sha256"]
-        or provenance.get("installed_files", {}).get("/usr/local/libexec/yoko-privileged-runtime/predecessor-observability-v1.py") != OLD["observer_sha256"]
-        or provenance.get("installed_files", {}).get("/usr/local/share/yoko-privileged-runtime/install-manifest.v1.json") != OLD["install_manifest_sha256"]
-        or provenance.get("installed_files", {}).get(f"/usr/local/share/yoko-privileged-runtime/profiles/{OLD['profile_id']}/manifest.v1.json") != OLD["profile_manifest_sha256"]
-        or provenance.get("installed_files", {}).get("/etc/sudoers.d/92-yoko-privileged-runtime") != OLD["sudoers_sha256"]
-        or provenance.get("privilege_delta") != {
-            "arbitrary_paths": False,
-            "arguments": "NONE",
-            "command": "/usr/local/sbin/yoko-privileged-runtime predecessor-observe",
-            "docker_socket_delegated": False,
-            "generic_docker": False,
-            "production_mutation": False,
-            "shell": False,
-        }
+        provenance.get("schema") != "yoko.crm.source-only-release-seal.v2"
+        or provenance.get("status") != "SEALED"
+        or provenance.get("commit") != OLD["source_commit"]
+        or provenance.get("tree") != OLD["source_tree"]
+        or provenance.get("profile_id") != OLD["profile_id"]
+        or provenance.get("package_version") != OLD["package_version"]
+        or provenance.get("runtime_abi") != "2.0.0"
+        or provenance.get("built_artifacts", {}).get("deb", {}).get("sha256") != OLD["rollback_deb_sha256"]
     ):
         raise SystemExit("direct rollback source/package provenance mismatch")
 
@@ -209,7 +200,7 @@ def main() -> None:
         "packaging/postinst",
         "packaging/build-package.sh",
         f"inputs/{ROLLBACK_DEB_NAME}",
-        "inputs/predecessor-observability-package-manifest.json",
+        "inputs/immediate-runtime-rollback-seal.json",
     ):
         inputs[relative] = sha(ROOT / relative)
 
@@ -217,11 +208,11 @@ def main() -> None:
         "schema": "yoko.crm.owner-bootstrap-review-manifest.v3",
         "profile_id": PROFILE_ID,
         "new_package": {
-            "path": "yoko-privileged-runtime_2.0.0-10_all.deb",
+            "path": "yoko-privileged-runtime_2.0.0-11_all.deb",
             "sha256": sha(NEW_DEB),
             "bytes": NEW_DEB.stat().st_size,
             "name": "yoko-privileged-runtime",
-            "version": "2.0.0-10",
+            "version": "2.0.0-11",
             "runtime_abi": "2.0.0",
             "architecture": "all",
         },
@@ -258,7 +249,7 @@ def main() -> None:
     payload_manifest = {
         "schema": "yoko.crm.owner-bootstrap-payload.v1",
         "profile_id": PROFILE_ID,
-        "new_package": {"name": "yoko-privileged-runtime", "version": "2.0.0-10", "architecture": "all"},
+        "new_package": {"name": "yoko-privileged-runtime", "version": "2.0.0-11", "architecture": "all"},
         "previous_package": {
             "name": "yoko-privileged-runtime",
             "version": "2.0.0-10",

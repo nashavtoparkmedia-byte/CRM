@@ -6,17 +6,17 @@ readonly PROFILE_ID='@PROFILE_ID@'
 readonly EXPECTED_HOST='jvxthcorvm'
 EXPECTED_DIR=$(/bin/pwd -P)
 readonly EXPECTED_DIR
-readonly NEW_DEB='yoko-privileged-runtime_2.0.0-10_all.deb'
-readonly OLD_DEB='yoko-privileged-runtime_2.0.0-10_predecessor-observability-v1_all.deb'
-readonly OLD_DEB_SHA='b97642ffc3a95be862943212802ab38bea3280b16597209fe56fa4a2c8dafa43'
-readonly OLD_PROFILE_ID='crm-08b9145945b2-gravity-source-v1'
-readonly OLD_RUNTIME_SHA='46bf3016e1582834e3e18bec3e148dc0f59073103be70a7fd628785f22daf8c7'
+readonly NEW_DEB='yoko-privileged-runtime_2.0.0-11_all.deb'
+readonly OLD_DEB='yoko-privileged-runtime_2.0.0-10_all.deb'
+readonly OLD_DEB_SHA='9c23ae1ad93da8db9eee1111f6b177e6d32be48e6505a96b6d66dc2633febe6a'
+readonly OLD_PROFILE_ID='crm-ae2082d852e3-gravity-source-v1'
+readonly OLD_RUNTIME_SHA='44a49a00e98e1ca7315bab70e20e436432f38a3b2f4934259fa419c35138f5ba'
 readonly OLD_CORE_SHA='0f97bafbfe5b430fa7994119b1fc76fead4bdbee26766c730d9e399551ebdffa'
 readonly OLD_OBSERVER_SHA='b5ea36c50e12b0fe6c171896258ddfc00a9d2666778735cae6a9b2a8df6d4084'
-readonly OLD_PROFILE_RUNTIME_SHA='e3a3142e6bc098a15dd62b75bf7c090a148ad64b4fe45d3d82499c2667de072f'
-readonly OLD_PROFILE_MANIFEST_SHA='0c948717cf6665cf443e37d2d742dfb99beb3961485506cfbb6cc6a4cd6eeb82'
+readonly OLD_PROFILE_RUNTIME_SHA='ae69315dd38cd8d39ae9ea7947529aed7685d961de4524822a21fb6bb9ac114e'
+readonly OLD_PROFILE_MANIFEST_SHA='67615b6b20209c8bdcc96a4fbe4a02c6f78b58f5c96ac147e1311c7c6155c572'
 readonly OLD_POLICY_SHA='8727373b0c6ec79c9abf82f1aaaa58abc2bae67e96aa96a602ac419f308db0e0'
-readonly OLD_INSTALL_MANIFEST_SHA='571206c1cbaed74fd33f7a7ae1c92361f0be959705459e330127d7b2537e5e4f'
+readonly OLD_INSTALL_MANIFEST_SHA='9ee1e7970b25d1944c58b5c6dff74e3ef8368bb389a29857e64750753aa8042a'
 readonly EXPECTED_AUDIT_RECORDS='36'
 readonly EXPECTED_AUDIT_DIGEST='7f7e4d739c9396c0d9757f0f2a60d57a50457048ce49cfd152ca46365306e344'
 readonly OLD_SUDOERS_SHA='3022dcfc323706da81e760255dd1ab43f9b8662ee699aa8b58fbe6e714cc69d7'
@@ -60,9 +60,9 @@ capabilities_exact() {
 }
 
 new_identity() {
-    test "$(/usr/bin/dpkg-query -W -f='${db:Status-Abbrev} ${Version}' yoko-privileged-runtime 2>/dev/null)" = 'ii  2.0.0-10' || return 1
+    test "$(/usr/bin/dpkg-query -W -f='${db:Status-Abbrev} ${Version}' yoko-privileged-runtime 2>/dev/null)" = 'ii  2.0.0-11' || return 1
     self_check=$(/usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n /usr/local/sbin/yoko-privileged-runtime self-check) || return 1
-    /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("package_version")=="2.0.0-10" and e.get("activation_profile_id")==sys.argv[1] and e.get("profile_argument_shape")=="ZERO_ARGUMENT_ONLY" else 1)' "$PROFILE_ID" <<<"$self_check" || return 1
+    /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v.get("evidence",{}); raise SystemExit(0 if v.get("ok") is True and e.get("package_version")=="2.0.0-11" and e.get("activation_profile_id")==sys.argv[1] and e.get("profile_argument_shape")=="ZERO_ARGUMENT_ONLY" else 1)' "$PROFILE_ID" <<<"$self_check" || return 1
     capabilities_exact "$PROFILE_ID" || return 1
 }
 
@@ -172,7 +172,7 @@ test "$(/bin/hostname)" = "$EXPECTED_HOST"
 /usr/bin/python3 -I - "$EXPECTED_DIR" "$PROFILE_ID" <<'PY'
 import hashlib,json,os,pathlib,stat,sys
 root=pathlib.Path(sys.argv[1])
-expected={"install.sh":0o500,"payload-manifest.json":0o400,"yoko-privileged-runtime_2.0.0-10_all.deb":0o400,"yoko-privileged-runtime_2.0.0-10_predecessor-observability-v1_all.deb":0o400,"review/human-manifest.md":0o400,"review/package-manifest.json":0o400,"review/installation-procedure.md":0o400,"review/rollback-analysis.md":0o400}
+expected={"install.sh":0o500,"payload-manifest.json":0o400,"yoko-privileged-runtime_2.0.0-11_all.deb":0o400,"yoko-privileged-runtime_2.0.0-10_all.deb":0o400,"review/human-manifest.md":0o400,"review/package-manifest.json":0o400,"review/installation-procedure.md":0o400,"review/rollback-analysis.md":0o400}
 observed={str(item.relative_to(root)) for item in root.rglob('*') if item.is_file()}
 observed_dirs={str(item.relative_to(root)) for item in root.rglob('*') if item.is_dir()}
 if observed != set(expected) or observed_dirs != {"review"}: raise SystemExit('payload file set mismatch')
@@ -181,8 +181,8 @@ if (root/'review').is_symlink() or not stat.S_ISDIR(review.st_mode) or review.st
 manifest=json.loads((root/'payload-manifest.json').read_text(encoding='ascii'))
 if set(manifest)!={"schema","profile_id","new_package","previous_package","files"}: raise SystemExit('manifest keys')
 if manifest["schema"]!='yoko.crm.owner-bootstrap-payload.v1' or manifest["profile_id"]!=sys.argv[2]: raise SystemExit('manifest identity')
-if manifest["new_package"]!={"name":"yoko-privileged-runtime","version":"2.0.0-10","architecture":"all"}: raise SystemExit('manifest successor identity')
-if manifest["previous_package"]!={"name":"yoko-privileged-runtime","version":"2.0.0-10","profile_id":"crm-08b9145945b2-gravity-source-v1","source_commit":"2b8811281a505c8dc20303bc83c3781087a3c746","sha256":"b97642ffc3a95be862943212802ab38bea3280b16597209fe56fa4a2c8dafa43","payload_path":"yoko-privileged-runtime_2.0.0-10_predecessor-observability-v1_all.deb","store_path":"/var/lib/yoko-privileged-runtime/activation-bootstraps/b97642ffc3a95be862943212802ab38bea3280b16597209fe56fa4a2c8dafa43/yoko-privileged-runtime_2.0.0-10_predecessor-observability-v1_all.deb"}: raise SystemExit('manifest predecessor identity')
+if manifest["new_package"]!={"name":"yoko-privileged-runtime","version":"2.0.0-11","architecture":"all"}: raise SystemExit('manifest successor identity')
+if manifest["previous_package"]!={"name":"yoko-privileged-runtime","version":"2.0.0-10","profile_id":"crm-ae2082d852e3-gravity-source-v1","source_commit":"ae2082d852e3f9c1b9dc774993955f65f5bd097d","sha256":"9c23ae1ad93da8db9eee1111f6b177e6d32be48e6505a96b6d66dc2633febe6a","payload_path":"yoko-privileged-runtime_2.0.0-10_all.deb","store_path":"/var/lib/yoko-privileged-runtime/activation-bootstraps/9c23ae1ad93da8db9eee1111f6b177e6d32be48e6505a96b6d66dc2633febe6a/yoko-privileged-runtime_2.0.0-10_all.deb"}: raise SystemExit('manifest predecessor identity')
 if set(manifest["files"]) != set(expected)-{"payload-manifest.json"}: raise SystemExit('manifest files')
 for name,mode in expected.items():
     path=root/name
@@ -194,7 +194,7 @@ for name,mode in expected.items():
 PY
 
 test "$(/usr/bin/dpkg-deb -f "$EXPECTED_DIR/$NEW_DEB" Package)" = 'yoko-privileged-runtime'
-test "$(/usr/bin/dpkg-deb -f "$EXPECTED_DIR/$NEW_DEB" Version)" = '2.0.0-10'
+test "$(/usr/bin/dpkg-deb -f "$EXPECTED_DIR/$NEW_DEB" Version)" = '2.0.0-11'
 test "$(/usr/bin/dpkg-deb -f "$EXPECTED_DIR/$NEW_DEB" Architecture)" = 'all'
 test -f "$OLD_DEB_SOURCE"
 test ! -L "$OLD_DEB_SOURCE"
@@ -244,7 +244,7 @@ old_store_exact() {
     test "$(/usr/bin/sha256sum "$OLD_DEB_STORED" | /usr/bin/cut -d ' ' -f 1)" = "$OLD_DEB_SHA" || return 1
 }
 
-if [ "$installed_version" != '2.0.0-10' ]; then
+if [ "$installed_version" != '2.0.0-10' ] && [ "$installed_version" != '2.0.0-11' ]; then
     exit 1
 fi
 if new_identity; then
@@ -257,7 +257,7 @@ if new_identity; then
             clear_guard
         fi
         trap - EXIT
-        printf '%s\n' "{\"schema\":\"yoko.crm.owner-bootstrap-result.v1\",\"ok\":true,\"marker\":\"YOKO_ACTIVATION_BOOTSTRAP_OK\",\"status\":\"ALREADY_INSTALLED\",\"package_version\":\"2.0.0-10\",\"runtime_abi\":\"2.0.0\",\"profile_id\":\"$PROFILE_ID\",\"rollback_available\":true,\"production_mutation\":false}"
+        printf '%s\n' "{\"schema\":\"yoko.crm.owner-bootstrap-result.v1\",\"ok\":true,\"marker\":\"YOKO_ACTIVATION_BOOTSTRAP_OK\",\"status\":\"ALREADY_INSTALLED\",\"package_version\":\"2.0.0-11\",\"runtime_abi\":\"2.0.0\",\"profile_id\":\"$PROFILE_ID\",\"rollback_available\":true,\"production_mutation\":false}"
         printf '%s\n' 'YOKO_ACTIVATION_BOOTSTRAP_OK'
         exit 0
     fi
@@ -332,5 +332,5 @@ audit_after=$(/usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n /usr/local/sbin/
 clear_guard
 new_attempted=0
 trap - EXIT
-printf '%s\n' "{\"schema\":\"yoko.crm.owner-bootstrap-result.v1\",\"ok\":true,\"marker\":\"YOKO_ACTIVATION_BOOTSTRAP_OK\",\"status\":\"INSTALLED\",\"package_version\":\"2.0.0-10\",\"runtime_abi\":\"2.0.0\",\"profile_id\":\"$PROFILE_ID\",\"package_sha256\":\"$new_sha\",\"rollback_available\":true,\"production_mutation\":false}"
+printf '%s\n' "{\"schema\":\"yoko.crm.owner-bootstrap-result.v1\",\"ok\":true,\"marker\":\"YOKO_ACTIVATION_BOOTSTRAP_OK\",\"status\":\"INSTALLED\",\"package_version\":\"2.0.0-11\",\"runtime_abi\":\"2.0.0\",\"profile_id\":\"$PROFILE_ID\",\"package_sha256\":\"$new_sha\",\"rollback_available\":true,\"production_mutation\":false}"
 printf '%s\n' 'YOKO_ACTIVATION_BOOTSTRAP_OK'

@@ -188,6 +188,10 @@ class InternalAdversarialReplayTests(unittest.TestCase):
                 "path": self.validator.NEW_DEB_NAME,
                 "sha256": hashlib.sha256(deb).hexdigest(),
                 "bytes": len(deb),
+                "name": "yoko-privileged-runtime",
+                "version": "2.0.0-11",
+                "runtime_abi": "2.0.0",
+                "architecture": "all",
             },
         }
         files["payload/review/package-manifest.json"] = (

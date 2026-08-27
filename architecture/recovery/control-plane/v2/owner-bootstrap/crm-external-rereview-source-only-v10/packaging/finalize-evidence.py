@@ -12,8 +12,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-TAR = ROOT / "dist/yoko-crm-source-only-runtime-2.0.0-10.tar"
-DEB = ROOT / "dist/yoko-privileged-runtime_2.0.0-10_all.deb"
+TAR = ROOT / "dist/yoko-crm-source-only-runtime-2.0.0-11.tar"
+DEB = ROOT / "dist/yoko-privileged-runtime_2.0.0-11_all.deb"
 SEAL = ROOT / "SEALED_RELEASE.json"
 SEALED_INPUT_VERIFIER = ROOT / "packaging/verify-sealed-inputs.py"
 INTERNAL_REVIEW_VERIFIER = ROOT / "packaging/verify-independent-critic.py"
@@ -101,7 +101,7 @@ def owner_command(tar_sha: str) -> str:
         "/usr/bin/tar --extract --file \"$root_tar\" --directory \"$stage\" --no-same-owner --no-same-permissions; "
         "/usr/bin/chown -R root:root \"$stage\"; /usr/bin/chmod 0700 \"$stage/payload\"; "
         "/usr/bin/chmod 0500 \"$stage/payload/install.sh\" \"$stage/payload/review\"; "
-        "/usr/bin/chmod 0400 \"$stage/payload/payload-manifest.json\" \"$stage/payload/yoko-privileged-runtime_2.0.0-10_all.deb\" \"$stage/payload/yoko-privileged-runtime_2.0.0-10_predecessor-observability-v1_all.deb\" \"$stage/payload/review/human-manifest.md\" \"$stage/payload/review/package-manifest.json\" \"$stage/payload/review/installation-procedure.md\" \"$stage/payload/review/rollback-analysis.md\"; "
+        "/usr/bin/chmod 0400 \"$stage/payload/payload-manifest.json\" \"$stage/payload/yoko-privileged-runtime_2.0.0-11_all.deb\" \"$stage/payload/yoko-privileged-runtime_2.0.0-10_all.deb\" \"$stage/payload/review/human-manifest.md\" \"$stage/payload/review/package-manifest.json\" \"$stage/payload/review/installation-procedure.md\" \"$stage/payload/review/rollback-analysis.md\"; "
         "cd \"$stage/payload\"; exec ./install.sh'"
     )
 
@@ -153,13 +153,13 @@ def main() -> None:
             completed.stderr
             or type(review_verification) is not dict
             or set(review_verification) != expected_keys
-            or review_verification.get("schema") != "yoko.crm.bootstrap-transition-independent-runtime-review-verification.v1"
+            or review_verification.get("schema") != "yoko.crm.transition-identity-strategy-independent-runtime-review-verification.v1"
             or review_verification.get("status") != "PASS"
             or review_verification.get("verdict") != "PASS"
             or review_verification.get("sealed_release_sha256") != sha(SEAL)
             or review_verification.get("bootstrap_tar_sha256") != tar_sha
             or review_verification.get("debian_package_sha256") != deb_sha
-            or review_verification.get("direct_rollback_package_sha256") != "b97642ffc3a95be862943212802ab38bea3280b16597209fe56fa4a2c8dafa43"
+            or review_verification.get("direct_rollback_package_sha256") != "9c23ae1ad93da8db9eee1111f6b177e6d32be48e6505a96b6d66dc2633febe6a"
             or review_verification.get("predecessor_acceptance_reopened") is not False
             or review_verification.get("full_replay_executed") is not False
         ):
@@ -185,14 +185,14 @@ def main() -> None:
         "status": "ACCEPTED_WAITING_FOR_OWNER" if args.bootstrap_review == "PASS" else "SEALED_BOOTSTRAP_REVIEW_PENDING_NOT_AUTHORIZED",
         "seal": seal,
         "bootstrap_tar": {"path": str(TAR), "sha256": tar_sha, "bytes": TAR.stat().st_size},
-        "package": {"path": str(DEB), "sha256": deb_sha, "version": "2.0.0-10", "runtime_abi": "2.0.0"},
+        "package": {"path": str(DEB), "sha256": deb_sha, "version": "2.0.0-11", "runtime_abi": "2.0.0"},
         "predecessor_package": {
             "version": "2.0.0-10",
-            "profile_id": "crm-08b9145945b2-gravity-source-v1",
-            "source_commit": "2b8811281a505c8dc20303bc83c3781087a3c746",
-            "sha256": "b97642ffc3a95be862943212802ab38bea3280b16597209fe56fa4a2c8dafa43",
-            "payload_path": "yoko-privileged-runtime_2.0.0-10_predecessor-observability-v1_all.deb",
-            "store_path": "/var/lib/yoko-privileged-runtime/activation-bootstraps/b97642ffc3a95be862943212802ab38bea3280b16597209fe56fa4a2c8dafa43/yoko-privileged-runtime_2.0.0-10_predecessor-observability-v1_all.deb",
+            "profile_id": "crm-ae2082d852e3-gravity-source-v1",
+            "source_commit": "ae2082d852e3f9c1b9dc774993955f65f5bd097d",
+            "sha256": "9c23ae1ad93da8db9eee1111f6b177e6d32be48e6505a96b6d66dc2633febe6a",
+            "payload_path": "yoko-privileged-runtime_2.0.0-10_all.deb",
+            "store_path": "/var/lib/yoko-privileged-runtime/activation-bootstraps/9c23ae1ad93da8db9eee1111f6b177e6d32be48e6505a96b6d66dc2633febe6a/yoko-privileged-runtime_2.0.0-10_all.deb",
         },
         "enabled_zero_argument_profiles": ["database-status", "release-preflight", "release-activate", "rollback"],
         "enabled_zero_argument_read_only_profiles": ["predecessor-observe"],

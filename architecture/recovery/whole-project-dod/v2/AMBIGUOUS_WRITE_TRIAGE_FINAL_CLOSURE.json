@@ -36,9 +36,9 @@
     {
       "record_id": "285751a0a8f4a577b7866c586f2cd5c29374bf8fe28aaac7b10b446150192909",
       "site_signature": "285751a0a8f4a577b7866c586f2cd5c29374bf8fe28aaac7b10b446150192909",
-      "source_sha256": "f1b3d1f545100e834aaf42677b7e970c03906a8d038404b1e7b9cef11266b384",
+      "source_sha256": "c1cab32a59c8eb13536c4086a038ad79ef18ac3345eb5582eea11933094a7ffb",
       "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py",
-      "line": 572,
+      "line": 562,
       "column": 12,
       "kind": "raw",
       "method": "mixed-script-sql",
@@ -61,7 +61,7 @@
         "pg_control_system"
       ],
       "sql_sha256": "1f4094522bade4b4b67314cab42cc3847f506365a4af368ed704b2ed09c25882",
-      "sql_provenance_sha256": "4a3874bbffb124d90154cf1753de23f93d81c79de9908f693660b497bc5779c1",
+      "sql_provenance_sha256": "52d30bfc5a06877d42acc95e2b2597f481482615a91e7fb9fef7f30a6e626982",
       "source_context": null,
       "source_technical_module": null,
       "owner_contexts": [],
@@ -86,9 +86,9 @@
     {
       "record_id": "db58ec08efaa08ff46d65c6514af2e4e7f3ea91fc829291f3555696d5ab6ffe1",
       "site_signature": "db58ec08efaa08ff46d65c6514af2e4e7f3ea91fc829291f3555696d5ab6ffe1",
-      "source_sha256": "f1b3d1f545100e834aaf42677b7e970c03906a8d038404b1e7b9cef11266b384",
+      "source_sha256": "c1cab32a59c8eb13536c4086a038ad79ef18ac3345eb5582eea11933094a7ffb",
       "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py",
-      "line": 654,
+      "line": 644,
       "column": 14,
       "kind": "raw",
       "method": "mixed-script-sql",
@@ -124,7 +124,7 @@
         "to_char"
       ],
       "sql_sha256": "cf33ccab7d66812ffd3b0bf0139e01b42bbae530bef6e5b396865bcbae03b7bb",
-      "sql_provenance_sha256": "7e0a35f84b4f615daea2213bd8ab40b170f21d3ae6d773ad92582c26a83d0754",
+      "sql_provenance_sha256": "64f8f9c4d47137881222e7da5025f9dec8532f43d6780f3b8ec3f2a83866a883",
       "source_context": null,
       "source_technical_module": null,
       "owner_contexts": [],
@@ -150,9 +150,9 @@
     {
       "record_id": "ed73ec50cf0da00bc470d3f5bfd82747620760e0c4f6bfa706b42dff421ce67a",
       "site_signature": "ed73ec50cf0da00bc470d3f5bfd82747620760e0c4f6bfa706b42dff421ce67a",
-      "source_sha256": "f1b3d1f545100e834aaf42677b7e970c03906a8d038404b1e7b9cef11266b384",
+      "source_sha256": "c1cab32a59c8eb13536c4086a038ad79ef18ac3345eb5582eea11933094a7ffb",
       "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py",
-      "line": 654,
+      "line": 644,
       "column": 14,
       "kind": "raw",
       "method": "mixed-script-sql",
@@ -190,7 +190,7 @@
         "to_char"
       ],
       "sql_sha256": "c92726a047fa91cec3b709b135a89d6ca9ea15fbbf61fe2351c44f9a4c16d1b3",
-      "sql_provenance_sha256": "448816e34cd3d4a91fb7bec2136a357c28d9f830fe4ac5d8218193b30c8b6b19",
+      "sql_provenance_sha256": "aade9d1fb7281f9e03e79872a6a477521b8a9035444643aec8bcd8b26e569dc1",
       "source_context": null,
       "source_technical_module": null,
       "owner_contexts": [],
@@ -216,9 +216,9 @@
     {
       "record_id": "3a19a0dbda9182e8fb61901a6f9645d519e97bfafed996916694e437e387d307",
       "site_signature": "3a19a0dbda9182e8fb61901a6f9645d519e97bfafed996916694e437e387d307",
-      "source_sha256": "f1b3d1f545100e834aaf42677b7e970c03906a8d038404b1e7b9cef11266b384",
+      "source_sha256": "c1cab32a59c8eb13536c4086a038ad79ef18ac3345eb5582eea11933094a7ffb",
       "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py",
-      "line": 808,
+      "line": 798,
       "column": 14,
       "kind": "raw",
       "method": "mixed-script-sql",
@@ -267,7 +267,7 @@
         "to_regclass"
       ],
       "sql_sha256": "ed9cfd406f605d57ad81ce24b9bc1f8bb572087e6e9c12680cce71f154ca2341",
-      "sql_provenance_sha256": "4f4d7e4b5ec8a0aeccb6418cde12e487cf4310ca62e02552de21f8265815af41",
+      "sql_provenance_sha256": "221781208c8a8d827f0499b4790f099dcae6ee59687b100d5c0139c49b288547",
       "source_context": null,
       "source_technical_module": null,
       "owner_contexts": [],
@@ -292,9 +292,9 @@
     {
       "record_id": "e1bb0d06f7069896ad0113852070e1047b5b3226ad79cfe239943b95585c1827",
       "site_signature": "e1bb0d06f7069896ad0113852070e1047b5b3226ad79cfe239943b95585c1827",
-      "source_sha256": "f1b3d1f545100e834aaf42677b7e970c03906a8d038404b1e7b9cef11266b384",
+      "source_sha256": "c1cab32a59c8eb13536c4086a038ad79ef18ac3345eb5582eea11933094a7ffb",
       "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in",
-      "line": 572,
+      "line": 562,
       "column": 12,
       "kind": "raw",
       "method": "mixed-script-sql",
@@ -317,7 +317,7 @@
         "pg_control_system"
       ],
       "sql_sha256": "1f4094522bade4b4b67314cab42cc3847f506365a4af368ed704b2ed09c25882",
-      "sql_provenance_sha256": "3d491331cf55d8235c7edc23bc154387874df7e74088a1ebebc93455b1191475",
+      "sql_provenance_sha256": "79c03e52bebc02a03e02d78fcbfa4d061ac874a0926b6bc6701459db2d69d3c7",
       "source_context": null,
       "source_technical_module": null,
       "owner_contexts": [],
@@ -342,9 +342,9 @@
     {
       "record_id": "493cd2bbc915132b5b76f372dc8538929757c7ea4379ac3cfff69584e5a07c62",
       "site_signature": "493cd2bbc915132b5b76f372dc8538929757c7ea4379ac3cfff69584e5a07c62",
-      "source_sha256": "f1b3d1f545100e834aaf42677b7e970c03906a8d038404b1e7b9cef11266b384",
+      "source_sha256": "c1cab32a59c8eb13536c4086a038ad79ef18ac3345eb5582eea11933094a7ffb",
       "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in",
-      "line": 654,
+      "line": 644,
       "column": 14,
       "kind": "raw",
       "method": "mixed-script-sql",
@@ -382,7 +382,7 @@
         "to_char"
       ],
       "sql_sha256": "c92726a047fa91cec3b709b135a89d6ca9ea15fbbf61fe2351c44f9a4c16d1b3",
-      "sql_provenance_sha256": "72c07c8349f120e56053987bbd8a0fa1105e090e1319c190023be2b7cae498c2",
+      "sql_provenance_sha256": "264aeae5e867866f5ee09a01b868fea04748e64eb7be6d767de9a2331581eaba",
       "source_context": null,
       "source_technical_module": null,
       "owner_contexts": [],
@@ -408,9 +408,9 @@
     {
       "record_id": "daebc11dfee4c485a983a0160cab94ee9065ee492a46dcb13d73e5d7094b465a",
       "site_signature": "daebc11dfee4c485a983a0160cab94ee9065ee492a46dcb13d73e5d7094b465a",
-      "source_sha256": "f1b3d1f545100e834aaf42677b7e970c03906a8d038404b1e7b9cef11266b384",
+      "source_sha256": "c1cab32a59c8eb13536c4086a038ad79ef18ac3345eb5582eea11933094a7ffb",
       "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in",
-      "line": 654,
+      "line": 644,
       "column": 14,
       "kind": "raw",
       "method": "mixed-script-sql",
@@ -446,7 +446,7 @@
         "to_char"
       ],
       "sql_sha256": "cf33ccab7d66812ffd3b0bf0139e01b42bbae530bef6e5b396865bcbae03b7bb",
-      "sql_provenance_sha256": "fad3fdc1a23a91a116d277aa31325257c65e461148548f1ec0307b61ff19c219",
+      "sql_provenance_sha256": "ff23cbf7c4bab2a57a6ae182dd9656046dafbbab7fdddf48056ef59155f436e5",
       "source_context": null,
       "source_technical_module": null,
       "owner_contexts": [],
@@ -472,9 +472,9 @@
     {
       "record_id": "d9186fc05728ff6f00cac9f9eb60aee5df74438494c9a4b377c617d4e0bf07a3",
       "site_signature": "d9186fc05728ff6f00cac9f9eb60aee5df74438494c9a4b377c617d4e0bf07a3",
-      "source_sha256": "f1b3d1f545100e834aaf42677b7e970c03906a8d038404b1e7b9cef11266b384",
+      "source_sha256": "c1cab32a59c8eb13536c4086a038ad79ef18ac3345eb5582eea11933094a7ffb",
       "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in",
-      "line": 808,
+      "line": 798,
       "column": 14,
       "kind": "raw",
       "method": "mixed-script-sql",
@@ -523,7 +523,7 @@
         "to_regclass"
       ],
       "sql_sha256": "ed9cfd406f605d57ad81ce24b9bc1f8bb572087e6e9c12680cce71f154ca2341",
-      "sql_provenance_sha256": "94da43f148aa7b724788c8af655ff7a5304d4485795659a00058011533601bbf",
+      "sql_provenance_sha256": "f884ba6997d7c849895541519b82f3ba7aa5bcf56ef5a83df386f7b09044f8fc",
       "source_context": null,
       "source_technical_module": null,
       "owner_contexts": [],
@@ -2607,11 +2607,11 @@
       "classification": "STATIC_MIXED_SCRIPT_SQL_READ",
       "source": {
         "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py",
-        "line": 572,
+        "line": 562,
         "column": 12,
         "method": "mixed-script-sql",
-        "source_sha256": "f1b3d1f545100e834aaf42677b7e970c03906a8d038404b1e7b9cef11266b384",
-        "sql_provenance_sha256": "4a3874bbffb124d90154cf1753de23f93d81c79de9908f693660b497bc5779c1"
+        "source_sha256": "c1cab32a59c8eb13536c4086a038ad79ef18ac3345eb5582eea11933094a7ffb",
+        "sql_provenance_sha256": "52d30bfc5a06877d42acc95e2b2597f481482615a91e7fb9fef7f30a6e626982"
       },
       "resolved_target": {
         "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
@@ -2631,12 +2631,12 @@
         ]
       },
       "evidence": [
-        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py:572:12",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py:562:12",
         "analysis_site_signature:285751a0a8f4a577b7866c586f2cd5c29374bf8fe28aaac7b10b446150192909",
         "sql_sha256:1f4094522bade4b4b67314cab42cc3847f506365a4af368ed704b2ed09c25882",
         "Exact embedded SELECT invokes only independently reviewed read-only PostgreSQL projection, catalog, identity, formatting, and hashing functions.",
-        "source_sha256:f1b3d1f545100e834aaf42677b7e970c03906a8d038404b1e7b9cef11266b384",
-        "sql_provenance_sha256:4a3874bbffb124d90154cf1753de23f93d81c79de9908f693660b497bc5779c1"
+        "source_sha256:c1cab32a59c8eb13536c4086a038ad79ef18ac3345eb5582eea11933094a7ffb",
+        "sql_provenance_sha256:52d30bfc5a06877d42acc95e2b2597f481482615a91e7fb9fef7f30a6e626982"
       ]
     },
     {
@@ -2644,11 +2644,11 @@
       "classification": "STATIC_MIXED_SCRIPT_SQL_READ",
       "source": {
         "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py",
-        "line": 654,
+        "line": 644,
         "column": 14,
         "method": "mixed-script-sql",
-        "source_sha256": "f1b3d1f545100e834aaf42677b7e970c03906a8d038404b1e7b9cef11266b384",
-        "sql_provenance_sha256": "7e0a35f84b4f615daea2213bd8ab40b170f21d3ae6d773ad92582c26a83d0754"
+        "source_sha256": "c1cab32a59c8eb13536c4086a038ad79ef18ac3345eb5582eea11933094a7ffb",
+        "sql_provenance_sha256": "64f8f9c4d47137881222e7da5025f9dec8532f43d6780f3b8ec3f2a83866a883"
       },
       "resolved_target": {
         "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
@@ -2681,12 +2681,12 @@
         ]
       },
       "evidence": [
-        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py:654:14",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py:644:14",
         "analysis_site_signature:db58ec08efaa08ff46d65c6514af2e4e7f3ea91fc829291f3555696d5ab6ffe1",
         "sql_sha256:cf33ccab7d66812ffd3b0bf0139e01b42bbae530bef6e5b396865bcbae03b7bb",
         "Exact embedded SELECT invokes only independently reviewed read-only PostgreSQL projection, catalog, identity, formatting, and hashing functions.",
-        "source_sha256:f1b3d1f545100e834aaf42677b7e970c03906a8d038404b1e7b9cef11266b384",
-        "sql_provenance_sha256:7e0a35f84b4f615daea2213bd8ab40b170f21d3ae6d773ad92582c26a83d0754"
+        "source_sha256:c1cab32a59c8eb13536c4086a038ad79ef18ac3345eb5582eea11933094a7ffb",
+        "sql_provenance_sha256:64f8f9c4d47137881222e7da5025f9dec8532f43d6780f3b8ec3f2a83866a883"
       ]
     },
     {
@@ -2694,11 +2694,11 @@
       "classification": "STATIC_MIXED_SCRIPT_SQL_READ",
       "source": {
         "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py",
-        "line": 654,
+        "line": 644,
         "column": 14,
         "method": "mixed-script-sql",
-        "source_sha256": "f1b3d1f545100e834aaf42677b7e970c03906a8d038404b1e7b9cef11266b384",
-        "sql_provenance_sha256": "448816e34cd3d4a91fb7bec2136a357c28d9f830fe4ac5d8218193b30c8b6b19"
+        "source_sha256": "c1cab32a59c8eb13536c4086a038ad79ef18ac3345eb5582eea11933094a7ffb",
+        "sql_provenance_sha256": "aade9d1fb7281f9e03e79872a6a477521b8a9035444643aec8bcd8b26e569dc1"
       },
       "resolved_target": {
         "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
@@ -2733,12 +2733,12 @@
         ]
       },
       "evidence": [
-        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py:654:14",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py:644:14",
         "analysis_site_signature:ed73ec50cf0da00bc470d3f5bfd82747620760e0c4f6bfa706b42dff421ce67a",
         "sql_sha256:c92726a047fa91cec3b709b135a89d6ca9ea15fbbf61fe2351c44f9a4c16d1b3",
         "Exact embedded SELECT invokes only independently reviewed read-only PostgreSQL projection, catalog, identity, formatting, and hashing functions.",
-        "source_sha256:f1b3d1f545100e834aaf42677b7e970c03906a8d038404b1e7b9cef11266b384",
-        "sql_provenance_sha256:448816e34cd3d4a91fb7bec2136a357c28d9f830fe4ac5d8218193b30c8b6b19"
+        "source_sha256:c1cab32a59c8eb13536c4086a038ad79ef18ac3345eb5582eea11933094a7ffb",
+        "sql_provenance_sha256:aade9d1fb7281f9e03e79872a6a477521b8a9035444643aec8bcd8b26e569dc1"
       ]
     },
     {
@@ -2746,11 +2746,11 @@
       "classification": "STATIC_MIXED_SCRIPT_SQL_READ",
       "source": {
         "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py",
-        "line": 808,
+        "line": 798,
         "column": 14,
         "method": "mixed-script-sql",
-        "source_sha256": "f1b3d1f545100e834aaf42677b7e970c03906a8d038404b1e7b9cef11266b384",
-        "sql_provenance_sha256": "4f4d7e4b5ec8a0aeccb6418cde12e487cf4310ca62e02552de21f8265815af41"
+        "source_sha256": "c1cab32a59c8eb13536c4086a038ad79ef18ac3345eb5582eea11933094a7ffb",
+        "sql_provenance_sha256": "221781208c8a8d827f0499b4790f099dcae6ee59687b100d5c0139c49b288547"
       },
       "resolved_target": {
         "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
@@ -2796,12 +2796,12 @@
         ]
       },
       "evidence": [
-        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py:808:14",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py:798:14",
         "analysis_site_signature:3a19a0dbda9182e8fb61901a6f9645d519e97bfafed996916694e437e387d307",
         "sql_sha256:ed9cfd406f605d57ad81ce24b9bc1f8bb572087e6e9c12680cce71f154ca2341",
         "Exact embedded SELECT invokes only independently reviewed read-only PostgreSQL projection, catalog, identity, formatting, and hashing functions.",
-        "source_sha256:f1b3d1f545100e834aaf42677b7e970c03906a8d038404b1e7b9cef11266b384",
-        "sql_provenance_sha256:4f4d7e4b5ec8a0aeccb6418cde12e487cf4310ca62e02552de21f8265815af41"
+        "source_sha256:c1cab32a59c8eb13536c4086a038ad79ef18ac3345eb5582eea11933094a7ffb",
+        "sql_provenance_sha256:221781208c8a8d827f0499b4790f099dcae6ee59687b100d5c0139c49b288547"
       ]
     },
     {
@@ -2809,11 +2809,11 @@
       "classification": "STATIC_MIXED_SCRIPT_SQL_READ",
       "source": {
         "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in",
-        "line": 572,
+        "line": 562,
         "column": 12,
         "method": "mixed-script-sql",
-        "source_sha256": "f1b3d1f545100e834aaf42677b7e970c03906a8d038404b1e7b9cef11266b384",
-        "sql_provenance_sha256": "3d491331cf55d8235c7edc23bc154387874df7e74088a1ebebc93455b1191475"
+        "source_sha256": "c1cab32a59c8eb13536c4086a038ad79ef18ac3345eb5582eea11933094a7ffb",
+        "sql_provenance_sha256": "79c03e52bebc02a03e02d78fcbfa4d061ac874a0926b6bc6701459db2d69d3c7"
       },
       "resolved_target": {
         "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
@@ -2833,12 +2833,12 @@
         ]
       },
       "evidence": [
-        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in:572:12",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in:562:12",
         "analysis_site_signature:e1bb0d06f7069896ad0113852070e1047b5b3226ad79cfe239943b95585c1827",
         "sql_sha256:1f4094522bade4b4b67314cab42cc3847f506365a4af368ed704b2ed09c25882",
         "Exact embedded SELECT invokes only independently reviewed read-only PostgreSQL projection, catalog, identity, formatting, and hashing functions.",
-        "source_sha256:f1b3d1f545100e834aaf42677b7e970c03906a8d038404b1e7b9cef11266b384",
-        "sql_provenance_sha256:3d491331cf55d8235c7edc23bc154387874df7e74088a1ebebc93455b1191475"
+        "source_sha256:c1cab32a59c8eb13536c4086a038ad79ef18ac3345eb5582eea11933094a7ffb",
+        "sql_provenance_sha256:79c03e52bebc02a03e02d78fcbfa4d061ac874a0926b6bc6701459db2d69d3c7"
       ]
     },
     {
@@ -2846,11 +2846,11 @@
       "classification": "STATIC_MIXED_SCRIPT_SQL_READ",
       "source": {
         "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in",
-        "line": 654,
+        "line": 644,
         "column": 14,
         "method": "mixed-script-sql",
-        "source_sha256": "f1b3d1f545100e834aaf42677b7e970c03906a8d038404b1e7b9cef11266b384",
-        "sql_provenance_sha256": "72c07c8349f120e56053987bbd8a0fa1105e090e1319c190023be2b7cae498c2"
+        "source_sha256": "c1cab32a59c8eb13536c4086a038ad79ef18ac3345eb5582eea11933094a7ffb",
+        "sql_provenance_sha256": "264aeae5e867866f5ee09a01b868fea04748e64eb7be6d767de9a2331581eaba"
       },
       "resolved_target": {
         "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
@@ -2885,12 +2885,12 @@
         ]
       },
       "evidence": [
-        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in:654:14",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in:644:14",
         "analysis_site_signature:493cd2bbc915132b5b76f372dc8538929757c7ea4379ac3cfff69584e5a07c62",
         "sql_sha256:c92726a047fa91cec3b709b135a89d6ca9ea15fbbf61fe2351c44f9a4c16d1b3",
         "Exact embedded SELECT invokes only independently reviewed read-only PostgreSQL projection, catalog, identity, formatting, and hashing functions.",
-        "source_sha256:f1b3d1f545100e834aaf42677b7e970c03906a8d038404b1e7b9cef11266b384",
-        "sql_provenance_sha256:72c07c8349f120e56053987bbd8a0fa1105e090e1319c190023be2b7cae498c2"
+        "source_sha256:c1cab32a59c8eb13536c4086a038ad79ef18ac3345eb5582eea11933094a7ffb",
+        "sql_provenance_sha256:264aeae5e867866f5ee09a01b868fea04748e64eb7be6d767de9a2331581eaba"
       ]
     },
     {
@@ -2898,11 +2898,11 @@
       "classification": "STATIC_MIXED_SCRIPT_SQL_READ",
       "source": {
         "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in",
-        "line": 654,
+        "line": 644,
         "column": 14,
         "method": "mixed-script-sql",
-        "source_sha256": "f1b3d1f545100e834aaf42677b7e970c03906a8d038404b1e7b9cef11266b384",
-        "sql_provenance_sha256": "fad3fdc1a23a91a116d277aa31325257c65e461148548f1ec0307b61ff19c219"
+        "source_sha256": "c1cab32a59c8eb13536c4086a038ad79ef18ac3345eb5582eea11933094a7ffb",
+        "sql_provenance_sha256": "ff23cbf7c4bab2a57a6ae182dd9656046dafbbab7fdddf48056ef59155f436e5"
       },
       "resolved_target": {
         "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
@@ -2935,12 +2935,12 @@
         ]
       },
       "evidence": [
-        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in:654:14",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in:644:14",
         "analysis_site_signature:daebc11dfee4c485a983a0160cab94ee9065ee492a46dcb13d73e5d7094b465a",
         "sql_sha256:cf33ccab7d66812ffd3b0bf0139e01b42bbae530bef6e5b396865bcbae03b7bb",
         "Exact embedded SELECT invokes only independently reviewed read-only PostgreSQL projection, catalog, identity, formatting, and hashing functions.",
-        "source_sha256:f1b3d1f545100e834aaf42677b7e970c03906a8d038404b1e7b9cef11266b384",
-        "sql_provenance_sha256:fad3fdc1a23a91a116d277aa31325257c65e461148548f1ec0307b61ff19c219"
+        "source_sha256:c1cab32a59c8eb13536c4086a038ad79ef18ac3345eb5582eea11933094a7ffb",
+        "sql_provenance_sha256:ff23cbf7c4bab2a57a6ae182dd9656046dafbbab7fdddf48056ef59155f436e5"
       ]
     },
     {
@@ -2948,11 +2948,11 @@
       "classification": "STATIC_MIXED_SCRIPT_SQL_READ",
       "source": {
         "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in",
-        "line": 808,
+        "line": 798,
         "column": 14,
         "method": "mixed-script-sql",
-        "source_sha256": "f1b3d1f545100e834aaf42677b7e970c03906a8d038404b1e7b9cef11266b384",
-        "sql_provenance_sha256": "94da43f148aa7b724788c8af655ff7a5304d4485795659a00058011533601bbf"
+        "source_sha256": "c1cab32a59c8eb13536c4086a038ad79ef18ac3345eb5582eea11933094a7ffb",
+        "sql_provenance_sha256": "f884ba6997d7c849895541519b82f3ba7aa5bcf56ef5a83df386f7b09044f8fc"
       },
       "resolved_target": {
         "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
@@ -2998,12 +2998,12 @@
         ]
       },
       "evidence": [
-        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in:808:14",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in:798:14",
         "analysis_site_signature:d9186fc05728ff6f00cac9f9eb60aee5df74438494c9a4b377c617d4e0bf07a3",
         "sql_sha256:ed9cfd406f605d57ad81ce24b9bc1f8bb572087e6e9c12680cce71f154ca2341",
         "Exact embedded SELECT invokes only independently reviewed read-only PostgreSQL projection, catalog, identity, formatting, and hashing functions.",
-        "source_sha256:f1b3d1f545100e834aaf42677b7e970c03906a8d038404b1e7b9cef11266b384",
-        "sql_provenance_sha256:94da43f148aa7b724788c8af655ff7a5304d4485795659a00058011533601bbf"
+        "source_sha256:c1cab32a59c8eb13536c4086a038ad79ef18ac3345eb5582eea11933094a7ffb",
+        "sql_provenance_sha256:f884ba6997d7c849895541519b82f3ba7aa5bcf56ef5a83df386f7b09044f8fc"
       ]
     },
     {
