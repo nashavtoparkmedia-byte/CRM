@@ -29,7 +29,7 @@ INPUT_PATHS = (
     "src/profile.v1.json",
     "inputs/source.tar.gz",
     "inputs/gravity-image.docker.tar",
-    "inputs/yoko-privileged-runtime_2.0.0-12_all.deb",
+    "inputs/yoko-privileged-runtime_2.0.0-13_all.deb",
     "inputs/immediate-runtime-rollback-seal.json",
     "inputs/migration.sql",
     "packaging/92-yoko-privileged-runtime",
@@ -114,8 +114,8 @@ def verify(phase: str) -> dict[str, object]:
     if not isinstance(built, dict) or set(built) != {"deb", "bootstrap_tar"}:
         raise SystemExit("sealed built-artifact map invalid")
     output: dict[str, object] = {}
-    deb = ROOT / "dist/yoko-privileged-runtime_2.0.0-13_all.deb"
-    tar = ROOT / "dist/yoko-crm-source-only-runtime-2.0.0-13.tar"
+    deb = ROOT / "dist/yoko-privileged-runtime_2.0.0-14_all.deb"
+    tar = ROOT / "dist/yoko-crm-source-only-runtime-2.0.0-14.tar"
     if phase in {"package-output", "payload", "bootstrap-output", "evidence"}:
         output["deb"] = artifact_identity(deb)
         if seal["status"] == "SEALED" and output["deb"] != built["deb"]:

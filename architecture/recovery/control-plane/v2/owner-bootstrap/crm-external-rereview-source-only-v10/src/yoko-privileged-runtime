@@ -15,7 +15,7 @@ from typing import Any
 
 
 RUNTIME_ABI = "2.0.0"
-PACKAGE_VERSION = "2.0.0-13"
+PACKAGE_VERSION = "2.0.0-14"
 TEST_ENV = "YOKO_PRIVILEGED_RUNTIME_TEST_ROOT"
 CORE_PATH = "/usr/local/libexec/yoko-privileged-runtime/core-2.0.0.py"
 CORE_SHA256 = "0f97bafbfe5b430fa7994119b1fc76fead4bdbee26766c730d9e399551ebdffa"

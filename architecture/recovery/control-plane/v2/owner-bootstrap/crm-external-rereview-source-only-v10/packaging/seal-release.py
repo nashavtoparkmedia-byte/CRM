@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Seal one accepted, clean strategy-repair commit into Runtime 2.0.0-13."""
+"""Seal one accepted, clean strategy-repair commit into Runtime 2.0.0-14."""
 from __future__ import annotations
 
 import argparse
@@ -36,12 +36,12 @@ TG_BOT_BASELINE_MANIFEST_FILE_SHA256 = "1bd1d5100cabeb37277262179ee1119b3dcd9154
 TG_BOT_BASELINE_MANIFEST_SHA256 = "72397e9c7e3c728b94d1e5645da825ddd75216bfacd13212b4671fe15f206d56"
 TG_BOT_BASELINE_OBSERVATIONAL_CONTAINER_ID = "c3fae82f86726739c6e768cd524f5903a1d0a9a0e926f86d9cc559ac633c0f7a"
 ACCEPTED_PREDECESSOR_RELEASE_CRITICAL_IDENTITY_SHA256 = "0385b32004178250be0d887ab27da40483a5952d1a12284c6c16f62d7207261a"
-DIRECT_ROLLBACK_DEB_NAME = "yoko-privileged-runtime_2.0.0-12_all.deb"
-DIRECT_ROLLBACK_DEB_SHA256 = "e8162918c07059ce430cfb47316aefe8937b57dc89b39c2589b1d8a43f969e9a"
-DIRECT_ROLLBACK_SOURCE_COMMIT = "26429c49ff807cf9aad761c851d13a48148e2bc7"
-DIRECT_ROLLBACK_SOURCE_TREE = "e60a4eafaf1b4db377de6ad3a9029cf92de60ecb"
-DIRECT_ROLLBACK_PROFILE_ID = "crm-26429c49ff80-gravity-source-v1"
-DIRECT_ROLLBACK_PROVENANCE_SHA256 = "b5fb7e1d96591b1caa5f63d91cba3e3a733126356501f6987fc8c1532398c194"
+DIRECT_ROLLBACK_DEB_NAME = "yoko-privileged-runtime_2.0.0-13_all.deb"
+DIRECT_ROLLBACK_DEB_SHA256 = "db5a91ea3192c541defa00fe432904357ff9d900be6dc8e13a5a024dddc1fa48"
+DIRECT_ROLLBACK_SOURCE_COMMIT = "d4575d20f91e0029fdcce9669b42478bd8e34e1f"
+DIRECT_ROLLBACK_SOURCE_TREE = "bd9524d524b6144eeb071a940cdc1c3035c3f056"
+DIRECT_ROLLBACK_PROFILE_ID = "crm-d4575d20f91e-gravity-source-v1"
+DIRECT_ROLLBACK_PROVENANCE_SHA256 = "398ea232af257e7f75848257391bcf791f77d2fd468c1bf25cdcc72356e449c9"
 SHA40 = re.compile(r"[0-9a-f]{40}")
 SHA64 = re.compile(r"[0-9a-f]{64}")
 GITHUB_REPOSITORY = "nashavtoparkmedia-byte/CRM"
@@ -1095,12 +1095,12 @@ def stage_direct_rollback_inputs(package: Path, provenance_path: Path) -> dict[s
     expected_installed = {
         "/etc/sudoers.d/92-yoko-privileged-runtime": "3022dcfc323706da81e760255dd1ab43f9b8662ee699aa8b58fbe6e714cc69d7",
         "/usr/local/libexec/yoko-privileged-runtime/core-2.0.0.py": "0f97bafbfe5b430fa7994119b1fc76fead4bdbee26766c730d9e399551ebdffa",
-        "/usr/local/libexec/yoko-privileged-runtime/crm-26429c49ff80-gravity-source-v1.py": "1ef96a099baa15cb22bfb22082956dc9d9b9a925de13cbbdc29cb6782906ac00",
+        "/usr/local/libexec/yoko-privileged-runtime/crm-d4575d20f91e-gravity-source-v1.py": "71322ca7b67b21ef1073ee7b521f7637b7d9a5a7ac0ce0d0485f1201432b6d76",
         "/usr/local/libexec/yoko-privileged-runtime/predecessor-observability-v1.py": "b5ea36c50e12b0fe6c171896258ddfc00a9d2666778735cae6a9b2a8df6d4084",
-        "/usr/local/sbin/yoko-privileged-runtime": "d4f6c93bd4c72f3a50991957ea18260d7625baaef654fb7ee20ac09eda9d3abb",
-        "/usr/local/share/yoko-privileged-runtime/install-manifest.v1.json": "b9292fbb5e4a7c9f19b064e16b77091a643030e6bbcbc4cd2797351abb898074",
+        "/usr/local/sbin/yoko-privileged-runtime": "4b9a661bba3d6575a7ab2a8c05964cc02fcc51f075328e2a864a409dcd1735eb",
+        "/usr/local/share/yoko-privileged-runtime/install-manifest.v1.json": "8595d63f569d7367ae69647db8c2eabc19bb7beb6b214c7c5f73650bd6c55bd6",
         "/usr/local/share/yoko-privileged-runtime/policy.v2.json": "8727373b0c6ec79c9abf82f1aaaa58abc2bae67e96aa96a602ac419f308db0e0",
-        "/usr/local/share/yoko-privileged-runtime/profiles/crm-26429c49ff80-gravity-source-v1/manifest.v1.json": "7ff8d68cac7ba235316504274af6c4e446df18459cfcb251a30f3b60f0f3d997",
+        "/usr/local/share/yoko-privileged-runtime/profiles/crm-d4575d20f91e-gravity-source-v1/manifest.v1.json": "42b946b9a16126123726d80c71a7eb07f8d6345a464448fc40968cb55dc4f2ff",
     }
     if (
         provenance.get("schema") != "yoko.crm.source-only-release-seal.v2"
@@ -1108,16 +1108,16 @@ def stage_direct_rollback_inputs(package: Path, provenance_path: Path) -> dict[s
         or provenance.get("commit") != DIRECT_ROLLBACK_SOURCE_COMMIT
         or provenance.get("tree") != DIRECT_ROLLBACK_SOURCE_TREE
         or provenance.get("profile_id") != DIRECT_ROLLBACK_PROFILE_ID
-        or provenance.get("package_version") != "2.0.0-12"
+        or provenance.get("package_version") != "2.0.0-13"
         or provenance.get("runtime_abi") != "2.0.0"
         or provenance.get("built_artifacts", {}).get("deb", {}).get("sha256") != DIRECT_ROLLBACK_DEB_SHA256
     ):
-        raise SystemExit("direct rollback provenance does not bind the exact installed 26429c49 Runtime")
+        raise SystemExit("direct rollback provenance does not bind the exact installed d4575d20 Runtime")
     metadata = subprocess.run(
         ["/usr/bin/dpkg-deb", "-f", str(package.resolve(strict=True)), "Package", "Version", "Architecture"],
         check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=30,
     ).stdout.splitlines()
-    if metadata != ["Package: yoko-privileged-runtime", "Version: 2.0.0-12", "Architecture: all"]:
+    if metadata != ["Package: yoko-privileged-runtime", "Version: 2.0.0-13", "Architecture: all"]:
         raise SystemExit("direct rollback Debian metadata mismatch")
     inputs = ROOT / "inputs"
     inputs.mkdir(mode=0o700, exist_ok=True)
@@ -1444,12 +1444,12 @@ def main() -> None:
         snapshot_document["schema"] != "yoko.crm.source-only-production-snapshot.v3"
         or snapshot_document["status"] != "ACCEPTED_READ_ONLY_CAPTURE"
         or snapshot_document["host"] != "jvxthcorvm"
-        or snapshot["runtime_package_version"] != "2.0.0-12"
+        or snapshot["runtime_package_version"] != "2.0.0-13"
         or snapshot["runtime_abi"] != "2.0.0"
         or snapshot["profile_id"] != DIRECT_ROLLBACK_PROFILE_ID
         or snapshot["audit_state"] != "VALID"
-        or snapshot["audit_records"] != 38
-        or snapshot["audit_last_digest"] != "6c7f50d3ef6df5fcbb2908e3a9070cacca6d1601721c6d9ee6e24216c2163091"
+        or snapshot["audit_records"] != 43
+        or snapshot["audit_last_digest"] != "7d00ca9a0081858f1137939298e71ace33a36c6d436984f478284ccc6a1b3d9e"
         or snapshot["gravity_image_id"] != PREDECESSOR_IMAGE
         or snapshot["gravity_oci_revision"] != PREDECESSOR_COMMIT
         or snapshot["gravity_running"] is not True
@@ -1693,7 +1693,7 @@ def main() -> None:
     sealed = {
         "schema": "yoko.crm.source-only-release-seal.v2",
         "status": "SEALING_BUILD_OUTPUTS",
-        "package_version": "2.0.0-13",
+        "package_version": "2.0.0-14",
         "runtime_abi": "2.0.0",
         "profile_id": profile_id,
         "commit": commit,
@@ -1729,8 +1729,8 @@ def main() -> None:
     for script in ("build-package.sh", "build-bootstrap-bundle.sh"):
         subprocess.run([str(ROOT / "packaging" / script)], check=True, timeout=1800)
     sealed["built_artifacts"] = {
-        "deb": verifier.artifact_identity(ROOT / "dist/yoko-privileged-runtime_2.0.0-13_all.deb"),
-        "bootstrap_tar": verifier.artifact_identity(ROOT / "dist/yoko-crm-source-only-runtime-2.0.0-13.tar"),
+        "deb": verifier.artifact_identity(ROOT / "dist/yoko-privileged-runtime_2.0.0-14_all.deb"),
+        "bootstrap_tar": verifier.artifact_identity(ROOT / "dist/yoko-crm-source-only-runtime-2.0.0-14.tar"),
     }
     sealed["status"] = "SEALED"
     write_json_atomic(seal_path, sealed, 0o600)

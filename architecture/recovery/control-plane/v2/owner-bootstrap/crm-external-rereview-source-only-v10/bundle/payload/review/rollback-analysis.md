@@ -1,8 +1,8 @@
 # Rollback analysis
 
 Before any release-profile invocation, a post-`dpkg` bootstrap failure
-reinstalls exact immediate predecessor package `e8162918…` from source
-`26429c49…` for profile `crm-26429c49ff80-gravity-source-v1` and proves its
+reinstalls exact immediate predecessor package `db5a91ea…` from source
+`d4575d20…` for profile `crm-d4575d20f91e-gravity-source-v1` and proves its
 wrapper, core, observer, policy, install manifest, sudoers, profile, self-check,
 capabilities, audit, content-addressed store and unchanged application
 provenance. Historical packages are not this bootstrap's direct rollback

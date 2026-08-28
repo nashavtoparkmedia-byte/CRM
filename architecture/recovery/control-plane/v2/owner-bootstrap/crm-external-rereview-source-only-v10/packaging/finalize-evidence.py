@@ -12,8 +12,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-TAR = ROOT / "dist/yoko-crm-source-only-runtime-2.0.0-13.tar"
-DEB = ROOT / "dist/yoko-privileged-runtime_2.0.0-13_all.deb"
+TAR = ROOT / "dist/yoko-crm-source-only-runtime-2.0.0-14.tar"
+DEB = ROOT / "dist/yoko-privileged-runtime_2.0.0-14_all.deb"
 SEAL = ROOT / "SEALED_RELEASE.json"
 SEALED_INPUT_VERIFIER = ROOT / "packaging/verify-sealed-inputs.py"
 INTERNAL_REVIEW_VERIFIER = ROOT / "packaging/verify-independent-critic.py"
@@ -125,7 +125,7 @@ def owner_command(tar_sha: str) -> str:
         "/usr/bin/tar --extract --file \"$root_tar\" --directory \"$stage\" --no-same-owner --no-same-permissions; "
         "/usr/bin/chown -R root:root \"$stage\"; /usr/bin/chmod 0700 \"$stage/payload\"; "
         "/usr/bin/chmod 0500 \"$stage/payload/install.sh\" \"$stage/payload/review\"; "
-        "/usr/bin/chmod 0400 \"$stage/payload/payload-manifest.json\" \"$stage/payload/yoko-privileged-runtime_2.0.0-13_all.deb\" \"$stage/payload/yoko-privileged-runtime_2.0.0-12_all.deb\" \"$stage/payload/review/human-manifest.md\" \"$stage/payload/review/package-manifest.json\" \"$stage/payload/review/installation-procedure.md\" \"$stage/payload/review/rollback-analysis.md\"; "
+        "/usr/bin/chmod 0400 \"$stage/payload/payload-manifest.json\" \"$stage/payload/yoko-privileged-runtime_2.0.0-14_all.deb\" \"$stage/payload/yoko-privileged-runtime_2.0.0-13_all.deb\" \"$stage/payload/review/human-manifest.md\" \"$stage/payload/review/package-manifest.json\" \"$stage/payload/review/installation-procedure.md\" \"$stage/payload/review/rollback-analysis.md\"; "
         "cd \"$stage/payload\"; ./install.sh'"
     )
 
@@ -183,7 +183,7 @@ def main() -> None:
             or review_verification.get("sealed_release_sha256") != sha(SEAL)
             or review_verification.get("bootstrap_tar_sha256") != tar_sha
             or review_verification.get("debian_package_sha256") != deb_sha
-            or review_verification.get("direct_rollback_package_sha256") != "e8162918c07059ce430cfb47316aefe8937b57dc89b39c2589b1d8a43f969e9a"
+            or review_verification.get("direct_rollback_package_sha256") != "db5a91ea3192c541defa00fe432904357ff9d900be6dc8e13a5a024dddc1fa48"
             or review_verification.get("predecessor_acceptance_reopened") is not False
             or review_verification.get("full_replay_executed") is not False
         ):
@@ -209,14 +209,14 @@ def main() -> None:
         "status": "ACCEPTED_WAITING_FOR_OWNER" if args.bootstrap_review == "PASS" else "SEALED_BOOTSTRAP_REVIEW_PENDING_NOT_AUTHORIZED",
         "seal": seal,
         "bootstrap_tar": {"path": str(TAR), "sha256": tar_sha, "bytes": TAR.stat().st_size},
-        "package": {"path": str(DEB), "sha256": deb_sha, "version": "2.0.0-13", "runtime_abi": "2.0.0"},
+        "package": {"path": str(DEB), "sha256": deb_sha, "version": "2.0.0-14", "runtime_abi": "2.0.0"},
         "predecessor_package": {
-            "version": "2.0.0-12",
-            "profile_id": "crm-26429c49ff80-gravity-source-v1",
-            "source_commit": "26429c49ff807cf9aad761c851d13a48148e2bc7",
-            "sha256": "e8162918c07059ce430cfb47316aefe8937b57dc89b39c2589b1d8a43f969e9a",
-            "payload_path": "yoko-privileged-runtime_2.0.0-12_all.deb",
-            "store_path": "/var/lib/yoko-privileged-runtime/activation-bootstraps/e8162918c07059ce430cfb47316aefe8937b57dc89b39c2589b1d8a43f969e9a/yoko-privileged-runtime_2.0.0-12_all.deb",
+            "version": "2.0.0-13",
+            "profile_id": "crm-d4575d20f91e-gravity-source-v1",
+            "source_commit": "d4575d20f91e0029fdcce9669b42478bd8e34e1f",
+            "sha256": "db5a91ea3192c541defa00fe432904357ff9d900be6dc8e13a5a024dddc1fa48",
+            "payload_path": "yoko-privileged-runtime_2.0.0-13_all.deb",
+            "store_path": "/var/lib/yoko-privileged-runtime/activation-bootstraps/db5a91ea3192c541defa00fe432904357ff9d900be6dc8e13a5a024dddc1fa48/yoko-privileged-runtime_2.0.0-13_all.deb",
         },
         "enabled_zero_argument_profiles": ["database-status", "release-preflight", "release-activate", "rollback"],
         "enabled_zero_argument_read_only_profiles": ["predecessor-observe"],

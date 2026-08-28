@@ -1,6 +1,6 @@
 # Pre-seal status
 
-Runtime 2.0.0-13 source-only builder prepared. No final commit, source archive,
+Runtime 2.0.0-14 source-only builder prepared. No final commit, source archive,
 package, bootstrap tar, critic decision, or Owner authorization is sealed yet.
 See `README.md` and the two input templates.
 
@@ -29,7 +29,7 @@ bootstrap Runtime reviewer authors the exact review artifact with explicit
 separation, no-mutation, no-predecessor-reopen and no-full-replay assertions.
 Finalization mechanically reruns only that catalog and binds the decision to
 the repaired source/tree, seal, successor Debian package, bootstrap tar and
-embedded direct rollback package `e8162918…` from source `26429c49…`.
+embedded direct rollback package `db5a91ea…` from source `d4575d20…`.
 
 The builder pins both the exact 62-row active migration name/checksum map and
 its semantic order. `database-status` exposes live timestamp-ordered rows; any

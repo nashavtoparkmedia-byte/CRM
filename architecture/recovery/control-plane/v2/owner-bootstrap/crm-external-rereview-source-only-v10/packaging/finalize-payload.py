@@ -14,36 +14,36 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILE_ID = json.loads((ROOT / "src/profile.v1.json").read_text(encoding="ascii"))["profile_id"]
-NEW_DEB = ROOT / "dist/yoko-privileged-runtime_2.0.0-13_all.deb"
-ROLLBACK_DEB_NAME = "yoko-privileged-runtime_2.0.0-12_all.deb"
+NEW_DEB = ROOT / "dist/yoko-privileged-runtime_2.0.0-14_all.deb"
+ROLLBACK_DEB_NAME = "yoko-privileged-runtime_2.0.0-13_all.deb"
 ROLLBACK_DEB = ROOT / "inputs" / ROLLBACK_DEB_NAME
 ROLLBACK_PROVENANCE = ROOT / "inputs/immediate-runtime-rollback-seal.json"
 PAYLOAD = ROOT / "bundle/payload"
 REVIEW = PAYLOAD / "review"
 OLD = {
-    "package_version": "2.0.0-12",
-    "profile_id": "crm-26429c49ff80-gravity-source-v1",
-    "source_commit": "26429c49ff807cf9aad761c851d13a48148e2bc7",
-    "source_tree": "e60a4eafaf1b4db377de6ad3a9029cf92de60ecb",
-    "runtime_sha256": "d4f6c93bd4c72f3a50991957ea18260d7625baaef654fb7ee20ac09eda9d3abb",
+    "package_version": "2.0.0-13",
+    "profile_id": "crm-d4575d20f91e-gravity-source-v1",
+    "source_commit": "d4575d20f91e0029fdcce9669b42478bd8e34e1f",
+    "source_tree": "bd9524d524b6144eeb071a940cdc1c3035c3f056",
+    "runtime_sha256": "4b9a661bba3d6575a7ab2a8c05964cc02fcc51f075328e2a864a409dcd1735eb",
     "core_sha256": "0f97bafbfe5b430fa7994119b1fc76fead4bdbee26766c730d9e399551ebdffa",
     "observer_sha256": "b5ea36c50e12b0fe6c171896258ddfc00a9d2666778735cae6a9b2a8df6d4084",
-    "profile_runtime_sha256": "1ef96a099baa15cb22bfb22082956dc9d9b9a925de13cbbdc29cb6782906ac00",
+    "profile_runtime_sha256": "71322ca7b67b21ef1073ee7b521f7637b7d9a5a7ac0ce0d0485f1201432b6d76",
     "policy_sha256": "8727373b0c6ec79c9abf82f1aaaa58abc2bae67e96aa96a602ac419f308db0e0",
-    "install_manifest_sha256": "b9292fbb5e4a7c9f19b064e16b77091a643030e6bbcbc4cd2797351abb898074",
-    "profile_manifest_sha256": "7ff8d68cac7ba235316504274af6c4e446df18459cfcb251a30f3b60f0f3d997",
-    "profile_sha256": "425cd37ec63dc8935da90d8cab80f915c698e71a45d18327f979c649bf61244f",
+    "install_manifest_sha256": "8595d63f569d7367ae69647db8c2eabc19bb7beb6b214c7c5f73650bd6c55bd6",
+    "profile_manifest_sha256": "42b946b9a16126123726d80c71a7eb07f8d6345a464448fc40968cb55dc4f2ff",
+    "profile_sha256": "abcb7a4967af720b85a599667c2ef98c648cd5142486c7afd15f8da43a4b50b4",
     "migration_sha256": "433b0d503f054ed6a8161a059e2650d5e401829dabe8c9d992a1d1763eef0016",
-    "source_archive_sha256": "adc7fb3190af5bccf7087c12218199cc8f027986ab94e124deed67a0a5dc62a5",
+    "source_archive_sha256": "d760b8bbb138839fac624b0b7aa4d2385fa58c40391d218b33646e5dd3254a27",
     "sudoers_sha256": "3022dcfc323706da81e760255dd1ab43f9b8662ee699aa8b58fbe6e714cc69d7",
     "registry_sha256": "8ea5c3b7113e1dd2ad5a74b82a1fb0bf56643fd59774dccf37e8aa9eb67bd057",
-    "rollback_deb_sha256": "e8162918c07059ce430cfb47316aefe8937b57dc89b39c2589b1d8a43f969e9a",
+    "rollback_deb_sha256": "db5a91ea3192c541defa00fe432904357ff9d900be6dc8e13a5a024dddc1fa48",
     "rollback_deb_payload_path": ROLLBACK_DEB_NAME,
-    "rollback_deb_store_path": "/var/lib/yoko-privileged-runtime/activation-bootstraps/e8162918c07059ce430cfb47316aefe8937b57dc89b39c2589b1d8a43f969e9a/yoko-privileged-runtime_2.0.0-12_all.deb",
-    "rollback_provenance_sha256": "b5fb7e1d96591b1caa5f63d91cba3e3a733126356501f6987fc8c1532398c194",
+    "rollback_deb_store_path": "/var/lib/yoko-privileged-runtime/activation-bootstraps/db5a91ea3192c541defa00fe432904357ff9d900be6dc8e13a5a024dddc1fa48/yoko-privileged-runtime_2.0.0-13_all.deb",
+    "rollback_provenance_sha256": "398ea232af257e7f75848257391bcf791f77d2fd468c1bf25cdcc72356e449c9",
     "audit_state": "VALID",
-    "audit_records": 38,
-    "audit_last_digest": "6c7f50d3ef6df5fcbb2908e3a9070cacca6d1601721c6d9ee6e24216c2163091",
+    "audit_records": 43,
+    "audit_last_digest": "7d00ca9a0081858f1137939298e71ace33a36c6d436984f478284ccc6a1b3d9e",
 }
 
 
@@ -126,14 +126,14 @@ def main() -> None:
         text=True,
         timeout=30,
     ).stdout.splitlines()
-    if metadata != ["Package: yoko-privileged-runtime", "Version: 2.0.0-13", "Architecture: all"]:
+    if metadata != ["Package: yoko-privileged-runtime", "Version: 2.0.0-14", "Architecture: all"]:
         raise SystemExit("successor package metadata mismatch")
     rollback_metadata = subprocess.run(
         ["/usr/bin/dpkg-deb", "-f", str(ROLLBACK_DEB), "Package", "Version", "Architecture"],
         check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         text=True, timeout=30,
     ).stdout.splitlines()
-    if rollback_metadata != ["Package: yoko-privileged-runtime", "Version: 2.0.0-12", "Architecture: all"] or sha(ROLLBACK_DEB) != OLD["rollback_deb_sha256"]:
+    if rollback_metadata != ["Package: yoko-privileged-runtime", "Version: 2.0.0-13", "Architecture: all"] or sha(ROLLBACK_DEB) != OLD["rollback_deb_sha256"]:
         raise SystemExit("direct rollback package identity mismatch")
     if sha(ROLLBACK_PROVENANCE) != OLD["rollback_provenance_sha256"]:
         raise SystemExit("direct rollback provenance identity mismatch")
@@ -208,11 +208,11 @@ def main() -> None:
         "schema": "yoko.crm.owner-bootstrap-review-manifest.v3",
         "profile_id": PROFILE_ID,
         "new_package": {
-            "path": "yoko-privileged-runtime_2.0.0-13_all.deb",
+            "path": "yoko-privileged-runtime_2.0.0-14_all.deb",
             "sha256": sha(NEW_DEB),
             "bytes": NEW_DEB.stat().st_size,
             "name": "yoko-privileged-runtime",
-            "version": "2.0.0-13",
+            "version": "2.0.0-14",
             "runtime_abi": "2.0.0",
             "architecture": "all",
         },
@@ -249,10 +249,10 @@ def main() -> None:
     payload_manifest = {
         "schema": "yoko.crm.owner-bootstrap-payload.v1",
         "profile_id": PROFILE_ID,
-        "new_package": {"name": "yoko-privileged-runtime", "version": "2.0.0-13", "architecture": "all"},
+        "new_package": {"name": "yoko-privileged-runtime", "version": "2.0.0-14", "architecture": "all"},
         "previous_package": {
             "name": "yoko-privileged-runtime",
-            "version": "2.0.0-12",
+            "version": "2.0.0-13",
             "profile_id": OLD["profile_id"],
             "source_commit": OLD["source_commit"],
             "sha256": OLD["rollback_deb_sha256"],

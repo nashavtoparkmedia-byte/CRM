@@ -129,7 +129,7 @@ def _load_profile(core: Any) -> dict[str, Any]:
         or profile.get("schema") != PROFILE_SCHEMA
         or profile.get("profile_id") != PROFILE_ID
         or profile.get("runtime_abi") != core.VERSION
-        or profile.get("package_version") != "2.0.0-13"
+        or profile.get("package_version") != "2.0.0-14"
         or profile.get("host") != "jvxthcorvm"
         or profile.get("enabled_zero_argument_profiles") != [
             "database-status", "release-preflight", "release-activate", "rollback"
@@ -2878,7 +2878,7 @@ def _rollback_tg_semantics_compatibility(
 
 
 def _transport_health_probe_script(origin: str = "http://127.0.0.1:3002") -> str:
-    """Return a bounded, body-silent proof of the sealed 1-WA/1-TG inventory."""
+    """Return a bounded, body-silent proof of the sealed 0-WA/1-TG inventory."""
     return (
         "const h=require('http');const o=" + json.dumps(origin) + ";let done=false;"
         "const end=c=>{if(done)return;done=true;process.exit(c)};"
@@ -2889,7 +2889,7 @@ def _transport_health_probe_script(origin: str = "http://127.0.0.1:3002") -> str
         "r.on('end',()=>{if(done)return;if(r.statusCode!==200){end(2);return}"
         "if(!String(r.headers['content-type']||'').toLowerCase().startsWith('application/json')){end(5);return}"
         "try{const v=JSON.parse(b);if(!exact(v,'telegram,timestamp,whatsapp')||!iso(v.timestamp)){end(5);return}"
-        "const expected={whatsapp:1,telegram:1},ids=new Set();"
+        "const expected={whatsapp:0,telegram:1},ids=new Set();"
         "for(const channel of ['whatsapp','telegram']){const bucket=v[channel];"
         "if(!exact(bucket,'connections')||!Array.isArray(bucket.connections)||bucket.connections.length!==expected[channel]){end(5);return}"
         "for(const e of bucket.connections){"
@@ -2932,8 +2932,8 @@ def _protected_messages_health_probe_script(origin: str = "http://127.0.0.1:3002
         "try{const v=JSON.parse(b);if(!v||v.status!=='ok'){end(2);return}"
         "const t=v.transport,p=v.pipeline,re=v.retry,rc=v.recovery,i=v.integrity,w=v.watchdog;"
         "const clean=!own(v,'degradedReasons')&&t&&t.degradedConnections===0"
-        "&&t.whatsapp&&t.whatsapp.readyCount===1&&t.whatsapp.totalCount===1"
-        "&&Array.isArray(t.whatsapp.connections)&&t.whatsapp.connections.length===1"
+        "&&t.whatsapp&&t.whatsapp.readyCount===0&&t.whatsapp.totalCount===0"
+        "&&Array.isArray(t.whatsapp.connections)&&t.whatsapp.connections.length===0"
         "&&t.telegram&&t.telegram.readyCount===1&&t.telegram.totalCount===1"
         "&&Array.isArray(t.telegram.connections)&&t.telegram.connections.length===1"
         "&&p&&p.failedLast24h===0&&p.stuckCount===0"

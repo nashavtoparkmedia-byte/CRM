@@ -1,7 +1,7 @@
 # YOKO CRM one-time source-only Owner bootstrap
 
-This payload replaces installed Runtime package `2.0.0-12` with revision
-`2.0.0-13` without changing ABI `2.0.0`, the Runtime core, observer, policy, or
+This payload replaces installed Runtime package `2.0.0-13` with revision
+`2.0.0-14` without changing ABI `2.0.0`, the Runtime core, observer, policy, or
 sudoers semantics. It installs one new checksum-pinned source-only Gravity
 profile with fresh transaction state; historical profile state is never
 imported as current prestate.
@@ -40,8 +40,8 @@ bindings. The builder itself emits only non-authorizing evidence and cannot
 create the review decision. This narrow gate does not reopen the accepted
 application predecessor or start the historical full replay.
 
-The bootstrap accepts only the installed Runtime from source `26429c49…` and
-carries exact package `e8162918…` as its direct
+The bootstrap accepts only the installed Runtime from source `d4575d20…` and
+carries exact package `db5a91ea…` as its direct
 rollback artifact. It places that DEB in the root-private content-addressed
 store before `dpkg`; any later failure restores and verifies that exact state.
 Historical packages are recovery ancestry, not direct bootstrap rollback.

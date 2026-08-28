@@ -1,13 +1,13 @@
-# Runtime 2.0.0-13 source-only release builder
+# Runtime 2.0.0-14 source-only release builder
 
 This external staging tree prepares a deterministic next-revision, same-ABI
-replacement for the installed `yoko-privileged-runtime` `2.0.0-12` package.
+replacement for the installed `yoko-privileged-runtime` `2.0.0-13` package.
 It is not an authorization to install or deploy anything. The exact installed
-`26429c49ff807cf9aad761c851d13a48148e2bc7` Runtime, package SHA-256
-`e8162918c07059ce430cfb47316aefe8937b57dc89b39c2589b1d8a43f969e9a`,
+`d4575d20f91e0029fdcce9669b42478bd8e34e1f` Runtime, package SHA-256
+`db5a91ea3192c541defa00fe432904357ff9d900be6dc8e13a5a024dddc1fa48`,
 is the direct
 control-plane rollback state. Its application profile remains
-`crm-26429c49ff80-gravity-source-v1`.
+`crm-d4575d20f91e-gravity-source-v1`.
 
 The successor preserves the installed core, observer, policy, and sudoers
 boundary byte-for-byte. The existing integrity-pinned, zero-argument
@@ -24,11 +24,11 @@ implementation.
 
 ## Seal after final acceptance
 
-The exact installed `26429c49…` DEB is supplied to the sealer as an external
+The exact installed `d4575d20…` DEB is supplied to the sealer as an external
 hash-pinned input, copied into the sealed bootstrap tar, and validated against
 its exact prior release seal. Before any `dpkg`, the Owner installer
 atomically places it at the fixed root-private content-addressed store keyed by
-`e8162918…e9a`. A later bootstrap failure reinstalls and verifies that exact
+`db5a91ea…a48`. A later bootstrap failure reinstalls and verifies that exact
 immediate Runtime state. Historical Runtime packages remain recovery ancestry,
 not this bootstrap's direct rollback target.
 
@@ -53,8 +53,8 @@ python3 -I packaging/seal-release.py \
   --migration-authority /absolute/production-migration-authority.json \
   --predecessor-attestation /absolute/independent-predecessor-attestation.json \
   --gravity-artifact-zip /absolute/gravity-image-COMMIT.zip \
-  --direct-rollback-package /absolute/yoko-privileged-runtime_2.0.0-12_all.deb \
-  --direct-rollback-provenance /absolute/26429c49-SEALED_RELEASE.json
+  --direct-rollback-package /absolute/yoko-privileged-runtime_2.0.0-13_all.deb \
+  --direct-rollback-provenance /absolute/d4575d20-SEALED_RELEASE.json
 ./packaging/build-package.sh
 ./packaging/build-bootstrap-bundle.sh
 python3 -I -B -m unittest discover -s tests -v
@@ -93,8 +93,8 @@ package source tree.
 
 `seal-release.py` refuses a dirty/non-HEAD commit, a commit without that exact
 hosted-CI acceptance record, any migration SQL delta from `7aea2823…`, or a
-production snapshot that is not the installed Runtime 2.0.0-12
-`crm-26429c49ff80-gravity-source-v1` control plane
+production snapshot that is not the installed Runtime 2.0.0-13
+`crm-d4575d20f91e-gravity-source-v1` control plane
 over the healthy `baf442f8…` image at revision `7aea2823…`. The capture CLI
 accepts no arguments and invokes
 only the exact finite `sudo -n yoko-privileged-runtime` read-only plan: version,
@@ -136,8 +136,8 @@ independent identity:
 python3 -I packaging/verify-independent-critic.py --bootstrap-review-evidence \
   --source-repo /absolute/clean/accepted/worktree \
   --seal "$PWD/SEALED_RELEASE.json" \
-  --tar "$PWD/dist/yoko-crm-source-only-runtime-2.0.0-13.tar" \
-  --deb "$PWD/dist/yoko-privileged-runtime_2.0.0-13_all.deb" \
+  --tar "$PWD/dist/yoko-crm-source-only-runtime-2.0.0-14.tar" \
+  --deb "$PWD/dist/yoko-privileged-runtime_2.0.0-14_all.deb" \
   > /absolute/bootstrap-transition-review-evidence.json
 ```
 
@@ -229,6 +229,6 @@ review and a new explicitly accepted authority.
 
 The Owner command remains explicitly unauthorized until the separately
 authored transition-identity strategy independent Runtime review verifies as PASS for
-the exact repaired seal, successor package, embedded `e8162918…` rollback
+the exact repaired seal, successor package, embedded `db5a91ea…` rollback
 package, bootstrap tar, hosted-CI attestation, commit, and tree. This bounded
 gate does not reopen the already accepted predecessor baseline.
