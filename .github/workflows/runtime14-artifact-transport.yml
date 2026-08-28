@@ -26,10 +26,10 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${GITHUB_TOKEN}" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/nashavtoparkmedia-byte/CRM/actions/artifacts/9700737053/zip" \
+            "https://api.github.com/repos/nashavtoparkmedia-byte/CRM/actions/artifacts/9705291266/zip" \
             -o qualified-artifact.zip
           printf '%s  %s\n' \
-            '49b87e9254609cd5e52d5c757ae57eadd6a25f8d26139e74da5c5955873a85ba' \
+            '438fcfd7a3caf23b385649aa4c3010c50a879ffdadc1ce29b8e0fff9ea6163f7' \
             'qualified-artifact.zip' | sha256sum --check --strict
           split --bytes=400000000 --numeric-suffixes=0 --suffix-length=2 \
             qualified-artifact.zip qualified-artifact.part-
