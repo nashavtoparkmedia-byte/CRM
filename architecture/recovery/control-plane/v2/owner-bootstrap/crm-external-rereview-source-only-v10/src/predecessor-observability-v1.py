@@ -718,7 +718,7 @@ def _release_critical_service(service: dict[str, Any]) -> dict[str, Any]:
         {
             key: value
             for key, value in attachment.items()
-            if key not in {"dns_names", "observational_endpoint"}
+            if key != "observational_endpoint"
         }
         for attachment in service["network_attachments"]
     ]

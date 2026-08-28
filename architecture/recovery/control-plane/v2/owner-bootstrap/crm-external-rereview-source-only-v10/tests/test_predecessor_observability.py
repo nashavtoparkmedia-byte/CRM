@@ -364,20 +364,28 @@ class PredecessorObservationTests(unittest.TestCase):
             str(core.mapped(OBSERVATION.ENVIRONMENT_PATH)),
         ])
 
-    def test_release_critical_projection_excludes_recreated_container_dns_name(self) -> None:
+    def test_capture_projection_excludes_recreated_container_dns_name(self) -> None:
         observed = OBSERVATION.observe(FakeCore(), POLICY)["services"][0]
         recreated = copy.deepcopy(observed)
         recreated["container"]["id"] = "9" * 64
         recreated["container"]["created"] = "2026-08-28T00:00:00Z"
         recreated["network_attachments"][0]["dns_names"] = ["9" * 12, "crm-gravity-mvp", "gravity-mvp"]
         self.assertEqual(
-            OBSERVATION._release_critical_service(observed),
-            OBSERVATION._release_critical_service(recreated),
+            CAPTURE.predecessor_release_critical_service(observed),
+            CAPTURE.predecessor_release_critical_service(recreated),
+        )
+        self.assertNotEqual(
+            CAPTURE.predecessor_release_critical_service(
+                observed, include_ephemeral_dns_names=True,
+            ),
+            CAPTURE.predecessor_release_critical_service(
+                recreated, include_ephemeral_dns_names=True,
+            ),
         )
         recreated["network_attachments"][0]["aliases"] = ["different"]
         self.assertNotEqual(
-            OBSERVATION._release_critical_service(observed),
-            OBSERVATION._release_critical_service(recreated),
+            CAPTURE.predecessor_release_critical_service(observed),
+            CAPTURE.predecessor_release_critical_service(recreated),
         )
 
     def test_fixed_production_files_require_exact_leaf_identity(self) -> None:
