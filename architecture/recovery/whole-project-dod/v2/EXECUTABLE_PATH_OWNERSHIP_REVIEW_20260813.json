@@ -196,7 +196,7 @@
       "functional_owner": "architecture_recovery_evidence",
       "exclusion": "architecture_recovery",
       "inventory_kind": "exact_runtime_inventory",
-      "source_sha256": "c1cab32a59c8eb13536c4086a038ad79ef18ac3345eb5582eea11933094a7ffb",
+      "source_sha256": "efc562863acb1f147ac3301ae3cef10bfc9cf83f55594cdbdd34a6e36ece5b5d",
       "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
       "review_rationale": "Internal executor review confirms this exact current source path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
     },
