@@ -207,10 +207,10 @@ class StaticContractTests(unittest.TestCase):
         postinst = (ROOT / "templates/postinst.in").read_text()
         self.assertIn('test "$#" -eq 0', installer)
         self.assertIn("EXPECTED_HOST='jvxthcorvm'", installer)
-        self.assertIn("EXPECTED_AUDIT_RECORDS='36'", installer)
-        self.assertIn("EXPECTED_AUDIT_DIGEST='7f7e4d73", installer)
-        self.assertIn("OLD_PROFILE_ID='crm-ae2082d852e3-gravity-source-v1'", installer)
-        self.assertIn("OLD_DEB_SHA='9c23ae1ad93da8db9", installer)
+        self.assertIn("EXPECTED_AUDIT_RECORDS='38'", installer)
+        self.assertIn("EXPECTED_AUDIT_DIGEST='6c7f50d3", installer)
+        self.assertIn("OLD_PROFILE_ID='crm-26429c49ff80-gravity-source-v1'", installer)
+        self.assertIn("OLD_DEB_SHA='e8162918c07059ce", installer)
         self.assertIn('readonly OLD_DEB_SOURCE="$EXPECTED_DIR/$OLD_DEB"', installer)
         self.assertIn('readonly OLD_DEB_STORED="$OLD_DEB_STORE/$OLD_DEB"', installer)
         self.assertIn('/usr/bin/dpkg --install "$OLD_DEB_STORED"', installer)
@@ -1132,7 +1132,7 @@ class SealedFixtureTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.source_repo = repository_root()
         cls.temp = tempfile.TemporaryDirectory(
-            prefix="runtime-2.0.0-10-test-", ignore_cleanup_errors=True,
+            prefix="runtime-2.0.0-12-test-", ignore_cleanup_errors=True,
         )
         temp = Path(cls.temp.name)
         cls.stage = temp / "stage"
@@ -1154,7 +1154,7 @@ class SealedFixtureTests(unittest.TestCase):
         rollback_root = temp / "rollback-package-root"
         (rollback_root / "DEBIAN").mkdir(parents=True)
         (rollback_root / "DEBIAN/control").write_text(
-            "Package: yoko-privileged-runtime\nVersion: 2.0.0-10\n"
+            "Package: yoko-privileged-runtime\nVersion: 2.0.0-12\n"
             "Architecture: all\nMaintainer: Test <test@example.invalid>\n"
             "Description: bounded direct rollback fixture\n",
             encoding="ascii",
@@ -1168,10 +1168,10 @@ class SealedFixtureTests(unittest.TestCase):
         rollback_provenance = {
             "schema": "yoko.crm.source-only-release-seal.v2",
             "status": "SEALED",
-            "commit": "ae2082d852e3f9c1b9dc774993955f65f5bd097d",
-            "tree": "0053965a53e434f5d0c56e80abfec2ab2c9b15c0",
-            "profile_id": "crm-ae2082d852e3-gravity-source-v1",
-            "package_version": "2.0.0-10",
+            "commit": "26429c49ff807cf9aad761c851d13a48148e2bc7",
+            "tree": "e60a4eafaf1b4db377de6ad3a9029cf92de60ecb",
+            "profile_id": "crm-26429c49ff80-gravity-source-v1",
+            "package_version": "2.0.0-12",
             "runtime_abi": "2.0.0",
             "built_artifacts": {"deb": {"sha256": fixture_rollback_sha}},
         }
@@ -1181,8 +1181,8 @@ class SealedFixtureTests(unittest.TestCase):
         )
         fixture_provenance_sha = hashlib.sha256(cls.direct_rollback_provenance.read_bytes()).hexdigest()
         replacements = {
-            "9c23ae1ad93da8db9eee1111f6b177e6d32be48e6505a96b6d66dc2633febe6a": fixture_rollback_sha,
-            "3c9aaa7f9faaf445db691b7db034d3a2c4ac316b80c773a6679bd8020303e0be": fixture_provenance_sha,
+            "e8162918c07059ce430cfb47316aefe8937b57dc89b39c2589b1d8a43f969e9a": fixture_rollback_sha,
+            "b5fb7e1d96591b1caa5f63d91cba3e3a733126356501f6987fc8c1532398c194": fixture_provenance_sha,
         }
         for path in cls.stage.rglob("*"):
             if not path.is_file():
@@ -1245,7 +1245,7 @@ class SealedFixtureTests(unittest.TestCase):
                 "__pycache__", "*.pyc", "*.pyo",
                 "source.tar.gz", "gravity-image.docker.tar", "sealed-inputs.v1.json",
                 "payload-manifest.json", "package-manifest.json",
-                "yoko-privileged-runtime_2.0.0-10_all.deb",
+                "yoko-privileged-runtime_2.0.0-12_all.deb",
             ),
         )
         subprocess.run(["/usr/bin/git", "-C", str(cls.repo), "add", "--all", "--", RUNTIME_SOURCE_PREFIX], check=True)
@@ -1418,12 +1418,12 @@ class SealedFixtureTests(unittest.TestCase):
         cls.acceptance = temp / "acceptance.json"
         cls.acceptance.write_text(json.dumps(acceptance), encoding="ascii")
         snapshot = {
-            "runtime_package_version": "2.0.0-10",
+            "runtime_package_version": "2.0.0-12",
             "runtime_abi": "2.0.0",
-            "profile_id": "crm-ae2082d852e3-gravity-source-v1",
+            "profile_id": "crm-26429c49ff80-gravity-source-v1",
             "audit_state": "VALID",
-            "audit_records": 36,
-            "audit_last_digest": "7f7e4d739c9396c0d9757f0f2a60d57a50457048ce49cfd152ca46365306e344",
+            "audit_records": 38,
+            "audit_last_digest": "6c7f50d3ef6df5fcbb2908e3a9070cacca6d1601721c6d9ee6e24216c2163091",
             "source_manifest_sha256": "ecfb0a8b6dc24121fb5c9efb58af28eb1f1626711ef1a6d977b0db29d05bdda3",
             "compose_sha256": "84a9f46904a65a69afcf19d2e56162e026b29718da52c43160abfc5449f84cc1",
             "compose_config_hash": "b40621c86f1f56f76879329430086b2675b9e434dfc593fd28e8a5d60e5c269c",
@@ -1536,7 +1536,7 @@ class SealedFixtureTests(unittest.TestCase):
             fixture_sealer.main()
         finally:
             sys.argv = original_argv
-        cls.deb = cls.stage / "dist/yoko-privileged-runtime_2.0.0-12_all.deb"
+        cls.deb = cls.stage / "dist/yoko-privileged-runtime_2.0.0-13_all.deb"
         cls.root = temp / "extract"
         subprocess.run(["/usr/bin/dpkg-deb", "-x", str(cls.deb), str(cls.root)], check=True)
         for relative in ("usr/sbin", "var", "var/lib"):
@@ -2386,19 +2386,19 @@ class ProtectedMessagesPostdeployProbeTests(unittest.TestCase):
 
 
 INSTALLER = ROOT / "templates/install.sh.in"
-ROLLBACK_NAME = "yoko-privileged-runtime_2.0.0-10_all.deb"
-ROLLBACK_SHA = "9c23ae1ad93da8db9eee1111f6b177e6d32be48e6505a96b6d66dc2633febe6a"
-NEW_NAME = "yoko-privileged-runtime_2.0.0-12_all.deb"
+ROLLBACK_NAME = "yoko-privileged-runtime_2.0.0-12_all.deb"
+ROLLBACK_SHA = "e8162918c07059ce430cfb47316aefe8937b57dc89b39c2589b1d8a43f969e9a"
+NEW_NAME = "yoko-privileged-runtime_2.0.0-13_all.deb"
 NEW_SHA = "a" * 64
-AUDIT_DIGEST = "7f7e4d739c9396c0d9757f0f2a60d57a50457048ce49cfd152ca46365306e344"
+AUDIT_DIGEST = "6c7f50d3ef6df5fcbb2908e3a9070cacca6d1601721c6d9ee6e24216c2163091"
 OBSERVABILITY = {
-    "wrapper": "44a49a00e98e1ca7315bab70e20e436432f38a3b2f4934259fa419c35138f5ba",
+    "wrapper": "d4f6c93bd4c72f3a50991957ea18260d7625baaef654fb7ee20ac09eda9d3abb",
     "core": "0f97bafbfe5b430fa7994119b1fc76fead4bdbee26766c730d9e399551ebdffa",
     "observer": "b5ea36c50e12b0fe6c171896258ddfc00a9d2666778735cae6a9b2a8df6d4084",
-    "profile_runtime": "ae69315dd38cd8d39ae9ea7947529aed7685d961de4524822a21fb6bb9ac114e",
-    "profile_manifest": "67615b6b20209c8bdcc96a4fbe4a02c6f78b58f5c96ac147e1311c7c6155c572",
+    "profile_runtime": "1ef96a099baa15cb22bfb22082956dc9d9b9a925de13cbbdc29cb6782906ac00",
+    "profile_manifest": "7ff8d68cac7ba235316504274af6c4e446df18459cfcb251a30f3b60f0f3d997",
     "policy": "8727373b0c6ec79c9abf82f1aaaa58abc2bae67e96aa96a602ac419f308db0e0",
-    "install_manifest": "9ee1e7970b25d1944c58b5c6dff74e3ef8368bb389a29857e64750753aa8042a",
+    "install_manifest": "b9292fbb5e4a7c9f19b064e16b77091a643030e6bbcbc4cd2797351abb898074",
     "sudoers": "3022dcfc323706da81e760255dd1ab43f9b8662ee699aa8b58fbe6e714cc69d7",
     "registry": "8ea5c3b7113e1dd2ad5a74b82a1fb0bf56643fd59774dccf37e8aa9eb67bd057",
 }
@@ -2465,12 +2465,12 @@ class InstallerSandbox:
         manifest = {
             "schema": "yoko.crm.owner-bootstrap-payload.v1",
             "profile_id": "@PROFILE_ID@",
-            "new_package": {"name": "yoko-privileged-runtime", "version": "2.0.0-12", "architecture": "all"},
+            "new_package": {"name": "yoko-privileged-runtime", "version": "2.0.0-13", "architecture": "all"},
             "previous_package": {
                 "name": "yoko-privileged-runtime",
-                "version": "2.0.0-10",
-                "profile_id": "crm-ae2082d852e3-gravity-source-v1",
-                "source_commit": "ae2082d852e3f9c1b9dc774993955f65f5bd097d",
+                "version": "2.0.0-12",
+                "profile_id": "crm-26429c49ff80-gravity-source-v1",
+                "source_commit": "26429c49ff807cf9aad761c851d13a48148e2bc7",
                 "sha256": ROLLBACK_SHA,
                 "payload_path": ROLLBACK_NAME,
                 "store_path": f"/var/lib/yoko-privileged-runtime/activation-bootstraps/{ROLLBACK_SHA}/{ROLLBACK_NAME}",
@@ -2508,14 +2508,14 @@ class InstallerSandbox:
             "dpkg-query",
             "#!/bin/sh\nstate=$(cat \"$YOKO_TEST_STATE_DIR/state\")\n"
             "case \"$state\" in missing) exit 1;; esac\n"
-            "version=2.0.0-10; case \"$state\" in new|new_bad) version=2.0.0-12;; esac\n"
+            "version=2.0.0-12; case \"$state\" in new|new_bad) version=2.0.0-13;; esac\n"
             "case \"$*\" in *Status-Abbrev*) printf 'ii  %s' \"$version\";; *) printf '%s' \"$version\";; esac\n",
         )
         self._write_executable(
             "dpkg-deb",
             "#!/bin/sh\n"
             "test ! -e \"$YOKO_TEST_STATE_DIR/bad-metadata\" || { printf 'wrong\\n'; exit 0; }\n"
-            f"version=2.0.0-10; case \"${{2:-}}\" in *{NEW_NAME}) version=2.0.0-12;; esac\n"
+            f"version=2.0.0-12; case \"${{2:-}}\" in *{NEW_NAME}) version=2.0.0-13;; esac\n"
             "case \"${3:-}\" in Package) printf 'yoko-privileged-runtime\\n';; Version) printf '%s\\n' \"$version\";; Architecture) printf 'all\\n';; *) exit 2;; esac\n",
         )
         self._write_executable(
@@ -2544,13 +2544,13 @@ class InstallerSandbox:
             "import hashlib,json,os,pathlib,sys\n"
             "root=pathlib.Path(os.environ['YOKO_TEST_STATE_DIR']); state=(root/'state').read_text().strip(); primitive=sys.argv[-1]; (root/'calls.log').open('a').write(primitive+'\\n')\n"
             f"obs={json.dumps(OBSERVABILITY, sort_keys=True)}\n"
-            "profile='@PROFILE_ID@' if state=='new' else 'wrong-new-profile' if state=='new_bad' else 'crm-ae2082d852e3-gravity-source-v1'\n"
+            "profile='@PROFILE_ID@' if state=='new' else 'wrong-new-profile' if state=='new_bad' else 'crm-26429c49ff80-gravity-source-v1'\n"
             "if primitive=='self-check':\n"
             " installed={'/etc/sudoers.d/92-yoko-privileged-runtime':obs['sudoers'],'/usr/local/libexec/yoko-privileged-runtime/core-2.0.0.py':obs['core'],'/usr/local/libexec/yoko-privileged-runtime/predecessor-observability-v1.py':obs['observer'],'/usr/local/sbin/yoko-privileged-runtime':obs['wrapper'],'/usr/local/share/yoko-privileged-runtime/policy.v2.json':obs['policy']}\n"
-            " package_version='2.0.0-12' if state in {'new','new_bad'} else '2.0.0-10'\n"
+            " package_version='2.0.0-13' if state in {'new','new_bad'} else '2.0.0-12'\n"
             " evidence={'runtime_version':'2.0.0','package_version':package_version,'activation_profile_id':profile,'profile_argument_shape':'ZERO_ARGUMENT_ONLY','activation_profile_manifest_sha256':obs['profile_manifest'],'predecessor_observability_sha256':obs['observer'],'registry_sha256':obs['registry'],'installed_identity':installed,'generic_command_execution':False,'arbitrary_paths':False,'docker_socket_delegated':False}\n"
             "elif primitive=='capabilities': evidence={'activation_profile_id':profile,'enabled_activation_profiles':['database-status','release-preflight','release-activate','rollback'],'enabled_read_only_profiles':['predecessor-observe'],'disabled_profiles':{'config-activation':'disabled','database-migration':'disabled'},'generic_command_execution':False,'arbitrary_paths':False,'arbitrary_package_install':False,'resources':{}}\n"
-            f"elif primitive=='audit-status': evidence={{'state':'VALID','record_count':36,'last_digest':'{AUDIT_DIGEST}'}}\n"
+            f"elif primitive=='audit-status': evidence={{'state':'VALID','record_count':38,'last_digest':'{AUDIT_DIGEST}'}}\n"
             "elif primitive=='docker-provenance':\n"
             " semantic={'name':'crm-gravity-mvp','image_id':'sha256:'+'2'*64}; body={'records':[semantic],'schema':'yoko.ai-calls.production-semantic-identity.v1'}; fingerprint=hashlib.sha256(json.dumps(body,sort_keys=True,separators=(',',':')).encode('ascii')).hexdigest(); record={'name':'crm-gravity-mvp','container_id':'1'*64,'image_id':'sha256:'+'2'*64,'status':'running','started_at':'2026-08-27T00:00:00Z','restart_count':0,'semantic':semantic}; evidence={'complete':True,'failures':[],'records':[record],'semantic':{**body,'fingerprint_sha256':fingerprint}}\n"
             "else: raise SystemExit(2)\n"

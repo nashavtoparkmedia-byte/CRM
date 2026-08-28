@@ -1,13 +1,13 @@
-# Runtime 2.0.0-12 source-only release builder
+# Runtime 2.0.0-13 source-only release builder
 
 This external staging tree prepares a deterministic next-revision, same-ABI
-replacement for the installed `yoko-privileged-runtime` `2.0.0-10` package.
+replacement for the installed `yoko-privileged-runtime` `2.0.0-12` package.
 It is not an authorization to install or deploy anything. The exact installed
-`ae2082d852e3f9c1b9dc774993955f65f5bd097d` Runtime, package SHA-256
-`9c23ae1ad93da8db9eee1111f6b177e6d32be48e6505a96b6d66dc2633febe6a`,
+`26429c49ff807cf9aad761c851d13a48148e2bc7` Runtime, package SHA-256
+`e8162918c07059ce430cfb47316aefe8937b57dc89b39c2589b1d8a43f969e9a`,
 is the direct
 control-plane rollback state. Its application profile remains
-`crm-ae2082d852e3-gravity-source-v1`.
+`crm-26429c49ff80-gravity-source-v1`.
 
 The successor preserves the installed core, observer, policy, and sudoers
 boundary byte-for-byte. The existing integrity-pinned, zero-argument
@@ -24,11 +24,11 @@ implementation.
 
 ## Seal after final acceptance
 
-The exact installed `ae2082d…` DEB is supplied to the sealer as an external
+The exact installed `26429c49…` DEB is supplied to the sealer as an external
 hash-pinned input, copied into the sealed bootstrap tar, and validated against
 its exact prior release seal. Before any `dpkg`, the Owner installer
 atomically places it at the fixed root-private content-addressed store keyed by
-`9c23ae1a…be6a`. A later bootstrap failure reinstalls and verifies that exact
+`e8162918…e9a`. A later bootstrap failure reinstalls and verifies that exact
 immediate Runtime state. Historical Runtime packages remain recovery ancestry,
 not this bootstrap's direct rollback target.
 
@@ -53,8 +53,8 @@ python3 -I packaging/seal-release.py \
   --migration-authority /absolute/production-migration-authority.json \
   --predecessor-attestation /absolute/independent-predecessor-attestation.json \
   --gravity-artifact-zip /absolute/gravity-image-COMMIT.zip \
-  --direct-rollback-package /absolute/yoko-privileged-runtime_2.0.0-10_all.deb \
-  --direct-rollback-provenance /absolute/ae2082d-SEALED_RELEASE.json
+  --direct-rollback-package /absolute/yoko-privileged-runtime_2.0.0-12_all.deb \
+  --direct-rollback-provenance /absolute/26429c49-SEALED_RELEASE.json
 ./packaging/build-package.sh
 ./packaging/build-bootstrap-bundle.sh
 python3 -I -B -m unittest discover -s tests -v
@@ -93,8 +93,8 @@ package source tree.
 
 `seal-release.py` refuses a dirty/non-HEAD commit, a commit without that exact
 hosted-CI acceptance record, any migration SQL delta from `7aea2823…`, or a
-production snapshot that is not the installed Runtime 2.0.0-10
-`crm-ae2082d852e3-gravity-source-v1` control plane
+production snapshot that is not the installed Runtime 2.0.0-12
+`crm-26429c49ff80-gravity-source-v1` control plane
 over the healthy `baf442f8…` image at revision `7aea2823…`. The capture CLI
 accepts no arguments and invokes
 only the exact finite `sudo -n yoko-privileged-runtime` read-only plan: version,
@@ -128,7 +128,7 @@ removes only that just-loaded target tag and proves it absent before returning
 the original failure. Cleanup failure is a separate fail-closed error.
 
 For this curator-approved transition-identity strategy repair, the builder emits only
-non-authorizing bounded evidence for the 26 transition and Runtime-bootstrap tests. It cannot author
+non-authorizing bounded evidence for the 28 transition and Runtime-bootstrap tests. It cannot author
 the independent bootstrap Runtime review decision or assign itself an
 independent identity:
 
@@ -136,15 +136,15 @@ independent identity:
 python3 -I packaging/verify-independent-critic.py --bootstrap-review-evidence \
   --source-repo /absolute/clean/accepted/worktree \
   --seal "$PWD/SEALED_RELEASE.json" \
-  --tar "$PWD/dist/yoko-crm-source-only-runtime-2.0.0-12.tar" \
-  --deb "$PWD/dist/yoko-privileged-runtime_2.0.0-12_all.deb" \
+  --tar "$PWD/dist/yoko-crm-source-only-runtime-2.0.0-13.tar" \
+  --deb "$PWD/dist/yoko-privileged-runtime_2.0.0-13_all.deb" \
   > /absolute/bootstrap-transition-review-evidence.json
 ```
 
 A separate reviewer must inspect that exact evidence and author an exact
 `yoko.crm.transition-identity-strategy-independent-runtime-review.v1` artifact. It
 binds the repaired source/tree, seal, final DEB, bootstrap tar, exact direct
-rollback DEB, validator and 26-test catalog, with an empty residual-finding
+rollback DEB, validator and 28-test catalog, with an empty residual-finding
 list and explicit no-mutation/no-predecessor-reopen/no-full-replay assertions.
 Finalization requires the review to be no more than 24 hours old, reruns only
 that bounded test catalog, and consumes—but never creates—the artifact:
@@ -229,6 +229,6 @@ review and a new explicitly accepted authority.
 
 The Owner command remains explicitly unauthorized until the separately
 authored transition-identity strategy independent Runtime review verifies as PASS for
-the exact repaired seal, successor package, embedded `9c23ae1a…` rollback
+the exact repaired seal, successor package, embedded `e8162918…` rollback
 package, bootstrap tar, hosted-CI attestation, commit, and tree. This bounded
 gate does not reopen the already accepted predecessor baseline.

@@ -4,6 +4,7 @@ from __future__ import annotations
 import importlib.machinery
 import importlib.util
 import json
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -221,6 +222,50 @@ class TransitionIdentityModelTests(unittest.TestCase):
             domains["post_activation_target_identity"]["gravity_compose_config_hash"],
             domains["rollback_recovery_identity"]["gravity_compose_config_hash"],
         )
+
+    def test_compose_hash_uses_resolved_in_memory_projection(self) -> None:
+        resolved = {
+            "name": "crm",
+            "services": {
+                "gravity-mvp": {
+                    "environment": {"SERVICE_SECRET": "resolved-but-never-emitted"},
+                    "image": self.runtime.ROLLBACK_TAG,
+                },
+            },
+        }
+        observed: dict[str, object] = {}
+
+        def run(_core, args, **kwargs):
+            observed["args"] = args
+            observed["stdin"] = os.read(kwargs["stdin_fd"], 4 * 1024 * 1024)
+            return SimpleNamespace(stdout=("gravity-mvp " + "b" * 64 + "\n").encode("ascii"))
+
+        core = SimpleNamespace(RuntimeFault=RuntimeFault)
+        original_args = [self.runtime.DOCKER, "compose", "--env-file", "/environment", "-f", "/compose"]
+        with (
+            mock.patch.object(self.runtime, "_compose_config_json", return_value=resolved),
+            mock.patch.object(self.runtime, "_required_success", side_effect=run),
+        ):
+            value = self.runtime._compose_service_hash(core, original_args, "gravity-mvp")
+        self.assertEqual(value, "b" * 64)
+        self.assertEqual(
+            observed["args"],
+            [self.runtime.DOCKER, "compose", "-f", "-", "config", "--hash", "gravity-mvp"],
+        )
+        self.assertEqual(observed["stdin"], self.runtime._canonical(resolved))
+        self.assertNotIn(b"resolved-but-never-emitted", " ".join(observed["args"]).encode("ascii"))
+
+    def test_compose_hash_rejects_oversized_resolved_projection_before_subprocess(self) -> None:
+        core = SimpleNamespace(RuntimeFault=RuntimeFault)
+        oversized = {"services": {"gravity-mvp": {"environment": {"VALUE": "x" * (4 * 1024 * 1024)}}}}
+        with (
+            mock.patch.object(self.runtime, "_compose_config_json", return_value=oversized),
+            mock.patch.object(self.runtime, "_required_success") as execute,
+            self.assertRaises(RuntimeFault) as raised,
+        ):
+            self.runtime._compose_service_hash(core, [self.runtime.DOCKER, "compose"], "gravity-mvp")
+        self.assertEqual(raised.exception.code, "TRANSITION_COMPOSE_HASH_DERIVATION_INVALID")
+        execute.assert_not_called()
 
     def test_prestate_target_alias_is_rejected(self) -> None:
         profile = self.profile()

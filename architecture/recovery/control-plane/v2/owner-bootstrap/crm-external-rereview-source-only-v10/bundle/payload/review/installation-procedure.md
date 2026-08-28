@@ -11,14 +11,14 @@ the installer rechecks a 5 GiB reserve; failure occurs before `new_attempted`
 and before package mutation.
 
 The installer accepts only the exact installed Runtime from source
-`ae2082d…`: package `9c23ae1a…`, profile
-`crm-ae2082d852e3-gravity-source-v1`, wrapper/core/observer/profile/install
+`26429c49…`: package `e8162918…`, profile
+`crm-26429c49ff80-gravity-source-v1`, wrapper/core/observer/profile/install
 manifest/sudoers identities, exact self-check and capabilities, and the valid
-36-record audit ending `7f7e4d73…`. The exact `9c23ae1a…` DEB is embedded in
+38-record audit ending `6c7f50d3…`. The exact `e8162918…` DEB is embedded in
 the sealed payload and atomically installed into its fixed root-private
 content-addressed store before any `dpkg`. A root-owned guard blocks all
 release-profile calls throughout `dpkg`. Post-install checks prove Runtime
-`2.0.0-12`, the new profile identity,
+`2.0.0-13`, the new profile identity,
 four enabled operations, disabled database migration, unchanged sudo boundary,
 unchanged audit and unchanged Docker provenance. The provenance comparison
 requires a complete inventory with an empty failure list and includes the

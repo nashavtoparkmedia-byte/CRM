@@ -1,6 +1,6 @@
 # Pre-seal status
 
-Runtime 2.0.0-12 source-only builder prepared. No final commit, source archive,
+Runtime 2.0.0-13 source-only builder prepared. No final commit, source archive,
 package, bootstrap tar, critic decision, or Owner authorization is sealed yet.
 See `README.md` and the two input templates.
 
@@ -24,12 +24,12 @@ are sealed. Any identity, hash, conclusion, count, catalog, staging entry or
 post-seal mutation drift fails closed.
 
 For the curator-approved transition-identity strategy repair, the executor can emit only
-non-authorizing evidence for the bounded 26-test strategy/bootstrap catalog. A separate
+non-authorizing evidence for the bounded 28-test strategy/bootstrap catalog. A separate
 bootstrap Runtime reviewer authors the exact review artifact with explicit
 separation, no-mutation, no-predecessor-reopen and no-full-replay assertions.
 Finalization mechanically reruns only that catalog and binds the decision to
 the repaired source/tree, seal, successor Debian package, bootstrap tar and
-embedded direct rollback package `9c23ae1a…` from source `ae2082d…`.
+embedded direct rollback package `e8162918…` from source `26429c49…`.
 
 The builder pins both the exact 62-row active migration name/checksum map and
 its semantic order. `database-status` exposes live timestamp-ordered rows; any

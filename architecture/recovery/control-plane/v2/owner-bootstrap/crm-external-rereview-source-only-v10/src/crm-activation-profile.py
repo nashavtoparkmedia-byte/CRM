@@ -129,7 +129,7 @@ def _load_profile(core: Any) -> dict[str, Any]:
         or profile.get("schema") != PROFILE_SCHEMA
         or profile.get("profile_id") != PROFILE_ID
         or profile.get("runtime_abi") != core.VERSION
-        or profile.get("package_version") != "2.0.0-12"
+        or profile.get("package_version") != "2.0.0-13"
         or profile.get("host") != "jvxthcorvm"
         or profile.get("enabled_zero_argument_profiles") != [
             "database-status", "release-preflight", "release-activate", "rollback"
@@ -2677,10 +2677,28 @@ def _compose_config_json(core: Any, args: list[str]) -> dict[str, Any]:
 
 
 def _compose_service_hash(core: Any, args: list[str], service: str) -> str:
-    completed = _required_success(
-        core, [*args, "config", "--hash", service], timeout=60,
-        code="TRANSITION_COMPOSE_HASH_DERIVATION_FAILED",
-    )
+    # Compose's convergence label hash resolves service-level env_file values,
+    # while `compose config --hash` does not (Docker Compose #14001).  Feed the
+    # already resolved, bounded model back through stdin so the preflight hash
+    # is the exact value `compose up` will write to the container label.  The
+    # resolved environment remains only in memory and is never emitted.
+    resolved = _compose_config_json(core, args)
+    raw = _canonical(resolved)
+    if len(raw) > 4 * 1024 * 1024:
+        raise core.RuntimeFault("TRANSITION_COMPOSE_HASH_DERIVATION_INVALID", 74)
+    fd = os.memfd_create("yoko-resolved-compose", os.MFD_CLOEXEC)
+    stream = os.fdopen(fd, "w+b", closefd=True)
+    try:
+        stream.write(raw)
+        stream.flush()
+        stream.seek(0)
+        completed = _required_success(
+            core, [DOCKER, "compose", "-f", "-", "config", "--hash", service],
+            timeout=60, code="TRANSITION_COMPOSE_HASH_DERIVATION_FAILED",
+            stdin_fd=stream.fileno(),
+        )
+    finally:
+        stream.close()
     try:
         output = completed.stdout.decode("ascii").strip().split()
     except UnicodeError as exc:

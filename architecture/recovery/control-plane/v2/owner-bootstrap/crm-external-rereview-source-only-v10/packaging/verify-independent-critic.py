@@ -50,6 +50,8 @@ TRANSITION_TARGETED_TESTS = (
     "preflight_accepts_predecessor_when_target_is_deliberately_different",
     "wrong_predecessor_hash_fails_before_any_mutation",
     "target_and_recovery_hashes_are_derived_into_distinct_state_domains",
+    "compose_hash_uses_resolved_in_memory_projection",
+    "compose_hash_rejects_oversized_resolved_projection_before_subprocess",
     "prestate_target_alias_is_rejected",
     "rollback_verifies_exact_prestate_hash_not_target_hash",
     "activation_postcheck_requires_derived_target_hashes",
@@ -117,41 +119,41 @@ ATTACK_COMMANDS: dict[str, tuple[tuple[str, ...], ...]] = {
     ),
 }
 BOOTSTRAP_MTIME = 1786492800
-NEW_DEB_NAME = "yoko-privileged-runtime_2.0.0-12_all.deb"
-ROLLBACK_DEB_NAME = "yoko-privileged-runtime_2.0.0-10_all.deb"
+NEW_DEB_NAME = "yoko-privileged-runtime_2.0.0-13_all.deb"
+ROLLBACK_DEB_NAME = "yoko-privileged-runtime_2.0.0-12_all.deb"
 PREDECESSOR_PACKAGE = {
     "name": "yoko-privileged-runtime",
-    "version": "2.0.0-10",
-    "profile_id": "crm-ae2082d852e3-gravity-source-v1",
-    "source_commit": "ae2082d852e3f9c1b9dc774993955f65f5bd097d",
-    "sha256": "9c23ae1ad93da8db9eee1111f6b177e6d32be48e6505a96b6d66dc2633febe6a",
+    "version": "2.0.0-12",
+    "profile_id": "crm-26429c49ff80-gravity-source-v1",
+    "source_commit": "26429c49ff807cf9aad761c851d13a48148e2bc7",
+    "sha256": "e8162918c07059ce430cfb47316aefe8937b57dc89b39c2589b1d8a43f969e9a",
     "payload_path": ROLLBACK_DEB_NAME,
-    "store_path": "/var/lib/yoko-privileged-runtime/activation-bootstraps/9c23ae1ad93da8db9eee1111f6b177e6d32be48e6505a96b6d66dc2633febe6a/yoko-privileged-runtime_2.0.0-10_all.deb",
+    "store_path": "/var/lib/yoko-privileged-runtime/activation-bootstraps/e8162918c07059ce430cfb47316aefe8937b57dc89b39c2589b1d8a43f969e9a/yoko-privileged-runtime_2.0.0-12_all.deb",
 }
 PREDECESSOR_REVIEW_IDENTITY = {
-    "package_version": "2.0.0-10",
-    "profile_id": "crm-ae2082d852e3-gravity-source-v1",
-    "source_commit": "ae2082d852e3f9c1b9dc774993955f65f5bd097d",
-    "source_tree": "0053965a53e434f5d0c56e80abfec2ab2c9b15c0",
-    "runtime_sha256": "44a49a00e98e1ca7315bab70e20e436432f38a3b2f4934259fa419c35138f5ba",
+    "package_version": "2.0.0-12",
+    "profile_id": "crm-26429c49ff80-gravity-source-v1",
+    "source_commit": "26429c49ff807cf9aad761c851d13a48148e2bc7",
+    "source_tree": "e60a4eafaf1b4db377de6ad3a9029cf92de60ecb",
+    "runtime_sha256": "d4f6c93bd4c72f3a50991957ea18260d7625baaef654fb7ee20ac09eda9d3abb",
     "core_sha256": "0f97bafbfe5b430fa7994119b1fc76fead4bdbee26766c730d9e399551ebdffa",
     "observer_sha256": "b5ea36c50e12b0fe6c171896258ddfc00a9d2666778735cae6a9b2a8df6d4084",
-    "profile_runtime_sha256": "ae69315dd38cd8d39ae9ea7947529aed7685d961de4524822a21fb6bb9ac114e",
+    "profile_runtime_sha256": "1ef96a099baa15cb22bfb22082956dc9d9b9a925de13cbbdc29cb6782906ac00",
     "policy_sha256": "8727373b0c6ec79c9abf82f1aaaa58abc2bae67e96aa96a602ac419f308db0e0",
-    "install_manifest_sha256": "9ee1e7970b25d1944c58b5c6dff74e3ef8368bb389a29857e64750753aa8042a",
-    "profile_manifest_sha256": "67615b6b20209c8bdcc96a4fbe4a02c6f78b58f5c96ac147e1311c7c6155c572",
-    "profile_sha256": "f958936b7ac352ac9bee96fe602b8158caa7cdbcad92b0a9277605233aab2076",
+    "install_manifest_sha256": "b9292fbb5e4a7c9f19b064e16b77091a643030e6bbcbc4cd2797351abb898074",
+    "profile_manifest_sha256": "7ff8d68cac7ba235316504274af6c4e446df18459cfcb251a30f3b60f0f3d997",
+    "profile_sha256": "425cd37ec63dc8935da90d8cab80f915c698e71a45d18327f979c649bf61244f",
     "migration_sha256": "433b0d503f054ed6a8161a059e2650d5e401829dabe8c9d992a1d1763eef0016",
-    "source_archive_sha256": "f40e331dbb84609e6550ea060a1dd03041809c6418da5f4b9df39e6c630d9826",
+    "source_archive_sha256": "adc7fb3190af5bccf7087c12218199cc8f027986ab94e124deed67a0a5dc62a5",
     "sudoers_sha256": "3022dcfc323706da81e760255dd1ab43f9b8662ee699aa8b58fbe6e714cc69d7",
     "registry_sha256": "8ea5c3b7113e1dd2ad5a74b82a1fb0bf56643fd59774dccf37e8aa9eb67bd057",
     "rollback_deb_sha256": PREDECESSOR_PACKAGE["sha256"],
     "rollback_deb_payload_path": PREDECESSOR_PACKAGE["payload_path"],
     "rollback_deb_store_path": PREDECESSOR_PACKAGE["store_path"],
-    "rollback_provenance_sha256": "3c9aaa7f9faaf445db691b7db034d3a2c4ac316b80c773a6679bd8020303e0be",
+    "rollback_provenance_sha256": "b5fb7e1d96591b1caa5f63d91cba3e3a733126356501f6987fc8c1532398c194",
     "audit_state": "VALID",
-    "audit_records": 36,
-    "audit_last_digest": "7f7e4d739c9396c0d9757f0f2a60d57a50457048ce49cfd152ca46365306e344",
+    "audit_records": 38,
+    "audit_last_digest": "6c7f50d3ef6df5fcbb2908e3a9070cacca6d1601721c6d9ee6e24216c2163091",
 }
 STREAM_CHUNK_BYTES = 1024 * 1024
 MAX_BOOTSTRAP_DOCUMENT_BYTES = 4 * 1024 * 1024
@@ -450,7 +452,7 @@ def validate_bootstrap_tar(
         or new_package.get("sha256") != exact_deb_sha256
         or new_package.get("bytes") != exact_deb_size
         or new_package.get("name") != "yoko-privileged-runtime"
-        or new_package.get("version") != "2.0.0-12"
+        or new_package.get("version") != "2.0.0-13"
         or new_package.get("runtime_abi") != "2.0.0"
         or new_package.get("architecture") != "all"
     ):
@@ -750,12 +752,12 @@ def transition_exact_bindings(source_repo: Path, seal_path: Path, tar_path: Path
         or provenance.get("installed_identity") != {
             "/etc/sudoers.d/92-yoko-privileged-runtime": PREDECESSOR_REVIEW_IDENTITY["sudoers_sha256"],
             "/usr/local/libexec/yoko-privileged-runtime/core-2.0.0.py": PREDECESSOR_REVIEW_IDENTITY["core_sha256"],
-            "/usr/local/libexec/yoko-privileged-runtime/crm-ae2082d852e3-gravity-source-v1.py": PREDECESSOR_REVIEW_IDENTITY["profile_runtime_sha256"],
+            "/usr/local/libexec/yoko-privileged-runtime/crm-26429c49ff80-gravity-source-v1.py": PREDECESSOR_REVIEW_IDENTITY["profile_runtime_sha256"],
             "/usr/local/libexec/yoko-privileged-runtime/predecessor-observability-v1.py": PREDECESSOR_REVIEW_IDENTITY["observer_sha256"],
             "/usr/local/sbin/yoko-privileged-runtime": PREDECESSOR_REVIEW_IDENTITY["runtime_sha256"],
             "/usr/local/share/yoko-privileged-runtime/install-manifest.v1.json": PREDECESSOR_REVIEW_IDENTITY["install_manifest_sha256"],
             "/usr/local/share/yoko-privileged-runtime/policy.v2.json": PREDECESSOR_REVIEW_IDENTITY["policy_sha256"],
-            "/usr/local/share/yoko-privileged-runtime/profiles/crm-ae2082d852e3-gravity-source-v1/manifest.v1.json": PREDECESSOR_REVIEW_IDENTITY["profile_manifest_sha256"],
+            "/usr/local/share/yoko-privileged-runtime/profiles/crm-26429c49ff80-gravity-source-v1/manifest.v1.json": PREDECESSOR_REVIEW_IDENTITY["profile_manifest_sha256"],
         }
         or provenance.get("direct_rollback") is not True
         or provenance.get("historical_package_is_direct_rollback") is not False
