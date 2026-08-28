@@ -36,6 +36,7 @@ TG_BOT_BASELINE_MANIFEST_FILE_SHA256 = "1bd1d5100cabeb37277262179ee1119b3dcd9154
 TG_BOT_BASELINE_MANIFEST_SHA256 = "72397e9c7e3c728b94d1e5645da825ddd75216bfacd13212b4671fe15f206d56"
 TG_BOT_BASELINE_OBSERVATIONAL_CONTAINER_ID = "c3fae82f86726739c6e768cd524f5903a1d0a9a0e926f86d9cc559ac633c0f7a"
 ACCEPTED_PREDECESSOR_RELEASE_CRITICAL_IDENTITY_SHA256 = "0385b32004178250be0d887ab27da40483a5952d1a12284c6c16f62d7207261a"
+ACCEPTED_PREDECESSOR_RECREATION_CONFIGURATION_SHA256 = "208abb67f8a15f9ebb24c2fda0724688cfb59c69ba202f4f5db8766afebeaa93"
 DIRECT_ROLLBACK_DEB_NAME = "yoko-privileged-runtime_2.0.0-13_all.deb"
 DIRECT_ROLLBACK_DEB_SHA256 = "db5a91ea3192c541defa00fe432904357ff9d900be6dc8e13a5a024dddc1fa48"
 DIRECT_ROLLBACK_SOURCE_COMMIT = "d4575d20f91e0029fdcce9669b42478bd8e34e1f"
@@ -1476,7 +1477,7 @@ def main() -> None:
         or snapshot["tg_bot_patch_baseline_manifest_sha256"] != TG_BOT_BASELINE_MANIFEST_SHA256
         or snapshot["outbox_catalog_state"] != "EXACT"
         or not accepted_outbox_counts(snapshot["outbox_counts"])
-        or snapshot["predecessor_release_critical_identity_sha256"] != ACCEPTED_PREDECESSOR_RELEASE_CRITICAL_IDENTITY_SHA256
+        or snapshot["predecessor_release_critical_identity_sha256"] != ACCEPTED_PREDECESSOR_RECREATION_CONFIGURATION_SHA256
         or snapshot["secret_values_emitted"] is not False
         or snapshot["production_mutated"] is not False
     ):
@@ -1631,7 +1632,7 @@ def main() -> None:
     })
     prestate = profile["pre_activation_live_prestate"]
     prestate.update({
-        "predecessor_release_critical_identity_sha256": snapshot["predecessor_release_critical_identity_sha256"],
+        "predecessor_release_critical_identity_sha256": ACCEPTED_PREDECESSOR_RELEASE_CRITICAL_IDENTITY_SHA256,
         "source_manifest_sha256": snapshot["source_manifest_sha256"],
         "gravity_container_id": snapshot["gravity_container_id"],
         "gravity_image_id": snapshot["gravity_image_id"],
@@ -1706,7 +1707,8 @@ def main() -> None:
         "hosted_authoritative_ci": accepted["authoritative_ci"],
         "gravity_image_artifact": gravity_artifact,
         "production_snapshot_sha256": sha(args.production_snapshot.read_bytes()),
-        "accepted_predecessor_release_critical_identity_sha256": snapshot["predecessor_release_critical_identity_sha256"],
+        "accepted_predecessor_release_critical_identity_sha256": ACCEPTED_PREDECESSOR_RELEASE_CRITICAL_IDENTITY_SHA256,
+        "accepted_predecessor_recreation_configuration_sha256": snapshot["predecessor_release_critical_identity_sha256"],
         "migration_authority_sha256": sha(authority_bytes),
         "predecessor_attestation_sha256": sha(attestation_bytes),
         "canonical_migration_inventory_digest": authority["inventory_digest"],

@@ -364,6 +364,22 @@ class PredecessorObservationTests(unittest.TestCase):
             str(core.mapped(OBSERVATION.ENVIRONMENT_PATH)),
         ])
 
+    def test_release_critical_projection_excludes_recreated_container_dns_name(self) -> None:
+        observed = OBSERVATION.observe(FakeCore(), POLICY)["services"][0]
+        recreated = copy.deepcopy(observed)
+        recreated["container"]["id"] = "9" * 64
+        recreated["container"]["created"] = "2026-08-28T00:00:00Z"
+        recreated["network_attachments"][0]["dns_names"] = ["9" * 12, "crm-gravity-mvp", "gravity-mvp"]
+        self.assertEqual(
+            OBSERVATION._release_critical_service(observed),
+            OBSERVATION._release_critical_service(recreated),
+        )
+        recreated["network_attachments"][0]["aliases"] = ["different"]
+        self.assertNotEqual(
+            OBSERVATION._release_critical_service(observed),
+            OBSERVATION._release_critical_service(recreated),
+        )
+
     def test_fixed_production_files_require_exact_leaf_identity(self) -> None:
         core = FakeCore()
         environment = core.mapped(OBSERVATION.ENVIRONMENT_PATH)
@@ -456,6 +472,19 @@ class PredecessorObservationTests(unittest.TestCase):
             "schema": evidence["schema"],
             "compose_source": evidence["compose_source"],
             "services": [CAPTURE.predecessor_release_critical_service(service) for service in evidence["services"]],
+            "volumes": evidence["volumes"],
+            "networks": evidence["networks"],
+        })
+        self.assertIs(CAPTURE.validate_predecessor_evidence(evidence), evidence)
+        evidence["release_critical_identity_sha256"] = CAPTURE.compact_digest({
+            "schema": evidence["schema"],
+            "compose_source": evidence["compose_source"],
+            "services": [
+                CAPTURE.predecessor_release_critical_service(
+                    service, include_ephemeral_dns_names=True,
+                )
+                for service in evidence["services"]
+            ],
             "volumes": evidence["volumes"],
             "networks": evidence["networks"],
         })

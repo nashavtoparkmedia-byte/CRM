@@ -858,10 +858,15 @@ class HostedCiAcceptanceTests(unittest.TestCase):
     def test_seal_binds_independently_accepted_predecessor_release_identity(self) -> None:
         seal = (ROOT / "packaging/seal-release.py").read_text()
         self.assertIn(
-            'snapshot["predecessor_release_critical_identity_sha256"] != ACCEPTED_PREDECESSOR_RELEASE_CRITICAL_IDENTITY_SHA256',
+            'snapshot["predecessor_release_critical_identity_sha256"] != ACCEPTED_PREDECESSOR_RECREATION_CONFIGURATION_SHA256',
+            seal,
+        )
+        self.assertIn(
+            '"predecessor_release_critical_identity_sha256": ACCEPTED_PREDECESSOR_RELEASE_CRITICAL_IDENTITY_SHA256',
             seal,
         )
         self.assertIn('"accepted_predecessor_release_critical_identity_sha256"', seal)
+        self.assertIn('"accepted_predecessor_recreation_configuration_sha256"', seal)
 
     def test_migration_authority_input_is_exact_accepted_commit_blob(self) -> None:
         authority_path = repository_root() / MIGRATION_AUTHORITY_PATH
@@ -1451,7 +1456,7 @@ class SealedFixtureTests(unittest.TestCase):
             "postgres_image_id": "sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229",
             "database_identity_sha256": "ed88dfeaad2a3dc2e759590d295992cd06531d4403d896ded00b21ea667be1c9",
             "migration_ledger_sha256": "a50f1a8988f79c85059354d6b2d45e9e8ed07284fc27c78d98face6680f25dfc",
-            "predecessor_release_critical_identity_sha256": fixture_sealer.ACCEPTED_PREDECESSOR_RELEASE_CRITICAL_IDENTITY_SHA256,
+            "predecessor_release_critical_identity_sha256": fixture_sealer.ACCEPTED_PREDECESSOR_RECREATION_CONFIGURATION_SHA256,
             "outbox_catalog_state": "EXACT",
             "outbox_counts": {"dead_letter": 0, "over_attempt_limit": 0, "pending": 0, "processing": 0, "published": 5, "retry_wait": 0, "stale_claimed": 0, "total": 5},
             "outbox_catalog_sha256": "ef0bce36bca8283b491a966ff3886644a8887f4bded3deebbec7ce559ac2defe",

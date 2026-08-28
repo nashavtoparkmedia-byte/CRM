@@ -241,7 +241,9 @@ def validate_name_list(value: object, label: str, *, environment: bool = False) 
     return value
 
 
-def predecessor_release_critical_service(service: dict[str, object]) -> dict[str, object]:
+def predecessor_release_critical_service(
+    service: dict[str, object], *, include_ephemeral_dns_names: bool = False,
+) -> dict[str, object]:
     output = {
         key: value
         for key, value in service.items()
@@ -252,8 +254,11 @@ def predecessor_release_critical_service(service: dict[str, object]) -> dict[str
     attachments = service["network_attachments"]
     if type(attachments) is not list:
         raise CaptureError("invalid predecessor network attachments")
+    excluded_attachment_keys = {"observational_endpoint"}
+    if not include_ephemeral_dns_names:
+        excluded_attachment_keys.add("dns_names")
     output["network_attachments"] = [
-        {key: value for key, value in attachment.items() if key != "observational_endpoint"}
+        {key: value for key, value in attachment.items() if key not in excluded_attachment_keys}
         for attachment in attachments
     ]
     image = dict(exact_dict(service["image"], {
@@ -428,14 +433,22 @@ def validate_predecessor_evidence(value: object) -> dict[str, object]:
     ):
         raise CaptureError("predecessor volume/network inventory mismatch")
     identity = evidence["release_critical_identity_sha256"]
-    expected_identity = compact_digest({
+    stable_identity_input = {
         "schema": evidence["schema"],
         "compose_source": source,
         "services": [predecessor_release_critical_service(service) for service in services],
         "volumes": volumes,
         "networks": networks,
+    }
+    stable_identity = compact_digest(stable_identity_input)
+    legacy_identity = compact_digest({
+        **stable_identity_input,
+        "services": [
+            predecessor_release_critical_service(service, include_ephemeral_dns_names=True)
+            for service in services
+        ],
     })
-    if identity != expected_identity:
+    if identity not in {stable_identity, legacy_identity}:
         raise CaptureError("predecessor release-critical identity mismatch")
     return evidence
 
@@ -1026,7 +1039,16 @@ def build_snapshot(records: list[dict[str, object]], started: dt.datetime, compl
         "rollback_recovery_required": True,
         "gravity_runtime_semantics_status": "DRIFTED_ROLLBACK_ALIAS_COMMAND_AND_CONFIG",
         "tg_bot_runtime_semantics_status": "DRIFTED_ROLLBACK_ALIAS_CONFIG",
-        "predecessor_release_critical_identity_sha256": predecessor["release_critical_identity_sha256"],
+        "predecessor_release_critical_identity_sha256": compact_digest({
+            "schema": predecessor["schema"],
+            "compose_source": predecessor["compose_source"],
+            "services": [
+                predecessor_release_critical_service(service)
+                for service in predecessor["services"]
+            ],
+            "volumes": predecessor["volumes"],
+            "networks": predecessor["networks"],
+        }),
         "predecessor_recreation_observation": predecessor,
         "secret_values_emitted": False,
         "production_mutated": False,
