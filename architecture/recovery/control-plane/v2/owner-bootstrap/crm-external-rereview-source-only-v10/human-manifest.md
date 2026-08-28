@@ -1,6 +1,6 @@
 # Pre-seal status
 
-Runtime 2.0.0-11 source-only builder prepared. No final commit, source archive,
+Runtime 2.0.0-12 source-only builder prepared. No final commit, source archive,
 package, bootstrap tar, critic decision, or Owner authorization is sealed yet.
 See `README.md` and the two input templates.
 
@@ -24,7 +24,7 @@ are sealed. Any identity, hash, conclusion, count, catalog, staging entry or
 post-seal mutation drift fails closed.
 
 For the curator-approved transition-identity strategy repair, the executor can emit only
-non-authorizing evidence for the bounded 24-test strategy/bootstrap catalog. A separate
+non-authorizing evidence for the bounded 26-test strategy/bootstrap catalog. A separate
 bootstrap Runtime reviewer authors the exact review artifact with explicit
 separation, no-mutation, no-predecessor-reopen and no-full-replay assertions.
 Finalization mechanically reruns only that catalog and binds the decision to

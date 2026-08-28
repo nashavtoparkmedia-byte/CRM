@@ -69,6 +69,8 @@ TRANSITION_TARGETED_TESTS = (
     "power_loss_guard_reconciliation_is_idempotent",
     "wrong_or_substituted_direct_rollback_deb_rejected",
     "payload_and_successor_identity_substitution_rejected",
+    "owner_envelope_rejects_low_space_and_cleans_exact_staging",
+    "installer_rejects_low_space_before_dpkg",
     "transition_scope_preserves_zero_argument_boundary",
 )
 ATTACK_IDS = (
@@ -115,7 +117,7 @@ ATTACK_COMMANDS: dict[str, tuple[tuple[str, ...], ...]] = {
     ),
 }
 BOOTSTRAP_MTIME = 1786492800
-NEW_DEB_NAME = "yoko-privileged-runtime_2.0.0-11_all.deb"
+NEW_DEB_NAME = "yoko-privileged-runtime_2.0.0-12_all.deb"
 ROLLBACK_DEB_NAME = "yoko-privileged-runtime_2.0.0-10_all.deb"
 PREDECESSOR_PACKAGE = {
     "name": "yoko-privileged-runtime",
@@ -448,7 +450,7 @@ def validate_bootstrap_tar(
         or new_package.get("sha256") != exact_deb_sha256
         or new_package.get("bytes") != exact_deb_size
         or new_package.get("name") != "yoko-privileged-runtime"
-        or new_package.get("version") != "2.0.0-11"
+        or new_package.get("version") != "2.0.0-12"
         or new_package.get("runtime_abi") != "2.0.0"
         or new_package.get("architecture") != "all"
     ):

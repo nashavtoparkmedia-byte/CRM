@@ -4,6 +4,12 @@ The exact-SHA Owner command copies the sealed tar into a root-only temporary
 file, verifies its digest, extracts it into a root-only directory and executes
 `install.sh` with zero arguments on host `jvxthcorvm`.
 
+Before staging, the Owner envelope requires at least 10 GiB free. The root tar
+and directory have deterministic exact-SHA paths and are securely reconciled
+on entry and removed on every normal or error exit. Immediately before `dpkg`,
+the installer rechecks a 5 GiB reserve; failure occurs before `new_attempted`
+and before package mutation.
+
 The installer accepts only the exact installed Runtime from source
 `ae2082d…`: package `9c23ae1a…`, profile
 `crm-ae2082d852e3-gravity-source-v1`, wrapper/core/observer/profile/install
@@ -12,7 +18,7 @@ manifest/sudoers identities, exact self-check and capabilities, and the valid
 the sealed payload and atomically installed into its fixed root-private
 content-addressed store before any `dpkg`. A root-owned guard blocks all
 release-profile calls throughout `dpkg`. Post-install checks prove Runtime
-`2.0.0-11`, the new profile identity,
+`2.0.0-12`, the new profile identity,
 four enabled operations, disabled database migration, unchanged sudo boundary,
 unchanged audit and unchanged Docker provenance. The provenance comparison
 requires a complete inventory with an empty failure list and includes the

@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Seal one accepted, clean strategy-repair commit into Runtime 2.0.0-11."""
+"""Seal one accepted, clean strategy-repair commit into Runtime 2.0.0-12."""
 from __future__ import annotations
 
 import argparse
@@ -1693,7 +1693,7 @@ def main() -> None:
     sealed = {
         "schema": "yoko.crm.source-only-release-seal.v2",
         "status": "SEALING_BUILD_OUTPUTS",
-        "package_version": "2.0.0-11",
+        "package_version": "2.0.0-12",
         "runtime_abi": "2.0.0",
         "profile_id": profile_id,
         "commit": commit,
@@ -1729,8 +1729,8 @@ def main() -> None:
     for script in ("build-package.sh", "build-bootstrap-bundle.sh"):
         subprocess.run([str(ROOT / "packaging" / script)], check=True, timeout=1800)
     sealed["built_artifacts"] = {
-        "deb": verifier.artifact_identity(ROOT / "dist/yoko-privileged-runtime_2.0.0-11_all.deb"),
-        "bootstrap_tar": verifier.artifact_identity(ROOT / "dist/yoko-crm-source-only-runtime-2.0.0-11.tar"),
+        "deb": verifier.artifact_identity(ROOT / "dist/yoko-privileged-runtime_2.0.0-12_all.deb"),
+        "bootstrap_tar": verifier.artifact_identity(ROOT / "dist/yoko-crm-source-only-runtime-2.0.0-12.tar"),
     }
     sealed["status"] = "SEALED"
     write_json_atomic(seal_path, sealed, 0o600)

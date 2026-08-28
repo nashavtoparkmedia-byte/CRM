@@ -1536,7 +1536,7 @@ class SealedFixtureTests(unittest.TestCase):
             fixture_sealer.main()
         finally:
             sys.argv = original_argv
-        cls.deb = cls.stage / "dist/yoko-privileged-runtime_2.0.0-11_all.deb"
+        cls.deb = cls.stage / "dist/yoko-privileged-runtime_2.0.0-12_all.deb"
         cls.root = temp / "extract"
         subprocess.run(["/usr/bin/dpkg-deb", "-x", str(cls.deb), str(cls.root)], check=True)
         for relative in ("usr/sbin", "var", "var/lib"):
@@ -2388,7 +2388,7 @@ class ProtectedMessagesPostdeployProbeTests(unittest.TestCase):
 INSTALLER = ROOT / "templates/install.sh.in"
 ROLLBACK_NAME = "yoko-privileged-runtime_2.0.0-10_all.deb"
 ROLLBACK_SHA = "9c23ae1ad93da8db9eee1111f6b177e6d32be48e6505a96b6d66dc2633febe6a"
-NEW_NAME = "yoko-privileged-runtime_2.0.0-11_all.deb"
+NEW_NAME = "yoko-privileged-runtime_2.0.0-12_all.deb"
 NEW_SHA = "a" * 64
 AUDIT_DIGEST = "7f7e4d739c9396c0d9757f0f2a60d57a50457048ce49cfd152ca46365306e344"
 OBSERVABILITY = {
@@ -2427,6 +2427,7 @@ class InstallerSandbox:
         self.dpkg_calls = self.base / "dpkg.log"
         self.bad_identity = self.base / "bad-identity"
         self.force_post_failure = self.base / "force-post-failure"
+        self.low_space = self.base / "low-space"
         self.bad_metadata = self.base / "bad-metadata"
         self.root_mount = self.base / "root"
         self.varlib_mount = self.base / "varlib"
@@ -2464,7 +2465,7 @@ class InstallerSandbox:
         manifest = {
             "schema": "yoko.crm.owner-bootstrap-payload.v1",
             "profile_id": "@PROFILE_ID@",
-            "new_package": {"name": "yoko-privileged-runtime", "version": "2.0.0-11", "architecture": "all"},
+            "new_package": {"name": "yoko-privileged-runtime", "version": "2.0.0-12", "architecture": "all"},
             "previous_package": {
                 "name": "yoko-privileged-runtime",
                 "version": "2.0.0-10",
@@ -2488,18 +2489,33 @@ class InstallerSandbox:
         hashes = json.dumps({"observability": OBSERVABILITY, "historical": HISTORICAL}, sort_keys=True)
         self._write_executable("id", "#!/bin/sh\nprintf '0\\n'\n")
         self._write_executable("hostname", "#!/bin/sh\nprintf 'jvxthcorvm\\n'\n")
+        shutil.copyfile("/usr/bin/stat", self.fake / "stat-real")
+        os.chmod(self.fake / "stat-real", 0o755)
+        self._write_executable(
+            "stat",
+            "#!/bin/sh\n"
+            "if test \"${1:-}\" = -f; then\n"
+            "  case \"$*\" in\n"
+            "    *%a*) if test -e \"$YOKO_TEST_STATE_DIR/low-space\"; then printf '1\\n'; else printf '2621440\\n'; fi;;\n"
+            "    *%S*) printf '4096\\n';;\n"
+            "    *) exit 2;;\n"
+            "  esac\n"
+            "  exit 0\n"
+            "fi\n"
+            "exec \"$YOKO_TEST_STATE_DIR/fake/stat-real\" \"$@\"\n",
+        )
         self._write_executable(
             "dpkg-query",
             "#!/bin/sh\nstate=$(cat \"$YOKO_TEST_STATE_DIR/state\")\n"
             "case \"$state\" in missing) exit 1;; esac\n"
-            "version=2.0.0-10; case \"$state\" in new|new_bad) version=2.0.0-11;; esac\n"
+            "version=2.0.0-10; case \"$state\" in new|new_bad) version=2.0.0-12;; esac\n"
             "case \"$*\" in *Status-Abbrev*) printf 'ii  %s' \"$version\";; *) printf '%s' \"$version\";; esac\n",
         )
         self._write_executable(
             "dpkg-deb",
             "#!/bin/sh\n"
             "test ! -e \"$YOKO_TEST_STATE_DIR/bad-metadata\" || { printf 'wrong\\n'; exit 0; }\n"
-            f"version=2.0.0-10; case \"${{2:-}}\" in *{NEW_NAME}) version=2.0.0-11;; esac\n"
+            f"version=2.0.0-10; case \"${{2:-}}\" in *{NEW_NAME}) version=2.0.0-12;; esac\n"
             "case \"${3:-}\" in Package) printf 'yoko-privileged-runtime\\n';; Version) printf '%s\\n' \"$version\";; Architecture) printf 'all\\n';; *) exit 2;; esac\n",
         )
         self._write_executable(
@@ -2531,7 +2547,7 @@ class InstallerSandbox:
             "profile='@PROFILE_ID@' if state=='new' else 'wrong-new-profile' if state=='new_bad' else 'crm-ae2082d852e3-gravity-source-v1'\n"
             "if primitive=='self-check':\n"
             " installed={'/etc/sudoers.d/92-yoko-privileged-runtime':obs['sudoers'],'/usr/local/libexec/yoko-privileged-runtime/core-2.0.0.py':obs['core'],'/usr/local/libexec/yoko-privileged-runtime/predecessor-observability-v1.py':obs['observer'],'/usr/local/sbin/yoko-privileged-runtime':obs['wrapper'],'/usr/local/share/yoko-privileged-runtime/policy.v2.json':obs['policy']}\n"
-            " package_version='2.0.0-11' if state in {'new','new_bad'} else '2.0.0-10'\n"
+            " package_version='2.0.0-12' if state in {'new','new_bad'} else '2.0.0-10'\n"
             " evidence={'runtime_version':'2.0.0','package_version':package_version,'activation_profile_id':profile,'profile_argument_shape':'ZERO_ARGUMENT_ONLY','activation_profile_manifest_sha256':obs['profile_manifest'],'predecessor_observability_sha256':obs['observer'],'registry_sha256':obs['registry'],'installed_identity':installed,'generic_command_execution':False,'arbitrary_paths':False,'docker_socket_delegated':False}\n"
             "elif primitive=='capabilities': evidence={'activation_profile_id':profile,'enabled_activation_profiles':['database-status','release-preflight','release-activate','rollback'],'enabled_read_only_profiles':['predecessor-observe'],'disabled_profiles':{'config-activation':'disabled','database-migration':'disabled'},'generic_command_execution':False,'arbitrary_paths':False,'arbitrary_package_install':False,'resources':{}}\n"
             f"elif primitive=='audit-status': evidence={{'state':'VALID','record_count':36,'last_digest':'{AUDIT_DIGEST}'}}\n"
@@ -2552,6 +2568,7 @@ mount --bind "$3/dpkg-query" /usr/bin/dpkg-query
 mount --bind "$3/dpkg-deb" /usr/bin/dpkg-deb
 mount --bind "$3/dpkg" /usr/bin/dpkg
 mount --bind "$3/sha256sum" /usr/bin/sha256sum
+mount --bind "$3/stat" /usr/bin/stat
 mount --bind "$3/runuser" /usr/sbin/runuser
 mount --bind "$3/id" /usr/bin/id
 mount --bind "$3/hostname" /bin/hostname
@@ -2617,6 +2634,35 @@ class BootstrapTransitionTests(unittest.TestCase):
         self.addCleanup(value.close)
         return value
 
+    def test_owner_envelope_rejects_low_space_and_cleans_exact_staging(self) -> None:
+        loader = importlib.machinery.SourceFileLoader(
+            "runtime_finalize_evidence",
+            str(ROOT / "packaging/finalize-evidence.py"),
+        )
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        self.assertIsNotNone(spec)
+        assert spec is not None
+        module = importlib.util.module_from_spec(spec)
+        loader.exec_module(module)
+        digest = "a" * 64
+        command = module.owner_command(digest)
+        self.assertEqual(module.OWNER_MINIMUM_FREE_BYTES, 10 * 1024 * 1024 * 1024)
+        self.assertIn('/root/yoko-crm-bootstrap.$expected.tar', command)
+        self.assertIn('/root/yoko-crm-bootstrap-stage.$expected', command)
+        self.assertIn('if [ -e "$root_tar" ] || [ -L "$root_tar" ]', command)
+        self.assertIn('if [ -e "$stage" ] || [ -L "$stage" ]', command)
+        self.assertIn('/usr/bin/find "$stage" -xdev -depth -delete', command)
+        self.assertIn('trap on_exit EXIT', command)
+        self.assertIn('test "$available_bytes" -ge 10737418240', command)
+        self.assertNotIn("mktemp", command)
+        self.assertNotIn("exec ./install.sh", command)
+        self.assertLess(command.index('test "$available_bytes"'), command.index('/usr/bin/install -d'))
+        completed = subprocess.run(
+            ["/bin/bash", "-n", "-c", command],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr.decode())
+
     def test_exact_observability_prestate_accepted(self) -> None:
         box = self.sandbox()
         result = box.run()
@@ -2628,6 +2674,18 @@ class BootstrapTransitionTests(unittest.TestCase):
         stored = box.varlib_mount / f"yoko-privileged-runtime/activation-bootstraps/{ROLLBACK_SHA}/{ROLLBACK_NAME}"
         self.assertEqual(stored.read_bytes(), b"rollback-good\n")
         self.assertEqual(stat.S_IMODE(stored.stat().st_mode), 0o400)
+
+    def test_installer_rejects_low_space_before_dpkg(self) -> None:
+        box = self.sandbox()
+        box.low_space.touch()
+        result = box.run()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(box.dpkg_log(), [])
+        self.assertFalse(box.guard().exists())
+        self.assertIn('"rollback_restored":false', result.stdout)
+        self.assertIn('"production_mutation":false', result.stdout)
+        installer = INSTALLER.read_text(encoding="utf-8")
+        self.assertLess(installer.index('test "$available_bytes"'), installer.rindex("new_attempted=1"))
 
     def test_historical_only_prestate_rejected_without_mutation(self) -> None:
         box = self.sandbox("historical")

@@ -189,7 +189,7 @@ class InternalAdversarialReplayTests(unittest.TestCase):
                 "sha256": hashlib.sha256(deb).hexdigest(),
                 "bytes": len(deb),
                 "name": "yoko-privileged-runtime",
-                "version": "2.0.0-11",
+                "version": "2.0.0-12",
                 "runtime_abi": "2.0.0",
                 "architecture": "all",
             },

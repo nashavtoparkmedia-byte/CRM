@@ -1,4 +1,4 @@
-# Runtime 2.0.0-11 source-only release builder
+# Runtime 2.0.0-12 source-only release builder
 
 This external staging tree prepares a deterministic next-revision, same-ABI
 replacement for the installed `yoko-privileged-runtime` `2.0.0-10` package.
@@ -31,6 +31,13 @@ atomically places it at the fixed root-private content-addressed store keyed by
 `9c23ae1a…be6a`. A later bootstrap failure reinstalls and verifies that exact
 immediate Runtime state. Historical Runtime packages remain recovery ancestry,
 not this bootstrap's direct rollback target.
+
+The Owner envelope rejects less than 10 GiB of available filesystem space
+before creating any root staging object. Its staging tar and directory use
+deterministic exact-SHA paths and are validated and removed on both entry and
+exit, so successful, failed, and retry executions cannot accumulate copies.
+Immediately before the `dpkg` mutation boundary the installer independently
+requires at least 5 GiB free; a shortfall leaves the installed Runtime untouched.
 
 Use a clean worktree whose `HEAD` is the already accepted final commit. Fill an
 exact v2 acceptance record and a newly recaptured read-only production snapshot,
@@ -121,7 +128,7 @@ removes only that just-loaded target tag and proves it absent before returning
 the original failure. Cleanup failure is a separate fail-closed error.
 
 For this curator-approved transition-identity strategy repair, the builder emits only
-non-authorizing bounded evidence for the 24 transition and Runtime-bootstrap tests. It cannot author
+non-authorizing bounded evidence for the 26 transition and Runtime-bootstrap tests. It cannot author
 the independent bootstrap Runtime review decision or assign itself an
 independent identity:
 
@@ -129,15 +136,15 @@ independent identity:
 python3 -I packaging/verify-independent-critic.py --bootstrap-review-evidence \
   --source-repo /absolute/clean/accepted/worktree \
   --seal "$PWD/SEALED_RELEASE.json" \
-  --tar "$PWD/dist/yoko-crm-source-only-runtime-2.0.0-11.tar" \
-  --deb "$PWD/dist/yoko-privileged-runtime_2.0.0-11_all.deb" \
+  --tar "$PWD/dist/yoko-crm-source-only-runtime-2.0.0-12.tar" \
+  --deb "$PWD/dist/yoko-privileged-runtime_2.0.0-12_all.deb" \
   > /absolute/bootstrap-transition-review-evidence.json
 ```
 
 A separate reviewer must inspect that exact evidence and author an exact
 `yoko.crm.transition-identity-strategy-independent-runtime-review.v1` artifact. It
 binds the repaired source/tree, seal, final DEB, bootstrap tar, exact direct
-rollback DEB, validator and 24-test catalog, with an empty residual-finding
+rollback DEB, validator and 26-test catalog, with an empty residual-finding
 list and explicit no-mutation/no-predecessor-reopen/no-full-replay assertions.
 Finalization requires the review to be no more than 24 hours old, reruns only
 that bounded test catalog, and consumes—but never creates—the artifact:

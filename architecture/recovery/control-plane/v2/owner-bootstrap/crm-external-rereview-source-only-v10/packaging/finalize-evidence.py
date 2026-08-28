@@ -12,12 +12,13 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-TAR = ROOT / "dist/yoko-crm-source-only-runtime-2.0.0-11.tar"
-DEB = ROOT / "dist/yoko-privileged-runtime_2.0.0-11_all.deb"
+TAR = ROOT / "dist/yoko-crm-source-only-runtime-2.0.0-12.tar"
+DEB = ROOT / "dist/yoko-privileged-runtime_2.0.0-12_all.deb"
 SEAL = ROOT / "SEALED_RELEASE.json"
 SEALED_INPUT_VERIFIER = ROOT / "packaging/verify-sealed-inputs.py"
 INTERNAL_REVIEW_VERIFIER = ROOT / "packaging/verify-independent-critic.py"
 INTERNAL_REVIEW_VERIFICATION_TIMEOUT_SECONDS = 30 * 60
+OWNER_MINIMUM_FREE_BYTES = 10 * 1024 * 1024 * 1024
 
 
 def sha(path: Path) -> str:
@@ -92,17 +93,40 @@ def verify_sealed_release() -> dict[str, object]:
 def owner_command(tar_sha: str) -> str:
     return (
         "/usr/bin/sudo /usr/bin/env -i PATH=/usr/sbin:/usr/bin:/sbin:/bin /bin/bash -p -c '"
-        "set -Eeuo pipefail; umask 077; trap '\"'\"'printf \"%s\\n\" YOKO_ACTIVATION_BOOTSTRAP_FAILED'\"'\"' ERR; "
+        "set -Eeuo pipefail; umask 077; "
         f"readonly src=\"{TAR}\"; readonly expected=\"{tar_sha}\"; "
-        "root_tar=$(/usr/bin/mktemp /root/yoko-crm-bootstrap.XXXXXXXX.tar); "
-        "stage=$(/usr/bin/mktemp -d /root/yoko-crm-bootstrap-stage.XXXXXXXX); "
+        "readonly root_tar=\"/root/yoko-crm-bootstrap.$expected.tar\"; "
+        "readonly stage=\"/root/yoko-crm-bootstrap-stage.$expected\"; "
+        "cleanup() { "
+        "test \"$root_tar\" = \"/root/yoko-crm-bootstrap.$expected.tar\"; "
+        "test \"$stage\" = \"/root/yoko-crm-bootstrap-stage.$expected\"; "
+        "if [ -e \"$root_tar\" ] || [ -L \"$root_tar\" ]; then "
+        "test -f \"$root_tar\"; test ! -L \"$root_tar\"; "
+        "test \"$(/usr/bin/stat -c %u:%g:%a:%h \"$root_tar\")\" = \"0:0:400:1\"; "
+        "test \"$(/usr/bin/sha256sum \"$root_tar\" | /usr/bin/cut -d \" \" -f 1)\" = \"$expected\"; "
+        "/usr/bin/unlink \"$root_tar\"; fi; "
+        "if [ -e \"$stage\" ] || [ -L \"$stage\" ]; then "
+        "test -d \"$stage\"; test ! -L \"$stage\"; "
+        "test \"$(/usr/bin/stat -c %u:%g:%a \"$stage\")\" = \"0:0:700\"; "
+        "! /usr/bin/mountpoint -q \"$stage\"; "
+        "test -z \"$(/usr/bin/find \"$stage\" -xdev -type l -print -quit)\"; "
+        "/usr/bin/find \"$stage\" -xdev -depth -delete; fi; "
+        "}; "
+        "on_exit() { rc=$?; trap - EXIT; cleanup || rc=1; "
+        "if [ \"$rc\" -ne 0 ]; then printf \"%s\\n\" YOKO_ACTIVATION_BOOTSTRAP_FAILED; fi; exit \"$rc\"; }; "
+        "trap on_exit EXIT; cleanup; "
+        "available_blocks=$(/usr/bin/stat -f -c %a /); "
+        "available_block_size=$(/usr/bin/stat -f -c %S /); "
+        "available_bytes=$((available_blocks * available_block_size)); "
+        f"test \"$available_bytes\" -ge {OWNER_MINIMUM_FREE_BYTES}; "
+        "/usr/bin/install -d -o root -g root -m 0700 \"$stage\"; "
         "/usr/bin/install -o root -g root -m 0400 \"$src\" \"$root_tar\"; "
         "test \"$(/usr/bin/sha256sum \"$root_tar\" | /usr/bin/cut -d \" \" -f 1)\" = \"$expected\"; "
         "/usr/bin/tar --extract --file \"$root_tar\" --directory \"$stage\" --no-same-owner --no-same-permissions; "
         "/usr/bin/chown -R root:root \"$stage\"; /usr/bin/chmod 0700 \"$stage/payload\"; "
         "/usr/bin/chmod 0500 \"$stage/payload/install.sh\" \"$stage/payload/review\"; "
-        "/usr/bin/chmod 0400 \"$stage/payload/payload-manifest.json\" \"$stage/payload/yoko-privileged-runtime_2.0.0-11_all.deb\" \"$stage/payload/yoko-privileged-runtime_2.0.0-10_all.deb\" \"$stage/payload/review/human-manifest.md\" \"$stage/payload/review/package-manifest.json\" \"$stage/payload/review/installation-procedure.md\" \"$stage/payload/review/rollback-analysis.md\"; "
-        "cd \"$stage/payload\"; exec ./install.sh'"
+        "/usr/bin/chmod 0400 \"$stage/payload/payload-manifest.json\" \"$stage/payload/yoko-privileged-runtime_2.0.0-12_all.deb\" \"$stage/payload/yoko-privileged-runtime_2.0.0-10_all.deb\" \"$stage/payload/review/human-manifest.md\" \"$stage/payload/review/package-manifest.json\" \"$stage/payload/review/installation-procedure.md\" \"$stage/payload/review/rollback-analysis.md\"; "
+        "cd \"$stage/payload\"; ./install.sh'"
     )
 
 
@@ -185,7 +209,7 @@ def main() -> None:
         "status": "ACCEPTED_WAITING_FOR_OWNER" if args.bootstrap_review == "PASS" else "SEALED_BOOTSTRAP_REVIEW_PENDING_NOT_AUTHORIZED",
         "seal": seal,
         "bootstrap_tar": {"path": str(TAR), "sha256": tar_sha, "bytes": TAR.stat().st_size},
-        "package": {"path": str(DEB), "sha256": deb_sha, "version": "2.0.0-11", "runtime_abi": "2.0.0"},
+        "package": {"path": str(DEB), "sha256": deb_sha, "version": "2.0.0-12", "runtime_abi": "2.0.0"},
         "predecessor_package": {
             "version": "2.0.0-10",
             "profile_id": "crm-ae2082d852e3-gravity-source-v1",
@@ -201,6 +225,8 @@ def main() -> None:
         "core_sudoers_delta": "ONE_ZERO_ARGUMENT_READ_ONLY_PREDECESSOR_OBSERVE",
         "bootstrap_production_mutation": False,
         "bootstrap_profile_invocation": False,
+        "owner_minimum_free_bytes": OWNER_MINIMUM_FREE_BYTES,
+        "owner_staging_cleanup": "DETERMINISTIC_EXACT_SHA_PATH_ON_ENTRY_AND_EXIT",
         "owner_command_authorized": args.bootstrap_review == "PASS",
         "owner_command": command if args.bootstrap_review == "PASS" else None,
         "bootstrap_transition_independent_review_artifact_sha256": review_artifact_sha256,

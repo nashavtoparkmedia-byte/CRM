@@ -14,7 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILE_ID = json.loads((ROOT / "src/profile.v1.json").read_text(encoding="ascii"))["profile_id"]
-NEW_DEB = ROOT / "dist/yoko-privileged-runtime_2.0.0-11_all.deb"
+NEW_DEB = ROOT / "dist/yoko-privileged-runtime_2.0.0-12_all.deb"
 ROLLBACK_DEB_NAME = "yoko-privileged-runtime_2.0.0-10_all.deb"
 ROLLBACK_DEB = ROOT / "inputs" / ROLLBACK_DEB_NAME
 ROLLBACK_PROVENANCE = ROOT / "inputs/immediate-runtime-rollback-seal.json"
@@ -126,7 +126,7 @@ def main() -> None:
         text=True,
         timeout=30,
     ).stdout.splitlines()
-    if metadata != ["Package: yoko-privileged-runtime", "Version: 2.0.0-11", "Architecture: all"]:
+    if metadata != ["Package: yoko-privileged-runtime", "Version: 2.0.0-12", "Architecture: all"]:
         raise SystemExit("successor package metadata mismatch")
     rollback_metadata = subprocess.run(
         ["/usr/bin/dpkg-deb", "-f", str(ROLLBACK_DEB), "Package", "Version", "Architecture"],
@@ -208,11 +208,11 @@ def main() -> None:
         "schema": "yoko.crm.owner-bootstrap-review-manifest.v3",
         "profile_id": PROFILE_ID,
         "new_package": {
-            "path": "yoko-privileged-runtime_2.0.0-11_all.deb",
+            "path": "yoko-privileged-runtime_2.0.0-12_all.deb",
             "sha256": sha(NEW_DEB),
             "bytes": NEW_DEB.stat().st_size,
             "name": "yoko-privileged-runtime",
-            "version": "2.0.0-11",
+            "version": "2.0.0-12",
             "runtime_abi": "2.0.0",
             "architecture": "all",
         },
@@ -249,7 +249,7 @@ def main() -> None:
     payload_manifest = {
         "schema": "yoko.crm.owner-bootstrap-payload.v1",
         "profile_id": PROFILE_ID,
-        "new_package": {"name": "yoko-privileged-runtime", "version": "2.0.0-11", "architecture": "all"},
+        "new_package": {"name": "yoko-privileged-runtime", "version": "2.0.0-12", "architecture": "all"},
         "previous_package": {
             "name": "yoko-privileged-runtime",
             "version": "2.0.0-10",

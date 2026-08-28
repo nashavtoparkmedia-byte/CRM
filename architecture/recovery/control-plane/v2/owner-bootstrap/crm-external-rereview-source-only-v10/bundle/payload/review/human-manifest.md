@@ -1,10 +1,14 @@
 # YOKO CRM one-time source-only Owner bootstrap
 
 This payload replaces installed Runtime package `2.0.0-10` with revision
-`2.0.0-11` without changing ABI `2.0.0`, the Runtime core, observer, policy, or
+`2.0.0-12` without changing ABI `2.0.0`, the Runtime core, observer, policy, or
 sudoers semantics. It installs one new checksum-pinned source-only Gravity
 profile with fresh transaction state; historical profile state is never
 imported as current prestate.
+
+The Owner envelope requires 10 GiB free before staging and cleans deterministic
+exact-SHA staging paths on entry and exit. The installer separately requires a
+5 GiB pre-dpkg reserve. Both checks fail closed before Runtime package mutation.
 
 Bootstrap itself does not invoke a profile, build or deploy an image, access
 PostgreSQL, restart a service, or mutate `/opt/crm`. `database-migrate` is
@@ -30,7 +34,7 @@ or post-seal-mutated identity is rejected.
 
 Owner authorization additionally requires a review artifact authored by a
 separate bootstrap Runtime reviewer and a fresh mechanical run of the bounded
-24-test transition-identity strategy catalog against the clean repaired checkout, with exact
+26-test transition-identity strategy catalog against the clean repaired checkout, with exact
 seal, successor package, bootstrap tar and embedded direct rollback package
 bindings. The builder itself emits only non-authorizing evidence and cannot
 create the review decision. This narrow gate does not reopen the accepted

@@ -129,7 +129,7 @@ def _load_profile(core: Any) -> dict[str, Any]:
         or profile.get("schema") != PROFILE_SCHEMA
         or profile.get("profile_id") != PROFILE_ID
         or profile.get("runtime_abi") != core.VERSION
-        or profile.get("package_version") != "2.0.0-11"
+        or profile.get("package_version") != "2.0.0-12"
         or profile.get("host") != "jvxthcorvm"
         or profile.get("enabled_zero_argument_profiles") != [
             "database-status", "release-preflight", "release-activate", "rollback"
