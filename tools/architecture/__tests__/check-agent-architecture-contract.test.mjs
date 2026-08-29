@@ -6,8 +6,8 @@ import { spawnSync } from 'node:child_process'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 
-const repositoryRoot = fileURLToPath(new URL('../..', import.meta.url))
-const guard = path.join(repositoryRoot, 'tools/check-agent-architecture-contract.mjs')
+const repositoryRoot = fileURLToPath(new URL('../../..', import.meta.url))
+const guard = path.join(repositoryRoot, 'tools/architecture/check-agent-architecture-contract.mjs')
 const fixtureFiles = [
   'AGENTS.md',
   'docs/architecture/AGENT_DEVELOPMENT_CONTRACT.md',

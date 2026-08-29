@@ -8,8 +8,8 @@ on:
       - .cursorrules
       - .claude/CLAUDE_BOOTSTRAP_PROMPT.md
       - docs/architecture/**
-      - tools/check-agent-architecture-contract.mjs
-      - tools/__tests__/check-agent-architecture-contract.test.mjs
+      - tools/architecture/check-agent-architecture-contract.mjs
+      - tools/architecture/__tests__/check-agent-architecture-contract.test.mjs
       - .github/workflows/agent-architecture-contract.yml
   push:
     branches:
@@ -20,8 +20,8 @@ on:
       - .cursorrules
       - .claude/CLAUDE_BOOTSTRAP_PROMPT.md
       - docs/architecture/**
-      - tools/check-agent-architecture-contract.mjs
-      - tools/__tests__/check-agent-architecture-contract.test.mjs
+      - tools/architecture/check-agent-architecture-contract.mjs
+      - tools/architecture/__tests__/check-agent-architecture-contract.test.mjs
       - .github/workflows/agent-architecture-contract.yml
 
 permissions:
@@ -41,7 +41,7 @@ jobs:
           node-version: 20.20.2
 
       - name: Verify canonical instructions and references
-        run: node tools/check-agent-architecture-contract.mjs
+        run: node tools/architecture/check-agent-architecture-contract.mjs
 
       - name: Prove positive and fail-closed behavior
-        run: node --test tools/__tests__/check-agent-architecture-contract.test.mjs
+        run: node --test tools/architecture/__tests__/check-agent-architecture-contract.test.mjs

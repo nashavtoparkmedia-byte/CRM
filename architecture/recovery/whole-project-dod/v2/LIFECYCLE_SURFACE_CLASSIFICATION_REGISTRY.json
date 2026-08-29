@@ -6253,7 +6253,7 @@
       "functional_owner": "platform_engineering"
     },
     {
-      "path": "tools/check-agent-architecture-contract.mjs",
+      "path": "tools/architecture/check-agent-architecture-contract.mjs",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
       "production_capability": "POSSIBLE",

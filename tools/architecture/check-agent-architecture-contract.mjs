@@ -163,7 +163,7 @@ export async function validateRepository(rootInput = process.cwd()) {
 function parseRootArgument(args) {
   if (args.length === 0) return process.cwd()
   if (args.length === 2 && args[0] === '--root' && args[1]) return args[1]
-  throw new Error('usage: node tools/check-agent-architecture-contract.mjs [--root <repository>]')
+  throw new Error('usage: node tools/architecture/check-agent-architecture-contract.mjs [--root <repository>]')
 }
 
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])
