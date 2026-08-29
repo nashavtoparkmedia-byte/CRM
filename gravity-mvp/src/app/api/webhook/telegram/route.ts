@@ -15,11 +15,63 @@ import { resolveContactV2 } from '@/modules/contacts/public/v2'
 import { CREATE_CHANNEL_MESSAGE_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { createChannelMessageV1, ensureConversationContactLinkV1, linkMatchedDriverToConversationCapabilityV1, patchChannelConversationV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
 import { RECORD_BOT_USER_PROFILE_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
-import { recordBotUserProfileV1 } from '@/modules/telegram-channel/public/v1'
+import { getBotUserLinkStatusV1, recordBotUserProfileV1 } from '@/modules/telegram-channel/public/v1'
+
+type BotUserRegistrationInput = {
+    telegramId?: string | number
+    username?: string | null
+    firstName?: string | null
+    lastName?: string | null
+    phone?: string | null
+    phoneVerified?: boolean
+}
+
+function optionalProfileValue(value: unknown) {
+    return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+async function registerBotUser(req: NextRequest, payload: BotUserRegistrationInput) {
+    const secret = process.env.BOT_CRM_SECRET
+    if (!secret || req.headers.get('x-bot-signature') !== secret) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const telegramId = String(payload.telegramId || '').trim()
+    if (!/^\d+$/.test(telegramId) || telegramId === '0') {
+        return NextResponse.json({ error: 'Missing or invalid telegramId' }, { status: 400 })
+    }
+
+    const phone = optionalProfileValue(payload.phone)
+    const telegramIdBigInt = BigInt(telegramId)
+    await recordBotUserProfileV1({
+        contract: RECORD_BOT_USER_PROFILE_COMMAND_V1,
+        telegramId: telegramIdBigInt,
+        username: optionalProfileValue(payload.username),
+        firstName: optionalProfileValue(payload.firstName),
+        lastName: optionalProfileValue(payload.lastName),
+        phone,
+        phoneVerified: Boolean(phone && payload.phoneVerified === true),
+        observedAt: new Date(),
+    })
+
+    const mapping = await getBotUserLinkStatusV1(telegramIdBigInt)
+    if (!mapping) {
+        return NextResponse.json({ success: true, linked: false, status: 'PENDING_MANAGER_LINK' })
+    }
+    return NextResponse.json({
+        success: true,
+        linked: true,
+        driverId: mapping.driverId,
+        driverName: mapping.username,
+    })
+}
 
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json()
+        if (body?.action === 'register_bot_user') {
+            return registerBotUser(req, (body.payload || {}) as BotUserRegistrationInput)
+        }
         console.log(`[WEBHOOK-TG] Received:`, JSON.stringify(body))
 
         // Structure expected from Bot's webhook payload

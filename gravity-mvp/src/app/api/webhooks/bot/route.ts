@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getYandexConnectionCredentialsV1, listYandexConnectionCredentialsV1, listYandexConnectionMetadataV1 } from '@/modules/fleet-operations/public/v1/yandex-connection-capability'
-import { PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, RECORD_BOT_USER_PROFILE_COMMAND_V1, RECORD_PENDING_BOT_LINK_REQUEST_COMMAND_V1, UPSERT_DRIVER_TELEGRAM_LINK_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
-import { patchDriverTelegramLinkV1, recordBotUserProfileV1, recordPendingBotLinkRequestV1, upsertDriverTelegramLinkV1 } from '@/modules/telegram-channel/public/v1'
+import { PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, RECORD_PENDING_BOT_LINK_REQUEST_COMMAND_V1, UPSERT_DRIVER_TELEGRAM_LINK_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
+import { patchDriverTelegramLinkV1, recordPendingBotLinkRequestV1, upsertDriverTelegramLinkV1 } from '@/modules/telegram-channel/public/v1'
 import {
     APPEND_SYSTEM_NOTIFICATION_V1,
     MARK_REQUIRES_RESPONSE_V1,
@@ -26,8 +26,6 @@ export async function POST(request: Request) {
         const { action, payload } = body
 
         switch (action) {
-            case 'register_bot_user':
-                return await handleRegisterBotUser(payload)
             case 'sync_user':
                 return await handleSyncUser(payload)
             case 'change_limit':
@@ -59,75 +57,6 @@ export async function POST(request: Request) {
         console.error('Webhook error:', err)
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
     }
-}
-
-type BotUserRegistrationInput = {
-    telegramId?: string | number
-    username?: string | null
-    firstName?: string | null
-    lastName?: string | null
-    phone?: string | null
-    phoneVerified?: boolean
-    attemptAutoLink?: boolean
-}
-
-function optionalProfileValue(value: unknown) {
-    return typeof value === 'string' && value.trim() ? value.trim() : null
-}
-
-async function recordObservedBotUser(payload: BotUserRegistrationInput) {
-    const telegramId = String(payload.telegramId || '').trim()
-    if (!/^\d+$/.test(telegramId) || telegramId === '0') return false
-    const phone = optionalProfileValue(payload.phone)
-
-    await recordBotUserProfileV1({
-        contract: RECORD_BOT_USER_PROFILE_COMMAND_V1,
-        telegramId: BigInt(telegramId),
-        username: optionalProfileValue(payload.username),
-        firstName: optionalProfileValue(payload.firstName),
-        lastName: optionalProfileValue(payload.lastName),
-        phone,
-        phoneVerified: Boolean(phone && payload.phoneVerified === true),
-        observedAt: new Date(),
-    })
-    return true
-}
-
-async function handleRegisterBotUser(payload: BotUserRegistrationInput | null | undefined) {
-    payload = payload || {}
-    if (!await recordObservedBotUser(payload)) {
-        return NextResponse.json({ error: 'Missing or invalid telegramId' }, { status: 400 })
-    }
-
-    const telegramId = String(payload.telegramId)
-    const mapping = await prisma.driverTelegram.findFirst({
-        where: { telegramId: BigInt(telegramId) },
-    })
-    if (mapping?.driverId) {
-        const driver = await prisma.driver.findFirst({
-            where: { OR: [{ id: mapping.driverId }, { yandexDriverId: mapping.driverId }] },
-            select: { id: true, fullName: true },
-        })
-        return NextResponse.json({
-            success: true,
-            linked: true,
-            driverId: driver?.id || mapping.driverId,
-            driverName: driver?.fullName || mapping.username || null,
-        })
-    }
-
-    if (payload.phone && payload.phoneVerified === true && payload.attemptAutoLink !== false) {
-        return handleSyncUser({
-            telegramId,
-            username: payload.username,
-            firstName: payload.firstName,
-            lastName: payload.lastName,
-            phone: payload.phone,
-            contactUserId: telegramId,
-        })
-    }
-
-    return NextResponse.json({ success: true, linked: false, status: 'PENDING_MANAGER_LINK' })
 }
 
 // Check if a Telegram user is linked to a driver
@@ -324,19 +253,11 @@ async function findCarById(connection: any, carId: string) {
 
 // Handle "Отправить данные менеджеру" from bot — try auto-link by phone, fallback to manual
 async function handleSyncUser(payload: any) {
-    const { telegramId, username, firstName, lastName, phone, contactUserId } = payload || {}
+    const { telegramId, username, phone } = payload
 
     if (!telegramId || !phone) {
         return NextResponse.json({ error: 'Missing telegramId or phone' }, { status: 400 })
     }
-    if (!contactUserId || String(contactUserId) !== String(telegramId)) {
-        return NextResponse.json({
-            error: 'CONTACT_OWNER_MISMATCH',
-            message: 'Используйте кнопку «Поделиться номером» и отправьте свой контакт.',
-        }, { status: 400 })
-    }
-
-    await recordObservedBotUser({ telegramId, username, firstName, lastName, phone, phoneVerified: true })
 
     console.log(`[Webhook] sync_user: TG ${telegramId}, Phone ${phone}`)
 
@@ -405,7 +326,7 @@ async function handleSyncUser(payload: any) {
     // Notify manager: drop a system message into the driver's existing TG chat
     await notifyManagerPendingLink({ telegramId, username, phone })
 
-    return NextResponse.json({ success: true, linked: false, autoLinked: false, message: 'Pending manual link by manager' })
+    return NextResponse.json({ success: true, autoLinked: false, message: 'Pending manual link by manager' })
 }
 
 // Inject a system message into the driver's TG chat so the manager sees the pending link request

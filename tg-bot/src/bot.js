@@ -5,7 +5,7 @@ const db = require('./database');
 const logger = require('./utils/logger');
 const { ensureBotMappingV1 } = require('./public-bot-maintenance');
 const sheetsService = require('./services/sheets');
-const botRegistrySync = require('./services/botRegistrySync');
+const userService = require('./services/userService');
 
 // Import handlers
 const startHandler = require('./handlers/start');
@@ -396,13 +396,13 @@ async function relaunchPolling(reason) {
 Promise.all([
     sheetsService.initializeSheet().then(() => logger.info('Google Sheets initialization completed')),
     initializeBotInDb().then(() => logger.info('Database bot mapping verified')),
-    botRegistrySync.syncPendingUsers()
+    userService.syncPendingCrmUsers()
 ]).then(() => {
     // bot.launch() returns a Promise that never resolves in polling mode —
     // we intentionally don't .then() it. We just need it kicked off.
     bot.launch().catch((err) => logger.error(`Bot launch error: ${err?.message || err}`));
     logger.info('Bot launching, heartbeat armed every ' + (HEARTBEAT_INTERVAL_MS / 1000) + 's');
-    botRegistrySync.startPeriodicSync();
+    userService.startPeriodicCrmSync();
 
     setInterval(async () => {
         const idleSec = Math.floor((Date.now() - lastActivityAt) / 1000);

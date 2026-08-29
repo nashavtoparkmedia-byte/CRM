@@ -8,7 +8,7 @@
     "architecture_findings": 0,
     "cross_context_imports": 838,
     "cross_context_imports_sha256": "7d80cdde3c49722e6a84f922c8a1bc53986b3d8b18b0b304c570ceee56c97d84",
-    "scanned_files": 1357
+    "scanned_files": 1350
   },
   "public_surface_migrations": [],
   "relationship_projection": {

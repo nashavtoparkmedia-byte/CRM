@@ -71,8 +71,13 @@ export async function POST(req: NextRequest) {
       localDrivers.filter(driver => driver.yandexDriverId).map(driver => [driver.yandexDriverId!, driver]),
     )
     const yandexProfileIds = new Set<string>()
+    const yandexProfilesByName = new Map<string, Set<string>>()
     const drivers: DriverSearchRow[] = yandex.results.flatMap(park => park.profiles.map(profile => {
       yandexProfileIds.add(profile.id)
+      const normalizedName = profile.fullName.toLocaleLowerCase('ru-RU').replace(/\s+/g, ' ').trim()
+      const phones = yandexProfilesByName.get(normalizedName) || new Set<string>()
+      profile.phones.forEach(phone => phones.add(phone.replace(/\D/g, '')))
+      yandexProfilesByName.set(normalizedName, phones)
       const local = localByYandexId.get(profile.id)
       return {
         id: local?.id || `yandex:${park.parkId}:${profile.id}`,
@@ -89,6 +94,10 @@ export async function POST(req: NextRequest) {
 
     for (const driver of localDrivers) {
       if (driver.yandexDriverId && yandexProfileIds.has(driver.yandexDriverId)) continue
+      const normalizedName = driver.fullName.toLocaleLowerCase('ru-RU').replace(/\s+/g, ' ').trim()
+      const matchingYandexPhones = yandexProfilesByName.get(normalizedName)
+      const localPhone = driver.phone?.replace(/\D/g, '') || ''
+      if (matchingYandexPhones && (!localPhone || matchingYandexPhones.has(localPhone))) continue
       drivers.push({
         id: driver.id,
         yandexDriverId: driver.yandexDriverId,

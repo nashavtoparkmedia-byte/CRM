@@ -3,7 +3,6 @@ const https = require('https');
 const http = require('http');
 const userService = require('../services/userService');
 const sheetsService = require('../services/sheets');
-const botRegistrySync = require('../services/botRegistrySync');
 const logger = require('../utils/logger');
 const config = require('../config');
 const { ensureBotMappingV1 } = require('../public-bot-maintenance');
@@ -262,7 +261,7 @@ async function handleMenuAction(ctx, surveyHandler, adminHandler) {
             try {
                 const user = await userService.getUserByTelegramId(userId);
                 const phone = user?.phone;
-                if (!phone || !user?.phone_verified) {
+                if (!phone) {
                     return await ctx.reply('Ваш телефон еще не сохранен. Пожалуйста, отправьте контакт через меню подключения или опрос.', {
                         ...Markup.keyboard([
                             [Markup.button.contactRequest('📱 Поделиться контактом')],
@@ -277,7 +276,7 @@ async function handleMenuAction(ctx, surveyHandler, adminHandler) {
                 const apiUrl = process.env.CRM_WEBHOOK_URL || 'http://localhost:3002/api/webhooks/bot';
                 const payloadStr = JSON.stringify({
                     action: 'sync_user',
-                    payload: { telegramId: userId, username: username, phone: phone, contactUserId: userId }
+                    payload: { telegramId: userId, username: username, phone: phone }
                 });
 
                 const parsed = new URL(apiUrl);
@@ -350,25 +349,6 @@ async function handleStart(ctx) {
         // Register user and log command
         await userService.registerUser(from);
         await userService.logAction(from.id, from.username, 'START_COMMAND', { payload: startPayload });
-
-        // Registration is independent from driver linkage. This makes every
-        // unlinked account visible to the manager immediately after /start.
-        try {
-            const localUser = await userService.getUserByTelegramId(from.id);
-            const registration = await botRegistrySync.registerUser({
-                telegram_id: String(from.id),
-                username: from.username || null,
-                first_name: from.first_name || null,
-                last_name: from.last_name || null,
-                phone: localUser?.phone || null,
-                phone_verified: Boolean(localUser?.phone_verified),
-            });
-            if (!registration.ok) {
-                logger.error(`[BotRegistry] CRM registration failed for TG ${from.id}`);
-            }
-        } catch (registrationError) {
-            logger.error(`[BotRegistry] Could not register TG ${from.id}:`, registrationError);
-        }
 
         // IMPORTANT: Ensure the bot exists in Prisma DB so surveys work
         const botToken = config.botToken?.trim() || '';
