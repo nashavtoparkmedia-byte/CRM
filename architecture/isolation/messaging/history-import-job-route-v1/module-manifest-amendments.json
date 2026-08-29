@@ -1,0 +1,1 @@
+{"schema":"yoko.crm.module-manifest-amendments.v1","version":1,"milestone":"CRM-ARCH-007-MESSAGING-HISTORY-IMPORT-JOB-ROUTE","amendments":[{"context":"messaging","add_commands":["DeleteHistoryImportJobCommand.v1","UpdateHistoryImportJobCommand.v1"],"reason":"Expose the API route's complete history-import job mutation lifecycle through Messaging."}]}

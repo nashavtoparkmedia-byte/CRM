@@ -1,14 +1,16 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import type { MergedFieldConfig } from '@/lib/tasks/scenario-settings-types'
-import { MAX_LIST_PREVIEW_FIELDS } from '@/lib/tasks/scenario-settings-types'
+import {
+    MAX_LIST_PREVIEW_FIELDS,
+    type MergedScenarioFieldV1,
+} from '@/contracts/work-management/v1'
 import { updateScenarioFieldSetting, reorderScenarioField, getScenarioFieldsConfig } from '../../actions'
 import { ArrowUp, ArrowDown } from 'lucide-react'
 
 interface Props {
     scenarioId: string
-    initialFields: MergedFieldConfig[]
+    initialFields: MergedScenarioFieldV1[]
 }
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -24,7 +26,7 @@ const SOURCE_CLASSNAME: Record<string, string> = {
 }
 
 export default function ScenarioFieldsSettingsClient({ scenarioId, initialFields }: Props) {
-    const [fields, setFields] = useState<MergedFieldConfig[]>(initialFields)
+    const [fields, setFields] = useState<MergedScenarioFieldV1[]>(initialFields)
     const [pending, startTransition] = useTransition()
 
     const showInListCount = fields.filter(f => f.showInList).length
@@ -35,7 +37,7 @@ export default function ScenarioFieldsSettingsClient({ scenarioId, initialFields
         setFields(fresh)
     }
 
-    const toggle = (fieldId: string, prop: keyof MergedFieldConfig, value: boolean) => {
+    const toggle = (fieldId: string, prop: keyof MergedScenarioFieldV1, value: boolean) => {
         // Optimistic update
         setFields(prev => prev.map(f => f.id === fieldId ? { ...f, [prop]: value } : f))
         startTransition(async () => {

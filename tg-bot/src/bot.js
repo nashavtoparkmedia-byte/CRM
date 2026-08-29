@@ -3,6 +3,7 @@ const { Telegraf, Scenes, session, Markup } = require('telegraf');
 const config = require('./config');
 const db = require('./database');
 const logger = require('./utils/logger');
+const { ensureBotMappingV1 } = require('./public-bot-maintenance');
 const sheetsService = require('./services/sheets');
 
 // Import handlers
@@ -29,9 +30,9 @@ if (socksUrl) {
         const { SocksProxyAgent } = require('socks-proxy-agent');
         const agent = new SocksProxyAgent(socksUrl);
         telegrafOptions.telegram = { agent };
-        logger.info(`Telegram API via SOCKS proxy ${socksUrl}`);
+        logger.info('Telegram API via configured SOCKS proxy');
     } catch (e) {
-        logger.error(`Failed to init SOCKS proxy ${socksUrl}: ${e.message}`);
+        logger.error(`Failed to init configured SOCKS proxy: ${e.message}`);
     }
 }
 
@@ -321,37 +322,14 @@ process.on('unhandledRejection', (reason, promise) => {
 
 // Initialize DB Bot mapping
 async function initializeBotInDb() {
-    const { PrismaClient } = require('@prisma/client');
-    const prisma = new PrismaClient();
     try {
         const botToken = config.botToken?.trim() || '';
         if (botToken) {
-            let botDb = await prisma.bot.findFirst({
-                where: { token: botToken },
-                include: { surveys: true }
-            });
-            if (!botDb) {
-                logger.info(`Auto-creating bot in DB on startup with token ${botToken.substring(0, 8)}...`);
-                botDb = await prisma.bot.create({
-                    data: {
-                        token: botToken,
-                        name: config.botName || 'Main Bot',
-                        isActive: true,
-                        surveys: {
-                            create: [{ title: 'Основной опрос', triggerButton: '📊 Опрос качества' }]
-                        }
-                    }
-                });
-            } else if (!botDb.surveys || botDb.surveys.length === 0) {
-                await prisma.survey.create({
-                    data: { botId: botDb.id, title: 'Основной опрос', triggerButton: '📊 Опрос качества' }
-                });
-            }
+            await ensureBotMappingV1({ token: botToken, name: config.botName || 'Main Bot' });
         }
     } catch (err) {
         logger.error('Error auto-creating bot in DB:', err.message);
     } finally {
-        await prisma.$disconnect();
     }
 }
 

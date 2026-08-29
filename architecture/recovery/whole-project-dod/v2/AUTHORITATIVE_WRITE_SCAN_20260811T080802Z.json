@@ -1,0 +1,47 @@
+{
+  "schema": "yoko.crm.authoritative-write-scan-record.v1",
+  "generated_at": "2026-08-11T08:08:31.997Z",
+  "authority": "Bounded authoritative scan after park-name and WhatsApp timestamp maintenance capability remediation; remaining ownership and dynamic ambiguity remains fail-closed, not READY.",
+  "inputs": {
+    "previous_baseline_sha256": "59183f13283af344733c22634c13c8737272f5bd6da0e31ad70e9223a4cf09bd",
+    "lifecycle_registry": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
+    "analyzer": "tools/architecture/v2/analyze.mjs",
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_PARK_TIMESTAMP.json"
+  },
+  "output": {
+    "baseline": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json",
+    "baseline_sha256": "46feafaaaaa4119799ef73a335cd7fc02088e07b9e84e390e3091ad875d0bf23",
+    "analysis_sha256": "af1f429ee1f565f5e49dfe71fd30a65e8a49089fea5f47e134a474fa933fd7f3",
+    "triage_sha256": "3d0d2984888654a88fa06a347f8eafe044f70331501508c279326a4176c71cdf"
+  },
+  "execution": {
+    "ambiguous_candidates": 165,
+    "complete": true,
+    "elapsed_ms": 376831.975076,
+    "failures": [],
+    "files_completed": 1707,
+    "files_discovered": 1707,
+    "mode": "fresh_process_per_javascript_surface",
+    "progress_every": 150,
+    "worker_failures": 0,
+    "worker_limit": 4,
+    "worker_timeout_ms": 120000,
+    "worker_timeouts": 0,
+    "writes_discovered": 1421
+  },
+  "summary": {
+    "ambiguous_writes": 165,
+    "discovered_write_sites": 1421,
+    "foreign_writes": 0,
+    "historical_dead_writes": 18,
+    "migration_only_writes": 500,
+    "operational_script_writes": 126,
+    "owner_writes": 509,
+    "parse_findings": 0,
+    "raw_sql_writes": 814,
+    "test_writes": 229,
+    "tracked_executable_surfaces": 1707,
+    "unreviewed_operational_surfaces": 0
+  },
+  "verdict": "NOT_READY_REQUIRES_OWNERSHIP_AND_DYNAMIC_AMBIGUITY_CLOSURE"
+}

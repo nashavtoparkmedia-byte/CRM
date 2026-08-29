@@ -1,0 +1,17 @@
+{
+  "schema": "yoko.crm.owner-bootstrap-remediation-map.v1",
+  "rejected_artifact_sha256": "366ba8b0a622c2d25df7f676d679ac59efb9177e1155d15c7a2dc9aed7fdc70f",
+  "rejected_artifact_status": "REJECTED_SUPERSEDED_NEVER_EXECUTE",
+  "current_source_status": "REMEDIATION_PRESENT_EXACT_SHA_CRITIC_PASS",
+  "findings": [
+    {
+      "id": "FOURTEENTH-CRITIC-001",
+      "remediation": "Retire-intent validation now defines the exact legal transition: schema/profile and every operational/preflight/backup/release field are byte-equivalent, production runner identities disappear, phase becomes one of the sealed terminal phases, and only migration_ledger_sha256 plus the MIGRATED completion timestamp may change. The recovery regression now carries a realistic distinct outer pre-migration digest, inner post-migration digest, database identity, and target image identity.",
+      "evidence": [
+        "src/crm-activation-profile.py::_database_migrate",
+        "tests/test_package_and_runtime.py::test_partial_runner_retirement_recovers_from_durable_intent_before_terminal_state",
+        "tests/test_package_and_runtime.py::test_runner_retire_intent_rejects_unsealed_final_state_drift"
+      ]
+    }
+  ]
+}

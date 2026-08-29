@@ -1,0 +1,103 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1",
+  "milestone": "CRM-ARCH-007R-MANAGER-HEALTH",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "61f0afc9c22590d3344dfbcea6c5f4a580459a7d",
+  "source_commit": "8aeccb755b3fad942a69a23799f76f7a480f4d4f",
+  "context": "operations_observability",
+  "caller_context": "analytics_reporting",
+  "pure_configuration_context": "work_management",
+  "plan": {
+    "id": "manager-health-v1",
+    "migration_references": [
+      "migration_188449b58f2615c8",
+      "migration_54bbbf68952db919",
+      "migration_55ddc71f7450c415",
+      "migration_58c9e0e2295698d0"
+    ],
+    "file": "gravity-mvp/src/lib/tasks/manager-health-config.ts",
+    "models": [
+      "health_snapshots",
+      "health_score_history"
+    ],
+    "role": "production_source_inactive",
+    "sites": [
+      {
+        "fingerprint": "arch_880b7dfae43971c822502b90",
+        "baseline_line": 348,
+        "operation": "ensure-snapshot-table-ddl"
+      },
+      {
+        "fingerprint": "arch_3251166f174bce021d52ecef",
+        "baseline_line": 349,
+        "operation": "ensure-decline-streak-column-ddl"
+      },
+      {
+        "fingerprint": "arch_10ee9720cfdccbead6e5ce70",
+        "baseline_line": 350,
+        "operation": "ensure-history-table-ddl"
+      },
+      {
+        "fingerprint": "arch_c03fd6c4c21c0595bbc73678",
+        "baseline_line": 351,
+        "operation": "ensure-history-index-ddl"
+      },
+      {
+        "fingerprint": "arch_4115f2efad420d474a99e256",
+        "baseline_line": 392,
+        "operation": "save-snapshot-batch"
+      },
+      {
+        "fingerprint": "arch_9379c33dd717fc04b6f50ea3",
+        "baseline_line": 406,
+        "operation": "append-history-batch"
+      }
+    ],
+    "reads": [
+      "list-manager-health-snapshots",
+      "list-manager-health-history"
+    ]
+  },
+  "contracts": [
+    "operations_observability.EnsureManagerHealthRepositoryCommand.v1",
+    "operations_observability.ListManagerHealthSnapshotsQuery.v1",
+    "operations_observability.SaveManagerHealthScoresCommand.v1",
+    "operations_observability.ListManagerHealthHistoryQuery.v1"
+  ],
+  "dependency": {
+    "reused": "analytics_reporting -> operations_observability.public",
+    "effective_added_dependencies": 0,
+    "cycle_verification": 0
+  },
+  "enforcement": {
+    "baseline_registry_commit": "61f0afc9c22590d3344dfbcea6c5f4a580459a7d",
+    "baseline_findings": 1414,
+    "baseline_direct_foreign_prisma_write": 91,
+    "retired": [
+      "arch_880b7dfae43971c822502b90",
+      "arch_3251166f174bce021d52ecef",
+      "arch_10ee9720cfdccbead6e5ce70",
+      "arch_c03fd6c4c21c0595bbc73678",
+      "arch_4115f2efad420d474a99e256",
+      "arch_9379c33dd717fc04b6f50ea3"
+    ],
+    "actual_findings": 1408,
+    "actual_exceptions": 1408,
+    "actual_direct_foreign_prisma_write": 85,
+    "actual_undeclared_dependency": 370,
+    "actual_removed": 6,
+    "actual_added": 0,
+    "actual_changed_shared_entries": 0,
+    "finding_digest": "f1508b169b806c8a8b2b6cdf2ff5feb0b3235296d9fb24fa93e3c955242f10e8",
+    "registry_sha256": "fc04f70cb1a6898275a6ad70668f67245d994802a4e55f10e996b47b49881f1d",
+    "registry_deterministic": true
+  },
+  "verified_at": "2026-08-10T03:59:45Z",
+  "source_control_mutation": {
+    "module_policy": true,
+    "strict_registry": true,
+    "source_only": true
+  },
+  "execution_performed": false,
+  "rollback": "61f0afc9c22590d3344dfbcea6c5f4a580459a7d"
+}

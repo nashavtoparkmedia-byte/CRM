@@ -1,0 +1,44 @@
+{
+  "schema": "yoko.crm.transactional-outbox-manifest.v1",
+  "version": 1,
+  "module_manifest_amendments": "architecture/events/v1/module-manifest-amendments.json",
+  "infrastructure_state_owner": "platform_shell",
+  "table": "domain_outbox_events",
+  "producer_context": "calling",
+  "consumer_context": "calling",
+  "flow": {
+    "event": "calling.RecordingReady.v1",
+    "aggregate": "Call",
+    "domain_state": "Call.recordingPath",
+    "atomic_writer": "gravity-mvp/src/modules/calling/internal/recording-ready-prisma-adapter.ts",
+    "public_facade": "gravity-mvp/src/modules/calling/public/v1/index.ts",
+    "consumer": "gravity-mvp/src/modules/calling/public/v1/outbox-consumers.ts",
+    "delivery_adapter": "BullMQ call-transcribe"
+  },
+  "reliability": {
+    "event_identity": "unique deterministic eventId",
+    "transactional_append": true,
+    "claim": "compare-and-set on id, status and attempts",
+    "batch_limit": 25,
+    "publish_timeout_ms": 5000,
+    "max_attempts": 5,
+    "retry_delays_ms": [5000, 30000, 120000, 600000, 1800000],
+    "stale_claim_ms": 300000,
+    "poison_state": "dead_letter",
+    "last_error_max_chars": 1000,
+    "last_error_secret_redaction": true,
+    "publisher_idempotency": "published status plus atomic claim",
+    "consumer_idempotency": "BullMQ jobId transcribe-${callId}"
+  },
+  "versioning": {
+    "event_type_contains_major": true,
+    "event_version_column": 1,
+    "unsupported_payload": "fail_closed_and_retry_then_dead_letter"
+  },
+  "correlation": {
+    "correlation_id": "Call.id",
+    "causation_id": "FreeSWITCH channel UUID"
+  },
+  "credentials_in_contract": false,
+  "production_active": false
+}

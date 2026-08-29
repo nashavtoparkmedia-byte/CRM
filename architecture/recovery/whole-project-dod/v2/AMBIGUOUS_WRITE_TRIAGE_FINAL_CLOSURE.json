@@ -1,0 +1,4032 @@
+{
+  "schema": "yoko.crm.ambiguous-write-triage.v1",
+  "baseline": {
+    "analysis_sha256": "edd40f56543ad1798f2e26c5e9af260021a93eda9aa609a07de98626ce0344f7",
+    "baseline_sha256": "1ed65f5f744ab1da38fb6faad1948466e536b6d084cf577a14fc619391e34278"
+  },
+  "policy": "No unresolved record is converted to PASS or non-write without source or analyzer evidence.",
+  "taxonomy": [
+    "CONFIRMED_WRITE_OWNER_RESOLVED",
+    "CONFIRMED_WRITE_OWNER_UNRESOLVED",
+    "DYNAMIC_DELEGATE_UNRESOLVED",
+    "DYNAMIC_SQL_UNRESOLVED",
+    "QUERY_RAW_SIDE_EFFECT_UNRESOLVED",
+    "SOURCE_FAMILY_REVIEW_REQUIRED",
+    "CONFIRMED_NON_WRITE",
+    "GENUINELY_DYNAMIC_UNRESOLVED"
+  ],
+  "summary": {
+    "RAW_BASELINE_AMBIGUOUS": 48,
+    "CONFIRMED_WRITE_OWNER_RESOLVED": 14,
+    "CONFIRMED_WRITE_OWNER_UNRESOLVED": 0,
+    "DYNAMIC_DELEGATE_UNRESOLVED": 0,
+    "DYNAMIC_SQL_UNRESOLVED": 0,
+    "QUERY_RAW_SIDE_EFFECT_UNRESOLVED": 0,
+    "SOURCE_FAMILY_REVIEW_REQUIRED": 0,
+    "CONFIRMED_NON_WRITE": 34,
+    "GENUINELY_DYNAMIC_UNRESOLVED": 0,
+    "RESOLVED_NON_WRITE": 34,
+    "OWNER_VALID_WRITE": 10,
+    "CONTROLLED_MIGRATION_WRITE": 4,
+    "MATERIAL_UNRESOLVED_WRITE_RISK": 0,
+    "RECONCILIATION_TOTAL": 48,
+    "RECONCILIATION_EXACT": true
+  },
+  "records": [
+    {
+      "record_id": "285751a0a8f4a577b7866c586f2cd5c29374bf8fe28aaac7b10b446150192909",
+      "site_signature": "285751a0a8f4a577b7866c586f2cd5c29374bf8fe28aaac7b10b446150192909",
+      "source_sha256": "d0c2707f396dd0c782fa352fb4530ba07b1694fc8bfcb20478da69aba6e82fd0",
+      "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py",
+      "line": 562,
+      "column": 12,
+      "kind": "raw",
+      "method": "mixed-script-sql",
+      "fragment_source": "embedded_database_string",
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "pg_control_system"
+      ],
+      "selected_columns": [
+        "system_identifier",
+        "text"
+      ],
+      "called_functions": [
+        "current_database",
+        "current_setting",
+        "pg_control_system"
+      ],
+      "sql_sha256": "1f4094522bade4b4b67314cab42cc3847f506365a4af368ed704b2ed09c25882",
+      "sql_provenance_sha256": "c3dea323aca5b59cada8a3a73b96a2babe294cab430f2e6e52c5d44da56c474e",
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [],
+      "receiver_origin": null,
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "select_function_side_effect_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "db58ec08efaa08ff46d65c6514af2e4e7f3ea91fc829291f3555696d5ab6ffe1",
+      "site_signature": "db58ec08efaa08ff46d65c6514af2e4e7f3ea91fc829291f3555696d5ab6ffe1",
+      "source_sha256": "d0c2707f396dd0c782fa352fb4530ba07b1694fc8bfcb20478da69aba6e82fd0",
+      "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py",
+      "line": 644,
+      "column": 14,
+      "kind": "raw",
+      "method": "mixed-script-sql",
+      "fragment_source": "embedded_database_string",
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [],
+      "selected_columns": [
+        "BY",
+        "IS",
+        "NOT",
+        "ORDER",
+        "applied_steps_count",
+        "id",
+        "json",
+        "logs",
+        "migration_name",
+        "rolled_back_at",
+        "started_at",
+        "text"
+      ],
+      "called_functions": [
+        "coalesce",
+        "convert_to",
+        "encode",
+        "json_agg",
+        "json_build_object",
+        "octet_length",
+        "sha256",
+        "to_char"
+      ],
+      "sql_sha256": "cf33ccab7d66812ffd3b0bf0139e01b42bbae530bef6e5b396865bcbae03b7bb",
+      "sql_provenance_sha256": "d7bb0402368ed13e869f27db4cab546677eb0c076ef25f5136a2bcd8a15829a7",
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [],
+      "receiver_origin": null,
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dialect_dependent_string_escape",
+        "dynamic_sql_fragment",
+        "select_function_side_effect_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "ed73ec50cf0da00bc470d3f5bfd82747620760e0c4f6bfa706b42dff421ce67a",
+      "site_signature": "ed73ec50cf0da00bc470d3f5bfd82747620760e0c4f6bfa706b42dff421ce67a",
+      "source_sha256": "d0c2707f396dd0c782fa352fb4530ba07b1694fc8bfcb20478da69aba6e82fd0",
+      "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py",
+      "line": 644,
+      "column": 14,
+      "kind": "raw",
+      "method": "mixed-script-sql",
+      "fragment_source": "embedded_database_string",
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "_prisma_migrations"
+      ],
+      "selected_columns": [
+        "BY",
+        "IS",
+        "NOT",
+        "ORDER",
+        "applied_steps_count",
+        "id",
+        "json",
+        "logs",
+        "migration_name",
+        "rolled_back_at",
+        "started_at",
+        "text"
+      ],
+      "called_functions": [
+        "coalesce",
+        "convert_to",
+        "encode",
+        "json_agg",
+        "json_build_object",
+        "octet_length",
+        "sha256",
+        "to_char"
+      ],
+      "sql_sha256": "c92726a047fa91cec3b709b135a89d6ca9ea15fbbf61fe2351c44f9a4c16d1b3",
+      "sql_provenance_sha256": "ead01bdaffd22b3bd8d1170722ef8638e3eb734fa9cd2f6c71625ff673f84242",
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [],
+      "receiver_origin": null,
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dialect_dependent_string_escape",
+        "dynamic_sql_fragment",
+        "select_function_side_effect_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "3a19a0dbda9182e8fb61901a6f9645d519e97bfafed996916694e437e387d307",
+      "site_signature": "3a19a0dbda9182e8fb61901a6f9645d519e97bfafed996916694e437e387d307",
+      "source_sha256": "d0c2707f396dd0c782fa352fb4530ba07b1694fc8bfcb20478da69aba6e82fd0",
+      "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py",
+      "line": 798,
+      "column": 14,
+      "kind": "raw",
+      "method": "mixed-script-sql",
+      "fragment_source": "embedded_database_string",
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "pg_attrdef",
+        "pg_attribute",
+        "pg_constraint",
+        "pg_enum",
+        "pg_indexes",
+        "pg_type"
+      ],
+      "selected_columns": [
+        "BY",
+        "ORDER",
+        "adbin",
+        "adnum",
+        "adrelid",
+        "attisdropped",
+        "attname",
+        "attnotnull",
+        "attnum",
+        "attrelid",
+        "atttypid",
+        "atttypmod",
+        "conname",
+        "enumlabel",
+        "enumsortorder",
+        "enumtypid",
+        "indexname",
+        "oid",
+        "typname"
+      ],
+      "called_functions": [
+        "coalesce",
+        "format_type",
+        "json_agg",
+        "json_build_object",
+        "pg_get_constraintdef",
+        "pg_get_expr",
+        "to_regclass"
+      ],
+      "sql_sha256": "ed9cfd406f605d57ad81ce24b9bc1f8bb572087e6e9c12680cce71f154ca2341",
+      "sql_provenance_sha256": "fbcffdb74a14e9457ff051d06c20939b4851643aa70ae473dce60c7354a6bced",
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [],
+      "receiver_origin": null,
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "select_function_side_effect_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "e1bb0d06f7069896ad0113852070e1047b5b3226ad79cfe239943b95585c1827",
+      "site_signature": "e1bb0d06f7069896ad0113852070e1047b5b3226ad79cfe239943b95585c1827",
+      "source_sha256": "d0c2707f396dd0c782fa352fb4530ba07b1694fc8bfcb20478da69aba6e82fd0",
+      "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in",
+      "line": 562,
+      "column": 12,
+      "kind": "raw",
+      "method": "mixed-script-sql",
+      "fragment_source": "embedded_database_string",
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "pg_control_system"
+      ],
+      "selected_columns": [
+        "system_identifier",
+        "text"
+      ],
+      "called_functions": [
+        "current_database",
+        "current_setting",
+        "pg_control_system"
+      ],
+      "sql_sha256": "1f4094522bade4b4b67314cab42cc3847f506365a4af368ed704b2ed09c25882",
+      "sql_provenance_sha256": "5e1ec086dd8feb2d977dbcdbd0ecb8fb44c6007ab4ac2c82b1c5273bed931443",
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [],
+      "receiver_origin": null,
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "select_function_side_effect_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "493cd2bbc915132b5b76f372dc8538929757c7ea4379ac3cfff69584e5a07c62",
+      "site_signature": "493cd2bbc915132b5b76f372dc8538929757c7ea4379ac3cfff69584e5a07c62",
+      "source_sha256": "d0c2707f396dd0c782fa352fb4530ba07b1694fc8bfcb20478da69aba6e82fd0",
+      "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in",
+      "line": 644,
+      "column": 14,
+      "kind": "raw",
+      "method": "mixed-script-sql",
+      "fragment_source": "embedded_database_string",
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "_prisma_migrations"
+      ],
+      "selected_columns": [
+        "BY",
+        "IS",
+        "NOT",
+        "ORDER",
+        "applied_steps_count",
+        "id",
+        "json",
+        "logs",
+        "migration_name",
+        "rolled_back_at",
+        "started_at",
+        "text"
+      ],
+      "called_functions": [
+        "coalesce",
+        "convert_to",
+        "encode",
+        "json_agg",
+        "json_build_object",
+        "octet_length",
+        "sha256",
+        "to_char"
+      ],
+      "sql_sha256": "c92726a047fa91cec3b709b135a89d6ca9ea15fbbf61fe2351c44f9a4c16d1b3",
+      "sql_provenance_sha256": "c9c53b558635cb7ed4895c70fba81bdbbc9ea58a52401dc8bbf40caa26aa220e",
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [],
+      "receiver_origin": null,
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [
+        "dialect_dependent_string_escape",
+        "dynamic_sql_fragment",
+        "select_function_side_effect_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "daebc11dfee4c485a983a0160cab94ee9065ee492a46dcb13d73e5d7094b465a",
+      "site_signature": "daebc11dfee4c485a983a0160cab94ee9065ee492a46dcb13d73e5d7094b465a",
+      "source_sha256": "d0c2707f396dd0c782fa352fb4530ba07b1694fc8bfcb20478da69aba6e82fd0",
+      "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in",
+      "line": 644,
+      "column": 14,
+      "kind": "raw",
+      "method": "mixed-script-sql",
+      "fragment_source": "embedded_database_string",
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [],
+      "selected_columns": [
+        "BY",
+        "IS",
+        "NOT",
+        "ORDER",
+        "applied_steps_count",
+        "id",
+        "json",
+        "logs",
+        "migration_name",
+        "rolled_back_at",
+        "started_at",
+        "text"
+      ],
+      "called_functions": [
+        "coalesce",
+        "convert_to",
+        "encode",
+        "json_agg",
+        "json_build_object",
+        "octet_length",
+        "sha256",
+        "to_char"
+      ],
+      "sql_sha256": "cf33ccab7d66812ffd3b0bf0139e01b42bbae530bef6e5b396865bcbae03b7bb",
+      "sql_provenance_sha256": "6dc335321fa5848f876766bdb512759f4a09190b452444af54886bcbcb6760c0",
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [],
+      "receiver_origin": null,
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [
+        "dialect_dependent_string_escape",
+        "dynamic_sql_fragment",
+        "select_function_side_effect_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "d9186fc05728ff6f00cac9f9eb60aee5df74438494c9a4b377c617d4e0bf07a3",
+      "site_signature": "d9186fc05728ff6f00cac9f9eb60aee5df74438494c9a4b377c617d4e0bf07a3",
+      "source_sha256": "d0c2707f396dd0c782fa352fb4530ba07b1694fc8bfcb20478da69aba6e82fd0",
+      "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in",
+      "line": 798,
+      "column": 14,
+      "kind": "raw",
+      "method": "mixed-script-sql",
+      "fragment_source": "embedded_database_string",
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "pg_attrdef",
+        "pg_attribute",
+        "pg_constraint",
+        "pg_enum",
+        "pg_indexes",
+        "pg_type"
+      ],
+      "selected_columns": [
+        "BY",
+        "ORDER",
+        "adbin",
+        "adnum",
+        "adrelid",
+        "attisdropped",
+        "attname",
+        "attnotnull",
+        "attnum",
+        "attrelid",
+        "atttypid",
+        "atttypmod",
+        "conname",
+        "enumlabel",
+        "enumsortorder",
+        "enumtypid",
+        "indexname",
+        "oid",
+        "typname"
+      ],
+      "called_functions": [
+        "coalesce",
+        "format_type",
+        "json_agg",
+        "json_build_object",
+        "pg_get_constraintdef",
+        "pg_get_expr",
+        "to_regclass"
+      ],
+      "sql_sha256": "ed9cfd406f605d57ad81ce24b9bc1f8bb572087e6e9c12680cce71f154ca2341",
+      "sql_provenance_sha256": "a1f7b8786a31bf712b525616aeaf6739b00fc471df1ea5a695b42cb7de3bf054",
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [],
+      "receiver_origin": null,
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "select_function_side_effect_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "86f57b58a6d3409af7a6a18ca3a9fb36b4dbf11d247c8df8fabde9dddc6c674a",
+      "site_signature": "86f57b58a6d3409af7a6a18ca3a9fb36b4dbf11d247c8df8fabde9dddc6c674a",
+      "source_sha256": "7bfee13164e0af822b9af896b61cb06b4cfc6206603632b466559d09ccfc6fdc",
+      "file": "gravity-mvp/scripts/bulk_phantom_lid_cleanup.js",
+      "line": 135,
+      "column": 23,
+      "kind": "raw",
+      "method": "$queryRawUnsafe",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "Chat",
+        "Contact",
+        "ContactIdentity",
+        "ContactPhone",
+        "Driver"
+      ],
+      "selected_columns": [
+        "BY",
+        "PARTITION",
+        "channel",
+        "contactId",
+        "displayName",
+        "driverId",
+        "externalId",
+        "id",
+        "isActive",
+        "isArchived",
+        "lid_identity_id",
+        "master_id",
+        "phantom_id",
+        "phantom_name",
+        "phantom_phone_id",
+        "phone",
+        "source",
+        "yandexDriverId"
+      ],
+      "called_functions": [
+        "coalesce",
+        "count",
+        "length",
+        "regexp_replace",
+        "right"
+      ],
+      "sql_sha256": "4647b04db022d77b0dfdb0125f273d0ec2e25113c6069f58d58f9cb9116a2d0a",
+      "sql_provenance_sha256": "db6ff6d8aacd2985838d6820e44348294e4b224380f5b1a8ae3346c4df8f7d07",
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [
+        "dialect_dependent_string_escape",
+        "query_raw_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "1dde17910d6ede26e63fea7f13eeb237a27f299dc3c25186fa9686400b466a68",
+      "site_signature": "1dde17910d6ede26e63fea7f13eeb237a27f299dc3c25186fa9686400b466a68",
+      "source_sha256": "a7e857d35e8ff79d1ab77baa5f3b1f7d4d08e10219211b2768bb8b8716db1787",
+      "file": "gravity-mvp/scripts/cleanup-group-chats.sql",
+      "line": 27,
+      "column": 1,
+      "kind": "raw",
+      "method": "sql-script",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [
+        "Chat"
+      ],
+      "operations": [
+        {
+          "dynamic_target": false,
+          "fragment_source": "standalone_sql",
+          "index": 932,
+          "operation": "UPDATE",
+          "table": "Chat"
+        }
+      ],
+      "read_tables": [],
+      "selected_columns": [],
+      "called_functions": [],
+      "sql_sha256": null,
+      "sql_provenance_sha256": null,
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": null,
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "maintenance_lifecycle": "CLEANUP",
+        "production_capability": "CONFIRMED_MANUAL_OPERATOR",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "CONTROLLED_MIGRATION",
+      "final_ownership_classification": null,
+      "semantic_state": "CONTROLLED_MIGRATION_WRITE"
+    },
+    {
+      "record_id": "c13b2ed496ae9c0a869281cd3db6f4ba560cffb50f5a10573e2702527fa49acc",
+      "site_signature": "c13b2ed496ae9c0a869281cd3db6f4ba560cffb50f5a10573e2702527fa49acc",
+      "source_sha256": "a7e857d35e8ff79d1ab77baa5f3b1f7d4d08e10219211b2768bb8b8716db1787",
+      "file": "gravity-mvp/scripts/cleanup-group-chats.sql",
+      "line": 30,
+      "column": 1,
+      "kind": "raw",
+      "method": "sql-script",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [
+        "Chat"
+      ],
+      "operations": [
+        {
+          "dynamic_target": false,
+          "fragment_source": "standalone_sql",
+          "index": 1064,
+          "operation": "UPDATE",
+          "table": "Chat"
+        }
+      ],
+      "read_tables": [],
+      "selected_columns": [],
+      "called_functions": [],
+      "sql_sha256": null,
+      "sql_provenance_sha256": null,
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": null,
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "maintenance_lifecycle": "CLEANUP",
+        "production_capability": "CONFIRMED_MANUAL_OPERATOR",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "CONTROLLED_MIGRATION",
+      "final_ownership_classification": null,
+      "semantic_state": "CONTROLLED_MIGRATION_WRITE"
+    },
+    {
+      "record_id": "3496c5c9535bc1d5b0cce4adf17e8516310c3260b20407856d5fd5f2ff54c4ec",
+      "site_signature": "3496c5c9535bc1d5b0cce4adf17e8516310c3260b20407856d5fd5f2ff54c4ec",
+      "source_sha256": "a7e857d35e8ff79d1ab77baa5f3b1f7d4d08e10219211b2768bb8b8716db1787",
+      "file": "gravity-mvp/scripts/cleanup-group-chats.sql",
+      "line": 34,
+      "column": 1,
+      "kind": "raw",
+      "method": "sql-script",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [
+        "Chat"
+      ],
+      "operations": [
+        {
+          "dynamic_target": false,
+          "fragment_source": "standalone_sql",
+          "index": 1236,
+          "operation": "UPDATE",
+          "table": "Chat"
+        }
+      ],
+      "read_tables": [],
+      "selected_columns": [],
+      "called_functions": [],
+      "sql_sha256": null,
+      "sql_provenance_sha256": null,
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "messaging"
+      ],
+      "receiver_origin": null,
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "maintenance_lifecycle": "CLEANUP",
+        "production_capability": "CONFIRMED_MANUAL_OPERATOR",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "CONTROLLED_MIGRATION",
+      "final_ownership_classification": null,
+      "semantic_state": "CONTROLLED_MIGRATION_WRITE"
+    },
+    {
+      "record_id": "94c8e6d4c7d0f3203debaf993aaa75f5127d6629d76b607f94f380494c170fd5",
+      "site_signature": "94c8e6d4c7d0f3203debaf993aaa75f5127d6629d76b607f94f380494c170fd5",
+      "source_sha256": "a7e857d35e8ff79d1ab77baa5f3b1f7d4d08e10219211b2768bb8b8716db1787",
+      "file": "gravity-mvp/scripts/cleanup-group-chats.sql",
+      "line": 43,
+      "column": 1,
+      "kind": "raw",
+      "method": "sql-script",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [
+        "ContactIdentity"
+      ],
+      "operations": [
+        {
+          "dynamic_target": false,
+          "fragment_source": "standalone_sql",
+          "index": 1639,
+          "operation": "DELETE",
+          "table": "ContactIdentity"
+        }
+      ],
+      "read_tables": [],
+      "selected_columns": [],
+      "called_functions": [],
+      "sql_sha256": null,
+      "sql_provenance_sha256": null,
+      "source_context": null,
+      "source_technical_module": null,
+      "owner_contexts": [
+        "contacts"
+      ],
+      "receiver_origin": null,
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "OPERATIONAL_SCRIPT",
+        "maintenance_lifecycle": "CLEANUP",
+        "production_capability": "CONFIRMED_MANUAL_OPERATOR",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "CONTROLLED_MIGRATION",
+      "final_ownership_classification": null,
+      "semantic_state": "CONTROLLED_MIGRATION_WRITE"
+    },
+    {
+      "record_id": "36c9b52b2b9c7b0d7ec8bec4120e6772b5421558fb0f591ed1ef2f9306aadce7",
+      "site_signature": "36c9b52b2b9c7b0d7ec8bec4120e6772b5421558fb0f591ed1ef2f9306aadce7",
+      "source_sha256": "296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
+      "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
+      "line": 113,
+      "column": 13,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "Call"
+      ],
+      "selected_columns": [
+        "IS",
+        "NOT",
+        "aiScore",
+        "answeredAt",
+        "direction",
+        "float",
+        "status"
+      ],
+      "called_functions": [
+        "avg",
+        "count"
+      ],
+      "sql_sha256": "5ed8d5190a2642e6abc8815901d892527a2de281163341ef3ce8822167721640",
+      "sql_provenance_sha256": "7f7a5519d909448dd62a9c78d70053f411763eaacda276c9946cadf034abdbcc",
+      "source_context": "calling",
+      "source_technical_module": "calls",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "bd5f029e6d7e1ae7767d85e524d2a69134bd87aef53352ebeb7caf364aa54825",
+      "site_signature": "bd5f029e6d7e1ae7767d85e524d2a69134bd87aef53352ebeb7caf364aa54825",
+      "source_sha256": "296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
+      "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
+      "line": 125,
+      "column": 13,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "Call"
+      ],
+      "selected_columns": [
+        "IS",
+        "NOT",
+        "aiScore",
+        "answeredAt",
+        "float",
+        "managerId",
+        "status"
+      ],
+      "called_functions": [
+        "avg",
+        "count"
+      ],
+      "sql_sha256": "4f397d25bbaff390caeaba2124f7400cf2176692d9b13444ca8829e4f0ccbafd",
+      "sql_provenance_sha256": "37c91001c05280782aad08271f22043c9bc737d861cd83639c5c5610c9b9f028",
+      "source_context": "calling",
+      "source_technical_module": "calls",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "3331c0d6e52e665c9f373dfa9a50f8b351bfffe7678db5d300bf2c01c46996bc",
+      "site_signature": "3331c0d6e52e665c9f373dfa9a50f8b351bfffe7678db5d300bf2c01c46996bc",
+      "source_sha256": "296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
+      "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
+      "line": 139,
+      "column": 13,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "Call"
+      ],
+      "selected_columns": [
+        "IS",
+        "NOT",
+        "answeredAt",
+        "date"
+      ],
+      "called_functions": [
+        "count",
+        "date_trunc"
+      ],
+      "sql_sha256": "29ad10fdca5c2278ec20e732282543bc63572ac10255b7ef59667c34690f469c",
+      "sql_provenance_sha256": "dd2946ce99b813f4649ef493a31d50f8f8664bcefc6b79ff755feeee86cb26d8",
+      "source_context": "calling",
+      "source_technical_module": "calls",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "037b459fcefcde89d3f50f66e7cb3d69cf7788f5451ec7ebe9cee41e94291b91",
+      "site_signature": "037b459fcefcde89d3f50f66e7cb3d69cf7788f5451ec7ebe9cee41e94291b91",
+      "source_sha256": "296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
+      "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
+      "line": 149,
+      "column": 13,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "Call",
+        "startedAt"
+      ],
+      "selected_columns": [
+        "IS",
+        "NOT",
+        "answeredAt",
+        "int"
+      ],
+      "called_functions": [
+        "count",
+        "extract"
+      ],
+      "sql_sha256": "0050b295197b256982ccafe530b5f6464327259940f4303f93d071e89e5bea41",
+      "sql_provenance_sha256": "d4f116886005715f3c20ff111e8d4f67c436271d855b691740ff805baeb88279",
+      "source_context": "calling",
+      "source_technical_module": "calls",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "d7b60d9168005c4268cd46df849f684067e5994e79744e430f76ccc5b14f08bb",
+      "site_signature": "d7b60d9168005c4268cd46df849f684067e5994e79744e430f76ccc5b14f08bb",
+      "source_sha256": "296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
+      "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
+      "line": 161,
+      "column": 13,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "Call",
+        "jsonb_array_elements_text"
+      ],
+      "selected_columns": [
+        "aiAnalysis",
+        "flag",
+        "int",
+        "startedAt"
+      ],
+      "called_functions": [
+        "count",
+        "jsonb_array_elements_text"
+      ],
+      "sql_sha256": "5daa65f02a7ab827006663bbcd1506e150beb7e7e6566c3960d5178de3ccfdb8",
+      "sql_provenance_sha256": "3cd1bd2f45bde0bbfc4916677757de55ca11fd97506a33e000a3891c74816aab",
+      "source_context": "calling",
+      "source_technical_module": "calls",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "dd15e3ca3b8b8470797072b94d9ee74c5a0d4f66aba7c7104f566faa790e6590",
+      "site_signature": "dd15e3ca3b8b8470797072b94d9ee74c5a0d4f66aba7c7104f566faa790e6590",
+      "source_sha256": "296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
+      "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
+      "line": 171,
+      "column": 13,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "Call"
+      ],
+      "selected_columns": [
+        "float",
+        "int"
+      ],
+      "called_functions": [
+        "avg"
+      ],
+      "sql_sha256": "41f720ec5e9447d852547c79d216a4e324e6608a947aeded21e8bd7d494842a1",
+      "sql_provenance_sha256": "5e1278eb8909c287bc7f5b6cb2a6b61a1dd7e3774156171c0f2fe7e583887c07",
+      "source_context": "calling",
+      "source_technical_module": "calls",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "8004a8dc8d8d1183024debb2be7bf79572b663ab596b6497a2e8058cb51b46fa",
+      "site_signature": "8004a8dc8d8d1183024debb2be7bf79572b663ab596b6497a2e8058cb51b46fa",
+      "source_sha256": "85620ff629ee5bc62a0dae1fc3f79670f0f0d762dc8c75937f9f467222e598b2",
+      "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
+      "line": 330,
+      "column": 28,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "AiKnowledgeItem"
+      ],
+      "selected_columns": [
+        "canonicalStatement",
+        "id",
+        "title"
+      ],
+      "called_functions": [],
+      "sql_sha256": "2d61f800b345ffa17dabd1477896f2bdaf4fced5982bde3fe8385af776dd0b36",
+      "sql_provenance_sha256": "96eaec6582caa262479bef704d8f469b9c8de916490a19bc510e07d98aaa8075",
+      "source_context": "messaging",
+      "source_technical_module": "messages",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "b2c3ae6fc6828d9d51e85f6f01d3dff86df72a5ced9f863516a2d0276c1c61e3",
+      "site_signature": "b2c3ae6fc6828d9d51e85f6f01d3dff86df72a5ced9f863516a2d0276c1c61e3",
+      "source_sha256": "e2c7efc7239249ca5e410fe5239263722dc06376563a5213638bb4cbeb5132ab",
+      "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+      "line": 1707,
+      "column": 28,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "Chat",
+        "Message",
+        "WhatsAppChat"
+      ],
+      "selected_columns": [
+        "INTERVAL",
+        "channel",
+        "chatId",
+        "connectionId",
+        "content",
+        "direction",
+        "externalChatId",
+        "id",
+        "int",
+        "metadata",
+        "sentAt",
+        "type"
+      ],
+      "called_functions": [
+        "coalesce",
+        "count",
+        "length",
+        "max",
+        "min",
+        "now"
+      ],
+      "sql_sha256": "6167a7563da84abc493ecee58c8ae8e3a12053448ae23bc234c428b54d28c89e",
+      "sql_provenance_sha256": "7bd7f7b3cb44c7e555ed099ce77295af534d594374860899efa798584fbaa8d8",
+      "source_context": "configuration",
+      "source_technical_module": "settings",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "e8319859102636b4b4915c12f4c1dccaac2f97309e2fe5853109ef441b95bae6",
+      "site_signature": "e8319859102636b4b4915c12f4c1dccaac2f97309e2fe5853109ef441b95bae6",
+      "source_sha256": "e2c7efc7239249ca5e410fe5239263722dc06376563a5213638bb4cbeb5132ab",
+      "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+      "line": 2253,
+      "column": 32,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "AiKnowledgeItem"
+      ],
+      "selected_columns": [
+        "canonicalStatement",
+        "confidence",
+        "conflictGroupId",
+        "id",
+        "isActive",
+        "isVerified",
+        "safetyLevel",
+        "sectionId",
+        "sourceCount",
+        "status",
+        "supersededByItemId",
+        "tags",
+        "text",
+        "title",
+        "uniqueManagerCount",
+        "verifiedAt",
+        "verifiedBy"
+      ],
+      "called_functions": [],
+      "sql_sha256": "20e05031e18965a3c164c760790395bbeaa42c75ad4fe9a4ea79ca85c2a063d3",
+      "sql_provenance_sha256": "ec9ca759febe7d209ae59a1215872f392dfa926700246f3e7fc008b096a52777",
+      "source_context": "configuration",
+      "source_technical_module": "settings",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "69ae5095adc3a7847274305f5f6a963d449606b60094335bb37a22a0423b4f9c",
+      "site_signature": "69ae5095adc3a7847274305f5f6a963d449606b60094335bb37a22a0423b4f9c",
+      "source_sha256": "e2c7efc7239249ca5e410fe5239263722dc06376563a5213638bb4cbeb5132ab",
+      "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+      "line": 2272,
+      "column": 41,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "AiKnowledgeSource"
+      ],
+      "selected_columns": [
+        "int"
+      ],
+      "called_functions": [
+        "count"
+      ],
+      "sql_sha256": "a12465741c5b62ecffc57a4bb7e3dd89b0d1acac32ae68d50664be12437afab2",
+      "sql_provenance_sha256": "072eb4449e85ffc98f7c15a34bbc5daa583e5f636d08af8446e4667af83fa65c",
+      "source_context": "configuration",
+      "source_technical_module": "settings",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "5cff329cbbb30ad80f4a934dadf91c774bdf4c1c77907e08527b8159762e554a",
+      "site_signature": "5cff329cbbb30ad80f4a934dadf91c774bdf4c1c77907e08527b8159762e554a",
+      "source_sha256": "42c89e0978f2fdc6bf55c0c1669abec5bdacafda4da75ef5b5dd55fdba397e29",
+      "file": "gravity-mvp/src/app/tasks/actions.ts",
+      "line": 552,
+      "column": 36,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "tasks"
+      ],
+      "selected_columns": [
+        "id",
+        "jsonb",
+        "scenarioData"
+      ],
+      "called_functions": [],
+      "sql_sha256": "a8bac2a13d9accdbcfadd04e3ec0efc40cc86964e6832404faf1df4a27eef3c5",
+      "sql_provenance_sha256": "7cfa92acee3b24982812925728e08643c890a28aa5cac9507687e62378e44b87",
+      "source_context": "work_management",
+      "source_technical_module": "tasks",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "3ee3e1ff772ceba991f2e501083d76c3fad96f5b0fc9831a0f47c1a827f37df8",
+      "site_signature": "3ee3e1ff772ceba991f2e501083d76c3fad96f5b0fc9831a0f47c1a827f37df8",
+      "source_sha256": "19b872a4bc78eb160700d08c37bc2c094416f5e7c00b3e91a5c42a459ba90995",
+      "file": "gravity-mvp/src/app/team-overview/actions.ts",
+      "line": 786,
+      "column": 19,
+      "kind": "raw",
+      "method": "$queryRawUnsafe",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "task_events"
+      ],
+      "selected_columns": [
+        "payload",
+        "text"
+      ],
+      "called_functions": [
+        "count",
+        "date",
+        "now"
+      ],
+      "sql_sha256": "50836b0cd6aff7245ca372648f32d92e3fb6b1574dcc0a9d12577e9d05cbf36c",
+      "sql_provenance_sha256": "89323ba208768e5b82f29e1a4c838647f9606e49547d8acf6f5b2d73c3811ea9",
+      "source_context": "analytics_reporting",
+      "source_technical_module": "analytics",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "0c81e542c6ee55171cb049c0570617f3fa9ea12402305bfe8014d2c953c51caa",
+      "site_signature": "0c81e542c6ee55171cb049c0570617f3fa9ea12402305bfe8014d2c953c51caa",
+      "source_sha256": "e266804bb3456fd2b906dd42a27339f29f8cd5d4ec1762f0c149953cafa81354",
+      "file": "gravity-mvp/src/app/tg-actions.ts",
+      "line": 1603,
+      "column": 32,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "Chat",
+        "Message"
+      ],
+      "selected_columns": [
+        "SELECT"
+      ],
+      "called_functions": [
+        "count",
+        "max",
+        "min"
+      ],
+      "sql_sha256": "bdef2e15fc02f10219bec9dde14ee6bbfbfa414b85c47686a830d3d15f2f6b53",
+      "sql_provenance_sha256": "4f2d1eeb5ec49f7c6be92958707ff276bd1743c7a6e0fcfec2338bbb03cdc61f",
+      "source_context": "telegram_channel",
+      "source_technical_module": "telegram_provider",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "45645e0b760a5827a47289517fa298c1a3bcd215068e418d7c93e887b8ad17ac",
+      "site_signature": "45645e0b760a5827a47289517fa298c1a3bcd215068e418d7c93e887b8ad17ac",
+      "source_sha256": "6c7f1bf52613551e1035c68137dbfc44974d8a311cc642a147b856d283177ffa",
+      "file": "gravity-mvp/src/infrastructure/outbox/prisma-outbox-store.ts",
+      "line": 24,
+      "column": 40,
+      "kind": "model",
+      "method": "updateMany",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": "domainOutboxEvent",
+      "candidate_models": [
+        "domainOutboxEvent"
+      ],
+      "tables": [],
+      "operations": [],
+      "read_tables": [],
+      "selected_columns": [],
+      "called_functions": [],
+      "sql_sha256": null,
+      "sql_provenance_sha256": null,
+      "source_context": "platform_shell",
+      "source_technical_module": "gravity_core",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [],
+      "unresolved_targets": [
+        "domainOutboxEvent",
+        "domainOutboxEvent"
+      ],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "81f28083be28056e5c9be0ca8018f6ec9121a53bee49136fe9fd7e710afdb913",
+      "site_signature": "81f28083be28056e5c9be0ca8018f6ec9121a53bee49136fe9fd7e710afdb913",
+      "source_sha256": "6c7f1bf52613551e1035c68137dbfc44974d8a311cc642a147b856d283177ffa",
+      "file": "gravity-mvp/src/infrastructure/outbox/prisma-outbox-store.ts",
+      "line": 36,
+      "column": 38,
+      "kind": "model",
+      "method": "updateMany",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": "domainOutboxEvent",
+      "candidate_models": [
+        "domainOutboxEvent"
+      ],
+      "tables": [],
+      "operations": [],
+      "read_tables": [],
+      "selected_columns": [],
+      "called_functions": [],
+      "sql_sha256": null,
+      "sql_provenance_sha256": null,
+      "source_context": "platform_shell",
+      "source_technical_module": "gravity_core",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [],
+      "unresolved_targets": [
+        "domainOutboxEvent",
+        "domainOutboxEvent"
+      ],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "64934aa9a77c0de5bafd842a668fa1b1f10654ce0a3ffa06cfe7a7fd3b995046",
+      "site_signature": "64934aa9a77c0de5bafd842a668fa1b1f10654ce0a3ffa06cfe7a7fd3b995046",
+      "source_sha256": "6c7f1bf52613551e1035c68137dbfc44974d8a311cc642a147b856d283177ffa",
+      "file": "gravity-mvp/src/infrastructure/outbox/prisma-outbox-store.ts",
+      "line": 49,
+      "column": 33,
+      "kind": "model",
+      "method": "updateMany",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": "domainOutboxEvent",
+      "candidate_models": [
+        "domainOutboxEvent"
+      ],
+      "tables": [],
+      "operations": [],
+      "read_tables": [],
+      "selected_columns": [],
+      "called_functions": [],
+      "sql_sha256": null,
+      "sql_provenance_sha256": null,
+      "source_context": "platform_shell",
+      "source_technical_module": "gravity_core",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [],
+      "unresolved_targets": [
+        "domainOutboxEvent",
+        "domainOutboxEvent"
+      ],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "8779aa7c9ab18d702c45db346d6e34b2262c14d2744796efbc77bd6bcf6927a2",
+      "site_signature": "8779aa7c9ab18d702c45db346d6e34b2262c14d2744796efbc77bd6bcf6927a2",
+      "source_sha256": "6c7f1bf52613551e1035c68137dbfc44974d8a311cc642a147b856d283177ffa",
+      "file": "gravity-mvp/src/infrastructure/outbox/prisma-outbox-store.ts",
+      "line": 81,
+      "column": 34,
+      "kind": "model",
+      "method": "updateMany",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": "domainOutboxEvent",
+      "candidate_models": [
+        "domainOutboxEvent"
+      ],
+      "tables": [],
+      "operations": [],
+      "read_tables": [],
+      "selected_columns": [],
+      "called_functions": [],
+      "sql_sha256": null,
+      "sql_provenance_sha256": null,
+      "source_context": "platform_shell",
+      "source_technical_module": "gravity_core",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [],
+      "unresolved_targets": [
+        "domainOutboxEvent",
+        "domainOutboxEvent"
+      ],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "68e7b2590b446a521037a09ba257bd2dc3e9dc5160ae46e2838bc955f203ab4d",
+      "site_signature": "68e7b2590b446a521037a09ba257bd2dc3e9dc5160ae46e2838bc955f203ab4d",
+      "source_sha256": "6c7f1bf52613551e1035c68137dbfc44974d8a311cc642a147b856d283177ffa",
+      "file": "gravity-mvp/src/infrastructure/outbox/prisma-outbox-store.ts",
+      "line": 102,
+      "column": 15,
+      "kind": "model",
+      "method": "updateMany",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": "domainOutboxEvent",
+      "candidate_models": [
+        "domainOutboxEvent"
+      ],
+      "tables": [],
+      "operations": [],
+      "read_tables": [],
+      "selected_columns": [],
+      "called_functions": [],
+      "sql_sha256": null,
+      "sql_provenance_sha256": null,
+      "source_context": "platform_shell",
+      "source_technical_module": "gravity_core",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [],
+      "unresolved_targets": [
+        "domainOutboxEvent",
+        "domainOutboxEvent"
+      ],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "48452c703f3878500e43002f7311f83f1a84a5d7a7c7fc02ac262672a49917b9",
+      "site_signature": "48452c703f3878500e43002f7311f83f1a84a5d7a7c7fc02ac262672a49917b9",
+      "source_sha256": "6c7f1bf52613551e1035c68137dbfc44974d8a311cc642a147b856d283177ffa",
+      "file": "gravity-mvp/src/infrastructure/outbox/prisma-outbox-store.ts",
+      "line": 114,
+      "column": 15,
+      "kind": "model",
+      "method": "updateMany",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": "domainOutboxEvent",
+      "candidate_models": [
+        "domainOutboxEvent"
+      ],
+      "tables": [],
+      "operations": [],
+      "read_tables": [],
+      "selected_columns": [],
+      "called_functions": [],
+      "sql_sha256": null,
+      "sql_provenance_sha256": null,
+      "source_context": "platform_shell",
+      "source_technical_module": "gravity_core",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [],
+      "unresolved_targets": [
+        "domainOutboxEvent",
+        "domainOutboxEvent"
+      ],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "e1c81095a11532a1ba56e2629b9316a15d42ad5062aa52dfa190283adb26f5e1",
+      "site_signature": "e1c81095a11532a1ba56e2629b9316a15d42ad5062aa52dfa190283adb26f5e1",
+      "source_sha256": "f59aa128a3bdbdd79890c8af1fb6f704fe9d0a29b012939cd6bf8bc40f5b2b1f",
+      "file": "gravity-mvp/src/lib/ai/knowledge/callTranscriptBuilder.ts",
+      "line": 82,
+      "column": 24,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "Call"
+      ],
+      "selected_columns": [
+        "id",
+        "startedAt",
+        "transcript"
+      ],
+      "called_functions": [
+        "length"
+      ],
+      "sql_sha256": "7c5ed7da00c072677c23d6d9ad2453ed19cfa513e516d03f526699dd786ca7ac",
+      "sql_provenance_sha256": "01a27bd5035001e8a47fee832a7058c2a4fc7a54ed89029fc6d5e6d816526739",
+      "source_context": "ai_knowledge",
+      "source_technical_module": "ai_knowledge",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "040c0d8f2319e57f6b22e2e2dbc3065fe5fbf10ad306e15ff687cf87f3604057",
+      "site_signature": "040c0d8f2319e57f6b22e2e2dbc3065fe5fbf10ad306e15ff687cf87f3604057",
+      "source_sha256": "43055e025a20615b1b969efee276cb4f0d4961863bd32793b4ffb6810fd43e61",
+      "file": "gravity-mvp/src/lib/ai/knowledge/explainability.ts",
+      "line": 227,
+      "column": 29,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "AiKnowledgeSource"
+      ],
+      "selected_columns": [
+        "channel",
+        "chatId",
+        "confidence",
+        "createdAt",
+        "excerpt",
+        "id",
+        "itemId",
+        "managerUserId",
+        "messageId",
+        "occurredAt",
+        "originType",
+        "text"
+      ],
+      "called_functions": [],
+      "sql_sha256": "c606ddba92d3d4c9091f46020afb2b0b0bbed3b44fe2b4c183b7be8791dc818a",
+      "sql_provenance_sha256": "8f89495ef390d95576c6ca14dd59babaac04b9cf95b49185452e82802b6c2c06",
+      "source_context": "ai_knowledge",
+      "source_technical_module": "ai_knowledge",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "ea322bd576b8b6ee4240ed4611e602b63d1cdcb2befa71a84a886a55afb4ac4f",
+      "site_signature": "ea322bd576b8b6ee4240ed4611e602b63d1cdcb2befa71a84a886a55afb4ac4f",
+      "source_sha256": "43055e025a20615b1b969efee276cb4f0d4961863bd32793b4ffb6810fd43e61",
+      "file": "gravity-mvp/src/lib/ai/knowledge/explainability.ts",
+      "line": 245,
+      "column": 32,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "AiKnowledgeAuditLog"
+      ],
+      "selected_columns": [
+        "action",
+        "actor",
+        "createdAt",
+        "id",
+        "itemId",
+        "metadata",
+        "text"
+      ],
+      "called_functions": [],
+      "sql_sha256": "4b9afb0d5a8c17e140109fa43e461544fb5ea48a732185b7545843c7ddc989d1",
+      "sql_provenance_sha256": "92570de14fd5d8449e56276ef98549b5938d51462046be670be8c40df3aa3d57",
+      "source_context": "ai_knowledge",
+      "source_technical_module": "ai_knowledge",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "3f0f0682204964ed2be82d5effe35517b5e8eaa97f73dbc4344cbc63d361907f",
+      "site_signature": "3f0f0682204964ed2be82d5effe35517b5e8eaa97f73dbc4344cbc63d361907f",
+      "source_sha256": "1d7ed3a0c526ca4967bac7cc4d46d7804fc2ccda95919d27dcace2dc0b1f3816",
+      "file": "gravity-mvp/src/lib/ai/knowledge/pairBuilder.ts",
+      "line": 133,
+      "column": 22,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "Chat",
+        "Message",
+        "WhatsAppChat"
+      ],
+      "selected_columns": [
+        "aiStatus",
+        "channel",
+        "chatId",
+        "connectionId",
+        "content",
+        "direction",
+        "externalChatId",
+        "id",
+        "metadata",
+        "sentAt",
+        "text",
+        "type"
+      ],
+      "called_functions": [
+        "coalesce",
+        "length"
+      ],
+      "sql_sha256": "a003efca8bcd485d9d29fb74e31b0be8b2de5058841c0a3dd6f9e7bfca407465",
+      "sql_provenance_sha256": "28aa2f6b91838283b6ee5ab392a47dcfed2fec61b474f9e935b4365e029c493d",
+      "source_context": "ai_knowledge",
+      "source_technical_module": "ai_knowledge",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "31e7ff73ab8a69a2a5f72de16d08e899a46e9cc48004c42e034335d5e622637c",
+      "site_signature": "31e7ff73ab8a69a2a5f72de16d08e899a46e9cc48004c42e034335d5e622637c",
+      "source_sha256": "1d7ed3a0c526ca4967bac7cc4d46d7804fc2ccda95919d27dcace2dc0b1f3816",
+      "file": "gravity-mvp/src/lib/ai/knowledge/pairBuilder.ts",
+      "line": 166,
+      "column": 18,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "Chat",
+        "Message",
+        "WhatsAppChat"
+      ],
+      "selected_columns": [
+        "aiStatus",
+        "channel",
+        "chatId",
+        "connectionId",
+        "content",
+        "direction",
+        "externalChatId",
+        "id",
+        "metadata",
+        "sentAt",
+        "text",
+        "type"
+      ],
+      "called_functions": [
+        "coalesce",
+        "length"
+      ],
+      "sql_sha256": "1c9406f7de14f23690893a18480eddb693ec6969962ffc7ff53196370495986c",
+      "sql_provenance_sha256": "9edf7e6fa46b727132c90cc399c815329669744204dcfe38ae95570a1af91d77",
+      "source_context": "ai_knowledge",
+      "source_technical_module": "ai_knowledge",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "2390d5d610646077ea1572b4ae278b721ceb44b14461dccf8e24817a7b68f541",
+      "site_signature": "2390d5d610646077ea1572b4ae278b721ceb44b14461dccf8e24817a7b68f541",
+      "source_sha256": "2da95a6a5bb9bb4acee386a981d1541595ffcb58343b03d5866a1e99d860eb23",
+      "file": "gravity-mvp/src/lib/ai/knowledge/queries.ts",
+      "line": 249,
+      "column": 28,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "AiKnowledgeSource"
+      ],
+      "selected_columns": [
+        "connectionId",
+        "int",
+        "itemId"
+      ],
+      "called_functions": [
+        "bool_or",
+        "count"
+      ],
+      "sql_sha256": "20f6c37beaa26cb0d91762b82c2a25147da3e52ed5c867dc32a1643332e4929b",
+      "sql_provenance_sha256": "3c882df776a592e740b43b59d5f30894356383fd94138b8a43f3ebd494ffa773",
+      "source_context": "ai_knowledge",
+      "source_technical_module": "ai_knowledge",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_intent_unresolved",
+        "select_function_side_effect_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "1ac9db07b55047f8f0e8b6708e294bf1e033a1e71f5348567b5fb6ee421a6858",
+      "site_signature": "1ac9db07b55047f8f0e8b6708e294bf1e033a1e71f5348567b5fb6ee421a6858",
+      "source_sha256": "9e8a4bfd44c81e48991d22ed1bb84205e39ba00114b55b94590b0e146a23db58",
+      "file": "gravity-mvp/src/lib/ai/knowledge/Retriever.ts",
+      "line": 184,
+      "column": 22,
+      "kind": "raw",
+      "method": "$queryRawUnsafe",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "AiKnowledgeItem"
+      ],
+      "selected_columns": [
+        "canonicalStatement",
+        "confidence",
+        "conflictGroupId",
+        "id",
+        "isActive",
+        "isVerified",
+        "safetyLevel",
+        "sectionId",
+        "sourceCount",
+        "status",
+        "supersededByItemId",
+        "tags",
+        "text",
+        "title",
+        "uniqueManagerCount"
+      ],
+      "called_functions": [],
+      "sql_sha256": "732084c489e5076cb08f958838780127f8ed1324582a5c1d9518e72195008f87",
+      "sql_provenance_sha256": "7e94284881b339b97cfed84c1106f71fb573e001dc07fbdd362099395391ccde",
+      "source_context": "ai_knowledge",
+      "source_technical_module": "ai_knowledge",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "6c84c5974dc29a3cd814144d007c6669c061d6217ca8837671847aaf97206891",
+      "site_signature": "6c84c5974dc29a3cd814144d007c6669c061d6217ca8837671847aaf97206891",
+      "source_sha256": "e401a0ef61ea0bebc7650e245221dee470c17e13da26dba6b43cebf92f28f7d2",
+      "file": "gravity-mvp/src/lib/MessageService.ts",
+      "line": 101,
+      "column": 65,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "Chat"
+      ],
+      "selected_columns": [
+        "assignedToUserId",
+        "chatType",
+        "id",
+        "lastInboundAt",
+        "lastOutboundAt"
+      ],
+      "called_functions": [],
+      "sql_sha256": "c1e0c276a397686626aac8475ae4d795c72f1185d46ec33c50fd74a99bdd7df0",
+      "sql_provenance_sha256": "9939e2f744c6913ff4ee164c131497ecd9773046d801dbdaf979042276170870",
+      "source_context": "messaging",
+      "source_technical_module": "messages",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "6fe3c1e8c14600a70e17a2782784bf9dbe45318c0ca596bc87d4ebcd3a1837c4",
+      "site_signature": "6fe3c1e8c14600a70e17a2782784bf9dbe45318c0ca596bc87d4ebcd3a1837c4",
+      "source_sha256": "d8e8482816b06592d282b7b67ad97c1797d4c05e31596094d0deb0df27b363e0",
+      "file": "gravity-mvp/src/lib/tasks/scenario-settings.ts",
+      "line": 62,
+      "column": 24,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "scenario_field_settings"
+      ],
+      "selected_columns": [
+        "fieldId",
+        "filterable",
+        "groupable",
+        "order",
+        "scenarioId",
+        "showInCard",
+        "showInList",
+        "sortable",
+        "updatedAt",
+        "updatedBy"
+      ],
+      "called_functions": [],
+      "sql_sha256": "a9c16182085c7bd28172571b1b253868a2c0758a81998de071653e130f8bdb24",
+      "sql_provenance_sha256": "a7a8f407828b165c4b8a99b6062c15321c1c2703024437275b43a5f0fb71e400",
+      "source_context": "work_management",
+      "source_technical_module": "tasks",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "490105b516a84ebfd5c94ad7544581e9628ae1f95dffee0c0940ba8b0bfa9dad",
+      "site_signature": "490105b516a84ebfd5c94ad7544581e9628ae1f95dffee0c0940ba8b0bfa9dad",
+      "source_sha256": "967d048235b0449643962b3e34252b72c42449c9a861c4d31329269aba821cc8",
+      "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
+      "line": 2388,
+      "column": 32,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "Chat",
+        "Message"
+      ],
+      "selected_columns": [
+        "SELECT",
+        "channel",
+        "chatId",
+        "id",
+        "sentAt"
+      ],
+      "called_functions": [
+        "count",
+        "max",
+        "min"
+      ],
+      "sql_sha256": "50f65e4b92c17e5d333eca535f6635c31d087056d23a2114ff4fb38f516b3927",
+      "sql_provenance_sha256": "ed89bb46f9301814602e9dd35f125ea97822ab0372122442add1cb86d045b6b5",
+      "source_context": "whatsapp_channel",
+      "source_technical_module": "whatsapp_provider",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "f2385246a9722e1692eaa96a81289d48e1bc42701ab7bbaf653642fac72b7e40",
+      "site_signature": "f2385246a9722e1692eaa96a81289d48e1bc42701ab7bbaf653642fac72b7e40",
+      "source_sha256": "7875a85d456ddd265d15dfbcae857893dfaba5c299af01448e513f87d839f444",
+      "file": "gravity-mvp/src/modules/calling/internal/recording-ready-prisma-adapter.ts",
+      "line": 16,
+      "column": 23,
+      "kind": "model",
+      "method": "createMany",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": "domainOutboxEvent",
+      "candidate_models": [
+        "domainOutboxEvent"
+      ],
+      "tables": [],
+      "operations": [],
+      "read_tables": [],
+      "selected_columns": [],
+      "called_functions": [],
+      "sql_sha256": null,
+      "sql_provenance_sha256": null,
+      "source_context": "calling",
+      "source_technical_module": "calling.module",
+      "owner_contexts": [],
+      "receiver_origin": "transaction-callback:import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [],
+      "unresolved_targets": [
+        "domainOutboxEvent",
+        "domainOutboxEvent"
+      ],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "b00356e49038391b1ecb1efbefd7c929b2e1e15f2cc6580a32df27a68f04c982",
+      "site_signature": "b00356e49038391b1ecb1efbefd7c929b2e1e15f2cc6580a32df27a68f04c982",
+      "source_sha256": "013c8d9494def2be0782244423b39994dfa92ea3e79df851a0e12115f05d0292",
+      "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
+      "line": 43,
+      "column": 35,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "ContactMerge"
+      ],
+      "selected_columns": [
+        "id"
+      ],
+      "called_functions": [],
+      "sql_sha256": "6c7936b5cfa45134e549041f280f40369d6dfaee8970d4f8ff3c03d7b35b66d2",
+      "sql_provenance_sha256": "45524e0a307e7fe0a938bc8c792ac23b3dfbde857fd4920e8eb7697a111c5587",
+      "source_context": "contacts",
+      "source_technical_module": "contacts.module",
+      "owner_contexts": [],
+      "receiver_origin": "import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "d0c82d56b1ebc1290af28a4c3add0047a2da0f9ab7cf0643ae9ac5ccd3920fc9",
+      "site_signature": "d0c82d56b1ebc1290af28a4c3add0047a2da0f9ab7cf0643ae9ac5ccd3920fc9",
+      "source_sha256": "013c8d9494def2be0782244423b39994dfa92ea3e79df851a0e12115f05d0292",
+      "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
+      "line": 74,
+      "column": 15,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "Contact"
+      ],
+      "selected_columns": [
+        "FOR",
+        "SELECT",
+        "id"
+      ],
+      "called_functions": [],
+      "sql_sha256": "89d1cf16e02c6989c59518c3ff4492759d7b3b33359b6060898e8a64a5fbe15c",
+      "sql_provenance_sha256": "67174ad2b78080a45043268871cb52572383c2aa0f77796086c8df1d1d010134",
+      "source_context": "contacts",
+      "source_technical_module": "contacts.module",
+      "owner_contexts": [],
+      "receiver_origin": "typed-parameter:transaction",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_NON_WRITE",
+      "rationale": "Source inspection proves a static SELECT projection; dynamic values are bound parameters/fragments and no mutation statement is reachable.",
+      "ownership_classification": null,
+      "final_ownership_classification": null,
+      "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "8ab08160d1b248fd01499e5a9a1c10aed80a83a90444baf0bd46e7c85e2877dd",
+      "site_signature": "8ab08160d1b248fd01499e5a9a1c10aed80a83a90444baf0bd46e7c85e2877dd",
+      "source_sha256": "d31a95451e148423ce8ad0dad0b78d4d7a487f428d5103a05bd3fed4c454c247",
+      "file": "tg-bot/src/public-bot-maintenance.js",
+      "line": 25,
+      "column": 26,
+      "kind": "ambiguous_model",
+      "method": "create",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": "bot",
+      "candidate_models": [
+        "bot"
+      ],
+      "tables": [],
+      "operations": [],
+      "read_tables": [],
+      "selected_columns": [],
+      "called_functions": [],
+      "sql_sha256": null,
+      "sql_provenance_sha256": null,
+      "source_context": "telegram_channel",
+      "source_technical_module": null,
+      "owner_contexts": [
+        "telegram_channel"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [
+        "nested_relation_write_requires_schema_resolution"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "The Prisma model and nested relation are statically resolved, and the owner-controlled capability source matches the schema owner.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "3fbd16d3e1c4078354a4c31a8248a8aea1746b3175e9c40ca2d6d65b0edfa919",
+      "site_signature": "3fbd16d3e1c4078354a4c31a8248a8aea1746b3175e9c40ca2d6d65b0edfa919",
+      "source_sha256": "d31a95451e148423ce8ad0dad0b78d4d7a487f428d5103a05bd3fed4c454c247",
+      "file": "tg-bot/src/public-bot-maintenance.js",
+      "line": 46,
+      "column": 22,
+      "kind": "ambiguous_model",
+      "method": "create",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": "bot",
+      "candidate_models": [
+        "bot"
+      ],
+      "tables": [],
+      "operations": [],
+      "read_tables": [],
+      "selected_columns": [],
+      "called_functions": [],
+      "sql_sha256": null,
+      "sql_provenance_sha256": null,
+      "source_context": "telegram_channel",
+      "source_technical_module": null,
+      "owner_contexts": [
+        "telegram_channel"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [
+        "nested_relation_write_requires_schema_resolution"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "The Prisma model and nested relation are statically resolved, and the owner-controlled capability source matches the schema owner.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "f7691415bdb4eb6bcb72502c8df0febd83b69ce0e9280e91988852663bc4a313",
+      "site_signature": "f7691415bdb4eb6bcb72502c8df0febd83b69ce0e9280e91988852663bc4a313",
+      "source_sha256": "d31a95451e148423ce8ad0dad0b78d4d7a487f428d5103a05bd3fed4c454c247",
+      "file": "tg-bot/src/public-bot-maintenance.js",
+      "line": 59,
+      "column": 22,
+      "kind": "ambiguous_model",
+      "method": "create",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": "bot",
+      "candidate_models": [
+        "bot"
+      ],
+      "tables": [],
+      "operations": [],
+      "read_tables": [],
+      "selected_columns": [],
+      "called_functions": [],
+      "sql_sha256": null,
+      "sql_provenance_sha256": null,
+      "source_context": "telegram_channel",
+      "source_technical_module": null,
+      "owner_contexts": [
+        "telegram_channel"
+      ],
+      "receiver_origin": "new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": "ACTIVE",
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": true
+      },
+      "ambiguity_reasons": [
+        "nested_relation_write_requires_schema_resolution"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "The Prisma model and nested relation are statically resolved, and the owner-controlled capability source matches the schema owner.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    }
+  ],
+  "current_exact_review": {
+    "ambiguous_denominator": 48,
+    "review_key": "site_signature",
+    "sorted_site_signatures_sha256": "f7c2c08771bbb2542c4233dc2cc93f1f69eca5b3f5a251cf868cceddc2285198",
+    "policy": "Every current ambiguous analyzer signature requires one independent disposition and every resolved non-write requires one exact proof; the historical raw baseline grants no authorization."
+  },
+  "non_write_proofs": [
+    {
+      "site_signature": "285751a0a8f4a577b7866c586f2cd5c29374bf8fe28aaac7b10b446150192909",
+      "classification": "STATIC_MIXED_SCRIPT_SQL_READ",
+      "source": {
+        "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py",
+        "line": 562,
+        "column": 12,
+        "method": "mixed-script-sql",
+        "source_sha256": "d0c2707f396dd0c782fa352fb4530ba07b1694fc8bfcb20478da69aba6e82fd0",
+        "sql_provenance_sha256": "c3dea323aca5b59cada8a3a73b96a2babe294cab430f2e6e52c5d44da56c474e"
+      },
+      "resolved_target": {
+        "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
+        "fragment_source": "embedded_database_string",
+        "read_tables": [
+          "pg_control_system"
+        ],
+        "selected_columns": [
+          "system_identifier",
+          "text"
+        ],
+        "sql_sha256": "1f4094522bade4b4b67314cab42cc3847f506365a4af368ed704b2ed09c25882",
+        "reviewed_read_only_functions": [
+          "current_database",
+          "current_setting",
+          "pg_control_system"
+        ]
+      },
+      "evidence": [
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py:562:12",
+        "analysis_site_signature:285751a0a8f4a577b7866c586f2cd5c29374bf8fe28aaac7b10b446150192909",
+        "sql_sha256:1f4094522bade4b4b67314cab42cc3847f506365a4af368ed704b2ed09c25882",
+        "Exact embedded SELECT invokes only independently reviewed read-only PostgreSQL projection, catalog, identity, formatting, and hashing functions.",
+        "source_sha256:d0c2707f396dd0c782fa352fb4530ba07b1694fc8bfcb20478da69aba6e82fd0",
+        "sql_provenance_sha256:c3dea323aca5b59cada8a3a73b96a2babe294cab430f2e6e52c5d44da56c474e"
+      ]
+    },
+    {
+      "site_signature": "db58ec08efaa08ff46d65c6514af2e4e7f3ea91fc829291f3555696d5ab6ffe1",
+      "classification": "STATIC_MIXED_SCRIPT_SQL_READ",
+      "source": {
+        "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py",
+        "line": 644,
+        "column": 14,
+        "method": "mixed-script-sql",
+        "source_sha256": "d0c2707f396dd0c782fa352fb4530ba07b1694fc8bfcb20478da69aba6e82fd0",
+        "sql_provenance_sha256": "d7bb0402368ed13e869f27db4cab546677eb0c076ef25f5136a2bcd8a15829a7"
+      },
+      "resolved_target": {
+        "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
+        "fragment_source": "embedded_database_string",
+        "read_tables": [],
+        "selected_columns": [
+          "BY",
+          "IS",
+          "NOT",
+          "ORDER",
+          "applied_steps_count",
+          "id",
+          "json",
+          "logs",
+          "migration_name",
+          "rolled_back_at",
+          "started_at",
+          "text"
+        ],
+        "sql_sha256": "cf33ccab7d66812ffd3b0bf0139e01b42bbae530bef6e5b396865bcbae03b7bb",
+        "reviewed_read_only_functions": [
+          "coalesce",
+          "convert_to",
+          "encode",
+          "json_agg",
+          "json_build_object",
+          "octet_length",
+          "sha256",
+          "to_char"
+        ]
+      },
+      "evidence": [
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py:644:14",
+        "analysis_site_signature:db58ec08efaa08ff46d65c6514af2e4e7f3ea91fc829291f3555696d5ab6ffe1",
+        "sql_sha256:cf33ccab7d66812ffd3b0bf0139e01b42bbae530bef6e5b396865bcbae03b7bb",
+        "Exact embedded SELECT invokes only independently reviewed read-only PostgreSQL projection, catalog, identity, formatting, and hashing functions.",
+        "source_sha256:d0c2707f396dd0c782fa352fb4530ba07b1694fc8bfcb20478da69aba6e82fd0",
+        "sql_provenance_sha256:d7bb0402368ed13e869f27db4cab546677eb0c076ef25f5136a2bcd8a15829a7"
+      ]
+    },
+    {
+      "site_signature": "ed73ec50cf0da00bc470d3f5bfd82747620760e0c4f6bfa706b42dff421ce67a",
+      "classification": "STATIC_MIXED_SCRIPT_SQL_READ",
+      "source": {
+        "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py",
+        "line": 644,
+        "column": 14,
+        "method": "mixed-script-sql",
+        "source_sha256": "d0c2707f396dd0c782fa352fb4530ba07b1694fc8bfcb20478da69aba6e82fd0",
+        "sql_provenance_sha256": "ead01bdaffd22b3bd8d1170722ef8638e3eb734fa9cd2f6c71625ff673f84242"
+      },
+      "resolved_target": {
+        "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
+        "fragment_source": "embedded_database_string",
+        "read_tables": [
+          "_prisma_migrations"
+        ],
+        "selected_columns": [
+          "BY",
+          "IS",
+          "NOT",
+          "ORDER",
+          "applied_steps_count",
+          "id",
+          "json",
+          "logs",
+          "migration_name",
+          "rolled_back_at",
+          "started_at",
+          "text"
+        ],
+        "sql_sha256": "c92726a047fa91cec3b709b135a89d6ca9ea15fbbf61fe2351c44f9a4c16d1b3",
+        "reviewed_read_only_functions": [
+          "coalesce",
+          "convert_to",
+          "encode",
+          "json_agg",
+          "json_build_object",
+          "octet_length",
+          "sha256",
+          "to_char"
+        ]
+      },
+      "evidence": [
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py:644:14",
+        "analysis_site_signature:ed73ec50cf0da00bc470d3f5bfd82747620760e0c4f6bfa706b42dff421ce67a",
+        "sql_sha256:c92726a047fa91cec3b709b135a89d6ca9ea15fbbf61fe2351c44f9a4c16d1b3",
+        "Exact embedded SELECT invokes only independently reviewed read-only PostgreSQL projection, catalog, identity, formatting, and hashing functions.",
+        "source_sha256:d0c2707f396dd0c782fa352fb4530ba07b1694fc8bfcb20478da69aba6e82fd0",
+        "sql_provenance_sha256:ead01bdaffd22b3bd8d1170722ef8638e3eb734fa9cd2f6c71625ff673f84242"
+      ]
+    },
+    {
+      "site_signature": "3a19a0dbda9182e8fb61901a6f9645d519e97bfafed996916694e437e387d307",
+      "classification": "STATIC_MIXED_SCRIPT_SQL_READ",
+      "source": {
+        "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py",
+        "line": 798,
+        "column": 14,
+        "method": "mixed-script-sql",
+        "source_sha256": "d0c2707f396dd0c782fa352fb4530ba07b1694fc8bfcb20478da69aba6e82fd0",
+        "sql_provenance_sha256": "fbcffdb74a14e9457ff051d06c20939b4851643aa70ae473dce60c7354a6bced"
+      },
+      "resolved_target": {
+        "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
+        "fragment_source": "embedded_database_string",
+        "read_tables": [
+          "pg_attrdef",
+          "pg_attribute",
+          "pg_constraint",
+          "pg_enum",
+          "pg_indexes",
+          "pg_type"
+        ],
+        "selected_columns": [
+          "BY",
+          "ORDER",
+          "adbin",
+          "adnum",
+          "adrelid",
+          "attisdropped",
+          "attname",
+          "attnotnull",
+          "attnum",
+          "attrelid",
+          "atttypid",
+          "atttypmod",
+          "conname",
+          "enumlabel",
+          "enumsortorder",
+          "enumtypid",
+          "indexname",
+          "oid",
+          "typname"
+        ],
+        "sql_sha256": "ed9cfd406f605d57ad81ce24b9bc1f8bb572087e6e9c12680cce71f154ca2341",
+        "reviewed_read_only_functions": [
+          "coalesce",
+          "format_type",
+          "json_agg",
+          "json_build_object",
+          "pg_get_constraintdef",
+          "pg_get_expr",
+          "to_regclass"
+        ]
+      },
+      "evidence": [
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py:798:14",
+        "analysis_site_signature:3a19a0dbda9182e8fb61901a6f9645d519e97bfafed996916694e437e387d307",
+        "sql_sha256:ed9cfd406f605d57ad81ce24b9bc1f8bb572087e6e9c12680cce71f154ca2341",
+        "Exact embedded SELECT invokes only independently reviewed read-only PostgreSQL projection, catalog, identity, formatting, and hashing functions.",
+        "source_sha256:d0c2707f396dd0c782fa352fb4530ba07b1694fc8bfcb20478da69aba6e82fd0",
+        "sql_provenance_sha256:fbcffdb74a14e9457ff051d06c20939b4851643aa70ae473dce60c7354a6bced"
+      ]
+    },
+    {
+      "site_signature": "e1bb0d06f7069896ad0113852070e1047b5b3226ad79cfe239943b95585c1827",
+      "classification": "STATIC_MIXED_SCRIPT_SQL_READ",
+      "source": {
+        "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in",
+        "line": 562,
+        "column": 12,
+        "method": "mixed-script-sql",
+        "source_sha256": "d0c2707f396dd0c782fa352fb4530ba07b1694fc8bfcb20478da69aba6e82fd0",
+        "sql_provenance_sha256": "5e1ec086dd8feb2d977dbcdbd0ecb8fb44c6007ab4ac2c82b1c5273bed931443"
+      },
+      "resolved_target": {
+        "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
+        "fragment_source": "embedded_database_string",
+        "read_tables": [
+          "pg_control_system"
+        ],
+        "selected_columns": [
+          "system_identifier",
+          "text"
+        ],
+        "sql_sha256": "1f4094522bade4b4b67314cab42cc3847f506365a4af368ed704b2ed09c25882",
+        "reviewed_read_only_functions": [
+          "current_database",
+          "current_setting",
+          "pg_control_system"
+        ]
+      },
+      "evidence": [
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in:562:12",
+        "analysis_site_signature:e1bb0d06f7069896ad0113852070e1047b5b3226ad79cfe239943b95585c1827",
+        "sql_sha256:1f4094522bade4b4b67314cab42cc3847f506365a4af368ed704b2ed09c25882",
+        "Exact embedded SELECT invokes only independently reviewed read-only PostgreSQL projection, catalog, identity, formatting, and hashing functions.",
+        "source_sha256:d0c2707f396dd0c782fa352fb4530ba07b1694fc8bfcb20478da69aba6e82fd0",
+        "sql_provenance_sha256:5e1ec086dd8feb2d977dbcdbd0ecb8fb44c6007ab4ac2c82b1c5273bed931443"
+      ]
+    },
+    {
+      "site_signature": "493cd2bbc915132b5b76f372dc8538929757c7ea4379ac3cfff69584e5a07c62",
+      "classification": "STATIC_MIXED_SCRIPT_SQL_READ",
+      "source": {
+        "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in",
+        "line": 644,
+        "column": 14,
+        "method": "mixed-script-sql",
+        "source_sha256": "d0c2707f396dd0c782fa352fb4530ba07b1694fc8bfcb20478da69aba6e82fd0",
+        "sql_provenance_sha256": "c9c53b558635cb7ed4895c70fba81bdbbc9ea58a52401dc8bbf40caa26aa220e"
+      },
+      "resolved_target": {
+        "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
+        "fragment_source": "embedded_database_string",
+        "read_tables": [
+          "_prisma_migrations"
+        ],
+        "selected_columns": [
+          "BY",
+          "IS",
+          "NOT",
+          "ORDER",
+          "applied_steps_count",
+          "id",
+          "json",
+          "logs",
+          "migration_name",
+          "rolled_back_at",
+          "started_at",
+          "text"
+        ],
+        "sql_sha256": "c92726a047fa91cec3b709b135a89d6ca9ea15fbbf61fe2351c44f9a4c16d1b3",
+        "reviewed_read_only_functions": [
+          "coalesce",
+          "convert_to",
+          "encode",
+          "json_agg",
+          "json_build_object",
+          "octet_length",
+          "sha256",
+          "to_char"
+        ]
+      },
+      "evidence": [
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in:644:14",
+        "analysis_site_signature:493cd2bbc915132b5b76f372dc8538929757c7ea4379ac3cfff69584e5a07c62",
+        "sql_sha256:c92726a047fa91cec3b709b135a89d6ca9ea15fbbf61fe2351c44f9a4c16d1b3",
+        "Exact embedded SELECT invokes only independently reviewed read-only PostgreSQL projection, catalog, identity, formatting, and hashing functions.",
+        "source_sha256:d0c2707f396dd0c782fa352fb4530ba07b1694fc8bfcb20478da69aba6e82fd0",
+        "sql_provenance_sha256:c9c53b558635cb7ed4895c70fba81bdbbc9ea58a52401dc8bbf40caa26aa220e"
+      ]
+    },
+    {
+      "site_signature": "daebc11dfee4c485a983a0160cab94ee9065ee492a46dcb13d73e5d7094b465a",
+      "classification": "STATIC_MIXED_SCRIPT_SQL_READ",
+      "source": {
+        "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in",
+        "line": 644,
+        "column": 14,
+        "method": "mixed-script-sql",
+        "source_sha256": "d0c2707f396dd0c782fa352fb4530ba07b1694fc8bfcb20478da69aba6e82fd0",
+        "sql_provenance_sha256": "6dc335321fa5848f876766bdb512759f4a09190b452444af54886bcbcb6760c0"
+      },
+      "resolved_target": {
+        "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
+        "fragment_source": "embedded_database_string",
+        "read_tables": [],
+        "selected_columns": [
+          "BY",
+          "IS",
+          "NOT",
+          "ORDER",
+          "applied_steps_count",
+          "id",
+          "json",
+          "logs",
+          "migration_name",
+          "rolled_back_at",
+          "started_at",
+          "text"
+        ],
+        "sql_sha256": "cf33ccab7d66812ffd3b0bf0139e01b42bbae530bef6e5b396865bcbae03b7bb",
+        "reviewed_read_only_functions": [
+          "coalesce",
+          "convert_to",
+          "encode",
+          "json_agg",
+          "json_build_object",
+          "octet_length",
+          "sha256",
+          "to_char"
+        ]
+      },
+      "evidence": [
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in:644:14",
+        "analysis_site_signature:daebc11dfee4c485a983a0160cab94ee9065ee492a46dcb13d73e5d7094b465a",
+        "sql_sha256:cf33ccab7d66812ffd3b0bf0139e01b42bbae530bef6e5b396865bcbae03b7bb",
+        "Exact embedded SELECT invokes only independently reviewed read-only PostgreSQL projection, catalog, identity, formatting, and hashing functions.",
+        "source_sha256:d0c2707f396dd0c782fa352fb4530ba07b1694fc8bfcb20478da69aba6e82fd0",
+        "sql_provenance_sha256:6dc335321fa5848f876766bdb512759f4a09190b452444af54886bcbcb6760c0"
+      ]
+    },
+    {
+      "site_signature": "d9186fc05728ff6f00cac9f9eb60aee5df74438494c9a4b377c617d4e0bf07a3",
+      "classification": "STATIC_MIXED_SCRIPT_SQL_READ",
+      "source": {
+        "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in",
+        "line": 798,
+        "column": 14,
+        "method": "mixed-script-sql",
+        "source_sha256": "d0c2707f396dd0c782fa352fb4530ba07b1694fc8bfcb20478da69aba6e82fd0",
+        "sql_provenance_sha256": "a1f7b8786a31bf712b525616aeaf6739b00fc471df1ea5a695b42cb7de3bf054"
+      },
+      "resolved_target": {
+        "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
+        "fragment_source": "embedded_database_string",
+        "read_tables": [
+          "pg_attrdef",
+          "pg_attribute",
+          "pg_constraint",
+          "pg_enum",
+          "pg_indexes",
+          "pg_type"
+        ],
+        "selected_columns": [
+          "BY",
+          "ORDER",
+          "adbin",
+          "adnum",
+          "adrelid",
+          "attisdropped",
+          "attname",
+          "attnotnull",
+          "attnum",
+          "attrelid",
+          "atttypid",
+          "atttypmod",
+          "conname",
+          "enumlabel",
+          "enumsortorder",
+          "enumtypid",
+          "indexname",
+          "oid",
+          "typname"
+        ],
+        "sql_sha256": "ed9cfd406f605d57ad81ce24b9bc1f8bb572087e6e9c12680cce71f154ca2341",
+        "reviewed_read_only_functions": [
+          "coalesce",
+          "format_type",
+          "json_agg",
+          "json_build_object",
+          "pg_get_constraintdef",
+          "pg_get_expr",
+          "to_regclass"
+        ]
+      },
+      "evidence": [
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/templates/crm-activation-profile.py.in:798:14",
+        "analysis_site_signature:d9186fc05728ff6f00cac9f9eb60aee5df74438494c9a4b377c617d4e0bf07a3",
+        "sql_sha256:ed9cfd406f605d57ad81ce24b9bc1f8bb572087e6e9c12680cce71f154ca2341",
+        "Exact embedded SELECT invokes only independently reviewed read-only PostgreSQL projection, catalog, identity, formatting, and hashing functions.",
+        "source_sha256:d0c2707f396dd0c782fa352fb4530ba07b1694fc8bfcb20478da69aba6e82fd0",
+        "sql_provenance_sha256:a1f7b8786a31bf712b525616aeaf6739b00fc471df1ea5a695b42cb7de3bf054"
+      ]
+    },
+    {
+      "site_signature": "86f57b58a6d3409af7a6a18ca3a9fb36b4dbf11d247c8df8fabde9dddc6c674a",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/scripts/bulk_phantom_lid_cleanup.js",
+        "line": 135,
+        "column": 23,
+        "method": "$queryRawUnsafe",
+        "source_sha256": "7bfee13164e0af822b9af896b61cb06b4cfc6206603632b466559d09ccfc6fdc",
+        "sql_provenance_sha256": "db6ff6d8aacd2985838d6820e44348294e4b224380f5b1a8ae3346c4df8f7d07"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "Chat",
+          "Contact",
+          "ContactIdentity",
+          "ContactPhone",
+          "Driver"
+        ],
+        "selected_columns": [
+          "BY",
+          "PARTITION",
+          "channel",
+          "contactId",
+          "displayName",
+          "driverId",
+          "externalId",
+          "id",
+          "isActive",
+          "isArchived",
+          "lid_identity_id",
+          "master_id",
+          "phantom_id",
+          "phantom_name",
+          "phantom_phone_id",
+          "phone",
+          "source",
+          "yandexDriverId"
+        ],
+        "sql_sha256": "4647b04db022d77b0dfdb0125f273d0ec2e25113c6069f58d58f9cb9116a2d0a",
+        "reviewed_read_only_functions": [
+          "coalesce",
+          "count",
+          "length",
+          "regexp_replace",
+          "right"
+        ]
+      },
+      "evidence": [
+        "gravity-mvp/scripts/bulk_phantom_lid_cleanup.js:135:23",
+        "analysis_site_signature:86f57b58a6d3409af7a6a18ca3a9fb36b4dbf11d247c8df8fabde9dddc6c674a",
+        "sql_sha256:4647b04db022d77b0dfdb0125f273d0ec2e25113c6069f58d58f9cb9116a2d0a",
+        "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
+        "source_sha256:7bfee13164e0af822b9af896b61cb06b4cfc6206603632b466559d09ccfc6fdc",
+        "sql_provenance_sha256:db6ff6d8aacd2985838d6820e44348294e4b224380f5b1a8ae3346c4df8f7d07"
+      ]
+    },
+    {
+      "site_signature": "36c9b52b2b9c7b0d7ec8bec4120e6772b5421558fb0f591ed1ef2f9306aadce7",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
+        "line": 113,
+        "column": 13,
+        "method": "$queryRaw",
+        "source_sha256": "296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
+        "sql_provenance_sha256": "7f7a5519d909448dd62a9c78d70053f411763eaacda276c9946cadf034abdbcc"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "Call"
+        ],
+        "selected_columns": [
+          "IS",
+          "NOT",
+          "aiScore",
+          "answeredAt",
+          "direction",
+          "float",
+          "status"
+        ],
+        "sql_sha256": "5ed8d5190a2642e6abc8815901d892527a2de281163341ef3ce8822167721640",
+        "reviewed_read_only_functions": [
+          "avg",
+          "count"
+        ]
+      },
+      "evidence": [
+        "gravity-mvp/src/app/api/calls/stats/route.ts:113:13",
+        "analysis_site_signature:36c9b52b2b9c7b0d7ec8bec4120e6772b5421558fb0f591ed1ef2f9306aadce7",
+        "sql_sha256:5ed8d5190a2642e6abc8815901d892527a2de281163341ef3ce8822167721640",
+        "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
+        "source_sha256:296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
+        "sql_provenance_sha256:7f7a5519d909448dd62a9c78d70053f411763eaacda276c9946cadf034abdbcc"
+      ]
+    },
+    {
+      "site_signature": "bd5f029e6d7e1ae7767d85e524d2a69134bd87aef53352ebeb7caf364aa54825",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
+        "line": 125,
+        "column": 13,
+        "method": "$queryRaw",
+        "source_sha256": "296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
+        "sql_provenance_sha256": "37c91001c05280782aad08271f22043c9bc737d861cd83639c5c5610c9b9f028"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "Call"
+        ],
+        "selected_columns": [
+          "IS",
+          "NOT",
+          "aiScore",
+          "answeredAt",
+          "float",
+          "managerId",
+          "status"
+        ],
+        "sql_sha256": "4f397d25bbaff390caeaba2124f7400cf2176692d9b13444ca8829e4f0ccbafd",
+        "reviewed_read_only_functions": [
+          "avg",
+          "count"
+        ]
+      },
+      "evidence": [
+        "gravity-mvp/src/app/api/calls/stats/route.ts:125:13",
+        "analysis_site_signature:bd5f029e6d7e1ae7767d85e524d2a69134bd87aef53352ebeb7caf364aa54825",
+        "sql_sha256:4f397d25bbaff390caeaba2124f7400cf2176692d9b13444ca8829e4f0ccbafd",
+        "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
+        "source_sha256:296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
+        "sql_provenance_sha256:37c91001c05280782aad08271f22043c9bc737d861cd83639c5c5610c9b9f028"
+      ]
+    },
+    {
+      "site_signature": "3331c0d6e52e665c9f373dfa9a50f8b351bfffe7678db5d300bf2c01c46996bc",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
+        "line": 139,
+        "column": 13,
+        "method": "$queryRaw",
+        "source_sha256": "296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
+        "sql_provenance_sha256": "dd2946ce99b813f4649ef493a31d50f8f8664bcefc6b79ff755feeee86cb26d8"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "Call"
+        ],
+        "selected_columns": [
+          "IS",
+          "NOT",
+          "answeredAt",
+          "date"
+        ],
+        "sql_sha256": "29ad10fdca5c2278ec20e732282543bc63572ac10255b7ef59667c34690f469c",
+        "reviewed_read_only_functions": [
+          "count",
+          "date_trunc"
+        ]
+      },
+      "evidence": [
+        "gravity-mvp/src/app/api/calls/stats/route.ts:139:13",
+        "analysis_site_signature:3331c0d6e52e665c9f373dfa9a50f8b351bfffe7678db5d300bf2c01c46996bc",
+        "sql_sha256:29ad10fdca5c2278ec20e732282543bc63572ac10255b7ef59667c34690f469c",
+        "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
+        "source_sha256:296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
+        "sql_provenance_sha256:dd2946ce99b813f4649ef493a31d50f8f8664bcefc6b79ff755feeee86cb26d8"
+      ]
+    },
+    {
+      "site_signature": "037b459fcefcde89d3f50f66e7cb3d69cf7788f5451ec7ebe9cee41e94291b91",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
+        "line": 149,
+        "column": 13,
+        "method": "$queryRaw",
+        "source_sha256": "296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
+        "sql_provenance_sha256": "d4f116886005715f3c20ff111e8d4f67c436271d855b691740ff805baeb88279"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "Call",
+          "startedAt"
+        ],
+        "selected_columns": [
+          "IS",
+          "NOT",
+          "answeredAt",
+          "int"
+        ],
+        "sql_sha256": "0050b295197b256982ccafe530b5f6464327259940f4303f93d071e89e5bea41",
+        "reviewed_read_only_functions": [
+          "count",
+          "extract"
+        ]
+      },
+      "evidence": [
+        "gravity-mvp/src/app/api/calls/stats/route.ts:149:13",
+        "analysis_site_signature:037b459fcefcde89d3f50f66e7cb3d69cf7788f5451ec7ebe9cee41e94291b91",
+        "sql_sha256:0050b295197b256982ccafe530b5f6464327259940f4303f93d071e89e5bea41",
+        "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
+        "source_sha256:296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
+        "sql_provenance_sha256:d4f116886005715f3c20ff111e8d4f67c436271d855b691740ff805baeb88279"
+      ]
+    },
+    {
+      "site_signature": "d7b60d9168005c4268cd46df849f684067e5994e79744e430f76ccc5b14f08bb",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
+        "line": 161,
+        "column": 13,
+        "method": "$queryRaw",
+        "source_sha256": "296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
+        "sql_provenance_sha256": "3cd1bd2f45bde0bbfc4916677757de55ca11fd97506a33e000a3891c74816aab"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "Call",
+          "jsonb_array_elements_text"
+        ],
+        "selected_columns": [
+          "aiAnalysis",
+          "flag",
+          "int",
+          "startedAt"
+        ],
+        "sql_sha256": "5daa65f02a7ab827006663bbcd1506e150beb7e7e6566c3960d5178de3ccfdb8",
+        "reviewed_read_only_functions": [
+          "count",
+          "jsonb_array_elements_text"
+        ]
+      },
+      "evidence": [
+        "gravity-mvp/src/app/api/calls/stats/route.ts:161:13",
+        "analysis_site_signature:d7b60d9168005c4268cd46df849f684067e5994e79744e430f76ccc5b14f08bb",
+        "sql_sha256:5daa65f02a7ab827006663bbcd1506e150beb7e7e6566c3960d5178de3ccfdb8",
+        "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
+        "source_sha256:296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
+        "sql_provenance_sha256:3cd1bd2f45bde0bbfc4916677757de55ca11fd97506a33e000a3891c74816aab"
+      ]
+    },
+    {
+      "site_signature": "dd15e3ca3b8b8470797072b94d9ee74c5a0d4f66aba7c7104f566faa790e6590",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
+        "line": 171,
+        "column": 13,
+        "method": "$queryRaw",
+        "source_sha256": "296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
+        "sql_provenance_sha256": "5e1278eb8909c287bc7f5b6cb2a6b61a1dd7e3774156171c0f2fe7e583887c07"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "Call"
+        ],
+        "selected_columns": [
+          "float",
+          "int"
+        ],
+        "sql_sha256": "41f720ec5e9447d852547c79d216a4e324e6608a947aeded21e8bd7d494842a1",
+        "reviewed_read_only_functions": [
+          "avg"
+        ]
+      },
+      "evidence": [
+        "gravity-mvp/src/app/api/calls/stats/route.ts:171:13",
+        "analysis_site_signature:dd15e3ca3b8b8470797072b94d9ee74c5a0d4f66aba7c7104f566faa790e6590",
+        "sql_sha256:41f720ec5e9447d852547c79d216a4e324e6608a947aeded21e8bd7d494842a1",
+        "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
+        "source_sha256:296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
+        "sql_provenance_sha256:5e1278eb8909c287bc7f5b6cb2a6b61a1dd7e3774156171c0f2fe7e583887c07"
+      ]
+    },
+    {
+      "site_signature": "8004a8dc8d8d1183024debb2be7bf79572b663ab596b6497a2e8058cb51b46fa",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
+        "line": 330,
+        "column": 28,
+        "method": "$queryRaw",
+        "source_sha256": "85620ff629ee5bc62a0dae1fc3f79670f0f0d762dc8c75937f9f467222e598b2",
+        "sql_provenance_sha256": "96eaec6582caa262479bef704d8f469b9c8de916490a19bc510e07d98aaa8075"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "AiKnowledgeItem"
+        ],
+        "selected_columns": [
+          "canonicalStatement",
+          "id",
+          "title"
+        ],
+        "sql_sha256": "2d61f800b345ffa17dabd1477896f2bdaf4fced5982bde3fe8385af776dd0b36",
+        "reviewed_read_only_functions": []
+      },
+      "evidence": [
+        "gravity-mvp/src/app/messages/proposed-reply-actions.ts:330:28",
+        "analysis_site_signature:8004a8dc8d8d1183024debb2be7bf79572b663ab596b6497a2e8058cb51b46fa",
+        "sql_sha256:2d61f800b345ffa17dabd1477896f2bdaf4fced5982bde3fe8385af776dd0b36",
+        "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
+        "source_sha256:85620ff629ee5bc62a0dae1fc3f79670f0f0d762dc8c75937f9f467222e598b2",
+        "sql_provenance_sha256:96eaec6582caa262479bef704d8f469b9c8de916490a19bc510e07d98aaa8075"
+      ]
+    },
+    {
+      "site_signature": "b2c3ae6fc6828d9d51e85f6f01d3dff86df72a5ced9f863516a2d0276c1c61e3",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+        "line": 1707,
+        "column": 28,
+        "method": "$queryRaw",
+        "source_sha256": "e2c7efc7239249ca5e410fe5239263722dc06376563a5213638bb4cbeb5132ab",
+        "sql_provenance_sha256": "7bd7f7b3cb44c7e555ed099ce77295af534d594374860899efa798584fbaa8d8"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "Chat",
+          "Message",
+          "WhatsAppChat"
+        ],
+        "selected_columns": [
+          "INTERVAL",
+          "channel",
+          "chatId",
+          "connectionId",
+          "content",
+          "direction",
+          "externalChatId",
+          "id",
+          "int",
+          "metadata",
+          "sentAt",
+          "type"
+        ],
+        "sql_sha256": "6167a7563da84abc493ecee58c8ae8e3a12053448ae23bc234c428b54d28c89e",
+        "reviewed_read_only_functions": [
+          "coalesce",
+          "count",
+          "length",
+          "max",
+          "min",
+          "now"
+        ]
+      },
+      "evidence": [
+        "gravity-mvp/src/app/settings/ai/actions.ts:1707:28",
+        "analysis_site_signature:b2c3ae6fc6828d9d51e85f6f01d3dff86df72a5ced9f863516a2d0276c1c61e3",
+        "sql_sha256:6167a7563da84abc493ecee58c8ae8e3a12053448ae23bc234c428b54d28c89e",
+        "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
+        "source_sha256:e2c7efc7239249ca5e410fe5239263722dc06376563a5213638bb4cbeb5132ab",
+        "sql_provenance_sha256:7bd7f7b3cb44c7e555ed099ce77295af534d594374860899efa798584fbaa8d8"
+      ]
+    },
+    {
+      "site_signature": "e8319859102636b4b4915c12f4c1dccaac2f97309e2fe5853109ef441b95bae6",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+        "line": 2253,
+        "column": 32,
+        "method": "$queryRaw",
+        "source_sha256": "e2c7efc7239249ca5e410fe5239263722dc06376563a5213638bb4cbeb5132ab",
+        "sql_provenance_sha256": "ec9ca759febe7d209ae59a1215872f392dfa926700246f3e7fc008b096a52777"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "AiKnowledgeItem"
+        ],
+        "selected_columns": [
+          "canonicalStatement",
+          "confidence",
+          "conflictGroupId",
+          "id",
+          "isActive",
+          "isVerified",
+          "safetyLevel",
+          "sectionId",
+          "sourceCount",
+          "status",
+          "supersededByItemId",
+          "tags",
+          "text",
+          "title",
+          "uniqueManagerCount",
+          "verifiedAt",
+          "verifiedBy"
+        ],
+        "sql_sha256": "20e05031e18965a3c164c760790395bbeaa42c75ad4fe9a4ea79ca85c2a063d3",
+        "reviewed_read_only_functions": []
+      },
+      "evidence": [
+        "gravity-mvp/src/app/settings/ai/actions.ts:2253:32",
+        "analysis_site_signature:e8319859102636b4b4915c12f4c1dccaac2f97309e2fe5853109ef441b95bae6",
+        "sql_sha256:20e05031e18965a3c164c760790395bbeaa42c75ad4fe9a4ea79ca85c2a063d3",
+        "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
+        "source_sha256:e2c7efc7239249ca5e410fe5239263722dc06376563a5213638bb4cbeb5132ab",
+        "sql_provenance_sha256:ec9ca759febe7d209ae59a1215872f392dfa926700246f3e7fc008b096a52777"
+      ]
+    },
+    {
+      "site_signature": "69ae5095adc3a7847274305f5f6a963d449606b60094335bb37a22a0423b4f9c",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+        "line": 2272,
+        "column": 41,
+        "method": "$queryRaw",
+        "source_sha256": "e2c7efc7239249ca5e410fe5239263722dc06376563a5213638bb4cbeb5132ab",
+        "sql_provenance_sha256": "072eb4449e85ffc98f7c15a34bbc5daa583e5f636d08af8446e4667af83fa65c"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "AiKnowledgeSource"
+        ],
+        "selected_columns": [
+          "int"
+        ],
+        "sql_sha256": "a12465741c5b62ecffc57a4bb7e3dd89b0d1acac32ae68d50664be12437afab2",
+        "reviewed_read_only_functions": [
+          "count"
+        ]
+      },
+      "evidence": [
+        "gravity-mvp/src/app/settings/ai/actions.ts:2272:41",
+        "analysis_site_signature:69ae5095adc3a7847274305f5f6a963d449606b60094335bb37a22a0423b4f9c",
+        "sql_sha256:a12465741c5b62ecffc57a4bb7e3dd89b0d1acac32ae68d50664be12437afab2",
+        "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
+        "source_sha256:e2c7efc7239249ca5e410fe5239263722dc06376563a5213638bb4cbeb5132ab",
+        "sql_provenance_sha256:072eb4449e85ffc98f7c15a34bbc5daa583e5f636d08af8446e4667af83fa65c"
+      ]
+    },
+    {
+      "site_signature": "5cff329cbbb30ad80f4a934dadf91c774bdf4c1c77907e08527b8159762e554a",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/src/app/tasks/actions.ts",
+        "line": 552,
+        "column": 36,
+        "method": "$queryRaw",
+        "source_sha256": "42c89e0978f2fdc6bf55c0c1669abec5bdacafda4da75ef5b5dd55fdba397e29",
+        "sql_provenance_sha256": "7cfa92acee3b24982812925728e08643c890a28aa5cac9507687e62378e44b87"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "tasks"
+        ],
+        "selected_columns": [
+          "id",
+          "jsonb",
+          "scenarioData"
+        ],
+        "sql_sha256": "a8bac2a13d9accdbcfadd04e3ec0efc40cc86964e6832404faf1df4a27eef3c5",
+        "reviewed_read_only_functions": []
+      },
+      "evidence": [
+        "gravity-mvp/src/app/tasks/actions.ts:552:36",
+        "analysis_site_signature:5cff329cbbb30ad80f4a934dadf91c774bdf4c1c77907e08527b8159762e554a",
+        "sql_sha256:a8bac2a13d9accdbcfadd04e3ec0efc40cc86964e6832404faf1df4a27eef3c5",
+        "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
+        "source_sha256:42c89e0978f2fdc6bf55c0c1669abec5bdacafda4da75ef5b5dd55fdba397e29",
+        "sql_provenance_sha256:7cfa92acee3b24982812925728e08643c890a28aa5cac9507687e62378e44b87"
+      ]
+    },
+    {
+      "site_signature": "3ee3e1ff772ceba991f2e501083d76c3fad96f5b0fc9831a0f47c1a827f37df8",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/src/app/team-overview/actions.ts",
+        "line": 786,
+        "column": 19,
+        "method": "$queryRawUnsafe",
+        "source_sha256": "19b872a4bc78eb160700d08c37bc2c094416f5e7c00b3e91a5c42a459ba90995",
+        "sql_provenance_sha256": "89323ba208768e5b82f29e1a4c838647f9606e49547d8acf6f5b2d73c3811ea9"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "task_events"
+        ],
+        "selected_columns": [
+          "payload",
+          "text"
+        ],
+        "sql_sha256": "50836b0cd6aff7245ca372648f32d92e3fb6b1574dcc0a9d12577e9d05cbf36c",
+        "reviewed_read_only_functions": [
+          "count",
+          "date",
+          "now"
+        ]
+      },
+      "evidence": [
+        "gravity-mvp/src/app/team-overview/actions.ts:786:19",
+        "analysis_site_signature:3ee3e1ff772ceba991f2e501083d76c3fad96f5b0fc9831a0f47c1a827f37df8",
+        "sql_sha256:50836b0cd6aff7245ca372648f32d92e3fb6b1574dcc0a9d12577e9d05cbf36c",
+        "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
+        "source_sha256:19b872a4bc78eb160700d08c37bc2c094416f5e7c00b3e91a5c42a459ba90995",
+        "sql_provenance_sha256:89323ba208768e5b82f29e1a4c838647f9606e49547d8acf6f5b2d73c3811ea9"
+      ]
+    },
+    {
+      "site_signature": "0c81e542c6ee55171cb049c0570617f3fa9ea12402305bfe8014d2c953c51caa",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/src/app/tg-actions.ts",
+        "line": 1603,
+        "column": 32,
+        "method": "$queryRaw",
+        "source_sha256": "e266804bb3456fd2b906dd42a27339f29f8cd5d4ec1762f0c149953cafa81354",
+        "sql_provenance_sha256": "4f2d1eeb5ec49f7c6be92958707ff276bd1743c7a6e0fcfec2338bbb03cdc61f"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "Chat",
+          "Message"
+        ],
+        "selected_columns": [
+          "SELECT"
+        ],
+        "sql_sha256": "bdef2e15fc02f10219bec9dde14ee6bbfbfa414b85c47686a830d3d15f2f6b53",
+        "reviewed_read_only_functions": [
+          "count",
+          "max",
+          "min"
+        ]
+      },
+      "evidence": [
+        "gravity-mvp/src/app/tg-actions.ts:1603:32",
+        "analysis_site_signature:0c81e542c6ee55171cb049c0570617f3fa9ea12402305bfe8014d2c953c51caa",
+        "sql_sha256:bdef2e15fc02f10219bec9dde14ee6bbfbfa414b85c47686a830d3d15f2f6b53",
+        "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
+        "source_sha256:e266804bb3456fd2b906dd42a27339f29f8cd5d4ec1762f0c149953cafa81354",
+        "sql_provenance_sha256:4f2d1eeb5ec49f7c6be92958707ff276bd1743c7a6e0fcfec2338bbb03cdc61f"
+      ]
+    },
+    {
+      "site_signature": "e1c81095a11532a1ba56e2629b9316a15d42ad5062aa52dfa190283adb26f5e1",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/src/lib/ai/knowledge/callTranscriptBuilder.ts",
+        "line": 82,
+        "column": 24,
+        "method": "$queryRaw",
+        "source_sha256": "f59aa128a3bdbdd79890c8af1fb6f704fe9d0a29b012939cd6bf8bc40f5b2b1f",
+        "sql_provenance_sha256": "01a27bd5035001e8a47fee832a7058c2a4fc7a54ed89029fc6d5e6d816526739"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "Call"
+        ],
+        "selected_columns": [
+          "id",
+          "startedAt",
+          "transcript"
+        ],
+        "sql_sha256": "7c5ed7da00c072677c23d6d9ad2453ed19cfa513e516d03f526699dd786ca7ac",
+        "reviewed_read_only_functions": [
+          "length"
+        ]
+      },
+      "evidence": [
+        "gravity-mvp/src/lib/ai/knowledge/callTranscriptBuilder.ts:82:24",
+        "analysis_site_signature:e1c81095a11532a1ba56e2629b9316a15d42ad5062aa52dfa190283adb26f5e1",
+        "sql_sha256:7c5ed7da00c072677c23d6d9ad2453ed19cfa513e516d03f526699dd786ca7ac",
+        "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
+        "source_sha256:f59aa128a3bdbdd79890c8af1fb6f704fe9d0a29b012939cd6bf8bc40f5b2b1f",
+        "sql_provenance_sha256:01a27bd5035001e8a47fee832a7058c2a4fc7a54ed89029fc6d5e6d816526739"
+      ]
+    },
+    {
+      "site_signature": "040c0d8f2319e57f6b22e2e2dbc3065fe5fbf10ad306e15ff687cf87f3604057",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/src/lib/ai/knowledge/explainability.ts",
+        "line": 227,
+        "column": 29,
+        "method": "$queryRaw",
+        "source_sha256": "43055e025a20615b1b969efee276cb4f0d4961863bd32793b4ffb6810fd43e61",
+        "sql_provenance_sha256": "8f89495ef390d95576c6ca14dd59babaac04b9cf95b49185452e82802b6c2c06"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "AiKnowledgeSource"
+        ],
+        "selected_columns": [
+          "channel",
+          "chatId",
+          "confidence",
+          "createdAt",
+          "excerpt",
+          "id",
+          "itemId",
+          "managerUserId",
+          "messageId",
+          "occurredAt",
+          "originType",
+          "text"
+        ],
+        "sql_sha256": "c606ddba92d3d4c9091f46020afb2b0b0bbed3b44fe2b4c183b7be8791dc818a",
+        "reviewed_read_only_functions": []
+      },
+      "evidence": [
+        "gravity-mvp/src/lib/ai/knowledge/explainability.ts:227:29",
+        "analysis_site_signature:040c0d8f2319e57f6b22e2e2dbc3065fe5fbf10ad306e15ff687cf87f3604057",
+        "sql_sha256:c606ddba92d3d4c9091f46020afb2b0b0bbed3b44fe2b4c183b7be8791dc818a",
+        "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
+        "source_sha256:43055e025a20615b1b969efee276cb4f0d4961863bd32793b4ffb6810fd43e61",
+        "sql_provenance_sha256:8f89495ef390d95576c6ca14dd59babaac04b9cf95b49185452e82802b6c2c06"
+      ]
+    },
+    {
+      "site_signature": "ea322bd576b8b6ee4240ed4611e602b63d1cdcb2befa71a84a886a55afb4ac4f",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/src/lib/ai/knowledge/explainability.ts",
+        "line": 245,
+        "column": 32,
+        "method": "$queryRaw",
+        "source_sha256": "43055e025a20615b1b969efee276cb4f0d4961863bd32793b4ffb6810fd43e61",
+        "sql_provenance_sha256": "92570de14fd5d8449e56276ef98549b5938d51462046be670be8c40df3aa3d57"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "AiKnowledgeAuditLog"
+        ],
+        "selected_columns": [
+          "action",
+          "actor",
+          "createdAt",
+          "id",
+          "itemId",
+          "metadata",
+          "text"
+        ],
+        "sql_sha256": "4b9afb0d5a8c17e140109fa43e461544fb5ea48a732185b7545843c7ddc989d1",
+        "reviewed_read_only_functions": []
+      },
+      "evidence": [
+        "gravity-mvp/src/lib/ai/knowledge/explainability.ts:245:32",
+        "analysis_site_signature:ea322bd576b8b6ee4240ed4611e602b63d1cdcb2befa71a84a886a55afb4ac4f",
+        "sql_sha256:4b9afb0d5a8c17e140109fa43e461544fb5ea48a732185b7545843c7ddc989d1",
+        "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
+        "source_sha256:43055e025a20615b1b969efee276cb4f0d4961863bd32793b4ffb6810fd43e61",
+        "sql_provenance_sha256:92570de14fd5d8449e56276ef98549b5938d51462046be670be8c40df3aa3d57"
+      ]
+    },
+    {
+      "site_signature": "3f0f0682204964ed2be82d5effe35517b5e8eaa97f73dbc4344cbc63d361907f",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/src/lib/ai/knowledge/pairBuilder.ts",
+        "line": 133,
+        "column": 22,
+        "method": "$queryRaw",
+        "source_sha256": "1d7ed3a0c526ca4967bac7cc4d46d7804fc2ccda95919d27dcace2dc0b1f3816",
+        "sql_provenance_sha256": "28aa2f6b91838283b6ee5ab392a47dcfed2fec61b474f9e935b4365e029c493d"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "Chat",
+          "Message",
+          "WhatsAppChat"
+        ],
+        "selected_columns": [
+          "aiStatus",
+          "channel",
+          "chatId",
+          "connectionId",
+          "content",
+          "direction",
+          "externalChatId",
+          "id",
+          "metadata",
+          "sentAt",
+          "text",
+          "type"
+        ],
+        "sql_sha256": "a003efca8bcd485d9d29fb74e31b0be8b2de5058841c0a3dd6f9e7bfca407465",
+        "reviewed_read_only_functions": [
+          "coalesce",
+          "length"
+        ]
+      },
+      "evidence": [
+        "gravity-mvp/src/lib/ai/knowledge/pairBuilder.ts:133:22",
+        "analysis_site_signature:3f0f0682204964ed2be82d5effe35517b5e8eaa97f73dbc4344cbc63d361907f",
+        "sql_sha256:a003efca8bcd485d9d29fb74e31b0be8b2de5058841c0a3dd6f9e7bfca407465",
+        "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
+        "source_sha256:1d7ed3a0c526ca4967bac7cc4d46d7804fc2ccda95919d27dcace2dc0b1f3816",
+        "sql_provenance_sha256:28aa2f6b91838283b6ee5ab392a47dcfed2fec61b474f9e935b4365e029c493d"
+      ]
+    },
+    {
+      "site_signature": "31e7ff73ab8a69a2a5f72de16d08e899a46e9cc48004c42e034335d5e622637c",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/src/lib/ai/knowledge/pairBuilder.ts",
+        "line": 166,
+        "column": 18,
+        "method": "$queryRaw",
+        "source_sha256": "1d7ed3a0c526ca4967bac7cc4d46d7804fc2ccda95919d27dcace2dc0b1f3816",
+        "sql_provenance_sha256": "9edf7e6fa46b727132c90cc399c815329669744204dcfe38ae95570a1af91d77"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "Chat",
+          "Message",
+          "WhatsAppChat"
+        ],
+        "selected_columns": [
+          "aiStatus",
+          "channel",
+          "chatId",
+          "connectionId",
+          "content",
+          "direction",
+          "externalChatId",
+          "id",
+          "metadata",
+          "sentAt",
+          "text",
+          "type"
+        ],
+        "sql_sha256": "1c9406f7de14f23690893a18480eddb693ec6969962ffc7ff53196370495986c",
+        "reviewed_read_only_functions": [
+          "coalesce",
+          "length"
+        ]
+      },
+      "evidence": [
+        "gravity-mvp/src/lib/ai/knowledge/pairBuilder.ts:166:18",
+        "analysis_site_signature:31e7ff73ab8a69a2a5f72de16d08e899a46e9cc48004c42e034335d5e622637c",
+        "sql_sha256:1c9406f7de14f23690893a18480eddb693ec6969962ffc7ff53196370495986c",
+        "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
+        "source_sha256:1d7ed3a0c526ca4967bac7cc4d46d7804fc2ccda95919d27dcace2dc0b1f3816",
+        "sql_provenance_sha256:9edf7e6fa46b727132c90cc399c815329669744204dcfe38ae95570a1af91d77"
+      ]
+    },
+    {
+      "site_signature": "2390d5d610646077ea1572b4ae278b721ceb44b14461dccf8e24817a7b68f541",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/src/lib/ai/knowledge/queries.ts",
+        "line": 249,
+        "column": 28,
+        "method": "$queryRaw",
+        "source_sha256": "2da95a6a5bb9bb4acee386a981d1541595ffcb58343b03d5866a1e99d860eb23",
+        "sql_provenance_sha256": "3c882df776a592e740b43b59d5f30894356383fd94138b8a43f3ebd494ffa773"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "AiKnowledgeSource"
+        ],
+        "selected_columns": [
+          "connectionId",
+          "int",
+          "itemId"
+        ],
+        "sql_sha256": "20f6c37beaa26cb0d91762b82c2a25147da3e52ed5c867dc32a1643332e4929b",
+        "reviewed_read_only_functions": [
+          "bool_or",
+          "count"
+        ]
+      },
+      "evidence": [
+        "gravity-mvp/src/lib/ai/knowledge/queries.ts:249:28",
+        "analysis_site_signature:2390d5d610646077ea1572b4ae278b721ceb44b14461dccf8e24817a7b68f541",
+        "sql_sha256:20f6c37beaa26cb0d91762b82c2a25147da3e52ed5c867dc32a1643332e4929b",
+        "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
+        "source_sha256:2da95a6a5bb9bb4acee386a981d1541595ffcb58343b03d5866a1e99d860eb23",
+        "sql_provenance_sha256:3c882df776a592e740b43b59d5f30894356383fd94138b8a43f3ebd494ffa773"
+      ]
+    },
+    {
+      "site_signature": "1ac9db07b55047f8f0e8b6708e294bf1e033a1e71f5348567b5fb6ee421a6858",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/src/lib/ai/knowledge/Retriever.ts",
+        "line": 184,
+        "column": 22,
+        "method": "$queryRawUnsafe",
+        "source_sha256": "9e8a4bfd44c81e48991d22ed1bb84205e39ba00114b55b94590b0e146a23db58",
+        "sql_provenance_sha256": "7e94284881b339b97cfed84c1106f71fb573e001dc07fbdd362099395391ccde"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "AiKnowledgeItem"
+        ],
+        "selected_columns": [
+          "canonicalStatement",
+          "confidence",
+          "conflictGroupId",
+          "id",
+          "isActive",
+          "isVerified",
+          "safetyLevel",
+          "sectionId",
+          "sourceCount",
+          "status",
+          "supersededByItemId",
+          "tags",
+          "text",
+          "title",
+          "uniqueManagerCount"
+        ],
+        "sql_sha256": "732084c489e5076cb08f958838780127f8ed1324582a5c1d9518e72195008f87",
+        "reviewed_read_only_functions": []
+      },
+      "evidence": [
+        "gravity-mvp/src/lib/ai/knowledge/Retriever.ts:184:22",
+        "analysis_site_signature:1ac9db07b55047f8f0e8b6708e294bf1e033a1e71f5348567b5fb6ee421a6858",
+        "sql_sha256:732084c489e5076cb08f958838780127f8ed1324582a5c1d9518e72195008f87",
+        "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
+        "source_sha256:9e8a4bfd44c81e48991d22ed1bb84205e39ba00114b55b94590b0e146a23db58",
+        "sql_provenance_sha256:7e94284881b339b97cfed84c1106f71fb573e001dc07fbdd362099395391ccde"
+      ]
+    },
+    {
+      "site_signature": "6c84c5974dc29a3cd814144d007c6669c061d6217ca8837671847aaf97206891",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/src/lib/MessageService.ts",
+        "line": 101,
+        "column": 65,
+        "method": "$queryRaw",
+        "source_sha256": "e401a0ef61ea0bebc7650e245221dee470c17e13da26dba6b43cebf92f28f7d2",
+        "sql_provenance_sha256": "9939e2f744c6913ff4ee164c131497ecd9773046d801dbdaf979042276170870"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "Chat"
+        ],
+        "selected_columns": [
+          "assignedToUserId",
+          "chatType",
+          "id",
+          "lastInboundAt",
+          "lastOutboundAt"
+        ],
+        "sql_sha256": "c1e0c276a397686626aac8475ae4d795c72f1185d46ec33c50fd74a99bdd7df0",
+        "reviewed_read_only_functions": []
+      },
+      "evidence": [
+        "gravity-mvp/src/lib/MessageService.ts:101:65",
+        "analysis_site_signature:6c84c5974dc29a3cd814144d007c6669c061d6217ca8837671847aaf97206891",
+        "sql_sha256:c1e0c276a397686626aac8475ae4d795c72f1185d46ec33c50fd74a99bdd7df0",
+        "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
+        "source_sha256:e401a0ef61ea0bebc7650e245221dee470c17e13da26dba6b43cebf92f28f7d2",
+        "sql_provenance_sha256:9939e2f744c6913ff4ee164c131497ecd9773046d801dbdaf979042276170870"
+      ]
+    },
+    {
+      "site_signature": "6fe3c1e8c14600a70e17a2782784bf9dbe45318c0ca596bc87d4ebcd3a1837c4",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/src/lib/tasks/scenario-settings.ts",
+        "line": 62,
+        "column": 24,
+        "method": "$queryRaw",
+        "source_sha256": "d8e8482816b06592d282b7b67ad97c1797d4c05e31596094d0deb0df27b363e0",
+        "sql_provenance_sha256": "a7a8f407828b165c4b8a99b6062c15321c1c2703024437275b43a5f0fb71e400"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "scenario_field_settings"
+        ],
+        "selected_columns": [
+          "fieldId",
+          "filterable",
+          "groupable",
+          "order",
+          "scenarioId",
+          "showInCard",
+          "showInList",
+          "sortable",
+          "updatedAt",
+          "updatedBy"
+        ],
+        "sql_sha256": "a9c16182085c7bd28172571b1b253868a2c0758a81998de071653e130f8bdb24",
+        "reviewed_read_only_functions": []
+      },
+      "evidence": [
+        "gravity-mvp/src/lib/tasks/scenario-settings.ts:62:24",
+        "analysis_site_signature:6fe3c1e8c14600a70e17a2782784bf9dbe45318c0ca596bc87d4ebcd3a1837c4",
+        "sql_sha256:a9c16182085c7bd28172571b1b253868a2c0758a81998de071653e130f8bdb24",
+        "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
+        "source_sha256:d8e8482816b06592d282b7b67ad97c1797d4c05e31596094d0deb0df27b363e0",
+        "sql_provenance_sha256:a7a8f407828b165c4b8a99b6062c15321c1c2703024437275b43a5f0fb71e400"
+      ]
+    },
+    {
+      "site_signature": "490105b516a84ebfd5c94ad7544581e9628ae1f95dffee0c0940ba8b0bfa9dad",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
+        "line": 2388,
+        "column": 32,
+        "method": "$queryRaw",
+        "source_sha256": "967d048235b0449643962b3e34252b72c42449c9a861c4d31329269aba821cc8",
+        "sql_provenance_sha256": "ed89bb46f9301814602e9dd35f125ea97822ab0372122442add1cb86d045b6b5"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "Chat",
+          "Message"
+        ],
+        "selected_columns": [
+          "SELECT",
+          "channel",
+          "chatId",
+          "id",
+          "sentAt"
+        ],
+        "sql_sha256": "50f65e4b92c17e5d333eca535f6635c31d087056d23a2114ff4fb38f516b3927",
+        "reviewed_read_only_functions": [
+          "count",
+          "max",
+          "min"
+        ]
+      },
+      "evidence": [
+        "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts:2388:32",
+        "analysis_site_signature:490105b516a84ebfd5c94ad7544581e9628ae1f95dffee0c0940ba8b0bfa9dad",
+        "sql_sha256:50f65e4b92c17e5d333eca535f6635c31d087056d23a2114ff4fb38f516b3927",
+        "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
+        "source_sha256:967d048235b0449643962b3e34252b72c42449c9a861c4d31329269aba821cc8",
+        "sql_provenance_sha256:ed89bb46f9301814602e9dd35f125ea97822ab0372122442add1cb86d045b6b5"
+      ]
+    },
+    {
+      "site_signature": "b00356e49038391b1ecb1efbefd7c929b2e1e15f2cc6580a32df27a68f04c982",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
+        "line": 43,
+        "column": 35,
+        "method": "$queryRaw",
+        "source_sha256": "013c8d9494def2be0782244423b39994dfa92ea3e79df851a0e12115f05d0292",
+        "sql_provenance_sha256": "45524e0a307e7fe0a938bc8c792ac23b3dfbde857fd4920e8eb7697a111c5587"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "ContactMerge"
+        ],
+        "selected_columns": [
+          "id"
+        ],
+        "sql_sha256": "6c7936b5cfa45134e549041f280f40369d6dfaee8970d4f8ff3c03d7b35b66d2",
+        "reviewed_read_only_functions": []
+      },
+      "evidence": [
+        "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts:43:35",
+        "analysis_site_signature:b00356e49038391b1ecb1efbefd7c929b2e1e15f2cc6580a32df27a68f04c982",
+        "sql_sha256:6c7936b5cfa45134e549041f280f40369d6dfaee8970d4f8ff3c03d7b35b66d2",
+        "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
+        "source_sha256:013c8d9494def2be0782244423b39994dfa92ea3e79df851a0e12115f05d0292",
+        "sql_provenance_sha256:45524e0a307e7fe0a938bc8c792ac23b3dfbde857fd4920e8eb7697a111c5587"
+      ]
+    },
+    {
+      "site_signature": "d0c82d56b1ebc1290af28a4c3add0047a2da0f9ab7cf0643ae9ac5ccd3920fc9",
+      "classification": "READ_ONLY_SQL_PROJECTION",
+      "source": {
+        "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
+        "line": 74,
+        "column": 15,
+        "method": "$queryRaw",
+        "source_sha256": "013c8d9494def2be0782244423b39994dfa92ea3e79df851a0e12115f05d0292",
+        "sql_provenance_sha256": "67174ad2b78080a45043268871cb52572383c2aa0f77796086c8df1d1d010134"
+      },
+      "resolved_target": {
+        "kind": "SQL_READ_PROJECTION",
+        "read_tables": [
+          "Contact"
+        ],
+        "selected_columns": [
+          "FOR",
+          "SELECT",
+          "id"
+        ],
+        "sql_sha256": "89d1cf16e02c6989c59518c3ff4492759d7b3b33359b6060898e8a64a5fbe15c",
+        "reviewed_read_only_functions": []
+      },
+      "evidence": [
+        "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts:74:15",
+        "analysis_site_signature:d0c82d56b1ebc1290af28a4c3add0047a2da0f9ab7cf0643ae9ac5ccd3920fc9",
+        "sql_sha256:89d1cf16e02c6989c59518c3ff4492759d7b3b33359b6060898e8a64a5fbe15c",
+        "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
+        "source_sha256:013c8d9494def2be0782244423b39994dfa92ea3e79df851a0e12115f05d0292",
+        "sql_provenance_sha256:67174ad2b78080a45043268871cb52572383c2aa0f77796086c8df1d1d010134"
+      ]
+    }
+  ]
+}

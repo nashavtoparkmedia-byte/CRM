@@ -5,11 +5,11 @@ import {
     MessageSquare, CheckCircle2, ShieldAlert,
     Trash2, Plus, LogOut, Check, RefreshCw, Smartphone, PauseCircle, PlayCircle, Loader2
 } from "lucide-react"
-import ChannelSyncBlock from "@/components/ChannelSyncBlock"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import ChannelSyncBlock from "@/modules/messaging/public/v1/client-ui/channel-sync-block"
+import { Button } from "@/infrastructure/ui/button"
+import { Input } from "@/infrastructure/ui/input"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/infrastructure/ui/tabs"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/infrastructure/ui/dialog"
 import {
     addMaxConnection,
     disconnectMax,
@@ -19,8 +19,9 @@ import {
     resumeMaxConnection,
     deleteMaxMessages
 } from "../../../max-actions"
+import type { MaxConnectionPublicMetadata } from "@/modules/max-channel/public/v1/max-connection-public-metadata"
 
-export default function MaxLoginClient({ initialConnections = [] }: { initialConnections: any[] }) {
+export default function MaxLoginClient({ initialConnections = [] }: { initialConnections: MaxConnectionPublicMetadata[] }) {
     const [isAddingNew, setIsAddingNew] = useState(initialConnections.length === 0)
     const [activeTab, setActiveTab] = useState("bots")
     
@@ -296,7 +297,9 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
                                                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Активен
                                                         </span>
                                                     )}
-                                                    <span className="text-[11px] text-muted-foreground font-mono">{conn.botToken.substring(0, 10)}...</span>
+                                                    <span className="text-[11px] text-muted-foreground">
+                                                        {conn.botTokenConfigured ? 'токен настроен' : 'токен не настроен'}
+                                                    </span>
                                                 </div>
                                             </div>
                                         </div>

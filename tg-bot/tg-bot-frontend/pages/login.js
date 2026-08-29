@@ -4,11 +4,21 @@ import { useAuth } from '../context/AuthContext';
 export default function Login() {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const [submitting, setSubmitting] = useState(false);
     const { login } = useAuth();
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        login(username, password);
+        setError('');
+        setSubmitting(true);
+        try {
+            await login(username, password);
+        } catch (loginError) {
+            setError(loginError.message);
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
@@ -36,11 +46,13 @@ export default function Login() {
                             onChange={(e) => setPassword(e.target.value)}
                         />
                     </div>
+                    {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
                     <button
                         type="submit"
+                        disabled={submitting}
                         className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
                     >
-                        Войти
+                        {submitting ? 'Вход…' : 'Войти'}
                     </button>
                 </form>
             </div>

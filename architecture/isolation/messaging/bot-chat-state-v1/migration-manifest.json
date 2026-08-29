@@ -1,0 +1,46 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1",
+  "milestone": "CRM-ARCH-007-MESSAGING-BOT-CHAT-STATE",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "712a2f6efcb1923346622f43d58b4f1c77d0f750",
+  "context": "messaging",
+  "caller_context": "platform_shell",
+  "plan": {
+    "id": "migration_d1f7fa71cd1fca3c",
+    "inventory_sites": 2,
+    "executable_production_sites": 1,
+    "sites": [
+      {
+        "id": "write_c9b528fc95e874db36fe",
+        "role": "production",
+        "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+        "model": "Chat",
+        "method": "update",
+        "disposition": "migrated"
+      },
+      {
+        "id": "write_1d6b56ed3c5ab85a86e4",
+        "role": "test",
+        "file": "gravity-mvp/src/lib/__tests__/max-contact-resolution-shadow.test.ts",
+        "model": "Chat",
+        "method": "update",
+        "disposition": "preserved_non_executable_source_assertion"
+      }
+    ]
+  },
+  "contract": "messaging.UpdateConversationCommand.v1",
+  "operation": "mark_requires_response",
+  "dependency": "platform_shell -> messaging.public pre-approved",
+  "command_amendment": "Messaging adds UpdateConversationCommand.v1",
+  "consumer_before_sha256": "68b95da3a82a5bbb2acf5aee29755dbaaa67cdc4cfec1a4f4679fe2408f949c9",
+  "consumer_after_sha256": "17a56dc25734e2b399e0b1cba1a184690514b0daa84ce177571fe3b3380c030b",
+  "enforcement": {
+    "before": 1510,
+    "after": 1509,
+    "retired": [
+      "arch_c54dc79b3e7ac029d5577b88"
+    ],
+    "new_capacity": 0
+  },
+  "rollback": "712a2f6efcb1923346622f43d58b4f1c77d0f750"
+}

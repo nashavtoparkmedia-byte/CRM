@@ -1,0 +1,16 @@
+{
+  "schema": "yoko.crm.mutation-ledger.v1",
+  "milestone": "CRM-ARCH-007-FLEET-DAILY-ACTIVITY",
+  "source": [
+    "RecordDriverDailyActivity v1 contract",
+    "Fleet owner handler and legacy Prisma adapter",
+    "one Messaging consumer migration",
+    "exact command and allowed-dependency amendments",
+    "three exact stale-exception retirements, controls and evidence"
+  ],
+  "production": [],
+  "database": [],
+  "services": [],
+  "deployment": [],
+  "secret_values_read_or_emitted": false
+}

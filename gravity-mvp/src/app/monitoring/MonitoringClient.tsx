@@ -1,14 +1,14 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/infrastructure/ui/button';
 import { Plus } from 'lucide-react';
 import { StatsBar } from './components/StatsBar';
 import { AttentionSection } from './components/AttentionSection';
 import { AllDriversSection } from './components/AllDriversSection';
-import { FleetCheckModal } from './components/FleetCheckModal';
+import { FleetCheckModal } from '@/modules/fleet-operations/public/v1/monitoring-ui/FleetCheckModal';
 import { AddToAttentionModal } from './components/AddToAttentionModal';
-import { ToastProvider, useToast } from './components/Toast';
+import { ToastProvider, useToast } from '@/infrastructure/ui/Toast';
 import type {
     MonitoringDriver, MonitoringStats, AttentionItem,
 } from '@/app/monitoring/lib/types';

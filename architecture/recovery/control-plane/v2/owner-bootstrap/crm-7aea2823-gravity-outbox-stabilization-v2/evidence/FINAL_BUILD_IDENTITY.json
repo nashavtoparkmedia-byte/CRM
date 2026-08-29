@@ -1,0 +1,31 @@
+{
+  "accepted_source_archive_sha256": "be616b7d528bc111717d237bcd745a8b106302897e702be4b8af1b8643cba26d",
+  "accepted_source_commit": "7aea2823efe50e13a156540993d424594025e403",
+  "accepted_source_tree": "dbb380be0775d41b246248a9fe8fbf99bcb38d22",
+  "bootstrap_tar_sha256": "c7823d66ebabc57df7da4bb54c40ee8d78a05964cb7ac7f63bcf04941f7fc048",
+  "build_inputs": {
+    "inputs/migration.sql": "433b0d503f054ed6a8161a059e2650d5e401829dabe8c9d992a1d1763eef0016",
+    "inputs/source.tar.gz": "be616b7d528bc111717d237bcd745a8b106302897e702be4b8af1b8643cba26d",
+    "inputs/yoko-privileged-runtime_2.0.0-8_all.deb": "c342889473f29d37cab47a8b6a88f21aa165d646a910b65dcee9b1a0a62d0289",
+    "packaging/92-yoko-privileged-runtime": "6e6b7cb2a088cc92fa7aee747adca46c64b4b96d1224be21117be5adef488c06",
+    "packaging/build-package.sh": "c6d3ac082f1c1fd129fa87e3648d8263a9424a03966a38ace8272f1c5ddd9ad8",
+    "packaging/control": "ae180c0a8ecc2742b6a3beaafea13801f5db535354da1b4c753c0fdd7a67db4c",
+    "packaging/postinst": "9677999bab5968a50fee444e34819b944b77c60c4062f39ff8d016a6a8bd3290",
+    "src/crm-activation-profile.py": "b87c7b2e77e6ba900bb0d092b343ce132c04e9ea58dfdb8baf4e8f834c85f7ac",
+    "src/policy.v2.base.json": "8727373b0c6ec79c9abf82f1aaaa58abc2bae67e96aa96a602ac419f308db0e0",
+    "src/profile.v1.json": "fac7a25ab76c938696b14e4d283bab107fe67654b1f74608ab96f86c8bed0167",
+    "src/yoko-privileged-runtime": "57daa343cb7cd6ad3cf326d1cd19687362a24b41492bbab5d894188a3045dcda",
+    "src/yoko-privileged-runtime-core.py": "0cdeeb4ba43abe50f80fed1580ad7b0729bf83358932ece2974b3faedafed57a"
+  },
+  "deterministic_bundle_double_build": "PASS",
+  "deterministic_debian_double_build": "PASS",
+  "evidence_generators": {
+    "packaging/build-bootstrap-bundle.sh": "c4bee6fecab4ca4dbdbd684a9456bb5f7ce8b78af7c657b2bf9531cd72d5af00",
+    "packaging/finalize-evidence.py": "99ddc8e353e58ec3d099e37e65d5cfc237d33764890fbd7c4c9d2d581cd1865b",
+    "packaging/finalize-payload.py": "adebde9bc99266ef43b44660b5a8713b28a52e3e75b04d294c4e93c97d4171a5"
+  },
+  "migration_sha256": "433b0d503f054ed6a8161a059e2650d5e401829dabe8c9d992a1d1763eef0016",
+  "package_sha256": "0c259741b4b58992acb830806e42db79ec87730f1b568a21e2879483d739be83",
+  "profile_id": "crm-af9646f5-gravity-outbox-v1",
+  "schema": "yoko.crm.owner-bootstrap-build-identity.v1"
+}

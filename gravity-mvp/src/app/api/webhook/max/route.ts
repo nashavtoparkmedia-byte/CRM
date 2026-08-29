@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { DriverMatchService } from '@/lib/DriverMatchService'
-import { ContactService } from '@/lib/ContactService'
-import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
+import { channelDriverMatchV1 as DriverMatchService } from '@/modules/fleet-operations/public/v1/channel-driver-match'
+import { resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
+import { channelConversationWorkflowV1 as ConversationWorkflowService } from '@/modules/messaging/public/v1/channel-conversation-workflow'
 import crypto from 'crypto'
+import { ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, UPSERT_EXTERNAL_MESSAGE_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { ensureConversationContactLinkV1, linkMatchedDriverToConversationCapabilityV1, patchChannelConversationV1, upsertChannelConversationV1, upsertExternalMessageV1 } from '@/modules/messaging/public/v1'
 
 // PR-Г: placeholder detection — name = "..", ". .", "TG NNN", pure digits.
 // Используется для умного update: новое реальное имя замещает placeholder
@@ -12,7 +14,7 @@ function isPlaceholderName(name?: string | null): boolean {
     if (!name) return true
     const t = name.trim()
     if (!t) return true
-    if (/^(TG|MAX|WA|Telegram|Max|WhatsApp)\s+\d+$/i.test(t)) return true
+    if (/^(TG|MAX|WA|Telegram|Max|WhatsApp)[\s:]+\d+$/i.test(t)) return true
     if (/^\d+$/.test(t)) return true
     if (/^[.\s\-]+$/.test(t)) return true
     return false
@@ -20,6 +22,7 @@ function isPlaceholderName(name?: string | null): boolean {
 
 export async function POST(req: NextRequest) {
     try {
+        console.warn('[WEBHOOK-MAX][legacy] Deprecated route /api/webhook/max received a request; scraper runtime should use /api/webhooks/max')
         const body = await req.json()
         const { phone, text, timestamp, driverName, chatId: maxChatId, senderId, isOutgoing, replyToExternalId, externalId: maxExternalId } = body
 
@@ -33,60 +36,16 @@ export async function POST(req: NextRequest) {
         // Normalize phone. MAX might send just a name (e.g. "Все 2" -> "2" or "Александр" -> "")
         let phoneDigits = (phone || '').replace(/\D/g, '')
 
-        // If we didn't get a valid 10+ digit phone number, try to fuzzy-match by name
+        // If we didn't get a valid 10+ digit phone number, do not derive one
+        // from names or recent chats. Name is not identity proof.
         if (phoneDigits.length < 10) {
-            console.log(`[WEBHOOK-MAX] Phone digits too short (${phoneDigits}) for name "${driverName || phone}". Attempting fuzzy match...`)
-            
-            // 1. First priority: Try to find a Driver matching this name (fuzzy)
-            // This is crucial for linking anonymous scraper messages to existing driver profiles
-            const matchedDriverId = await DriverMatchService.findDriverId({ name: driverName || phone })
-            
-            if (matchedDriverId) {
-                const driver = await (prisma.driver as any).findUnique({ where: { id: matchedDriverId } })
-                if (driver && driver.phone) {
-                    phoneDigits = driver.phone.replace(/\D/g, '')
-                    console.log(`[WEBHOOK-MAX] fuzzy matched to Driver "${driver.fullName}". Bound to phone: ${phoneDigits}`)
-                }
-            } else {
-                // 1.5. Check if there is an active max chat for a driver whose name contains this word
-                // This handles cases where "Александр" is ambiguous (many drivers), but only one "Александр Ремезов" has an active MAX chat
-                const searchName = (driverName || phone).trim();
-                const recentDriverChats = await (prisma.chat as any).findMany({
-                    where: { 
-                        channel: 'max', 
-                        driverId: { not: null } 
-                    },
-                    include: { driver: true },
-                    orderBy: { lastMessageAt: 'desc' },
-                    take: 20
-                });
-
-                const matchedActiveChat = recentDriverChats.find((c: any) => {
-                    if (!c.driver) return false;
-                    const fullName = c.driver.fullName.toLowerCase();
-                    const search = searchName.toLowerCase();
-                    // Require at least 3 chars for fully fuzzy contains() match
-                    if (search.length < 3) {
-                        return fullName === search || fullName.split(/\s+/).includes(search);
-                    }
-                    return fullName.includes(search);
-                });
-                
-                if (matchedActiveChat && matchedActiveChat.driver.phone) {
-                    phoneDigits = matchedActiveChat.driver.phone.replace(/\D/g, '');
-                    console.log(`[WEBHOOK-MAX] Ambiguous name "${searchName}", but linked to active driver "${matchedActiveChat.driver.fullName}" from recent chats. Bound to phone: ${phoneDigits}`);
-                } else {
-                    // 2. Second priority: Check if we already have a MAX chat exactly matching this name (Ghost Chat)
-                    const existingChatByName = await (prisma.chat as any).findFirst({
-                        where: { channel: 'max', name: driverName || phone }
-                    })
-
-                    if (existingChatByName && existingChatByName.externalChatId) {
-                        phoneDigits = existingChatByName.externalChatId.replace('max:', '')
-                        console.log(`[WEBHOOK-MAX] Driver not found, reusing existing Chat name ID: ${phoneDigits}`)
-                    }
-                }
-            }
+            console.warn(JSON.stringify({
+                level: 'warn',
+                event: 'legacy_max_name_phone_resolution_blocked',
+                hasChatId: Boolean(maxChatId),
+                nameLength: String(driverName || phone || '').trim().length,
+            }))
+            phoneDigits = ''
         }
 
         // Use MAX internal chatId as primary identifier (most reliable)
@@ -113,10 +72,7 @@ export async function POST(req: NextRequest) {
             if (oldChat) {
                 const newChat = await (prisma.chat as any).findUnique({ where: { externalChatId: String(maxChatId) } })
                 if (!newChat) {
-                    await (prisma.chat as any).update({
-                        where: { id: oldChat.id },
-                        data: { externalChatId: String(maxChatId) }
-                    })
+                    await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: oldChat.id }, patch: { externalChatId: String(maxChatId) } })
                     console.log(`[WEBHOOK-MAX] MIGRATED chat ${oldChat.id}: ${oldExternalId} → ${maxChatId}`)
                 }
             }
@@ -129,17 +85,26 @@ export async function POST(req: NextRequest) {
             const newExId = String(maxChatId)
             const alreadyExists = await (prisma.chat as any).findUnique({ where: { externalChatId: newExId } })
             if (!alreadyExists) {
-                const driver = await (prisma.driver as any).findFirst({
+                const driverCandidates = await (prisma.driver as any).findMany({
                     where: { phone: { contains: phoneDigits.slice(-10) } }
                 })
-                if (driver) {
+                if (driverCandidates.length === 1) {
+                    const driver = driverCandidates[0]
                     const staleChat = await (prisma.chat as any).findFirst({
                         where: { channel: 'max', driverId: driver.id, externalChatId: { not: newExId } }
                     })
                     if (staleChat) {
-                        await (prisma.chat as any).update({ where: { id: staleChat.id }, data: { externalChatId: newExId } })
+                        await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: staleChat.id }, patch: { externalChatId: newExId } })
                         console.log(`[WEBHOOK-MAX] MIGRATED old-chatId ${staleChat.externalChatId} → ${newExId} (driver ${driver.id})`)
                     }
+                } else if (driverCandidates.length > 1) {
+                    console.warn(JSON.stringify({
+                        level: 'warn',
+                        event: 'legacy_max_old_chat_migration_ambiguous_driver_phone',
+                        phoneSuffix: phoneDigits.slice(-4),
+                        candidateCount: driverCandidates.length,
+                        candidateIds: driverCandidates.map((driver: any) => driver.id),
+                    }))
                 }
             }
         }
@@ -160,25 +125,14 @@ export async function POST(req: NextRequest) {
         })()
 
         if (!unifiedChat) {
-            unifiedChat = await (prisma.chat as any).create({
-                data: {
-                    externalChatId,
-                    channel: 'max',
-                    name: bestName,
-                    lastMessageAt: sentAt,
-                    status: 'new'
-                }
-            })
+            const created = await upsertChannelConversationV1({ contract: UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, externalChatId, channel: 'max', name: bestName, chatType: 'private', metadata: {} })
+            unifiedChat = created.conversation as any
+            await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: sentAt } })
         } else {
             // Update name только если current placeholder, а новое — лучше
             const shouldUpdateName = isPlaceholderName(unifiedChat.name) && !isPlaceholderName(bestName)
-            unifiedChat = await (prisma.chat as any).update({
-                where: { id: unifiedChat.id },
-                data: {
-                    lastMessageAt: sentAt,
-                    ...(shouldUpdateName ? { name: bestName } : {})
-                }
-            })
+            const patched = await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: sentAt, ...(shouldUpdateName ? { name: bestName } : {}) } })
+            unifiedChat = patched.conversation as any
         }
 
         // PR-Г: ContactService integration. Раньше для MAX не вызывался —
@@ -187,30 +141,32 @@ export async function POST(req: NextRequest) {
         // — displayName = bestName (реальное имя или номер)
         try {
             if (phoneDigits && phoneDigits.length >= 10) {
-                const contactResult = await ContactService.resolveContact(
+                const contactResult = await resolveChannelContactOperationV1(
                     'max',
                     phoneDigits,
                     phoneDigits,
                     isPlaceholderName(bestName) ? null : bestName,
                 )
-                await ContactService.ensureChatLinked(
-                    unifiedChat.id,
-                    contactResult.contact.id,
-                    contactResult.identity.id,
-                )
+                await ensureConversationContactLinkV1({
+                    contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
+                    chatId: unifiedChat.id,
+                    contactId: contactResult.contact.id,
+                    contactIdentityId: contactResult.identity.id,
+                })
             } else {
                 // Phone не извлекли — используем externalChatId как identity-id
-                const contactResult = await ContactService.resolveContact(
+                const contactResult = await resolveChannelContactOperationV1(
                     'max',
                     externalChatId,
                     null,
                     isPlaceholderName(bestName) ? null : bestName,
                 )
-                await ContactService.ensureChatLinked(
-                    unifiedChat.id,
-                    contactResult.contact.id,
-                    contactResult.identity.id,
-                )
+                await ensureConversationContactLinkV1({
+                    contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
+                    chatId: unifiedChat.id,
+                    contactId: contactResult.contact.id,
+                    contactIdentityId: contactResult.identity.id,
+                })
             }
         } catch (contactErr: any) {
             console.error(`[WEBHOOK-MAX] ContactService error (non-blocking): ${contactErr.message}`)
@@ -221,7 +177,7 @@ export async function POST(req: NextRequest) {
             const linked = await DriverMatchService.linkChatToDriver(unifiedChat.id, { 
                 phone: phoneDigits,
                 name: driverName || phone
-            })
+            }, linkMatchedDriverToConversationCapabilityV1)
             if (linked) {
                 unifiedChat = await (prisma.chat as any).findUnique({ where: { id: unifiedChat.id } })
             }
@@ -253,19 +209,17 @@ export async function POST(req: NextRequest) {
         })
 
         if (!existingMessage) {
-            await (prisma.message as any).create({
-                data: {
-                    id: messageId,
-                    chatId: unifiedChat.id,
-                    direction,
-                    content: text,
-                    channel: 'max',
-                    type: 'text',
-                    sentAt,
-                    status: 'delivered',
-                    ...(maxExternalId ? { externalId: String(maxExternalId) } : {}),
-                    ...(replyToExternalId ? { metadata: { replyToExternalId } } : {}),
-                }
+            await upsertExternalMessageV1({
+                contract: UPSERT_EXTERNAL_MESSAGE_COMMAND_V1,
+                lookupExternalId: String(maxExternalId || messageId),
+                chatId: unifiedChat.id,
+                direction,
+                type: 'text',
+                content: text,
+                channel: 'max',
+                externalId: maxExternalId ? String(maxExternalId) : messageId,
+                sentAt,
+                metadata: replyToExternalId ? { replyToExternalId } : {},
             })
 
             // Workflow: only trigger inbound workflow for driver messages

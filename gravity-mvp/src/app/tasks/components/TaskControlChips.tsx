@@ -6,8 +6,8 @@
 // narrows the list to matching problem signals.
 // ═══════════════════════════════════════════════════════════════════
 
-import { useFilteredTasks } from '@/store/tasks-selectors'
-import { useListViewStore } from '@/store/list-view-store'
+import { useFilteredTasks } from '@/modules/work-management/public/v1/client-state/task-selectors'
+import { useListViewStore } from '@/modules/work-management/public/v1/client-state/list-view-store'
 import {
     CONTROL_SIGNALS,
     CONTROL_SIGNAL_SHORT_LABELS,

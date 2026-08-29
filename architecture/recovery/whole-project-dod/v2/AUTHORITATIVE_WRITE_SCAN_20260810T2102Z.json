@@ -1,0 +1,55 @@
+{
+  "schema": "yoko.crm.authoritative-write-scan-record.v1",
+  "captured_at": "2026-08-10T21:03:48Z",
+  "classification": "CURRENT_BASELINE_NOT_ACCEPTANCE",
+  "scope": "every Git-tracked executable surface; deleted tracked files excluded",
+  "authority": {
+    "final_scan_count_after_bounded_execution_fix": 1,
+    "prior_attempt": {
+      "path": "architecture/recovery/whole-project-dod/v2/WRITE_EXECUTION_ATTEMPT_1_INTERRUPTED.jsonl",
+      "sha256": "64bf631da59db0b4f4bf81d4bf7616f62888bdd4c22513ddbdb4abab5c9c180b",
+      "classification": "INTERRUPTED_NON_AUTHORITATIVE_NO_BASELINE_MATERIALIZED"
+    }
+  },
+  "source": {
+    "git_commit": "3ab9ad96b5d51aeddaa0a9d87d4f7c9402153257",
+    "git_tree": "05dfbf0d172ba4e3fdbb441f2620f20bff9c4d1f",
+    "tracked_worktree_clean": false,
+    "tracked_worktree_status_sha256": "3f4e1504a1ab3ec932a7f4d2a8cbf057cf123330f20ae88308985cea71288899"
+  },
+  "outputs": {
+    "baseline": {
+      "path": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json",
+      "sha256": "73259b98675789afb00258c1f1fac33c8799202f962b9944001a9bf05cfdf003",
+      "analysis_sha256": "3a9a5005e6897d1eb91b9ec5f504acf5916ffc258becae5b04d364bb6a0d59ae"
+    },
+    "progress": {
+      "path": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_PROGRESS.jsonl",
+      "sha256": "bb77f0b8a5e1f5ebb310f1ec7c61a19cef53b699f8a40abe2b662b7911181ee5",
+      "final_event": "run_finished"
+    }
+  },
+  "execution": {
+    "mode": "fresh_process_per_javascript_surface",
+    "worker_limit": 4,
+    "worker_timeout_ms": 120000,
+    "files_discovered": 1639,
+    "files_completed": 1639,
+    "elapsed_ms": 320082.124511,
+    "worker_failures": 0,
+    "worker_timeouts": 0,
+    "complete": true
+  },
+  "summary": {
+    "discovered_write_sites": 1578,
+    "foreign_writes": 47,
+    "ambiguous_writes": 640,
+    "owner_writes": 420,
+    "operational_script_writes": 488,
+    "unreviewed_operational_surfaces": 438,
+    "migration_only_writes": 468,
+    "raw_sql_writes": 924,
+    "parse_findings": 0
+  },
+  "conclusion": "The bounded analyzer execution is evidenced and the baseline is current. The nonzero foreign, ambiguous, and unreviewed operational results keep EXTERNAL_FINAL_ACCEPTANCE_FAILED and do not close any FINAL-DOD finding."
+}

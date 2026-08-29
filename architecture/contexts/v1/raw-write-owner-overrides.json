@@ -1,0 +1,68 @@
+{
+  "schema": "yoko.crm.raw-write-owner-overrides.v1",
+  "rules": [
+    {
+      "file": "gravity-mvp/src/app/team-overview/actions.ts",
+      "lines": [825, 826, 827],
+      "models": ["intervention_actions"],
+      "owner_contexts": ["operations_observability"],
+      "evidence": "Three calls execute constant DDL/index SQL for intervention_actions."
+    },
+    {
+      "file": "gravity-mvp/src/lib/IntegrityChecker.ts",
+      "lines": [42],
+      "models": ["integrity_check_log"],
+      "owner_contexts": ["operations_observability"],
+      "evidence": "Call executes the constant index DDL paired with integrity_check_log table creation."
+    },
+    {
+      "file": "gravity-mvp/src/lib/RetentionCleanup.ts",
+      "lines": [208],
+      "models": ["DriverEvent", "CommunicationEvent", "ApiLog"],
+      "owner_contexts": ["fleet_operations", "messaging"],
+      "evidence": "Dynamic tableName is called only with hardcoded DriverEvent, CommunicationEvent and ApiLog values; migration must split by owner."
+    },
+    {
+      "file": "gravity-mvp/src/lib/config-validator.ts",
+      "lines": [232],
+      "models": ["config_change_log"],
+      "owner_contexts": ["configuration"],
+      "evidence": "Call executes constant index DDL for config_change_log."
+    },
+    {
+      "file": "gravity-mvp/src/lib/cron-health.ts",
+      "lines": [30],
+      "models": ["cron_health_log"],
+      "owner_contexts": ["operations_observability"],
+      "evidence": "Call executes constant index DDL for cron_health_log."
+    },
+    {
+      "file": "gravity-mvp/src/lib/perf-monitor.ts",
+      "lines": [54, 58],
+      "models": ["perf_log"],
+      "owner_contexts": ["operations_observability"],
+      "evidence": "Both calls execute constant index DDL for perf_log."
+    },
+    {
+      "file": "gravity-mvp/src/lib/stability-check.ts",
+      "lines": [77],
+      "models": ["stability_check_log"],
+      "owner_contexts": ["operations_observability"],
+      "evidence": "Call executes constant index DDL for stability_check_log."
+    },
+    {
+      "file": "gravity-mvp/src/lib/tasks/manager-health-config.ts",
+      "lines": [348, 349],
+      "models": ["health_snapshots"],
+      "owner_contexts": ["operations_observability"],
+      "evidence": "Calls execute constant table/column DDL for health_snapshots."
+    },
+    {
+      "file": "gravity-mvp/src/lib/tasks/manager-health-config.ts",
+      "lines": [350, 351],
+      "models": ["health_score_history"],
+      "owner_contexts": ["operations_observability"],
+      "evidence": "Calls execute constant table/index DDL for health_score_history."
+    }
+  ]
+}

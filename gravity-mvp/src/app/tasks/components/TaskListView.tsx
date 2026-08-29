@@ -1,9 +1,9 @@
 'use client'
 
-import { useFilteredTasks } from '@/store/tasks-selectors'
+import { useFilteredTasks } from '@/modules/work-management/public/v1/client-state/task-selectors'
 import { Inbox } from 'lucide-react'
-import { useTasksStore } from '@/store/tasks-store'
-import { useListViewStore } from '@/store/list-view-store'
+import { useTasksStore } from '@/modules/work-management/public/v1/client-state/task-store'
+import { useListViewStore } from '@/modules/work-management/public/v1/client-state/list-view-store'
 import TaskListRow from './TaskListRow'
 import TaskCaseRow from './TaskCaseRow'
 import TaskCaseListHeader from './TaskCaseListHeader'

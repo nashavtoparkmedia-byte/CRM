@@ -1,0 +1,82 @@
+{
+  "schema": "yoko.crm.live-architecture-debt-closure.v1",
+  "captured_at": "2026-08-12T02:16:00Z",
+  "status": "INTERNALLY_CLOSED_CONTINUE_WHOLE_PROJECT_DOD_RECOVERY",
+  "source": {
+    "commit": "3c8087311caab7912708a1746b2bb5ca3e2c088b",
+    "tree": "60900235f4183400e24d40442df9dd4b5b955483",
+    "branch": "codex/crm-architecture-dod-recovery"
+  },
+  "opening_denominator": {
+    "findings": 1288,
+    "exception_covered": 1281,
+    "uncovered": 7
+  },
+  "current": {
+    "scanned_files": 1270,
+    "contexts": 16,
+    "findings": 0,
+    "exception_covered": 0,
+    "uncovered": 0,
+    "actually_closed": 1288,
+    "temporary_exceptions": 0,
+    "permanent_intentional_candidates": 0,
+    "internal_module_imports": 0,
+    "non_public_cross_context_imports": 0,
+    "undeclared_dependencies": 0,
+    "provider_transport_accesses": 0,
+    "credential_violations": 0,
+    "foreign_writes": 0,
+    "contract_violations": 0,
+    "manifest_violations": 0,
+    "dependency_cycles": 0,
+    "detector_parse_errors": 0,
+    "detector_finding_digest_mismatch": 0,
+    "finding_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+    "exception_registry_sha256": "7066f160ba619f80ff7c12800baa70d89bb636d2454d148ea17cbc4689105a67"
+  },
+  "write_ownership": {
+    "confirmed_writes_discovered": 1404,
+    "confirmed_foreign": 0,
+    "closed_foreign": 53,
+    "material_ambiguous_remaining": 0,
+    "active_operational_surfaces_unclassified": 0,
+    "temporary_exceptions": 0,
+    "intentional_exceptions": 0,
+    "authoritative_scan_rerun": false,
+    "reason": "The closing batch did not materially change the internally accepted write architecture."
+  },
+  "credential_security": {
+    "inventory_artifact": "architecture/recovery/whole-project-dod/v2/CREDENTIAL_DATABASE_ACCESS_ARCHITECTURE_RECONCILIATION_20260812.json",
+    "credential_database_accesses": 401,
+    "secret_reads": 155,
+    "metadata_only_reads": 64,
+    "raw_ambiguous_accesses": 81,
+    "material_unresolved": 0,
+    "public_exposure": 0,
+    "cross_domain_capability_gaps": 0,
+    "gravity_security": "34/34 PASS",
+    "tg_bot_security": "15/15 PASS",
+    "independent_critic": "PASS"
+  },
+  "validation": {
+    "architecture_enforcement": "PASS; 0 findings and 0 exceptions",
+    "architecture_negative_suite": "29/29 PASS",
+    "context_manifests": "PASS; 16 contexts and 106 dependency relationships",
+    "context_checksums": "PASS",
+    "cron_behavior": "11/11 PASS",
+    "cron_boundary_negative_probe": "PASS; unrelated capability rejected",
+    "contract_boundaries": "PASS",
+    "credential_field_registry": "14 policies PASS",
+    "gravity_security": "34/34 PASS",
+    "static_sql_ownership": "5/5 PASS",
+    "typescript": "30 inherited diagnostics; no changed-path diagnostic"
+  },
+  "protected_state": {
+    "messages_behavior_changed_by_closing_batch": false,
+    "ai_calls_worktree_mutated": false,
+    "production_mutated": false
+  },
+  "next_cluster": "AUTHORITATIVE_CI_AFTER_DEBT_CLOSURE",
+  "whole_project_verdict": "NOT_READY"
+}

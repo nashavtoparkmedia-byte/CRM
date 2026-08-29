@@ -1,0 +1,19 @@
+{
+  "schema": "yoko.crm.owner-bootstrap-remediation-map.v1",
+  "rejected_artifact_sha256": "439b4a104c950b4e6d59895a727eb2adf800143c06a4a77b2bc8a70d8f089047",
+  "rejected_artifact_status": "REJECTED_SUPERSEDED_NEVER_EXECUTE",
+  "current_source_status": "REMEDIATION_PRESENT_EXACT_SHA_CRITIC_PASS",
+  "findings": [
+    {
+      "id": "SIXTH-CRITIC-001",
+      "remediation": "The receipt now contains an exact post_state_digest computed without the receipt. Reconciliation proves the current receipt-free state matches before reading/appending any terminal record, then atomically rewrites durable state without the receipt and updates the in-memory state. A crash before consumption is idempotently reconciled; a receipt inherited into any later phase fails closed without growing audit.",
+      "evidence": [
+        "src/crm-activation-profile.py::_write_terminal_state",
+        "src/crm-activation-profile.py::_reconcile_terminal_audit",
+        "src/crm-activation-profile.py::_terminal_audit_matches",
+        "tests/test_package_and_runtime.py::test_terminal_audit_receipt_reconciles_exactly_once_after_crash_window",
+        "tests/test_package_and_runtime.py::test_terminal_receipt_cannot_follow_state_into_a_later_phase"
+      ]
+    }
+  ]
+}

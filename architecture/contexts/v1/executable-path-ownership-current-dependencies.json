@@ -1,0 +1,160 @@
+{
+  "schema": "yoko.crm.executable-path-ownership-current-dependencies.v1",
+  "version": 1,
+  "current_live": {
+    "authority": {
+      "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
+      "schema": "yoko.crm.executable-path-ownership-coverage.v1"
+    },
+    "authority_boundary": {
+      "executable": "tools/architecture/validate-executable-path-ownership.mjs",
+      "interface": "FINITE_PROCESS_OPERATIONS_ONLY",
+      "single_authority_reader_executable": true,
+      "authority_capability_exports": 0,
+      "raw_authority_reader_module_api_removed": true,
+      "authority_paths_private_to_orchestrator": true,
+      "operations": [
+        "validate",
+        "generate_contexts",
+        "materialize_reviewed_current_denominator"
+      ],
+      "authority_sources": [
+        {
+          "role": "current_coverage",
+          "path": "architecture/contexts/v1/executable-path-ownership-coverage.json"
+        },
+        {
+          "role": "current_dependencies",
+          "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json"
+        },
+        {
+          "role": "historical_baseline",
+          "path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_COVERAGE_BASELINE_2108.json"
+        },
+        {
+          "role": "reviewed_decisions",
+          "path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json"
+        }
+      ],
+      "reusable_helpers": [
+        {
+          "path": "tools/architecture/enrich-context-manifests.mjs",
+          "authority_io": false,
+          "raw_authority_paths": false,
+          "inputs": "EXPLICIT_INJECTED_DATA"
+        },
+        {
+          "path": "tools/architecture/generate-context-manifests.mjs",
+          "authority_io": false,
+          "raw_authority_paths": false,
+          "inputs": "EXPLICIT_INJECTED_DATA"
+        }
+      ],
+      "former_consumer_transitions": [
+        {
+          "path": "tools/architecture/__tests__/context-manifests.test.mjs",
+          "imports_authority": false,
+          "data_flow": "pure context fixtures into context validation helpers"
+        },
+        {
+          "path": "tools/architecture/generate-context-manifests.mjs",
+          "imports_authority": false,
+          "data_flow": "process delegation to orchestrator then injected bytes into generation operation"
+        },
+        {
+          "path": "tools/architecture/test-executable-path-ownership.mjs",
+          "imports_authority": false,
+          "data_flow": "process result and module namespace assertions without raw authority documents"
+        },
+        {
+          "path": "tools/architecture/validate-context-manifests.mjs",
+          "imports_authority": false,
+          "data_flow": "context-only bundle into pure context validators"
+        },
+        {
+          "path": "tools/architecture/v2/independent-critic-final-gate.mjs",
+          "imports_authority": false,
+          "data_flow": "finite validation process result containing derived summary only"
+        }
+      ],
+      "retired_mechanisms": [
+        "node_equivalent_identity_enumeration",
+        "source_language_loader_enumeration",
+        "terminal_authority_consumer_import_grammar",
+        "authority_capability_import_discovery",
+        "arbitrary_javascript_dataflow"
+      ],
+      "threat_model": {
+        "repository_source": "REVIEWED_SAME_TRUST_SOURCE",
+        "candidate_identity": "IMMUTABLE_COMMIT_SHA_AND_SEAL",
+        "authority_api": "PROCESS_INTERNAL_ONLY",
+        "malicious_same_trust_arbitrary_file_reads": "OUT_OF_SCOPE_NOT_A_SECURITY_SANDBOX"
+      }
+    },
+    "derived_fields": {
+      "tracked_executable_surfaces": "/source/tracked_executable_surfaces",
+      "tracked_inventory_sha256": "/source/tracked_inventory_sha256",
+      "coverage_sha256": "/coverage_sha256"
+    },
+    "derivation_inputs": [
+      {
+        "role": "tracked_surface_inventory",
+        "path": "tools/architecture/v2/tracked-surface-inventory.mjs"
+      },
+      {
+        "role": "lifecycle_registry",
+        "path": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json"
+      },
+      {
+        "role": "context_manifest_index",
+        "path": "architecture/contexts/v1/context-index.json"
+      },
+      {
+        "role": "reviewed_decisions",
+        "path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json"
+      },
+      {
+        "role": "historical_baseline",
+        "path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_COVERAGE_BASELINE_2108.json"
+      }
+    ],
+    "authority_direction": [
+      "repository_tracked_paths_modes_and_lifecycle_metadata",
+      "tracked_surface_inventory",
+      "reviewed_decisions_over_historical_baseline",
+      "single_authority_reader_executable",
+      "pure_injected_data_helpers",
+      "validation_and_generated_outputs"
+    ],
+    "inventory_identity_inputs": [
+      "tracked_path",
+      "git_mode",
+      "lifecycle_and_registry_metadata",
+      "working_tree_deleted"
+    ],
+    "inventory_identity_excludes": [
+      "ordinary_unregistered_source_bytes"
+    ]
+  },
+  "historical_negative_fixtures": [
+    {
+      "id": "working_tree_deleted_pinned_repository_state_v2",
+      "schema": "yoko.crm.executable-path-ownership-historical-working-tree-deletion.v2",
+      "candidate": "7aea2823efe50e13a156540993d424594025e403",
+      "path": "tools/architecture/validate-context-manifests.mjs",
+      "mutation": {
+        "kind": "working_tree_deleted"
+      },
+      "expected": {
+        "candidate_tree": "dbb380be0775d41b246248a9fe8fbf99bcb38d22",
+        "git_mode": "100644",
+        "blob_oid": "1c67aade24afd509818ffc6e303f94cc274e2b11",
+        "source_sha256": "3ddc60842b4bd5da1d2e2dd472efcc0473c054b1afd108edbad09ee73a45846a",
+        "clean_inventory_sha256": "b3c2d8d9d8fed6859df119dcfb35cc38c075d6eabcf42f600371eb99e3a43d62",
+        "working_tree_deleted_inventory_sha256": "00920323e3ed16cb19231b1342b9d1a3e5a255834fe96c455f50f29afdd65490",
+        "mutation_provenance_sha256": "b19a2f890d401bc2fb4fa32163a87e3138f8e7814915b7b97519796c64c60fd0"
+      },
+      "expected_failure": "materialization requires a clean exact candidate checkout"
+    }
+  ]
+}

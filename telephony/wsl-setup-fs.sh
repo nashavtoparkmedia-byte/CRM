@@ -27,9 +27,10 @@ cp "${CONF_SRC}/sip_profiles/internal.xml" "${FS_PREFIX}/conf/sip_profiles/inter
 mkdir -p "${FS_PREFIX}/conf/sip_profiles/external"
 cp "${CONF_SRC}/sip_profiles/external/megafon.xml" "${FS_PREFIX}/conf/sip_profiles/external/megafon.xml"
 
-# directory (extension users 101/102)
+# directory (extension users 101/102/103)
 cp "${CONF_SRC}/directory/default/101.xml" "${FS_PREFIX}/conf/directory/default/101.xml"
 cp "${CONF_SRC}/directory/default/102.xml" "${FS_PREFIX}/conf/directory/default/102.xml"
+cp "${CONF_SRC}/directory/default/103.xml" "${FS_PREFIX}/conf/directory/default/103.xml"
 
 # dialplan (megafon inbound, user outbound). 01_megafon_outbound.xml is
 # DEPRECATED — it matched the same regex as 03_user_outbound.xml but came

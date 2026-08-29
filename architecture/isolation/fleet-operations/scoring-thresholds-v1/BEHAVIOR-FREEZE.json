@@ -1,0 +1,22 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1",
+  "milestone": "CRM-ARCH-007-FLEET-SCORING",
+  "base_commit": "fc43a3170f43b0166c0733c4c22de6d7bd1061b3",
+  "captured_at": "2026-08-09T16:08:03Z",
+  "consumer": "gravity-mvp/src/app/settings/scoring/actions.ts",
+  "consumer_sha256": "35f64e42644e959a64aab0e3fde7e27e4c149f05ab25d6a518fe881f4895924b",
+  "behavior": [
+    "accept a Record<string, number> including an empty record",
+    "upsert every own entry in Object.entries insertion order",
+    "use key as the unique selector and value for both update and create",
+    "await each upsert sequentially",
+    "revalidate /settings/scoring and /drivers only after persistence succeeds",
+    "persistence failures remain visible to the caller"
+  ],
+  "out_of_scope": [
+    "ScoringThreshold reads and default values",
+    "settings UI behavior",
+    "database schema or data",
+    "production activation"
+  ]
+}

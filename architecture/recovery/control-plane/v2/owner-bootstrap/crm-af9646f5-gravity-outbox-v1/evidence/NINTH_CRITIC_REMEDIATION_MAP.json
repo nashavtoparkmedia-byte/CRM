@@ -1,0 +1,18 @@
+{
+  "schema": "yoko.crm.owner-bootstrap-remediation-map.v1",
+  "rejected_artifact_sha256": "8843dfc38b333346e0e74a6d9f3ba20e2c9c167979c8d1fee6a47d126026f62e",
+  "rejected_artifact_status": "REJECTED_SUPERSEDED_NEVER_EXECUTE",
+  "current_source_status": "REMEDIATION_PRESENT_EXACT_SHA_CRITIC_PASS",
+  "findings": [
+    {
+      "id": "NINTH-CRITIC-001",
+      "remediation": "Interrupted repair captures the resolve start outcome, unconditionally quiesces both exact sealed runners, and only then reads the ledger. If the exact resolved poststate is absent it rethrows the original start fault; a reconciled exact poststate may proceed. Tests inventory exactly three production prepared-runner call sites and dynamically prove both successful and failed resolve orderings.",
+      "evidence": [
+        "src/crm-activation-profile.py::_repair_interrupted_outbox_migration",
+        "tests/test_package_and_runtime.py::test_all_prepared_production_runner_call_sites_have_post_outcome_quiesce",
+        "tests/test_package_and_runtime.py::test_interrupted_migration_repair_is_fixed_empty_cleanup_then_resolve",
+        "tests/test_package_and_runtime.py::test_interrupted_resolve_failure_quiesces_before_ledger_and_rethrows"
+      ]
+    }
+  ]
+}

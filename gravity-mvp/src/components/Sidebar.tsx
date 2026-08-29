@@ -3,9 +3,9 @@
 import React, { useState, useEffect } from "react";
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { cn } from "@/lib/utils";
+import { cn } from "@/infrastructure/ui/class-names";
 import { DOMAINS, NavigationDomain } from "@/config/navigation-domains";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/infrastructure/ui/tooltip";
 
 export function Sidebar() {
     const pathname = usePathname();
@@ -16,6 +16,7 @@ export function Sidebar() {
     const [isOpen, setIsOpen] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
     const [hoveredDomainKey, setHoveredDomainKey] = useState<string | null>(null);
+    const [isMobileRailOpen, setIsMobileRailOpen] = useState(false);
     
     // Track last visited section per domain
     const [lastVisited, setLastVisited] = useState<Record<string, string>>({});
@@ -38,10 +39,32 @@ export function Sidebar() {
 
     useEffect(() => {
         setMounted(true);
-        const handleResize = () => setIsMobile(window.innerWidth < 1200);
+        const handleResize = () => {
+            const nextIsMobile = window.innerWidth < 1200;
+            setIsMobile(nextIsMobile);
+            if (!nextIsMobile) {
+                setIsMobileRailOpen(false);
+            }
+        };
         handleResize();
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    useEffect(() => {
+        const handleMobileToggle = () => {
+            setIsMobileRailOpen(prev => {
+                const next = !prev;
+                if (!next) {
+                    setIsOpen(false);
+                    setIsHovered(false);
+                    setHoveredDomainKey(null);
+                }
+                return next;
+            });
+        };
+        window.addEventListener('crm:toggle-mobile-sidebar', handleMobileToggle);
+        return () => window.removeEventListener('crm:toggle-mobile-sidebar', handleMobileToggle);
     }, []);
 
     // Deep link behavior: update active domain
@@ -59,6 +82,13 @@ export function Sidebar() {
             if (!pathname.startsWith('/messages') && !pathname.startsWith('/settings')) {
                 localStorage.setItem('last_crm_route', pathname);
             }
+
+            if (isMobile) {
+                setIsMobileRailOpen(false);
+                setIsOpen(false);
+                setIsHovered(false);
+                setHoveredDomainKey(null);
+            }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pathname, mounted]);
@@ -70,6 +100,9 @@ export function Sidebar() {
     const handleDomainClick = (e: React.MouseEvent, domain: NavigationDomain) => {
         e.preventDefault();
         setActiveDomainKey(domain.key);
+        if (isMobile) {
+            setIsMobileRailOpen(true);
+        }
         setIsOpen(true); // Open panel on click
         
         const firstItemHref = domain.items?.[0]?.href || domain.groups?.[0]?.items?.[0]?.href;
@@ -79,35 +112,47 @@ export function Sidebar() {
         }
     };
 
-    const handleLinkClick = () => {
-        // Auto-collapse after clicking a section link
+    const closeMobileRail = () => {
+        setIsMobileRailOpen(false);
         setIsOpen(false);
         setIsHovered(false);
         setHoveredDomainKey(null);
     };
 
+    const handleLinkClick = () => {
+        // Auto-collapse after clicking a section link
+        setIsOpen(false);
+        setIsHovered(false);
+        setHoveredDomainKey(null);
+        if (isMobile) {
+            setIsMobileRailOpen(false);
+        }
+    };
+
     if (!mounted) return <div className="w-[72px] h-screen border-r border-[#e5e7eb] bg-white flex-shrink-0" />; 
 
-    const showContextPanel = !displayDomain.hideContextPanel && (isOpen || isHovered);
+    const showMobileRail = !isMobile || isMobileRailOpen;
+    const showContextPanel = showMobileRail && !displayDomain.hideContextPanel && (isOpen || isHovered);
     const contextPanelWidth = showContextPanel ? 280 : 0;
     
-    // On mobile, the sidebar footprint is always 72px (panel is strict overlay)
-    // On desktop, the sidebar footprint expands to push content
-    const sidebarWidth = isMobile ? 72 : 72 + contextPanelWidth;
+    // On mobile, the sidebar is an overlay drawer and can fully retract.
+    // On desktop, the sidebar footprint expands to push content.
+    const sidebarWidth = isMobile ? (showMobileRail ? 72 : 0) : 72 + contextPanelWidth;
 
     return (
         <TooltipProvider delayDuration={300}>
             {/* Mobile / Overlay background */}
-            {isMobile && showContextPanel && (
+            {isMobile && showMobileRail && (
                 <div 
                     className="fixed inset-0 bg-black/20 z-40 transition-opacity" 
-                    onClick={() => setIsOpen(false)}
+                    onClick={closeMobileRail}
                 />
             )}
 
             <div 
                 className={cn(
                     "fixed left-0 top-0 flex flex-shrink-0 h-[100vh] transition-all duration-300 z-50 bg-background",
+                    isMobile && !showMobileRail && "pointer-events-none"
                 )}
                 style={{ width: sidebarWidth }}
                 onMouseEnter={() => !isMobile && setIsHovered(true)}
@@ -119,10 +164,27 @@ export function Sidebar() {
                 }}
             >
                 {/* 1. ICON RAIL (Fixed 72px) */}
-                <aside className="w-[72px] h-full bg-[#ffffff] border-r border-[#e5e7eb] flex flex-col items-center py-[4px] flex-shrink-0 z-50">
-                    <div className="mb-6 flex h-[40px] w-[40px] flex-shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground cursor-pointer shadow-sm">
+                <aside className={cn(
+                    "w-[72px] h-full bg-[#ffffff] border-r border-[#e5e7eb] flex flex-col items-center py-[4px] flex-shrink-0 z-50 transition-transform duration-300",
+                    isMobile && !showMobileRail ? "-translate-x-full" : "translate-x-0"
+                )}>
+                    <button
+                        type="button"
+                        aria-label={isMobile && showMobileRail ? "Скрыть меню" : "Открыть меню"}
+                        aria-expanded={isMobile ? showMobileRail : undefined}
+                        onClick={() => {
+                            if (isMobile) {
+                                if (showMobileRail) {
+                                    closeMobileRail();
+                                } else {
+                                    setIsMobileRailOpen(true);
+                                }
+                            }
+                        }}
+                        className="mb-6 flex h-[40px] w-[40px] flex-shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground cursor-pointer shadow-sm border-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                    >
                         <span className="font-bold text-lg">Y</span>
-                    </div>
+                    </button>
 
                     <nav className="flex flex-col gap-[2px] flex-1 w-full items-center">
                         {DOMAINS.map(domain => {

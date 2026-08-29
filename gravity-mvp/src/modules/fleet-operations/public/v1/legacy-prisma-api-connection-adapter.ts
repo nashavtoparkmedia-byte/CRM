@@ -1,0 +1,2 @@
+import{prisma}from'@/lib/prisma';import type{ApiConnectionPersistencePortV1}from'./api-connection-handler'
+export const legacyPrismaApiConnectionPortV1:ApiConnectionPersistencePortV1={async create(input){await prisma.apiConnection.create({data:{clid:input.clid,apiKey:input.apiKey,parkId:input.parkId,name:input.name}})},async updateName(connectionId,name){await prisma.apiConnection.update({where:{id:connectionId},data:{name}})},async delete(connectionId){await prisma.apiConnection.delete({where:{id:connectionId}})}}

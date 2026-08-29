@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { DELETE_HISTORY_IMPORT_JOB_COMMAND_V1, UPDATE_HISTORY_IMPORT_JOB_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { deleteHistoryImportJobV1, updateHistoryImportJobV1 } from '@/modules/messaging/public/v1'
 
 export async function DELETE(
     _req: NextRequest,
@@ -7,7 +9,7 @@ export async function DELETE(
 ) {
     try {
         const { id } = await params
-        await prisma.$executeRaw`DELETE FROM "HistoryImportJob" WHERE id = ${id}`
+        await deleteHistoryImportJobV1({ contract: DELETE_HISTORY_IMPORT_JOB_COMMAND_V1, jobId: id })
         return NextResponse.json({ ok: true })
     } catch (e: any) {
         return NextResponse.json({ error: e.message }, { status: 500 })
@@ -52,29 +54,7 @@ export async function PATCH(
             if (dateRange[0]?.max_date) realTo   = dateRange[0].max_date
         } catch {}
 
-        await prisma.$executeRawUnsafe(
-            `UPDATE "HistoryImportJob"
-            SET
-                status            = '${status}'::"AiImportStatus",
-                "resultType"      = $1,
-                "messagesImported"= $2,
-                "chatsScanned"    = $3,
-                "contactsFound"   = $4,
-                "startedAt"       = $5,
-                "finishedAt"      = $6,
-                "coveredPeriodFrom" = $7,
-                "coveredPeriodTo"   = $8
-            WHERE id = $9`,
-            resultType ?? null,
-            messagesImported ?? 0,
-            chatsScanned ?? 0,
-            contactsFound ?? 0,
-            startedAt ? new Date(startedAt) : null,
-            finishedAt ? new Date(finishedAt) : null,
-            realFrom,
-            realTo,
-            id
-        )
+        await updateHistoryImportJobV1({ contract: UPDATE_HISTORY_IMPORT_JOB_COMMAND_V1, jobId: id, status, resultType: resultType ?? null, messagesImported: messagesImported ?? 0, chatsScanned: chatsScanned ?? 0, contactsFound: contactsFound ?? 0, startedAt: startedAt ? new Date(startedAt) : null, finishedAt: finishedAt ? new Date(finishedAt) : null, coveredPeriodFrom: realFrom, coveredPeriodTo: realTo })
 
         return NextResponse.json({ ok: true })
     } catch (e: any) {

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { DELETE_DRIVER_TELEGRAM_LINK_COMMAND_V1, DISMISS_BOT_LINK_REQUEST_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
+import { deleteDriverTelegramLinkV1, dismissBotLinkRequestV1 } from '@/modules/telegram-channel/public/v1'
 
 // GET /api/bot-users — linked drivers + pending link requests
 export async function GET() {
@@ -93,12 +95,12 @@ export async function DELETE(req: NextRequest) {
   const requestId = req.nextUrl.searchParams.get('requestId')
 
   if (telegramId) {
-    await prisma.driverTelegram.deleteMany({ where: { telegramId: BigInt(telegramId) } })
+    await deleteDriverTelegramLinkV1({ contract: DELETE_DRIVER_TELEGRAM_LINK_COMMAND_V1, telegramId: BigInt(telegramId) })
     return NextResponse.json({ success: true })
   }
 
   if (requestId) {
-    await prisma.botChatMessage.deleteMany({ where: { id: requestId } })
+    await dismissBotLinkRequestV1({ contract: DISMISS_BOT_LINK_REQUEST_COMMAND_V1, requestId })
     return NextResponse.json({ success: true })
   }
 

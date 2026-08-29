@@ -1,0 +1,6 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1", "milestone": "CRM-ARCH-007-AI-DECISION-REVIEW", "status": "PASS_CONTINUE_SOURCE_GATE", "base_commit": "19f210641f023fcdf5ee79c3b8f8336eb9eb08ec", "context": "ai_knowledge", "caller_context": "configuration",
+  "plan": {"id": "migration_9896cb76f4eeb68a", "site_id": "write_3773971fa5f1951e4569", "file": "gravity-mvp/src/app/settings/ai/actions.ts", "model": "AiDecisionLog", "method": "$executeRaw", "role": "production"},
+  "contract": "ai_knowledge.ReviewAiDecisionCommand.v1", "dependency": "configuration -> ai_knowledge.public pre-approved", "consumer_before_sha256": "297e9fb8bc6053fa80238334b4df66eea45b988582dd09157cb1de1378c2c034", "consumer_after_sha256": "7494ea6fb3c4500bb7836592dbe2fa2a81269a10386f4e70cf2c7ea28dd40fcf",
+  "enforcement": {"before": 1503, "after": 1502, "retired": ["arch_92ce1243dbfced1448d407ae"], "new_capacity": 0}, "execution_performed": false, "rollback": "19f210641f023fcdf5ee79c3b8f8336eb9eb08ec"
+}

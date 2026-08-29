@@ -1,0 +1,87 @@
+{
+  "allowed_dependencies": [
+    {
+      "context": "platform_shell",
+      "surface": "platform_shell.public"
+    },
+    {
+      "context": "telegram_channel",
+      "surface": "telegram_channel.public"
+    },
+    {
+      "context": "calling",
+      "surface": "calling.public"
+    }
+  ],
+  "commands": [],
+  "compatibility_strategy": "Keep all current public paths stable; route changes require additive aliases and Nginx syntax/health verification.",
+  "context": {
+    "id": "edge_delivery",
+    "name": "Edge Delivery"
+  },
+  "credential_relationships": {
+    "database_models": [],
+    "environment_names": [],
+    "policy": "Names and access locations only. Values stay inside the owning adapter and never cross a public contract."
+  },
+  "events": [],
+  "evidence": {
+    "dependency_edges": 0,
+    "source_snapshot_sha256": "2713db175062bb673dcca2d97e80c2ae204a2f257438036c6db2506587dfad7d",
+    "write_sites_requiring_migration": 0
+  },
+  "forbidden_dependencies": [
+    "credentialValuesInContracts",
+    "directForeignPrismaWrites",
+    "domain_database",
+    "providerImplementationImportsOutsideOwningContext",
+    "provider_credentials",
+    "unversionedCrossContextPayloads"
+  ],
+  "foreign_write_migration_plans": [],
+  "internal_surface": [
+    "deploy/nginx"
+  ],
+  "owned_data": [],
+  "owned_paths": [
+    "deploy/nginx"
+  ],
+  "owner": {
+    "accountability": "Edge Delivery bounded-context owner",
+    "context": "edge_delivery"
+  },
+  "protected": true,
+  "provider_relationships": [],
+  "public_surface": [
+    "ExternalHttpRoutes.v1"
+  ],
+  "responsibility": "Nginx routing, TLS termination and stable external route compatibility.",
+  "schema": "yoko.crm.module-manifest.v1",
+  "technical_modules": [
+    "nginx"
+  ],
+  "verification": {
+    "architecture_checks": [
+      "node tools/architecture/validate-context-manifests.mjs",
+      "node tools/architecture/enforce-architecture.mjs",
+      "node tools/architecture/test-architecture-enforcement.mjs"
+    ],
+    "blast_radius": {
+      "consumer_contexts": [],
+      "owner_context": "edge_delivery",
+      "provider_scope": "NOT_APPLICABLE",
+      "provider_siblings": []
+    },
+    "build_checks": [
+      "node tools/architecture/check-typescript-baseline.mjs"
+    ],
+    "contract_tests": [
+      "node tools/architecture/validate-contract-registry.mjs",
+      "node tools/architecture/check-contract-boundaries.mjs"
+    ],
+    "module_tests": [
+      "node tools/architecture/check-calling-client-ui-boundary.mjs"
+    ]
+  },
+  "version": 1
+}

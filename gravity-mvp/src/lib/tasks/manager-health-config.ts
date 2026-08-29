@@ -306,51 +306,7 @@ export function calculateHealthTrend(current: number, previous: number | null): 
     return 'stable'
 }
 
-// ─── Snapshot persistence (raw SQL, no migrations) ──────────
-
-import { prisma } from '@/lib/prisma'
-
-const ENSURE_TABLE_SQL = `
-CREATE TABLE IF NOT EXISTS health_snapshots (
-  manager_id TEXT PRIMARY KEY,
-  score INTEGER NOT NULL,
-  decline_streak INTEGER NOT NULL DEFAULT 0,
-  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-)`
-
-const ENSURE_COLUMN_SQL = `
-DO $$ BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_name = 'health_snapshots' AND column_name = 'decline_streak'
-  ) THEN
-    ALTER TABLE health_snapshots ADD COLUMN decline_streak INTEGER NOT NULL DEFAULT 0;
-  END IF;
-END $$`
-
-const ENSURE_HISTORY_TABLE_SQL = `
-CREATE TABLE IF NOT EXISTS health_score_history (
-  id SERIAL PRIMARY KEY,
-  manager_id TEXT NOT NULL,
-  score INTEGER NOT NULL,
-  health_level TEXT NOT NULL,
-  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-)`
-
-const ENSURE_HISTORY_INDEX_SQL = `
-CREATE INDEX IF NOT EXISTS idx_hsh_manager_date
-  ON health_score_history (manager_id, recorded_at DESC)`
-
-let tableEnsured = false
-
-async function ensureTable() {
-    if (tableEnsured) return
-    await prisma.$executeRawUnsafe(ENSURE_TABLE_SQL)
-    await prisma.$executeRawUnsafe(ENSURE_COLUMN_SQL)
-    await prisma.$executeRawUnsafe(ENSURE_HISTORY_TABLE_SQL)
-    await prisma.$executeRawUnsafe(ENSURE_HISTORY_INDEX_SQL)
-    tableEnsured = true
-}
+// ─── Snapshot data shapes ──────────────────────────────────
 
 export interface HealthSnapshot {
     managerId: string
@@ -365,60 +321,6 @@ export interface PreviousHealthData {
 }
 
 /**
- * Read previous health scores and decline streaks for all managers.
- */
-export async function getPreviousHealthScores(): Promise<Map<string, PreviousHealthData>> {
-    await ensureTable()
-    const rows: { manager_id: string; score: number; decline_streak: number }[] =
-        await prisma.$queryRawUnsafe('SELECT manager_id, score, decline_streak FROM health_snapshots')
-    const map = new Map<string, PreviousHealthData>()
-    for (const r of rows) map.set(r.manager_id, { score: r.score, declineStreak: r.decline_streak })
-    return map
-}
-
-/**
- * Upsert current health scores with decline streaks.
- * Also appends to health_score_history (max 1 record per manager per hour).
- * History write is failure-tolerant — main upsert always completes.
- */
-export async function saveHealthScores(snapshots: HealthSnapshot[]): Promise<void> {
-    if (snapshots.length === 0) return
-    await ensureTable()
-
-    // 1. Primary upsert (existing behavior, untouched)
-    const values = snapshots
-        .map(s => `('${s.managerId}', ${s.score}, ${s.declineStreak}, NOW())`)
-        .join(', ')
-    await prisma.$executeRawUnsafe(`
-        INSERT INTO health_snapshots (manager_id, score, decline_streak, recorded_at)
-        VALUES ${values}
-        ON CONFLICT (manager_id) DO UPDATE SET
-          score = EXCLUDED.score,
-          decline_streak = EXCLUDED.decline_streak,
-          recorded_at = NOW()
-    `)
-
-    // 2. Append to history (failure-tolerant, 1-hour dedup)
-    try {
-        const historyValues = snapshots
-            .map(s => `('${s.managerId}', ${s.score}, '${s.healthLevel}')`)
-            .join(', ')
-        await prisma.$executeRawUnsafe(`
-            INSERT INTO health_score_history (manager_id, score, health_level, recorded_at)
-            SELECT v.manager_id, v.score, v.health_level, NOW()
-            FROM (VALUES ${historyValues}) AS v(manager_id, score, health_level)
-            WHERE NOT EXISTS (
-              SELECT 1 FROM health_score_history h
-              WHERE h.manager_id = v.manager_id
-                AND h.recorded_at > NOW() - INTERVAL '1 hour'
-            )
-        `)
-    } catch (e) {
-        console.error('[health-history] Failed to write history, continuing:', e)
-    }
-}
-
-/**
  * Calculate updated decline streak based on current trend.
  */
 export function updateDeclineStreak(trend: HealthTrend, previousStreak: number): number {
@@ -430,47 +332,4 @@ export function updateDeclineStreak(trend: HealthTrend, previousStreak: number):
  */
 export function isSustainedDecline(declineStreak: number): boolean {
     return declineStreak >= HEALTH_SCORE_CONFIG.declineStreakThreshold
-}
-
-/**
- * Read health score history for given managers within a time window.
- * Returns raw points sorted ascending by recorded_at.
- * Failure-tolerant: returns empty map on error.
- */
-export async function getHealthHistory(
-    managerIds: string[],
-    periodDays?: number
-): Promise<Map<string, HealthHistoryPoint[]>> {
-    const result = new Map<string, HealthHistoryPoint[]>()
-    if (managerIds.length === 0) return result
-
-    try {
-        await ensureTable()
-        const days = Math.min(
-            periodDays ?? HEALTH_HISTORY_CONFIG.defaultPeriodDays,
-            HEALTH_HISTORY_CONFIG.maxPeriodDays
-        )
-
-        const rows: { manager_id: string; score: number; health_level: string; recorded_at: Date }[] =
-            await prisma.$queryRawUnsafe(`
-                SELECT manager_id, score, health_level, recorded_at
-                FROM health_score_history
-                WHERE manager_id = ANY($1)
-                  AND recorded_at >= NOW() - INTERVAL '${days} days'
-                ORDER BY manager_id, recorded_at ASC
-            `, managerIds)
-
-        for (const r of rows) {
-            if (!result.has(r.manager_id)) result.set(r.manager_id, [])
-            result.get(r.manager_id)!.push({
-                score: r.score,
-                healthLevel: r.health_level as HealthLevel,
-                recordedAt: r.recorded_at,
-            })
-        }
-    } catch (e) {
-        console.error('[health-history] Failed to read history, returning empty:', e)
-    }
-
-    return result
 }

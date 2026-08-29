@@ -1,0 +1,29 @@
+{
+  "schema": "yoko.crm.context-isolation-verification.v1",
+  "milestone": "CRM-ARCH-007-AI-KNOWLEDGE-USAGE-LOG",
+  "verified_at": "2026-08-09T18:01:05Z",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "architecture": {
+    "files": 855,
+    "contexts": 16,
+    "findings": 1504,
+    "exceptions": 1504,
+    "finding_digest": "1ab3580bf9b68ce3b2644eb5f1501f814a0fe529f08f3db510bda5b2bedc667b",
+    "registry_sha256": "f54d2b57a17c9fdb079b317ef09aa305ddca642d1d9a720da34acab1a9f62331",
+    "dependency_cycles": 0
+  },
+  "tests": {
+    "ai_knowledge_usage_behavior": "13/13 PASS",
+    "ai_knowledge_usage_controls": "13/13 PASS",
+    "contract_controls": "81/81 PASS",
+    "enforcement": "16/16 PASS",
+    "auth": "33/33 PASS",
+    "calling": "93/93 PASS",
+    "current_cumulative_architecture_test_and_check_scripts": "41/41 scripts PASS"
+  },
+  "typescript": "28 baseline / 28 candidate / 0 normalized semantic differences",
+  "eslint": "2 inherited PipelineWorker diagnostics / 2 candidate PipelineWorker diagnostics; new contract and owner files 0",
+  "historical_evidence_note": "CRM-ARCH-002 evidence remains checksum-authoritative for its frozen input identity; its byte-count validator is not reinterpreted as a current-tree validator.",
+  "secret_values_read_or_emitted": false,
+  "production_mutated": false
+}

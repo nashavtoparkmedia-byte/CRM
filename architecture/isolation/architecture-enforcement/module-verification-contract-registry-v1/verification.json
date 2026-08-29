@@ -1,0 +1,81 @@
+{
+  "schema": "yoko.crm.module-verification-contract-registry-verification.v1",
+  "status": "PASS_CONTINUE",
+  "verified_at": "2026-08-12T03:19:10Z",
+  "source_commit": "18c249d2d486a79886dade325d013d49df73312d",
+  "source_tree": "08de3e65b2d9222cc28dee23c223d5d4679dbbc5",
+  "module_manifests": {
+    "contexts": 16,
+    "functional_owners": 16,
+    "owned_path_sets": 16,
+    "verified_manifests": 16,
+    "verified_entrypoints": 45,
+    "verified_controls": 14,
+    "negative_properties": 11,
+    "dependency_relationship_inputs": 106,
+    "technical_modules": 27,
+    "owned_data_records": 96,
+    "migration_plans": 79,
+    "historical_foreign_write_site_inputs": 195
+  },
+  "contract_registry": {
+    "context_public_surfaces": 16,
+    "allowed_context_interactions": 61,
+    "detailed_individual_contract_records": 2,
+    "negative_properties": 4,
+    "coverage_level": "CONTEXT_PUBLIC_API",
+    "dedicated_runtime_file_asserted_for_every_surface": false
+  },
+  "blast_radius": {
+    "source": "MODULE_MANIFEST_VERIFICATION_PROFILES",
+    "provider_specific_max_excludes_telegram_and_whatsapp": true,
+    "shared_messaging_fans_out_to_max_telegram_whatsapp": true,
+    "deleted_paths_retained": true,
+    "unclassified_production_paths_fail_closed": true
+  },
+  "verification": {
+    "authoritative_targeted_controls": "33/33 PASS",
+    "active_boundary_controls": "112/112 PASS",
+    "evidence_backed_superseded_controls": 6,
+    "independent_source_critic": "PASS",
+    "gravity_security": "34/34 PASS",
+    "tg_bot_security": "15/15 PASS",
+    "typescript_diagnostics": 30,
+    "typescript_maximum": 30,
+    "changed_path_typescript_diagnostics": 0,
+    "architecture_findings": 0,
+    "architecture_exceptions": 0,
+    "architecture_scanned_files": 1270,
+    "full_write_scan_run": false,
+    "full_credential_scan_run": false
+  },
+  "write_metrics": {
+    "confirmed_writes_discovered": 1404,
+    "confirmed_foreign": 0,
+    "closed_foreign": 53,
+    "raw_ambiguity_record_classified": 46,
+    "material_ambiguity_remaining": 0,
+    "active_operational_surfaces_unclassified": 0,
+    "temporary_exceptions": 0,
+    "intentional_exceptions": 0
+  },
+  "credential_metrics": {
+    "database_accesses": 401,
+    "secret_reads": 155,
+    "metadata_only": 64,
+    "raw_ambiguity": 81,
+    "material_unresolved": 0,
+    "public_exposure": 0,
+    "capability_gaps": 0
+  },
+  "mutations": {
+    "production_application_source_changed": false,
+    "protected_messages_behavior_changed": false,
+    "protected_ai_calls_behavior_changed": false,
+    "database_accessed": false,
+    "runtime_or_provider_invoked": false,
+    "credential_values_read_or_emitted": false,
+    "deployment_or_production_mutated": false
+  },
+  "readiness": "NOT_READY"
+}

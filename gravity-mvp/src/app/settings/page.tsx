@@ -1,5 +1,5 @@
-import { PageContainer } from '@/components/ui/PageContainer'
-import { PageHeader } from '@/components/layout/PageHeader'
+import { PageContainer } from '@/infrastructure/ui/PageContainer'
+import { PageHeader } from '@/infrastructure/ui/PageHeader'
 import { Settings as SettingsIcon } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'

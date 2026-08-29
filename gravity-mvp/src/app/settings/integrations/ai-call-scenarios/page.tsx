@@ -1,6 +1,6 @@
 import { listScenarios, listProjects } from '@/lib/ai-call/scenarios'
-import { getCurrentUser } from '@/lib/users/user-service'
-import { getAiCallKeysStatus } from '@/lib/ai-call/keys-status'
+import { getCurrentUserIdentityV1 as getCurrentUser } from '@/modules/identity-access/public/v1/user-directory'
+import { getAiCallProviderStatusV1 } from '@/modules/calling/public/v1/ai-call-provider-status'
 import { getValue } from '@/lib/ai-call/provider-settings'
 import AiCallScenariosClient from './AiCallScenariosClient'
 
@@ -23,7 +23,7 @@ export default async function AiCallScenariosPage() {
     const [projects, scenarios, keysStatus, activeProjectId] = await Promise.all([
         listProjects(),
         listScenarios(),
-        getAiCallKeysStatus(),
+        getAiCallProviderStatusV1(),
         // Which project is "live" — used by future AI-call dispatcher to pick
         // the scenario when a manager presses the button. Stored as a regular
         // AiProviderSetting row (provider=system, key=activeProjectId).

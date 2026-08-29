@@ -1,0 +1,229 @@
+{
+  "allowed_dependencies": [
+    {
+      "context": "calling",
+      "surface": "calling.public"
+    }
+  ],
+  "commands": [
+    "ExtractKnowledgeCommand.v1",
+    "UpdateRetrievalPolicyCommand.v1",
+    "ProposeReplyCommand.v1"
+  ],
+  "compatibility_strategy": "Preserve current retrieval and legacy-migration behavior behind a knowledge facade; version contracts before consumer migration.",
+  "context": {
+    "id": "ai_knowledge",
+    "name": "AI Knowledge"
+  },
+  "credential_relationships": {
+    "database_models": [
+      "AiAgentConfig"
+    ],
+    "environment_names": [
+      "NODE_ENV"
+    ],
+    "policy": "Names and access locations only. Values stay inside the owning adapter and never cross a public contract."
+  },
+  "events": [
+    "KnowledgeExtracted.v1",
+    "RetrievalPolicyChanged.v1",
+    "ReplyProposed.v1"
+  ],
+  "evidence": {
+    "dependency_edges": 1,
+    "source_snapshot_sha256": "2713db175062bb673dcca2d97e80c2ae204a2f257438036c6db2506587dfad7d",
+    "write_sites_requiring_migration": 2
+  },
+  "forbidden_dependencies": [
+    "credentialValuesInContracts",
+    "directForeignPrismaWrites",
+    "foreign_message_write",
+    "providerImplementationImportsOutsideOwningContext",
+    "provider_specific_contract",
+    "unversionedCrossContextPayloads"
+  ],
+  "foreign_write_migration_plans": [
+    "migration_1ede9e2ac70ee04b",
+    "migration_30dc23eb89df8b76",
+    "migration_3edf8273887f2fd4",
+    "migration_5b68d1e7487106e9",
+    "migration_9896cb76f4eeb68a",
+    "migration_b3ef43569ca981b9",
+    "migration_b83e3f6c604949b1",
+    "migration_c30c02edcc5831fa",
+    "migration_ca65203b883c6533",
+    "migration_e067061cee092028",
+    "migration_e49c8cabc83892c7",
+    "migration_eafe85fb377d05e3"
+  ],
+  "internal_surface": [
+    "gravity-mvp/src/lib/ai/knowledge"
+  ],
+  "owned_data": [
+    {
+      "current_writer_modules": [
+        "gravity_core",
+        "settings"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiDecisionLog",
+      "mapped_table": null,
+      "model": "AiDecisionLog",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "ai_knowledge",
+        "settings"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiExtractionJob",
+      "mapped_table": null,
+      "model": "AiExtractionJob",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "ai_knowledge"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiKnowledgeAuditLog",
+      "mapped_table": null,
+      "model": "AiKnowledgeAuditLog",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "ai_knowledge",
+        "messages",
+        "settings"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiKnowledgeItem",
+      "mapped_table": null,
+      "model": "AiKnowledgeItem",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [],
+      "id": "gravity-mvp/prisma/schema.prisma:AiKnowledgeSection",
+      "mapped_table": null,
+      "model": "AiKnowledgeSection",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "ai_knowledge",
+        "settings"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiKnowledgeSource",
+      "mapped_table": null,
+      "model": "AiKnowledgeSource",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "gravity_core"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiKnowledgeUsageLog",
+      "mapped_table": null,
+      "model": "AiKnowledgeUsageLog",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "messages"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiProposedReply",
+      "mapped_table": null,
+      "model": "AiProposedReply",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "settings"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiRetrievalPolicy",
+      "mapped_table": null,
+      "model": "AiRetrievalPolicy",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "settings"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:KnowledgeBaseEntry",
+      "mapped_table": null,
+      "model": "KnowledgeBaseEntry",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    }
+  ],
+  "owned_paths": [
+    "gravity-mvp/src/contracts/ai-knowledge",
+    "gravity-mvp/src/lib/ai/knowledge",
+    "gravity-mvp/src/modules/ai-knowledge"
+  ],
+  "owner": {
+    "accountability": "AI Knowledge bounded-context owner",
+    "context": "ai_knowledge"
+  },
+  "protected": true,
+  "provider_relationships": [
+    {
+      "adapter_modules": [
+        "ai_knowledge"
+      ],
+      "name": "openai",
+      "role": "embedding/generation provider"
+    },
+    {
+      "adapter_modules": [
+        "ai_knowledge"
+      ],
+      "name": "anthropic",
+      "role": "generation provider"
+    }
+  ],
+  "public_surface": [
+    "KnowledgeQuery.v1",
+    "KnowledgeCitation.v1",
+    "ProposedReply.v1",
+    "KnowledgeGovernanceAudit.v1",
+    "KnowledgeLegacyMigration.v1",
+    "KnowledgeExtractionExecution.v1",
+    "KnowledgeTextSimilarity.v1",
+    "KnowledgeRetrievalVersion.v1",
+    "KnowledgeCoach.v1"
+  ],
+  "responsibility": "Knowledge sources, extraction, retrieval policy, decisions, proposed replies and explainability audit.",
+  "schema": "yoko.crm.module-manifest.v1",
+  "technical_modules": [
+    "ai_knowledge"
+  ],
+  "verification": {
+    "architecture_checks": [
+      "node tools/architecture/validate-context-manifests.mjs",
+      "node tools/architecture/enforce-architecture.mjs",
+      "node tools/architecture/test-architecture-enforcement.mjs"
+    ],
+    "blast_radius": {
+      "consumer_contexts": [
+        "configuration",
+        "messaging",
+        "platform_shell"
+      ],
+      "owner_context": "ai_knowledge",
+      "provider_scope": "NOT_APPLICABLE",
+      "provider_siblings": []
+    },
+    "build_checks": [
+      "node tools/architecture/check-typescript-baseline.mjs"
+    ],
+    "contract_tests": [
+      "node tools/architecture/validate-contract-registry.mjs",
+      "node tools/architecture/check-contract-boundaries.mjs"
+    ],
+    "module_tests": [
+      "node tools/architecture/check-ai-knowledge-governance-boundary.mjs",
+      "node tools/architecture/check-ai-knowledge-retrieval-boundary.mjs",
+      "node tools/architecture/check-ai-decision-boundary.mjs"
+    ]
+  },
+  "version": 1
+}

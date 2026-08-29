@@ -1,0 +1,6 @@
+{
+  "schema": "yoko.crm.context-isolation-verification.v1", "milestone": "CRM-ARCH-007-AI-DECISION-REVIEW", "verified_at": "2026-08-09T18:14:57Z", "status": "PASS_CONTINUE_SOURCE_GATE",
+  "architecture": {"files": 861, "contexts": 16, "findings": 1502, "exceptions": 1502, "finding_digest": "e3a7d57eea0ce1519cf68803a1c83cb39e5c147f50821686f89cbc587dc30269", "registry_sha256": "a431e968aa705f6f2f964bb340f691f92c6e1f3443351b168d005ce4f96cfca4", "dependency_cycles": 0},
+  "tests": {"ai_decision_review_behavior": "10/10 PASS", "ai_decision_review_controls": "11/11 PASS", "contract_controls": "83/83 PASS", "enforcement": "16/16 PASS", "auth": "33/33 PASS", "calling": "93/93 PASS", "current_cumulative_architecture_test_and_check_scripts": "45/45 scripts PASS"},
+  "typescript": "28 baseline / 28 candidate / 0 semantic differences after line/column, ordering and literal-union-order normalization", "eslint": "1 inherited settings-action warning / 1 candidate warning; new contract and owner files 0", "secret_values_read_or_emitted": false, "production_mutated": false
+}

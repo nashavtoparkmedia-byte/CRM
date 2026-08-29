@@ -1,0 +1,1 @@
+{"schema":"yoko.crm.mutation-ledger.v1","milestone":"CRM-ARCH-007R-RESUMED-DECISIONS","repository_evidence_only":true,"production":{"database_mutations":0,"service_restarts":0,"container_mutations":0,"deployment_mutations":0,"provider_calls":0},"secret_values_read_or_emitted":false}

@@ -1,4 +1,9 @@
 const http = require('http');
+require('dotenv').config();
+
+if (!process.env.ADMIN_USER || !process.env.ADMIN_PASS) {
+    throw new Error('ADMIN_USER and ADMIN_PASS are required');
+}
 
 const botId = '6f11cd83-a56d-4c54-8800-2253eacb90ab';
 console.log(`Fetching dashboard for ${botId}...`);
@@ -9,7 +14,7 @@ const options = {
     path: `/api/admin/dashboard?botId=${botId}&period=30d`,
     method: 'GET',
     headers: {
-        'Authorization': 'Bearer test',
+        'Authorization': 'Basic ' + Buffer.from(`${process.env.ADMIN_USER}:${process.env.ADMIN_PASS}`).toString('base64'),
         'Content-Type': 'application/json'
     }
 };

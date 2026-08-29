@@ -1,0 +1,19 @@
+{
+  "schema": "yoko.crm.owner-bootstrap-remediation-map.v1",
+  "rejected_artifact_sha256": "a6b014df4f8adde8706f59ecc382e14e3e7632042c8d24d4337670f3dabd9da2",
+  "rejected_artifact_status": "REJECTED_SUPERSEDED_NEVER_EXECUTE",
+  "current_source_status": "REMEDIATION_PRESENT_EXACT_SHA_CRITIC_PASS",
+  "findings": [
+    {
+      "id": "ELEVENTH-CRITIC-001",
+      "remediation": "Fresh/recovery success retires both exact sealed stopped runners, then durably clears production_runner_identities. Terminal status/ALREADY crash reconciliation uses _retire_production_runners: exact Docker absence is accepted, but a present replacement, identity drift or running object fails closed; after retirement it clears the map before DB read. A dynamic exact-not-found test proves normal terminal cleanup and durable state clearing.",
+      "evidence": [
+        "src/crm-activation-profile.py::_retire_production_runners",
+        "src/crm-activation-profile.py::_clear_production_runner_state",
+        "src/crm-activation-profile.py::_database_status_profile",
+        "src/crm-activation-profile.py::_database_migrate",
+        "tests/test_package_and_runtime.py::test_terminal_runner_retirement_accepts_exact_absence_then_clears_state"
+      ]
+    }
+  ]
+}

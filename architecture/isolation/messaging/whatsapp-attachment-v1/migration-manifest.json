@@ -1,0 +1,28 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1",
+  "milestone": "CRM-ARCH-007-MESSAGING-WHATSAPP-ATTACHMENT",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "20b10682f72c4539aa66f86e691bf06016039aa8",
+  "context": "messaging",
+  "caller_context": "whatsapp_channel",
+  "plan": {
+    "id": "migration_f2e2a093cfd6bc54",
+    "site_id": "write_dba695a05a50e31a24a2",
+    "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
+    "model": "MessageAttachment",
+    "method": "create"
+  },
+  "contract": "messaging.AttachMessageMediaCommand.v1",
+  "dependency": "whatsapp_channel -> messaging.public pre-approved",
+  "consumer_before_sha256": "a8a41d9a9c225fb9e8317408599a21dad64ce29e7f792bece24dffedf22448be",
+  "consumer_after_sha256": "39b58de8365c1cea80899aa8797d83afeadf367217a0df9ca8a1dd00be5826f3",
+  "enforcement": {
+    "before": 1509,
+    "after": 1508,
+    "retired": [
+      "arch_97280414e986fedc1be14e60"
+    ],
+    "new_capacity": 0
+  },
+  "rollback": "20b10682f72c4539aa66f86e691bf06016039aa8"
+}

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { stripToDigits } from '@/lib/phoneUtils'
+import { stripToDigits } from '@/modules/contacts/public/v1/phone-identity'
 
 /**
  * GET /api/contacts/search?q=...&limit=10
@@ -113,7 +113,7 @@ export async function GET(req: NextRequest) {
         },
         identities: {
           where: { isActive: true },
-          select: { id: true, channel: true, externalId: true },
+          select: { id: true, channel: true, externalId: true, reachabilityStatus: true },
         },
         chats: {
           select: { id: true, channel: true, lastMessageAt: true },

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/users/user-service'
-import { listProjects } from '@/lib/ai-call/scenarios'
-import { opsLog } from '@/lib/opsLog'
+import { getCurrentUserIdentityV1 as getCurrentUser } from '@/modules/identity-access/public/v1/user-directory'
+import { listProjects } from '@/modules/calling/public/v1/ai-call-scenario-management'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 
 export const dynamic = 'force-dynamic'
 

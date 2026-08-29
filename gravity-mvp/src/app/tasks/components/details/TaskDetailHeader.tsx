@@ -9,7 +9,7 @@ import {
     Plus,
     MousePointerClick,
 } from 'lucide-react'
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/infrastructure/ui/tooltip'
 import type { TaskDTO, TaskSource, TaskPriority } from '@/lib/tasks/types'
 
 const SOURCE_LABELS: Record<string, string> = {

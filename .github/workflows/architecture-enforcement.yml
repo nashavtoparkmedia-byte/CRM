@@ -1,0 +1,257 @@
+name: Architecture enforcement
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: architecture-enforcement-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  architecture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    services:
+      postgres:
+        image: postgres:16.14-alpine@sha256:7a396fd264a2067788b6551122b50f162bf6136312c7fc9d74381cb92c648382
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Check out exact revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 2
+
+      - name: Run targeted Runtime TG base-reference contract
+        env:
+          YOKO_RUNTIME_REAL_DOCKER: '1'
+          YOKO_TG_REFERENCE_TEST_BASE: 'postgres@sha256:7a396fd264a2067788b6551122b50f162bf6136312c7fc9d74381cb92c648382'
+        run: |
+          set -Eeuo pipefail
+          runtime=architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10
+          python3 -I -B "$runtime/tests/test_builder_contract.py" RealDockerTgBaseReferenceTests -v
+
+      - name: Fetch exact Runtime v10 predecessor
+        env:
+          RUNTIME_V10_PREDECESSOR_COMMIT: 7aea2823efe50e13a156540993d424594025e403
+        run: |
+          set -Eeuo pipefail
+          git fetch --no-tags --depth=1 origin \
+            "$RUNTIME_V10_PREDECESSOR_COMMIT:refs/heads/yoko-runtime-v10-predecessor"
+          test "$(git rev-parse 'refs/heads/yoko-runtime-v10-predecessor^{commit}')" = \
+            "$RUNTIME_V10_PREDECESSOR_COMMIT"
+
+      - name: Set up exact Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20.20.2
+
+      - name: Verify exact Node.js
+        run: |
+          node --version
+          node -e "if (process.versions.node !== '20.20.2') process.exit(1)"
+
+      - name: Install locked test toolchain without lifecycle scripts
+        run: |
+          npm ci --prefix gravity-mvp --ignore-scripts --no-audit --no-fund
+          npm ci --prefix tg-bot --ignore-scripts --no-audit --no-fund
+
+      - name: Generate checked Prisma clients
+        run: |
+          npm run --prefix gravity-mvp gen
+          npm run --prefix tg-bot gen
+
+      - name: Verify pinned PostgreSQL replay client
+        env:
+          YOKO_POSTGRES_CLIENT_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          docker exec "$YOKO_POSTGRES_CLIENT_CONTAINER" psql --version | grep -F '16.14'
+          docker exec "$YOKO_POSTGRES_CLIENT_CONTAINER" pg_dump --version | grep -F '16.14'
+
+      - name: Run authoritative architecture controls
+        env:
+          # The accepted remediation is one exact source commit. The exact-head
+          # checkout above deliberately carries its parent, so this remains
+          # reproducible even when the hosted PR base is hundreds of commits
+          # behind and is not present in the shallow checkout.
+          YOKO_BLAST_BASE: HEAD^
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres?schema=yoko_migration_authority_replay_ci
+          YOKO_POSTGRES_CLIENT_CONTAINER: ${{ job.services.postgres.id }}
+          YOKO_CI_ATTESTATION_OUTPUT: authoritative-ci-execution.json
+        run: node tools/architecture/run-authoritative-ci.mjs
+
+      - name: Upload exact authoritative CI execution proof
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: authoritative-ci-proof-${{ github.event.pull_request.head.sha || github.sha }}
+          path: authoritative-ci-execution.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+  gravity-artifact:
+    needs: architecture
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Check out exact revision
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 1
+
+      - name: Set up exact Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        with:
+          version: v0.30.1
+          driver: docker-container
+          driver-opts: image=moby/buildkit:v0.25.2@sha256:72bda77240181301a0d5ee57d39fa58e4aabd7eff26f81bbf108088caf810f05
+
+      - name: Download exact authoritative CI execution proof
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: authoritative-ci-proof-${{ github.event.pull_request.head.sha || github.sha }}
+          path: .
+
+      - name: Build exact Gravity image and machine attestation
+        env:
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          NEXT_PUBLIC_AVITO_LEADS_URL: ''
+          NEXT_PUBLIC_MAX_SCRAPER_PHONE: '+79221853150'
+          NEXT_PUBLIC_FORCE_SHOW_ALL_CHANNELS: 'true'
+        run: |
+          set -Eeuo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          test "$(docker buildx version | awk '{print $2}')" = 'v0.30.1'
+          buildx_inspect=$(docker buildx inspect --bootstrap)
+          test "$(printf '%s\n' "$buildx_inspect" | awk '$1 == "Driver:" { print $2 }')" = 'docker-container'
+          test "$(printf '%s\n' "$buildx_inspect" | awk '$1 == "BuildKit" && $2 == "version:" { print $3 }')" = 'v0.25.2'
+          image="yoko/crm-gravity-mvp:${EXPECTED_HEAD_SHA}-source-only-v1"
+          profile="crm-${EXPECTED_HEAD_SHA:0:12}-gravity-source-v1"
+          docker buildx build \
+            --platform linux/amd64 \
+            --pull \
+            --no-cache \
+            --provenance=false \
+            --sbom=false \
+            --build-arg "NEXT_PUBLIC_AVITO_LEADS_URL=$NEXT_PUBLIC_AVITO_LEADS_URL" \
+            --build-arg "NEXT_PUBLIC_MAX_SCRAPER_PHONE=$NEXT_PUBLIC_MAX_SCRAPER_PHONE" \
+            --build-arg "NEXT_PUBLIC_FORCE_SHOW_ALL_CHANNELS=$NEXT_PUBLIC_FORCE_SHOW_ALL_CHANNELS" \
+            --label "org.opencontainers.image.revision=$EXPECTED_HEAD_SHA" \
+            --label "yoko.activation.profile=$profile" \
+            --tag "$image" \
+            --load \
+            --file gravity-mvp/Dockerfile \
+            gravity-mvp
+          image_id=$(docker image inspect --format '{{.Id}}' "$image")
+          printf '%s\n' "$image_id" | grep -Eq '^sha256:[0-9a-f]{64}$'
+          docker image save --output gravity-image.docker.tar "$image"
+          python3 -I - "$EXPECTED_HEAD_SHA" "$(git rev-parse 'HEAD^{tree}')" "$image" "$image_id" <<'PY'
+          import hashlib, json, os, pathlib, stat, sys
+          commit, tree, image, image_id = sys.argv[1:]
+          archive = pathlib.Path('gravity-image.docker.tar')
+          dockerfile = pathlib.Path('gravity-mvp/Dockerfile')
+          lock = pathlib.Path('gravity-mvp/package-lock.json')
+          def file_identity(path):
+              descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+              digest = hashlib.sha256()
+              total = 0
+              try:
+                  before = os.fstat(descriptor)
+                  if not stat.S_ISREG(before.st_mode) or before.st_nlink != 1:
+                      raise SystemExit(f'unsafe attestation input: {path}')
+                  while chunk := os.read(descriptor, 1024 * 1024):
+                      digest.update(chunk)
+                      total += len(chunk)
+                  after = os.fstat(descriptor)
+              finally:
+                  os.close(descriptor)
+              stable = ('st_dev', 'st_ino', 'st_mode', 'st_nlink', 'st_size', 'st_mtime_ns', 'st_ctime_ns')
+              if total != before.st_size or any(getattr(before, key) != getattr(after, key) for key in stable):
+                  raise SystemExit(f'attestation input changed while hashing: {path}')
+              return digest.hexdigest(), total
+          archive_sha256, archive_bytes = file_identity(archive)
+          dockerfile_sha256, _ = file_identity(dockerfile)
+          package_lock_sha256, _ = file_identity(lock)
+          value = {
+              'schema': 'yoko.crm.hosted-gravity-image-artifact.v1',
+              'repository': 'nashavtoparkmedia-byte/CRM',
+              'commit': commit,
+              'tree': tree,
+              'platform': 'linux/amd64',
+              'image_reference': image,
+              'image_id': image_id,
+              'docker_archive': {
+                  'path': 'gravity-image.docker.tar',
+                  'sha256': archive_sha256,
+                  'bytes': archive_bytes,
+              },
+              'materials': {
+                  'dockerfile_sha256': dockerfile_sha256,
+                  'package_lock_sha256': package_lock_sha256,
+                  'dockerfile_frontend': 'docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e',
+                  'node_base': 'node:20-bookworm-slim@sha256:3d0f05455dea2c82e2f76e7e2543964c30f6b7d673fc1a83286736d44fe4c41c',
+                  'debian_snapshot': '20260801T000000Z',
+                  'buildx_version': 'v0.30.1',
+                  'buildkit_image': 'moby/buildkit:v0.25.2@sha256:72bda77240181301a0d5ee57d39fa58e4aabd7eff26f81bbf108088caf810f05',
+                  'build_args': {
+                      'NEXT_PUBLIC_AVITO_LEADS_URL': '',
+                      'NEXT_PUBLIC_MAX_SCRAPER_PHONE': '+79221853150',
+                      'NEXT_PUBLIC_FORCE_SHOW_ALL_CHANNELS': 'true',
+                  },
+              },
+          }
+          value['materials']['semantic_sha256'] = hashlib.sha256(
+              (json.dumps(value['materials'], sort_keys=True, separators=(',', ':')) + '\n').encode('ascii')
+          ).hexdigest()
+          pathlib.Path('gravity-image-attestation.json').write_text(
+              json.dumps(value, sort_keys=True, separators=(',', ':')) + '\n',
+              encoding='ascii',
+          )
+          PY
+
+      - name: Upload exact Gravity artifact
+        id: gravity_upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: gravity-image-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            gravity-image.docker.tar
+            gravity-image-attestation.json
+            authoritative-ci-execution.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+      - name: Record hosted artifact identity
+        env:
+          ARTIFACT_DIGEST: ${{ steps.gravity_upload.outputs.artifact-digest }}
+          ARTIFACT_ID: ${{ steps.gravity_upload.outputs.artifact-id }}
+          ARTIFACT_URL: ${{ steps.gravity_upload.outputs.artifact-url }}
+        run: |
+          test -n "$ARTIFACT_ID"
+          test -n "$ARTIFACT_URL"
+          # upload-artifact exposes the raw 64-hex SHA-256 output. The REST
+          # artifact resource later represents the same value as
+          # "sha256:<hex>"; keep the two representations explicit.
+          printf '%s\n' "$ARTIFACT_DIGEST" | grep -Eq '^[0-9a-f]{64}$'

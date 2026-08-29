@@ -124,13 +124,9 @@ export default function SurveyBuilder() {
             const suffix = exportAllRequested ? 'all' : 'selected';
             const fileName = `survey_export_${dateStr}_${suffix}.xlsx`;
 
-            // Navigate directly to backend with filename in URL path.
-            // Auth middleware supports ?token= query param as fallback.
-            // The server returns Content-Disposition: attachment; filename="..."
-            // which the browser uses for the download name.
-            const token = localStorage.getItem('crm_token');
+            // The same-origin admin proxy authenticates this download from its
+            // HttpOnly session cookie. Credentials never enter the URL.
             const params = new URLSearchParams();
-            if (token) params.set('token', token);
             if (exportAllRequested) {
                 params.set('all', 'true');
             } else {

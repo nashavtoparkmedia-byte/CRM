@@ -1,0 +1,46 @@
+{
+  "schema": "yoko.crm.mutation-ledger.v1",
+  "milestone": "CRM-ARCH-007R-CONTACT-MERGE-TRANSACTION",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "78097c58e99de2abd2983557c61bb72c2e6381b6",
+  "source_commit": "51e4734d781d7d998f3beba393e397c125c72ef2",
+  "verified_at": "2026-08-10T07:59:31Z",
+  "source": [
+    "one closed contacts.MergeContactsCommand.v1 command and result contract",
+    "one Contacts owner handler preserving legacy preconditions, no-ops, errors, snapshots and step order",
+    "one exact Contacts unit-of-work adapter with named Contacts, Fleet, Messaging and Work repositories",
+    "one ContactMergeService compatibility facade retaining both existing static signatures and unversioned results",
+    "two focused Vitest files with facade, characterization and fake rollback failure-injection coverage",
+    "one deterministic transaction-coordinator architecture checker",
+    "contract boundary controls extended for the Contacts merge facade",
+    "exact Chat and Task file/model infrastructure-writer policy approvals",
+    "deterministically regenerated strict registry with eight exact retirements",
+    "checksummed source-gate evidence package"
+  ],
+  "approved_infrastructure_writers": [
+    {
+      "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
+      "model": "Chat"
+    },
+    {
+      "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
+      "model": "Task"
+    }
+  ],
+  "production": [],
+  "database": [],
+  "providers": [],
+  "webhooks": [],
+  "services": [],
+  "deployment": [],
+  "policy_source_mutated": true,
+  "registry_source_mutated": true,
+  "module_rule_source_mutated": false,
+  "module_manifest_amendment_added": false,
+  "source_control_only": true,
+  "fake_transaction_rollback_tests_executed": true,
+  "physical_postgresql_rollback_executed": false,
+  "contact_merge_mutation_executed_against_database": false,
+  "production_mutated": false,
+  "secret_values_read_or_emitted": false
+}

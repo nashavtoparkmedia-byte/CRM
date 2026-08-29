@@ -1,0 +1,28 @@
+{
+  "schema": "yoko.crm.context-isolation-verification.v1",
+  "milestone": "CRM-ARCH-007-MESSAGING-LEAD-RECEIVE",
+  "verified_at": "2026-08-09T16:53:50Z",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "architecture": {
+    "files": 827,
+    "contexts": 16,
+    "findings": 1511,
+    "exceptions": 1511,
+    "finding_digest": "b68ec9f1ea4459afde5012840b104c878973cfb13a40503a2e62e1f89fe8dd10",
+    "registry_sha256": "67f05ee3ebed08a6caf81a5decf97d44fd11138ce075ace6a9d71badec3e9b4b",
+    "dependency_cycles": 0
+  },
+  "tests": {
+    "messaging_lead_receive_behavior": "14/14 PASS",
+    "messaging_lead_receive_controls": "14/14 PASS",
+    "contract_controls": "59/59 PASS",
+    "enforcement": "16/16 PASS",
+    "auth": "33/33 PASS",
+    "calling": "93/93 PASS",
+    "current_baseline_context_contract_outbox_identity_work_management_contacts_fleet_and_messaging_controls": "PASS"
+  },
+  "typescript": "28 baseline / 28 candidate / 0 normalized differences",
+  "eslint": "1 inherited lead-intake diagnostic / 1 candidate diagnostic; new owner and contract files 0",
+  "historical_evidence_note": "CRM-ARCH-002 evidence remains checksum-authoritative for its frozen input identity; its byte-count validator is not reinterpreted as a current-tree validator.",
+  "production_mutated": false
+}

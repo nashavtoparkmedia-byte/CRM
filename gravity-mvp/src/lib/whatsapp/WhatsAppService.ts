@@ -1,16 +1,21 @@
 import { Client, LocalAuth, Message, MessageMedia } from 'whatsapp-web.js'
+import * as WhatsAppWebRuntime from 'whatsapp-web.js'
 import { prisma } from '@/lib/prisma'
 import path from 'path'
 import fs from 'fs'
-import { DriverMatchService } from '@/lib/DriverMatchService'
-import { ContactService } from '@/lib/ContactService'
-import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
-import { enrichWaChatNameFromSibling } from '@/lib/whatsapp/enrichChatName'
-import { emitMessageReceived } from '@/lib/messageEvents'
-import { broadcastChatMessage } from '@/lib/messageStreamBus'
-import * as registry from '@/lib/TransportRegistry'
-import { opsLog } from '@/lib/opsLog'
+import { createHash } from 'node:crypto'
+import { channelDriverMatchV1 as DriverMatchService } from '@/modules/fleet-operations/public/v1/channel-driver-match'
+import { attachPhoneToIdentityV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
+import { channelConversationWorkflowV1 as ConversationWorkflowService } from '@/modules/messaging/public/v1/channel-conversation-workflow'
+import { attachVisibleWaPhone, enrichWaChatNameFromSibling } from '@/lib/whatsapp/enrichChatName'
+import { publishPersistedMessageV1 as emitMessageReceived } from '@/modules/messaging/public/v1/persisted-message-ingress'
+import { broadcastChatMessageV1 as broadcastChatMessage } from '@/modules/messaging/public/v1/message-stream'
+import { transportRegistryLifecycleV1 as registry } from '@/modules/messaging/public/v1/transport-registry-lifecycle'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { WWEBJS_AUTH_DIR } from '@/lib/whatsapp/WhatsAppCleanup'
+import { ATTACH_MESSAGE_MEDIA_COMMAND_V1, CREATE_CHANNEL_MESSAGE_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, PATCH_MESSAGE_DELIVERY_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, type HistoryImportJobPatchV1 } from '@/contracts/messaging/v1'
+import { attachMessageMediaV1, createChannelMessageV1, ensureConversationContactLinkV1, linkMatchedDriverToConversationCapabilityV1, patchChannelConversationV1, patchHistoryImportJobV1, patchMessageDeliveryV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
+import { clearPendingWhatsAppQr, publishPendingWhatsAppQr } from './whatsapp-qr-ceremony'
 
 // 25MB per file. Was 10MB but modern iPhone photos (12MP JPEG) and
 // short videos easily exceed that — skipped media left the UI with
@@ -22,28 +27,30 @@ const HISTORY_MONTHS = 3
 // Global singleton map: connectionId -> Client instance
 const globalForWA = global as unknown as { waClients: Map<string, Client> }
 const clients = globalForWA.waClients || new Map<string, Client>()
-if (process.env.NODE_ENV !== 'production') globalForWA.waClients = clients
+// Next.js can load Server Actions and API routes as separate production
+// modules. The global map is the process-wide runtime authority in every mode.
+globalForWA.waClients = clients
 
 // instanceId per connection — links client to registry entry (survive hot reload)
 const globalForWAIds = global as unknown as { _waInstanceIds?: Map<string, string> }
 const instanceIds = globalForWAIds._waInstanceIds || new Map<string, string>()
-if (process.env.NODE_ENV !== 'production') globalForWAIds._waInstanceIds = instanceIds
+globalForWAIds._waInstanceIds = instanceIds
 
 // Guard: track which connections already had auto-sync (prevent re-sync on reconnect)
 const globalSyncDone = global as unknown as { _waSyncDone?: Set<string> }
 const syncDoneSet = globalSyncDone._waSyncDone || new Set<string>()
-if (process.env.NODE_ENV !== 'production') globalSyncDone._waSyncDone = syncDoneSet
+globalSyncDone._waSyncDone = syncDoneSet
 
 // FIX 1: In-flight guard — prevent overlapping initializeClient for same connectionId.
 // Parallel callers get the same Promise; resolved on finally.
 const globalForInitPromises = global as unknown as { _waInitPromises?: Map<string, Promise<void>> }
 const initPromises: Map<string, Promise<void>> = globalForInitPromises._waInitPromises || new Map()
-if (process.env.NODE_ENV !== 'production') globalForInitPromises._waInitPromises = initPromises
+globalForInitPromises._waInitPromises = initPromises
 
 // FIX 7: Serialize forceResetSession per connectionId.
 const globalForResetLocks = global as unknown as { _waResetLocks?: Map<string, Promise<void>> }
 const forceResetLocks: Map<string, Promise<void>> = globalForResetLocks._waResetLocks || new Map()
-if (process.env.NODE_ENV !== 'production') globalForResetLocks._waResetLocks = forceResetLocks
+globalForResetLocks._waResetLocks = forceResetLocks
 
 /**
  * Validate a WA timestamp (epoch seconds).
@@ -77,6 +84,48 @@ function validateMessageTs(rawSeconds: unknown): Date | null {
  * that can't skip (live client.on handler where we want to always process). */
 function clampMessageTs(rawSeconds: unknown): Date {
     return validateMessageTs(rawSeconds) ?? new Date()
+}
+
+/** Reconstruct a stable history id when whatsapp-web.js omits `_serialized`. */
+function serializeHistoryMessageId(
+    rawId: unknown,
+    chatJid: string,
+    message: { body?: string; timestamp?: number; fromMe?: boolean; type?: string },
+    ordinal: number,
+): string {
+    if (typeof rawId === 'string' && rawId.trim()) return rawId
+
+    const id = rawId && typeof rawId === 'object' ? rawId as Record<string, any> : null
+    const serialized = typeof id?._serialized === 'string' ? id._serialized.trim() : ''
+    if (serialized) return serialized
+
+    const serializeWid = (wid: unknown): string => {
+        if (typeof wid === 'string') return wid
+        if (!wid || typeof wid !== 'object') return ''
+        const value = wid as Record<string, any>
+        if (typeof value._serialized === 'string') return value._serialized
+        if (value.user && value.server) return `${value.user}@${value.server}`
+        return ''
+    }
+
+    const localId = typeof id?.id === 'string' ? id.id.trim() : ''
+    if (localId) {
+        const remote = serializeWid(id?.remote) || chatJid
+        const participant = serializeWid(id?.participant)
+        return [id?.fromMe ? 'true' : 'false', remote, localId, participant]
+            .filter(Boolean)
+            .join('_')
+    }
+
+    const seed = JSON.stringify([
+        chatJid,
+        message.timestamp || 0,
+        !!message.fromMe,
+        message.type || 'chat',
+        message.body || '',
+        ordinal,
+    ])
+    return `history_${createHash('sha256').update(seed).digest('hex')}`
 }
 
 /**
@@ -159,7 +208,7 @@ function canonicalWaExternalChatId(rawJid: string): string {
  * NOT done here (intentionally, because it's a group room, not a phone):
  *   - phone normalization / LID translation
  *   - DriverMatchService.linkChatToDriver
- *   - ContactService.resolveContact (the sender in msg.author is not
+ *   - contact resolution (the sender in msg.author is not
  *     the chat partner — a group has N members)
  *
  * Group outbound (you write to the group) arrives as msg.fromMe=true
@@ -212,25 +261,11 @@ async function handleLiveGroupMessage(msg: Message, connectionId: string): Promi
         where: { externalChatId: groupJid },
     })
     if (!unifiedChat) {
-        unifiedChat = await (prisma.chat as any).create({
-            data: {
-                externalChatId: groupJid,
-                channel: 'whatsapp',
-                name: groupName || groupJid,
-                chatType: 'group',
-                lastMessageAt: ts,
-                metadata: { connectionId },
-            },
-        })
+        const created = await upsertChannelConversationV1({ contract: UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, externalChatId: groupJid, channel: 'whatsapp', name: groupName || groupJid, chatType: 'group', metadata: { connectionId } })
+        unifiedChat = created.conversation as any
+        await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: ts } })
     } else {
-        await (prisma.chat as any).update({
-            where: { id: unifiedChat.id },
-            data: {
-                lastMessageAt: ts,
-                chatType: 'group',
-                ...(groupName ? { name: groupName } : {}),
-            },
-        })
+        await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: ts, ...(groupName ? { name: groupName } : {}) } })
     }
 
     // Legacy WhatsAppMessage
@@ -257,18 +292,17 @@ async function handleLiveGroupMessage(msg: Message, connectionId: string): Promi
     if (existing) return
 
     const unifiedType = mapToUnifiedMessageType(msg.type)
-    const savedMsg = await prisma.message.create({
-        data: {
-            chatId: unifiedChat.id,
-            direction: isOutbound ? 'outbound' : 'inbound',
-            type: unifiedType,
-            content: waContentWithFallback(msg.body, msg.type),
-            externalId: msg.id._serialized,
-            channel: 'whatsapp',
-            sentAt: ts,
-            status: isOutbound ? 'delivered' : undefined,
-            metadata: (msg as any).author ? { groupAuthor: (msg as any).author } : undefined,
-        },
+    const { message: savedMsg } = await createChannelMessageV1({
+        contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1,
+        chatId: unifiedChat.id,
+        direction: isOutbound ? 'outbound' : 'inbound',
+        type: unifiedType,
+        content: waContentWithFallback(msg.body, msg.type),
+        externalId: msg.id._serialized,
+        channel: 'whatsapp',
+        sentAt: ts,
+        status: isOutbound ? 'delivered' : undefined,
+        metadata: (msg as any).author ? { groupAuthor: (msg as any).author } : undefined,
     })
 
     // Media — reuse the same helper the 1:1 path uses.
@@ -319,15 +353,14 @@ async function downloadAndSaveMedia(
             return false
         }
         const dataUrl = `data:${media.mimetype};base64,${media.data}`
-        await prisma.messageAttachment.create({
-            data: {
-                messageId: unifiedMessageId,
-                type: msgType,
-                url: dataUrl,
-                fileName: media.filename || null,
-                fileSize: base64Bytes,
-                mimeType: media.mimetype || null,
-            },
+        await attachMessageMediaV1({
+            contract: ATTACH_MESSAGE_MEDIA_COMMAND_V1,
+            messageId: unifiedMessageId,
+            mediaType: msgType,
+            url: dataUrl,
+            fileName: media.filename || null,
+            fileSize: base64Bytes,
+            mimeType: media.mimetype || null,
         })
         console.log(`[WA-MEDIA] ${logCtx} saved: ${msgType} ${media.mimetype} (${base64Bytes}B)`)
         return true
@@ -347,7 +380,28 @@ async function downloadAndSaveMedia(
  */
 function isCdpContextDestroyed(err: unknown): boolean {
     const msg = err instanceof Error ? err.message : String(err)
-    return /Execution context was destroyed|Protocol error \(Runtime\.|Target closed/i.test(msg)
+    return /Execution context was destroyed|Protocol error \(Runtime\.|Target closed|detached Frame|frame was detached|Session closed/i.test(msg)
+}
+
+/** Validate the Puppeteer runtime rather than trusting stale `client.info`. */
+function getClientRuntimeIssue(client: Client | undefined): string | null {
+    if (!client) return 'client_missing'
+    if (!client.info) return 'client_info_null'
+
+    const page = (client as any).pupPage
+    if (!page) return 'page_missing'
+    try {
+        if (typeof page.isClosed === 'function' && page.isClosed()) return 'page_closed'
+        const frame = typeof page.mainFrame === 'function' ? page.mainFrame() : null
+        if (frame && (
+            (typeof frame.isDetached === 'function' && frame.isDetached())
+            || frame.detached === true
+            || frame._detached === true
+        )) return 'frame_detached'
+    } catch {
+        return 'page_unavailable'
+    }
+    return null
 }
 
 async function retryOnCdpError<T>(
@@ -377,19 +431,129 @@ async function retryOnCdpError<T>(
     throw lastErr
 }
 
+/** Recover usable chat models even when one stale WA Web model rejects. */
+async function getChatsResilient(client: Client, connectionId: string, op: string) {
+    try {
+        return await retryOnCdpError(
+            () => client.getChats(),
+            { retries: 2, delayMs: 3000, op },
+            connectionId,
+        )
+    } catch (error) {
+        if (isCdpContextDestroyed(error)) throw error
+
+        const page = (client as any).pupPage
+        if (!page) throw error
+        const serialized = await page.evaluate(async () => {
+            const collection = (window as any).require?.('WAWebCollections')?.Chat
+            if (!collection) return { total: 0, chats: [] as any[] }
+            const models = collection.getModelsArray ? collection.getModelsArray() : []
+            const settled = await Promise.allSettled(
+                models.map((chat: any) => (window as any).WWebJS.getChatModel(chat)),
+            )
+            return {
+                total: models.length,
+                chats: settled.map((result: any, index: number) => {
+                    if (result.status === 'fulfilled' && result.value) return result.value
+                    const chat = models[index]
+                    const jid = chat?.id?._serialized || ''
+                    if (!jid) return null
+                    const at = jid.lastIndexOf('@')
+                    return {
+                        id: {
+                            _serialized: jid,
+                            user: at > 0 ? jid.slice(0, at) : jid,
+                            server: at > 0 ? jid.slice(at + 1) : '',
+                        },
+                        formattedTitle: chat?.formattedTitle || jid,
+                        isGroup: jid.endsWith('@g.us') || !!chat?.groupMetadata,
+                        isChannel: jid.endsWith('@newsletter'),
+                        groupMetadata: null,
+                        lastMessage: null,
+                    }
+                }).filter(Boolean),
+            }
+        })
+        if (serialized.chats.length === 0) throw error
+
+        const chats: any[] = []
+        let constructorFailures = 0
+        const runtime = WhatsAppWebRuntime as any
+        for (const model of serialized.chats) {
+            try {
+                const ChatConstructor = model.isGroup
+                    ? runtime.GroupChat
+                    : model.isChannel
+                        ? runtime.Channel
+                        : runtime.PrivateChat
+                chats.push(new ChatConstructor(client, model))
+            } catch {
+                constructorFailures++
+            }
+        }
+        const skipped = serialized.total - serialized.chats.length + constructorFailures
+        if (chats.length === 0) throw error
+
+        opsLog('warn', 'wa_get_chats_partial_fallback', {
+            connectionId,
+            op,
+            totalIds: serialized.total,
+            recoveredChats: chats.length,
+            skippedChats: skipped,
+            originalError: error instanceof Error ? error.message : String(error),
+        })
+        return chats
+    }
+}
+
+/** Recreate a client whose page/frame died without a disconnect event. */
+async function recoverClientForHistoryImport(connectionId: string, reason: string): Promise<Client> {
+    opsLog('warn', 'wa_import_runtime_recovery_start', { connectionId, reason })
+
+    const staleClient = clients.get(connectionId)
+    const staleInstanceId = instanceIds.get(connectionId)
+    if (staleInstanceId) registry.setFailed(connectionId, staleInstanceId, `history import: ${reason}`)
+    if (staleClient) {
+        try { staleClient.removeAllListeners() } catch { /* ignore */ }
+        try {
+            await Promise.race([
+                staleClient.destroy(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Destroy timeout')), 10_000)),
+            ])
+        } catch { /* cleanup below handles a zombie Chromium */ }
+    }
+    clients.delete(connectionId)
+    instanceIds.delete(connectionId)
+
+    const { cleanupStaleWhatsAppSessions } = await import('./WhatsAppCleanup')
+    await cleanupStaleWhatsAppSessions(connectionId)
+    syncDoneSet.add(connectionId)
+    await initializeClient(connectionId)
+
+    const recovered = clients.get(connectionId)
+    const runtimeIssue = getClientRuntimeIssue(recovered)
+    const entry = registry.getEntry(connectionId)
+    if (!recovered || runtimeIssue || entry?.state !== 'ready') {
+        throw new Error(`WhatsApp runtime recovery failed: ${runtimeIssue ?? entry?.state ?? 'not_ready'}`)
+    }
+
+    opsLog('info', 'wa_import_runtime_recovery_complete', { connectionId })
+    return recovered
+}
+
 // Pause flag + message buffer (pause/resume with flush/drop)
 const globalForPaused = global as unknown as { _waPaused?: Set<string> }
 const pausedSet: Set<string> = globalForPaused._waPaused || new Set()
-if (process.env.NODE_ENV !== 'production') globalForPaused._waPaused = pausedSet
+globalForPaused._waPaused = pausedSet
 
 const globalForBuffer = global as unknown as { _waBuffer?: Map<string, Message[]> }
 const messageBuffers: Map<string, Message[]> = globalForBuffer._waBuffer || new Map()
-if (process.env.NODE_ENV !== 'production') globalForBuffer._waBuffer = messageBuffers
+globalForBuffer._waBuffer = messageBuffers
 
 // Per-connection cutoff for "last N days" mode — applied in message handler
 const globalForCutoffs = global as unknown as { _waSyncCutoffs?: Map<string, Date> }
 const connectionSyncCutoffs: Map<string, Date> = globalForCutoffs._waSyncCutoffs || new Map()
-if (process.env.NODE_ENV !== 'production') globalForCutoffs._waSyncCutoffs = connectionSyncCutoffs
+globalForCutoffs._waSyncCutoffs = connectionSyncCutoffs
 
 async function safeUpdateConnection(connectionId: string, data: any) {
     try {
@@ -402,7 +566,10 @@ async function safeUpdateConnection(connectionId: string, data: any) {
             console.log(`[WA-SERVICE] Connection ${connectionId} not found, destroying client.`)
             destroyClient(connectionId).catch(() => {})
         } else {
-            console.error(`[WA-SERVICE] Failed to update connection ${connectionId}:`, err)
+            // data can contain sessionData. Prisma diagnostics may echo the
+            // invocation, so retain only the non-secret error code.
+            const code = typeof err?.code === 'string' ? err.code : 'database_error'
+            console.error(`[WA-SERVICE] Failed to update connection ${connectionId}: ${code}`)
         }
     }
 }
@@ -423,8 +590,8 @@ async function saveSession(connectionId: string, client: Client) {
         JSON.parse(session)
         await safeUpdateConnection(connectionId, { sessionData: session })
         console.log(`[WA-SERVICE] Session saved for connectionId: ${connectionId}`)
-    } catch (err) {
-        console.error(`[WA-SERVICE] Failed to save session for ${connectionId}:`, err)
+    } catch {
+        console.error(`[WA-SERVICE] Failed to save session for ${connectionId}`)
     }
 }
 
@@ -439,7 +606,7 @@ async function syncHistory(connectionId: string, client: Client) {
     const cutoff = getHistoryCutoff()
 
     try {
-        const chatsRaw = await client.getChats()
+        const chatsRaw = await getChatsResilient(client, connectionId, 'background_sync_getChats')
         for (const chatRaw of chatsRaw) {
             try {
                 // Skip only status broadcasts — groups go through with
@@ -456,8 +623,18 @@ async function syncHistory(connectionId: string, client: Client) {
                 let usedFallback = false
                 try {
                     const fetched = await chatRaw.fetchMessages({ limit: 1000 })
-                    for (const m of fetched) fetchedByJid.set(m.id._serialized, m)
-                    rawMsgs = fetched.map(m => ({ id: m.id._serialized, body: m.body || '', timestamp: m.timestamp, fromMe: m.fromMe, type: m.type, hasMedia: !!m.hasMedia }))
+                    rawMsgs = fetched.map((message: Message, index: number) => {
+                        const id = serializeHistoryMessageId((message as any).id, chatJid, message, index)
+                        fetchedByJid.set(id, message)
+                        return {
+                            id,
+                            body: message.body || '',
+                            timestamp: message.timestamp,
+                            fromMe: message.fromMe,
+                            type: message.type,
+                            hasMedia: !!message.hasMedia,
+                        }
+                    })
                 } catch {
                     usedFallback = true
                     const page = (client as any).pupPage
@@ -480,6 +657,11 @@ async function syncHistory(connectionId: string, client: Client) {
                         } catch {}
                     }
                 }
+
+                rawMsgs = rawMsgs.map((message, index) => ({
+                    ...message,
+                    id: serializeHistoryMessageId(message.id, chatJid, message, index),
+                }))
 
                 // If we came through Store-fallback (@lid), try to recover
                 // Message objects for media types so downloadMedia works.
@@ -526,17 +708,14 @@ async function syncHistory(connectionId: string, client: Client) {
                 // Normalize externalChatId so live + sync + import all use
                 // the same key — otherwise we get duplicate Chat rows.
                 const syncCanonicalExt = canonicalWaExternalChatId(chatRaw.id._serialized)
-                const unifiedSyncChat = await prisma.chat.upsert({
-                    where: { externalChatId: syncCanonicalExt },
-                    update: { name: chatRaw.name, chatType: isGroupChat ? 'group' : 'private' },
-                    create: {
-                        externalChatId: syncCanonicalExt,
-                        channel: 'whatsapp',
-                        name: chatRaw.name,
-                        chatType: isGroupChat ? 'group' : 'private',
-                        metadata: { connectionId }
-                    }
-                })
+                const unifiedSyncChat = (await upsertChannelConversationV1({
+                    contract: UPSERT_CHANNEL_CONVERSATION_COMMAND_V1,
+                    externalChatId: syncCanonicalExt,
+                    channel: 'whatsapp',
+                    name: chatRaw.name,
+                    chatType: isGroupChat ? 'group' : 'private',
+                    metadata: { connectionId },
+                })).conversation as NonNullable<Awaited<ReturnType<typeof prisma.chat.findUnique>>>
 
                 // Contact resolution: only for private chats. For groups
                 // the JID is the group id, not a phone — no contact to link.
@@ -548,8 +727,13 @@ async function syncHistory(connectionId: string, client: Client) {
                         if (isLid) {
                             // Для @lid передаём identity externalId = весь LID-JID, phone=null.
                             // НЕ цифры из @lid (это linked-device id, не phone) — иначе фабрикуем phantom phone.
-                            const contactResult = await ContactService.resolveContact('whatsapp', serialized, null, chatRaw.name)
-                            await ContactService.ensureChatLinked(unifiedSyncChat.id, contactResult.contact.id, contactResult.identity.id)
+                            const contactResult = await resolveChannelContactOperationV1('whatsapp', serialized, null, chatRaw.name)
+                            await ensureConversationContactLinkV1({
+                                contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
+                                chatId: unifiedSyncChat.id,
+                                contactId: contactResult.contact.id,
+                                contactIdentityId: contactResult.identity.id,
+                            })
                             await enrichWaChatNameFromSibling(
                                 unifiedSyncChat.id,
                                 unifiedSyncChat.name,
@@ -557,8 +741,13 @@ async function syncHistory(connectionId: string, client: Client) {
                                 null,
                             ).catch(err => console.warn(`[WA-SERVICE] enrichChatName failed: ${err.message}`))
                         } else if (rawPhone && /^\d{10,15}$/.test(rawPhone)) {
-                            const contactResult = await ContactService.resolveContact('whatsapp', rawPhone, rawPhone, chatRaw.name)
-                            await ContactService.ensureChatLinked(unifiedSyncChat.id, contactResult.contact.id, contactResult.identity.id)
+                            const contactResult = await resolveChannelContactOperationV1('whatsapp', rawPhone, rawPhone, chatRaw.name)
+                            await ensureConversationContactLinkV1({
+                                contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
+                                chatId: unifiedSyncChat.id,
+                                contactId: contactResult.contact.id,
+                                contactIdentityId: contactResult.identity.id,
+                            })
                             // PR-Л: если у этого нового chat name=null/placeholder, но
                             // у sibling-чата того же contactId уже есть pushname —
                             // подтягиваем. Закрывает источник «Без имени» @lid дубликатов.
@@ -573,6 +762,10 @@ async function syncHistory(connectionId: string, client: Client) {
                         // Non-blocking — don't break sync
                         console.warn(`[WA-SERVICE] syncHistory contact resolve failed for ${chatRaw.id._serialized}: ${contactErr.message}`)
                     }
+                }
+                if (!isGroupChat) {
+                    await attachVisibleWaPhone(unifiedSyncChat.id)
+                        .catch(error => console.warn(`[WA-SERVICE] syncHistory phone backfill failed: ${error.message}`))
                 }
 
                 let maxTimestamp: Date | null = null
@@ -625,28 +818,24 @@ async function syncHistory(connectionId: string, client: Client) {
                             if (existing) {
                                 if (!existing.externalId) {
                                     try {
-                                        await prisma.message.update({
-                                            where: { id: existing.id },
-                                            data: { externalId: msg.id }
-                                        })
+                                        await patchMessageDeliveryV1({ contract: PATCH_MESSAGE_DELIVERY_COMMAND_V1, messageId: existing.id, externalId: msg.id })
                                     } catch (updErr: any) {
                                         if (updErr.code !== 'P2002') throw updErr
                                         // Another message already has this externalId — skip silently
                                     }
                                 }
                             } else {
-                                const savedMsg = await prisma.message.create({
-                                    data: {
-                                        chatId: unifiedChat.id,
-                                        direction: msg.fromMe ? 'outbound' : 'inbound',
-                                        type: mapToUnifiedMessageType(msg.type),
-                                        content: waContentWithFallback(msg.body, msg.type),
-                                        externalId: msg.id,
-                                        channel: 'whatsapp',
-                                        sentAt: ts,
-                                        // Outbound came from phone — already delivered.
-                                        status: msg.fromMe ? 'delivered' : undefined,
-                                    }
+                                const { message: savedMsg } = await createChannelMessageV1({
+                                    contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1,
+                                    chatId: unifiedChat.id,
+                                    direction: msg.fromMe ? 'outbound' : 'inbound',
+                                    type: mapToUnifiedMessageType(msg.type),
+                                    content: waContentWithFallback(msg.body, msg.type),
+                                    externalId: msg.id,
+                                    channel: 'whatsapp',
+                                    sentAt: ts,
+                                    // Outbound came from phone — already delivered.
+                                    status: msg.fromMe ? 'delivered' : undefined,
                                 })
 
                                 // Media download — backfill path.
@@ -669,10 +858,7 @@ async function syncHistory(connectionId: string, client: Client) {
                         where: { id: chatRaw.id._serialized },
                         data: { lastMessageAt: maxTimestamp }
                     })
-                    await prisma.chat.update({
-                        where: { externalChatId: syncCanonicalExt },
-                        data: { lastMessageAt: maxTimestamp }
-                    })
+                    await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { externalChatId: syncCanonicalExt }, patch: { lastMessageAt: maxTimestamp } })
                 }
             } catch (chatErr) {
                 console.error(`[WA-SERVICE] Failed to sync chat ${chatRaw.id._serialized}:`, chatErr)
@@ -769,6 +955,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
 
     const instanceId = registry.beginNewInstance(connectionId)
     instanceIds.set(connectionId, instanceId)
+    const chromiumProxyServer = process.env.WA_CHROMIUM_PROXY_SERVER?.trim()
 
     const client = new Client({
         authStrategy: new LocalAuth({
@@ -788,6 +975,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                 '--disable-blink-features=AutomationControlled',
                 '--disable-features=IsolateOrigins,site-per-process',
                 '--disable-site-isolation-trials',
+                ...(chromiumProxyServer ? [`--proxy-server=${chromiumProxyServer}`] : []),
             ],
             ignoreDefaultArgs: ['--enable-automation'],
         },
@@ -825,7 +1013,10 @@ async function doInitializeClient(connectionId: string): Promise<void> {
             opsLog('info', 'wa_qr_received', { connectionId, instanceId })
             const QRCode = (await import('qrcode')).default
             const qrDataUrl = await QRCode.toDataURL(qr)
-            await safeUpdateConnection(connectionId, { status: 'qr', sessionData: qrDataUrl })
+            publishPendingWhatsAppQr(connectionId, instanceId, qrDataUrl)
+            // sessionData is reserved for established server-side session
+            // snapshots. QR authorization material is ephemeral process state.
+            await safeUpdateConnection(connectionId, { status: 'qr', sessionData: null })
         } catch (err) {
             console.error(`[WA-SERVICE] QR event error for ${connectionId}:`, err)
         }
@@ -835,6 +1026,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
         if (!registry.isCurrentInstance(connectionId, instanceId)) return
         try {
             opsLog('info', 'wa_authenticated', { connectionId, instanceId })
+            clearPendingWhatsAppQr(connectionId, instanceId)
             await safeUpdateConnection(connectionId, { status: 'authenticated' })
             // saveSession moved to 'ready' handler — on 'authenticated', WA Web may still be
             // navigating internally and pupPage.evaluate can trigger "Execution context destroyed"
@@ -847,6 +1039,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
         try {
             if (!registry.isCurrentInstance(connectionId, instanceId)) return
             registry.setReady(connectionId, instanceId)
+            clearPendingWhatsAppQr(connectionId, instanceId)
             opsLog('info', 'wa_ready', { connectionId, instanceId, phone: client.info?.wid?.user })
             const info = client.info
             await safeUpdateConnection(connectionId, {
@@ -1079,14 +1272,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
             if (unifiedChat) {
                 // Always update potential variant IDs to the standardized format
                 try {
-                    await (prisma.chat as any).update({
-                        where: { id: unifiedChat.id },
-                        data: {
-                            externalChatId: normalizedExternalId,
-                            lastMessageAt: ts,
-                            metadata: { ...(unifiedChat.metadata as any || {}), connectionId }
-                        }
-                    })
+                    await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { externalChatId: normalizedExternalId, lastMessageAt: ts } })
                 } catch (updateErr: any) {
                     if (updateErr.code === 'P2002') {
                         // Another chat already has normalizedExternalId — use it as the canonical chat
@@ -1094,28 +1280,23 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                         if (phoneChat) {
                             console.warn(`[WA-SERVICE] Unique conflict on externalChatId update — redirecting to phone chat ${phoneChat.id}`)
                             unifiedChat = phoneChat
-                            await (prisma.chat as any).update({ where: { id: phoneChat.id }, data: { lastMessageAt: ts } })
+                            await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: phoneChat.id }, patch: { lastMessageAt: ts } })
                         }
                     } else {
                         throw updateErr
                     }
                 }
             } else {
-                unifiedChat = await (prisma.chat as any).create({
-                    data: {
-                        externalChatId: normalizedExternalId,
-                        channel: 'whatsapp',
-                        lastMessageAt: ts,
-                        metadata: { connectionId }
-                    }
-                })
+                const created = await upsertChannelConversationV1({ contract: UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, externalChatId: normalizedExternalId, channel: 'whatsapp', name: null, chatType: 'private', metadata: { connectionId } })
+                unifiedChat = created.conversation as any
+                await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: ts } })
             }
 
             // Relink driver on every inbound if missing
             if (!unifiedChat.driverId) {
-                let matched = await DriverMatchService.linkChatToDriver(unifiedChat.id, { phone: phoneDigits })
+                let matched = await DriverMatchService.linkChatToDriver(unifiedChat.id, { phone: phoneDigits }, linkMatchedDriverToConversationCapabilityV1)
                 if (!matched && unifiedChat.name && unifiedChat.name.includes('+')) {
-                    matched = await DriverMatchService.linkChatToDriver(unifiedChat.id, { phone: unifiedChat.name })
+                    matched = await DriverMatchService.linkChatToDriver(unifiedChat.id, { phone: unifiedChat.name }, linkMatchedDriverToConversationCapabilityV1)
                 }
                 if (matched) {
                     unifiedChat = await (prisma.chat as any).findUnique({ where: { id: unifiedChat.id } })
@@ -1134,32 +1315,36 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                 //     rows that map LIDs onto real people's numbers by accident)
                 const identityExternalId = lidResolved ? normalizedPhone : rawChatId
                 const phoneForResolve   = lidResolved ? phoneDigits     : null
-                const contactResult = await ContactService.resolveContact(
+                const contactResult = await resolveChannelContactOperationV1(
                     'whatsapp',
                     identityExternalId,
                     phoneForResolve,
                     (msg as any).notifyName || unifiedChat.name || null,
                 )
-                await ContactService.ensureChatLinked(
-                    unifiedChat.id,
-                    contactResult.contact.id,
-                    contactResult.identity.id,
-                )
+                await ensureConversationContactLinkV1({
+                    contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
+                    chatId: unifiedChat.id,
+                    contactId: contactResult.contact.id,
+                    contactIdentityId: contactResult.identity.id,
+                })
                 // Backfill phone onto contact when LID resolved to a real number.
                 // resolveContact may have returned an existing contact (found via old
                 // @lid identity) that was created before phone resolution was available.
-                // addPhoneToContact is idempotent — safe to call on every message.
+                // The identity attachment also preserves conflict and primary-phone truth.
                 if (lidResolved && phoneDigits.length >= 10) {
                     const e164 = '+7' + phoneDigits.slice(-10)
-                    const backfill = await ContactService.addPhoneToContact(
+                    const backfill = await attachPhoneToIdentityV1(
                         contactResult.contact.id,
+                        contactResult.identity.id,
                         e164,
-                        { source: 'whatsapp', isPrimary: true },
+                        { source: 'whatsapp', confirmed: true },
                     )
-                    if (backfill.kind === 'added') {
+                    if (backfill.kind !== 'conflict') {
                         console.log(`[WA-SERVICE] Backfilled phone ${e164} → contact ${contactResult.contact.id}`)
                     }
                 }
+                await attachVisibleWaPhone(unifiedChat.id)
+                    .catch(error => console.warn(`[WA-SERVICE] live phone backfill failed: ${error.message}`))
             } catch (contactErr: any) {
                 console.error(`[WA-SERVICE] ContactService error (non-blocking): ${contactErr.message}`)
             }
@@ -1215,26 +1400,22 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                 console.log(`[WA-SERVICE] DB-DEDUP: skipped duplicate ${direction} msgId=${msg.id._serialized} (existing=${existingUnified.id})`)
                 if (!existingUnified.externalId) {
                     try {
-                        await prisma.message.update({
-                            where: { id: existingUnified.id },
-                            data: { externalId: msg.id._serialized }
-                        })
+                        await patchMessageDeliveryV1({ contract: PATCH_MESSAGE_DELIVERY_COMMAND_V1, messageId: existingUnified.id, externalId: msg.id._serialized })
                     } catch (updErr: any) {
                         if (updErr.code !== 'P2002') throw updErr
                     }
                 }
             } else {
                 const msgType = mapToUnifiedMessageType(msg.type)
-                const savedMsg = await prisma.message.create({
-                    data: {
-                        chatId: unifiedChat.id,
-                        direction,
-                        type: msgType,
-                        content: waContentWithFallback(msg.body, msg.type),
-                        externalId: msg.id._serialized,
-                        sentAt: ts,
-                        status: isOutbound ? 'delivered' : undefined,
-                    }
+                const { message: savedMsg } = await createChannelMessageV1({
+                    contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1,
+                    chatId: unifiedChat.id,
+                    direction,
+                    type: msgType,
+                    content: waContentWithFallback(msg.body, msg.type),
+                    externalId: msg.id._serialized,
+                    sentAt: ts,
+                    status: isOutbound ? 'delivered' : undefined,
                 })
 
                 // Download and save media attachment (image, voice, video, document, sticker).
@@ -1292,6 +1473,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
     client.on('auth_failure', async (msg) => {
         try {
             if (!registry.isCurrentInstance(connectionId, instanceId)) return
+            clearPendingWhatsAppQr(connectionId, instanceId)
             opsLog('error', 'wa_auth_failure', { connectionId, instanceId, reason: String(msg) })
             // Unrecoverable — no auto-reconnect
             registry.setFailed(connectionId, instanceId, `auth_failure: ${msg}`)
@@ -1306,6 +1488,7 @@ async function doInitializeClient(connectionId: string): Promise<void> {
     client.on('disconnected', async (reason) => {
         try {
             if (!registry.isCurrentInstance(connectionId, instanceId)) return
+            clearPendingWhatsAppQr(connectionId, instanceId)
             await safeUpdateConnection(connectionId, { status: 'disconnected' })
             clients.delete(connectionId)
             instanceIds.delete(connectionId) // FIX 5: drop stale instanceId — next init creates a new one
@@ -1342,9 +1525,10 @@ async function doInitializeClient(connectionId: string): Promise<void> {
         })
     } catch (err: any) {
         const elapsedMs = Date.now() - initStartedAt
+        clearPendingWhatsAppQr(connectionId, instanceId)
         const msg = err?.message ?? String(err)
         const errorClass =
-            /browser is already running/i.test(msg) ? 'browser_already_running' :
+            /browser is already running|profile appears to be in use|process_singleton/i.test(msg) ? 'browser_already_running' :
             /Execution context was destroyed/i.test(msg) ? 'cdp_context_destroyed' :
             /Navigation timeout/i.test(msg) ? 'navigation_timeout' :
             /Target closed/i.test(msg) ? 'browser_closed' :
@@ -1367,17 +1551,20 @@ async function doInitializeClient(connectionId: string): Promise<void> {
             return
         }
 
-        // Critical: write error status to DB so UI doesn't show stale "ready" from previous session
+        // Keep UI status honest, then schedule the retry explicitly because
+        // initializeClient swallows per-account warmup failures by design.
         await safeUpdateConnection(connectionId, { status: 'error' })
-        registry.setFailed(connectionId, instanceId, `init_failed: ${errorClass}`)
         try { await client.destroy() } catch { /* zombie process may not respond */ }
         clients.delete(connectionId)
         instanceIds.delete(connectionId)
-        // NO throw — warmup continues with other connections
+        registry.setReconnecting(connectionId, instanceId)
+        registry.scheduleReconnect(connectionId, instanceId, () => initializeClient(connectionId))
+        // NO throw — warmup continues with other connections while this one retries.
     }
 }
 
 export async function destroyClient(connectionId: string): Promise<void> {
+    clearPendingWhatsAppQr(connectionId)
     const client = clients.get(connectionId)
     if (!client) return
     console.log(`[WA-TRANSPORT] client_destroying connId=${connectionId}`)
@@ -1433,7 +1620,7 @@ const HARD_RESTART_COOLDOWN_MS = 5 * 60 * 1000 // 5 min
  * client_missing / client_info_null / similar conditions.
  */
 async function scheduleHardRestart(connectionId: string, reason: string): Promise<void> {
-    const { opsLog } = await import('@/lib/opsLog')
+    const { operationalLogV1: opsLog } = await import('@/infrastructure/operations/operational-log')
 
     const last = hardRestartLastAt.get(connectionId) || 0
     if (Date.now() - last < HARD_RESTART_COOLDOWN_MS) {
@@ -1487,7 +1674,7 @@ async function scheduleHardRestart(connectionId: string, reason: string): Promis
 }
 
 export async function checkAllClientsHealth(): Promise<{ checkedCount: number; unhealthyCount: number; details: Array<{ connectionId: string; healthy: boolean; reason?: string }> }> {
-    const { opsLog } = await import('@/lib/opsLog')
+    const { operationalLogV1: opsLog } = await import('@/infrastructure/operations/operational-log')
     const entries = registry.getAllEntries().filter(e => e.channel === 'whatsapp' && e.state === 'ready')
     const details: Array<{ connectionId: string; healthy: boolean; reason?: string }> = []
     let unhealthyCount = 0
@@ -1516,26 +1703,26 @@ export async function checkAllClientsHealth(): Promise<{ checkedCount: number; u
             continue
         }
 
-        if (!client.info) {
-            // Puppeteer dead — client.info is null
+        const runtimeIssue = getClientRuntimeIssue(client)
+        if (runtimeIssue) {
             const lastAction = watchdogLastAction.get(entry.connectionId) || 0
             if (Date.now() - lastAction < WATCHDOG_COOLDOWN_MS) {
-                details.push({ connectionId: entry.connectionId, healthy: false, reason: 'stale_info_cooldown' })
+                details.push({ connectionId: entry.connectionId, healthy: false, reason: `${runtimeIssue}_cooldown` })
                 continue
             }
             watchdogLastAction.set(entry.connectionId, Date.now())
-            opsLog('warn', 'wa_watchdog_stale', { connectionId: entry.connectionId, reason: 'client_info_null' })
+            opsLog('warn', 'wa_watchdog_stale', { connectionId: entry.connectionId, reason: runtimeIssue })
             const curInstanceId = registry.getInstanceId(entry.connectionId)
             if (curInstanceId) {
-                registry.setFailed(entry.connectionId, curInstanceId, 'watchdog: puppeteer dead (client.info null)')
+                registry.setFailed(entry.connectionId, curInstanceId, `watchdog: ${runtimeIssue}`)
             }
             try { client.removeAllListeners() } catch { /* ignore */ } // FIX 4 extension: drop listeners on dead client
             clients.delete(entry.connectionId)
             instanceIds.delete(entry.connectionId) // FIX 5: drop stale instanceId
             // Stage 1 addition: attempt automatic recovery
-            scheduleHardRestart(entry.connectionId, 'client_info_null').catch(() => {})
+            scheduleHardRestart(entry.connectionId, runtimeIssue).catch(() => {})
             unhealthyCount++
-            details.push({ connectionId: entry.connectionId, healthy: false, reason: 'client_info_null' })
+            details.push({ connectionId: entry.connectionId, healthy: false, reason: runtimeIssue })
             continue
         }
 
@@ -1692,10 +1879,7 @@ export async function sendMessage(connectionId: string, chatId: string, text: st
     if (unifiedChat) {
         if (unifiedChat.externalChatId !== normalizedTarget) {
             try {
-                unifiedChat = await prisma.chat.update({
-                    where: { id: unifiedChat.id },
-                    data: { externalChatId: normalizedTarget }
-                });
+                unifiedChat = (await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { externalChatId: normalizedTarget } })).conversation as typeof unifiedChat;
             } catch (updateErr: any) {
                 // P2002 = another chat already has normalizedTarget as externalChatId.
                 // This happens when a phone-format chat was created while the @lid chat
@@ -1726,32 +1910,12 @@ export async function sendMessage(connectionId: string, chatId: string, text: st
 
         if (existing) {
             console.log(`[WA-SERVICE] Found existing optimistic message ${existing.id}, updating with externalId ${msg.id._serialized}`)
-            await prisma.message.update({
-                where: { id: existing.id },
-                data: { 
-                    externalId: msg.id._serialized,
-                    status: 'delivered',
-                    sentAt: ts // Update to actual sent time from WA
-                }
-            })
+            await patchMessageDeliveryV1({ contract: PATCH_MESSAGE_DELIVERY_COMMAND_V1, messageId: existing.id, externalId: msg.id._serialized, status: 'delivered', sentAt: ts })
         } else {
-            await prisma.message.create({
-                data: {
-                    chatId: unifiedChat.id,
-                    direction: 'outbound',
-                    type: 'text',
-                    content: text,
-                    externalId: msg.id._serialized,
-                    sentAt: ts,
-                    status: 'delivered'
-                }
-            })
+            await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: unifiedChat.id, direction: 'outbound', type: 'text', content: text, externalId: msg.id._serialized, sentAt: ts, status: 'delivered' })
         }
 
-        await prisma.chat.update({
-            where: { id: unifiedChat.id },
-            data: { lastMessageAt: ts }
-        })
+        await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: ts } })
     }
 
     return { externalId: msg.id._serialized }
@@ -1881,16 +2045,22 @@ export async function importWhatsAppHistory(
         const conns = await prisma.whatsAppConnection.findMany({ where: { status: 'ready' } })
         if (conns.length === 0) {
             console.error('[WA-IMPORT] No ready WhatsApp connections')
-            await updateImportJob(jobId, { status: 'failed', resultType: 'failed', finishedAt: new Date() })
+            await updateImportJob(jobId, {
+                status: 'failed', resultType: 'failed', finishedAt: new Date(),
+                detailsJson: { reason: 'no_ready_connection' },
+            })
             return
         }
         connId = conns[0].id
     }
 
-    const client = clients.get(connId)
+    let client = clients.get(connId)
     if (!client) {
         console.error(`[WA-IMPORT] Client not found for connection ${connId}`)
-        await updateImportJob(jobId, { status: 'failed', resultType: 'failed', finishedAt: new Date() })
+        await updateImportJob(jobId, {
+            status: 'failed', resultType: 'failed', finishedAt: new Date(),
+            detailsJson: { reason: 'client_not_connected' },
+        })
         return
     }
 
@@ -1907,10 +2077,12 @@ export async function importWhatsAppHistory(
         cutoff = new Date() // only new messages from now
         connectionSyncCutoffs.set(connId!, cutoff)
     } else {
-        // available_history — no cutoff, allow everything the library delivers
-        cutoff = getHistoryCutoff()
+        // available_history — accept every valid protocol timestamp exposed
+        // by the current WhatsApp Web session.
+        cutoff = new Date(MIN_TS_MS)
         connectionSyncCutoffs.delete(connId!)
     }
+    const historyMessageLimit = mode === 'available_history' ? Infinity : 1000
     opsLog('info', 'wa_sync_cutoff_set', {
         connectionId: connId, mode, cutoffISO: cutoff.toISOString(),
     })
@@ -1923,14 +2095,28 @@ export async function importWhatsAppHistory(
     let maxDate: Date | null = null
 
     try {
+        // client.info can outlive Puppeteer's page/frame. Recreate the runtime
+        // before the first CDP call when the process-global client is stale.
+        const initialRuntimeIssue = getClientRuntimeIssue(client)
+        if (initialRuntimeIssue) {
+            client = await recoverClientForHistoryImport(connId!, initialRuntimeIssue)
+        }
+
         // Retry getChats() on "Execution context was destroyed" — WA Web
         // occasionally navigates internally right after ready, invalidating
-        // puppeteer's evaluate context. Give it a few seconds to stabilize.
-        const chatsRaw = await retryOnCdpError(
-            () => client.getChats(),
-            { retries: 4, delayMs: 5000, op: 'getChats' },
-            connId!,
-        )
+        // puppeteer's evaluate context. A detached main frame is permanent for
+        // the current Client, so recreate it once and continue the same job.
+        let chatsRaw
+        try {
+            chatsRaw = await getChatsResilient(client, connId!, 'getChats')
+        } catch (getChatsErr) {
+            if (!isCdpContextDestroyed(getChatsErr)) throw getChatsErr
+            client = await recoverClientForHistoryImport(
+                connId!,
+                getChatsErr instanceof Error ? getChatsErr.message : String(getChatsErr),
+            )
+            chatsRaw = await getChatsResilient(client, connId!, 'getChats_after_recovery')
+        }
 
         for (const chatRaw of chatsRaw) {
             try {
@@ -1951,16 +2137,19 @@ export async function importWhatsAppHistory(
                 const fetchedByJid = new Map<string, Message>()
                 let usedFallback = false
                 try {
-                    const fetched = await chatRaw.fetchMessages({ limit: 1000 })
-                    for (const m of fetched) fetchedByJid.set(m.id._serialized, m)
-                    rawMessages = fetched.map(m => ({
-                        id: m.id._serialized,
-                        body: m.body || '',
-                        timestamp: m.timestamp,
-                        fromMe: m.fromMe,
-                        type: m.type,
-                        hasMedia: !!m.hasMedia,
-                    }))
+                    const fetched = await chatRaw.fetchMessages({ limit: historyMessageLimit })
+                    rawMessages = fetched.map((message: Message, index: number) => {
+                        const id = serializeHistoryMessageId((message as any).id, chatJid, message, index)
+                        fetchedByJid.set(id, message)
+                        return {
+                            id,
+                            body: message.body || '',
+                            timestamp: message.timestamp,
+                            fromMe: message.fromMe,
+                            type: message.type,
+                            hasMedia: !!message.hasMedia,
+                        }
+                    })
                 } catch {
                     usedFallback = true
                     // fetchMessages fails for @lid chats — use Puppeteer Store directly
@@ -1987,6 +2176,13 @@ export async function importWhatsAppHistory(
                         } catch {}
                     }
                 }
+
+                // Store fallback can expose malformed legacy keys. Give every
+                // history row a deterministic id before deduplication.
+                rawMessages = rawMessages.map((message, index) => ({
+                    ...message,
+                    id: serializeHistoryMessageId(message.id, chatJid, message, index),
+                }))
 
                 // @lid chats arrive via Store-fallback with no Message objects,
                 // which meant media was lost. Try getMessageById for each
@@ -2032,17 +2228,14 @@ export async function importWhatsAppHistory(
 
                 // Normalize externalChatId to keep live + sync + import in sync.
                 const importCanonicalExt = canonicalWaExternalChatId(chatRaw.id._serialized)
-                const unifiedChat = await prisma.chat.upsert({
-                    where: { externalChatId: importCanonicalExt },
-                    update: { name: chatRaw.name, chatType: isGroupChat ? 'group' : 'private' },
-                    create: {
-                        externalChatId: importCanonicalExt,
-                        channel: 'whatsapp',
-                        name: chatRaw.name,
-                        chatType: isGroupChat ? 'group' : 'private',
-                        metadata: { connectionId: connId }
-                    }
-                })
+                const unifiedChat = (await upsertChannelConversationV1({
+                    contract: UPSERT_CHANNEL_CONVERSATION_COMMAND_V1,
+                    externalChatId: importCanonicalExt,
+                    channel: 'whatsapp',
+                    name: chatRaw.name,
+                    chatType: isGroupChat ? 'group' : 'private',
+                    metadata: { connectionId: connId },
+                })).conversation as NonNullable<Awaited<ReturnType<typeof prisma.chat.findUnique>>>
 
                 // Contact resolution: only for private (1:1) chats.
                 // Group JIDs are room ids, not phones.
@@ -2053,8 +2246,13 @@ export async function importWhatsAppHistory(
                         const rawPhone = serialized.split('@')[0]
                         if (isLid) {
                             // Для @lid: externalId = весь LID-JID, phone=null. См. live-path выше.
-                            const contactResult = await ContactService.resolveContact('whatsapp', serialized, null, chatRaw.name)
-                            await ContactService.ensureChatLinked(unifiedChat.id, contactResult.contact.id, contactResult.identity.id)
+                            const contactResult = await resolveChannelContactOperationV1('whatsapp', serialized, null, chatRaw.name)
+                            await ensureConversationContactLinkV1({
+                                contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
+                                chatId: unifiedChat.id,
+                                contactId: contactResult.contact.id,
+                                contactIdentityId: contactResult.identity.id,
+                            })
                             await enrichWaChatNameFromSibling(
                                 unifiedChat.id,
                                 unifiedChat.name,
@@ -2063,8 +2261,13 @@ export async function importWhatsAppHistory(
                             ).catch(err => console.warn(`[WA-SERVICE] importHistory enrichChatName failed: ${err.message}`))
                             totalContacts++
                         } else if (rawPhone && /^\d{10,15}$/.test(rawPhone)) {
-                            const contactResult = await ContactService.resolveContact('whatsapp', rawPhone, rawPhone, chatRaw.name)
-                            await ContactService.ensureChatLinked(unifiedChat.id, contactResult.contact.id, contactResult.identity.id)
+                            const contactResult = await resolveChannelContactOperationV1('whatsapp', rawPhone, rawPhone, chatRaw.name)
+                            await ensureConversationContactLinkV1({
+                                contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
+                                chatId: unifiedChat.id,
+                                contactId: contactResult.contact.id,
+                                contactIdentityId: contactResult.identity.id,
+                            })
                             // PR-Л: тот же sibling-lookup как в syncHistory.
                             // Если этот chat дубликат @lid existing-чата с pushname —
                             // подтянем имя автоматически.
@@ -2077,6 +2280,10 @@ export async function importWhatsAppHistory(
                             totalContacts++
                         }
                     } catch {}
+                }
+                if (!isGroupChat) {
+                    await attachVisibleWaPhone(unifiedChat.id)
+                        .catch(err => console.warn(`[WA-SERVICE] importHistory phone backfill failed: ${err.message}`))
                 }
 
                 let chatMaxTs: Date | null = null
@@ -2125,21 +2332,20 @@ export async function importWhatsAppHistory(
 
                         totalMessages++
                         if (!existing) {
-                            const savedMsg = await prisma.message.create({
-                                data: {
-                                    chatId: unifiedChat.id,
-                                    direction: msg.fromMe ? 'outbound' : 'inbound',
-                                    type: mapToUnifiedMessageType(msg.type),
-                                    content: waContentWithFallback(msg.body, msg.type),
-                                    externalId: msgId,
-                                    channel: 'whatsapp',
-                                    sentAt: ts,
-                                    // Backfilled outbound messages came from
-                                    // WA Web's own Store — they already shipped
-                                    // from the phone. Mark delivered so the UI
-                                    // doesn't flag them with "Повторить".
-                                    status: msg.fromMe ? 'delivered' : undefined,
-                                }
+                            const { message: savedMsg } = await createChannelMessageV1({
+                                contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1,
+                                chatId: unifiedChat.id,
+                                direction: msg.fromMe ? 'outbound' : 'inbound',
+                                type: mapToUnifiedMessageType(msg.type),
+                                content: waContentWithFallback(msg.body, msg.type),
+                                externalId: msgId,
+                                channel: 'whatsapp',
+                                sentAt: ts,
+                                // Backfilled outbound messages came from
+                                // WA Web's own Store — they already shipped
+                                // from the phone. Mark delivered so the UI
+                                // doesn't flag them with "Повторить".
+                                status: msg.fromMe ? 'delivered' : undefined,
                             })
                             newMessages++
 
@@ -2161,7 +2367,7 @@ export async function importWhatsAppHistory(
                 // Update lastMessageAt
                 if (chatMaxTs) {
                     await prisma.whatsAppChat.update({ where: { id: chatRaw.id._serialized }, data: { lastMessageAt: chatMaxTs } })
-                    await prisma.chat.update({ where: { externalChatId: importCanonicalExt }, data: { lastMessageAt: chatMaxTs } })
+                    await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { externalChatId: importCanonicalExt }, patch: { lastMessageAt: chatMaxTs } })
                 }
 
                 // Periodic job progress update (every 5 chats)
@@ -2215,6 +2421,7 @@ export async function importWhatsAppHistory(
         console.log(`[WA-IMPORT] Completed job=${jobId}: ${finalMessages} msgs (${newMessages} new, ${finalMessages - newMessages} existing), ${finalChats} chats, ${finalContacts} contacts`)
     } catch (err: any) {
         console.error(`[WA-IMPORT] Fatal error job=${jobId}: ${err.message}`)
+        const runtimeFailure = isCdpContextDestroyed(err) || /runtime recovery failed/i.test(String(err?.message ?? err))
         await updateImportJob(jobId, {
             status: 'failed',
             resultType: 'failed',
@@ -2222,45 +2429,18 @@ export async function importWhatsAppHistory(
             chatsScanned: totalChats,
             contactsFound: totalContacts,
             finishedAt: new Date(),
+            detailsJson: {
+                reason: runtimeFailure ? 'whatsapp_runtime_unavailable' : 'import_failed',
+                error: String(err?.message ?? err).slice(0, 500),
+            },
         })
     }
 }
 
 /** Update HistoryImportJob fields directly via Prisma */
-async function updateImportJob(jobId: string, data: {
-    status?: string
-    resultType?: string
-    messagesImported?: number
-    chatsScanned?: number
-    contactsFound?: number
-    startedAt?: Date | null
-    finishedAt?: Date | null
-    coveredPeriodFrom?: Date | null
-    coveredPeriodTo?: Date | null
-    detailsJson?: any
-}) {
+async function updateImportJob(jobId: string, data: HistoryImportJobPatchV1) {
     try {
-        const sets: string[] = []
-        const vals: any[] = []
-        let idx = 1
-
-        if (data.status !== undefined)           { sets.push(`status = $${idx}::"AiImportStatus"`); vals.push(data.status); idx++ }
-        if (data.resultType !== undefined)        { sets.push(`"resultType" = $${idx}`); vals.push(data.resultType); idx++ }
-        if (data.messagesImported !== undefined)  { sets.push(`"messagesImported" = $${idx}`); vals.push(data.messagesImported); idx++ }
-        if (data.chatsScanned !== undefined)      { sets.push(`"chatsScanned" = $${idx}`); vals.push(data.chatsScanned); idx++ }
-        if (data.contactsFound !== undefined)     { sets.push(`"contactsFound" = $${idx}`); vals.push(data.contactsFound); idx++ }
-        if (data.startedAt !== undefined)         { sets.push(`"startedAt" = $${idx}`); vals.push(data.startedAt); idx++ }
-        if (data.finishedAt !== undefined)        { sets.push(`"finishedAt" = $${idx}`); vals.push(data.finishedAt); idx++ }
-        if (data.coveredPeriodFrom !== undefined) { sets.push(`"coveredPeriodFrom" = $${idx}`); vals.push(data.coveredPeriodFrom); idx++ }
-        if (data.coveredPeriodTo !== undefined)   { sets.push(`"coveredPeriodTo" = $${idx}`); vals.push(data.coveredPeriodTo); idx++ }
-        if (data.detailsJson !== undefined)       { sets.push(`"detailsJson" = $${idx}::jsonb`); vals.push(JSON.stringify(data.detailsJson)); idx++ }
-
-        if (sets.length === 0) return
-        vals.push(jobId)
-        await prisma.$executeRawUnsafe(
-            `UPDATE "HistoryImportJob" SET ${sets.join(', ')} WHERE id = $${idx}`,
-            ...vals
-        )
+        await patchHistoryImportJobV1({ contract: PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, jobId, patch: data })
     } catch (err: any) {
         console.error(`[WA-IMPORT] updateImportJob error: ${err.message}`)
     }
@@ -2270,40 +2450,82 @@ async function updateImportJob(jobId: string, data: {
  * Check if a phone number is registered on WhatsApp.
  * Uses client.isRegisteredUser() from whatsapp-web.js.
  *
- * On timeout, missing client, or internal error returns { reachable: true } as a soft fallback —
- * this means "don't show a warning", NOT "confirmed reachable".
+ * Only client.isRegisteredUser() is allowed to produce definitive true/false.
+ * Runtime failures return reachable:null so the UI can show an operational
+ * state without lying that the account exists or does not exist.
  */
+type WhatsAppReachabilityCheck = {
+    reachable: boolean | null
+    confirmed?: boolean
+    retryable?: boolean
+    error?: string
+    reason?: string
+}
+
+function waReachabilityChecking(error: string, reason: string, retryable = true): WhatsAppReachabilityCheck {
+    return { reachable: null, confirmed: false, retryable, error, reason }
+}
+
+function getLiveReachabilityConnectionId(): string | null {
+    const entries = registry.getAllEntries()
+        .filter(e => e.channel === 'whatsapp' && e.state === 'ready')
+        .sort((a, b) => (b.readyAt?.getTime() ?? 0) - (a.readyAt?.getTime() ?? 0))
+
+    for (const entry of entries) {
+        const client = clients.get(entry.connectionId)
+        if (client?.info) return entry.connectionId
+    }
+    return null
+}
+
 export async function checkReachability(
     phone: string,
     connectionId?: string
-): Promise<{ reachable: boolean; confirmed?: boolean; error?: string }> {
-    // `confirmed: true` помечает РЕАЛЬНЫЙ positive answer от WhatsApp client.isRegisteredUser().
-    // Soft fallback'и (no connection / stale client / short phone / timeout / exception) возвращают reachable:true
-    // БЕЗ confirmed — чтобы route /api/channels/check-reachability не персистил status='confirmed' ложно.
+): Promise<WhatsAppReachabilityCheck> {
+    // `confirmed: true` means a REAL positive answer from WhatsApp client.isRegisteredUser().
+    // Operational states must never return reachable:true as a soft fallback:
+    // the reachability UI has to distinguish "account exists" from "CRM cannot check yet".
     const TIMEOUT_MS = 8_000
 
     try {
-        // Find a ready connection
-        let connId = connectionId
+        // Prefer the same runtime truth used by the WhatsApp settings screen:
+        // registry ready + live client.info. DB status can lag behind runtime
+        // (for example remain "qr" while the in-memory session is ready).
+        let connId: string | null = connectionId ?? null
+        if (!connId) {
+            connId = getLiveReachabilityConnectionId()
+        }
         if (!connId) {
             const conn = await prisma.whatsAppConnection.findFirst({
-                where: { status: 'ready' },
+                where: { status: { in: ['ready', 'authenticated'] } },
                 select: { id: true },
             })
-            if (!conn) return { reachable: true } // No ready connection — soft fallback
-            connId = conn.id
+            connId = conn?.id ?? null
+        }
+        if (!connId) {
+            return waReachabilityChecking('WhatsApp не подключён в CRM', 'no_ready_connection', false)
         }
 
         const client = clients.get(connId)
         if (!client || !client.info) {
-            // Client not initialized or stale — soft fallback, don't warn
-            return { reachable: true }
+            // Client not initialized or stale. Kick recovery once, then let UI retry.
+            opsLog('warn', 'wa_reachability_client_not_ready', {
+                connectionId: connId,
+                reason: !client ? 'client_missing' : 'client_info_null',
+            })
+            initializeClient(connId).catch((err: any) => {
+                opsLog('error', 'wa_reachability_reinit_failed', {
+                    connectionId: connId,
+                    error: err?.message ?? String(err),
+                })
+            })
+            return waReachabilityChecking('WhatsApp подключение восстанавливается', 'client_not_ready', true)
         }
 
         // Normalize: strip '+' and non-digits
         const digits = phone.replace(/\D/g, '')
         if (digits.length < 10) {
-            return { reachable: true } // Too short to check — soft fallback
+            return waReachabilityChecking('Некорректный номер WhatsApp', 'invalid_phone', false)
         }
 
         const result = await Promise.race([
@@ -2312,7 +2534,9 @@ export async function checkReachability(
         ])
 
         // Timeout → soft fallback
-        if (result === null) return { reachable: true }
+        if (result === null) {
+            return waReachabilityChecking('WhatsApp не ответил за 8 секунд', 'timeout', true)
+        }
 
         if (result) {
             return { reachable: true, confirmed: true }  // ← реально найден в WA
@@ -2320,9 +2544,8 @@ export async function checkReachability(
             return { reachable: false, error: 'Номер не зарегистрирован в WhatsApp' }
         }
     } catch (err: any) {
-        // Any error — soft fallback
         console.error(`[WA-CHECK] Error checking ${phone}: ${err.message}`)
-        return { reachable: true }
+        return waReachabilityChecking('Ошибка проверки WhatsApp', 'exception', true)
     }
 }
 

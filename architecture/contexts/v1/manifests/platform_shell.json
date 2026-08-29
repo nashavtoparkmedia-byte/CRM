@@ -1,0 +1,171 @@
+{
+  "allowed_dependencies": [
+    {
+      "context": "identity_access",
+      "surface": "identity_access.public"
+    },
+    {
+      "context": "contacts",
+      "surface": "contacts.public"
+    },
+    {
+      "context": "fleet_operations",
+      "surface": "fleet_operations.public"
+    },
+    {
+      "context": "work_management",
+      "surface": "work_management.public"
+    },
+    {
+      "context": "messaging",
+      "surface": "messaging.public"
+    },
+    {
+      "context": "calling",
+      "surface": "calling.public"
+    },
+    {
+      "context": "ai_knowledge",
+      "surface": "ai_knowledge.public"
+    },
+    {
+      "context": "analytics_reporting",
+      "surface": "analytics_reporting.public"
+    },
+    {
+      "context": "operations_observability",
+      "surface": "operations_observability.public"
+    },
+    {
+      "context": "configuration",
+      "surface": "configuration.public"
+    }
+  ],
+  "commands": [],
+  "compatibility_strategy": "Keep existing composition entry points as adapters while cross-context imports move to public contracts.",
+  "context": {
+    "id": "platform_shell",
+    "name": "Platform Shell"
+  },
+  "credential_relationships": {
+    "database_models": [
+      "AiAgentConfig",
+      "ApiConnection",
+      "WhatsAppConnection"
+    ],
+    "environment_names": [
+      "BOT_API_URL",
+      "BOT_CRM_SECRET",
+      "DATABASE_URL",
+      "DRIVER_ACTIONS_PARK_ID",
+      "MAX_SCRAPER_URL",
+      "NEXT_RUNTIME",
+      "NODE_ENV",
+      "OPENAI_API_KEY",
+      "RETENTION_DRY_RUN",
+      "S3_ACCESS_KEY",
+      "S3_BUCKET",
+      "S3_ENDPOINT",
+      "S3_REGION",
+      "S3_SECRET_KEY",
+      "TELEGRAM_BOT_URL",
+      "YANDEX_FLEET_SCRAPER_URL"
+    ],
+    "policy": "Names and access locations only. Values stay inside the owning adapter and never cross a public contract."
+  },
+  "events": [
+    "PlatformStarted.v1",
+    "PlatformHealthChanged.v1"
+  ],
+  "evidence": {
+    "dependency_edges": 18,
+    "source_snapshot_sha256": "2713db175062bb673dcca2d97e80c2ae204a2f257438036c6db2506587dfad7d",
+    "write_sites_requiring_migration": 31
+  },
+  "forbidden_dependencies": [
+    "channel_provider_internal",
+    "credentialValuesInContracts",
+    "directForeignPrismaWrites",
+    "providerImplementationImportsOutsideOwningContext",
+    "scraper_session_internal",
+    "unversionedCrossContextPayloads"
+  ],
+  "foreign_write_migration_plans": [
+    "migration_152c887cb9c50943",
+    "migration_1e5e17cb2e9c36b5",
+    "migration_26a0af43f7c4670a",
+    "migration_3edf8273887f2fd4",
+    "migration_40e1670f51050e92",
+    "migration_5a688a3d12805612",
+    "migration_64d66948aba8a911",
+    "migration_af31e260c06c121e",
+    "migration_b13277983c0d719d",
+    "migration_ca65203b883c6533",
+    "migration_d1f7fa71cd1fca3c",
+    "migration_df999fc22f6019db",
+    "migration_e8090a3214acadc2"
+  ],
+  "internal_surface": [
+    "gravity-mvp/src/components",
+    "gravity-mvp/src/app/layout.tsx",
+    "gravity-mvp/src/instrumentation.ts"
+  ],
+  "owned_data": [],
+  "owned_paths": [
+    "gravity-mvp/src/app/layout.tsx",
+    "gravity-mvp/src/components",
+    "gravity-mvp/src/instrumentation.ts",
+    "gravity-mvp/src/modules/platform-shell"
+  ],
+  "owner": {
+    "accountability": "Platform Shell bounded-context owner",
+    "context": "platform_shell"
+  },
+  "protected": true,
+  "provider_relationships": [
+    {
+      "adapter_modules": [
+        "infrastructure/providers/openai-client"
+      ],
+      "name": "openai",
+      "role": "OpenAI SDK client construction"
+    }
+  ],
+  "public_surface": [
+    "PlatformHealth.v1",
+    "UiComposition.v1"
+  ],
+  "responsibility": "Application composition, shared UI primitives and framework bootstrapping; no business-data ownership.",
+  "schema": "yoko.crm.module-manifest.v1",
+  "technical_modules": [
+    "gravity_core",
+    "gravity_ui"
+  ],
+  "verification": {
+    "architecture_checks": [
+      "node tools/architecture/validate-context-manifests.mjs",
+      "node tools/architecture/enforce-architecture.mjs",
+      "node tools/architecture/test-architecture-enforcement.mjs"
+    ],
+    "blast_radius": {
+      "consumer_contexts": [
+        "edge_delivery"
+      ],
+      "owner_context": "platform_shell",
+      "provider_scope": "NOT_APPLICABLE",
+      "provider_siblings": []
+    },
+    "build_checks": [
+      "node tools/architecture/check-typescript-baseline.mjs"
+    ],
+    "contract_tests": [
+      "node tools/architecture/validate-contract-registry.mjs",
+      "node tools/architecture/check-contract-boundaries.mjs"
+    ],
+    "module_tests": [
+      "node tools/architecture/check-contact-conversation-api-boundary.mjs",
+      "node tools/architecture/check-messaging-bot-system-send-boundary.mjs"
+    ]
+  },
+  "version": 1
+}

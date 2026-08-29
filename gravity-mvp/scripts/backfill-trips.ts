@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client'
+import { resetDriverDaySummaryV1, upsertDriverDaySummaryV1 } from '../src/modules/fleet-operations/public/v1/legacy-prisma-driver-history-maintenance-adapter.js'
 
 const prisma = new PrismaClient()
 
@@ -124,13 +125,7 @@ async function main() {
         // But since we didn't specify that, we'll just upsert the ones we found.
         // Wait, if an old day had 5 trips and now has 0, upsert with 0 won't happen because we only iterate found dates.
         // It's safer to clear tripCount for the past 30 days for this driver, then apply the new counts.
-        await prisma.driverDaySummary.updateMany({
-            where: {
-                driverId: driver.id,
-                date: { gte: startDate, lte: endDate }
-            },
-            data: { tripCount: 0 }
-        })
+        await resetDriverDaySummaryV1(driver.id, startDate, endDate)
         cleared++;
 
         if (!driverDates) continue
@@ -139,17 +134,7 @@ async function main() {
             const dateObj = new Date(dateStr)
             dateObj.setHours(0, 0, 0, 0)
 
-            await prisma.driverDaySummary.upsert({
-                where: {
-                    driverId_date: { driverId: driver.id, date: dateObj },
-                },
-                update: { tripCount: trips },
-                create: {
-                    driverId: driver.id,
-                    date: dateObj,
-                    tripCount: trips,
-                },
-            })
+            await upsertDriverDaySummaryV1(driver.id, dateObj, trips)
         }
 
         // We could recalculate segment here, but maybe it's too slow in a huge loop. 

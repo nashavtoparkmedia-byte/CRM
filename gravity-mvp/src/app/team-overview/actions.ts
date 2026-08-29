@@ -1,24 +1,79 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
-import { logTaskEvent } from '@/lib/tasks/task-event-service'
-import { isManagerOverloaded } from '@/lib/tasks/workload-config'
-import { CONTACT_EVENT_TYPES, isLateResponse } from '@/lib/tasks/response-config'
-import { isFastClose } from '@/lib/tasks/completion-config'
-import { evaluateTaskRisk } from '@/lib/tasks/risk-config'
-import { RESPONSE_THRESHOLDS } from '@/lib/tasks/response-config'
-import { getRootCauseLabel } from '@/lib/tasks/root-cause-config'
-import { PATTERN_THRESHOLDS } from '@/lib/tasks/pattern-config'
-import { calculateManagerHealthScore, calculateHealthTrend, getPreviousHealthScores, saveHealthScores, updateDeclineStreak, isSustainedDecline, getHealthHistory, computeTeamStability, computeRiskPersistence, computeTeamRiskProfile, type HealthLevel, type HealthScoreBreakdown, type HealthTrend, type HealthHistoryPoint, type TeamStabilityResult, type RiskPersistenceResult, type TeamRiskProfileResult } from '@/lib/tasks/manager-health-config'
-import { buildInterventionReasons, type InterventionReason } from '@/lib/tasks/intervention-config'
-import { INTERVENTION_ACTION_LABELS, type InterventionAction } from '@/lib/tasks/intervention-action-config'
-import { evaluateOutcome, INTERVENTION_OUTCOME_CONFIG, type InterventionOutcome } from '@/lib/tasks/intervention-outcome-config'
-import { ROOT_CAUSE_PERSISTENCE_CONFIG, type PersistentRootCause } from '@/lib/tasks/root-cause-persistence-config'
-import { computeTeamCapacity, type TeamCapacityResult } from '@/lib/tasks/capacity-config'
-import { computeProcessReliability, type ProcessReliabilityResult } from '@/lib/tasks/reliability-config'
-import { computeManagerInterventionAgingHours, isInterventionAging, type InterventionAgingResult } from '@/lib/tasks/intervention-aging-config'
-import { OUTCOME_TIMING_CONFIG, type OutcomeTimingResult } from '@/lib/tasks/outcome-timing-config'
-import { computeOperationalVolatility, type OperationalVolatilityResult } from '@/lib/tasks/volatility-config'
+import {
+    CONTACT_EVENT_TYPES,
+    HEALTH_HISTORY_CONFIG,
+    INTERVENTION_ACTION_LABELS,
+    INTERVENTION_OUTCOME_CONFIG,
+    OUTCOME_TIMING_CONFIG,
+    PATTERN_THRESHOLDS,
+    RESPONSE_THRESHOLDS,
+    ROOT_CAUSE_PERSISTENCE_CONFIG,
+    buildInterventionReasons,
+    calculateHealthTrend,
+    calculateManagerHealthScore,
+    computeManagerInterventionAgingHours,
+    computeOperationalVolatility,
+    computeProcessReliability,
+    computeRiskPersistence,
+    computeTeamCapacity,
+    computeTeamRiskProfile,
+    computeTeamStability,
+    evaluateOutcome,
+    evaluateTaskRisk,
+    getRootCauseLabel,
+    isFastClose,
+    isInterventionAging,
+    isLateResponse,
+    isManagerOverloaded,
+    isSustainedDecline,
+    updateDeclineStreak,
+    type HealthHistoryPoint,
+    type HealthLevel,
+    type HealthScoreBreakdown,
+    type HealthSnapshot,
+    type HealthTrend,
+    type InterventionAction,
+    type InterventionAgingResult,
+    type InterventionOutcome,
+    type InterventionReason,
+    type OperationalVolatilityResult,
+    type OutcomeTimingResult,
+    type PersistentRootCause,
+    type PreviousHealthData,
+    type ProcessReliabilityResult,
+    type RiskPersistenceResult,
+    type TeamCapacityResult,
+    type TeamRiskProfileResult,
+    type TeamStabilityResult,
+} from '@/modules/work-management/public/v1/team-operational-policy'
+import {
+    CREATE_INTERVENTION_ACTION_COMMAND_V1,
+    ENSURE_MANAGER_HEALTH_REPOSITORY_COMMAND_V1,
+    ENSURE_INTERVENTION_ACTIONS_REPOSITORY_COMMAND_V1,
+    LIST_COMPLETED_INTERVENTION_TIMES_QUERY_V1,
+    LIST_MANAGER_HEALTH_HISTORY_QUERY_V1,
+    LIST_MANAGER_HEALTH_SNAPSHOTS_QUERY_V1,
+    LIST_INTERVENTION_OUTCOME_COUNTS_QUERY_V1,
+    LIST_LATEST_INTERVENTION_ACTIONS_QUERY_V1,
+    LIST_PENDING_INTERVENTION_ACTIONS_QUERY_V1,
+    SAVE_MANAGER_HEALTH_SCORES_COMMAND_V1,
+    SET_INTERVENTION_OUTCOME_COMMAND_V1,
+} from '@/contracts/operations-observability/v1'
+import {
+    createInterventionActionV1,
+    ensureManagerHealthRepositoryV1,
+    ensureInterventionActionsRepositoryV1,
+    listCompletedInterventionTimesV1,
+    listManagerHealthHistoryV1,
+    listManagerHealthSnapshotsV1,
+    listInterventionOutcomeCountsV1,
+    listLatestInterventionActionsV1,
+    listPendingInterventionActionsV1,
+    saveManagerHealthScoresV1,
+    setInterventionOutcomeV1,
+} from '@/modules/operations-observability/public/v1'
 
 export interface ManagerNextTask {
     id: string
@@ -144,6 +199,66 @@ export interface TeamOverview {
     teamRiskProfile: TeamRiskProfileResult | null
     operationalVolatility: OperationalVolatilityResult
     managers: ManagerStats[]
+}
+
+async function getPreviousHealthScores(): Promise<Map<string, PreviousHealthData>> {
+    await ensureManagerHealthRepositoryV1({
+        contract: ENSURE_MANAGER_HEALTH_REPOSITORY_COMMAND_V1,
+    })
+    const { items } = await listManagerHealthSnapshotsV1({
+        contract: LIST_MANAGER_HEALTH_SNAPSHOTS_QUERY_V1,
+    })
+    const result = new Map<string, PreviousHealthData>()
+    for (const item of items) {
+        result.set(item.managerId, { score: item.score, declineStreak: item.declineStreak })
+    }
+    return result
+}
+
+async function saveHealthScores(snapshots: HealthSnapshot[]): Promise<void> {
+    if (snapshots.length === 0) return
+    await ensureManagerHealthRepositoryV1({
+        contract: ENSURE_MANAGER_HEALTH_REPOSITORY_COMMAND_V1,
+    })
+    await saveManagerHealthScoresV1({
+        contract: SAVE_MANAGER_HEALTH_SCORES_COMMAND_V1,
+        items: snapshots,
+    })
+}
+
+async function getHealthHistory(
+    managerIds: string[],
+    periodDays?: number
+): Promise<Map<string, HealthHistoryPoint[]>> {
+    const result = new Map<string, HealthHistoryPoint[]>()
+    if (managerIds.length === 0) return result
+
+    try {
+        await ensureManagerHealthRepositoryV1({
+            contract: ENSURE_MANAGER_HEALTH_REPOSITORY_COMMAND_V1,
+        })
+        const days = Math.min(
+            periodDays ?? HEALTH_HISTORY_CONFIG.defaultPeriodDays,
+            HEALTH_HISTORY_CONFIG.maxPeriodDays
+        )
+        const { items } = await listManagerHealthHistoryV1({
+            contract: LIST_MANAGER_HEALTH_HISTORY_QUERY_V1,
+            managerIds,
+            periodDays: days,
+        })
+        for (const item of items) {
+            if (!result.has(item.managerId)) result.set(item.managerId, [])
+            result.get(item.managerId)!.push({
+                score: item.score,
+                healthLevel: item.healthLevel as HealthLevel,
+                recordedAt: item.recordedAt,
+            })
+        }
+    } catch (e) {
+        console.error('[health-history] Failed to read history, returning empty:', e)
+    }
+
+    return result
 }
 
 export async function getTeamOverview(): Promise<TeamOverview> {
@@ -631,52 +746,6 @@ export async function getTeamOverview(): Promise<TeamOverview> {
 }
 
 /**
- * Reassign tasks from one manager to another.
- * Logs a 'reassigned' event for each task.
- */
-export async function reassignTasks(
-    taskIds: string[],
-    newAssigneeId: string
-): Promise<{ reassigned: number }> {
-    if (taskIds.length === 0) return { reassigned: 0 }
-
-    // Verify target user exists
-    const targetUser = await prisma.crmUser.findUnique({
-        where: { id: newAssigneeId },
-        select: { id: true, name: true },
-    })
-    if (!targetUser) throw new Error('Target user not found')
-
-    let reassigned = 0
-
-    for (const taskId of taskIds) {
-        const task = await prisma.task.findUnique({
-            where: { id: taskId },
-            select: { id: true, assigneeId: true },
-        })
-        if (!task) continue
-        if (task.assigneeId === newAssigneeId) continue // already assigned
-
-        const oldAssigneeId = task.assigneeId
-
-        await prisma.task.update({
-            where: { id: taskId },
-            data: { assigneeId: newAssigneeId },
-        })
-
-        await logTaskEvent(taskId, 'reassigned', {
-            from: oldAssigneeId,
-            to: newAssigneeId,
-            toName: targetUser.name,
-        })
-
-        reassigned++
-    }
-
-    return { reassigned }
-}
-
-/**
  * Get active tasks for a specific manager (for reassign modal).
  */
 export async function getManagerActiveTasks(managerId: string) {
@@ -755,15 +824,14 @@ async function getOutcomeTimingStats(): Promise<OutcomeTimingResult> {
     }
 
     try {
-        await ensureInterventionTable()
+        await ensureInterventionActionsRepositoryV1({
+            contract: ENSURE_INTERVENTION_ACTIONS_REPOSITORY_COMMAND_V1,
+        })
         const cfg = OUTCOME_TIMING_CONFIG
 
-        const rows: { created_at: Date }[] = await prisma.$queryRawUnsafe(`
-            SELECT created_at
-            FROM intervention_actions
-            WHERE outcome IS NOT NULL
-            ORDER BY created_at DESC
-        `)
+        const { items: rows } = await listCompletedInterventionTimesV1({
+            contract: LIST_COMPLETED_INTERVENTION_TIMES_QUERY_V1,
+        })
 
         if (rows.length < cfg.minCompletedForStats) return insufficient
 
@@ -772,10 +840,10 @@ async function getOutcomeTimingStats(): Promise<OutcomeTimingResult> {
         let recentCount = 0
 
         for (const r of rows) {
-            if (r.created_at.getTime() >= recentCutoff) recentCount++
+            if (r.createdAt.getTime() >= recentCutoff) recentCount++
         }
 
-        const newestDaysAgo = Math.round((now - rows[0].created_at.getTime()) / (24 * 60 * 60 * 1000) * 10) / 10
+        const newestDaysAgo = Math.round((now - rows[0].createdAt.getTime()) / (24 * 60 * 60 * 1000) * 10) / 10
         const avgPerDay = Math.round((recentCount / cfg.recentPeriodDays) * 10) / 10
 
         return {
@@ -791,42 +859,7 @@ async function getOutcomeTimingStats(): Promise<OutcomeTimingResult> {
     }
 }
 
-// ─── Intervention Actions (raw SQL, no migrations) ──────────
-
-const ENSURE_INTERVENTION_TABLE_SQL = `
-CREATE TABLE IF NOT EXISTS intervention_actions (
-  id TEXT PRIMARY KEY,
-  manager_id TEXT NOT NULL,
-  action TEXT NOT NULL,
-  comment TEXT,
-  score_at_action INTEGER,
-  outcome TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-)`
-
-const ENSURE_INTERVENTION_COLUMNS_SQL = `
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'intervention_actions' AND column_name = 'score_at_action') THEN
-    ALTER TABLE intervention_actions ADD COLUMN score_at_action INTEGER;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'intervention_actions' AND column_name = 'outcome') THEN
-    ALTER TABLE intervention_actions ADD COLUMN outcome TEXT;
-  END IF;
-END $$`
-
-const ENSURE_INTERVENTION_INDEX_SQL = `
-CREATE INDEX IF NOT EXISTS idx_intervention_actions_manager
-ON intervention_actions (manager_id, created_at DESC)`
-
-let interventionTableEnsured = false
-
-async function ensureInterventionTable() {
-    if (interventionTableEnsured) return
-    await prisma.$executeRawUnsafe(ENSURE_INTERVENTION_TABLE_SQL)
-    await prisma.$executeRawUnsafe(ENSURE_INTERVENTION_COLUMNS_SQL)
-    await prisma.$executeRawUnsafe(ENSURE_INTERVENTION_INDEX_SQL)
-    interventionTableEnsured = true
-}
+// ─── Intervention Actions ───────────────────────────────────
 
 /**
  * Log an intervention action for a manager, storing current health score.
@@ -837,35 +870,39 @@ export async function logInterventionAction(params: {
     comment?: string
     scoreAtAction?: number
 }): Promise<void> {
-    await ensureInterventionTable()
+    await ensureInterventionActionsRepositoryV1({
+        contract: ENSURE_INTERVENTION_ACTIONS_REPOSITORY_COMMAND_V1,
+    })
     const id = `ia_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     const comment = params.comment?.trim() || null
     const score = params.scoreAtAction ?? null
-    await prisma.$executeRawUnsafe(
-        `INSERT INTO intervention_actions (id, manager_id, action, comment, score_at_action, created_at)
-         VALUES ($1, $2, $3, $4, $5, NOW())`,
-        id, params.managerId, params.action, comment, score
-    )
+    await createInterventionActionV1({
+        contract: CREATE_INTERVENTION_ACTION_COMMAND_V1,
+        id,
+        managerId: params.managerId,
+        action: params.action,
+        comment,
+        scoreAtAction: score,
+    })
 }
 
 /**
  * Get the last intervention action for each manager.
  */
 async function getLastInterventionActions(): Promise<Map<string, InterventionActionRecord>> {
-    await ensureInterventionTable()
-    const rows: { manager_id: string; action: string; comment: string | null; score_at_action: number | null; outcome: string | null; created_at: Date }[] =
-        await prisma.$queryRawUnsafe(`
-            SELECT DISTINCT ON (manager_id) manager_id, action, comment, score_at_action, outcome, created_at
-            FROM intervention_actions
-            ORDER BY manager_id, created_at DESC
-        `)
+    await ensureInterventionActionsRepositoryV1({
+        contract: ENSURE_INTERVENTION_ACTIONS_REPOSITORY_COMMAND_V1,
+    })
+    const { items: rows } = await listLatestInterventionActionsV1({
+        contract: LIST_LATEST_INTERVENTION_ACTIONS_QUERY_V1,
+    })
     const map = new Map<string, InterventionActionRecord>()
     for (const r of rows) {
-        map.set(r.manager_id, {
+        map.set(r.managerId, {
             action: r.action,
             comment: r.comment,
-            timestamp: r.created_at.toISOString(),
-            scoreAtAction: r.score_at_action,
+            timestamp: r.createdAt.toISOString(),
+            scoreAtAction: r.scoreAtAction,
             outcome: (r.outcome as InterventionOutcome) ?? null,
         })
     }
@@ -876,30 +913,31 @@ async function getLastInterventionActions(): Promise<Map<string, InterventionAct
  * Evaluate and persist outcomes for intervention actions that are past the outcome window.
  */
 async function evaluateInterventionOutcomes(managers: { managerId: string; healthScore: number }[]): Promise<void> {
-    await ensureInterventionTable()
+    await ensureInterventionActionsRepositoryV1({
+        contract: ENSURE_INTERVENTION_ACTIONS_REPOSITORY_COMMAND_V1,
+    })
     const windowMs = INTERVENTION_OUTCOME_CONFIG.outcomeWindowHours * 60 * 60 * 1000
     const cutoff = new Date(Date.now() - windowMs)
 
     // Find actions that have score_at_action but no outcome yet, and are older than the window
-    const pendingRows: { id: string; manager_id: string; score_at_action: number }[] =
-        await prisma.$queryRawUnsafe(`
-            SELECT id, manager_id, score_at_action
-            FROM intervention_actions
-            WHERE outcome IS NULL AND score_at_action IS NOT NULL AND created_at <= $1
-        `, cutoff)
+    const { items: pendingRows } = await listPendingInterventionActionsV1({
+        contract: LIST_PENDING_INTERVENTION_ACTIONS_QUERY_V1,
+        eligibleAtOrBefore: cutoff,
+    })
 
     if (pendingRows.length === 0) return
 
     const scoreMap = new Map(managers.map(m => [m.managerId, m.healthScore]))
 
     for (const row of pendingRows) {
-        const currentScore = scoreMap.get(row.manager_id)
+        const currentScore = scoreMap.get(row.managerId)
         if (currentScore === undefined) continue
-        const outcome = evaluateOutcome(row.score_at_action, currentScore)
-        await prisma.$executeRawUnsafe(
-            `UPDATE intervention_actions SET outcome = $1 WHERE id = $2`,
-            outcome, row.id
-        )
+        const outcome = evaluateOutcome(row.scoreAtAction, currentScore)
+        await setInterventionOutcomeV1({
+            contract: SET_INTERVENTION_OUTCOME_COMMAND_V1,
+            id: row.id,
+            outcome,
+        })
     }
 }
 
@@ -908,22 +946,19 @@ async function evaluateInterventionOutcomes(managers: { managerId: string; healt
  * Only considers actions with evaluated outcomes.
  */
 async function getInterventionEffectiveness(): Promise<EffectivenessStat[]> {
-    await ensureInterventionTable()
-    const rows: { action: string; outcome: string; cnt: string }[] =
-        await prisma.$queryRawUnsafe(`
-            SELECT action, outcome, COUNT(*)::text as cnt
-            FROM intervention_actions
-            WHERE outcome IS NOT NULL
-            GROUP BY action, outcome
-            ORDER BY action, outcome
-        `)
+    await ensureInterventionActionsRepositoryV1({
+        contract: ENSURE_INTERVENTION_ACTIONS_REPOSITORY_COMMAND_V1,
+    })
+    const { items: rows } = await listInterventionOutcomeCountsV1({
+        contract: LIST_INTERVENTION_OUTCOME_COUNTS_QUERY_V1,
+    })
 
     // Aggregate per action
     const actionMap = new Map<string, { improved: number; unchanged: number; worsened: number }>()
     for (const r of rows) {
         if (!actionMap.has(r.action)) actionMap.set(r.action, { improved: 0, unchanged: 0, worsened: 0 })
         const entry = actionMap.get(r.action)!
-        const count = parseInt(r.cnt, 10) || 0
+        const count = parseInt(r.total, 10) || 0
         if (r.outcome === 'improved') entry.improved += count
         else if (r.outcome === 'unchanged') entry.unchanged += count
         else if (r.outcome === 'worsened') entry.worsened += count

@@ -1,0 +1,1 @@
+{"command":"self-check","fixed_commands":["docker-provenance","messages-worktree-state","production-git-state","runtime-content-manifest","self-check"],"hardlinks":1,"implementation_sha256":"0a8f18bad0467056c3b7460827618b5d8df8ac8678da57040988478dba34ab18","mode":"0755","ok":true,"owner":"root:root","schema":"CRM-ARCH-000R-1","sudoers_valid":true}

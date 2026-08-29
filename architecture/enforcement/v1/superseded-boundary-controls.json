@@ -1,0 +1,54 @@
+{
+  "schema": "yoko.crm.superseded-boundary-controls.v1",
+  "policy": "A checker may be skipped only when later accepted migrations changed its frozen sibling assumptions and active successor controls cover the same architectural risk.",
+  "records": [
+    {
+      "checker": "tools/architecture/check-contacts-fleet-contact-phone-boundary.mjs",
+      "reason": "Later Contacts resolution consolidation changed the legacy adapter shape while preserving owner-routed phone operations.",
+      "successors": [
+        "tools/architecture/check-contact-service-public-boundary.mjs",
+        "tools/architecture/check-contacts-fleet-contact-boundary.mjs"
+      ]
+    },
+    {
+      "checker": "tools/architecture/check-contacts-manual-link-name-boundary.mjs",
+      "reason": "Later conversation-link and contact-resolution migrations replaced the frozen neighboring-flow identity.",
+      "successors": [
+        "tools/architecture/check-contact-conversation-api-boundary.mjs",
+        "tools/architecture/check-contact-service-public-boundary.mjs"
+      ]
+    },
+    {
+      "checker": "tools/architecture/check-messaging-call-timeline-boundary.mjs",
+      "reason": "Calling timeline and Fleet communication-history ownership were subsequently split into narrower owner capabilities.",
+      "successors": [
+        "tools/architecture/check-calling-messaging-timeline-boundary.mjs",
+        "tools/architecture/check-fleet-driver-communication-event-boundary.mjs"
+      ]
+    },
+    {
+      "checker": "tools/architecture/check-messaging-max-maintenance-boundary.mjs",
+      "reason": "Later Contacts identity-maintenance ownership removed the frozen inline identity-cleanup assumption.",
+      "successors": [
+        "tools/architecture/check-contact-service-public-boundary.mjs",
+        "tools/architecture/check-messaging-transport-registry-boundary.mjs"
+      ]
+    },
+    {
+      "checker": "tools/architecture/check-messaging-whatsapp-chat-boundary.mjs",
+      "reason": "Later channel-conversation and Contacts owner capabilities replaced the frozen seven-call composition.",
+      "successors": [
+        "tools/architecture/check-messaging-channel-conversation-workflow-boundary.mjs",
+        "tools/architecture/check-contact-service-public-boundary.mjs"
+      ]
+    },
+    {
+      "checker": "tools/architecture/check-shared-class-name-boundary.mjs",
+      "reason": "The later shared UI infrastructure migration replaced individual compatibility shims and broadened the accepted technical-UI set.",
+      "successors": [
+        "tools/architecture/check-shared-technical-utilities-boundary.mjs",
+        "tools/architecture/check-shared-ui-infrastructure-boundary.mjs"
+      ]
+    }
+  ]
+}

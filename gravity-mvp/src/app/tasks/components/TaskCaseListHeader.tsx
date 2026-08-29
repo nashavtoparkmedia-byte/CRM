@@ -16,7 +16,7 @@ import { useMemo, useState } from 'react'
 import type { ResolvedLayout, ResolvedColumn } from '@/lib/tasks/list-schema'
 import type { TaskSortField, TaskSortDirection } from '@/lib/tasks/types'
 import { ChevronUp, ChevronDown, GripVertical, EyeOff } from 'lucide-react'
-import { useListViewStore } from '@/store/list-view-store'
+import { useListViewStore } from '@/modules/work-management/public/v1/client-state/list-view-store'
 import { recordUsage } from '@/lib/tasks/usage'
 
 const SORTABLE_IDS: Record<string, TaskSortField> = {

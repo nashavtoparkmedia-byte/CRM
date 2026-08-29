@@ -2,6 +2,8 @@
 
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
+import { UPDATE_SCORING_THRESHOLDS_COMMAND_V1 } from '@/contracts/fleet-operations/v1'
+import { updateScoringThresholdsV1 } from '@/modules/fleet-operations/public/v1'
 
 export async function getThresholdSettings() {
     const rows = await prisma.scoringThreshold.findMany()
@@ -20,13 +22,10 @@ export async function getThresholdSettings() {
 }
 
 export async function updateThresholdSettings(data: Record<string, number>) {
-    for (const [key, value] of Object.entries(data)) {
-        await prisma.scoringThreshold.upsert({
-            where: { key },
-            update: { value },
-            create: { key, value },
-        })
-    }
+    await updateScoringThresholdsV1({
+        contract: UPDATE_SCORING_THRESHOLDS_COMMAND_V1,
+        thresholds: data,
+    })
     revalidatePath('/settings/scoring')
     revalidatePath('/drivers')
 }

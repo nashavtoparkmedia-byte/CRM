@@ -3,8 +3,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { randomUUID } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
-import { getCurrentUser } from '@/lib/users/user-service'
-import { opsLog } from '@/lib/opsLog'
+import { getCurrentUserIdentityV1 as getCurrentUser } from '@/modules/identity-access/public/v1/user-directory'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { originateAiCall } from '@/lib/ai-call/esl-originate'
 import { getScenario, DEFAULT_PROJECT_ID, listScenarios } from '@/lib/ai-call/scenarios'
 

@@ -1,6 +1,6 @@
 import React from 'react';
-import { PageContainer } from '@/components/ui/PageContainer';
-import { PageShell } from '@/components/layout/PageShell';
+import { PageContainer } from '@/infrastructure/ui/PageContainer';
+import { PageShell } from '@/infrastructure/ui/PageShell';
 
 export default function Page() {
   return (

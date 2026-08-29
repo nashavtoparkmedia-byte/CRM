@@ -1,0 +1,369 @@
+{
+  "schema": "yoko.crm.authoritative-baseline.v1",
+  "milestone": "CRM-ARCH-001",
+  "generated_at": "2026-08-09T13:02:00Z",
+  "architecture_worktree": {
+    "path": "/opt/codex-work/crm-arch-001-baseline",
+    "branch": "codex/crm-arch-001-baseline",
+    "base_revision": "ee93f8e2e964e523c5f3922a906ce110e491b4e4",
+    "role": "clean architecture integration substrate; not asserted as a complete production source",
+    "production_deployable": false
+  },
+  "evidence_inputs": [
+    {
+      "id": "crm_arch_000r_final",
+      "path": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260809T125221Z-yfs-scoped-final/AUTHORITATIVE_SOURCE_MAP.json",
+      "sha256": "70cb8e89ea5ddb4e9461b326e5e2a7cf1c850b85290296e3afcd6269ee7dbec3"
+    },
+    {
+      "id": "crm_arch_000r_classifications",
+      "path": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260809T125221Z-yfs-scoped-final/SOURCE_CLASSIFICATIONS.json",
+      "sha256": "20abcb0bff1178fa8f7338a9adac831d6b449285c4e45e4e39a22523c411c17b"
+    },
+    {
+      "id": "production_only_snapshot",
+      "path": "/opt/codex-work/crm-arch-000-evidence/20260808T070726Z/manifest.json",
+      "sha256": "b42c1e3bae282422694edcedbd5fe47dba529d0a5f86e8fc2df938510059cee4"
+    },
+    {
+      "id": "production_only_payload_ledger",
+      "path": "/opt/codex-work/crm-arch-000-evidence/20260808T070726Z/PACKAGE_CONTENTS.tsv",
+      "sha256": "ba987cb23ebf6be8111b59f423ca6d2aadd6b508e82281365c60a870f1bc0a3c"
+    },
+    {
+      "id": "production_working_files",
+      "path": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T122923Z/continuity/production-working-files.sha256",
+      "sha256": "2636c859c8085a85747cc0a3a0d9e1f371d8befba88a94fcce30155e2903ee35"
+    },
+    {
+      "id": "production_working_git_blobs",
+      "path": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T122923Z/continuity/production-working-files.git-blobs.tsv",
+      "sha256": "af37d3e18d2378c43438015ba5f5d6399b5ab9110257b12ac3ddfc1c430ed2d9"
+    }
+  ],
+  "repositories": [
+    {
+      "id": "production",
+      "path": "/opt/crm",
+      "revision": "e6a0a833fbb756216b058bfe326f9f9c77c4cc6d",
+      "branch": "feature/ai-knowledge-core",
+      "role": "observed production source root",
+      "authority": "COMPOSITE_PRODUCTION_SOURCE",
+      "protected": true
+    },
+    {
+      "id": "development",
+      "path": "/opt/codex-work/crm",
+      "revision": "ee93f8e2e964e523c5f3922a906ce110e491b4e4",
+      "branch": "codex/test-ai-knowledge-textutils",
+      "role": "dirty development worktree; read input only",
+      "authority": "DEVELOPMENT_INPUT",
+      "protected": true
+    },
+    {
+      "id": "architecture_baseline",
+      "path": "/opt/codex-work/crm-arch-001-baseline",
+      "revision": "ee93f8e2e964e523c5f3922a906ce110e491b4e4",
+      "branch": "codex/crm-arch-001-baseline",
+      "role": "isolated clean architecture integration worktree",
+      "authority": "ARCHITECTURE_CONTROL_PLANE",
+      "protected": false
+    },
+    {
+      "id": "messages_remediation",
+      "path": "/opt/codex-work/crm-messages-remediation-clean",
+      "revision": "50ae48a5761ced6acb1639497fa80094b108f305",
+      "branch": "dev/messages-complete-remediation",
+      "role": "clean historical Messages reconciliation evidence",
+      "authority": "HISTORICAL_ONLY",
+      "protected": true
+    },
+    {
+      "id": "ai_calls_dev",
+      "path": "/opt/codex-work/crm-ai-calls",
+      "revision": "b38b22d3e00b3fb43d05417131709b3d2c535b2b",
+      "branch": "dev/ai-calls-product-preview-v2",
+      "role": "protected active AI Calls development",
+      "authority": "AUTHORITATIVE_DEV_CHECKPOINT",
+      "protected": true
+    },
+    {
+      "id": "max_release",
+      "path": "/opt/codex-work/crm-max-release.20260806",
+      "revision": "74657f827153babbe601a2765bf6c526efbb73d2",
+      "branch": "codex/max-mirroring-recovery-20260806",
+      "role": "accepted MAX release lineage input",
+      "authority": "MODULE_RELEASE_EVIDENCE",
+      "protected": true
+    },
+    {
+      "id": "call_release",
+      "path": "/opt/codex-work/crm-call-release.QkpL6H",
+      "revision": "2fdd44a3e7aa6af32d6c7dbf7e033477bc6201bf",
+      "branch": "codex/telegram-mirroring-recovery-20260806",
+      "role": "accepted call and Telegram release lineage input",
+      "authority": "MODULE_RELEASE_EVIDENCE",
+      "protected": true
+    },
+    {
+      "id": "personal_max_stage8b1r",
+      "path": "/opt/codex-work/crm-personal-max-stage8b1r-release-hardening-20260727T220905Z",
+      "revision": "1651865ec39c77da2695f97c4072d97876705a8b",
+      "branch": "feature/personal-max-stage8b1r-release-hardening-20260727T220905Z",
+      "role": "Personal MAX release-hardening lineage, not the deployed revision",
+      "authority": "MODULE_RELEASE_EVIDENCE",
+      "protected": true
+    },
+    {
+      "id": "personal_max_stage8b2",
+      "path": "/opt/codex-work/crm-personal-max-stage8b2-autonomous-20260728T122700Z",
+      "revision": "db8b34001dfd24a0ffee44f2d96de98c9e9c32b0",
+      "branch": "feature/personal-max-stage8b2-autonomous-20260728T122700Z",
+      "role": "later Personal MAX development lineage, not production authority",
+      "authority": "EXPERIMENTAL_CONFIRMED",
+      "protected": true
+    }
+  ],
+  "dirty_states": [
+    {
+      "id": "production_composite_delta",
+      "repository": "production",
+      "classification": "ACCEPTED_PRODUCTION_COMPOSITE",
+      "modified": 81,
+      "deleted": 4,
+      "staged": 0,
+      "working_set_digest": "90e991db900ccc4853ae03d882da8bcc0ab68a7e2a680e64c35cae4263e854f9",
+      "file_hash_evidence": "production_working_files",
+      "git_blob_evidence": "production_working_git_blobs"
+    },
+    {
+      "id": "production_only_snapshot",
+      "repository": "production",
+      "classification": "PRESERVED_PRODUCTION_ONLY_SOURCE",
+      "entries": 28,
+      "exact_content_preserved": 27,
+      "secret_safe_metadata_only": 1,
+      "evidence": "production_only_snapshot",
+      "preservation_strategy": "Retain the immutable checksummed evidence snapshot; do not overlay it onto the architecture branch until its owning module migration slice selects files explicitly."
+    },
+    {
+      "id": "development_worktree_dirty",
+      "repository": "development",
+      "classification": "UNCLASSIFIED_DIRTY_DEVELOPMENT_NOT_BASELINE_AUTHORITY",
+      "modified": 46,
+      "untracked_status_entries": 155,
+      "status_porcelain_v1_z_sha256": "aed725d1c739c6dfc323ad8df2e126f46752fc46302f38bb6ee2bf1613370eb6"
+    },
+    {
+      "id": "ai_calls_streaming_stt_dirty",
+      "repository": "ai_calls_dev",
+      "classification": "EXPERIMENTAL_PROTECTED_DIRTY_DELTA",
+      "modified": 8,
+      "untracked_status_entries": 11,
+      "status_porcelain_v1_z_sha256": "a50ea551859fb5b16f9187bb7ab45359566d93305b14cffbe91b5a8500d107c5",
+      "relationship": "Streaming STT experimental work; not production Audio Bridge authority."
+    }
+  ],
+  "lifecycle_separation": {
+    "observed_production": ["production", "gravity", "whatsapp_gravity", "telegram_gravity", "messages", "telegram_bot", "telegram_frontend", "personal_max", "max_scraper", "yfs_api", "yfs_worker", "audio_bridge", "freeswitch", "nginx"],
+    "accepted_source_authority": ["production_composite_delta", "production_only_snapshot", "max_release", "call_release", "personal_max@f97532cb6903f033c070856b4a8c207df8e35026"],
+    "experimental_development": ["development", "ai_calls_dev", "streaming_stt_dev", "personal_max_stage8b2"],
+    "rejected_branches": [],
+    "rejected_branch_note": "No branch is newly rejected by this technical baseline; absence from accepted authority is not equivalent to rejection.",
+    "historical_only": ["messages_remediation", "personal_max_stage8b1r"],
+    "uncommitted_preserved_deltas": ["production_composite_delta", "production_only_snapshot", "development_worktree_dirty", "ai_calls_streaming_stt_dirty"],
+    "unresolved_lifecycle_classifications": []
+  },
+  "components": [
+    {
+      "id": "gravity",
+      "component": "Main Gravity application",
+      "module_roots": ["gravity-mvp"],
+      "source_authority": ["production@e6a0a833fbb756216b058bfe326f9f9c77c4cc6d", "production_composite_delta", "production_only_snapshot"],
+      "runtime": {"state":"CURRENT_RUNTIME_PROVEN","container":"crm-gravity-mvp","container_id":"37ce24fdaf2421e3a8e655746c47e0f4faf920488097b65bd53317283ef692ee","image_id":"sha256:b36751e5a6d2b52e7a7676ee5babcd70f496111e9715e5056f6338d04b028f68"},
+      "source_relationship": "291 non-generated files map to the production/release/snapshot composite; generated output is an exact deployed artifact without recorded build revision.",
+      "authority_status": "DEPLOYED_ARTIFACT_AUTHORITY",
+      "protected": true,
+      "lifecycle": "PRODUCTION",
+      "evidence": ["crm_arch_000r_final", "crm_arch_000r_classifications"]
+    },
+    {
+      "id": "whatsapp_gravity",
+      "component": "WhatsApp embedded in Gravity",
+      "module_roots": ["gravity-mvp/src/lib/whatsapp", "gravity-mvp/src/app/api/webhook/whatsapp"],
+      "source_authority": ["production@e6a0a833fbb756216b058bfe326f9f9c77c4cc6d", "production_composite_delta", "production_only_snapshot"],
+      "runtime": {"state":"CURRENT_RUNTIME_PROVEN","container":"crm-gravity-mvp","image_id":"sha256:b36751e5a6d2b52e7a7676ee5babcd70f496111e9715e5056f6338d04b028f68"},
+      "source_relationship": "Embedded module-specific composite inside the Gravity runtime.",
+      "authority_status": "AUTHORITATIVE_MODULE_SPECIFIC",
+      "protected": true,
+      "lifecycle": "PRODUCTION",
+      "evidence": ["production_working_files", "production_only_snapshot"]
+    },
+    {
+      "id": "telegram_gravity",
+      "component": "Telegram gravity-side",
+      "module_roots": ["gravity-mvp/src/app/api/webhook/telegram", "gravity-mvp/src/app/tg-actions.ts", "gravity-mvp/src/lib/telegram"],
+      "source_authority": ["production@e6a0a833fbb756216b058bfe326f9f9c77c4cc6d", "call_release@2fdd44a3e7aa6af32d6c7dbf7e033477bc6201bf:partial", "production_composite_delta", "production_only_snapshot"],
+      "runtime": {"state":"CURRENT_RUNTIME_PROVEN","container":"crm-gravity-mvp","image_id":"sha256:b36751e5a6d2b52e7a7676ee5babcd70f496111e9715e5056f6338d04b028f68"},
+      "source_relationship": "Per-file production composite; no single Messages commit is promoted.",
+      "authority_status": "AUTHORITATIVE_MODULE_SPECIFIC",
+      "protected": true,
+      "lifecycle": "PRODUCTION",
+      "evidence": ["production_working_files", "production_only_snapshot"]
+    },
+    {
+      "id": "messages",
+      "component": "Messages cross-provider domain",
+      "module_roots": ["gravity-mvp/src/app/messages", "gravity-mvp/src/lib/MessageService.ts", "gravity-mvp/src/app/api/messages"],
+      "source_authority": ["production@e6a0a833fbb756216b058bfe326f9f9c77c4cc6d", "production_composite_delta", "production_only_snapshot", "max_release@74657f827153babbe601a2765bf6c526efbb73d2:partial", "call_release@2fdd44a3e7aa6af32d6c7dbf7e033477bc6201bf:partial"],
+      "runtime": {"state":"CURRENT_RUNTIME_PROVEN","containers":["crm-gravity-mvp","crm-max-scraper","crm-tg-bot"]},
+      "source_relationship": "Protected per-file composite. The clean remediation worktree at 50ae48a is historical evidence only and does not replace production authority.",
+      "authority_status": "AUTHORITATIVE_MODULE_SPECIFIC",
+      "protected": true,
+      "lifecycle": "PRODUCTION",
+      "evidence": ["production_working_files", "production_working_git_blobs", "production_only_snapshot"]
+    },
+    {
+      "id": "telegram_bot",
+      "component": "Telegram bot",
+      "module_roots": ["tg-bot"],
+      "source_authority": ["production@e6a0a833fbb756216b058bfe326f9f9c77c4cc6d", "production_composite_delta", "production_only_snapshot"],
+      "runtime": {"state":"CURRENT_RUNTIME_PROVEN","container":"crm-tg-bot","container_id":"c3fae82f86726739c6e768cd524f5903a1d0a9a0e926f86d9cc559ac633c0f7a","image_id":"sha256:0849c4c9912aecf3cb7c35b51abba22cdb1c85a385afa6c2746000d14b9835f6"},
+      "source_relationship": "All retained runtime application files match the explicit production composite.",
+      "authority_status": "PROVEN_CONTENT_EQUIVALENT",
+      "protected": true,
+      "lifecycle": "PRODUCTION",
+      "evidence": ["crm_arch_000r_classifications", "production_working_files"]
+    },
+    {
+      "id": "telegram_frontend",
+      "component": "Telegram frontend",
+      "module_roots": ["tg-bot/tg-bot-frontend"],
+      "source_authority": ["production@e6a0a833fbb756216b058bfe326f9f9c77c4cc6d", "production_composite_delta"],
+      "runtime": {"state":"CURRENT_RUNTIME_PROVEN","container":"crm-tg-bot-frontend","container_id":"951b7edb1355764ef19f2353ae8a4f9d5c162ea939e3534b240cea2d3f4c1490","image_id":"sha256:87e2f3c70e11dd49e179889b8cacd6ebbc3ed188ed2787698b288a98b89b083d"},
+      "source_relationship": "Current immutable frontend artifact is exact; the original build revision was not recorded.",
+      "authority_status": "DEPLOYED_ARTIFACT_AUTHORITY",
+      "protected": true,
+      "lifecycle": "PRODUCTION",
+      "evidence": ["crm_arch_000r_final", "crm_arch_000r_classifications"]
+    },
+    {
+      "id": "personal_max",
+      "component": "Personal MAX gateway",
+      "module_roots": ["gravity-mvp/src/lib/providers/max-personal", "personal-max-stage8"],
+      "source_authority": ["git-revision:f97532cb6903f033c070856b4a8c207df8e35026"],
+      "runtime": {"state":"CURRENT_RUNTIME_PROVEN","container":"crm-max-personal-gateway","container_id":"81df6e6f3bd91a97f4016cb2d8ff289a58d9585bf3d03799d6f3a71d202e423d","image_id":"sha256:1859c44327ba4e2264728534c334b81f8ee0cdbd56ebe28c50bb62dffadfc0c1"},
+      "source_relationship": "The deployed image records exact revision f97532cb; that Git object is not present in the current local object store, so the deployed artifact and frozen evidence preserve authority while stage8 worktrees remain non-production lineages.",
+      "authority_status": "PROVEN_GIT_REVISION",
+      "protected": true,
+      "lifecycle": "PRODUCTION",
+      "evidence": ["crm_arch_000r_final", "crm_arch_000r_classifications"]
+    },
+    {
+      "id": "max_scraper",
+      "component": "MAX scraper",
+      "module_roots": ["max-web-scraper"],
+      "source_authority": ["production@e6a0a833fbb756216b058bfe326f9f9c77c4cc6d", "production_composite_delta", "max_release@74657f827153babbe601a2765bf6c526efbb73d2:partial"],
+      "runtime": {"state":"CURRENT_RUNTIME_PROVEN","container":"crm-max-scraper","container_id":"d7283f76bed4eb3090c8a9a340de0f3bebf5c316ef6e67b30f67fef4fc9c312b","image_id":"sha256:87835969ed6335a99d50e1cc2eaf70aa33fdbaf937f4cef658a926f55b26f365"},
+      "source_relationship": "All retained application files match the explicit production composite.",
+      "authority_status": "PROVEN_CONTENT_EQUIVALENT",
+      "protected": true,
+      "lifecycle": "PRODUCTION",
+      "evidence": ["crm_arch_000r_classifications", "production_working_files"]
+    },
+    {
+      "id": "yfs_api",
+      "component": "YFS API",
+      "module_roots": ["yandex-fleet-scraper/src/api.ts", "yandex-fleet-scraper/src/lib"],
+      "source_authority": ["production@e6a0a833fbb756216b058bfe326f9f9c77c4cc6d", "production_composite_delta", "production_only_snapshot"],
+      "runtime": {"state":"CURRENT_RUNTIME_PROVEN","container":"crm-yfs-api","container_id":"3a75ea182086b58d70049a7c9f298ff61e3b17d12838690fc94472ca4206e42e","image_id":"sha256:7df77531470940da08a216e75ffbe1f17d44ce7f66747f1fc3dcf31094b1b5e4"},
+      "source_relationship": "Exact immutable artifact and image-layer content are proven; generated or unmatched content has no recorded source revision.",
+      "authority_status": "DEPLOYED_ARTIFACT_AUTHORITY",
+      "protected": true,
+      "lifecycle": "PRODUCTION",
+      "evidence": ["crm_arch_000r_final", "crm_arch_000r_classifications"]
+    },
+    {
+      "id": "yfs_worker",
+      "component": "YFS worker",
+      "module_roots": ["yandex-fleet-scraper/src/worker.ts", "yandex-fleet-scraper/src/lib"],
+      "source_authority": ["production@e6a0a833fbb756216b058bfe326f9f9c77c4cc6d", "production_composite_delta", "production_only_snapshot"],
+      "runtime": {"state":"CURRENT_RUNTIME_PROVEN","container":"crm-yfs-worker","container_id":"255bba82adbf2bbccf383e35dc1c4b5e4fd0a868b6888b1f0ed2e3a86eee1702","image_id":"sha256:9a909f13f46f260cc490016be65b9d7923d3b29e5fe0493f6a1ba763474d8501"},
+      "source_relationship": "All retained application files match the explicit production composite. API and worker image IDs remain distinct despite a mutable shared tag.",
+      "authority_status": "PROVEN_CONTENT_EQUIVALENT",
+      "protected": true,
+      "lifecycle": "PRODUCTION",
+      "evidence": ["crm_arch_000r_classifications", "production_working_files"]
+    },
+    {
+      "id": "audio_bridge",
+      "component": "Audio Bridge production",
+      "module_roots": ["tools/audio-bridge-day1"],
+      "source_authority": ["production@e6a0a833fbb756216b058bfe326f9f9c77c4cc6d"],
+      "runtime": {"state":"CURRENT_RUNTIME_PROVEN","container":"crm-audio-bridge","container_id":"2234ab2d1ea138b2e90cc530a5a9f7c8d6dd0d42c818c08a72c25ceaaa19136f","image_id":"sha256:ba83a60f43149d71f25fc1663dd32094ecff9b166bd59d2cacfa880869e86417"},
+      "source_relationship": "All retained runtime application files match production revision e6a0; overlap with AI Calls DEV is explicitly non-authoritative for production.",
+      "authority_status": "PROVEN_CONTENT_EQUIVALENT",
+      "protected": true,
+      "lifecycle": "PRODUCTION",
+      "evidence": ["crm_arch_000r_classifications"]
+    },
+    {
+      "id": "freeswitch",
+      "component": "FreeSWITCH production",
+      "module_roots": ["telephony/conf", "tools/fs-config"],
+      "source_authority": ["production@e6a0a833fbb756216b058bfe326f9f9c77c4cc6d", "development@ee93f8e2e964e523c5f3922a906ce110e491b4e4:partial", "production_composite_delta"],
+      "runtime": {"state":"CURRENT_RUNTIME_PROVEN","container":"crm-freeswitch","container_id":"431261ef7600f7ab0098a28ab4700bb6c69defa7b5572a799d982a121bec55b6","image_id":"sha256:d5f8183e3754bda3f9d21dc69eb452ff98ec15bcf3b73264c25ef5fd0ee86947","config_manifest_sha256":"b4b01c078249fb4ec8f1c4263515a229d90863fc7da524a8727c3317b2b0b8f5"},
+      "source_relationship": "Image-layer and writable configuration overrides are proven without secret content; original release provenance is unrecorded.",
+      "authority_status": "DEPLOYED_ARTIFACT_AUTHORITY",
+      "protected": true,
+      "lifecycle": "PRODUCTION",
+      "evidence": ["crm_arch_000r_final", "production_working_files"]
+    },
+    {
+      "id": "nginx",
+      "component": "Nginx live configuration",
+      "module_roots": ["deploy/nginx"],
+      "source_authority": ["production:/opt/crm/deploy/nginx"],
+      "runtime": {"state":"CURRENT_RUNTIME_PROVEN","container":"crm-nginx","container_id":"8a55379583bf494f24e430b7f810acb78f10ad1c5ccacfb3eae5de2dc3882d76","image_id":"sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10","config_manifest_sha256":"e816ccf9c877b948d2554d11a11d1c1a9772df01243bf16461ca7a05eac297a1"},
+      "source_relationship": "Live bind-mounted project configuration is authoritative; deployed image source revision is unrecorded.",
+      "authority_status": "AUTHORITATIVE_PROVEN",
+      "protected": true,
+      "lifecycle": "PRODUCTION",
+      "evidence": ["crm_arch_000r_final"]
+    },
+    {
+      "id": "ai_calls_dev",
+      "component": "AI Calls DEV",
+      "module_roots": ["tools/audio-bridge-day1"],
+      "source_authority": ["ai_calls_dev@b38b22d3e00b3fb43d05417131709b3d2c535b2b"],
+      "runtime": {"state":"NOT_PRODUCTION_AUTHORITY"},
+      "source_relationship": "Protected DEV checkpoint, separate from production Audio Bridge and FreeSWITCH authority.",
+      "authority_status": "AUTHORITATIVE_DEV_CHECKPOINT",
+      "protected": true,
+      "lifecycle": "ACTIVE_DEVELOPMENT",
+      "evidence": ["crm_arch_000r_final"]
+    },
+    {
+      "id": "streaming_stt_dev",
+      "component": "Streaming STT DEV",
+      "module_roots": ["tools/audio-bridge-day1/scripts/freeswitch-stt-aj", "tools/audio-bridge-day1/scripts/freeswitch-media-aj"],
+      "source_authority": ["ai_calls_dev@b38b22d3e00b3fb43d05417131709b3d2c535b2b", "ai_calls_streaming_stt_dirty"],
+      "runtime": {"state":"EXPERIMENTAL_NOT_PRODUCTION"},
+      "source_relationship": "Protected dirty experimental state; no production authority or lifecycle acceptance is inferred.",
+      "authority_status": "EXPERIMENTAL_CONFIRMED",
+      "protected": true,
+      "lifecycle": "EXPERIMENTAL",
+      "evidence": ["crm_arch_000r_final"]
+    }
+  ],
+  "invariants": {
+    "single_repository_authority_forced": false,
+    "production_only_source_preserved": true,
+    "dirty_production_presented_as_clean_commit": false,
+    "messages_rewritten_or_promoted": false,
+    "ai_calls_dev_promoted_to_production": false,
+    "streaming_stt_promoted_to_production": false,
+    "mutable_image_tag_used_as_artifact_identity": false,
+    "production_mutated": false
+  }
+}

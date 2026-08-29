@@ -1,0 +1,3 @@
+import { prisma } from '@/lib/prisma'
+import type { UpdateDriverStatePersistencePortV1 } from './update-driver-state-handler'
+export const legacyPrismaUpdateDriverStatePortV1:UpdateDriverStatePersistencePortV1={async resolveAttention({attentionId,resolvedBy}){const attention=await prisma.driverAttention.findUnique({where:{id:attentionId}});if(!attention)return{status:'not_found',attention:null};if(attention.status==='resolved')return{status:'already_resolved',attention:null};const updated=await prisma.driverAttention.update({where:{id:attentionId},data:{status:'resolved',resolvedAt:new Date(),resolvedBy}});return{status:'resolved',attention:{id:updated.id,resolvedAt:updated.resolvedAt?.toISOString()??null}}}}

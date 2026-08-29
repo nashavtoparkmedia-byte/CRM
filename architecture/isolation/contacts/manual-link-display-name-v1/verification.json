@@ -1,0 +1,28 @@
+{
+  "schema": "yoko.crm.context-isolation-verification.v1",
+  "milestone": "CRM-ARCH-007-CONTACTS-MANUAL-LINK-NAME",
+  "verified_at": "2026-08-09T16:25:57Z",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "architecture": {
+    "files": 812,
+    "contexts": 16,
+    "findings": 1519,
+    "exceptions": 1519,
+    "finding_digest": "0fb7071be98035e0cce6d6fe978623b23b2b4a310544c3b538f1bd2f97c2b277",
+    "registry_sha256": "a98b7757aadaf850abeb206588583ad96dda3c57c92aaa8f1bd3e00325c323e0",
+    "dependency_cycles": 0
+  },
+  "tests": {
+    "manual_link_name_behavior": "10/10 PASS",
+    "manual_link_name_controls": "10/10 PASS",
+    "contract_controls": "47/47 PASS",
+    "enforcement": "16/16 PASS",
+    "auth": "33/33 PASS",
+    "calling": "93/93 PASS",
+    "current_baseline_context_contract_outbox_identity_work_management_contacts_and_fleet_controls": "PASS"
+  },
+  "typescript": "28 baseline / 28 candidate / 0 normalized differences",
+  "eslint": "4 inherited consumer diagnostics / 4 candidate diagnostics; new owner and contract files 0",
+  "historical_evidence_note": "CRM-ARCH-002 evidence remains checksum-authoritative for its frozen input identity; its byte-count validator is not reinterpreted as a current-tree validator.",
+  "production_mutated": false
+}

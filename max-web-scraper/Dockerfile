@@ -25,7 +25,7 @@ COPY --from=deps --chown=pwuser:pwuser /app/node_modules ./node_modules
 COPY --chown=pwuser:pwuser . .
 
 # Профиль и runtime-стейт — монтируются volume на VPS
-RUN mkdir -p /app/userData \
+RUN mkdir -p /app/user_data \
     && chown -R pwuser:pwuser /app
 
 USER pwuser

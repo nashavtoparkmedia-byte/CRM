@@ -1,0 +1,12 @@
+{
+  "schema": "yoko.crm.context-isolation-verification.v1",
+  "milestone": "CRM-ARCH-007-AI-DECISION-LOG",
+  "verified_at": "2026-08-09T18:08:30Z",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "architecture": {"files": 858, "contexts": 16, "findings": 1503, "exceptions": 1503, "finding_digest": "e3842be1c33c34d7cd6bd010cc3a75befa57d92feb5925fecbd39aa5610409f1", "registry_sha256": "1ced69155bebee077b83b5ae07c026980c7c1b5236b5764b4415d49b1b625b1b", "dependency_cycles": 0},
+  "tests": {"ai_decision_behavior": "11/11 PASS", "ai_decision_controls": "12/12 PASS", "contract_controls": "82/82 PASS", "enforcement": "16/16 PASS", "auth": "33/33 PASS", "calling": "93/93 PASS", "current_cumulative_architecture_test_and_check_scripts": "43/43 scripts PASS"},
+  "typescript": "28 baseline / 28 candidate / 0 semantic differences after line/column, ordering and literal-union-order normalization; one diagnostic rendered an equivalent six-member union in a different order",
+  "eslint": "2 inherited PipelineWorker diagnostics / 2 candidate PipelineWorker diagnostics; new contract and owner files 0",
+  "secret_values_read_or_emitted": false,
+  "production_mutated": false
+}

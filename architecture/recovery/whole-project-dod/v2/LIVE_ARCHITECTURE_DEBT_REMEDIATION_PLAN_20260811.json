@@ -1,0 +1,443 @@
+{
+  "schema": "yoko.crm.live-architecture-debt-remediation-plan.v1",
+  "status": "OPEN_LIVE_DEBT_BURN_DOWN",
+  "source": "LIVE_ARCHITECTURE_DEBT_RECOMPUTE_20260811.json",
+  "opening_finding_count": 1288,
+  "current_finding_count": 117,
+  "exception_covered_live_debt": 117,
+  "open_finding_count": 0,
+  "actually_closed_since_opening_baseline": 1171,
+  "confirmed_direct_foreign_prisma_writes": 0,
+  "items": [
+    {
+      "surface": "gravity-mvp/src/lib/DriverMatchService.ts",
+      "finding_count": 2,
+      "intent": "Link a strictly matched driver to a messaging-owned chat through the existing versioned messaging capability.",
+      "owner_context": "fleet_operations",
+      "target_context": "messaging",
+      "approved_path": "narrow cross-context contract or orchestration adapter; preserve driver matching safety tests",
+      "status": "CLOSED_OWNER_CAPABILITY"
+    },
+    {
+      "surface": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
+      "finding_count": 3,
+      "intent": "Publish call lifecycle/timeline updates from FreeSWITCH without bypassing the protected Messages and AI Calls behavior.",
+      "owner_context": "calling",
+      "target_context": "messaging",
+      "approved_path": "versioned call-event sink or owner-controlled messaging capability; no manifest-only exception",
+      "status": "CLOSED_CALLING_OWNED_PROJECTION_PORT"
+    },
+    {
+      "surface": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
+      "finding_count": 2,
+      "intent": "Compose one transactional contact merge across messaging chat links and work-management tasks.",
+      "owner_context": "contacts",
+      "target_contexts": [
+        "messaging",
+        "work_management"
+      ],
+      "approved_path": "owner-controlled transactional composition capability with exact operations; do not copy foreign writers into Contacts",
+      "status": "CLOSED_EXACT_OWNER_TRANSACTION_COMPOSITION"
+    },
+    {
+      "surface": "WhatsApp and Yandex Fleet provider runtime consumers",
+      "finding_count": 40,
+      "intent": "Keep provider clients, browser pages, transport Store objects and scheduled sync options inside their owning contexts.",
+      "owner_contexts": [
+        "whatsapp_channel",
+        "fleet_operations"
+      ],
+      "target_contexts": [
+        "platform_shell",
+        "messaging",
+        "operations_observability",
+        "configuration"
+      ],
+      "approved_path": "exact owner-controlled runtime, diagnostic, history, reachability and scheduled-sync capabilities; shared composition exposes projections only",
+      "status": "CLOSED_PROVIDER_TRANSPORT_BOUNDARY"
+    },
+    {
+      "surface": "shared technical UI primitives and Identity user-directory consumers",
+      "finding_count": 489,
+      "intent": "Place shared UI primitives in technical infrastructure and route identity reads through a narrow owner query API.",
+      "owner_context": "shared infrastructure and identity_access",
+      "target_contexts": [
+        "all UI consumers",
+        "calling"
+      ],
+      "approved_path": "implementation extraction with compatibility shims plus a fixed identity query facade",
+      "status": "CLOSED_SEMANTIC_BATCHES"
+    },
+    {
+      "surface": "Telegram runtime and operational consumers",
+      "finding_count": 36,
+      "intent": "Keep Telegram listener lifecycle, delivery, history, reachability and connection projection inside the provider owner.",
+      "owner_context": "telegram_channel",
+      "target_contexts": [
+        "platform_shell",
+        "fleet_operations",
+        "messaging",
+        "operations_observability",
+        "configuration",
+        "work_management"
+      ],
+      "approved_path": "exact owner runtime API plus fixed shared composition; no GramJS client export",
+      "status": "CLOSED_PROVIDER_RUNTIME_BOUNDARY"
+    },
+    {
+      "surface": "ContactService cross-context consumers",
+      "finding_count": 24,
+      "intent": "Resolve channel and phone identities and perform narrow cleanup through the Contacts owner.",
+      "owner_context": "contacts",
+      "target_contexts": [
+        "avito_acquisition",
+        "calling",
+        "max_channel",
+        "messaging",
+        "telegram_channel",
+        "whatsapp_channel"
+      ],
+      "approved_path": "versioned Contacts resolution and exact identity-maintenance capabilities",
+      "status": "CLOSED_CONTACTS_OWNER_BOUNDARY"
+    },
+    {
+      "surface": "Work Management client state",
+      "finding_count": 86,
+      "intent": "Keep task stores, selectors, query hooks and mutation hooks within Work ownership while preserving old imports as explicit compatibility shims.",
+      "owner_context": "work_management",
+      "target_contexts": [
+        "work_management",
+        "platform_shell"
+      ],
+      "approved_path": "owner public client-state files, explicit named compatibility shims and focused store behavior tests",
+      "status": "CLOSED_WORK_CLIENT_STATE_OWNERSHIP"
+    },
+    {
+      "surface": "Fleet monitoring policy",
+      "finding_count": 15,
+      "intent": "Keep fleet event vocabulary, status labels, scraper limits and display mappings in the Fleet owner.",
+      "owner_context": "fleet_operations",
+      "target_contexts": [
+        "fleet_operations",
+        "operations_observability"
+      ],
+      "approved_path": "read-only versioned Fleet policy surface plus explicit compatibility shim",
+      "status": "CLOSED_FLEET_MONITORING_POLICY"
+    },
+    {
+      "surface": "Configuration operational health",
+      "finding_count": 14,
+      "intent": "Expose validation results and recent change history without exposing registration, change logging, raw SQL or Prisma.",
+      "owner_context": "configuration",
+      "target_contexts": [
+        "operations_observability",
+        "platform_shell"
+      ],
+      "approved_path": "narrow read-only Configuration facade with exact delegation tests",
+      "status": "CLOSED_CONFIGURATION_HEALTH_QUERY"
+    },
+    {
+      "surface": "Work scenario catalog and team operational policy",
+      "finding_count": 92,
+      "intent": "Publish pure Work-owned scenario metadata, thresholds, classifications and calculations used by Analytics, Messaging and Configuration.",
+      "owner_context": "work_management",
+      "target_contexts": [
+        "analytics_reporting",
+        "configuration",
+        "messaging"
+      ],
+      "approved_path": "two explicit read-only versioned policy surfaces with no wildcard, service, repository or persistence export",
+      "status": "CLOSED_WORK_POLICY_BOUNDARY"
+    },
+    {
+      "surface": "shared class-name utility",
+      "finding_count": 8,
+      "intent": "Keep the pure cn helper in shared technical UI infrastructure rather than making business contexts depend on Platform Shell.",
+      "owner_context": "shared infrastructure",
+      "target_contexts": [
+        "all UI consumers"
+      ],
+      "approved_path": "shared technical helper plus explicit named compatibility shim",
+      "status": "CLOSED_SHARED_TECHNICAL_UTILITY"
+    },
+    {
+      "surface": "Calling internal event stream",
+      "finding_count": 10,
+      "intent": "Keep call-stream publication and subscription inside the Calling owner.",
+      "owner_context": "calling",
+      "target_contexts": [
+        "calling"
+      ],
+      "approved_path": "owner-internal stream with exact subscriber behavior tests",
+      "status": "CLOSED_CALLING_INTERNAL_STREAM"
+    },
+    {
+      "surface": "Yandex Fleet operations",
+      "finding_count": 10,
+      "intent": "Keep Yandex operational reads and commands behind Fleet's versioned owner surface.",
+      "owner_context": "fleet_operations",
+      "target_contexts": [
+        "fleet_operations",
+        "platform_shell"
+      ],
+      "approved_path": "versioned Fleet operational capability plus explicit named compatibility shim",
+      "status": "CLOSED_YANDEX_FLEET_OPERATIONS"
+    },
+    {
+      "surface": "Contacts display policy",
+      "finding_count": 8,
+      "intent": "Keep canonical contact labels, phone formatting and provider fallbacks in Contacts.",
+      "owner_context": "contacts",
+      "target_contexts": [
+        "contacts",
+        "messaging"
+      ],
+      "approved_path": "pure versioned Contacts display policy plus explicit named compatibility shim",
+      "status": "CLOSED_CONTACT_DISPLAY_POLICY"
+    },
+    {
+      "surface": "SIP browser context",
+      "finding_count": 6,
+      "intent": "Keep browser SIP registration, state and call controls inside Calling while preserving codec and alert behavior.",
+      "owner_context": "calling",
+      "target_contexts": [
+        "platform_shell",
+        "messaging"
+      ],
+      "approved_path": "versioned Calling client context with byte-preserved implementation and narrow compatibility shim",
+      "status": "CLOSED_SIP_CLIENT_CONTEXT"
+    },
+    {
+      "surface": "Calling client UI and ringtone capability",
+      "finding_count": 22,
+      "intent": "Keep call controls, lists, popups and ringtone logic in Calling without introducing a Fleet-to-Calling dependency cycle.",
+      "owner_contexts": [
+        "calling",
+        "fleet_operations"
+      ],
+      "target_contexts": [
+        "calling",
+        "messaging",
+        "fleet_operations",
+        "platform_shell"
+      ],
+      "approved_path": "Calling public client UI, Fleet-owned driver adapters and a narrow owner-neutral outbound-call client port",
+      "status": "CLOSED_CALLING_CLIENT_UI_BOUNDARY"
+    },
+    {
+      "surface": "Messaging channel-sync client and import-job operations",
+      "finding_count": 11,
+      "intent": "Keep channel synchronization UI and exact import-job orchestration inside Messaging while preserving provider-specific behavior.",
+      "owner_context": "messaging",
+      "target_contexts": [
+        "configuration",
+        "max_channel",
+        "telegram_channel",
+        "whatsapp_channel"
+      ],
+      "approved_path": "versioned Messaging client surface and exact owner-controlled sync operations; no broad settings action export",
+      "status": "CLOSED_MESSAGING_CHANNEL_SYNC_CAPABILITY"
+    },
+    {
+      "surface": "Calling AI call scenario management",
+      "finding_count": 6,
+      "intent": "Expose exact scenario/project administration without relocating or duplicating Calling-owned writers.",
+      "owner_context": "calling",
+      "target_context": "configuration",
+      "approved_path": "narrow versioned Calling facade over the unchanged owner repository",
+      "status": "CLOSED_CALLING_SCENARIO_MANAGEMENT"
+    },
+    {
+      "surface": "Calling AI provider settings",
+      "finding_count": 4,
+      "intent": "Keep credential save/delete and fixed OpenAI runtime lookup behind narrow server-only Calling capabilities.",
+      "owner_context": "calling",
+      "target_contexts": [
+        "configuration",
+        "platform_shell"
+      ],
+      "approved_path": "exact server-only admin commands and fixed runtime lookup; no generic plaintext or bulk secret export",
+      "status": "CLOSED_CALLING_PROVIDER_SETTINGS"
+    },
+    {
+      "surface": "Calling call-status policy",
+      "finding_count": 4,
+      "intent": "Publish pure call label, color and icon semantics used by protected Messages without exposing hangup mapping internals.",
+      "owner_context": "calling",
+      "target_context": "messaging",
+      "approved_path": "exact named policy surface with exhaustive rendering matrix characterization",
+      "status": "CLOSED_CALLING_STATUS_POLICY"
+    },
+    {
+      "surface": "Calling AI provider status",
+      "finding_count": 2,
+      "intent": "Expose configured/source/mask metadata to Configuration without exposing plaintext credential access.",
+      "owner_context": "calling",
+      "target_context": "configuration",
+      "approved_path": "read-only versioned status query excluding mask helpers and generic provider getters",
+      "status": "CLOSED_CALLING_PROVIDER_STATUS"
+    },
+    {
+      "surface": "remaining shared UI technical components",
+      "finding_count": 18,
+      "intent": "Keep presentation-only controls and dashboard shell components in shared technical infrastructure.",
+      "owner_context": "shared infrastructure",
+      "target_contexts": [
+        "analytics_reporting",
+        "avito_acquisition",
+        "operations_observability",
+        "work_management"
+      ],
+      "approved_path": "implementation relocation with explicit deprecated aliases and compatibility identity tests",
+      "status": "CLOSED_SHARED_UI_FINAL_BATCH"
+    },
+    {
+      "surface": "AI Knowledge admin read model",
+      "finding_count": 6,
+      "intent": "Publish filtered Knowledge administration reads without leaking source excerpts or repository/provider capabilities.",
+      "owner_context": "ai_knowledge",
+      "target_context": "configuration",
+      "approved_path": "narrow versioned owner read model with source-access policy",
+      "status": "CLOSED_AI_KNOWLEDGE_ADMIN_READ_MODEL"
+    },
+    {
+      "surface": "AI Knowledge operational status",
+      "finding_count": 8,
+      "intent": "Publish fixed readiness and runtime-mode projections without exposing feature-flag internals.",
+      "owner_context": "ai_knowledge",
+      "target_contexts": [
+        "configuration",
+        "platform_shell"
+      ],
+      "approved_path": "read-only versioned operational status capability",
+      "status": "CLOSED_AI_KNOWLEDGE_OPERATIONAL_STATUS"
+    },
+    {
+      "surface": "Messaging delivery recovery operations",
+      "finding_count": 6,
+      "intent": "Keep stuck-message recovery and bounded retry candidate selection inside protected Messaging ownership.",
+      "owner_context": "messaging",
+      "target_context": "platform_shell",
+      "approved_path": "two exact owner-controlled scheduled capabilities with unrelated-write negative enforcement",
+      "status": "CLOSED_MESSAGING_DELIVERY_RECOVERY"
+    },
+    {
+      "surface": "Operations scheduled maintenance",
+      "finding_count": 8,
+      "intent": "Keep integrity, retention and daily stability policies inside Operations ownership.",
+      "owner_context": "operations_observability",
+      "target_context": "platform_shell",
+      "approved_path": "three no-input scheduled capabilities with unrelated-write negative enforcement",
+      "status": "CLOSED_OPERATIONS_SCHEDULED_MAINTENANCE"
+    },
+    {
+      "surface": "Work operational trigger evaluations",
+      "finding_count": 5,
+      "intent": "Route five operational cron endpoints through exact Work-owned trigger evaluations.",
+      "owner_context": "work_management",
+      "target_context": "operations_observability",
+      "approved_path": "six no-input versioned evaluation capabilities preserving route result mapping and execution order",
+      "status": "CLOSED_WORK_OPERATIONAL_TRIGGER_EVALUATIONS"
+    },
+    {
+      "surface": "AI Knowledge runtime retrieval",
+      "finding_count": 6,
+      "intent": "Publish exact runtime retrieval, admin preview and fact formatting without exposing repositories, providers or unrestricted query controls.",
+      "owner_context": "ai_knowledge",
+      "target_contexts": [
+        "configuration",
+        "platform_shell"
+      ],
+      "approved_path": "three narrow versioned retrieval/query functions with fixed runtime policy",
+      "status": "CLOSED_AI_KNOWLEDGE_RETRIEVAL_QUERY"
+    },
+    {
+      "surface": "AI Knowledge explainability read model",
+      "finding_count": 4,
+      "intent": "Project decision-log and source explainability with owner-controlled source excerpt access.",
+      "owner_context": "ai_knowledge",
+      "target_contexts": [
+        "configuration",
+        "messaging"
+      ],
+      "approved_path": "filtered read model with source excerpts redacted by default and raw-read negative enforcement",
+      "status": "CLOSED_AI_KNOWLEDGE_EXPLAINABILITY"
+    },
+    {
+      "surface": "AI Knowledge governance audit",
+      "finding_count": 4,
+      "intent": "Append and query governance audit state without exposing the generic audit implementation or arbitrary writer operations.",
+      "owner_context": "ai_knowledge",
+      "target_contexts": [
+        "configuration",
+        "messaging"
+      ],
+      "approved_path": "exact append, snapshot and list capability with unrelated-writer negative enforcement",
+      "status": "CLOSED_AI_KNOWLEDGE_GOVERNANCE_AUDIT"
+    },
+    {
+      "surface": "AI Knowledge legacy migration",
+      "finding_count": 4,
+      "intent": "Preview and execute the idempotent legacy Knowledge migration without publishing raw migration internals.",
+      "owner_context": "ai_knowledge",
+      "target_context": "configuration",
+      "approved_path": "authenticated preview/execute capability retaining legacy source and exact actor attribution",
+      "status": "CLOSED_AI_KNOWLEDGE_LEGACY_MIGRATION"
+    },
+    {
+      "surface": "AI Knowledge extraction execution",
+      "finding_count": 8,
+      "intent": "Run one queued extraction job and publish its scope DTO without exposing extractor, pair-builder, SQL or prompt internals.",
+      "owner_context": "ai_knowledge",
+      "target_context": "configuration",
+      "approved_path": "single queued-job execution capability with fixed owner scope types",
+      "status": "CLOSED_AI_KNOWLEDGE_EXTRACTION_EXECUTION"
+    },
+    {
+      "surface": "Calling OpenAI chat-completion transport",
+      "finding_count": 4,
+      "intent": "Keep OpenAI credential resolution and client singleton inside Calling while exposing one chat-completion operation instead of an SDK handle.",
+      "owner_context": "calling",
+      "target_context": "calling",
+      "approved_path": "one versioned completion operation over the designated infrastructure adapter",
+      "status": "CLOSED_CALLING_OPENAI_COMPLETION_TRANSPORT"
+    },
+    {
+      "surface": "Operations operational-job registry",
+      "finding_count": 6,
+      "intent": "Own background-job overlap, state and interval lifecycle in Operations rather than Work Management.",
+      "owner_context": "operations_observability",
+      "target_contexts": [
+        "operations_observability",
+        "platform_shell"
+      ],
+      "approved_path": "five exact lifecycle functions covering runtime and active operational-script consumers",
+      "status": "CLOSED_OPERATIONS_JOB_REGISTRY"
+    },
+    {
+      "surface": "AI Knowledge pure runtime support",
+      "finding_count": 4,
+      "intent": "Publish only text similarity and retrieval-version metadata needed by Messages and the pipeline.",
+      "owner_context": "ai_knowledge",
+      "target_contexts": [
+        "messaging",
+        "platform_shell"
+      ],
+      "approved_path": "two pure read-only capabilities with private utility and rerank implementations hash-frozen",
+      "status": "CLOSED_AI_KNOWLEDGE_PURE_RUNTIME_SUPPORT"
+    }
+  ],
+  "prohibited_shortcuts": [
+    "broad dependency exceptions",
+    "manifest ownership reassignment",
+    "moving foreign writes into an approved file",
+    "arbitrary Prisma access from an approved adapter"
+  ],
+  "next_cluster": {
+    "name": "AI_KNOWLEDGE_COACH_CAPABILITY",
+    "finding_count": 4,
+    "classification": "EXCEPTION_COVERED_TEMPORARY_LEGACY_DEBT",
+    "acceptance": "Publish only the exact coach operation and result DTOs needed by protected Messages; preserve item-id filtering, current-value handling and error containment; expose no generic LLM client, prompt or knowledge writer capability."
+  },
+  "acceptance": "Uncovered findings and provider transport accesses are zero without new exceptions. The project remains NOT READY while 117 temporary exception-covered live findings remain."
+}

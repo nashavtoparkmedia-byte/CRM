@@ -13,6 +13,46 @@
  * Используется в WhatsAppService.syncHistory и WhatsAppService.importHistory.
  */
 import { prisma } from '@/lib/prisma'
+import { PATCH_CHANNEL_CONVERSATION_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { patchChannelConversationV1 } from '@/modules/messaging/public/v1'
+import { attachPhoneToIdentityV1 } from '@/modules/contacts/public/v1'
+import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
+
+/** Accept only chat titles composed entirely of phone punctuation and 10/11 digits. */
+export function phoneFromWaChatName(name: string | null | undefined): string | null {
+    const value = String(name || '').trim()
+    if (!value || !/^\+?[\d\s()\-]+$/.test(value)) return null
+    const digitCount = value.replace(/\D/g, '').length
+    if (digitCount !== 10 && digitCount !== 11) return null
+    return normalizePhoneE164(value)
+}
+
+/** Backfill the visible WA number onto an already-linked opaque @lid identity. */
+export async function attachVisibleWaPhone(chatId: string): Promise<boolean> {
+    const chat = await prisma.chat.findUnique({
+        where: { id: chatId },
+        select: { name: true, contactId: true, contactIdentityId: true },
+    })
+    if (!chat?.contactId || !chat.contactIdentityId) return false
+
+    const phone = phoneFromWaChatName(chat.name)
+    if (!phone) return false
+
+    const result = await attachPhoneToIdentityV1(
+        chat.contactId,
+        chat.contactIdentityId,
+        phone,
+        { source: 'whatsapp', confirmed: true },
+    )
+    if (result.kind === 'conflict') {
+        console.warn(
+            `[wa-enrich] visible phone conflict chat=${chatId} phone=${phone} `
+            + `contact=${chat.contactId} owner=${result.otherContactId}`,
+        )
+        return false
+    }
+    return true
+}
 
 function isPlaceholder(name: string | null | undefined): boolean {
     if (!name) return true
@@ -61,12 +101,11 @@ export async function enrichWaChatNameFromSibling(
     const goodSibling = siblings.find(s => !isPlaceholder(s.name))
     if (!goodSibling) return null
 
-    const updates: any = { name: goodSibling.name }
-    if (!driverId && goodSibling.driverId) {
-        updates.driverId = goodSibling.driverId
-    }
-
-    await prisma.chat.update({ where: { id: chatId }, data: updates })
+    await patchChannelConversationV1({
+        contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1,
+        selector: { chatId },
+        patch: { name: goodSibling.name, ...(!driverId && goodSibling.driverId ? { driverId: goodSibling.driverId } : {}) },
+    })
     console.log(`[wa-enrich] chat=${chatId} name "${currentName ?? 'null'}" → "${goodSibling.name}" (donor ${goodSibling.id})`)
     return goodSibling.name as string
 }

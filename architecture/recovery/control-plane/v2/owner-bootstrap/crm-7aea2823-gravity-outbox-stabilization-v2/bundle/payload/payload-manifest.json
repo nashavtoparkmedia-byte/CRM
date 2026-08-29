@@ -1,0 +1,44 @@
+{
+  "files": {
+    "install.sh": {
+      "mode": "0500",
+      "sha256": "5cb494c88a0f91ba0f90fbbae2ecc6481188a720c842e94d04c143c3abee5730"
+    },
+    "review/human-manifest.md": {
+      "mode": "0400",
+      "sha256": "80e384882f3441ad1a0cc67c89a40aef2442827028e7734254cf8479b420a7df"
+    },
+    "review/installation-procedure.md": {
+      "mode": "0400",
+      "sha256": "2d8260b6fcdae30e37064cf59a2395157b84c4b0d0a2605c65880d58c2794d3f"
+    },
+    "review/package-manifest.json": {
+      "mode": "0400",
+      "sha256": "f0113f547fdd3942cd0b8174bdc4722e3b3455b9366f3727cedc99e542f512d9"
+    },
+    "review/rollback-analysis.md": {
+      "mode": "0400",
+      "sha256": "241bee9f10543ebf3445089901abc34e29d7744d98fd99a7de5747d1cbc9cf0d"
+    },
+    "yoko-privileged-runtime_2.0.0-8_all.deb": {
+      "mode": "0400",
+      "sha256": "c342889473f29d37cab47a8b6a88f21aa165d646a910b65dcee9b1a0a62d0289"
+    },
+    "yoko-privileged-runtime_2.0.0-9_all.deb": {
+      "mode": "0400",
+      "sha256": "0c259741b4b58992acb830806e42db79ec87730f1b568a21e2879483d739be83"
+    }
+  },
+  "new_package": {
+    "architecture": "all",
+    "name": "yoko-privileged-runtime",
+    "version": "2.0.0-9"
+  },
+  "previous_package": {
+    "name": "yoko-privileged-runtime",
+    "sha256": "c342889473f29d37cab47a8b6a88f21aa165d646a910b65dcee9b1a0a62d0289",
+    "version": "2.0.0-8"
+  },
+  "profile_id": "crm-af9646f5-gravity-outbox-v1",
+  "schema": "yoko.crm.owner-bootstrap-payload.v1"
+}

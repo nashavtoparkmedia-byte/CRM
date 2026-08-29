@@ -1,0 +1,94 @@
+{
+  "artifact_sha256": "88a30f4fdf74c1f86d47f47c31edec824a887c172a69585c45eddceb85fb755e",
+  "members": [
+    {
+      "bytes": 0,
+      "gid": 0,
+      "mode": "0700",
+      "path": "payload",
+      "type": "directory",
+      "uid": 0
+    },
+    {
+      "bytes": 14078,
+      "gid": 0,
+      "mode": "0500",
+      "path": "payload/install.sh",
+      "sha256": "9ec0718a1c52a57aa439910a4d2264ef7b51cf2f4157fd48fa9cbff42eadd1fb",
+      "type": "file",
+      "uid": 0
+    },
+    {
+      "bytes": 1464,
+      "gid": 0,
+      "mode": "0400",
+      "path": "payload/payload-manifest.json",
+      "sha256": "fa9c31b31018997f6c27cf91a0dd1c0ca5f897f9ba2daaa1b1fa34d5b27bb7fd",
+      "type": "file",
+      "uid": 0
+    },
+    {
+      "bytes": 0,
+      "gid": 0,
+      "mode": "0500",
+      "path": "payload/review",
+      "type": "directory",
+      "uid": 0
+    },
+    {
+      "bytes": 2231,
+      "gid": 0,
+      "mode": "0400",
+      "path": "payload/review/human-manifest.md",
+      "sha256": "5d0dff5d013dd811a27fd1497c199b60771e0349ebdc4b5bdc3c1a694d8d0f26",
+      "type": "file",
+      "uid": 0
+    },
+    {
+      "bytes": 1719,
+      "gid": 0,
+      "mode": "0400",
+      "path": "payload/review/installation-procedure.md",
+      "sha256": "4a20d0386b040dc0b249d0307e49ba71dcc7eb59da6970095d5b156662beefd4",
+      "type": "file",
+      "uid": 0
+    },
+    {
+      "bytes": 8411,
+      "gid": 0,
+      "mode": "0400",
+      "path": "payload/review/package-manifest.json",
+      "sha256": "05dc9dc033dcfc06917d4f8c469be4283acc625f2a9e82315a61aa93d1960166",
+      "type": "file",
+      "uid": 0
+    },
+    {
+      "bytes": 1235,
+      "gid": 0,
+      "mode": "0400",
+      "path": "payload/review/rollback-analysis.md",
+      "sha256": "996b905834439b577bc1a363d63f6905e836c25c7e581ac3f075a3204e1e06af",
+      "type": "file",
+      "uid": 0
+    },
+    {
+      "bytes": 14350,
+      "gid": 0,
+      "mode": "0400",
+      "path": "payload/yoko-privileged-runtime_2.0.0-5_all.deb",
+      "sha256": "057f6a5400fa4e9f57cec7c1f121ee4821e3db5c9593f6976da0692e693d5b63",
+      "type": "file",
+      "uid": 0
+    },
+    {
+      "bytes": 29754914,
+      "gid": 0,
+      "mode": "0400",
+      "path": "payload/yoko-privileged-runtime_2.0.0-6_all.deb",
+      "sha256": "597f58d813f7a0f3631b9d1778588db880c00e7df97d92a51cef385f8f4d8ba0",
+      "type": "file",
+      "uid": 0
+    }
+  ],
+  "schema": "yoko.crm.owner-bootstrap-package-contents.v1"
+}

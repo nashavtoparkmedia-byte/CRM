@@ -1,0 +1,1 @@
+{"schema":"yoko.crm.module-manifest-amendments.v1","version":1,"milestone":"CRM-ARCH-007-MESSAGING-WHATSAPP-CHAT","amendments":[{"context":"messaging","add_commands":["UpsertChannelConversationCommand.v1","PatchChannelConversationCommand.v1"],"reason":"Expose channel conversation upsert and locator-based patch persistence through Messaging."}]}

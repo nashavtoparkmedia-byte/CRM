@@ -9,7 +9,9 @@
     "lint": "eslint",
     "gen": "prisma generate",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:security-boundaries": "node scripts/check-public-boundaries.mjs && vitest run src/lib/security/public-boundary-source.test.ts src/lib/security/integration-admin-credentials.test.ts src/lib/security/integration-admin-boundary-source.test.ts src/modules/fleet-operations/public/v1/api-connection-public-metadata.test.ts src/modules/telegram-channel/public/v1/telegram-connection-public-metadata.test.ts src/modules/max-channel/public/v1/max-connection-public-metadata.test.ts src/modules/whatsapp-channel/public/v1/whatsapp-connection-public-metadata.test.ts src/modules/calling/public/v1/ai-agent-config-public-metadata.test.ts src/lib/whatsapp/whatsapp-qr-ceremony.test.ts",
+    "test:security-boundaries:build": "node scripts/check-public-boundaries.mjs --require-build"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.40.0",

@@ -1,6 +1,6 @@
 import { getManagerTasks } from './actions'
 import InboxClient from './InboxClient'
-import { SectionDescription } from '@/components/ui/SectionDescription'
+import { SectionDescription } from '@/infrastructure/ui/SectionDescription'
 
 export const dynamic = 'force-dynamic'
 

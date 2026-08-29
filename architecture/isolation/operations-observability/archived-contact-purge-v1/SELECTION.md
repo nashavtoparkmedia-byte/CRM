@@ -1,0 +1,3 @@
+# CRM-ARCH-007R archived-contact purge selection
+
+Selected the accepted Operations-owned, deliberately nontransactional archived-contact purge workflow. Operations and Observability retains the fixed 365-day/50-row eligibility query, per-contact Chat/Message/ContactMerge safety reads, dry-run accounting, phase deadline and result aggregation. Real writes now cross three narrow owner commands in the inherited order: Messaging detaches contact-linked conversations, Work Management detaches contact-linked tasks, then Contacts deletes the retention-authorized contact. No command exposes SQL, table, predicate, cutoff, batch, arbitrary patch, identity expansion or transaction capability.

@@ -32,11 +32,11 @@ import { Worker, type Job } from 'bullmq'
 import type { Prisma } from '@prisma/client'
 import { ProxyAgent, fetch as undiciFetch } from 'undici'
 import { prisma } from '@/lib/prisma'
-import { opsLog } from '@/lib/opsLog'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { getRedisConnection } from '@/lib/queue/connection'
 import { ANALYZE_QUEUE, type AnalyzeJobData } from '@/lib/queue/queues'
-import { broadcastCall } from '@/lib/callStreamBus'
-import { getOpenAI } from '@/lib/openaiClient'
+import { broadcastCall } from '@/modules/calling/internal/call-stream'
+import { createCallingOpenAiChatCompletionV1 } from '@/modules/calling/public/v1/openai-chat-completion'
 import { getTelephonyAiConfig } from '@/lib/aiCallAnalysis/config'
 import { parseAnalysisResponse, averageScore, buildSystemPrompt } from '@/lib/aiCallAnalysis/prompt'
 import {
@@ -55,7 +55,8 @@ import {
 // The AI-call fallback path (analyzeAiCall) still uses the SDK — it
 // fires rarely (only when the bridge finalize didn't reach end_call),
 // and migrating it to undici is a follow-up. If the geofence ever
-// trips on that path, swap getOpenAI() for undiciFetch + the same
+// trips on that path, swap createCallingOpenAiChatCompletionV1() for
+// undiciFetch + the same
 // custom headers.
 function getProxyDispatcher() {
     const proxy = process.env.HTTPS_PROXY || process.env.https_proxy
@@ -253,8 +254,7 @@ async function analyzeManagerCall(
  */
 async function analyzeAiCall(callId: string, transcript: string, model: string): Promise<void> {
     const startedAt = Date.now()
-    const openai = await getOpenAI()
-    const completion = await openai.chat.completions.create({
+    const completion = await createCallingOpenAiChatCompletionV1({
         model,
         response_format: { type: 'json_object' },
         temperature: 0,

@@ -1,5 +1,13 @@
 import { prisma } from '@/lib/prisma'
-import { opsLog } from '@/lib/opsLog'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
+import { RUN_API_LOG_RETENTION_COMMAND_V1, RUN_COMMUNICATION_EVENT_RETENTION_COMMAND_V1, RUN_DRIVER_EVENT_RETENTION_COMMAND_V1 } from '@/contracts/fleet-operations/v1'
+import { DELETE_CONTACT_FOR_RETENTION_COMMAND_V1 } from '@/contracts/contacts/v1'
+import { DELETE_RETAINED_MESSAGES_COMMAND_V1, DETACH_CONTACT_CONVERSATIONS_COMMAND_V1, PURGE_MESSAGE_RETRY_METADATA_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { DETACH_CONTACT_TASKS_COMMAND_V1 } from '@/contracts/work-management/v1'
+import { deleteContactForRetentionV1 } from '@/modules/contacts/public/v1'
+import { runApiLogRetentionV1, runCommunicationEventRetentionV1, runDriverEventRetentionV1 } from '@/modules/fleet-operations/public/v1'
+import { deleteRetainedMessagesV1, detachContactConversationsV1, purgeMessageRetryMetadataV1 } from '@/modules/messaging/public/v1'
+import { detachContactTasksV1 } from '@/modules/work-management/public/v1'
 
 /**
  * RetentionCleanup — bounded, idempotent data lifecycle cleanup.
@@ -86,17 +94,29 @@ export class RetentionCleanup {
 
       // 4. Old DriverEvent > 6 months
       if (!checkTimeout()) {
-        result.deletedEvents += await this._cleanupTable('DriverEvent', 180, 100, dryRun)
+        const driverEvents = await runDriverEventRetentionV1({
+          contract: RUN_DRIVER_EVENT_RETENTION_COMMAND_V1,
+          dryRun,
+        })
+        result.deletedEvents += driverEvents.selectedCount
       }
 
       // 5. Old CommunicationEvent > 6 months
       if (!checkTimeout()) {
-        result.deletedEvents += await this._cleanupTable('CommunicationEvent', 180, 100, dryRun)
+        const communicationEvents = await runCommunicationEventRetentionV1({
+          contract: RUN_COMMUNICATION_EVENT_RETENTION_COMMAND_V1,
+          dryRun,
+        })
+        result.deletedEvents += communicationEvents.selectedCount
       }
 
       // 6. Old ApiLog > 30 days
       if (!checkTimeout()) {
-        result.deletedEvents += await this._cleanupTable('ApiLog', 30, 100, dryRun)
+        const apiLogs = await runApiLogRetentionV1({
+          contract: RUN_API_LOG_RETENTION_COMMAND_V1,
+          dryRun,
+        })
+        result.deletedEvents += apiLogs.selectedCount
       }
 
       // 7. Archived contacts > 12 months
@@ -148,7 +168,7 @@ export class RetentionCleanup {
 
     const ids = rows.map(r => r.id)
     // Cascade: MessageAttachment + MessageEventLog deleted automatically
-    await prisma.$executeRaw`DELETE FROM "Message" WHERE id = ANY(${ids}::text[])`
+    await deleteRetainedMessagesV1({ contract: DELETE_RETAINED_MESSAGES_COMMAND_V1, messageIds: ids })
     return ids.length
   }
 
@@ -165,7 +185,7 @@ export class RetentionCleanup {
     if (dryRun || rows.length === 0) return rows.length
 
     const ids = rows.map(r => r.id)
-    await prisma.$executeRaw`DELETE FROM "Message" WHERE id = ANY(${ids}::text[])`
+    await deleteRetainedMessagesV1({ contract: DELETE_RETAINED_MESSAGES_COMMAND_V1, messageIds: ids })
     return ids.length
   }
 
@@ -185,30 +205,7 @@ export class RetentionCleanup {
 
     const ids = rows.map(r => r.id)
     // Strip retry fields, keep error for audit
-    await prisma.$executeRaw`
-      UPDATE "Message"
-      SET metadata = jsonb_build_object('error', metadata->>'error', 'cleaned', true)
-      WHERE id = ANY(${ids}::text[])
-    `
-    return ids.length
-  }
-
-  // ── Generic table cleanup by createdAt ─────────────────────────────────
-
-  private static async _cleanupTable(tableName: string, ageDays: number, limit: number, dryRun: boolean): Promise<number> {
-    // Safe table names (no SQL injection — hardcoded in caller)
-    const rows = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-      `SELECT id FROM "${tableName}" WHERE "createdAt" < (NOW() AT TIME ZONE 'UTC') - CAST($1 AS INTERVAL) ORDER BY "createdAt" ASC LIMIT $2`,
-      `${ageDays} days`,
-      limit,
-    )
-    if (dryRun || rows.length === 0) return rows.length
-
-    const ids = rows.map(r => r.id)
-    await prisma.$executeRawUnsafe(
-      `DELETE FROM "${tableName}" WHERE id = ANY($1::text[])`,
-      ids,
-    )
+    await purgeMessageRetryMetadataV1({ contract: PURGE_MESSAGE_RETRY_METADATA_COMMAND_V1, messageIds: ids })
     return ids.length
   }
 
@@ -250,9 +247,18 @@ export class RetentionCleanup {
       if (!dryRun) {
         // Cascade: ContactPhone, ContactIdentity deleted automatically
         // Must first unlink chats and tasks
-        await prisma.$executeRaw`UPDATE "Chat" SET "contactId" = NULL, "contactIdentityId" = NULL WHERE "contactId" = ${id}`
-        await prisma.$executeRaw`UPDATE "tasks" SET "contactId" = NULL WHERE "contactId" = ${id}`
-        await prisma.$executeRaw`DELETE FROM "Contact" WHERE id = ${id}`
+        await detachContactConversationsV1({
+          contract: DETACH_CONTACT_CONVERSATIONS_COMMAND_V1,
+          contactId: id,
+        })
+        await detachContactTasksV1({
+          contract: DETACH_CONTACT_TASKS_COMMAND_V1,
+          contactId: id,
+        })
+        await deleteContactForRetentionV1({
+          contract: DELETE_CONTACT_FOR_RETENTION_COMMAND_V1,
+          contactId: id,
+        })
       }
       deleted++
     }

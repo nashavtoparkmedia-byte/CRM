@@ -1,0 +1,13 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "CRM-ARCH-007",
+  "amendments": [
+    {
+      "context": "identity_access",
+      "add_public_surface": [
+        "ListUserIdentitiesQuery.v1"
+      ]
+    }
+  ]
+}

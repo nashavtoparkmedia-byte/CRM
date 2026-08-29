@@ -22,7 +22,7 @@
  *   - Работает с любым provider в config.provider
  */
 
-import { callForJson } from '@/lib/pipeline/llmClient'
+import { callProviderJsonV1 as callForJson } from '@/infrastructure/providers/multi-provider-llm'
 
 export interface KnowledgeItemForCoach {
     id:                 string

@@ -1,0 +1,1401 @@
+{
+  "schema": "yoko.crm.lifecycle-migration-dead-closure.v1",
+  "generated_at": "2026-08-11T06:51:01.795284Z",
+  "authority": "Exact evidence from conservative ownership review; lifecycle status does not authorize writes.",
+  "source_artifact": "OWNERSHIP_CLASSIFICATION_CONSERVATIVE_20260811.json",
+  "source_sha256": "a41c1f19bae87d0c8fa5881917335de79c61e6fd2462d0cbad7f944fd3afea3b",
+  "summary": {
+    "historical_dead_sites": 18,
+    "historical_dead_files": 6,
+    "controlled_migration_sites": 26,
+    "controlled_migration_files": 13,
+    "unresolved_lifecycle_in_this_batch": 0
+  },
+  "policy": "Dead/historical entries require explicit no-package/runtime-reference or deprecated-documentation evidence; migration entries require explicit deploy/restore/schema command evidence. Unresolved records remain blocked.",
+  "records": [
+    {
+      "site_signature": "00c96dc7c8cb5eb013f0eec0427d677a1ecfc39d1e8c91343927830d014823a1",
+      "classification": "CONTROLLED_MIGRATION",
+      "classification_confidence": "HIGH",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability",
+      "functional_owner": "platform_operations",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "deploy/docker-compose.production.yml",
+          "line": 452,
+          "column": 54,
+          "method": "mixed-script-command:prisma db push",
+          "model": null,
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "ONE_SHOT_PENDING_RETIREMENT",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.unresolved.256a4cb501cae196",
+        "last_commit": "12f6de56 2026-06-24 fix(ops): sync uncaughtException handler + Redis noeviction + FS recordings + log rotation",
+        "package_runtime_references_excluding_source": [
+          "scripts/deploy.sh",
+          "scripts/setup-server.sh",
+          "scripts/migrate-data-apply.sh",
+          "scripts/get-ssl.sh",
+          "deploy/docker-compose.test.yml"
+        ],
+        "ambiguity_reasons": [
+          "dynamic_database_command_requires_review",
+          "dynamic_database_write_command_requires_review"
+        ]
+      }
+    },
+    {
+      "site_signature": "c099548aaa9f0871ea1cc7475912c648b58f64f43308d0bf100b315a39890bcb",
+      "classification": "CONTROLLED_MIGRATION",
+      "classification_confidence": "HIGH",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability",
+      "functional_owner": "work_management",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/add_partial_index.sql",
+          "line": 1,
+          "column": 1,
+          "method": "sql-script",
+          "model": null,
+          "tables": [
+            "tasks"
+          ],
+          "operations": [
+            {
+              "dynamic_target": false,
+              "fragment_source": "standalone_sql",
+              "index": 0,
+              "operation": "CREATE_INDEX",
+              "table": "tasks"
+            }
+          ]
+        },
+        "owner_contexts": [
+          "work_management"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "ONE_SHOT_PENDING_RETIREMENT",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.work_management.c01283dc020b860c",
+        "last_commit": "6b44221c 2026-03-27 v3",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "1d18f4724b5dd4e8148b0183adf1daa6715e7100a87688d30b210cd749a501e6",
+      "classification": "CONTROLLED_MIGRATION",
+      "classification_confidence": "HIGH",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability",
+      "functional_owner": "platform_operations",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/Dockerfile",
+          "line": 118,
+          "column": 23,
+          "method": "mixed-script-command:prisma migrate deploy",
+          "model": null,
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "ONE_SHOT_PENDING_RETIREMENT",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.unresolved.5342feaa42ecf1dc",
+        "last_commit": "4ff81385 2026-08-10 feat: close provider write ownership boundaries",
+        "package_runtime_references_excluding_source": [
+          "deploy/docker-compose.production.yml"
+        ],
+        "ambiguity_reasons": [
+          "dynamic_database_command_requires_review",
+          "dynamic_database_write_command_requires_review"
+        ]
+      }
+    },
+    {
+      "site_signature": "8a143f3442c3be46652085300b45087ed7c13692b73f9758aece667e6ec47a9e",
+      "classification": "CONTROLLED_MIGRATION",
+      "classification_confidence": "HIGH",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability",
+      "functional_owner": "messaging",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/fix_channels.sql",
+          "line": 1,
+          "column": 1,
+          "method": "sql-script",
+          "model": null,
+          "tables": [
+            "Message"
+          ],
+          "operations": [
+            {
+              "dynamic_target": false,
+              "fragment_source": "standalone_sql",
+              "index": 0,
+              "operation": "UPDATE",
+              "table": "Message"
+            }
+          ]
+        },
+        "owner_contexts": [
+          "messaging"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "CLEANUP",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.messaging.fef249b293994801",
+        "last_commit": "ad461fca 2026-03-22 v2",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "a407cdaca37366769948e02c7d37c96c1f30520932fabd46f370a94c48d86bf0",
+      "classification": "CONTROLLED_MIGRATION",
+      "classification_confidence": "HIGH",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability",
+      "functional_owner": "messaging",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/fix_channels.sql",
+          "line": 2,
+          "column": 1,
+          "method": "sql-script",
+          "model": null,
+          "tables": [
+            "Message"
+          ],
+          "operations": [
+            {
+              "dynamic_target": false,
+              "fragment_source": "standalone_sql",
+              "index": 65,
+              "operation": "UPDATE",
+              "table": "Message"
+            }
+          ]
+        },
+        "owner_contexts": [
+          "messaging"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": null,
+        "registry_reachability": null,
+        "registry_capability_id": null,
+        "last_commit": "ad461fca 2026-03-22 v2",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "ed67f1db0653d928ae864aa4c637241f296b76aef56950cf7008f2eadc49bcac",
+      "classification": "CONTROLLED_MIGRATION",
+      "classification_confidence": "HIGH",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability",
+      "functional_owner": "configuration",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/add-scenario-field-settings-table.js",
+          "line": 7,
+          "column": 15,
+          "method": "$executeRawUnsafe",
+          "model": null,
+          "tables": [
+            "scenario_field_settings"
+          ],
+          "operations": [
+            {
+              "dynamic_target": false,
+              "index": 13,
+              "operation": "CREATE_TABLE",
+              "table": "scenario_field_settings"
+            }
+          ]
+        },
+        "owner_contexts": [
+          "configuration"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": null,
+        "registry_reachability": null,
+        "registry_capability_id": null,
+        "last_commit": "e9541a83 2026-04-21 WIP: chats + telephony + scenarios settings (snapshot 2026-04-10)",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "0034cdfc35ab80ac588d9c763dda10b06435603dfeebffc14c93fe6961deceae",
+      "classification": "CONTROLLED_MIGRATION",
+      "classification_confidence": "HIGH",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability",
+      "functional_owner": "configuration",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/add-scenario-field-settings-table.js",
+          "line": 23,
+          "column": 15,
+          "method": "$executeRawUnsafe",
+          "model": null,
+          "tables": [
+            "scenario_field_settings"
+          ],
+          "operations": [
+            {
+              "dynamic_target": false,
+              "index": 13,
+              "operation": "CREATE_INDEX",
+              "table": "scenario_field_settings"
+            }
+          ]
+        },
+        "owner_contexts": [
+          "configuration"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "ONE_SHOT_PENDING_RETIREMENT",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.configuration.921891a255a7be81",
+        "last_commit": "e9541a83 2026-04-21 WIP: chats + telephony + scenarios settings (snapshot 2026-04-10)",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "be2c1019196729d92dc53f9922cbc56b57ef4aa557b5d79f487f0197f257e242",
+      "classification": "HISTORICAL_DEAD",
+      "classification_confidence": "HIGH",
+      "rationale": "README_BACKFILL explicitly labels one-off/deprecated or unusable alternative; no runtime caller",
+      "functional_owner": "messaging",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/backfill_max_names.js",
+          "line": 78,
+          "column": 19,
+          "method": "update",
+          "model": "chat",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "messaging"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "BACKFILL",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.messaging.97ac42e7aaac613c",
+        "last_commit": "06fa5532 2026-05-23 PR-\u0410/\u0411/\u0412/\u0413: \u0438\u043c\u0435\u043d\u0430 \u0438 \u043d\u043e\u043c\u0435\u0440\u0430 \u0434\u043b\u044f TG/WA/MAX \u2014 ingest + backfill",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "03ac0c977a42dbf5c9870472b50165e0cc40b9e5844a8928a41b4db952f7729a",
+      "classification": "HISTORICAL_DEAD",
+      "classification_confidence": "HIGH",
+      "rationale": "README_BACKFILL explicitly labels one-off/deprecated or unusable alternative; no runtime caller",
+      "functional_owner": "contacts",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/backfill_max_names.js",
+          "line": 88,
+          "column": 27,
+          "method": "update",
+          "model": "contact",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "contacts"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "BACKFILL",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.contacts.922290612f461ab1",
+        "last_commit": "06fa5532 2026-05-23 PR-\u0410/\u0411/\u0412/\u0413: \u0438\u043c\u0435\u043d\u0430 \u0438 \u043d\u043e\u043c\u0435\u0440\u0430 \u0434\u043b\u044f TG/WA/MAX \u2014 ingest + backfill",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "990eda04136ba2233335a0f17caecfd55edb6a0f08ae2fe8495575182b78a772",
+      "classification": "HISTORICAL_DEAD",
+      "classification_confidence": "HIGH",
+      "rationale": "README_BACKFILL explicitly labels one-off/deprecated or unusable alternative; no runtime caller",
+      "functional_owner": "messaging",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/backfill_tg_via_bot_api.js",
+          "line": 117,
+          "column": 19,
+          "method": "update",
+          "model": "chat",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "messaging"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "BACKFILL",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.messaging.eb5847e37c093ba7",
+        "last_commit": "4ff81385 2026-08-10 feat: close provider write ownership boundaries",
+        "package_runtime_references_excluding_source": [
+          "tg-bot/src/security/authSecurity.test.js"
+        ],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "aca623a16fe8c112c73c6ec21b9f68ea909c1cef8d0138e2cf955eee8b144e36",
+      "classification": "HISTORICAL_DEAD",
+      "classification_confidence": "HIGH",
+      "rationale": "README_BACKFILL explicitly labels one-off/deprecated or unusable alternative; no runtime caller",
+      "functional_owner": "contacts",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/backfill_tg_via_bot_api.js",
+          "line": 127,
+          "column": 27,
+          "method": "update",
+          "model": "contact",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "contacts"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "BACKFILL",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.contacts.2fac2372bf15d362",
+        "last_commit": "4ff81385 2026-08-10 feat: close provider write ownership boundaries",
+        "package_runtime_references_excluding_source": [
+          "tg-bot/src/security/authSecurity.test.js"
+        ],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "ae74379f118fa67af410d9e7d2cb6f1749343387efc55db8166d8114c7d00a41",
+      "classification": "HISTORICAL_DEAD",
+      "classification_confidence": "HIGH",
+      "rationale": "README_BACKFILL explicitly labels one-off/deprecated or unusable alternative; no runtime caller",
+      "functional_owner": "messaging",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/backfill_wa_names.js",
+          "line": 64,
+          "column": 19,
+          "method": "update",
+          "model": "chat",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "messaging"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "BACKFILL",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.messaging.a26b675b03d958fe",
+        "last_commit": "06fa5532 2026-05-23 PR-\u0410/\u0411/\u0412/\u0413: \u0438\u043c\u0435\u043d\u0430 \u0438 \u043d\u043e\u043c\u0435\u0440\u0430 \u0434\u043b\u044f TG/WA/MAX \u2014 ingest + backfill",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "884f50b8a8913506cea1c48d1c08b9d52a080891d1747dc9fb2f215a6048c16b",
+      "classification": "HISTORICAL_DEAD",
+      "classification_confidence": "HIGH",
+      "rationale": "README_BACKFILL explicitly labels one-off/deprecated or unusable alternative; no runtime caller",
+      "functional_owner": "contacts",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/backfill_wa_names.js",
+          "line": 74,
+          "column": 27,
+          "method": "update",
+          "model": "contact",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "contacts"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "BACKFILL",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.contacts.8902f456e7ad3982",
+        "last_commit": "06fa5532 2026-05-23 PR-\u0410/\u0411/\u0412/\u0413: \u0438\u043c\u0435\u043d\u0430 \u0438 \u043d\u043e\u043c\u0435\u0440\u0430 \u0434\u043b\u044f TG/WA/MAX \u2014 ingest + backfill",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "a962a2fdac7c3c993837f0ab130fe1e13c36b876fd6d34a8e56d617da6e56f9f",
+      "classification": "CONTROLLED_MIGRATION",
+      "classification_confidence": "HIGH",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability",
+      "functional_owner": "work_management",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/backfill-scenario-data.js",
+          "line": 166,
+          "column": 19,
+          "method": "$executeRaw",
+          "model": null,
+          "tables": [
+            "tasks"
+          ],
+          "operations": [
+            {
+              "dynamic_target": false,
+              "index": 17,
+              "operation": "UPDATE",
+              "table": "tasks"
+            }
+          ]
+        },
+        "owner_contexts": [
+          "work_management"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": null,
+        "registry_reachability": null,
+        "registry_capability_id": null,
+        "last_commit": "e9541a83 2026-04-21 WIP: chats + telephony + scenarios settings (snapshot 2026-04-10)",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "fb0765906652f3c3eb19a70e1eb8201b5b1e3be232f1e1e0dc69494d759fde52",
+      "classification": "CONTROLLED_MIGRATION",
+      "classification_confidence": "HIGH",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability",
+      "functional_owner": "platform_operations",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/baseline-vps.sh",
+          "line": 18,
+          "column": 9,
+          "method": "mixed-script-command:prisma migrate resolve",
+          "model": null,
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "CONTROLLED_MIGRATION",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.unresolved.fdbfd25b62c0df45",
+        "last_commit": "62b9154c 2026-06-12 fix(prisma): \u0432\u043e\u0441\u0441\u0442\u0430\u043d\u043e\u0432\u043b\u0435\u043d\u0438\u0435 \u0438\u0441\u0442\u043e\u0440\u0438\u0438 \u043c\u0438\u0433\u0440\u0430\u0446\u0438\u0439 + \u0432\u043e\u0437\u0432\u0440\u0430\u0442 migrate deploy",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": [
+          "dynamic_database_command_requires_review",
+          "dynamic_database_write_command_requires_review"
+        ]
+      }
+    },
+    {
+      "site_signature": "175a2212ec49b4fcfa4eeeae1f3cfd6e6b1dca6e197541b48f94646f761e5773",
+      "classification": "HISTORICAL_DEAD",
+      "classification_confidence": "HIGH",
+      "rationale": "One-shot test/temporary data utility; no package/runtime caller evidence; retained only as historical source",
+      "functional_owner": "messaging",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/create_test_chat.js",
+          "line": 12,
+          "column": 22,
+          "method": "upsert",
+          "model": "chat",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "messaging"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "ONE_SHOT_PENDING_RETIREMENT",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.messaging.69a20d2620c28e96",
+        "last_commit": "ad461fca 2026-03-22 v2",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "e600c0a8db5e4d4b95c64ba33d5c61bfef918245b29c526554554fb447bb8d99",
+      "classification": "HISTORICAL_DEAD",
+      "classification_confidence": "HIGH",
+      "rationale": "One-shot test/temporary data utility; no package/runtime caller evidence; retained only as historical source",
+      "functional_owner": "messaging",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/create_test_chat.js",
+          "line": 32,
+          "column": 9,
+          "method": "create",
+          "model": "message",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "messaging"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "ONE_SHOT_PENDING_RETIREMENT",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.messaging.69da1e40995b4d5e",
+        "last_commit": "ad461fca 2026-03-22 v2",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "137e450cce829309c4a3b03bb1044c1de8fb6a4155ac2d001f63110539a5bf97",
+      "classification": "HISTORICAL_DEAD",
+      "classification_confidence": "HIGH",
+      "rationale": "One-shot test/temporary data utility; no package/runtime caller evidence; retained only as historical source",
+      "functional_owner": null,
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/inject_test_data.sql",
+          "line": 5,
+          "column": 5,
+          "method": "sql-script",
+          "model": null,
+          "tables": [
+            "v_driver_id"
+          ],
+          "operations": [
+            {
+              "container": "DO",
+              "dynamic_target": false,
+              "fragment_source": "standalone_sql",
+              "index": 46,
+              "operation": "SELECT_INTO",
+              "table": "v_driver_id"
+            }
+          ]
+        },
+        "owner_contexts": [],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "ONE_SHOT_PENDING_RETIREMENT",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.unresolved.91362fbef9a98f0a",
+        "last_commit": "ad461fca 2026-03-22 v2",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "5c8b2034b7e5a75cdc3d61021124bae14f5182dcc736fb090d4c6a7708c1b78f",
+      "classification": "HISTORICAL_DEAD",
+      "classification_confidence": "HIGH",
+      "rationale": "One-shot test/temporary data utility; no package/runtime caller evidence; retained only as historical source",
+      "functional_owner": "messaging",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/inject_test_data.sql",
+          "line": 9,
+          "column": 9,
+          "method": "sql-script",
+          "model": null,
+          "tables": [
+            "Chat"
+          ],
+          "operations": [
+            {
+              "container": "DO",
+              "dynamic_target": false,
+              "fragment_source": "standalone_sql",
+              "index": 178,
+              "operation": "INSERT",
+              "table": "Chat"
+            }
+          ]
+        },
+        "owner_contexts": [
+          "messaging"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "ONE_SHOT_PENDING_RETIREMENT",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.messaging.494b4aeaa6dcbd46",
+        "last_commit": "ad461fca 2026-03-22 v2",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "2a64371028697a4649cd1154cddc3171d2dad16d5519e6f04cf823fa4fd79dbc",
+      "classification": "HISTORICAL_DEAD",
+      "classification_confidence": "HIGH",
+      "rationale": "One-shot test/temporary data utility; no package/runtime caller evidence; retained only as historical source",
+      "functional_owner": "messaging",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/inject_test_data.sql",
+          "line": 18,
+          "column": 9,
+          "method": "sql-script",
+          "model": null,
+          "tables": [
+            "Message"
+          ],
+          "operations": [
+            {
+              "container": "DO",
+              "dynamic_target": false,
+              "fragment_source": "standalone_sql",
+              "index": 689,
+              "operation": "INSERT",
+              "table": "Message"
+            }
+          ]
+        },
+        "owner_contexts": [
+          "messaging"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "ONE_SHOT_PENDING_RETIREMENT",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.messaging.5c020ffd41dcba9d",
+        "last_commit": "ad461fca 2026-03-22 v2",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "102a1698c96e3dfd05f21fdc840c3ee2d28e641b488b16765a936f50a0c8ee66",
+      "classification": "CONTROLLED_MIGRATION",
+      "classification_confidence": "HIGH",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability",
+      "functional_owner": "contacts",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/migrate-contacts.ts",
+          "line": 180,
+          "column": 29,
+          "method": "create",
+          "model": "contact",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "contacts"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "CONTROLLED_MIGRATION",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.contacts.dbd4b172493ccc1a",
+        "last_commit": "02218b13 2026-05-15 feat(messages): finish Yandex Pro removal across DB, UI text, scripts and docs",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "a7bb579420666341312247c8ba0cb7b7e5cd1eb149bad7b40489d11ac803c02a",
+      "classification": "CONTROLLED_MIGRATION",
+      "classification_confidence": "HIGH",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability",
+      "functional_owner": "contacts",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/migrate-contacts.ts",
+          "line": 200,
+          "column": 31,
+          "method": "create",
+          "model": "contactPhone",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "contacts"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": null,
+        "registry_reachability": null,
+        "registry_capability_id": null,
+        "last_commit": "02218b13 2026-05-15 feat(messages): finish Yandex Pro removal across DB, UI text, scripts and docs",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "15db98f84f1cfe5b929932f5d550423d63d0cdfe41e4c0e6d50715e0fa977424",
+      "classification": "CONTROLLED_MIGRATION",
+      "classification_confidence": "HIGH",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability",
+      "functional_owner": "contacts",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/migrate-contacts.ts",
+          "line": 209,
+          "column": 17,
+          "method": "update",
+          "model": "contact",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "contacts"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "CONTROLLED_MIGRATION",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.contacts.ad0612a5d59900ed",
+        "last_commit": "02218b13 2026-05-15 feat(messages): finish Yandex Pro removal across DB, UI text, scripts and docs",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "6ec19d2408c23a56727f1ab05b2514ae9dbd20d7420eb1231ea6eb7adacc3b6e",
+      "classification": "CONTROLLED_MIGRATION",
+      "classification_confidence": "HIGH",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability",
+      "functional_owner": "contacts",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/migrate-contacts.ts",
+          "line": 287,
+          "column": 13,
+          "method": "create",
+          "model": "contactIdentity",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "contacts"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "CONTROLLED_MIGRATION",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.contacts.5bf907a2db370265",
+        "last_commit": "02218b13 2026-05-15 feat(messages): finish Yandex Pro removal across DB, UI text, scripts and docs",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "b2cf150f126b8f87fede1fc4e031c3cf5c17872d0ca2c78eb54932550e4656d8",
+      "classification": "CONTROLLED_MIGRATION",
+      "classification_confidence": "HIGH",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability",
+      "functional_owner": "contacts",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/migrate-contacts.ts",
+          "line": 355,
+          "column": 31,
+          "method": "create",
+          "model": "contactPhone",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "contacts"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": null,
+        "registry_reachability": null,
+        "registry_capability_id": null,
+        "last_commit": "02218b13 2026-05-15 feat(messages): finish Yandex Pro removal across DB, UI text, scripts and docs",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "77e9a1ad0c3e790fd22c06f619dfcb7ad0270a644b99624c8a478a5a216cd060",
+      "classification": "CONTROLLED_MIGRATION",
+      "classification_confidence": "HIGH",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability",
+      "functional_owner": "contacts",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/migrate-contacts.ts",
+          "line": 386,
+          "column": 13,
+          "method": "create",
+          "model": "contactIdentity",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "contacts"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": null,
+        "registry_reachability": null,
+        "registry_capability_id": null,
+        "last_commit": "02218b13 2026-05-15 feat(messages): finish Yandex Pro removal across DB, UI text, scripts and docs",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "e2437e44902cb7387eb871eccd3076e165596cdae4019f4d72affdde6f53ae5b",
+      "classification": "CONTROLLED_MIGRATION",
+      "classification_confidence": "HIGH",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability",
+      "functional_owner": "contacts",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/migrate-contacts.ts",
+          "line": 511,
+          "column": 33,
+          "method": "create",
+          "model": "contact",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "contacts"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": null,
+        "registry_reachability": null,
+        "registry_capability_id": null,
+        "last_commit": "02218b13 2026-05-15 feat(messages): finish Yandex Pro removal across DB, UI text, scripts and docs",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "03841ee7269cde33ac0338c8da7daafdc9f1dd787eef2a64367ec4d28e222bd0",
+      "classification": "CONTROLLED_MIGRATION",
+      "classification_confidence": "HIGH",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability",
+      "functional_owner": "contacts",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/migrate-contacts.ts",
+          "line": 529,
+          "column": 37,
+          "method": "create",
+          "model": "contactPhone",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "contacts"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "CONTROLLED_MIGRATION",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.contacts.d82bdc961670a4f5",
+        "last_commit": "02218b13 2026-05-15 feat(messages): finish Yandex Pro removal across DB, UI text, scripts and docs",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "a336fa130fa93547fa640e9bacd80299ad8afd28e8b7ebc669ddd5a67d5b530d",
+      "classification": "CONTROLLED_MIGRATION",
+      "classification_confidence": "HIGH",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability",
+      "functional_owner": "contacts",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/migrate-contacts.ts",
+          "line": 537,
+          "column": 23,
+          "method": "update",
+          "model": "contact",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "contacts"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": null,
+        "registry_reachability": null,
+        "registry_capability_id": null,
+        "last_commit": "02218b13 2026-05-15 feat(messages): finish Yandex Pro removal across DB, UI text, scripts and docs",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "87c81fa7c493e67bd292efea7dd1494ea9571c211dd84ba25fe7262c0cbf0d54",
+      "classification": "CONTROLLED_MIGRATION",
+      "classification_confidence": "HIGH",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability",
+      "functional_owner": "contacts",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/migrate-contacts.ts",
+          "line": 590,
+          "column": 38,
+          "method": "create",
+          "model": "contactIdentity",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "contacts"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": null,
+        "registry_reachability": null,
+        "registry_capability_id": null,
+        "last_commit": "02218b13 2026-05-15 feat(messages): finish Yandex Pro removal across DB, UI text, scripts and docs",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "b37ce9b5ea619ba68122f91b284a37bce900dbd3ed9a4256b5a133f20462eba4",
+      "classification": "CONTROLLED_MIGRATION",
+      "classification_confidence": "HIGH",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability",
+      "functional_owner": "messaging",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/migrate-contacts.ts",
+          "line": 629,
+          "column": 15,
+          "method": "update",
+          "model": "chat",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "messaging"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "CONTROLLED_MIGRATION",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.messaging.a83b718290fb9cba",
+        "last_commit": "02218b13 2026-05-15 feat(messages): finish Yandex Pro removal across DB, UI text, scripts and docs",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "d9d88cd19ab15a7ad54550926e114f0934a9bc4becd4034fba50b201b1b10b79",
+      "classification": "CONTROLLED_MIGRATION",
+      "classification_confidence": "HIGH",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability",
+      "functional_owner": "work_management",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/migrate-contacts.ts",
+          "line": 694,
+          "column": 13,
+          "method": "update",
+          "model": "task",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "work_management"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "CONTROLLED_MIGRATION",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.work_management.e3843528904d278e",
+        "last_commit": "02218b13 2026-05-15 feat(messages): finish Yandex Pro removal across DB, UI text, scripts and docs",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "774f170415e96018ac5b9430dd02beff9631a5764c6eb3e9818aff0d737124a6",
+      "classification": "CONTROLLED_MIGRATION",
+      "classification_confidence": "HIGH",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability",
+      "functional_owner": "work_management",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/migrate-scenario-from-metadata.ts",
+          "line": 33,
+          "column": 15,
+          "method": "update",
+          "model": "task",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "work_management"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "CONTROLLED_MIGRATION",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.work_management.f28b44ce4fffa800",
+        "last_commit": "824d1565 2026-04-13 feat: add scenario model \u2014 schema, types, config, migrations, scripts",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "1804dac0259cf69cec475ab7986a0ce99124481ee6eb2fc07d97f400048b0d82",
+      "classification": "CONTROLLED_MIGRATION",
+      "classification_confidence": "HIGH",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability",
+      "functional_owner": "messaging",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/recover-wa-unified-from-legacy.js",
+          "line": 84,
+          "column": 15,
+          "method": "create",
+          "model": "message",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "messaging"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "ONE_SHOT_PENDING_RETIREMENT",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.messaging.fc8f3e65dd484b65",
+        "last_commit": "e45ec3cd 2026-04-25 fix(whatsapp): unify externalChatId across live + sync + import pipelines",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "59ca0f72871e7820528046746450325fcc7e1094222e07f47e6f58ab24fad48f",
+      "classification": "HISTORICAL_DEAD",
+      "classification_confidence": "HIGH",
+      "rationale": "One-shot test/temporary data utility; no package/runtime caller evidence; retained only as historical source",
+      "functional_owner": "fleet_operations",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/temp_swap_driver_to_ahmetov.js",
+          "line": 21,
+          "column": 11,
+          "method": "deleteMany",
+          "model": "driverAction",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "fleet_operations"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": null,
+        "registry_reachability": null,
+        "registry_capability_id": null,
+        "last_commit": "9317b0bd 2026-06-08 driver-actions: \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0430 \u0441 \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u043c\u0438 \u043f\u043e\u043b\u044f\u043c\u0438 \u0437\u0430\u043a\u0430\u0437\u0430 \u0438\u0437 fleet.yandex.ru",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "b35c2e9503d39d243f735cff1dc0165d215fed1096123fa1165fec8ffb19fa7d",
+      "classification": "HISTORICAL_DEAD",
+      "classification_confidence": "HIGH",
+      "rationale": "One-shot test/temporary data utility; no package/runtime caller evidence; retained only as historical source",
+      "functional_owner": "fleet_operations",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/temp_swap_driver_to_ahmetov.js",
+          "line": 22,
+          "column": 11,
+          "method": "delete",
+          "model": "driver",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "fleet_operations"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": null,
+        "registry_reachability": null,
+        "registry_capability_id": null,
+        "last_commit": "9317b0bd 2026-06-08 driver-actions: \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0430 \u0441 \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u043c\u0438 \u043f\u043e\u043b\u044f\u043c\u0438 \u0437\u0430\u043a\u0430\u0437\u0430 \u0438\u0437 fleet.yandex.ru",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "ed146ee063421a11d62fcee95f7ef3e6c79c55e8f2ab6a0108c39d52270a8e33",
+      "classification": "HISTORICAL_DEAD",
+      "classification_confidence": "HIGH",
+      "rationale": "One-shot test/temporary data utility; no package/runtime caller evidence; retained only as historical source",
+      "functional_owner": "fleet_operations",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/temp_swap_driver_to_ahmetov.js",
+          "line": 25,
+          "column": 30,
+          "method": "upsert",
+          "model": "driver",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "fleet_operations"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "ONE_SHOT_PENDING_RETIREMENT",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.fleet_operations.949ee103158f7f33",
+        "last_commit": "9317b0bd 2026-06-08 driver-actions: \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0430 \u0441 \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u043c\u0438 \u043f\u043e\u043b\u044f\u043c\u0438 \u0437\u0430\u043a\u0430\u0437\u0430 \u0438\u0437 fleet.yandex.ru",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "1263505026add0a565ad199461de1cfa48c52e45a299a0a1798c0fe317d697e8",
+      "classification": "HISTORICAL_DEAD",
+      "classification_confidence": "HIGH",
+      "rationale": "One-shot test/temporary data utility; no package/runtime caller evidence; retained only as historical source",
+      "functional_owner": "telegram_channel",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/temp_swap_driver_to_ahmetov.js",
+          "line": 37,
+          "column": 27,
+          "method": "updateMany",
+          "model": "driverTelegram",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "telegram_channel"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": null,
+        "registry_reachability": null,
+        "registry_capability_id": null,
+        "last_commit": "9317b0bd 2026-06-08 driver-actions: \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0430 \u0441 \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u043c\u0438 \u043f\u043e\u043b\u044f\u043c\u0438 \u0437\u0430\u043a\u0430\u0437\u0430 \u0438\u0437 fleet.yandex.ru",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "0279bd80352108258a83db88b2032f8ff6bdfd0cfdd70118ee9966be5485b67b",
+      "classification": "HISTORICAL_DEAD",
+      "classification_confidence": "HIGH",
+      "rationale": "One-shot test/temporary data utility; no package/runtime caller evidence; retained only as historical source",
+      "functional_owner": "telegram_channel",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/temp_swap_driver_to_ahmetov.js",
+          "line": 47,
+          "column": 27,
+          "method": "updateMany",
+          "model": "driverTelegram",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "telegram_channel"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "ONE_SHOT_PENDING_RETIREMENT",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.telegram_channel.d3512bdf37225682",
+        "last_commit": "9317b0bd 2026-06-08 driver-actions: \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0430 \u0441 \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u043c\u0438 \u043f\u043e\u043b\u044f\u043c\u0438 \u0437\u0430\u043a\u0430\u0437\u0430 \u0438\u0437 fleet.yandex.ru",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "25f2eabf7a05c786d56bdfbf567c852340e0d02a0ba1c176aeeb05039cc619d7",
+      "classification": "HISTORICAL_DEAD",
+      "classification_confidence": "HIGH",
+      "rationale": "One-shot test/temporary data utility; no package/runtime caller evidence; retained only as historical source",
+      "functional_owner": "fleet_operations",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/temp_swap_driver_to_ahmetov.js",
+          "line": 54,
+          "column": 34,
+          "method": "deleteMany",
+          "model": "driverAction",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "fleet_operations"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "ONE_SHOT_PENDING_RETIREMENT",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.fleet_operations.831fb0afbb58ff08",
+        "last_commit": "9317b0bd 2026-06-08 driver-actions: \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0430 \u0441 \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u043c\u0438 \u043f\u043e\u043b\u044f\u043c\u0438 \u0437\u0430\u043a\u0430\u0437\u0430 \u0438\u0437 fleet.yandex.ru",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "87228fc7fc26bc468207dc65822f955fc257da32732b4fee3297064d843f9a48",
+      "classification": "HISTORICAL_DEAD",
+      "classification_confidence": "HIGH",
+      "rationale": "One-shot test/temporary data utility; no package/runtime caller evidence; retained only as historical source",
+      "functional_owner": "fleet_operations",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "gravity-mvp/scripts/temp_swap_driver_to_ahmetov.js",
+          "line": 57,
+          "column": 27,
+          "method": "delete",
+          "model": "driver",
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [
+          "fleet_operations"
+        ],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "ONE_SHOT_PENDING_RETIREMENT",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.fleet_operations.fb4643f95637d22d",
+        "last_commit": "9317b0bd 2026-06-08 driver-actions: \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0430 \u0441 \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u043c\u0438 \u043f\u043e\u043b\u044f\u043c\u0438 \u0437\u0430\u043a\u0430\u0437\u0430 \u0438\u0437 fleet.yandex.ru",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": []
+      }
+    },
+    {
+      "site_signature": "2f63589b29d8ca9c3fc9a2395a36c59204aaa960f4c9b4ffac26be8a7fcf778f",
+      "classification": "CONTROLLED_MIGRATION",
+      "classification_confidence": "HIGH",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability",
+      "functional_owner": "platform_operations",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "scripts/deploy.sh",
+          "line": 91,
+          "column": 41,
+          "method": "mixed-script-command:prisma migrate deploy",
+          "model": null,
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "ONE_SHOT_PENDING_RETIREMENT",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.unresolved.ffa6cacdb78ff13e",
+        "last_commit": "35ef88a6 2026-06-09 deploy: PR2 \u2014 Dockerfile'\u044b, nginx, deploy-\u0441\u043a\u0440\u0438\u043f\u0442",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": [
+          "dynamic_database_command_requires_review",
+          "dynamic_database_write_command_requires_review"
+        ]
+      }
+    },
+    {
+      "site_signature": "2d375d50425d4ebfcdae9f253de9d7512072f7448c5dd653b31beeb32fc885a1",
+      "classification": "CONTROLLED_MIGRATION",
+      "classification_confidence": "HIGH",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability",
+      "functional_owner": "platform_operations",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "scripts/migrate-data-apply.sh",
+          "line": 84,
+          "column": 31,
+          "method": "mixed-script-command:pg_restore",
+          "model": null,
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "CONTROLLED_MIGRATION",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.unresolved.c68440b5e5c04530",
+        "last_commit": "75f8088c 2026-06-10 deploy: PR4 \u2014 production hardening (B-4..B-10 fixes)",
+        "package_runtime_references_excluding_source": [
+          "scripts/migrate-data-to-vps.sh"
+        ],
+        "ambiguity_reasons": [
+          "dynamic_database_command_requires_review",
+          "dynamic_database_write_command_requires_review"
+        ]
+      }
+    },
+    {
+      "site_signature": "f661f1e776d6dd842255444759e9cf185969ef79e7662a152959630e15e7af66",
+      "classification": "CONTROLLED_MIGRATION",
+      "classification_confidence": "HIGH",
+      "rationale": "Explicit deploy/restore/schema/data migration script; exact target/owner must be exposed through controlled migration capability",
+      "functional_owner": "platform_operations",
+      "foreign_signal": false,
+      "evidence": {
+        "source": {
+          "path": "scripts/restore-pg.sh",
+          "line": 87,
+          "column": 34,
+          "method": "mixed-script-command:pg_restore",
+          "model": null,
+          "tables": [],
+          "operations": []
+        },
+        "owner_contexts": [],
+        "surface_lifecycle": "OPERATIONAL_SCRIPT",
+        "registry_lifecycle": "ONE_SHOT_PENDING_RETIREMENT",
+        "registry_reachability": "UNKNOWN",
+        "registry_capability_id": "mmc.v1.unresolved.587ffe8bc0e9828a",
+        "last_commit": "17c09366 2026-06-09 deploy: PR1 \u2014 \u0438\u043d\u0444\u0440\u0430-\u0441\u043a\u0435\u043b\u0435\u0442 \u0434\u043b\u044f \u043f\u0435\u0440\u0435\u0435\u0437\u0434\u0430 \u043d\u0430 Beget VPS",
+        "package_runtime_references_excluding_source": [],
+        "ambiguity_reasons": [
+          "dynamic_database_command_requires_review",
+          "dynamic_database_write_command_requires_review"
+        ]
+      }
+    }
+  ]
+}

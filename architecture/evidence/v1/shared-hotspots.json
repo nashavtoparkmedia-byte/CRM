@@ -1,0 +1,1649 @@
+{
+  "baseline_milestone": "CRM-ARCH-001",
+  "baseline_schema": "yoko.crm.authoritative-baseline.v1",
+  "generated_from": "CRM-ARCH-001 accepted composite baseline",
+  "schema_version": 1,
+  "shared_data_hotspots": [
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER",
+        "SHARED_AMBIGUOUS"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:Chat",
+      "mapped_table": null,
+      "model": "Chat",
+      "owner_candidate": "messages",
+      "reader_modules": [
+        "ai_knowledge",
+        "calls",
+        "contacts",
+        "gravity_core",
+        "leads",
+        "max_provider",
+        "messages",
+        "monitoring",
+        "settings",
+        "telegram_provider",
+        "whatsapp_provider"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 46,
+      "writer_modules": [
+        "avito",
+        "calls",
+        "contacts",
+        "gravity_core",
+        "leads",
+        "max_provider",
+        "messages",
+        "monitoring",
+        "whatsapp_provider"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:Contact",
+      "mapped_table": null,
+      "model": "Contact",
+      "owner_candidate": "contacts",
+      "reader_modules": [
+        "ai_calls",
+        "contacts",
+        "max_provider",
+        "messages",
+        "monitoring",
+        "tasks",
+        "telegram_provider",
+        "yandex_fleet"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 24,
+      "writer_modules": [
+        "contacts",
+        "gravity_core",
+        "max_provider",
+        "messages",
+        "monitoring",
+        "telegram_provider",
+        "yandex_fleet"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:Message",
+      "mapped_table": null,
+      "model": "Message",
+      "owner_candidate": "messages",
+      "reader_modules": [
+        "ai_knowledge",
+        "calls",
+        "contacts",
+        "gravity_core",
+        "leads",
+        "max_provider",
+        "max_scraper",
+        "messages",
+        "monitoring",
+        "settings",
+        "telegram_provider",
+        "whatsapp_provider"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 22,
+      "writer_modules": [
+        "calls",
+        "gravity_core",
+        "leads",
+        "max_provider",
+        "messages",
+        "monitoring",
+        "whatsapp_provider"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:Task",
+      "mapped_table": "tasks",
+      "model": "Task",
+      "owner_candidate": "tasks",
+      "reader_modules": [
+        "analytics",
+        "monitoring",
+        "tasks"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 24,
+      "writer_modules": [
+        "ai_calls",
+        "analytics",
+        "contacts",
+        "monitoring",
+        "tasks"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:Driver",
+      "mapped_table": null,
+      "model": "Driver",
+      "owner_candidate": "drivers",
+      "reader_modules": [
+        "ai_calls",
+        "analytics",
+        "calls",
+        "contacts",
+        "drivers",
+        "gravity_core",
+        "messages",
+        "monitoring",
+        "tasks",
+        "yandex_fleet"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 9,
+      "writer_modules": [
+        "drivers",
+        "gravity_core",
+        "tasks",
+        "yandex_fleet"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:HistoryImportJob",
+      "mapped_table": null,
+      "model": "HistoryImportJob",
+      "owner_candidate": "messages",
+      "reader_modules": [
+        "settings"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 10,
+      "writer_modules": [
+        "gravity_core",
+        "settings",
+        "telegram_provider",
+        "whatsapp_provider"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "LEGACY",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiKnowledgeItem",
+      "mapped_table": null,
+      "model": "AiKnowledgeItem",
+      "owner_candidate": "ai_knowledge",
+      "reader_modules": [
+        "ai_knowledge",
+        "messages",
+        "settings"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 20,
+      "writer_modules": [
+        "ai_knowledge",
+        "messages",
+        "settings"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:DriverDaySummary",
+      "mapped_table": null,
+      "model": "DriverDaySummary",
+      "owner_candidate": "drivers",
+      "reader_modules": [
+        "analytics",
+        "drivers",
+        "tasks"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 5,
+      "writer_modules": [
+        "drivers",
+        "messages",
+        "yandex_fleet"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:DriverTelegram",
+      "mapped_table": null,
+      "model": "DriverTelegram",
+      "owner_candidate": "telegram_provider",
+      "reader_modules": [
+        "drivers",
+        "gravity_core",
+        "messages",
+        "telegram_provider",
+        "yandex_fleet"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 14,
+      "writer_modules": [
+        "drivers",
+        "gravity_core",
+        "telegram_provider"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:MessageAttachment",
+      "mapped_table": null,
+      "model": "MessageAttachment",
+      "owner_candidate": "messages",
+      "reader_modules": [
+        "max_provider",
+        "messages"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 4,
+      "writer_modules": [
+        "max_provider",
+        "messages",
+        "whatsapp_provider"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiDecisionLog",
+      "mapped_table": null,
+      "model": "AiDecisionLog",
+      "owner_candidate": "ai_knowledge",
+      "reader_modules": [
+        "ai_knowledge",
+        "gravity_core",
+        "settings"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 2,
+      "writer_modules": [
+        "gravity_core",
+        "settings"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiExtractionJob",
+      "mapped_table": null,
+      "model": "AiExtractionJob",
+      "owner_candidate": "ai_knowledge",
+      "reader_modules": [
+        "ai_knowledge",
+        "settings"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 4,
+      "writer_modules": [
+        "ai_knowledge",
+        "settings"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "LEGACY",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiKnowledgeSource",
+      "mapped_table": null,
+      "model": "AiKnowledgeSource",
+      "owner_candidate": "ai_knowledge",
+      "reader_modules": [
+        "ai_knowledge",
+        "settings"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 6,
+      "writer_modules": [
+        "ai_knowledge",
+        "settings"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:avito_responses",
+      "mapped_table": null,
+      "model": "avito_responses",
+      "owner_candidate": "avito",
+      "reader_modules": [
+        "avito",
+        "leads"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 4,
+      "writer_modules": [
+        "avito",
+        "leads"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:BotChatMessage",
+      "mapped_table": null,
+      "model": "BotChatMessage",
+      "owner_candidate": "telegram_provider",
+      "reader_modules": [
+        "gravity_core",
+        "telegram_provider"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 4,
+      "writer_modules": [
+        "gravity_core",
+        "telegram_provider"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:Call",
+      "mapped_table": null,
+      "model": "Call",
+      "owner_candidate": "calls",
+      "reader_modules": [
+        "ai_calls",
+        "ai_knowledge",
+        "calls",
+        "monitoring",
+        "settings"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 11,
+      "writer_modules": [
+        "ai_calls",
+        "calls"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:CommunicationEvent",
+      "mapped_table": null,
+      "model": "CommunicationEvent",
+      "owner_candidate": "messages",
+      "reader_modules": [
+        "messages",
+        "tasks"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 3,
+      "writer_modules": [
+        "drivers",
+        "messages"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER",
+        "SHARED_AMBIGUOUS"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:ContactIdentity",
+      "mapped_table": null,
+      "model": "ContactIdentity",
+      "owner_candidate": "contacts",
+      "reader_modules": [
+        "contacts",
+        "leads",
+        "messages",
+        "monitoring"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 10,
+      "writer_modules": [
+        "contacts",
+        "telegram_provider"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:ContactPhone",
+      "mapped_table": null,
+      "model": "ContactPhone",
+      "owner_candidate": "contacts",
+      "reader_modules": [
+        "calls",
+        "contacts",
+        "monitoring",
+        "whatsapp_provider",
+        "yandex_fleet"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 17,
+      "writer_modules": [
+        "contacts",
+        "yandex_fleet"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:DriverAttention",
+      "mapped_table": null,
+      "model": "DriverAttention",
+      "owner_candidate": "drivers",
+      "reader_modules": [
+        "monitoring"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 2,
+      "writer_modules": [
+        "drivers",
+        "monitoring"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:DriverEvent",
+      "mapped_table": null,
+      "model": "DriverEvent",
+      "owner_candidate": "drivers",
+      "reader_modules": [
+        "drivers"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 5,
+      "writer_modules": [
+        "drivers",
+        "yandex_fleet"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:ManagerTask",
+      "mapped_table": null,
+      "model": "ManagerTask",
+      "owner_candidate": "tasks",
+      "reader_modules": [
+        "messages",
+        "tasks"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 2,
+      "writer_modules": [
+        "messages",
+        "tasks"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:MessageEventLog",
+      "mapped_table": null,
+      "model": "MessageEventLog",
+      "owner_candidate": "messages",
+      "reader_modules": [],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 4,
+      "writer_modules": [
+        "gravity_core",
+        "messages"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN",
+        "OWNER"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:ScoringThreshold",
+      "mapped_table": null,
+      "model": "ScoringThreshold",
+      "owner_candidate": "drivers",
+      "reader_modules": [
+        "drivers",
+        "settings"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 2,
+      "writer_modules": [
+        "drivers",
+        "settings"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiAgentConfig",
+      "mapped_table": null,
+      "model": "AiAgentConfig",
+      "owner_candidate": "ai_calls",
+      "reader_modules": [
+        "ai_knowledge",
+        "gravity_core",
+        "messages",
+        "settings"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 5,
+      "writer_modules": [
+        "settings"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiAgentProfile",
+      "mapped_table": null,
+      "model": "AiAgentProfile",
+      "owner_candidate": "ai_calls",
+      "reader_modules": [
+        "settings"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 3,
+      "writer_modules": [
+        "settings"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiKnowledgeUsageLog",
+      "mapped_table": null,
+      "model": "AiKnowledgeUsageLog",
+      "owner_candidate": "ai_knowledge",
+      "reader_modules": [
+        "ai_knowledge"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 1,
+      "writer_modules": [
+        "gravity_core"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiProposedReply",
+      "mapped_table": null,
+      "model": "AiProposedReply",
+      "owner_candidate": "ai_knowledge",
+      "reader_modules": [
+        "messages"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 6,
+      "writer_modules": [
+        "messages"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiRetrievalPolicy",
+      "mapped_table": null,
+      "model": "AiRetrievalPolicy",
+      "owner_candidate": "ai_knowledge",
+      "reader_modules": [
+        "ai_knowledge",
+        "settings"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 1,
+      "writer_modules": [
+        "settings"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:ApiConnection",
+      "mapped_table": null,
+      "model": "ApiConnection",
+      "owner_candidate": "yandex_fleet",
+      "reader_modules": [
+        "drivers",
+        "gravity_core",
+        "yandex_fleet"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 3,
+      "writer_modules": [
+        "gravity_core"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:ApiLog",
+      "mapped_table": null,
+      "model": "ApiLog",
+      "owner_candidate": "yandex_fleet",
+      "reader_modules": [
+        "gravity_core"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 2,
+      "writer_modules": [
+        "gravity_core"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:CommunicationTrigger",
+      "mapped_table": null,
+      "model": "CommunicationTrigger",
+      "owner_candidate": "messages",
+      "reader_modules": [
+        "settings",
+        "tasks"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 4,
+      "writer_modules": [
+        "settings"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:DriverAction",
+      "mapped_table": null,
+      "model": "DriverAction",
+      "owner_candidate": "drivers",
+      "reader_modules": [],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 4,
+      "writer_modules": [
+        "gravity_core"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:health_score_history",
+      "mapped_table": null,
+      "model": "health_score_history",
+      "owner_candidate": "monitoring",
+      "reader_modules": [
+        "tasks"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 1,
+      "writer_modules": [
+        "tasks"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:health_snapshots",
+      "mapped_table": null,
+      "model": "health_snapshots",
+      "owner_candidate": "monitoring",
+      "reader_modules": [],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 1,
+      "writer_modules": [
+        "tasks"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:intervention_actions",
+      "mapped_table": null,
+      "model": "intervention_actions",
+      "owner_candidate": "monitoring",
+      "reader_modules": [
+        "analytics"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 2,
+      "writer_modules": [
+        "analytics"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:KnowledgeBaseEntry",
+      "mapped_table": null,
+      "model": "KnowledgeBaseEntry",
+      "owner_candidate": "ai_knowledge",
+      "reader_modules": [
+        "ai_knowledge",
+        "gravity_core",
+        "settings"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 3,
+      "writer_modules": [
+        "settings"
+      ]
+    },
+    {
+      "classifications": [
+        "FOREIGN"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:scenario_field_settings",
+      "mapped_table": null,
+      "model": "scenario_field_settings",
+      "owner_candidate": "settings",
+      "reader_modules": [
+        "tasks"
+      ],
+      "schema": "gravity-mvp/prisma/schema.prisma",
+      "write_sites": 2,
+      "writer_modules": [
+        "tasks"
+      ]
+    }
+  ],
+  "shared_utility_hotspots": [
+    {
+      "file": "gravity-mvp/src/lib/prisma.ts",
+      "importer_count": 169,
+      "importer_modules": [
+        "ai_calls",
+        "ai_knowledge",
+        "analytics",
+        "avito",
+        "calls",
+        "contacts",
+        "drivers",
+        "gravity_core",
+        "leads",
+        "max_provider",
+        "messages",
+        "monitoring",
+        "settings",
+        "tasks",
+        "telegram_provider",
+        "whatsapp_provider",
+        "yandex_fleet"
+      ],
+      "module": "gravity_core"
+    },
+    {
+      "file": "gravity-mvp/src/components/ui/PageContainer.tsx",
+      "importer_count": 37,
+      "importer_modules": [
+        "analytics",
+        "drivers",
+        "gravity_core",
+        "leads",
+        "max_provider",
+        "messages",
+        "monitoring",
+        "settings",
+        "tasks",
+        "telegram_provider",
+        "users",
+        "whatsapp_provider"
+      ],
+      "module": "gravity_ui"
+    },
+    {
+      "file": "gravity-mvp/src/lib/opsLog.ts",
+      "importer_count": 31,
+      "importer_modules": [
+        "ai_calls",
+        "calls",
+        "gravity_core",
+        "max_provider",
+        "messages",
+        "monitoring",
+        "settings",
+        "tasks",
+        "telegram_provider",
+        "whatsapp_provider"
+      ],
+      "module": "monitoring"
+    },
+    {
+      "file": "gravity-mvp/src/lib/tasks/types.ts",
+      "importer_count": 30,
+      "importer_modules": [
+        "gravity_ui",
+        "messages",
+        "tasks"
+      ],
+      "module": "tasks"
+    },
+    {
+      "file": "gravity-mvp/src/lib/users/user-service.ts",
+      "importer_count": 29,
+      "importer_modules": [
+        "ai_calls",
+        "calls",
+        "gravity_ui",
+        "monitoring",
+        "settings",
+        "tasks",
+        "users"
+      ],
+      "module": "users"
+    },
+    {
+      "file": "gravity-mvp/src/components/ui/button.tsx",
+      "importer_count": 28,
+      "importer_modules": [
+        "analytics",
+        "avito",
+        "drivers",
+        "gravity_core",
+        "gravity_ui",
+        "leads",
+        "max_provider",
+        "messages",
+        "monitoring",
+        "settings",
+        "telegram_provider",
+        "whatsapp_provider"
+      ],
+      "module": "gravity_ui"
+    },
+    {
+      "file": "gravity-mvp/src/lib/tasks/scenario-config.ts",
+      "importer_count": 27,
+      "importer_modules": [
+        "analytics",
+        "gravity_ui",
+        "messages",
+        "settings",
+        "tasks"
+      ],
+      "module": "tasks"
+    },
+    {
+      "file": "gravity-mvp/src/lib/utils.ts",
+      "importer_count": 24,
+      "importer_modules": [
+        "analytics",
+        "avito",
+        "drivers",
+        "gravity_ui"
+      ],
+      "module": "gravity_core"
+    },
+    {
+      "file": "gravity-mvp/src/components/layout/PageShell.tsx",
+      "importer_count": 23,
+      "importer_modules": [
+        "analytics",
+        "drivers",
+        "leads",
+        "messages",
+        "settings"
+      ],
+      "module": "gravity_ui"
+    },
+    {
+      "file": "tg-bot/src/utils/logger.js",
+      "importer_count": 19,
+      "importer_modules": [
+        "telegram_bot"
+      ],
+      "module": "telegram_bot"
+    },
+    {
+      "file": "gravity-mvp/src/app/tg-actions.ts",
+      "importer_count": 18,
+      "importer_modules": [
+        "drivers",
+        "gravity_core",
+        "messages",
+        "monitoring",
+        "settings",
+        "tasks",
+        "telegram_provider"
+      ],
+      "module": "telegram_provider"
+    },
+    {
+      "file": "gravity-mvp/src/components/ui/input.tsx",
+      "importer_count": 17,
+      "importer_modules": [
+        "avito",
+        "drivers",
+        "gravity_core",
+        "gravity_ui",
+        "max_provider",
+        "messages",
+        "monitoring",
+        "settings",
+        "telegram_provider"
+      ],
+      "module": "gravity_ui"
+    },
+    {
+      "file": "gravity-mvp/src/app/tasks/actions.ts",
+      "importer_count": 16,
+      "importer_modules": [
+        "gravity_ui",
+        "messages",
+        "tasks"
+      ],
+      "module": "tasks"
+    },
+    {
+      "file": "gravity-mvp/src/lib/phoneUtils.ts",
+      "importer_count": 14,
+      "importer_modules": [
+        "calls",
+        "contacts",
+        "leads",
+        "max_provider",
+        "messages",
+        "yandex_fleet"
+      ],
+      "module": "gravity_core"
+    },
+    {
+      "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
+      "importer_count": 13,
+      "importer_modules": [
+        "gravity_core",
+        "messages",
+        "monitoring",
+        "settings",
+        "whatsapp_provider"
+      ],
+      "module": "whatsapp_provider"
+    },
+    {
+      "file": "gravity-mvp/src/store/tasks-store.ts",
+      "importer_count": 13,
+      "importer_modules": [
+        "gravity_ui",
+        "tasks"
+      ],
+      "module": "gravity_ui"
+    },
+    {
+      "file": "gravity-mvp/src/app/monitoring/lib/constants.ts",
+      "importer_count": 12,
+      "importer_modules": [
+        "drivers",
+        "monitoring"
+      ],
+      "module": "monitoring"
+    },
+    {
+      "file": "gravity-mvp/src/lib/ContactService.ts",
+      "importer_count": 12,
+      "importer_modules": [
+        "calls",
+        "contacts",
+        "leads",
+        "max_provider",
+        "messages",
+        "telegram_provider",
+        "whatsapp_provider"
+      ],
+      "module": "contacts"
+    },
+    {
+      "file": "gravity-mvp/src/lib/cron-health.ts",
+      "importer_count": 12,
+      "importer_modules": [
+        "monitoring",
+        "tasks",
+        "yandex_fleet"
+      ],
+      "module": "monitoring"
+    },
+    {
+      "file": "gravity-mvp/src/lib/tasks/usage.ts",
+      "importer_count": 12,
+      "importer_modules": [
+        "tasks"
+      ],
+      "module": "tasks"
+    },
+    {
+      "file": "gravity-mvp/src/app/drivers/actions.ts",
+      "importer_count": 11,
+      "importer_modules": [
+        "analytics",
+        "drivers",
+        "messages",
+        "yandex_fleet"
+      ],
+      "module": "drivers"
+    },
+    {
+      "file": "gravity-mvp/src/lib/ConversationWorkflowService.ts",
+      "importer_count": 11,
+      "importer_modules": [
+        "max_provider",
+        "messages",
+        "telegram_provider",
+        "whatsapp_provider"
+      ],
+      "module": "messages"
+    },
+    {
+      "file": "gravity-mvp/src/lib/messageStreamBus.ts",
+      "importer_count": 11,
+      "importer_modules": [
+        "calls",
+        "max_provider",
+        "messages",
+        "telegram_provider",
+        "whatsapp_provider"
+      ],
+      "module": "messages"
+    },
+    {
+      "file": "gravity-mvp/src/components/ui/SectionDescription.tsx",
+      "importer_count": 10,
+      "importer_modules": [
+        "analytics",
+        "drivers",
+        "gravity_core",
+        "gravity_ui",
+        "max_provider",
+        "messages",
+        "monitoring",
+        "telegram_provider",
+        "whatsapp_provider"
+      ],
+      "module": "gravity_ui"
+    },
+    {
+      "file": "gravity-mvp/src/lib/tasks/list-schema.ts",
+      "importer_count": 10,
+      "importer_modules": [
+        "gravity_ui",
+        "tasks"
+      ],
+      "module": "tasks"
+    },
+    {
+      "file": "tools/audio-bridge-day1/runtime-config.js",
+      "importer_count": 10,
+      "importer_modules": [
+        "audio_bridge"
+      ],
+      "module": "audio_bridge"
+    },
+    {
+      "file": "gravity-mvp/src/lib/avito/helpers.ts",
+      "importer_count": 9,
+      "importer_modules": [
+        "avito"
+      ],
+      "module": "avito"
+    },
+    {
+      "file": "gravity-mvp/src/store/list-view-store.ts",
+      "importer_count": 9,
+      "importer_modules": [
+        "tasks"
+      ],
+      "module": "gravity_ui"
+    },
+    {
+      "file": "gravity-mvp/src/lib/ai-call/provider-settings.ts",
+      "importer_count": 8,
+      "importer_modules": [
+        "ai_calls",
+        "gravity_core",
+        "settings"
+      ],
+      "module": "ai_calls"
+    },
+    {
+      "file": "gravity-mvp/src/lib/ai-call/scenarios.ts",
+      "importer_count": 8,
+      "importer_modules": [
+        "ai_calls",
+        "settings"
+      ],
+      "module": "ai_calls"
+    },
+    {
+      "file": "gravity-mvp/src/store/tasks-selectors.ts",
+      "importer_count": 8,
+      "importer_modules": [
+        "tasks"
+      ],
+      "module": "gravity_ui"
+    },
+    {
+      "file": "tg-bot/src/config.js",
+      "importer_count": 8,
+      "importer_modules": [
+        "telegram_bot"
+      ],
+      "module": "telegram_bot"
+    },
+    {
+      "file": "tg-bot/src/handlers/start.js",
+      "importer_count": 8,
+      "importer_modules": [
+        "telegram_bot"
+      ],
+      "module": "telegram_bot"
+    },
+    {
+      "file": "gravity-mvp/src/app/max-actions.ts",
+      "importer_count": 7,
+      "importer_modules": [
+        "drivers",
+        "gravity_core",
+        "max_provider",
+        "messages"
+      ],
+      "module": "max_provider"
+    },
+    {
+      "file": "gravity-mvp/src/components/layout/PageHeader.tsx",
+      "importer_count": 7,
+      "importer_modules": [
+        "analytics",
+        "gravity_core",
+        "settings",
+        "tasks",
+        "users"
+      ],
+      "module": "gravity_ui"
+    },
+    {
+      "file": "gravity-mvp/src/components/ui/badge.tsx",
+      "importer_count": 7,
+      "importer_modules": [
+        "avito",
+        "drivers",
+        "gravity_ui",
+        "leads",
+        "settings"
+      ],
+      "module": "gravity_ui"
+    },
+    {
+      "file": "gravity-mvp/src/components/ui/dialog.tsx",
+      "importer_count": 7,
+      "importer_modules": [
+        "avito",
+        "max_provider",
+        "tasks",
+        "telegram_provider",
+        "whatsapp_provider"
+      ],
+      "module": "gravity_ui"
+    },
+    {
+      "file": "tg-bot/tg-bot-frontend/lib/api.js",
+      "importer_count": 7,
+      "importer_modules": [
+        "telegram_frontend"
+      ],
+      "module": "telegram_frontend"
+    },
+    {
+      "file": "avito-worker/src/db/db.module.ts",
+      "importer_count": 6,
+      "importer_modules": [
+        "avito_worker"
+      ],
+      "module": "avito_worker"
+    },
+    {
+      "file": "gravity-mvp/src/app/actions.ts",
+      "importer_count": 6,
+      "importer_modules": [
+        "drivers",
+        "gravity_core",
+        "monitoring",
+        "settings",
+        "telegram_provider"
+      ],
+      "module": "gravity_core"
+    },
+    {
+      "file": "gravity-mvp/src/app/dashboard/actions.ts",
+      "importer_count": 6,
+      "importer_modules": [
+        "analytics",
+        "gravity_core"
+      ],
+      "module": "analytics"
+    },
+    {
+      "file": "gravity-mvp/src/app/messages/hooks/useConversations.ts",
+      "importer_count": 6,
+      "importer_modules": [
+        "messages"
+      ],
+      "module": "messages"
+    },
+    {
+      "file": "gravity-mvp/src/app/messages/hooks/useMessages.ts",
+      "importer_count": 6,
+      "importer_modules": [
+        "messages"
+      ],
+      "module": "messages"
+    },
+    {
+      "file": "gravity-mvp/src/app/messages/utils/message-utils.ts",
+      "importer_count": 6,
+      "importer_modules": [
+        "messages"
+      ],
+      "module": "messages"
+    },
+    {
+      "file": "gravity-mvp/src/app/monitoring/lib/types.ts",
+      "importer_count": 6,
+      "importer_modules": [
+        "monitoring"
+      ],
+      "module": "monitoring"
+    },
+    {
+      "file": "gravity-mvp/src/components/ui/tooltip.tsx",
+      "importer_count": 6,
+      "importer_modules": [
+        "avito",
+        "gravity_ui",
+        "messages",
+        "tasks"
+      ],
+      "module": "gravity_ui"
+    },
+    {
+      "file": "gravity-mvp/src/lib/DriverMatchService.ts",
+      "importer_count": 6,
+      "importer_modules": [
+        "gravity_core",
+        "max_provider",
+        "telegram_provider",
+        "whatsapp_provider"
+      ],
+      "module": "drivers"
+    },
+    {
+      "file": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
+      "importer_count": 6,
+      "importer_modules": [
+        "calls",
+        "gravity_core",
+        "monitoring",
+        "settings"
+      ],
+      "module": "calls"
+    },
+    {
+      "file": "gravity-mvp/src/lib/queue/queues.ts",
+      "importer_count": 6,
+      "importer_modules": [
+        "ai_calls",
+        "calls",
+        "monitoring"
+      ],
+      "module": "calls"
+    },
+    {
+      "file": "gravity-mvp/src/lib/sip/SipContext.tsx",
+      "importer_count": 6,
+      "importer_modules": [
+        "gravity_core",
+        "gravity_ui",
+        "messages"
+      ],
+      "module": "calls"
+    },
+    {
+      "file": "tg-bot/src/services/sheets.js",
+      "importer_count": 6,
+      "importer_modules": [
+        "telegram_bot"
+      ],
+      "module": "telegram_bot"
+    },
+    {
+      "file": "tg-bot/src/services/userService.js",
+      "importer_count": 6,
+      "importer_modules": [
+        "telegram_bot"
+      ],
+      "module": "telegram_bot"
+    },
+    {
+      "file": "tools/audio-bridge-day1/call-session.js",
+      "importer_count": 6,
+      "importer_modules": [
+        "audio_bridge"
+      ],
+      "module": "audio_bridge"
+    },
+    {
+      "file": "avito-worker/src/playwright/browser-registry.service.ts",
+      "importer_count": 5,
+      "importer_modules": [
+        "avito_worker"
+      ],
+      "module": "avito_worker"
+    },
+    {
+      "file": "gravity-mvp/src/app/team-overview/actions.ts",
+      "importer_count": 5,
+      "importer_modules": [
+        "analytics",
+        "tasks"
+      ],
+      "module": "analytics"
+    },
+    {
+      "file": "gravity-mvp/src/components/ui/table.tsx",
+      "importer_count": 5,
+      "importer_modules": [
+        "drivers",
+        "monitoring",
+        "settings"
+      ],
+      "module": "gravity_ui"
+    },
+    {
+      "file": "gravity-mvp/src/lib/callStreamBus.ts",
+      "importer_count": 5,
+      "importer_modules": [
+        "calls"
+      ],
+      "module": "gravity_core"
+    },
+    {
+      "file": "gravity-mvp/src/lib/contacts/contact-resolution.types.ts",
+      "importer_count": 5,
+      "importer_modules": [
+        "contacts",
+        "gravity_core"
+      ],
+      "module": "contacts"
+    },
+    {
+      "file": "gravity-mvp/src/lib/leads/types.ts",
+      "importer_count": 5,
+      "importer_modules": [
+        "leads"
+      ],
+      "module": "leads"
+    },
+    {
+      "file": "gravity-mvp/src/lib/pipeline/ContextBuilder.ts",
+      "importer_count": 5,
+      "importer_modules": [
+        "gravity_core"
+      ],
+      "module": "gravity_core"
+    },
+    {
+      "file": "gravity-mvp/src/lib/scoring.ts",
+      "importer_count": 5,
+      "importer_modules": [
+        "drivers",
+        "yandex_fleet"
+      ],
+      "module": "drivers"
+    },
+    {
+      "file": "gravity-mvp/src/lib/tasks/list-views.ts",
+      "importer_count": 5,
+      "importer_modules": [
+        "tasks"
+      ],
+      "module": "tasks"
+    },
+    {
+      "file": "gravity-mvp/src/lib/triggers.ts",
+      "importer_count": 5,
+      "importer_modules": [
+        "monitoring"
+      ],
+      "module": "tasks"
+    },
+    {
+      "file": "max-web-scraper/transport/TransportInterceptor.js",
+      "importer_count": 5,
+      "importer_modules": [
+        "max_scraper"
+      ],
+      "module": "max_scraper"
+    },
+    {
+      "file": "tg-bot/tg-bot-frontend/components/CustomSelect.js",
+      "importer_count": 5,
+      "importer_modules": [
+        "telegram_frontend"
+      ],
+      "module": "telegram_frontend"
+    },
+    {
+      "file": "tools/audio-bridge-day1/crm-client.js",
+      "importer_count": 5,
+      "importer_modules": [
+        "audio_bridge"
+      ],
+      "module": "audio_bridge"
+    },
+    {
+      "file": "tools/audio-bridge-day1/init-proxy.js",
+      "importer_count": 5,
+      "importer_modules": [
+        "audio_bridge"
+      ],
+      "module": "audio_bridge"
+    },
+    {
+      "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+      "importer_count": 4,
+      "importer_modules": [
+        "gravity_ui",
+        "messages",
+        "settings"
+      ],
+      "module": "settings"
+    },
+    {
+      "file": "gravity-mvp/src/components/ui/card.tsx",
+      "importer_count": 4,
+      "importer_modules": [
+        "avito",
+        "leads",
+        "telegram_provider"
+      ],
+      "module": "gravity_ui"
+    },
+    {
+      "file": "gravity-mvp/src/lib/ai/knowledge/Retriever.ts",
+      "importer_count": 4,
+      "importer_modules": [
+        "ai_knowledge",
+        "gravity_core",
+        "settings"
+      ],
+      "module": "ai_knowledge"
+    },
+    {
+      "file": "gravity-mvp/src/lib/messageEvents.ts",
+      "importer_count": 4,
+      "importer_modules": [
+        "gravity_core",
+        "max_provider",
+        "telegram_provider",
+        "whatsapp_provider"
+      ],
+      "module": "messages"
+    },
+    {
+      "file": "gravity-mvp/src/lib/tasks/response-config.ts",
+      "importer_count": 4,
+      "importer_modules": [
+        "analytics",
+        "settings",
+        "tasks"
+      ],
+      "module": "tasks"
+    },
+    {
+      "file": "gravity-mvp/src/lib/TransportRegistry.ts",
+      "importer_count": 4,
+      "importer_modules": [
+        "gravity_core",
+        "monitoring",
+        "telegram_provider",
+        "whatsapp_provider"
+      ],
+      "module": "messages"
+    },
+    {
+      "file": "gravity-mvp/src/app/drivers/components/SegmentBadge.tsx",
+      "importer_count": 3,
+      "importer_modules": [
+        "analytics",
+        "drivers",
+        "messages"
+      ],
+      "module": "drivers"
+    },
+    {
+      "file": "gravity-mvp/src/components/ChannelSyncBlock.tsx",
+      "importer_count": 3,
+      "importer_modules": [
+        "max_provider",
+        "telegram_provider",
+        "whatsapp_provider"
+      ],
+      "module": "gravity_ui"
+    },
+    {
+      "file": "gravity-mvp/src/components/ui/tabs.tsx",
+      "importer_count": 3,
+      "importer_modules": [
+        "avito",
+        "drivers",
+        "max_provider"
+      ],
+      "module": "gravity_ui"
+    },
+    {
+      "file": "gravity-mvp/src/lib/ai/knowledge/auditLog.ts",
+      "importer_count": 3,
+      "importer_modules": [
+        "ai_knowledge",
+        "messages",
+        "settings"
+      ],
+      "module": "ai_knowledge"
+    },
+    {
+      "file": "gravity-mvp/src/lib/contacts/contact-resolution-shadow.types.ts",
+      "importer_count": 3,
+      "importer_modules": [
+        "contacts",
+        "gravity_core",
+        "max_provider"
+      ],
+      "module": "contacts"
+    },
+    {
+      "file": "gravity-mvp/src/lib/tasks/pattern-config.ts",
+      "importer_count": 3,
+      "importer_modules": [
+        "analytics",
+        "settings",
+        "tasks"
+      ],
+      "module": "tasks"
+    },
+    {
+      "file": "gravity-mvp/src/lib/tasks/risk-config.ts",
+      "importer_count": 3,
+      "importer_modules": [
+        "analytics",
+        "settings",
+        "tasks"
+      ],
+      "module": "tasks"
+    },
+    {
+      "file": "gravity-mvp/src/lib/yandexSync.ts",
+      "importer_count": 3,
+      "importer_modules": [
+        "drivers",
+        "gravity_core",
+        "yandex_fleet"
+      ],
+      "module": "yandex_fleet"
+    }
+  ],
+  "source_snapshot_sha256": "2713db175062bb673dcca2d97e80c2ae204a2f257438036c6db2506587dfad7d",
+  "totals": {
+    "shared_data_hotspots": 38,
+    "shared_utility_hotspots": 81
+  }
+}

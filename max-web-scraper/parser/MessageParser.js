@@ -13,7 +13,7 @@ class MessageParser {
       externalId:        msg.id || null,
       chatId:            chatId || msg.chatId || null,
       senderId:          msg.from || null,
-      phone:             MessageParser.normalizePhone(msg.from),
+      phone:             MessageParser.normalizePhone(msg.phone || msg.senderPhone),
       text:              msg.text || '',
       timestamp:         MessageParser.normalizeTimestamp(msg.timestamp),
       messageType:       msg.type || 'text',
@@ -34,11 +34,11 @@ class MessageParser {
     if (digits.length === 10)                              return '7' + digits
     if (digits.length === 11 && digits.startsWith('8'))   return '7' + digits.slice(1)
     if (digits.length === 11 && digits.startsWith('7'))   return digits
-    if (digits.length > 11)                               return digits.slice(-11)
+    if (digits.length > 11 && digits.startsWith('7'))     return digits.slice(-11)
 
     // Если это не телефон (может быть внутренний user_id MAX)
-    // возвращаем как есть — будет использоваться как идентификатор
-    return digits || String(raw)
+    // не подставляем его в phone, чтобы CRM не склеивала чат по ложному номеру.
+    return null
   }
 
   /**
@@ -87,10 +87,15 @@ class MessageParser {
 
   static _detectMaxType(attaches) {
     if (!attaches || !attaches.length) return 'text'
-    const t = (attaches[0]._type || '').toUpperCase()
+    const first = attaches[0] || {}
+    const t = (first._type || first.preview?._type || first.type || '').toUpperCase()
+    const name = String(first.name || first.filename || '').replace(/\u0000/g, '').replace(/\uFFFD/g, '')
+    const mime = String(first.mimeType || first.type || '')
     if (t === 'PHOTO')                     return 'image'
-    if (t === 'VIDEO')                     return 'video'
+    if (t === 'VIDEO' || first.videoId || first.thumbnail || /\.mp4\b/i.test(name) || /^video\//i.test(mime)) return 'video'
+    if (t === 'MUSIC')                     return 'audio'
     if (t === 'AUDIO' || t === 'VOICE')    return 'voice'
+    if (/\.ogg\b/i.test(name) || /^audio\//i.test(mime)) return 'audio'
     // STICKER covers both static and animated (smileType=4) MAX stickers.
     // Without this branch they leaked into the default 'document' bucket
     // and rendered as empty "Документ" chips.
@@ -99,17 +104,29 @@ class MessageParser {
   }
 
   static _extractMaxAttachments(attaches) {
-    return attaches.map(a => ({
-      type:        (a._type || 'file').toLowerCase(),
-      url:         a.baseUrl || a.url || null,
-      name:        a.name || a.filename || null,
-      size:        a.size || null,
-      previewData: a.previewData || null,
-      photoId:     a.photoId || null,
-      videoId:     a.videoId || null,
-      fileId:      a.fileId || null,
-      token:       a.token || null,
-    }))
+    return attaches.map(a => {
+      const rawType = String(a._type || a.preview?._type || a.type || '').toUpperCase()
+      const name = String(a.name || a.filename || '').replace(/\u0000/g, '').replace(/\uFFFD/g, '').trim() || null
+      let type = (a._type || 'file').toLowerCase()
+      if (rawType === 'MUSIC') type = 'audio'
+      if (rawType === 'VIDEO' || a.videoId || a.thumbnail || /\.mp4\b/i.test(name || '')) type = 'video'
+      if (/\.ogg\b/i.test(name || '') && type === 'file') type = 'audio'
+      const mimeType = a.mimeType || (type === 'audio' ? 'audio/ogg' : type === 'video' ? 'video/mp4' : a.type || null)
+      return {
+        type,
+        url:         a.baseUrl || a.url || null,
+        name,
+        size:        a.size || null,
+        mimeType,
+        previewData: a.previewData || null,
+        thumbnail:   a.thumbnail || null,
+        duration:    a.duration || a.preview?.duration || null,
+        photoId:     a.photoId || null,
+        videoId:     a.videoId || null,
+        fileId:      a.fileId || a.token || null,
+        token:       a.token || null,
+      }
+    })
   }
 
   static isIncoming(msg) {

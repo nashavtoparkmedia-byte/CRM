@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { broadcastChatMessage } from '@/lib/messageStreamBus'
+import { broadcastChatMessageV1 as broadcastChatMessage } from '@/modules/messaging/public/v1/message-stream'
+import { PATCH_MESSAGE_METADATA_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { patchMessageMetadataV1 } from '@/modules/messaging/public/v1'
 
 // POST /api/webhook/max/reaction
 // Вызывается скрапером когда пользователь ставит/убирает реакцию в MAX веб-интерфейсе.
@@ -14,13 +16,35 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'externalMsgId required' }, { status: 400 })
         }
 
-        // Find message by externalId
-        const message = await (prisma.message as any).findFirst({
+        // MAX can echo a differently packed id. Prefer exact identity, then
+        // use only a bounded hexadecimal suffix inside the MAX channel.
+        let message = await (prisma.message as any).findFirst({
             where: { externalId: String(externalMsgId) },
         })
 
         if (!message) {
+            const compactId = String(externalMsgId).replace(/[^a-fA-F0-9]/g, '')
+            const suffix = compactId.slice(-10)
+            if (suffix.length >= 8) {
+                message = await (prisma.message as any).findFirst({
+                    where: {
+                        channel: 'max',
+                        externalId: { contains: suffix },
+                    },
+                    orderBy: { sentAt: 'desc' },
+                })
+            }
+        }
+
+        if (!message) {
             console.warn(`[WEBHOOK-MAX/reaction] Message not found: externalMsgId=${externalMsgId}`)
+            console.log('[MAX_DELIVERY]', JSON.stringify({
+                ts: new Date().toISOString(),
+                operation: 'reaction',
+                status: 'failed',
+                maxMessageId: String(externalMsgId),
+                error: 'message not found',
+            }))
             return NextResponse.json({ ok: false, reason: 'message not found' })
         }
 
@@ -39,17 +63,26 @@ export async function POST(req: NextRequest) {
             if (isRemove || !emoji) {
                 if (emoji) delete reactions[emoji]
             } else {
-                reactions[emoji] = (reactions[emoji] || 0) + 1
+                reactions[emoji] = 1
             }
         }
 
-        const updated = await (prisma.message as any).update({
-            where: { id: message.id },
-            data: { metadata: { ...meta, reactions } },
-        })
+        const updated = { ...message, metadata: { ...meta, reactions } }
+        await patchMessageMetadataV1({ contract: PATCH_MESSAGE_METADATA_COMMAND_V1, messageId: message.id, metadata: updated.metadata })
 
         // Broadcast via SSE so open chat tabs refresh instantly
         try { broadcastChatMessage(updated.chatId, updated) } catch {}
+
+        console.log('[MAX_DELIVERY]', JSON.stringify({
+            ts: new Date().toISOString(),
+            operation: 'reaction',
+            status: 'max_echo_received',
+            crmMessageId: message.id,
+            maxMessageId: String(externalMsgId),
+            conversationId: message.chatId,
+            reaction: emoji || null,
+            error: null,
+        }))
 
         console.log(`[WEBHOOK-MAX/reaction] msgId=${message.id} emoji=${emoji} remove=${isRemove} reactions=${JSON.stringify(reactions)}`)
         return NextResponse.json({ ok: true, reactions })

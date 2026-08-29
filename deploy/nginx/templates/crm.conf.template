@@ -56,6 +56,13 @@ server {
 
     client_max_body_size 64m;
 
+    # Debug/database diagnostics are not a production HTTP capability.
+    # Application proxy.ts repeats this denial for direct-container traffic.
+    location ^~ /api/debug-db {
+        access_log off;
+        return 404;
+    }
+
     # SIP WebSocket: browser connects wss://yokoone.ru/wss-sip
     # nginx proxies WSS → plain WS → FreeSWITCH on host (host.docker.internal:7080)
     # FS runs in host network mode so ICE candidates carry the public VPS IP directly.
@@ -123,6 +130,11 @@ server {
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
     client_max_body_size 64m;
+
+    location ^~ /api/debug-db {
+        access_log off;
+        return 404;
+    }
 
     location / {
         set $gravity_backend "http://gravity-mvp:3002";

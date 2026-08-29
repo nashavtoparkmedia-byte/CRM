@@ -1,0 +1,24 @@
+{
+  "schema": "yoko.crm.architecture-mutation-ledger.v1",
+  "milestone": "CRM-ARCH-007",
+  "generated_at": "2026-08-09T15:04:06Z",
+  "production_mutations": [],
+  "runtime_mutations": [],
+  "database_mutations": [],
+  "protected_worktree_mutations": [],
+  "architecture_worktree_changes": [
+    "Identity Access v1 query/command contracts and runtime validators",
+    "provider-neutral Identity owner handler",
+    "legacy user-service compatibility adapter",
+    "versioned server-action facade",
+    "TopBar consumer migrated from three Identity internal import sites",
+    "Identity module manifest amendment",
+    "six exact legacy exception fingerprints retired",
+    "CI extended with locked toolchain, Identity controls and behavior tests",
+    "verification, reviews, gate and checksums"
+  ],
+  "local_non_source_setup": [
+    "ignored gravity-mvp/node_modules symlink to the existing workspace dependency cache for local verification"
+  ],
+  "result": "NO_PRODUCTION_RUNTIME_DATABASE_OR_PROTECTED_WORKTREE_MUTATION"
+}

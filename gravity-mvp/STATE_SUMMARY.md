@@ -190,7 +190,7 @@ Total:                         195/195 ✅
 | Pre-merge snapshot | `git checkout pre-telephony-merge-rev2` |
 | Post-merge stable | `git checkout post-telephony-merge` |
 | Remote origin | `https://github.com/nashavtoparkmedia-byte/CRM` |
-| Откат БД до состояния pre-PR1 | `node gravity-mvp/scripts/rollback_knowledge_core.js` |
+| Откат БД до состояния pre-PR1 | Исторический destructive rollback permanently disabled; use reviewed current migrations/recovery procedures. |
 | Применить migrations | `cd gravity-mvp && npx prisma migrate deploy` |
 | Re-seed sections | `cd gravity-mvp && node scripts/seed_knowledge_sections.js` |
 | Re-backfill WA provenance | `node gravity-mvp/scripts/backfill_source_connection_pr7.js` |

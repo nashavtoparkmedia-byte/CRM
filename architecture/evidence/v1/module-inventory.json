@@ -1,0 +1,548 @@
+{
+  "baseline_milestone": "CRM-ARCH-001",
+  "baseline_schema": "yoko.crm.authoritative-baseline.v1",
+  "generated_from": "CRM-ARCH-001 accepted composite baseline",
+  "modules": [
+    {
+      "contexts": [
+        "calls"
+      ],
+      "extensions": {
+        ".js": 8,
+        ".ts": 23,
+        ".tsx": 10
+      },
+      "files": 41,
+      "id": "ai_calls",
+      "lines": 8154,
+      "roles": {
+        "production": 37,
+        "test": 4
+      },
+      "source_roots": [
+        "gravity-mvp/src"
+      ]
+    },
+    {
+      "contexts": [
+        "ai"
+      ],
+      "extensions": {
+        ".ts": 16,
+        ".tsx": 2
+      },
+      "files": 18,
+      "id": "ai_knowledge",
+      "lines": 4517,
+      "roles": {
+        "legacy": 1,
+        "production": 17
+      },
+      "source_roots": [
+        "gravity-mvp/src"
+      ]
+    },
+    {
+      "contexts": [
+        "analytics"
+      ],
+      "extensions": {
+        ".ts": 2,
+        ".tsx": 21
+      },
+      "files": 23,
+      "id": "analytics",
+      "lines": 3330,
+      "roles": {
+        "production": 23
+      },
+      "source_roots": [
+        "gravity-mvp/src"
+      ]
+    },
+    {
+      "contexts": [
+        "calls"
+      ],
+      "extensions": {
+        ".js": 48,
+        ".json": 1,
+        ".py": 3,
+        ".sh": 2
+      },
+      "files": 54,
+      "id": "audio_bridge",
+      "lines": 9589,
+      "roles": {
+        "configuration": 1,
+        "production": 21,
+        "script": 19,
+        "test": 13
+      },
+      "source_roots": [
+        "tools/audio-bridge-day1"
+      ]
+    },
+    {
+      "contexts": [
+        "avito"
+      ],
+      "extensions": {
+        ".ts": 22,
+        ".tsx": 3
+      },
+      "files": 25,
+      "id": "avito",
+      "lines": 5136,
+      "roles": {
+        "production": 24,
+        "test": 1
+      },
+      "source_roots": [
+        "gravity-mvp/src"
+      ]
+    },
+    {
+      "contexts": [
+        "avito"
+      ],
+      "extensions": {
+        ".ts": 22
+      },
+      "files": 22,
+      "id": "avito_worker",
+      "lines": 5297,
+      "roles": {
+        "production": 22
+      },
+      "source_roots": [
+        "avito-worker/src"
+      ]
+    },
+    {
+      "contexts": [
+        "calls"
+      ],
+      "extensions": {
+        ".js": 2,
+        ".ts": 20,
+        ".tsx": 6
+      },
+      "files": 28,
+      "id": "calls",
+      "lines": 5308,
+      "roles": {
+        "production": 25,
+        "test": 3
+      },
+      "source_roots": [
+        "gravity-mvp/src"
+      ]
+    },
+    {
+      "contexts": [
+        "contacts"
+      ],
+      "extensions": {
+        ".ts": 17
+      },
+      "files": 17,
+      "id": "contacts",
+      "lines": 3135,
+      "roles": {
+        "production": 17
+      },
+      "source_roots": [
+        "gravity-mvp/src"
+      ]
+    },
+    {
+      "contexts": [
+        "drivers"
+      ],
+      "extensions": {
+        ".ts": 11,
+        ".tsx": 25
+      },
+      "files": 36,
+      "id": "drivers",
+      "lines": 5665,
+      "roles": {
+        "production": 36
+      },
+      "source_roots": [
+        "gravity-mvp/src"
+      ]
+    },
+    {
+      "contexts": [
+        "core"
+      ],
+      "extensions": {
+        ".css": 1,
+        ".js": 1,
+        ".json": 2,
+        ".prisma": 1,
+        ".py": 2,
+        ".sql": 42,
+        ".toml": 1,
+        ".ts": 33,
+        ".tsx": 4
+      },
+      "files": 87,
+      "id": "gravity_core",
+      "lines": 12083,
+      "roles": {
+        "configuration": 47,
+        "production": 33,
+        "script": 1,
+        "test": 6
+      },
+      "source_roots": [
+        "gravity-mvp/prisma",
+        "gravity-mvp/src"
+      ]
+    },
+    {
+      "contexts": [
+        "shell"
+      ],
+      "extensions": {
+        ".py": 4,
+        ".ts": 5,
+        ".tsx": 41
+      },
+      "files": 50,
+      "id": "gravity_ui",
+      "lines": 5921,
+      "roles": {
+        "production": 46,
+        "test": 4
+      },
+      "source_roots": [
+        "gravity-mvp/src"
+      ]
+    },
+    {
+      "contexts": [
+        "leads"
+      ],
+      "extensions": {
+        ".ts": 6,
+        ".tsx": 5
+      },
+      "files": 11,
+      "id": "leads",
+      "lines": 1446,
+      "roles": {
+        "production": 11
+      },
+      "source_roots": [
+        "gravity-mvp/src"
+      ]
+    },
+    {
+      "contexts": [
+        "messages"
+      ],
+      "extensions": {
+        ".ts": 10,
+        ".tsx": 2
+      },
+      "files": 12,
+      "id": "max_provider",
+      "lines": 2093,
+      "roles": {
+        "production": 12
+      },
+      "source_roots": [
+        "gravity-mvp/src"
+      ]
+    },
+    {
+      "contexts": [
+        "max"
+      ],
+      "extensions": {
+        ".js": 28,
+        ".json": 1,
+        ".py": 7
+      },
+      "files": 36,
+      "id": "max_scraper",
+      "lines": 12837,
+      "roles": {
+        "configuration": 1,
+        "production": 23,
+        "script": 1,
+        "test": 11
+      },
+      "source_roots": [
+        "max-web-scraper"
+      ]
+    },
+    {
+      "contexts": [
+        "messages"
+      ],
+      "extensions": {
+        ".py": 3,
+        ".ts": 44,
+        ".tsx": 33
+      },
+      "files": 80,
+      "id": "messages",
+      "lines": 16439,
+      "roles": {
+        "production": 76,
+        "test": 4
+      },
+      "source_roots": [
+        "gravity-mvp/src"
+      ]
+    },
+    {
+      "contexts": [
+        "operations"
+      ],
+      "extensions": {
+        ".js": 1,
+        ".ts": 38,
+        ".tsx": 14
+      },
+      "files": 53,
+      "id": "monitoring",
+      "lines": 5335,
+      "roles": {
+        "legacy": 10,
+        "production": 43
+      },
+      "source_roots": [
+        "gravity-mvp/src"
+      ]
+    },
+    {
+      "contexts": [
+        "edge"
+      ],
+      "extensions": {
+        ".conf": 2
+      },
+      "files": 2,
+      "id": "nginx",
+      "lines": 82,
+      "roles": {
+        "configuration": 2
+      },
+      "source_roots": [
+        "deploy/nginx"
+      ]
+    },
+    {
+      "contexts": [
+        "settings"
+      ],
+      "extensions": {
+        ".ts": 13,
+        ".tsx": 20
+      },
+      "files": 33,
+      "id": "settings",
+      "lines": 12479,
+      "roles": {
+        "production": 32,
+        "test": 1
+      },
+      "source_roots": [
+        "gravity-mvp/src"
+      ]
+    },
+    {
+      "contexts": [
+        "tasks"
+      ],
+      "extensions": {
+        ".ts": 41,
+        ".tsx": 45
+      },
+      "files": 86,
+      "id": "tasks",
+      "lines": 16335,
+      "roles": {
+        "production": 86
+      },
+      "source_roots": [
+        "gravity-mvp/src"
+      ]
+    },
+    {
+      "contexts": [
+        "telegram"
+      ],
+      "extensions": {
+        ".js": 32,
+        ".prisma": 1,
+        ".sql": 1,
+        ".toml": 1
+      },
+      "files": 35,
+      "id": "telegram_bot",
+      "lines": 5532,
+      "roles": {
+        "configuration": 3,
+        "production": 32
+      },
+      "source_roots": [
+        "tg-bot/prisma",
+        "tg-bot/src"
+      ]
+    },
+    {
+      "contexts": [
+        "telegram"
+      ],
+      "extensions": {
+        ".css": 1,
+        ".js": 19,
+        ".json": 2,
+        ".mjs": 2
+      },
+      "files": 24,
+      "id": "telegram_frontend",
+      "lines": 3018,
+      "roles": {
+        "configuration": 3,
+        "production": 21
+      },
+      "source_roots": [
+        "tg-bot/tg-bot-frontend"
+      ]
+    },
+    {
+      "contexts": [
+        "messages"
+      ],
+      "extensions": {
+        ".ts": 5,
+        ".tsx": 3
+      },
+      "files": 8,
+      "id": "telegram_provider",
+      "lines": 3333,
+      "roles": {
+        "production": 8
+      },
+      "source_roots": [
+        "gravity-mvp/src"
+      ]
+    },
+    {
+      "contexts": [
+        "telephony"
+      ],
+      "extensions": {
+        ".conf": 1,
+        ".py": 1,
+        ".sh": 8,
+        ".xml": 13,
+        ".yml": 1
+      },
+      "files": 24,
+      "id": "telephony_config",
+      "lines": 1162,
+      "roles": {
+        "configuration": 15,
+        "script": 8,
+        "test": 1
+      },
+      "source_roots": [
+        "telephony"
+      ]
+    },
+    {
+      "contexts": [
+        "identity"
+      ],
+      "extensions": {
+        ".js": 4,
+        ".ts": 1,
+        ".tsx": 2
+      },
+      "files": 7,
+      "id": "users",
+      "lines": 1031,
+      "roles": {
+        "production": 4,
+        "test": 3
+      },
+      "source_roots": [
+        "gravity-mvp/src"
+      ]
+    },
+    {
+      "contexts": [
+        "messages"
+      ],
+      "extensions": {
+        ".py": 1,
+        ".ts": 5,
+        ".tsx": 2
+      },
+      "files": 8,
+      "id": "whatsapp_provider",
+      "lines": 3969,
+      "roles": {
+        "production": 7,
+        "test": 1
+      },
+      "source_roots": [
+        "gravity-mvp/src"
+      ]
+    },
+    {
+      "contexts": [
+        "yandex_fleet"
+      ],
+      "extensions": {
+        ".ts": 9
+      },
+      "files": 9,
+      "id": "yandex_fleet",
+      "lines": 1380,
+      "roles": {
+        "production": 9
+      },
+      "source_roots": [
+        "gravity-mvp/src"
+      ]
+    },
+    {
+      "contexts": [
+        "yandex_fleet"
+      ],
+      "extensions": {
+        ".prisma": 1,
+        ".ts": 15
+      },
+      "files": 16,
+      "id": "yfs",
+      "lines": 3549,
+      "roles": {
+        "configuration": 1,
+        "production": 4,
+        "script": 11
+      },
+      "source_roots": [
+        "yandex-fleet-scraper/prisma",
+        "yandex-fleet-scraper/src"
+      ]
+    }
+  ],
+  "schema_version": 1,
+  "source_snapshot_sha256": "2713db175062bb673dcca2d97e80c2ae204a2f257438036c6db2506587dfad7d",
+  "totals": {
+    "files": 845,
+    "lines": 158155,
+    "modules": 27
+  }
+}

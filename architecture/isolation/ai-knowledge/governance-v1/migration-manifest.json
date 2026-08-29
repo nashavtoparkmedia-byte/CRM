@@ -1,0 +1,123 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1",
+  "milestone": "CRM-ARCH-007R-AI-KNOWLEDGE-GOVERNANCE",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "49901fcc2dd528a83c326d4180b4bc13e5129b44",
+  "source_commit": "2dfa7ebe0683a21cb53ff8f5caf59f2562b60de0",
+  "implementation_commits": [
+    "2dfa7ebe0683a21cb53ff8f5caf59f2562b60de0"
+  ],
+  "context": "ai_knowledge",
+  "caller_context": "configuration",
+  "owner_contexts": ["ai_knowledge"],
+  "plan": {
+    "id": "ai-knowledge-governance-v1",
+    "consumer": "gravity-mvp/src/app/settings/ai/actions.ts",
+    "contract": "gravity-mvp/src/contracts/ai-knowledge/v1/knowledge-governance-commands.ts",
+    "handler": "gravity-mvp/src/modules/ai-knowledge/public/v1/knowledge-governance-handler.ts",
+    "adapter": "gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-knowledge-governance-adapter.ts",
+    "model": "AiKnowledgeItem",
+    "legacy_write_sites": 13,
+    "role": "production_source_unexecuted"
+  },
+  "contracts": [
+    "ai_knowledge.EditGovernanceKnowledgeItemCommand.v1",
+    "ai_knowledge.ArchiveGovernanceKnowledgeItemCommand.v1",
+    "ai_knowledge.RestoreGovernanceKnowledgeItemCommand.v1",
+    "ai_knowledge.VerifyGovernanceKnowledgeItemCommand.v1",
+    "ai_knowledge.UnverifyGovernanceKnowledgeItemCommand.v1",
+    "ai_knowledge.SupersedeGovernanceKnowledgeItemCommand.v1",
+    "ai_knowledge.ArchiveKnowledgeConflictMemberCommand.v1",
+    "ai_knowledge.ClearKnowledgeConflictWinnerCommand.v1",
+    "ai_knowledge.ClearKnowledgeConflictGroupCommand.v1",
+    "ai_knowledge.CreateManualGovernanceKnowledgeItemCommand.v1",
+    "ai_knowledge.MarkKnowledgeItemSourcesDisabledCommand.v1",
+    "ai_knowledge.ArchiveKnowledgeItemAfterSourceDisableCommand.v1",
+    "ai_knowledge.ArchiveKnowledgeItemForCoreResetCommand.v1"
+  ],
+  "manifest": {
+    "ai_knowledge_commands_added": 13,
+    "module_manifest_amendment_added": true,
+    "dependency_amendment_added": false,
+    "configuration_to_ai_knowledge_public_preapproved": true
+  },
+  "ownership": {
+    "configuration": "admin authorization, reads, validation and no-op policy, snapshots, audits, counters, return values and revalidation",
+    "ai_knowledge": "exact AiKnowledgeItem persistence behind 13 versioned commands",
+    "trainer_verification": "separate pre-existing VerifyKnowledgeItemCommand.v1 lifecycle retained",
+    "generic_persistence_capabilities": 0,
+    "transaction_capabilities": 0
+  },
+  "adapter": {
+    "analyzer_visible_static_writes": 27,
+    "edit_non_empty_masks": 15,
+    "fixed_non_edit_writes": 12,
+    "dynamic_sql_writes": 0,
+    "tables": ["AiKnowledgeItem"],
+    "zero_affected_rows_are_success": true,
+    "database_errors_propagate": true
+  },
+  "behavior": {
+    "transactions_added": 0,
+    "deliberate_partial_success_preserved": true,
+    "auth_read_audit_revalidate_caller_owned": true,
+    "runtime_truthiness_and_fallbacks_preserved": true,
+    "protected_trainer_and_ui_surfaces_changed": 0
+  },
+  "dependency": {
+    "added": [],
+    "effective_added_dependencies": 0,
+    "dependency_relationships": 106,
+    "dependency_cycles": 0,
+    "reverse_owner_dependency_added": false
+  },
+  "enforcement": {
+    "baseline_registry_commit": "49901fcc2dd528a83c326d4180b4bc13e5129b44",
+    "baseline_findings": 1361,
+    "baseline_direct_foreign_prisma_write": 66,
+    "baseline_direct_provider_transport_access": 38,
+    "baseline_internal_module_import": 374,
+    "baseline_non_public_cross_context_import": 530,
+    "baseline_undeclared_dependency": 353,
+    "retired_fingerprints": [
+      "arch_0252c770de7d64ed509a7cb7",
+      "arch_a4ac437ee63612be542c41f1",
+      "arch_f37918ffece45c8c2fac640a",
+      "arch_a8885d8a8444133b24aa4790",
+      "arch_40e29e1dc58883bbea5c2312",
+      "arch_017d9d9a4052bc6ff85426d3",
+      "arch_6e704450d240b6f310703d33",
+      "arch_329f8e630093dcd104500072",
+      "arch_6b9f9aba5e753e8235faef55",
+      "arch_8340aef56bce44a43296b0c5",
+      "arch_983191f225c8517cf1f6e47f",
+      "arch_75fa299364aff057fff8879d",
+      "arch_6e29944bcf94cdb964274720"
+    ],
+    "actual_findings": 1348,
+    "actual_exceptions": 1348,
+    "actual_direct_foreign_prisma_write": 53,
+    "actual_direct_provider_transport_access": 38,
+    "actual_internal_module_import": 374,
+    "actual_non_public_cross_context_import": 530,
+    "actual_undeclared_dependency": 353,
+    "actual_removed": 13,
+    "actual_added": 0,
+    "actual_semantic_shared_changes": 0,
+    "location_metadata_rebased": 0,
+    "finding_digest": "75ecd722872a5613d31c1f7ab831db364d6954a585b12ccf565e5366c22052d4",
+    "registry_sha256": "81987440f97424ee691ddf79e9563c708479e41f1e6d20457ce1ab02607293ff",
+    "registry_deterministic": true
+  },
+  "verified_at": "2026-08-10T08:36:24Z",
+  "source_control_mutation": {
+    "module_rule": false,
+    "module_policy": true,
+    "strict_registry": true,
+    "source_only": true
+  },
+  "execution_performed": false,
+  "execution_scope": "offline source analysis, unit tests and deterministic failure probes only; no database, deployed runtime, provider or production execution",
+  "provider_tests_executed": false,
+  "rollback": "49901fcc2dd528a83c326d4180b4bc13e5129b44"
+}

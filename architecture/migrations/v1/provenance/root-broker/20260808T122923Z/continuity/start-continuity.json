@@ -1,0 +1,31 @@
+{
+  "run_started_at": "2026-08-08T12:29:23.745165602Z",
+  "host": "jvxthcorvm",
+  "executor": "uid=998(codexbot) gid=998(codexbot) groups=998(codexbot)",
+  "repositories": {
+    "/opt/crm": "e6a0a833fbb756216b058bfe326f9f9c77c4cc6d",
+    "/opt/codex-work/crm": "ee93f8e2e964e523c5f3922a906ce110e491b4e4",
+    "/opt/codex-work/crm-ai-calls": "b38b22d3e00b3fb43d05417131709b3d2c535b2b",
+    "/opt/codex-work/crm-messages-remediation-clean": "50ae48a5761ced6acb1639497fa80094b108f305",
+    "/opt/codex-work/crm-max-release.20260806": "74657f827153babbe601a2765bf6c526efbb73d2",
+    "/opt/codex-work/crm-call-release.QkpL6H": "2fdd44a3e7aa6af32d6c7dbf7e033477bc6201bf"
+  },
+  "personal_max_frozen_authority": "f97532cb6903f033c070856b4a8c207df8e35026",
+  "production_working_set": {
+    "expected_digest": "90e991db900ccc4853ae03d882da8bcc0ab68a7e2a680e64c35cae4263e854f9",
+    "current_broker_output_byte_equal_to_prior": true,
+    "broker_output_sha256": "6318696f1d66d7bb7451d3a097b20846ace850fd954d1737905aeb33d4ce8f13",
+    "modified": 81,
+    "deleted": 4,
+    "staged": 0,
+    "continuity_verdict": "UNCHANGED"
+  },
+  "runtime": {
+    "frozen_runtime_baseline_checksum": "e633283a6eae676427e34d3617887ca2b6dfb83342e8ab458c2ff1c67c20d73a",
+    "last_successful_eight_service_identity_observation": "2026-08-08T12:01:52Z",
+    "last_successful_runtime_manifest_sha256": "e4cf904efafd89e5c63715e67fe7b588381556201ba9079ecc8370e84546d0ba",
+    "current_ten_service_identity_observation": "BLOCKED_BY_INSTALLED_V1_DOCKER_PROVENANCE_DEFECT",
+    "current_docker_provenance_failure_sha256": "e0180d12837a245362a85d72fc01ae673b289e8456541444de546aa00d069113"
+  },
+  "continuity_status": "PARTIAL_UNCHANGED_REPOSITORIES_RUNTIME_CURRENT_IDENTITY_BLOCKED"
+}

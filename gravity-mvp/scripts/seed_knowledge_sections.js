@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 /**
  * Seed: 10 секций AI Knowledge Core (book-style оглавление).
  *
@@ -18,8 +17,9 @@
  * Запуск: cd D:/Github/CRM/gravity-mvp && node scripts/seed_knowledge_sections.js
  */
 
-const { PrismaClient } = require('@prisma/client')
-const prisma = new PrismaClient()
+/* eslint-disable @typescript-eslint/no-require-imports */
+
+const { seedKnowledgeSectionsV1 } = require('../src/modules/ai-knowledge/public/v1/legacy-prisma-seed-knowledge-sections-adapter')
 
 const SECTIONS = [
     { slug: 'tariffs',      title: 'Тарифы',                       description: 'Стоимость подключения, комиссия парка, варианты оплаты.',                                                  iconKey: 'Wallet',          sortOrder: 10 },
@@ -35,43 +35,11 @@ const SECTIONS = [
 ]
 
 async function main() {
-    console.log('[seed-knowledge-sections] Connecting...')
-    await prisma.$queryRaw`SELECT 1`
-    console.log('[seed-knowledge-sections] DB OK. Seeding 10 sections...')
-
-    let created = 0, updated = 0
-    for (const s of SECTIONS) {
-        const existing = await prisma.$queryRaw`
-            SELECT id FROM "AiKnowledgeSection" WHERE slug = ${s.slug} LIMIT 1
-        `
-        if (existing.length === 0) {
-            const id = 'sec_' + s.slug + '_' + Date.now()
-            await prisma.$executeRaw`
-                INSERT INTO "AiKnowledgeSection"
-                    (id, slug, title, description, "iconKey", "sortOrder", "isActive", "createdAt", "updatedAt")
-                VALUES
-                    (${id}, ${s.slug}, ${s.title}, ${s.description},
-                     ${s.iconKey}, ${s.sortOrder}, true, NOW(), NOW())
-            `
-            created++
-            console.log(`  + created   ${s.slug} (${s.title})`)
-        } else {
-            await prisma.$executeRaw`
-                UPDATE "AiKnowledgeSection"
-                SET description = ${s.description},
-                    "iconKey"   = ${s.iconKey},
-                    "sortOrder" = ${s.sortOrder},
-                    "updatedAt" = NOW()
-                WHERE slug = ${s.slug}
-            `
-            updated++
-            console.log(`  ↻ updated   ${s.slug} (${s.title})`)
-        }
-    }
+    console.log('[seed-knowledge-sections] Seeding 10 sections through AI Knowledge capability...')
+    const { created, updated } = await seedKnowledgeSectionsV1(SECTIONS)
 
     console.log(`[seed-knowledge-sections] Done. created=${created} updated=${updated}`)
 }
 
 main()
     .catch(e => { console.error('[seed-knowledge-sections] FAILED:', e); process.exit(1) })
-    .finally(async () => { await prisma.$disconnect() })

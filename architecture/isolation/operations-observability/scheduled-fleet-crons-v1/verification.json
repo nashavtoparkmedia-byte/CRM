@@ -1,0 +1,52 @@
+{
+  "schema": "yoko.crm.context-isolation-verification.v1",
+  "milestone": "LIVE-ARCHITECTURE-DEBT-ZERO-SCHEDULED-FLEET-CRONS",
+  "verified_at": "2026-08-12T02:16:00Z",
+  "status": "PASS_CONTINUE_WHOLE_PROJECT_DOD_RECOVERY",
+  "architecture": {
+    "scanned_files": 1270,
+    "contexts": 16,
+    "dependency_relationships": 106,
+    "opening_findings": 1288,
+    "findings": 0,
+    "actually_closed": 1288,
+    "exceptions": 0,
+    "temporary_exceptions": 0,
+    "permanent_intentional_candidates": 0,
+    "internal_module_imports": 0,
+    "non_public_cross_context_imports": 0,
+    "undeclared_dependencies": 0,
+    "provider_transport_accesses": 0,
+    "contract_violations": 0,
+    "manifest_violations": 0,
+    "dependency_cycles": 0,
+    "finding_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  "write_ownership": {
+    "authoritative_scan_rerun": false,
+    "reason": "The batch moves read/transport and health orchestration without materially changing the accepted write architecture.",
+    "confirmed_writes_discovered": 1404,
+    "confirmed_foreign": 0,
+    "closed_foreign": 53,
+    "material_ambiguous_remaining": 0,
+    "active_operational_surfaces_unclassified": 0,
+    "temporary_exceptions": 0,
+    "intentional_exceptions": 0
+  },
+  "tests": {
+    "cron_behavior": "11/11 PASS",
+    "cron_boundary_negative_probe": "PASS; unrelated additional capability rejected",
+    "architecture_enforcement": "PASS; 0 findings and 0 exceptions",
+    "architecture_enforcement_negative_suite": "29/29 PASS",
+    "gravity_security_boundaries": "34/34 PASS",
+    "credential_field_registry": "14 policies PASS",
+    "static_sql_ownership": "5/5 PASS",
+    "context_manifests": "PASS; 16 contexts and 106 dependencies",
+    "contract_boundaries": "PASS"
+  },
+  "typescript": "30 inherited diagnostics; no changed-path diagnostic",
+  "protected_messages_behavior_changed": false,
+  "ai_calls_worktree_mutated": false,
+  "production_mutated": false,
+  "whole_project_verdict": "NOT_READY_CONTINUE_TO_AUTHORITATIVE_CI"
+}

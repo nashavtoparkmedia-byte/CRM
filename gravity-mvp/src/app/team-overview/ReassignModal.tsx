@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { X, Check, Loader2, ArrowRight, AlertTriangle } from 'lucide-react'
 import { getManagerActiveTasks } from './actions'
-import { getScenario, getStage } from '@/lib/tasks/scenario-config'
+import { getScenario, getStage } from '@/modules/work-management/public/v1/scenario-catalog'
 
 interface ReassignableTask {
     id: string

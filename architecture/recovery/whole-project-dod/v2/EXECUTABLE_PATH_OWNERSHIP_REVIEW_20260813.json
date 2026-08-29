@@ -1,0 +1,504 @@
+{
+  "schema": "yoko.crm.reviewed-executable-path-ownership-decisions.v1",
+  "version": 1,
+  "review": {
+    "status": "COMPLETED_EXACT_PATH_REVIEW",
+    "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+    "role": "SOL_HIGH_INTERNAL_REVIEW",
+    "external_acceptance": false,
+    "independent_acceptance": false,
+    "decision": "Internal remediation materialization records the exact baseline-to-current ownership assignments and exact-inventory transitions enumerated below; the current denominator includes the separately qualified Runtime rollback and transition-identity regression tests under the existing architecture-recovery ownership rule, and the declared current-dependency manifest prevents test-source literals from becoming a second authority; this artifact is not external or independent acceptance."
+  },
+  "baseline": {
+    "coverage_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_COVERAGE_BASELINE_2108.json",
+    "coverage_sha256": "429a48c9d257408025bbc273a4d6f1413ed78196549ed889118422b6caba5730"
+  },
+  "current": {
+    "tracked_inventory_sha256": "64c20da3edba4687524e9d89f24cc5c29dcf55f6c431c44b529d08158e4067c0",
+    "tracked_executable_surfaces": 2197,
+    "coverage_sha256": "a7cf33db6bab3ae05494c157afc05167d4787df0b5bd359ac79ebaf89e1f7785"
+  },
+  "exact_inventory_changes": [
+    {
+      "exclusion": "architecture_recovery",
+      "inventory_kind": "exact_runtime_inventory",
+      "review_decision": "APPROVED_EXACT_INVENTORY_TRANSITION",
+      "review_rationale": "Internal executor review reconciled all eighteen baseline paths to the sixteen current runtime-classified evidence paths; three named v10 packaging utilities and the new package tar auditor are explicitly reviewed operational surfaces, while the exact predecessor-observation Runtime module remains source-hash-bound to the architecture recovery evidence owner.",
+      "previous_inventory": {
+        "path_count": 18,
+        "path_sha256": "e0d8b8fb360869f5df8c911f74ec571ee76eb39cbb3ca794b1e1a69158a9999e"
+      },
+      "previous_paths": [
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-recovery-v1/packaging/finalize-evidence.py",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-recovery-v1/packaging/finalize-payload.py",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-recovery-v1/src/yoko-privileged-runtime-core.py",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-stabilization-v2/packaging/finalize-evidence.py",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-stabilization-v2/packaging/finalize-payload.py",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-stabilization-v2/src/yoko-privileged-runtime-core.py",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1-ledger-reconciliation/packaging/finalize-evidence.py",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1-ledger-reconciliation/packaging/finalize-payload.py",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1-ledger-reconciliation/src/yoko-privileged-runtime-core.py",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1/packaging/finalize-evidence.py",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1/packaging/finalize-payload.py",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1/src/yoko-privileged-runtime-core.py",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/packaging/finalize-evidence.py",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/packaging/finalize-payload.py",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/packaging/seal-release.py",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py",
+        "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/yoko-privileged-runtime-core.py",
+        "architecture/recovery/whole-project-dod/v2/continuation/PER_FILE_LOCALIZATION_PROBE.mjs"
+      ],
+      "current_inventory": {
+        "path_count": 16,
+        "path_sha256": "8733f45135acd16ec0f0c4dd1665385e61f3e976218c2ddb0ee4e3bb40da7319"
+      }
+    },
+    {
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "review_decision": "APPROVED_EXACT_INVENTORY_TRANSITION",
+      "review_rationale": "Internal executor review classified all twenty-seven newly tracked source-shaped snapshot files as immutable DEAD_HISTORICAL evidence and reconciled each exact current path and byte hash.",
+      "previous_inventory": {
+        "path_count": 0,
+        "path_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "previous_paths": [],
+      "current_inventory": {
+        "path_count": 27,
+        "path_sha256": "4e314b3f5fcea9ae66bcb21012d14851cf25628324ed2ee60598812eb7734e93"
+      }
+    }
+  ],
+  "assignments": [
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-recovery-v1/packaging/finalize-evidence.py",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "architecture_recovery",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "f8888ea8b6e95c242ade20a9d6c1ff963ba56091b4db3ea146143409672db132",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact current source path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-recovery-v1/packaging/finalize-payload.py",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "architecture_recovery",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "417a4b9fcce3d51014a5ee71f51ec86608a576ef0aacdcf1750ed0bcbf2b10bf",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact current source path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-recovery-v1/src/yoko-privileged-runtime-core.py",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "architecture_recovery",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "0cdeeb4ba43abe50f80fed1580ad7b0729bf83358932ece2974b3faedafed57a",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact current source path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-stabilization-v2/packaging/finalize-evidence.py",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "architecture_recovery",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "99ddc8e353e58ec3d099e37e65d5cfc237d33764890fbd7c4c9d2d581cd1865b",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact current source path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-stabilization-v2/packaging/finalize-payload.py",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "architecture_recovery",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "adebde9bc99266ef43b44660b5a8713b28a52e3e75b04d294c4e93c97d4171a5",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact current source path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-stabilization-v2/src/yoko-privileged-runtime-core.py",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "architecture_recovery",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "0cdeeb4ba43abe50f80fed1580ad7b0729bf83358932ece2974b3faedafed57a",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact current source path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1-ledger-reconciliation/packaging/finalize-evidence.py",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "architecture_recovery",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "2937ef82dea196785b9b0c6a7968b28a2889a3a41be26b88afca155479c832bc",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact current source path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1-ledger-reconciliation/packaging/finalize-payload.py",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "architecture_recovery",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "a03f5550e5e1cd66c9a9fb350f79c7ececffee2997221d74c9c57062bc5ae3da",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact current source path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1-ledger-reconciliation/src/yoko-privileged-runtime-core.py",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "architecture_recovery",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "0cdeeb4ba43abe50f80fed1580ad7b0729bf83358932ece2974b3faedafed57a",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact current source path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1/packaging/finalize-evidence.py",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "architecture_recovery",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "2cf983dddf245a6b16ed7180fc36a6d2d312d9ac3da78c41ff7ed38e942ba231",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact current source path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1/packaging/finalize-payload.py",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "architecture_recovery",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "c8ad994c000f5676549ceb6e994ef554f1c1d3d15c25d1aa81f72ac0fe797adc",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact current source path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1/src/yoko-privileged-runtime-core.py",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "architecture_recovery",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "0cdeeb4ba43abe50f80fed1580ad7b0729bf83358932ece2974b3faedafed57a",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact current source path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/crm-activation-profile.py",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "architecture_recovery",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "d0c2707f396dd0c782fa352fb4530ba07b1694fc8bfcb20478da69aba6e82fd0",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact current source path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/predecessor-observability-v1.py",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "architecture_recovery",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "b5ea36c50e12b0fe6c171896258ddfc00a9d2666778735cae6a9b2a8df6d4084",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact current source path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/src/yoko-privileged-runtime-core.py",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "architecture_recovery",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "0f97bafbfe5b430fa7994119b1fc76fead4bdbee26766c730d9e399551ebdffa",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact current source path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/recovery/whole-project-dod/v2/continuation/PER_FILE_LOCALIZATION_PROBE.mjs",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "architecture_recovery",
+      "inventory_kind": "exact_runtime_inventory",
+      "source_sha256": "d963f6be67c828b8c26db1eddd3cdc33452a4960148e8f691644715deb20b056",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact current source path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/gravity-mvp/Dockerfile",
+      "lifecycle": "DEAD_HISTORICAL",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "02a316598d5ebfe6a54afcf3b9ef40b5a7e3eaad762219d1f7ce04927654c9ff",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact immutable snapshot path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/gravity-mvp/Dockerfile.hotfix",
+      "lifecycle": "DEAD_HISTORICAL",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "97c0c8ec3e5690d5b83c9308bbf06de402bc59f053090ab092b63957c247a3ae",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact immutable snapshot path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/gravity-mvp/Dockerfile.hotfix2",
+      "lifecycle": "DEAD_HISTORICAL",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "43f78f0105bd5868bcaa7397baf31467af2212f72af20676695614a4e37e70b2",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact immutable snapshot path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/gravity-mvp/Dockerfile.hotfix3",
+      "lifecycle": "DEAD_HISTORICAL",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "76b89c2b329fc808acb44509691a920074c04ebe8565a8f0dadc1d3510f0e2af",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact immutable snapshot path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/gravity-mvp/prisma/migrations/20260717000000_add_driver_telegram_submitted_phone/migration.sql",
+      "lifecycle": "DEAD_HISTORICAL",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "03013fdf531f45c3b012c13fa15581be29f6399019f5b1dd308c4f8c407ae7e5",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact immutable snapshot path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/gravity-mvp/prisma/schema.prisma",
+      "lifecycle": "DEAD_HISTORICAL",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "fdf711a943dd453c136f498b0005f739795b865b751867856eb0b8090a946a81",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact immutable snapshot path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/gravity-mvp/src/app/api/bot-users/route.ts",
+      "lifecycle": "DEAD_HISTORICAL",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "040cb8f97eb1eded84fc2c07e98986c3b4cd9c0dfbb2b408b1af9a6d9a6c5481",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact immutable snapshot path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/gravity-mvp/src/app/api/webhook/telegram/route.ts",
+      "lifecycle": "DEAD_HISTORICAL",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "3ccabb275e924599be0c251b06ca926175890ebb138a8a018634f07991fcd1a6",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact immutable snapshot path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/gravity-mvp/src/app/api/webhooks/bot/route.ts",
+      "lifecycle": "DEAD_HISTORICAL",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "5d7382705c64d1c679aecdb5eb75e47ad912da0c23544af0cb9457edd2552d82",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact immutable snapshot path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/gravity-mvp/src/app/api/webhooks/max/route.ts",
+      "lifecycle": "DEAD_HISTORICAL",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "2a13e48acdb5ce3ef7c7fe55967ed8dbc7342ea5dcef397caafe1f8833cf8cf8",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact immutable snapshot path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/gravity-mvp/src/app/settings/integrations/bot/BotPageClient.tsx",
+      "lifecycle": "DEAD_HISTORICAL",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "d580311706422564f49a7f6a98d64fbb46108c7e0249deb1bcfe34a3f1a1bf11",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact immutable snapshot path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/gravity-mvp/src/lib/DriverMatchService.ts",
+      "lifecycle": "DEAD_HISTORICAL",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "abdc925ab88d0432b6fe8745ea1aa4131ed0aa333640b2a5f7ca2e639cafba8b",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact immutable snapshot path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/gravity-mvp/src/lib/botDriverResolver.ts",
+      "lifecycle": "DEAD_HISTORICAL",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "e76d0e4938d4fddde8b54ecd69384cd087649af5a255ba925902174fd3966eb0",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact immutable snapshot path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/gravity-mvp/src/lib/botLinking.ts",
+      "lifecycle": "DEAD_HISTORICAL",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "ec9f73ecfd8f4805f58b96a97ce3ad7ec4f05c19be3bac03014614872ac50fad",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact immutable snapshot path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/max-web-scraper/scripts/check_recent_max.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "5272a723116b046f03d4520b04cceccddb0b3469ffe5005b333c6d0fcbc8430d",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact immutable snapshot path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/max-web-scraper/scripts/test_webhook_push.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "ddbfd171f8a4951cecbf0311e0c78f1516e32fb2463b9c06bf97fe43ea5b4f25",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact immutable snapshot path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/tg-bot/src/bot.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "cb42c7c3db4d0dcbd99d5f723add5fb8d9400c29fbb91e99f1ec39bcf2b0ac7c",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact immutable snapshot path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/tg-bot/src/handlers/carManagement.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "557ad97d1632daf681c3a7c048f2d3078e8b7ecee4a395c6cded213ae50fc590",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact immutable snapshot path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/tg-bot/src/handlers/driverOrder.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "1eb965d5e88b630d29fd0f1ea0e43f8cedcc6f28f377fdee99e5879a937de11a",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact immutable snapshot path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/tg-bot/src/routes/crm.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "6dc097d53858c893fd8c51df42de113d19b3be7cc43bbef5ec3f627c494037d0",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact immutable snapshot path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/tg-bot/test/bot-runtime.test.js",
+      "lifecycle": "DEAD_HISTORICAL",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "4233b5312373e9708bbc4635352260365e060aec1401e49c7d41b50c844b69d0",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact immutable snapshot path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/yandex-fleet-scraper/src/api.ts",
+      "lifecycle": "DEAD_HISTORICAL",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "917b4af047d9017cac90eeb61e8824fc2f9c52b5ac5c10457fb0975ab4468999",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact immutable snapshot path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/yandex-fleet-scraper/src/lib/captcha.ts",
+      "lifecycle": "DEAD_HISTORICAL",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "81e2c2aa2cddd129ca7c12cf264445ed83f5c0a0b0e4353521e05234b4c8d904",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact immutable snapshot path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/yandex-fleet-scraper/src/lib/order-locator.ts",
+      "lifecycle": "DEAD_HISTORICAL",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "b94c87ff34101efb1fd030f62de18783dfe21448e154aa9b02524b17756f9b14",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact immutable snapshot path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/yandex-fleet-scraper/src/worker.ts",
+      "lifecycle": "DEAD_HISTORICAL",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "513c57d795197887dcbdbf54c61cc02a46954274585f718723aa31cfeb01df17",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact immutable snapshot path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/yandex-fleet-scraper/tests/captcha.test.ts",
+      "lifecycle": "DEAD_HISTORICAL",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "433712a06fcd6a517a06f210a0bffb0b5d93ac4cec37afc0c9a02668a5c0079f",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact immutable snapshot path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    },
+    {
+      "path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/files/yandex-fleet-scraper/tests/order-locator.test.ts",
+      "lifecycle": "DEAD_HISTORICAL",
+      "functional_owner": "architecture_recovery_evidence",
+      "exclusion": "production_migration_provenance_snapshot",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "5696ed34caf4c4d5b24fed3addf407ea03e057051c1958ea16a533bf94e42a2c",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact immutable snapshot path, lifecycle, functional owner, governed exclusion and byte hash as one indivisible assignment."
+    }
+  ]
+}

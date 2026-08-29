@@ -1,0 +1,27 @@
+{
+  "artifact_sha256": "88a30f4fdf74c1f86d47f47c31edec824a887c172a69585c45eddceb85fb755e",
+  "checks": {
+    "automatic_rollback_intent_and_recovery": "PASS",
+    "bootstrap_guard_and_rerun": "PASS",
+    "compose_and_environment_revalidation": "PASS",
+    "deterministic_bundle_rebuild": "PASS",
+    "deterministic_package_rebuild": "PASS",
+    "explicit_rollback_intent_and_recovery": "PASS",
+    "finite_zero_argument_authorization": "PASS",
+    "installation_modes_and_ownership": "PASS",
+    "manifest_and_checksum_coverage": "PASS",
+    "negative_dynamic_race_probe": "PASS",
+    "rejected_artifact_retirement": "PASS",
+    "static_security_validation": "PASS"
+  },
+  "critic_scope": "EXACT_SEALED_ARTIFACT_ONLY",
+  "independent": true,
+  "material_findings": [],
+  "owner_command_authorized": true,
+  "package_sha256": "597f58d813f7a0f3631b9d1778588db880c00e7df97d92a51cef385f8f4d8ba0",
+  "production_mutation_by_critic": false,
+  "repository_mutation_by_critic": false,
+  "schema": "yoko.crm.owner-bootstrap-critic.v1",
+  "test_evidence": "65/65 PASS",
+  "verdict": "PASS"
+}

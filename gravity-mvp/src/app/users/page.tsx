@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { PageContainer } from '@/components/ui/PageContainer'
-import { PageHeader } from '@/components/layout/PageHeader'
+import { PageContainer } from '@/infrastructure/ui/PageContainer'
+import { PageHeader } from '@/infrastructure/ui/PageHeader'
 import { getUsers, addUser, updateUser, deleteUser, UserItem, getCurrentUser } from '@/lib/users/user-service'
 import { Plus, ToggleLeft, ToggleRight, User, Trash2, Mail, Phone } from 'lucide-react'
 

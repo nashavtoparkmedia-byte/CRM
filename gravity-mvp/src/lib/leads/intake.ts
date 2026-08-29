@@ -19,10 +19,13 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { ContactService } from '@/lib/ContactService'
-import { normalizePhoneE164 } from '@/lib/phoneUtils'
+import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
 import type { ChatChannel } from '@prisma/client'
 import type { LeadSource } from './types'
+import { ENSURE_LEAD_CONVERSATION_COMMAND_V1, RECEIVE_MESSAGE_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { ensureLeadConversationV1, receiveMessageV1 } from '@/modules/messaging/public/v1'
+import { MARK_TEMPORARY_CONTACT_PHONE_COMMAND_V1 } from '@/contracts/contacts/v1'
+import { addPhoneToContactV1, markTemporaryContactPhoneV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
 
 // LeadSource → ChatChannel. У нас сейчас полное совпадение (avito,
 // whatsapp, telegram, phone), но 'site' не имеет канала в чатах.
@@ -88,7 +91,7 @@ export async function ingestLead(input: IngestLeadInput): Promise<IngestLeadResu
     )
   }
 
-  const resolved = await ContactService.resolveContact(
+  const resolved = await resolveChannelContactOperationV1(
     channel,
     input.sourceExternalId,
     input.phone,
@@ -106,10 +109,7 @@ export async function ingestLead(input: IngestLeadInput): Promise<IngestLeadResu
     if (normalized) {
       const ttlDays = Number(process.env.AVITO_TEMP_PHONE_TTL_DAYS ?? '14')
       const expiresAt = new Date(Date.now() + ttlDays * 86400_000)
-      await (prisma.contactPhone as any).updateMany({
-        where: { contactId: resolved.contact.id, phone: normalized, isTemporary: false },
-        data: { isTemporary: true, expiresAt, label: 'Временный (Авито)' },
-      })
+      await markTemporaryContactPhoneV1({ contract: MARK_TEMPORARY_CONTACT_PHONE_COMMAND_V1, contactId: resolved.contact.id, phone: normalized, expiresAt, label: 'Временный (Авито)' })
     }
   }
 
@@ -117,51 +117,16 @@ export async function ingestLead(input: IngestLeadInput): Promise<IngestLeadResu
   // Сначала ищем существующий чат для этого контакта и канала. Если
   // есть — переиспользуем (повторные отклики ложатся в тот же чат).
   // Если нет — создаём.
-  let chat = await prisma.chat.findFirst({
-    where: {
-      contactId: resolved.contact.id,
-      channel,
-    },
-    orderBy: { lastMessageAt: 'desc' },
+  const chat = await ensureLeadConversationV1({
+    contract: ENSURE_LEAD_CONVERSATION_COMMAND_V1,
+    contactId: resolved.contact.id,
+    contactIdentityId: resolved.identity.id,
+    channel,
+    externalChatId: `${input.source}:contact:${resolved.contact.id}`,
+    name: input.chatTitle ?? input.candidateName ?? null,
+    receivedAt: input.receivedAt,
+    metadata: { source: input.source, ...input.sourceMeta },
   })
-
-  if (!chat) {
-    // Уникальный externalChatId. Берём первый externalId источника —
-    // дальше Chat может содержать сообщения от других откликов того же
-    // контакта; externalChatId остаётся «именем рождения». Префикс
-    // канала — чтобы не было коллизий с другими источниками в этой
-    // таблице.
-    const externalChatId = `${input.source}:contact:${resolved.contact.id}`
-    chat = await prisma.chat.create({
-      data: {
-        channel,
-        externalChatId,
-        contactId: resolved.contact.id,
-        contactIdentityId: resolved.identity.id,
-        name: input.chatTitle ?? input.candidateName ?? null,
-        status: 'new',
-        requiresResponse: true,
-        lastMessageAt: input.receivedAt,
-        lastInboundAt: input.receivedAt,
-        metadata: {
-          source: input.source,
-          ...input.sourceMeta,
-        },
-      },
-    })
-  } else {
-    // Чат уже существовал — обновим last-inbound маркеры. Без этого
-    // повторный отклик не «всплывёт» наверх в /messages.
-    await prisma.chat.update({
-      where: { id: chat.id },
-      data: {
-        lastMessageAt: input.receivedAt,
-        lastInboundAt: input.receivedAt,
-        requiresResponse: true,
-        unreadCount: { increment: 1 },
-      },
-    })
-  }
 
   // ─── Step 3: Append Message (idempotent by externalId) ─────────────
   const messageExternalId = `${input.source}:msg:${input.sourceExternalId}`
@@ -172,29 +137,19 @@ export async function ingestLead(input: IngestLeadInput): Promise<IngestLeadResu
         ? `Новый отклик от ${input.candidateName}`
         : 'Новый отклик'
 
-  let message = await prisma.message.findUnique({
-    where: { externalId: messageExternalId },
+  const receivedMessage = await receiveMessageV1({
+    contract: RECEIVE_MESSAGE_COMMAND_V1,
+    chatId: chat.chatId,
+    content: messageContent,
+    sentAt: input.receivedAt.toISOString(),
+    externalId: messageExternalId,
+    channel,
+    metadata: {
+      source: input.source,
+      sourceExternalId: input.sourceExternalId,
+      ...input.sourceMeta,
+    },
   })
-
-  if (!message) {
-    message = await prisma.message.create({
-      data: {
-        chatId: chat.id,
-        direction: 'inbound',
-        type: 'text',
-        content: messageContent,
-        status: 'delivered',
-        sentAt: input.receivedAt,
-        externalId: messageExternalId,
-        channel,
-        metadata: {
-          source: input.source,
-          sourceExternalId: input.sourceExternalId,
-          ...input.sourceMeta,
-        },
-      },
-    })
-  }
 
   // ─── Step 4: Task — пропущено в MVP ────────────────────────────────
   // Task требует ручной адаптации UI под driverId=null. Создание задач
@@ -203,8 +158,8 @@ export async function ingestLead(input: IngestLeadInput): Promise<IngestLeadResu
 
   return {
     contactId: resolved.contact.id,
-    chatId: chat.id,
-    messageId: message.id,
+    chatId: chat.chatId,
+    messageId: receivedMessage.messageId,
     taskId,
     contactCreated: resolved.isNew,
   }
@@ -268,7 +223,7 @@ export async function updateLeadPhone(
   // Contact'a. Если в `expiresAt` ещё был live временный — он уйдёт в
   // isActive:false, чтобы Авито при следующей ротации временного не
   // случайно сматчился через resolveByPhone в этот же Contact.
-  const result = await ContactService.addPhoneToContact(contactId, normalized, {
+  const result = await addPhoneToContactV1(contactId, normalized, {
     isTemporary: false,
     source: input.source as 'manual' | 'avito' | 'whatsapp' | 'telegram' | 'phone',
     label: 'Личный',

@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
-import { Message, AiStatus } from '@prisma/client'
-import { pipelineWorker } from '@/lib/pipeline/PipelineWorker'
+import type { AiStatus } from '@prisma/client'
+import type { ExternalMessageRecordV1 } from '@/contracts/messaging/v1'
+import { pipelineWorker } from '@/modules/messaging/internal/ai-reply-pipeline/PipelineWorker'
 import { broadcastChatMessage } from '@/lib/messageStreamBus'
 
 /**
@@ -11,7 +12,7 @@ import { broadcastChatMessage } from '@/lib/messageStreamBus'
  * 4. Broadcasts to /api/messages/stream subscribers (Phase 4 SSE — UI gets
  *    new messages instantly without waiting for the next poll tick).
  */
-export async function emitMessageReceived(message: Message): Promise<void> {
+export async function emitMessageReceived(message: ExternalMessageRecordV1): Promise<void> {
     // Broadcast to /api/messages/stream subscribers FIRST — for both
     // directions. Outbound also benefits: a second CRM tab open on the
     // same chat sees the manager's reply pop in instantly, and a message
@@ -26,10 +27,11 @@ export async function emitMessageReceived(message: Message): Promise<void> {
     // Создаём событие в очереди pipeline через raw SQL
     // (не требует regenerate Prisma client — status поле добавлено миграцией)
     const eventId = `evt_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
-    await prisma.$executeRaw`
-        INSERT INTO "MessageEventLog" (id, "messageId", "eventType", status, "createdAt", "updatedAt")
-        VALUES (${eventId}, ${message.id}, 'MessageReceived', 'pending', NOW(), NOW())
-    `
+    await prisma.$executeRawUnsafe(
+        `INSERT INTO "MessageEventLog" (id, "messageId", "eventType", status, "createdAt", "updatedAt")
+         VALUES ($1, $2, 'MessageReceived', 'pending', NOW(), NOW())`,
+        eventId, message.id,
+    )
 
     await setAiStatus(message.id, 'pending')
 

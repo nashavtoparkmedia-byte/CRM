@@ -1,0 +1,20 @@
+{
+  "schema": "yoko.crm.lifecycle-classification-batch.v1",
+  "generated_at": "2026-08-10T23:14:56.832Z",
+  "authority": "Lifecycle-only batch: 32 named verification/smoke harnesses classified TEST. No owner_context or ownership manifest is changed; all writes remain visible.",
+  "inputs": {
+    "previous_baseline_sha256": "118c886e4276f51f0e85f66abe9aa5db87c049e032b174fb99e492c2b37dbebe",
+    "registry": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_TEST_CLASSIFICATION_REGISTRY.json"
+  },
+  "results": {
+    "authoritative_scan": "1693/1693 surfaces, 276275ms, zero failures/timeouts",
+    "test_surfaces_classified": 32,
+    "previous_ambiguous": 531,
+    "current_ambiguous": 275,
+    "production_operational_unreviewed": 411,
+    "foreign_writes": 0,
+    "material_unresolved": 264
+  },
+  "classification_effect": "Test-only writes are excluded from production ownership ambiguity while preserved in test_writes=259; unresolved active operational records remain fail-closed.",
+  "next_action": "Continue active operational ownership/capability closure; no ownership shortcut."
+}

@@ -31,6 +31,8 @@
 
 'use strict'
 
+const { insertAiCallEventsV1 } = require('../../modules/calling/public/v1/legacy-prisma-ai-call-event-maintenance-adapter')
+
 // Allowed event types. Every type added needs (a) the enum extended
 // via an ALTER TYPE migration, (b) a documented payload shape in
 // docs/design/conversation-intelligence-layer.md.
@@ -114,7 +116,7 @@ function validateEvent(e, callId) {
  *   On Postgres failure: returns `{ inserted: 0, errored: true }` and
  *     logs `ai_call_event_insert_failed` (warn) — caller continues.
  */
-function _createPersistEvents(prismaClient) {
+function _createPersistEvents(eventWriter = insertAiCallEventsV1) {
     return async function persistEvents({ events, callId, opsLog }) {
         const log = opsLog ?? (() => {})
 
@@ -153,10 +155,7 @@ function _createPersistEvents(prismaClient) {
             // The `(prismaClient as any).aiCallEvent` access path matches
             // the existing pattern in scenarios.ts — Prisma client types
             // may lag the migration on dev boxes.
-            const result = await prismaClient.aiCallEvent.createMany({
-                data: validRows,
-                skipDuplicates: true,
-            })
+            const result = await eventWriter(validRows)
             return {
                 inserted: result.count,
                 skipped: issues.length,

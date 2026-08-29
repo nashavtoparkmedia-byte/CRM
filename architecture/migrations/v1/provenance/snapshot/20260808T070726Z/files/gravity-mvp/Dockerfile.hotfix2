@@ -1,0 +1,27 @@
+# syntax=docker/dockerfile:1.7
+# Low-disk build: reuse installed production dependencies and add only the
+# small build-time packages required by Next.js.
+FROM crm/gravity-mvp:multi-park-scheduler-629b108-20260713T152852Z AS builder
+USER root
+WORKDIR /app
+COPY --chown=app:app . .
+RUN npm install --no-save --ignore-scripts \
+      @tailwindcss/postcss@4 typescript@5 \
+    && npx prisma generate
+ARG NEXT_PUBLIC_AVITO_LEADS_URL=""
+ARG NEXT_PUBLIC_MAX_SCRAPER_PHONE=""
+ARG NEXT_PUBLIC_FORCE_SHOW_ALL_CHANNELS=""
+ENV NEXT_PUBLIC_AVITO_LEADS_URL=$NEXT_PUBLIC_AVITO_LEADS_URL
+ENV NEXT_PUBLIC_MAX_SCRAPER_PHONE=$NEXT_PUBLIC_MAX_SCRAPER_PHONE
+ENV NEXT_PUBLIC_FORCE_SHOW_ALL_CHANNELS=$NEXT_PUBLIC_FORCE_SHOW_ALL_CHANNELS
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=production
+RUN npm run build
+
+FROM crm/gravity-mvp:multi-park-scheduler-629b108-20260713T152852Z AS runner
+USER root
+COPY --from=builder --chown=app:app /app/.next /app/.next
+COPY --from=builder --chown=app:app /app/prisma /app/prisma
+COPY --from=builder --chown=app:app /app/node_modules/.prisma/client /app/node_modules/.prisma/client
+COPY --from=builder --chown=app:app /app/node_modules/@prisma/client /app/node_modules/@prisma/client
+USER app

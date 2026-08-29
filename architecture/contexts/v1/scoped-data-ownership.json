@@ -1,0 +1,23 @@
+{
+  "schema": "yoko.crm.scoped-data-ownership.v1",
+  "rules": [
+    {
+      "id": "telegram-bot-sqlite-actions-v1",
+      "source": "tg-bot/src/database.js",
+      "store": "tg-bot local SQLite",
+      "table": "actions",
+      "owner_context": "telegram_channel",
+      "allowed_operations": ["CREATE_TABLE", "INSERT", "SELECT"],
+      "rationale": "Telegram bot interaction/audit stream; scope prevents collision with unrelated tables named actions."
+    },
+    {
+      "id": "telegram-bot-sqlite-connection-requests-v1",
+      "source": "tg-bot/src/database.js",
+      "store": "tg-bot local SQLite",
+      "table": "connection_requests",
+      "owner_context": "fleet_operations",
+      "allowed_operations": [],
+      "rationale": "Driver/park onboarding business state remains Fleet-owned; empty operations means no Telegram writer is authorized."
+    }
+  ]
+}

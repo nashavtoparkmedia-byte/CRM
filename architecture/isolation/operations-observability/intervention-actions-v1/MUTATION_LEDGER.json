@@ -1,0 +1,32 @@
+{
+  "schema": "yoko.crm.mutation-ledger.v1",
+  "milestone": "CRM-ARCH-007R-INTERVENTION-ACTIONS",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "e8811394458d2ee7e731aa51f5ff00c65d958901",
+  "source_commit": "fb53587e5377c272fefa58c58d521c8524a8e511",
+  "verified_at": "2026-08-10T03:23:02Z",
+  "source": [
+    "versioned Operations Observability intervention-actions request, result and row contracts",
+    "strict parsers for three commands and four queries",
+    "one named owner repository port with parse-before-port handlers",
+    "owner adapter containing the exact three-statement compatibility DDL state machine and four fixed reads",
+    "typed intervention_actions create and zero-row-safe outcome updateMany writes",
+    "Analytics consumer relocation preserving caller-owned clocks, ID generation, outcome computation, mapping and aggregation",
+    "source and boundary controls for DDL, read, write, ordering, failure and capability scope",
+    "activated module policy for the accepted Analytics to Operations public dependency",
+    "deterministically regenerated strict architecture registry with the exact five-finding retirement",
+    "completed and checksummed source-gate evidence package"
+  ],
+  "production": [],
+  "database": [],
+  "services": [],
+  "deployment": [],
+  "policy_source_mutated": true,
+  "registry_source_mutated": true,
+  "source_control_only": true,
+  "raw_write_owner_override_mutated": false,
+  "raw_write_owner_override_disposition": "intentionally frozen CRM-ARCH-003 ownership evidence; out of scope",
+  "intervention_repository_executed_against_database": false,
+  "production_mutated": false,
+  "secret_values_read_or_emitted": false
+}

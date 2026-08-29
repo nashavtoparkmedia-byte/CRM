@@ -1,0 +1,13 @@
+{
+  "schema": "yoko.crm.ownership-gap-focused-review.v1",
+  "baseline_sha256": "73259b98675789afb00258c1f1fac33c8799202f962b9944001a9bf05cfdf003",
+  "reviewed_records": 10,
+  "summary": {"OWNER_VALID": 7, "OWNERSHIP_MANIFEST_GAP_REVIEW": 2, "FOREIGN": 1},
+  "decisions": [
+    {"classification":"OWNER_VALID","count":6,"source":"gravity-mvp/src/infrastructure/outbox/prisma-outbox-store.ts","target":"DomainOutboxEvent","owner":"platform_shell","evidence":"outbox manifest and module-manifest amendment establish platform_shell infrastructure-state ownership"},
+    {"classification":"OWNER_VALID","count":1,"source":"gravity-mvp/src/modules/calling/internal/recording-ready-prisma-adapter.ts","target":"DomainOutboxEvent","owner":"platform_shell","writer":"calling","evidence":"explicit RecordingReady transactional outbox flow; approved-writer exact-capability hardening remains required"},
+    {"classification":"OWNERSHIP_MANIFEST_GAP_REVIEW","count":2,"source":"tg-bot/src/database.js","target":"telegram local SQLite actions","desired_owner":"telegram_channel","evidence":"runtime DDL and action audit stream; requires schema/store-scoped ownership, never a global actions alias"},
+    {"classification":"FOREIGN","count":1,"source":"tg-bot/src/database.js","target":"connection_requests","desired_owner":"fleet_operations","writer":"telegram_channel","evidence":"driver/park onboarding business state; requires Fleet public onboarding capability"}
+  ],
+  "manifest_changes_made": false
+}

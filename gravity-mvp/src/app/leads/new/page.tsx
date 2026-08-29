@@ -22,9 +22,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Phone, MessageSquare, ExternalLink, RefreshCw, Megaphone } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Card } from '@/components/ui/card'
+import { Button } from '@/infrastructure/ui/button'
+import { Badge } from '@/infrastructure/ui/badge'
+import { Card } from '@/infrastructure/ui/card'
 import {
   LEAD_SOURCES,
   LEAD_STATUS_LABEL_RU,

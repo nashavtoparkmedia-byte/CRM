@@ -1,4 +1,9 @@
 const http = require('http');
+require('dotenv').config();
+
+if (!process.env.ADMIN_USER || !process.env.ADMIN_PASS) {
+    throw new Error('ADMIN_USER and ADMIN_PASS are required');
+}
 
 const options = {
     hostname: 'localhost',
@@ -6,7 +11,7 @@ const options = {
     path: '/api/admin/surveys/bbd15c7a-c378-41d5-87bc-e917bde5ada4/analytics',
     method: 'GET',
     headers: {
-        'Authorization': 'Bearer testadmin', // Mock token to bypass if it checks headers loosely, though auth is usually required
+        'Authorization': 'Basic ' + Buffer.from(`${process.env.ADMIN_USER}:${process.env.ADMIN_PASS}`).toString('base64'),
         'Content-Type': 'application/json'
     }
 };

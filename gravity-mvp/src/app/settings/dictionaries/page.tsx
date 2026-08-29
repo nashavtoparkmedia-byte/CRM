@@ -1,20 +1,22 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { PageContainer } from '@/components/ui/PageContainer'
-import { PageHeader } from '@/components/layout/PageHeader'
-import { 
-    getDictionaries, 
-    addDictionaryItem, 
-    updateDictionaryItem, 
-    deleteDictionaryItem,
-    DictionaryItem,
-    DictionaryType 
-} from '@/lib/dictionaries/dictionary-service'
-import { getCurrentUser } from '@/lib/users/user-service'
+import { PageContainer } from '@/infrastructure/ui/PageContainer'
+import { PageHeader } from '@/infrastructure/ui/PageHeader'
+import type {
+    TaskDictionaryItemV1,
+    TaskDictionaryTypeV1,
+} from '@/contracts/work-management/v1'
+import {
+    addTaskDictionaryItemV1,
+    deleteTaskDictionaryItemV1,
+    getTaskDictionariesV1,
+    updateTaskDictionaryItemV1,
+} from '@/modules/work-management/public/v1/task-dictionary-catalog'
+import { getCurrentUserIdentityV1 as getCurrentUser } from '@/modules/identity-access/public/v1/user-directory'
 import { Plus, Trash2, Check, X, ToggleLeft, ToggleRight } from 'lucide-react'
 
-const DICT_TITLES: Record<DictionaryType, string> = {
+const DICT_TITLES: Record<TaskDictionaryTypeV1, string> = {
     scenarios: 'Сценарии',
     events: 'События',
     statuses: 'Статусы',
@@ -27,14 +29,14 @@ const DICT_TITLES: Record<DictionaryType, string> = {
 
 export default function DictionariesPage() {
     const [dicts, setDicts] = useState<any>(null)
-    const [activeTab, setActiveTab] = useState<DictionaryType>('scenarios')
+    const [activeTab, setActiveTab] = useState<TaskDictionaryTypeV1>('scenarios')
     const [newLabel, setNewLabel] = useState('')
     const [isLoading, setIsLoading] = useState(true)
     const [currentUser, setCurrentUser] = useState<any>(null)
 
     const load = () => {
         setIsLoading(true)
-        getDictionaries().then(res => {
+        getTaskDictionariesV1().then(res => {
             setDicts(res)
             setIsLoading(false)
         })
@@ -47,19 +49,19 @@ export default function DictionariesPage() {
 
     const handleAdd = async () => {
         if (!newLabel.trim()) return
-        await addDictionaryItem(activeTab, { label: newLabel, isActive: true })
+        await addTaskDictionaryItemV1(activeTab, { label: newLabel, isActive: true })
         setNewLabel('')
         load()
     }
 
-    const handleToggleActive = async (item: DictionaryItem) => {
-        await updateDictionaryItem(activeTab, item.id, { isActive: !item.isActive })
+    const handleToggleActive = async (item: TaskDictionaryItemV1) => {
+        await updateTaskDictionaryItemV1(activeTab, item.id, { isActive: !item.isActive })
         load()
     }
 
     const handleDelete = async (id: string) => {
         if (!confirm('Вы уверены?')) return
-        await deleteDictionaryItem(activeTab, id)
+        await deleteTaskDictionaryItemV1(activeTab, id)
         load()
     }
 
@@ -89,14 +91,14 @@ export default function DictionariesPage() {
                     {['contact_results', 'next_actions'].map(type => (
                         <button
                             key={type}
-                            onClick={() => setActiveTab(type as DictionaryType)}
+                            onClick={() => setActiveTab(type as TaskDictionaryTypeV1)}
                             className={`px-[4px] py-1.5 text-[13px] font-bold rounded-xl transition-all whitespace-nowrap ${
                                 activeTab === type 
                                     ? 'bg-white text-gray-900 shadow-sm border border-gray-200' 
                                     : 'text-gray-500 hover:text-gray-800'
                             }`}
                         >
-                            {DICT_TITLES[type as DictionaryType]}
+                            {DICT_TITLES[type as TaskDictionaryTypeV1]}
                         </button>
                     ))}
                 </div>
@@ -106,14 +108,14 @@ export default function DictionariesPage() {
                     {['scenarios', 'events', 'statuses', 'priorities', 'sources', 'history_actions'].map(type => (
                         <button
                             key={type}
-                            onClick={() => setActiveTab(type as DictionaryType)}
+                            onClick={() => setActiveTab(type as TaskDictionaryTypeV1)}
                             className={`px-[4px] py-1.5 text-[13px] font-bold rounded-xl transition-all whitespace-nowrap ${
                                 activeTab === type 
                                     ? 'bg-white text-gray-900 shadow-sm border border-gray-200' 
                                     : 'text-gray-500 hover:text-gray-800'
                             }`}
                         >
-                            {DICT_TITLES[type as DictionaryType]}
+                            {DICT_TITLES[type as TaskDictionaryTypeV1]}
                         </button>
                     ))}
                 </div>
@@ -122,7 +124,7 @@ export default function DictionariesPage() {
             <div className="mt-[4px] bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
                 {/* List Items */}
                 <div className="divide-y divide-gray-100">
-                    {dicts?.[activeTab]?.map((item: DictionaryItem) => (
+                    {dicts?.[activeTab]?.map((item: TaskDictionaryItemV1) => (
                         <div key={item.id} className="flex items-center justify-between px-[4px] py-3 hover:bg-gray-50 transition-colors">
                             <div>
                                 <span className={`text-[14px] font-medium ${item.isActive ? 'text-gray-900' : 'text-gray-400 line-through'}`}>

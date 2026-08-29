@@ -1,0 +1,67 @@
+{
+  "schema": "yoko.crm.context-isolation-verification.v1",
+  "milestone": "CRM-ARCH-007R-INTERVENTION-ACTIONS",
+  "base_commit": "e8811394458d2ee7e731aa51f5ff00c65d958901",
+  "source_commit": "fb53587e5377c272fefa58c58d521c8524a8e511",
+  "verified_at": "2026-08-10T03:23:02Z",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "source": {
+    "consumer": "gravity-mvp/src/app/team-overview/actions.ts",
+    "consumer_before_sha256": "b01c8ab8e92ae6f0a0ff1d215f21d22bca6a4b9a676756681ca7b421c747d89f",
+    "consumer_after_sha256": "f9529a3d36604c938035c2ed4b4064c15ff3c5e17634668b88e512190c2cf2db",
+    "retired_fingerprints": [
+      "arch_88826812df7607334fe418c0",
+      "arch_797839b976905d3a7fc723b8",
+      "arch_b6c2382b10f9b0d97aab482a",
+      "arch_be72e901fee4b2693481ee1d",
+      "arch_e6b0081069429a87f802c5e8"
+    ]
+  },
+  "architecture": {
+    "files": 967,
+    "contexts": 16,
+    "dependency_relationships": 106,
+    "effective_added_dependencies": 1,
+    "dependency_cycles": 0,
+    "findings": 1414,
+    "exceptions": 1414,
+    "direct_foreign_prisma_write": 91,
+    "undeclared_dependency": 370,
+    "registry_removed": 5,
+    "registry_added": 0,
+    "changed_shared_entries": 0,
+    "finding_digest": "2d262852d9b5e78314a109ea830bc1afbd34b69811fed95fc09f7caf0f0e9f43",
+    "registry_sha256": "ec5829f8140b841448e26e9bd4d8d055cc41ea7ddeb8db2728668ee8797843a9",
+    "registry_deterministic": true
+  },
+  "tests": {
+    "operations_intervention_repository": "8/8 PASS",
+    "operations_intervention_consumer_orchestration": "10/10 PASS",
+    "operations_intervention_boundary": "27/27 PASS",
+    "architecture_enforcement_parser": "29/29 PASS",
+    "contract_boundary_controls": "119/119 PASS",
+    "current_cumulative_architecture_test_and_check_scripts": "115/115 PASS"
+  },
+  "typescript": {
+    "diagnostics": 28,
+    "classification": "inherited",
+    "modified_or_new_slice_diagnostics": 0,
+    "normalized_base_sha256": "4bc87f13a0d8807e2e1ca0c79d5719cdfa743c69c6e8443e63626951b9457a17",
+    "normalized_current_sha256": "4bc87f13a0d8807e2e1ca0c79d5719cdfa743c69c6e8443e63626951b9457a17",
+    "normalized_diagnostics_identical": true
+  },
+  "eslint": {
+    "new_source_errors": 0,
+    "consumer_inherited_errors": 5
+  },
+  "checksums": "29/29 PASS",
+  "policy_source_mutated": true,
+  "registry_source_mutated": true,
+  "source_control_only": true,
+  "raw_write_owner_override_mutated": false,
+  "raw_write_owner_override_disposition": "intentionally frozen CRM-ARCH-003 ownership evidence; out of scope",
+  "database_accessed": false,
+  "intervention_repository_executed_against_database": false,
+  "secret_values_read_or_emitted": false,
+  "production_mutated": false
+}

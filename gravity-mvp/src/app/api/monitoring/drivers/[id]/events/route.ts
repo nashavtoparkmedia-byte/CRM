@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { EVENTS_LIMIT_DEFAULT } from '@/app/monitoring/lib/constants';
+import { EVENTS_LIMIT_DEFAULT } from '@/modules/fleet-operations/public/v1/monitoring-policy';
 
 export async function GET(
     req: NextRequest,

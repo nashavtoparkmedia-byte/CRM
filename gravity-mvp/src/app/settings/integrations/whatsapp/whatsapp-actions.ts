@@ -3,17 +3,55 @@
 import { prisma } from '@/lib/prisma'
 import { initializeClient, destroyClient, sendMessage as waSendMessage, resetSyncGuard } from '@/lib/whatsapp/WhatsAppService'
 import { revalidatePath } from 'next/cache'
+import { DELETE_CONVERSATIONS_BY_CHANNEL_COMMAND_V1, DELETE_CONVERSATIONS_BY_ID_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CONNECTION_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { deleteConversationsByChannelV1, deleteConversationsByIdV1, deleteHistoryImportJobsForConnectionV1 } from '@/modules/messaging/public/v1'
+import { projectWhatsAppConnectionMetadata } from '@/modules/whatsapp-channel/public/v1/whatsapp-connection-public-metadata'
+import { readPendingWhatsAppQr } from '@/lib/whatsapp/whatsapp-qr-ceremony'
+import { requireIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
+import { cleanupDanglingContactIdentitiesV1 } from '@/modules/contacts/public/v1'
+
+const publicWhatsAppConnectionSelect = {
+    id: true,
+    name: true,
+    status: true,
+    phoneNumber: true,
+    createdAt: true,
+    updatedAt: true,
+} as const
+
+function toPublicWhatsAppConnection(connection: {
+    id: string
+    name: string | null
+    status: string
+    phoneNumber: string | null
+    createdAt: Date
+    updatedAt: Date
+}) {
+    return projectWhatsAppConnectionMetadata({
+        id: connection.id,
+        name: connection.name,
+        status: connection.status,
+        phoneNumber: connection.phoneNumber,
+        createdAt: connection.createdAt,
+        updatedAt: connection.updatedAt,
+        // QR-pending is not an established session. Do not select the raw
+        // persistence payload merely to derive browser metadata.
+        sessionConfigured: connection.status === 'ready',
+    })
+}
 
 export async function createWhatsAppConnection(name?: string) {
+    await requireIntegrationAdminAccess()
     console.log(`[WA-ACTIONS] createWhatsAppConnection called with name: ${name}`)
 
     // Guard: prevent creating a new connection if one is already pending QR scan
     const pending = await prisma.whatsAppConnection.findFirst({
-        where: { status: { in: ['idle', 'qr', 'qr_expired', 'authenticated'] } }
+        where: { status: { in: ['idle', 'qr', 'qr_expired', 'authenticated'] } },
+        select: publicWhatsAppConnectionSelect,
     })
     if (pending) {
         console.log(`[WA-ACTIONS] Blocked: already have pending connection ${pending.id} (status=${pending.status})`)
-        return pending
+        return toPublicWhatsAppConnection(pending)
     }
 
     // PR7.14: дефолтное имя теперь NULL вместо "WhatsApp Account".
@@ -21,20 +59,22 @@ export async function createWhatsAppConnection(name?: string) {
     // Без литеральных дефолтов исключаем ситуацию «два WhatsApp Account».
     const trimmed = name?.trim() || null
     const connection = await prisma.whatsAppConnection.create({
-        data: { name: trimmed, status: 'idle' }
+        data: { name: trimmed, status: 'idle' },
+        select: publicWhatsAppConnectionSelect,
     })
 
     console.log(`[WA-ACTIONS] Created connection: ${connection.id} name=${trimmed ?? '<null>'}`)
     initializeWhatsAppConnection(connection.id).catch(console.error)
     revalidatePath('/whatsapp')
     revalidatePath('/settings/integrations/whatsapp')
-    return connection
+    return toPublicWhatsAppConnection(connection)
 }
 
 /** PR7.14: переименование подключения. Допустимо переименовывать в
  *  любой момент — не влияет на сессию Baileys / phoneNumber. Пустая
  *  строка → NULL (UI снова покажет fallback по телефону). */
 export async function renameWhatsAppConnection(id: string, name: string) {
+    await requireIntegrationAdminAccess()
     const trimmed = name?.trim() ?? ''
     const next = trimmed.length === 0 ? null : trimmed.slice(0, 80)
     console.log(`[WA-ACTIONS] renameWhatsAppConnection id=${id} → ${next ?? '<null>'}`)
@@ -49,6 +89,7 @@ export async function renameWhatsAppConnection(id: string, name: string) {
 }
 
 export async function initializeWhatsAppConnection(connectionId: string) {
+    await requireIntegrationAdminAccess()
     console.log(`[WA-ACTIONS] initializeWhatsAppConnection called for: ${connectionId}`)
     try {
         await initializeClient(connectionId)
@@ -62,6 +103,7 @@ export async function initializeWhatsAppConnection(connectionId: string) {
 }
 
 export async function refreshWhatsAppQR(connectionId: string) {
+    await requireIntegrationAdminAccess()
     console.log(`[WA-ACTIONS] refreshWhatsAppQR called for: ${connectionId}`)
     try {
         await destroyClient(connectionId)
@@ -74,21 +116,26 @@ export async function refreshWhatsAppQR(connectionId: string) {
 }
 
 export async function getWhatsAppConnections() {
+    await requireIntegrationAdminAccess()
     console.log(`[WA-ACTIONS] getWhatsAppConnections called`)
-    return prisma.whatsAppConnection.findMany({
-        orderBy: { createdAt: 'asc' }
+    const connections = await prisma.whatsAppConnection.findMany({
+        orderBy: { createdAt: 'asc' },
+        select: publicWhatsAppConnectionSelect,
     })
+    return connections.map(toPublicWhatsAppConnection)
 }
 
 export async function getWhatsAppStatus(connectionId: string) {
+    await requireIntegrationAdminAccess()
     const { getActualStatus, isPaused } = await import('@/lib/whatsapp/WhatsAppService')
     const conn = await prisma.whatsAppConnection.findUnique({
-        where: { id: connectionId }
+        where: { id: connectionId },
+        select: publicWhatsAppConnectionSelect,
     })
     if (!conn) return null
     const actual = await getActualStatus(connectionId)
     return {
-        ...conn,
+        ...toPublicWhatsAppConnection(conn),
         // Derived fields — UI MUST use these, not raw conn.status.
         actualState: actual.state,
         actualLabel: actual.humanReadable,
@@ -101,7 +148,25 @@ export async function getWhatsAppStatus(connectionId: string) {
     }
 }
 
+/**
+ * Explicit authentication-ceremony output. QR material comes only from the
+ * short-lived in-memory ceremony store; WhatsAppConnection.sessionData is
+ * never read or returned through a browser-callable action.
+ */
+export async function getWhatsAppQrCode(connectionId: string) {
+    await requireIntegrationAdminAccess()
+    const connection = await prisma.whatsAppConnection.findUnique({
+        where: { id: connectionId },
+        select: { status: true },
+    })
+    if (!connection || !['qr', 'qr_required'].includes(connection.status)) {
+        return { qrCodeDataUrl: null }
+    }
+    return { qrCodeDataUrl: readPendingWhatsAppQr(connectionId) }
+}
+
 export async function disconnectWhatsApp(connectionId: string, wipeAuth: boolean = false) {
+    await requireIntegrationAdminAccess()
     console.log(`[WA-ACTIONS] disconnectWhatsApp called for: ${connectionId} wipeAuth=${wipeAuth}`)
     await destroyClient(connectionId)
     // destroyClient does not update DB status — without this, UI would keep showing 'ready'
@@ -130,6 +195,7 @@ export async function disconnectWhatsApp(connectionId: string, wipeAuth: boolean
 }
 
 export async function forceResetWhatsAppSession(connectionId: string) {
+    await requireIntegrationAdminAccess()
     console.log(`[WA-ACTIONS] forceResetWhatsAppSession called for: ${connectionId}`)
     const { forceResetSession } = await import('@/lib/whatsapp/WhatsAppService')
     await forceResetSession(connectionId)
@@ -138,6 +204,7 @@ export async function forceResetWhatsAppSession(connectionId: string) {
 }
 
 export async function deleteWhatsAppConnection(connectionId: string) {
+    await requireIntegrationAdminAccess()
     console.log(`[WA-ACTIONS] deleteWhatsAppConnection START for: ${connectionId}`)
     try {
         console.log(`[WA-ACTIONS] Attempting to destroy client ${connectionId}`)
@@ -167,6 +234,7 @@ export async function deleteWhatsAppConnection(connectionId: string) {
 }
 
 export async function pauseWhatsAppConnection(connectionId: string, deleteMessages: boolean) {
+    await requireIntegrationAdminAccess()
     console.log(`[WA-ACTIONS] pauseWhatsAppConnection id=${connectionId} deleteMessages=${deleteMessages}`)
     // Keep Baileys socket alive — just flag this connection as paused so incoming
     // messages are buffered in memory instead of being saved to DB.
@@ -180,6 +248,7 @@ export async function pauseWhatsAppConnection(connectionId: string, deleteMessag
 }
 
 export async function resumeWhatsAppConnection(connectionId: string, catchUp: boolean) {
+    await requireIntegrationAdminAccess()
     console.log(`[WA-ACTIONS] resumeWhatsAppConnection id=${connectionId} catchUp=${catchUp}`)
     const { setPaused, flushPausedBuffer, dropPausedBuffer } = await import('@/lib/whatsapp/WhatsAppService')
 
@@ -202,6 +271,7 @@ export async function resumeWhatsAppConnection(connectionId: string, catchUp: bo
 }
 
 export async function deleteWhatsAppMessages(connectionId: string) {
+    await requireIntegrationAdminAccess()
     console.log(`[WA-ACTIONS] deleteWhatsAppMessages id=${connectionId}`)
     // Do NOT reset sync guard here — auto-sync must stay blocked after deletion.
     // Guard is only reset when user explicitly clicks "Загрузить историю".
@@ -230,27 +300,21 @@ export async function deleteWhatsAppMessages(connectionId: string) {
 
     if (connectionChatIds.length > 0) {
         // Delete messages only from this connection's chats
-        const msgDel = await (prisma.message as any).deleteMany({
-            where: { chatId: { in: connectionChatIds } }
-        })
-        console.log(`[WA-DELETE] Deleted ${msgDel.count} messages for connection ${connectionId}`)
+        await deleteConversationsByIdV1({ contract: DELETE_CONVERSATIONS_BY_ID_COMMAND_V1, conversationIds: connectionChatIds })
+        console.log(`[WA-DELETE] Deleted messages and chats for connection ${connectionId}`)
 
         const contactIds = [...new Set(connectionChats.map((c: any) => c.contactId).filter(Boolean))] as string[]
 
-        const chatDel = await (prisma.chat as any).deleteMany({ where: { id: { in: connectionChatIds } } })
-        console.log(`[WA-DELETE] Deleted ${chatDel.count} chats for connection ${connectionId}`)
-
         // Cleanup dangling identities
         if (contactIds.length > 0) {
-            const { ContactService } = await import('@/lib/ContactService')
-            await ContactService.cleanupDanglingIdentities(contactIds)
+            await cleanupDanglingContactIdentitiesV1(contactIds)
         }
     } else {
         console.log(`[WA-DELETE] No unified chats found for connection ${connectionId}`)
     }
     // Clean up HistoryImportJob records only for THIS connection so ChannelSyncBlock resets
     try {
-        await prisma.$executeRaw`DELETE FROM "HistoryImportJob" WHERE 'whatsapp' = ANY(channels) AND "connectionId" = ${connectionId}`
+        await deleteHistoryImportJobsForConnectionV1({ contract: DELETE_HISTORY_IMPORT_JOBS_FOR_CONNECTION_COMMAND_V1, channel: 'whatsapp', connectionId })
         console.log(`[WA-DELETE] Cleaned up import jobs for connection ${connectionId}`)
     } catch (e: any) { console.error(`[WA-DELETE] ImportJob cleanup error: ${e.message}`) }
 
@@ -264,13 +328,8 @@ export async function deleteWhatsAppMessages(connectionId: string) {
             where: { status: { in: ['ready', 'authenticated', 'qr', 'idle'] } },
         })
         if (activeWaCount <= 1) {
-            const leftoverMsgs = await (prisma.message as any).deleteMany({
-                where: { channel: 'whatsapp' },
-            })
-            const leftoverChats = await (prisma.chat as any).deleteMany({
-                where: { channel: 'whatsapp' },
-            })
-            console.log(`[WA-DELETE] Wholesale wipe (single WA connection): removed ${leftoverMsgs.count} msgs, ${leftoverChats.count} chats`)
+            await deleteConversationsByChannelV1({ contract: DELETE_CONVERSATIONS_BY_CHANNEL_COMMAND_V1, channel: 'whatsapp' })
+            console.log(`[WA-DELETE] Wholesale wipe (single WA connection): removed all remaining WhatsApp conversations`)
         } else {
             // Multiple WA connections — be conservative, only remove truly orphan (zero messages)
             const orphanChats = await (prisma.chat as any).findMany({
@@ -281,8 +340,8 @@ export async function deleteWhatsAppMessages(connectionId: string) {
                 .filter((c: any) => (c._count?.messages ?? 0) === 0)
                 .map((c: any) => c.id)
             if (orphanIds.length > 0) {
-                const orphanDel = await (prisma.chat as any).deleteMany({ where: { id: { in: orphanIds } } })
-                console.log(`[WA-DELETE] Removed ${orphanDel.count} orphan whatsapp chats (no messages)`)
+                await deleteConversationsByIdV1({ contract: DELETE_CONVERSATIONS_BY_ID_COMMAND_V1, conversationIds: orphanIds })
+                console.log(`[WA-DELETE] Removed ${orphanIds.length} orphan whatsapp chats (no messages)`)
             }
         }
     } catch (e: any) { console.error(`[WA-DELETE] Wholesale cleanup error: ${e.message}`) }

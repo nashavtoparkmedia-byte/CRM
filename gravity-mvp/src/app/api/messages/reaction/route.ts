@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { broadcastChatMessage } from '@/lib/messageStreamBus'
+import { getMaxChannelDeliveryV1, getTelegramChannelDeliveryV1, getWhatsAppChannelDeliveryV1 } from '@/modules/messaging/public/v1/channel-delivery-runtime'
+import { PATCH_MESSAGE_METADATA_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { patchMessageMetadataV1 } from '@/modules/messaging/public/v1'
 
 /**
  * POST /api/messages/reaction
@@ -51,19 +54,58 @@ export async function POST(req: NextRequest) {
 
         const updatedMetadata = { ...metadata, reactions }
 
-        const updated = await prisma.message.update({
-            where: { id: messageId },
-            data: { metadata: updatedMetadata }
+        // A MAX frame acknowledgement is not a provider echo. Persist only
+        // after the channel capability confirms the reaction reached MAX.
+        if (msg.channel === 'max') {
+            try {
+                const result = await sendReactionToChannel(
+                    msg.channel,
+                    msg.externalId,
+                    msg.chat?.externalChatId || '',
+                    emoji,
+                    isRemoving,
+                    msg.chat?.metadata,
+                )
+                if (!result.reactionConfirmed) {
+                    console.log('[MAX_DELIVERY]', JSON.stringify({
+                        ts: new Date().toISOString(),
+                        operation: 'reaction',
+                        status: result.status || 'send_requested',
+                        crmMessageId: msg.id,
+                        maxMessageId: msg.externalId,
+                        conversationId: msg.chat?.externalChatId || '',
+                        error: null,
+                    }))
+                    return NextResponse.json({
+                        success: false,
+                        pending: true,
+                        status: result.status || 'send_requested',
+                        message: 'MAX reaction sent; waiting for provider confirmation',
+                    }, { status: 202 })
+                }
+            } catch (error: any) {
+                console.warn('[API/reaction] MAX delivery failed:', error.message)
+                return NextResponse.json({ error: error.message || 'MAX reaction failed' }, { status: 502 })
+            }
+        }
+
+        await patchMessageMetadataV1({
+            contract: PATCH_MESSAGE_METADATA_COMMAND_V1,
+            messageId,
+            metadata: updatedMetadata,
         })
+        const updated = { ...msg, metadata: updatedMetadata }
 
         // Broadcast immediately so all open chat tabs refresh without waiting for channel round-trip
         try { broadcastChatMessage(updated.chatId, updated) } catch {}
 
         // Send reaction to messenger channel (best-effort, don't fail on error)
-        try {
-            await sendReactionToChannel(msg.channel || '', msg.externalId, msg.chat?.externalChatId || '', emoji, isRemoving, msg.chat?.metadata)
-        } catch (err: any) {
-            console.warn(`[API/reaction] Failed to send reaction to ${msg.channel}:`, err.message)
+        if (msg.channel !== 'max') {
+            try {
+                await sendReactionToChannel(msg.channel || '', msg.externalId, msg.chat?.externalChatId || '', emoji, isRemoving, msg.chat?.metadata)
+            } catch (err: any) {
+                console.warn(`[API/reaction] Failed to send reaction to ${msg.channel}:`, err.message)
+            }
         }
 
         return NextResponse.json({ reactions })
@@ -73,9 +115,6 @@ export async function POST(req: NextRequest) {
     }
 }
 
-/**
- * Send reaction to the actual messenger channel.
- */
 async function sendReactionToChannel(
     channel: string,
     externalMsgId: string | null | undefined,
@@ -83,144 +122,40 @@ async function sendReactionToChannel(
     emoji: string,
     isRemoving: boolean,
     chatMetadata: any
-) {
+): Promise<{ reactionConfirmed: boolean; status?: string }> {
     if (!externalMsgId) {
         console.log(`[reaction] No externalId for message, skipping channel delivery`)
-        return
+        return { reactionConfirmed: false }
     }
 
     switch (channel) {
         case 'whatsapp':
-            await sendWhatsAppReaction(externalMsgId, externalChatId, emoji, isRemoving, chatMetadata)
-            break
+            await getWhatsAppChannelDeliveryV1().sendReaction({
+                connectionId: chatMetadata?.connectionId,
+                chatId: externalChatId,
+                messageId: externalMsgId,
+                emoji,
+                remove: isRemoving,
+            })
+            return { reactionConfirmed: true }
         case 'telegram':
-            await sendTelegramReaction(externalMsgId, externalChatId, emoji, isRemoving, chatMetadata)
-            break
+            await getTelegramChannelDeliveryV1().sendReaction({
+                connectionId: chatMetadata?.connectionId,
+                chatId: externalChatId,
+                messageId: externalMsgId,
+                emoji,
+                remove: isRemoving,
+            })
+            return { reactionConfirmed: true }
         case 'max':
-            await sendMaxReaction(externalMsgId, externalChatId, emoji, isRemoving)
-            break
+            return getMaxChannelDeliveryV1().sendReaction({
+                chatId: externalChatId.replace(/^max:/, ''),
+                messageId: externalMsgId,
+                emoji,
+                remove: isRemoving,
+            })
         default:
             console.log(`[reaction] Channel ${channel} not supported for reactions`)
+            return { reactionConfirmed: false }
     }
-}
-
-/**
- * WhatsApp: react to a message using whatsapp-web.js client.react()
- */
-async function sendWhatsAppReaction(
-    externalMsgId: string,
-    externalChatId: string,
-    emoji: string,
-    isRemoving: boolean,
-    chatMetadata: any
-) {
-    const { getClient } = await import('@/lib/whatsapp/WhatsAppService')
-
-    // Determine connectionId from chat metadata
-    const connectionId = chatMetadata?.connectionId
-    if (!connectionId) {
-        // Try to find any ready WhatsApp connection
-        const conns: any[] = await prisma.$queryRaw`
-            SELECT id FROM "WhatsAppConnection" WHERE "status" = 'ready' LIMIT 1
-        `
-        if (conns.length === 0) throw new Error('No ready WhatsApp connection')
-        const client = getClient(conns[0].id)
-        if (!client) throw new Error('WhatsApp client not found')
-        await reactWhatsApp(client, externalChatId, externalMsgId, emoji, isRemoving)
-        return
-    }
-
-    const client = getClient(connectionId)
-    if (!client) throw new Error(`WhatsApp client not found for connection ${connectionId}`)
-    await reactWhatsApp(client, externalChatId, externalMsgId, emoji, isRemoving)
-}
-
-async function reactWhatsApp(client: any, chatId: string, msgId: string, emoji: string, isRemoving: boolean) {
-    const chat = await client.getChatById(chatId)
-    const messages = await chat.fetchMessages({ limit: 50 })
-    const targetMsg = messages.find((m: any) => m.id._serialized === msgId)
-
-    if (!targetMsg) {
-        throw new Error(`WhatsApp message ${msgId} not found in chat ${chatId}`)
-    }
-
-    // react('') removes reaction, react(emoji) sets it
-    await targetMsg.react(isRemoving ? '' : emoji)
-    console.log(`[reaction/WA] ${isRemoving ? 'Removed' : 'Sent'} ${emoji} on msg ${msgId}`)
-}
-
-/**
- * Telegram: send reaction via GramJS Api.messages.SendReaction
- */
-async function sendTelegramReaction(
-    externalMsgId: string,
-    externalChatId: string,
-    emoji: string,
-    isRemoving: boolean,
-    chatMetadata: any
-) {
-    const { Api } = await import('telegram')
-
-    // Find the Telegram connection
-    const connectionId = chatMetadata?.connectionId
-    let connId = connectionId
-    if (!connId) {
-        const conns: any[] = await prisma.$queryRaw`
-            SELECT id FROM "TelegramConnection" WHERE "isActive" = true ORDER BY "isDefault" DESC LIMIT 1
-        `
-        if (conns.length === 0) throw new Error('No active Telegram connection')
-        connId = conns[0].id
-    }
-
-    // Get the GramJS client from the cache
-    // tg-actions exports getTelegramClient indirectly — we access the client cache
-    const { getClientForReaction } = await import('@/app/tg-actions')
-    const client = await getClientForReaction(connId)
-    if (!client) throw new Error(`Telegram client not found for connection ${connId}`)
-
-    // Parse the peer from externalChatId
-    // externalChatId format: "telegram:{userId}" or just the user/chat ID
-    const peerIdStr = externalChatId.replace('telegram:', '')
-    const peerId = parseInt(peerIdStr, 10)
-    if (isNaN(peerId)) throw new Error(`Invalid Telegram peer ID: ${externalChatId}`)
-
-    const msgIdNum = parseInt(externalMsgId, 10)
-    if (isNaN(msgIdNum)) throw new Error(`Invalid Telegram message ID: ${externalMsgId}`)
-
-    const reaction = isRemoving
-        ? []
-        : [new Api.ReactionEmoji({ emoticon: emoji })]
-
-    await client.invoke(
-        new Api.messages.SendReaction({
-            peer: peerId,
-            msgId: msgIdNum,
-            reaction,
-        })
-    )
-
-    console.log(`[reaction/TG] ${isRemoving ? 'Removed' : 'Sent'} ${emoji} on msg ${externalMsgId} in peer ${peerIdStr}`)
-}
-
-/**
- * MAX: react to a message via max-web-scraper /send-reaction (opcode 178/179)
- */
-async function sendMaxReaction(
-    externalMsgId: string,
-    externalChatId: string,
-    emoji: string,
-    isRemoving: boolean
-) {
-    const maxScraperUrl = process.env.MAX_SCRAPER_URL || 'http://localhost:3005'
-    const chatId = externalChatId.replace(/^max:/, '')
-    const res = await fetch(`${maxScraperUrl}/send-reaction`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chatId, messageId: externalMsgId, emoji, remove: isRemoving }),
-    })
-    if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || `MAX reaction failed: ${res.status}`)
-    }
-    console.log(`[reaction/MAX] ${isRemoving ? 'Removed' : 'Sent'} ${emoji} on msg ${externalMsgId} in chat ${chatId}`)
 }

@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useLayoutEffect, useCallback } from "react
 import { Message } from "../hooks/useMessages"
 import { UIItem, MessageUIItem, DateSeparatorUIItem } from "../utils/message-utils"
 import { ArrowDown, Reply, MessageSquare, Copy, ClipboardList, Check, AlertCircle, RotateCcw, Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, PhoneOff, Play } from "lucide-react"
-import { callStatusColor, callStatusIcon, callStatusLabel, type CallStatusValue, type CallDirection } from "@/lib/calls/status"
+import { callStatusColor, callStatusIcon, callStatusLabel, type CallStatusValue, type CallDirection } from "@/modules/calling/public/v1/call-status-policy"
 import { usePathname, useRouter } from "next/navigation"
 import MessageContextMenu from "./MessageContextMenu"
 import ImageLightbox from "./ImageLightbox"
@@ -315,8 +315,11 @@ export default function MessageFeed({
                         requestAnimationFrame(() => { requestAnimationFrame(() => { if (el) el.scrollTop = el.scrollHeight }) })
                     }
                 } else {
-                    if (atBottom && el) {
-                        el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+                    const isNearBottom = el
+                        ? el.scrollHeight - el.scrollTop - el.clientHeight < 700
+                        : false
+                    if ((atBottom || isNearBottom) && el) {
+                        runSnapToBottom(el)
                         setNewMsgCount(0)
                     } else {
                         setNewMsgCount(prev => prev + 1)

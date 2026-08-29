@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+/* eslint-disable @typescript-eslint/no-require-imports */
 /**
  * PR8.B2 — idempotent backfill of AiKnowledgeSource.connectionId
  * for legacy Telegram + MAX sources.
@@ -32,6 +32,7 @@
  */
 
 const { PrismaClient } = require('@prisma/client')
+const { backfillLegacyTelegramMaxSourceConnectionsV1 } = require('../src/modules/ai-knowledge/public/v1/legacy-prisma-source-connection-backfill-adapter')
 const prisma = new PrismaClient()
 
 const DRY_RUN = process.env.DRY_RUN === '1'
@@ -115,15 +116,7 @@ async function main() {
 
     // ── 4. Apply UPDATE ──────────────────────────────────────────
     // Одним statement'ом atomic update.
-    const updated = await prisma.$executeRaw`
-        UPDATE "AiKnowledgeSource" s
-        SET "connectionId" = c.metadata->>'connectionId'
-        FROM "Chat" c
-        WHERE s."connectionId" IS NULL
-          AND s.channel::text IN ('telegram', 'max')
-          AND c.id = s."chatId"
-          AND c.metadata->>'connectionId' IS NOT NULL
-    `
+    const updated = await backfillLegacyTelegramMaxSourceConnectionsV1()
     console.log(`\n[backfill] UPDATE done. Rows affected: ${updated}`)
 
     // ── 5. Verify after ──────────────────────────────────────────

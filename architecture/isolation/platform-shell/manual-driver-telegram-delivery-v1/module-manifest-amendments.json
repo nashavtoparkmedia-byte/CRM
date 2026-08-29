@@ -1,0 +1,16 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "CRM-ARCH-007R-MANUAL-DRIVER-TELEGRAM-DELIVERY",
+  "amendments": [
+    {
+      "context": "telegram_channel",
+      "add_commands": [
+        "SaveManualDriverTelegramLinkCommand.v1",
+        "RemoveManualDriverTelegramLinkCommand.v1",
+        "NotifyManualDriverTelegramLinkCommand.v1"
+      ],
+      "reason": "Expose only the manual driver Telegram link save, unlink and optional confirmation-delivery operations required by Platform Shell orchestration."
+    }
+  ]
+}

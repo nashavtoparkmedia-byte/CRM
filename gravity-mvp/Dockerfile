@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
 # ─────────────────────────────────────────────────────────────────────────────
 # gravity-mvp — CRM фронтенд/бэкенд (Next.js 16.1.6 + Prisma 6)
 #
@@ -11,28 +11,43 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ─── Stage 1: deps ───────────────────────────────────────────────────────────
-FROM node:20-bookworm-slim AS deps
+FROM node:20-bookworm-slim@sha256:3d0f05455dea2c82e2f76e7e2543964c30f6b7d673fc1a83286736d44fe4c41c AS deps
 WORKDIR /app
 # OpenSSL нужен Prisma для генерации schema engine
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# The pinned slim base has no CA bundle. Snapshot metadata and packages remain
+# authenticated by Debian's signed InRelease metadata and package hashes; no
+# unauthenticated/trusted-repository bypass is permitted (enforced in CI).
+RUN rm -f /etc/apt/sources.list.d/debian.sources \
+    && printf '%s\n' \
+      'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/20260801T000000Z bookworm main' \
+      'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/20260801T000000Z bookworm-updates main' \
+      'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/20260801T000000Z bookworm-security main' \
+      > /etc/apt/sources.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
     openssl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json* ./
 COPY prisma ./prisma
 # npm ci быстрее install + воспроизводимо. ignore-scripts чтобы prisma generate
 # выполнить осознанно ниже (а не как побочный эффект).
-RUN npm ci --no-audit --no-fund
+RUN PUPPETEER_SKIP_DOWNLOAD=true npm ci --ignore-scripts --no-audit --no-fund
 
 # ─── Stage 2: builder ────────────────────────────────────────────────────────
-FROM node:20-bookworm-slim AS builder
+FROM node:20-bookworm-slim@sha256:3d0f05455dea2c82e2f76e7e2543964c30f6b7d673fc1a83286736d44fe4c41c AS builder
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN rm -f /etc/apt/sources.list.d/debian.sources \
+    && printf '%s\n' \
+      'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/20260801T000000Z bookworm main' \
+      'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/20260801T000000Z bookworm-updates main' \
+      'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/20260801T000000Z bookworm-security main' \
+      > /etc/apt/sources.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
     openssl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # Prisma client (генерируется под текущую платформу)
-RUN npx prisma generate
+RUN ./node_modules/.bin/prisma generate
 # Next build — нужны переменные NEXT_PUBLIC_* во время сборки.
 # Передаются через --build-arg в compose, чтобы они вкомпилировались в client bundle.
 ARG NEXT_PUBLIC_AVITO_LEADS_URL=""
@@ -46,7 +61,7 @@ ENV NODE_ENV=production
 RUN npm run build
 
 # ─── Stage 3: runner ─────────────────────────────────────────────────────────
-FROM node:20-bookworm-slim AS runner
+FROM node:20-bookworm-slim@sha256:3d0f05455dea2c82e2f76e7e2543964c30f6b7d673fc1a83286736d44fe4c41c AS runner
 WORKDIR /app
 
 # Runtime зависимости:
@@ -57,7 +72,13 @@ WORKDIR /app
 #     Chromium с GUI-зависимостями. Без них instrumentation.ts whatsapp_warmup
 #     падает с "Failed to launch the browser process".
 #   - fonts-liberation: рендеринг шрифтов в Chromium (иначе emoji-крокозябры)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN rm -f /etc/apt/sources.list.d/debian.sources \
+    && printf '%s\n' \
+      'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/20260801T000000Z bookworm main' \
+      'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian/20260801T000000Z bookworm-updates main' \
+      'deb [check-valid-until=no] http://snapshot.debian.org/archive/debian-security/20260801T000000Z bookworm-security main' \
+      > /etc/apt/sources.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
     openssl ca-certificates ffmpeg tini \
     chromium fonts-liberation \
     libnss3 libatk-bridge2.0-0 libxkbcommon0 libpangocairo-1.0-0 \
@@ -85,14 +106,15 @@ COPY --from=builder --chown=app:app /app/node_modules ./node_modules
 COPY --from=builder --chown=app:app /app/.next ./.next
 COPY --from=builder --chown=app:app /app/public ./public
 COPY --from=builder --chown=app:app /app/prisma ./prisma
-# Скрипты миграций — могут понадобиться в runtime (prisma migrate deploy)
-COPY --from=builder --chown=app:app /app/scripts ./scripts
+# Prisma migrate deploy consumes only ./prisma/migrations. Operational,
+# historical and one-shot scripts are deliberately absent from the runtime
+# image; production maintenance goes through the finite operator control plane.
 # Runtime-data: user-service.ts читает src/data/users.json через fs.readFile
 # (server action). Без этого dropdown «Войти...» пустой и залогиниться нельзя.
 COPY --from=builder --chown=app:app /app/src/data ./src/data
 
 # Удаляем dev-зависимости (npm prune вместо отдельной stage — экономит слой)
-RUN npm prune --omit=dev && npm cache clean --force
+RUN npm prune --omit=dev --ignore-scripts && npm cache clean --force
 
 # Pre-create writable cache + ensure /app сам по себе writable для app user.
 # Без chown /app — npx prisma migrate deploy не может писать в /tmp/.npm,
@@ -112,5 +134,6 @@ ENTRYPOINT ["/usr/bin/tini", "--"]
 # *_drift / 20260612000000_sync_schema_drift) и эквивалентна schema.prisma.
 # Существующая БД должна быть забейслайнена один раз:
 #   npx prisma migrate resolve --applied <name> для каждой миграции
-# (см. scripts/baseline-vps.sh) — дальше deploy применяет только новые.
+# Existing databases are baselined through the finite operator profile; normal
+# starts only deploy migrations already present under ./prisma/migrations.
 CMD ["sh", "-c", "npx prisma migrate deploy && npm run start"]

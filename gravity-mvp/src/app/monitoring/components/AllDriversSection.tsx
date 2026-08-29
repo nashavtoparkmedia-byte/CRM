@@ -3,14 +3,14 @@
 import { useState } from 'react';
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+} from '@/infrastructure/ui/table';
+import { Button } from '@/infrastructure/ui/button';
+import { Input } from '@/infrastructure/ui/input';
 import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
-import { FLEET_STATUS_LABELS } from '@/app/monitoring/lib/constants';
-import { ActionButtons } from './ActionButtons';
-import { HistoryIcons } from './HistoryIcons';
-import { DriverHoverCard } from './DriverHoverCard';
+import { FLEET_STATUS_LABELS } from '@/modules/fleet-operations/public/v1/monitoring-policy';
+import { ActionButtons } from '@/modules/fleet-operations/public/v1/monitoring-ui/ActionButtons';
+import { HistoryIcons } from '@/modules/fleet-operations/public/v1/monitoring-ui/HistoryIcons';
+import { DriverHoverCard } from '@/modules/fleet-operations/public/v1/monitoring-ui/DriverHoverCard';
 import type { MonitoringDriver } from '@/app/monitoring/lib/types';
 
 interface AllDriversSectionProps {

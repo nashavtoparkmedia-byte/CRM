@@ -1,0 +1,14 @@
+export const DELETE_RETAINED_MESSAGES_COMMAND_V1='messaging.DeleteRetainedMessagesCommand.v1' as const
+export const DELETE_RETAINED_MESSAGES_RESULT_V1='messaging.DeleteRetainedMessagesResult.v1' as const
+export const PURGE_MESSAGE_RETRY_METADATA_COMMAND_V1='messaging.PurgeMessageRetryMetadataCommand.v1' as const
+export const PURGE_MESSAGE_RETRY_METADATA_RESULT_V1='messaging.PurgeMessageRetryMetadataResult.v1' as const
+export interface DeleteRetainedMessagesCommandV1{contract:typeof DELETE_RETAINED_MESSAGES_COMMAND_V1;messageIds:string[]}
+export interface DeleteRetainedMessagesResultV1{contract:typeof DELETE_RETAINED_MESSAGES_RESULT_V1;deleted:true}
+export interface PurgeMessageRetryMetadataCommandV1{contract:typeof PURGE_MESSAGE_RETRY_METADATA_COMMAND_V1;messageIds:string[]}
+export interface PurgeMessageRetryMetadataResultV1{contract:typeof PURGE_MESSAGE_RETRY_METADATA_RESULT_V1;purged:true}
+export class MessageRetentionCommandValidationError extends Error{readonly code:'INVALID_CONTRACT'|'UNSUPPORTED_CONTRACT_VERSION';constructor(code:MessageRetentionCommandValidationError['code'],message:string){super(message);this.name='MessageRetentionCommandValidationError';this.code=code}}
+const isRecord=(value:unknown):value is Record<string,unknown>=>typeof value==='object'&&value!==null&&!Array.isArray(value)
+function invalid(message:string):never{throw new MessageRetentionCommandValidationError('INVALID_CONTRACT',message)}
+function parse(input:unknown,expected:string,prefix:string):string[]{if(!isRecord(input))invalid('command must be an object');const extra=Object.keys(input).filter(key=>!['contract','messageIds'].includes(key));if(extra.length)invalid(`unsupported field(s): ${extra.sort().join(', ')}`);if(input.contract!==expected){if(typeof input.contract==='string'&&input.contract.startsWith(prefix))throw new MessageRetentionCommandValidationError('UNSUPPORTED_CONTRACT_VERSION',`unsupported contract version: ${input.contract}`);invalid(`contract must equal ${expected}`)}if(!Array.isArray(input.messageIds)||input.messageIds.length===0||input.messageIds.some(id=>typeof id!=='string'||id.trim()===''))invalid('messageIds must be a non-empty string array');if(new Set(input.messageIds).size!==input.messageIds.length)invalid('messageIds must not contain duplicates');return input.messageIds as string[]}
+export function parseDeleteRetainedMessagesCommandV1(input:unknown):DeleteRetainedMessagesCommandV1{parse(input,DELETE_RETAINED_MESSAGES_COMMAND_V1,'messaging.DeleteRetainedMessagesCommand.');return input as DeleteRetainedMessagesCommandV1}
+export function parsePurgeMessageRetryMetadataCommandV1(input:unknown):PurgeMessageRetryMetadataCommandV1{parse(input,PURGE_MESSAGE_RETRY_METADATA_COMMAND_V1,'messaging.PurgeMessageRetryMetadataCommand.');return input as PurgeMessageRetryMetadataCommandV1}

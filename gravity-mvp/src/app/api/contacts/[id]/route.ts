@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { normalizePhoneE164 } from '@/lib/phoneUtils'
+import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
+import { buildCanonicalContactSummary } from '@/modules/contacts/public/v1/contact-display-policy'
 
 /**
  * GET /api/contacts/:id
@@ -136,6 +137,11 @@ export async function GET(
       identities: contact.identities,
       chats: contact.chats,
       driver,
+      canonicalSummary: buildCanonicalContactSummary({
+        contact,
+        driver,
+        currentChannel: contact.chats[0]?.channel || null,
+      }),
       mergeHistory,
     })
   } catch (err: any) {

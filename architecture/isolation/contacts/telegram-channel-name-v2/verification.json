@@ -1,0 +1,6 @@
+{
+  "schema": "yoko.crm.context-isolation-verification.v1", "milestone": "CRM-ARCH-007-CONTACTS-TELEGRAM-NAME", "verified_at": "2026-08-09T15:55:05Z", "status": "PASS_CONTINUE_SOURCE_GATE",
+  "architecture": {"files": 798, "contexts": 16, "findings": 1522, "exceptions": 1522, "finding_digest": "818b850def89f4f1543d3828c6ef2140cfb26dde82ed345df28703513312e78a", "registry_sha256": "a33e14108ad0e95dd253fe04ddfc1c7d3c189a7293a779ed29dedf6db837d831"},
+  "tests": {"v2_behavior": "9/9 PASS", "v2_controls": "8/8 PASS", "contract_controls": "36/36 PASS", "enforcement": "16/16 PASS", "auth": "33/33 PASS", "calling": "93/93 PASS", "inherited_gates": "PASS"},
+  "typescript": "28 baseline / 28 candidate / 0 normalized differences", "v1_byte_identical": true, "production_mutated": false
+}

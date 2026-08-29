@@ -1,0 +1,101 @@
+{
+  "schema": "yoko.crm.architecture-enforcement-verification.v1",
+  "version": 1,
+  "milestone": "CRM-ARCH-006",
+  "verified_at": "2026-08-09T14:47:31Z",
+  "result": "PASS_CONTINUE",
+  "base": {
+    "milestone": "CRM-ARCH-005",
+    "commit": "f4ede0b0a95818f51ada7d03a452b9b1d5402d4a"
+  },
+  "scan": {
+    "production_files": 766,
+    "contexts": 16,
+    "findings": 1535,
+    "exceptions": 1535,
+    "finding_digest": "fd80a8a62af89261b3efba431994fadcb0778e10d986088a8f1f06a1ba2e43de",
+    "by_rule": {
+      "direct_foreign_prisma_write": 187,
+      "direct_provider_transport_access": 38,
+      "internal_module_import": 385,
+      "non_public_cross_context_import": 542,
+      "undeclared_dependency": 383
+    },
+    "uncovered": 0,
+    "expired": 0,
+    "stale": 0,
+    "unexceptionable": 0,
+    "duplicate_fingerprints": 0,
+    "wildcards": 0,
+    "registry_sha256": "a4c8d9852e389d4cff01e696832ab3049296832e3e4e26b246fb928fe27ef8b7",
+    "registry_reproducible": true
+  },
+  "legacy_write_supplement": {
+    "sites": 5,
+    "all_exact_fingerprints": true,
+    "all_linked_from_exceptions": true,
+    "deadline": "2026-12-31"
+  },
+  "controls": {
+    "context_manifest_validation": "PASS",
+    "verified_context_manifests": 16,
+    "verified_context_controls": 8,
+    "verified_context_outputs": 2,
+    "enforcement_tests": {
+      "passed": 16,
+      "failed": 0
+    },
+    "contract_boundary_controls": {
+      "passed": 14,
+      "failed": 0
+    },
+    "contract_preview_tests": {
+      "passed": 11,
+      "failed": 0
+    },
+    "outbox_architecture_controls": {
+      "passed": 14,
+      "failed": 0
+    },
+    "outbox_preview_tests": {
+      "passed": 16,
+      "failed": 0
+    },
+    "protected_calling_tests": {
+      "passed": 93,
+      "failed": 0,
+      "files": 5
+    },
+    "typescript_project_check": {
+      "baseline_errors": 28,
+      "candidate_errors": 28,
+      "counted_file_line_code_signature_differences": 0,
+      "new_diagnostics": 0
+    },
+    "node_syntax": "PASS",
+    "json_parse": "PASS",
+    "workflow_yaml_parse": "PASS",
+    "secret_pattern_scan": "PASS",
+    "diff_check": "PASS"
+  },
+  "ci": {
+    "workflow": ".github/workflows/architecture-enforcement.yml",
+    "pull_request_gate": true,
+    "main_push_gate": true,
+    "permissions": "contents:read",
+    "timeout_minutes": 10,
+    "third_party_action_pinned_to_commit": true
+  },
+  "corrective_source_change": {
+    "file": "gravity-mvp/src/contracts/index.ts",
+    "change": "root namespace exports point directly to versioned v1 surfaces",
+    "public_names_changed": false,
+    "lines_added": 2,
+    "lines_removed": 2
+  },
+  "production_mutated": false,
+  "runtime_mutated": false,
+  "database_mutated": false,
+  "protected_worktree_mutated": false,
+  "deployed": false
+}

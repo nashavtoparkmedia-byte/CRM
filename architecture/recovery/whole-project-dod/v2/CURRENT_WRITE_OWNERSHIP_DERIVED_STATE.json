@@ -1,0 +1,153 @@
+{
+  "schema": "yoko.crm.write-ownership-derived-state.v1",
+  "generated_at": "2026-08-11T13:30:00.000Z",
+  "program": "WHOLE-PROJECT DOD RECOVERY",
+  "phase": "WRITE_OWNERSHIP_CLOSURE_FINAL_GATE",
+  "verdict": "EXTERNAL_FINAL_ACCEPTANCE_FAILED",
+  "ready": false,
+  "frozen_baseline": {
+    "path": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json",
+    "sha256": "7c6eb03e1249d9dbd2230390a72471caefe1fb01c992ec608775e1f2a0e41292",
+    "analysis_sha256": "7d76d6432e7f57d74e6280b1b4cef1b2d81b9239cfd08061c40b6a7baed9c089",
+    "new_scan_run": true,
+    "previous_frozen_sha256": "6d865916f70314c6c04bf63206ab9f01263ed0356b12f81f936c635d7e259351"
+  },
+  "metrics": {
+    "confirmed_writes_discovered": 1404,
+    "confirmed_writes_total_derived": 1404,
+    "owner_valid": 595,
+    "confirmed_foreign_raw": 0,
+    "closed_foreign_in_worktree_pending_rescan": 0,
+    "closed_foreign_total": 53,
+    "ambiguous_remaining": 46,
+    "maintenance_migration_confirmed_records": 500,
+    "dynamic_delegate_unresolved": 0,
+    "dynamic_sql_unresolved": 0,
+    "query_raw_side_effect_unresolved": 0,
+    "confirmed_non_writes": 30,
+    "operational_surfaces_total": 1725,
+    "operational_surfaces_classified_active": 363,
+    "operational_surfaces_classified_historical_dead": 35,
+    "operational_surfaces_newly_classified": 5,
+    "operational_surfaces_unclassified": 0,
+    "temporary_exceptions": 0,
+    "intentional_exceptions": 0,
+    "confirmed_write_owner_unresolved": 0,
+    "material_unresolved_remaining": 0,
+    "test_surfaces_classified": 32,
+    "dead_historical_classified": 29,
+    "operational_surfaces_reviewed_batch": 382,
+    "operational_surfaces_analyzer_registry_unreviewed": 0,
+    "operational_surfaces_classified_test": 34,
+    "raw_baseline_ambiguous_records": 46,
+    "resolved_non_writes": 30,
+    "owner_valid_writes": 11,
+    "material_unresolved_write_risk": 0,
+    "confirmed_foreign": 0,
+    "closed_foreign": 53,
+    "confirmed_write_owner_resolved": 16,
+    "active_operational_surfaces_unclassified": 0,
+    "controlled_migration_writes": 5
+  },
+  "focused_ownership_review": {
+    "reviewed": 10,
+    "owner_valid": 9,
+    "manifest_gap": 0,
+    "new_foreign": 0
+  },
+  "active_conflict_remediation": [
+    {
+      "source": "gravity-mvp/scripts/sync-drivers-activity.ts",
+      "target": "Driver.upsert",
+      "result": "fleet_operations.ReconcileDriverProfileCommand.v1 owner boundary implemented and targeted test passing",
+      "state": "REMEDIATED_PENDING_AUTHORITATIVE_RESCAN"
+    },
+    {
+      "source": "gravity-mvp/scripts/trigger_import.js",
+      "target": "HistoryImportJob INSERT",
+      "result": "existing messaging.QueueHistoryImportJobCommand.v1 owner boundary adopted; compatibility CLI retained; targeted tests passing",
+      "state": "REMEDIATED_PENDING_AUTHORITATIVE_RESCAN"
+    },
+    {
+      "source": "tg-bot/src/database.js",
+      "target": "connection_requests",
+      "result": "unused write-only foreign onboarding mirror removed; Google Sheets operational flow preserved",
+      "state": "REMEDIATED_PENDING_AUTHORITATIVE_RESCAN"
+    },
+    {
+      "source": "provider ingress batch",
+      "target": "messaging-owned Chat/Message/MessageAttachment",
+      "result": "MAX, Telegram, WhatsApp provider paths route unified conversation/message writes through messaging public v1 contracts; targeted analyzer reports zero foreign sites in remediated files",
+      "state": "REMEDIATED_PENDING_AUTHORITATIVE_RESCAN"
+    },
+    {
+      "source": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
+      "target": "Messaging-owned Chat and Work Management-owned Task relinking",
+      "result": "narrow owner-controlled transactional capabilities adopted; five foreign sites removed",
+      "state": "CLOSED_AFTER_AUTHORITATIVE_RESCAN"
+    }
+  ],
+  "next_action": "Continue automatically to the preserved security and credential closure cluster; ownership closure is internally accepted but final readiness remains false pending security validation and independent critic review.",
+  "targeted_batch": {
+    "artifact": "architecture/recovery/whole-project-dod/v2/WRITE_OWNERSHIP_CLOSURE_BATCH_20260811.json",
+    "triage_artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_WA_JUNK.json",
+    "closed_foreign_in_batch": 1,
+    "closed_foreign_total": 53,
+    "dynamic_delegate_resolved": 11,
+    "dynamic_sql_resolved": 16,
+    "static_read_nonwrites_resolved": 11,
+    "seed_capability_writes_routed": 4,
+    "backfill_capability_writes_routed": 7,
+    "maintenance_repair_writes_routed": 4,
+    "name_backfill_writes_routed": 4,
+    "park_timestamp_writes_routed": 4,
+    "call_status_writes_routed": 2,
+    "driver_history_writes_routed": 6,
+    "identity_maintenance_writes_routed": 5,
+    "owner_split_phantom_writes_routed": 3,
+    "foreign_regression_rejected": 3,
+    "megrabyan_writes_routed": 6,
+    "duplicate_wa_writes_routed": 6,
+    "task_chat_repair_writes_routed": 7,
+    "wa_junk_writes_routed": 8
+  },
+  "authoritative_rescan": {
+    "artifact": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T131500Z.json",
+    "baseline_sha256": "7c6eb03e1249d9dbd2230390a72471caefe1fb01c992ec608775e1f2a0e41292",
+    "analysis_sha256": "7d76d6432e7f57d74e6280b1b4cef1b2d81b9239cfd08061c40b6a7baed9c089",
+    "triage_artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_FINAL_CLOSURE.json",
+    "triage_sha256": "ce3e297f1fe736815fd310094a066717a53d8e4631cbae85f99046963f3c9f70",
+    "execution": {
+      "ambiguous_candidates": 46,
+      "complete": true,
+      "elapsed_ms": 373832.54756,
+      "failures": [],
+      "files_completed": 1725,
+      "files_discovered": 1725,
+      "mode": "fresh_process_per_javascript_surface",
+      "progress_every": 150,
+      "worker_failures": 0,
+      "worker_limit": 4,
+      "worker_timeout_ms": 120000,
+      "worker_timeouts": 0,
+      "writes_discovered": 1404
+    }
+  },
+  "operational_surface_classification": {
+    "artifact": "architecture/recovery/whole-project-dod/v2/OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+    "sha256": "e42d7c817bc32819db80a704fd3d2f0523b3306e535e4ae8ab929ca65e4e2a5a",
+    "classified": 382,
+    "unclassified": 0,
+    "write_capable_files": 73,
+    "policy": "Lifecycle classification is separate from ownership authorization; active writer sites remain fail-closed until exact owner capability evidence.",
+    "registry_artifact": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
+    "registry_entries": 447
+  },
+  "reconciliation": {
+    "artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_FINAL_CLOSURE.json",
+    "sha256": "ce3e297f1fe736815fd310094a066717a53d8e4631cbae85f99046963f3c9f70",
+    "triage_artifact": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_FINAL_CLOSURE.json",
+    "triage_sha256": "ce3e297f1fe736815fd310094a066717a53d8e4631cbae85f99046963f3c9f70",
+    "exact": true
+  }
+}

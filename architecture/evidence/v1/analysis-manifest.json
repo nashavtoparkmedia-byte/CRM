@@ -1,0 +1,4267 @@
+{
+  "analyzer": "tools/architecture/analyze-architecture.mjs",
+  "baseline_milestone": "CRM-ARCH-001",
+  "baseline_schema": "yoko.crm.authoritative-baseline.v1",
+  "generated_from": "CRM-ARCH-001 accepted composite baseline",
+  "input_files": [
+    {
+      "bytes": 882,
+      "file": "avito-worker/src/app.module.ts",
+      "sha256": "431554f00251bac3a29783772a8484b18f50870cce2a5a7b91bc8cfeb99fe065"
+    },
+    {
+      "bytes": 297,
+      "file": "avito-worker/src/db/db.module.ts",
+      "sha256": "f272ec69cefa8d63c4991301e54ad4380549e6fdda4511383174a160f8d99ff4"
+    },
+    {
+      "bytes": 6560,
+      "file": "avito-worker/src/jobs/handlers/check-session.handler.ts",
+      "sha256": "5882a6cd3a6f6cafec1a9afc16d1e33289d14021c842d3573833387dec7af043"
+    },
+    {
+      "bytes": 54091,
+      "file": "avito-worker/src/jobs/handlers/collect-responses.handler.ts",
+      "sha256": "01067ff0413679340975043768c65407763af32182a9c42c1d7bdb3fb72b120e"
+    },
+    {
+      "bytes": 1849,
+      "file": "avito-worker/src/jobs/handlers/open-login-window.handler.ts",
+      "sha256": "23986d03a4f3f8e65c34f2759cf9ed1d355e93e8f292d35ef9ebdcaad1355418"
+    },
+    {
+      "bytes": 19560,
+      "file": "avito-worker/src/jobs/handlers/scan-account.handler.ts",
+      "sha256": "df6aa84566cf98fd118c2708ccb00bc9d28ba410a1933d2e918b3738782b43a2"
+    },
+    {
+      "bytes": 1663,
+      "file": "avito-worker/src/jobs/job-dispatcher.service.ts",
+      "sha256": "28619a6116bc211928d5d4a0febd766230a4d51730eeb91ad7ef08cc4467e7c0"
+    },
+    {
+      "bytes": 25847,
+      "file": "avito-worker/src/jobs/job-poller.service.ts",
+      "sha256": "e3cdd1f5d9d1491dcc835717f3b6e61ae4e40f3fd3190955eb1096cf332df38b"
+    },
+    {
+      "bytes": 1518,
+      "file": "avito-worker/src/logger/file-logger.ts",
+      "sha256": "c90e42fdc8bfa99df5f9594427b57d6459d7b6d721b4ffb38d1a818e68f7b49d"
+    },
+    {
+      "bytes": 1370,
+      "file": "avito-worker/src/main.ts",
+      "sha256": "129022f5c4efd43b2a0dbe09e50f49fbeca27c440696308890bd72ac75875afe"
+    },
+    {
+      "bytes": 5735,
+      "file": "avito-worker/src/notifications/crm-dto.ts",
+      "sha256": "0a162aebe6c97a8c69214502586440c5e90c0766a515507921a140d49fcfa05e"
+    },
+    {
+      "bytes": 9173,
+      "file": "avito-worker/src/notifications/crm.ts",
+      "sha256": "8bbc660a14fbf4fba7ebf6a7dd440deefbb44f4d66ea94b93b83754c6644c4ca"
+    },
+    {
+      "bytes": 4474,
+      "file": "avito-worker/src/notifications/tg.ts",
+      "sha256": "37829450745b950c55177c5ffb9765e058d28eacafa70c1d9a1f037e10c39a3e"
+    },
+    {
+      "bytes": 3300,
+      "file": "avito-worker/src/playwright/browser-registry.service.ts",
+      "sha256": "14452e985a2408fec57dafa9194b6dcd26ae98a698a47aec57c3171842069875"
+    },
+    {
+      "bytes": 16156,
+      "file": "avito-worker/src/playwright/parse-messenger-dialog.ts",
+      "sha256": "5d723b04a456b1981d00fba4cfab91f47bc30814ff08c2736ae6a27170ba5ebc"
+    },
+    {
+      "bytes": 9936,
+      "file": "avito-worker/src/playwright/parse-messenger-list.ts",
+      "sha256": "45e7ecd3dddbd120ce53c2dd76d1547d1692e5d550cf8a3554a70a7ec7593527"
+    },
+    {
+      "bytes": 2859,
+      "file": "avito-worker/src/playwright/profile-signals-extractor.ts",
+      "sha256": "668559f4617a43159d43ef7ff98f1f685927f85128086717fbe64f95b1639da2"
+    },
+    {
+      "bytes": 7207,
+      "file": "avito-worker/src/playwright/reveal-phone.ts",
+      "sha256": "9eb9c5ec200ad7c4729fa4669b88f0da099d1f92ac0708670a2b5c42b6c44e80"
+    },
+    {
+      "bytes": 5080,
+      "file": "avito-worker/src/playwright/send-chat-message.ts",
+      "sha256": "65ff5f5accb7e4b9e0cd55d0cbf30e34a44ea78c872b07d4296aef5c3cfe1b54"
+    },
+    {
+      "bytes": 2831,
+      "file": "avito-worker/src/playwright/stable-id-extractor.ts",
+      "sha256": "eb81a2ad421115d3154223eff53af6121c330cffee55424cc50696df32dcbc37"
+    },
+    {
+      "bytes": 2242,
+      "file": "avito-worker/src/spike/fs8-verify.ts",
+      "sha256": "628c2ef535f4a9572a6d7e17c5b0bfd06b4edb65c2daf3851532f351eb879cab"
+    },
+    {
+      "bytes": 14197,
+      "file": "avito-worker/src/spike/stable-id-probe.ts",
+      "sha256": "c76d7c443da01c549c78767d56569cf54294878a2f9004757669ecd3343405ba"
+    },
+    {
+      "bytes": 1380,
+      "file": "deploy/nginx/conf.d/default.conf",
+      "sha256": "c08bf78ff83aae69d7607605db0adb6ef8391e22a931b706f367308f820b8a65"
+    },
+    {
+      "bytes": 2350,
+      "file": "deploy/nginx/nginx.conf",
+      "sha256": "a4e93f06d0ccffc4cc11f2563b67ff945333140f6477ae9e11498b738e086bdc"
+    },
+    {
+      "bytes": 1282,
+      "file": "gravity-mvp/prisma/check-driver.ts",
+      "sha256": "935e809464743bd3c9d43694e71cabb9293c027aac9a1726927fe32a8e59aef3"
+    },
+    {
+      "bytes": 16477,
+      "file": "gravity-mvp/prisma/migrations/0_init/migration.sql",
+      "sha256": "b4f1ff9935ecd0ce65f0f167051cbae1b949a0f30bc651754c77aa09a1c7dc4b"
+    },
+    {
+      "bytes": 3754,
+      "file": "gravity-mvp/prisma/migrations/20260315184000_add_unified_messaging/migration.sql",
+      "sha256": "b9b53c05bc8d6d5b81efc4f36ea0bc7bc573a4c9ce1bdc9c9284196c333c4673"
+    },
+    {
+      "bytes": 2241,
+      "file": "gravity-mvp/prisma/migrations/20260328000000_add_system_direction_driver_max_personal_session/migration.sql",
+      "sha256": "2d374e353cf0154be06a4f2789b26518000f129d12fd89d3e3f217ca7ff543eb"
+    },
+    {
+      "bytes": 357,
+      "file": "gravity-mvp/prisma/migrations/20260329000000_add_ai_status/migration.sql",
+      "sha256": "0a1274ba95a261922f9fc450ae9b5d095d2b577399eb9d60ef7335528bc3d9c6"
+    },
+    {
+      "bytes": 4683,
+      "file": "gravity-mvp/prisma/migrations/20260329100000_add_ai_control_center/migration.sql",
+      "sha256": "5a7db01041418363746422115d51808dbf04c78f97e495aaf75c09c6ca5b49f9"
+    },
+    {
+      "bytes": 436,
+      "file": "gravity-mvp/prisma/migrations/20260330000000_add_message_event_log_status/migration.sql",
+      "sha256": "4c0683990d4ad698dbc3aa6f66de4b55d827d01cff4c1fc6772bbd924c83c3d7"
+    },
+    {
+      "bytes": 3282,
+      "file": "gravity-mvp/prisma/migrations/20260403000000_add_task_model/migration.sql",
+      "sha256": "419085b28fb757507a15f9e331d39c25d885331b02a894c2c7fd3e9fb62e33ad"
+    },
+    {
+      "bytes": 5692,
+      "file": "gravity-mvp/prisma/migrations/20260404000000_add_contact_model/migration.sql",
+      "sha256": "430000665535bc3e467f95b4920044f75266e72209823843460c6fb2d78bebca"
+    },
+    {
+      "bytes": 75,
+      "file": "gravity-mvp/prisma/migrations/20260408000000_add_merge_driver_yandex_id/migration.sql",
+      "sha256": "63d9fd87124d46296e282ae19b3cc7ce3ca924da6e95e3d0a4f9180140475140"
+    },
+    {
+      "bytes": 555,
+      "file": "gravity-mvp/prisma/migrations/20260408050000_add_chat_status_drift/migration.sql",
+      "sha256": "9b9689158d60c1d00f28e3dbfad31993232092039f8d0d25b7ef6e77e18e698d"
+    },
+    {
+      "bytes": 1472,
+      "file": "gravity-mvp/prisma/migrations/20260408100000_conversation_workflow/migration.sql",
+      "sha256": "6b624551109e3562d556e43d7ee783751eb5cf9b891f36094ff32592c0fe0289"
+    },
+    {
+      "bytes": 1345,
+      "file": "gravity-mvp/prisma/migrations/20260410000000_add_chat_type_and_group_visibility/migration.sql",
+      "sha256": "0ef5875b4e8d84ff86fce041b803998231da0b589bf9c6c9dc91af46a5249141"
+    },
+    {
+      "bytes": 784,
+      "file": "gravity-mvp/prisma/migrations/20260413000000_add_scenario_fields/migration.sql",
+      "sha256": "425e5536e973708c07efbd914b94e478364f49124e0e2ab4bad56eff9dd5db51"
+    },
+    {
+      "bytes": 323,
+      "file": "gravity-mvp/prisma/migrations/20260413100000_add_crm_user/migration.sql",
+      "sha256": "4431b7b9325c70036cfeef25b142dec49e3e354fa89c878414dbcddc38e5aba9"
+    },
+    {
+      "bytes": 10022,
+      "file": "gravity-mvp/prisma/migrations/20260422000000_baseline_telephony_safety_scenarios/migration.sql",
+      "sha256": "115a9261e5472b262178ada6981053e17c9955e34981c9b0f44835a668e6af81"
+    },
+    {
+      "bytes": 474,
+      "file": "gravity-mvp/prisma/migrations/20260422100000_add_usage_events/migration.sql",
+      "sha256": "8c5dea21dc77d2a7b16455552fbb235523065cd9821df6ee67a76bff5392c2d7"
+    },
+    {
+      "bytes": 9344,
+      "file": "gravity-mvp/prisma/migrations/20260426000000_add_avito_module/migration.sql",
+      "sha256": "466fb7545f0793cb3261244cfff052937735fd473d80ecd40fccaddcc0c1ac8f"
+    },
+    {
+      "bytes": 2133,
+      "file": "gravity-mvp/prisma/migrations/20260426010000_add_avito_lead_intake/migration.sql",
+      "sha256": "c340816ba720ac571636b665e9cdbc85af5e28ad449ab137ad9ff3f84862c610"
+    },
+    {
+      "bytes": 956,
+      "file": "gravity-mvp/prisma/migrations/20260514000000_drop_android_telephony/migration.sql",
+      "sha256": "01042cdd45171426bd1811f23cd882cf658bf6b175818d78749c4aafdda0a8f2"
+    },
+    {
+      "bytes": 2095,
+      "file": "gravity-mvp/prisma/migrations/20260514120000_add_call_model/migration.sql",
+      "sha256": "16816f68d6f320e256d6527d9009115f5d8bb5289e5de20ddb0501ff30c300a3"
+    },
+    {
+      "bytes": 586,
+      "file": "gravity-mvp/prisma/migrations/20260514130000_add_telephony_ai_config/migration.sql",
+      "sha256": "3543378fd36076a58321de77c6c30ed66a76564ec3936c7ac03cc67d0303e9b2"
+    },
+    {
+      "bytes": 383,
+      "file": "gravity-mvp/prisma/migrations/20260514230000_add_message_channel_drift/migration.sql",
+      "sha256": "1cac458f5799853f38e09febaf80964efe5a62751086705028f2fe9a942df02f"
+    },
+    {
+      "bytes": 949,
+      "file": "gravity-mvp/prisma/migrations/20260515000000_remove_yandex_pro_channel/migration.sql",
+      "sha256": "c2c78efecbf3a506d6512e635a981cd5422ec19dd874a3b3e9a5cd42faf5eb40"
+    },
+    {
+      "bytes": 2195,
+      "file": "gravity-mvp/prisma/migrations/20260515180000_add_ai_call_models/migration.sql",
+      "sha256": "3e36bb6a5cc3c51e0854c734c0675ed45e20475fa0c36fffd236075f937bd63e"
+    },
+    {
+      "bytes": 2505,
+      "file": "gravity-mvp/prisma/migrations/20260517000000_add_ai_call_projects/migration.sql",
+      "sha256": "3d2dd6948fe22c60d47bd112e8de1f16f7c2c322757a21808c86d2487a844f58"
+    },
+    {
+      "bytes": 890,
+      "file": "gravity-mvp/prisma/migrations/20260518000000_add_ai_provider_settings/migration.sql",
+      "sha256": "61b56b954e3646f425c76ca28af642557af4fb2bd0394cfe88f4fb3b5f6a18e8"
+    },
+    {
+      "bytes": 1354,
+      "file": "gravity-mvp/prisma/migrations/20260519200000_add_ai_agent_profile/migration.sql",
+      "sha256": "4ba4e07fa398102e1e870d4e72ddadb1307ad15342ce12451c981bfb8b114add"
+    },
+    {
+      "bytes": 722,
+      "file": "gravity-mvp/prisma/migrations/20260520210000_add_cancelled_callstatus/migration.sql",
+      "sha256": "cb78ec0bd95839ad03e052bb06bc81ac024d3354f87986b99dcb4ca2b24c428c"
+    },
+    {
+      "bytes": 732,
+      "file": "gravity-mvp/prisma/migrations/20260520210100_add_temporary_contact_phones/migration.sql",
+      "sha256": "fc60f4bee3b2394eefa5e0bc5c5711cfebc2336f6e1a254d657937ec1658c93c"
+    },
+    {
+      "bytes": 3488,
+      "file": "gravity-mvp/prisma/migrations/20260520213000_add_ai_outcome_layer/migration.sql",
+      "sha256": "51dda8c0a4a8983465b6a857e27ead3a85822dd8003ddc678e58b48cec84d3e9"
+    },
+    {
+      "bytes": 2255,
+      "file": "gravity-mvp/prisma/migrations/20260520220000_add_ai_call_event/migration.sql",
+      "sha256": "a353537e9ac00cb97420d3f68f91415de855420721cb7d9ec460c095bd71cd06"
+    },
+    {
+      "bytes": 743,
+      "file": "gravity-mvp/prisma/migrations/20260520223000_add_stt_suspicious_pattern_event/migration.sql",
+      "sha256": "abbb9abbeeca053ee8059a83981847fd5c9472adf45c959227e546ceebaadf13"
+    },
+    {
+      "bytes": 535,
+      "file": "gravity-mvp/prisma/migrations/20260520230000_add_recovery_attempted_event/migration.sql",
+      "sha256": "b1aa4434d381a5809e9c9acbde76fa180d6af95b0ff9688a479056c7addc8e53"
+    },
+    {
+      "bytes": 620,
+      "file": "gravity-mvp/prisma/migrations/20260520233000_add_scenario_greeting_variants/migration.sql",
+      "sha256": "a27e7d32aa769c4f270f362505de67c55a6e8805ca576cdbe36e27570008eb3a"
+    },
+    {
+      "bytes": 695,
+      "file": "gravity-mvp/prisma/migrations/20260520240000_add_scenario_prompt_fragments/migration.sql",
+      "sha256": "339d50112b2914708451626ba906edf949abcce032faca5451d519430d51b1ed"
+    },
+    {
+      "bytes": 7483,
+      "file": "gravity-mvp/prisma/migrations/20260520250000_add_ai_knowledge_core_foundation/migration.sql",
+      "sha256": "3059245fd0e17e5853539ed0d15a3c92ebb2f4241c97a1d25d70450a16909fd4"
+    },
+    {
+      "bytes": 1893,
+      "file": "gravity-mvp/prisma/migrations/20260520260000_add_extraction_snapshot_fields/migration.sql",
+      "sha256": "9bda07d4fd48ed7c2399c91c8bb0183adc6ffa758cc746125efb30dfbe10ca87"
+    },
+    {
+      "bytes": 1834,
+      "file": "gravity-mvp/prisma/migrations/20260520270000_add_knowledge_audit_log/migration.sql",
+      "sha256": "5b889355e824e48a5c7a55a25bcb90029602bec165e584e32785e190ccdc18bc"
+    },
+    {
+      "bytes": 2894,
+      "file": "gravity-mvp/prisma/migrations/20260520280000_add_retrieval_policy_and_traces/migration.sql",
+      "sha256": "8238d402bd20afd0a770696ae54d9386a2138d203a86fa78dcf7485a6b6bb18b"
+    },
+    {
+      "bytes": 1117,
+      "file": "gravity-mvp/prisma/migrations/20260522000000_add_source_provenance_and_disable/migration.sql",
+      "sha256": "9c76a1c60d3e4d8b89f0b8e18cf3910e3290f3ce6bc6ea1515b3fc0c3f2d4ec9"
+    },
+    {
+      "bytes": 5846,
+      "file": "gravity-mvp/prisma/migrations/20260612000000_sync_schema_drift/migration.sql",
+      "sha256": "f9c8c99b36018c99db922be2da05f50c3939f0646640d6c67aac0eb25bfd2a82"
+    },
+    {
+      "bytes": 233,
+      "file": "gravity-mvp/prisma/migrations/20260616000000_add_park_name_and_active_park/migration.sql",
+      "sha256": "c2e1bbceda04331775b78c452fbe8e9df63caf5eaf26786fd68a159800381dc4"
+    },
+    {
+      "bytes": 127,
+      "file": "gravity-mvp/prisma/migrations/migration_lock.toml",
+      "sha256": "d6bae7899f05da956e1070ba5703455503208ef79e161acb18c93bfe3c6cd236"
+    },
+    {
+      "bytes": 86629,
+      "file": "gravity-mvp/prisma/schema.prisma",
+      "sha256": "64a830b2973bfc685b029ffac0dc887d4f661ccdf4157c00e32b4dbb5067defd"
+    },
+    {
+      "bytes": 12611,
+      "file": "gravity-mvp/src/app/ApiListClient.tsx",
+      "sha256": "e94420c5f1a17649a5e0b6da42f6f5184eea98abe46bf546f1ec4d729f4a2edf"
+    },
+    {
+      "bytes": 12195,
+      "file": "gravity-mvp/src/app/actions.ts",
+      "sha256": "1d3f75ddd688aab89a466a5e69ec875783e8524df6ecb9c9a63207378ed2d31f"
+    },
+    {
+      "bytes": 296,
+      "file": "gravity-mvp/src/app/analytics/active-base/page.tsx",
+      "sha256": "e7532d91abd0a0963cb9e16c8b3d2c7e9f038d6bb28f9652c8c378929b3fcc58"
+    },
+    {
+      "bytes": 293,
+      "file": "gravity-mvp/src/app/analytics/channels/page.tsx",
+      "sha256": "24231c8142b5957d2ff71d4bad05707cfe18be5d51a7ccf173bb6a9d58540ea8"
+    },
+    {
+      "bytes": 290,
+      "file": "gravity-mvp/src/app/analytics/churn/page.tsx",
+      "sha256": "02dd6a147c1eb0ed9eacd1c04f32d0f43ad63db833be87c68c5d2586ec59b60f"
+    },
+    {
+      "bytes": 291,
+      "file": "gravity-mvp/src/app/analytics/funnel/page.tsx",
+      "sha256": "fc07b34d83811322a5858f9057cf75314fcab6688acc56c8a13504763149aa42"
+    },
+    {
+      "bytes": 635,
+      "file": "gravity-mvp/src/app/analytics/page.tsx",
+      "sha256": "d5e83d7c07fe6b3a026d559b35a24143e04139a6a35da24ad096ca5f664f27e2"
+    },
+    {
+      "bytes": 4307,
+      "file": "gravity-mvp/src/app/api/admin/contact-health/route.ts",
+      "sha256": "d36a313b6d534f4c645a4863b71a58db7044d6ea559063ba3e97b61df4436d04"
+    },
+    {
+      "bytes": 5339,
+      "file": "gravity-mvp/src/app/api/admin/reprocess-recordings/route.ts",
+      "sha256": "0ff6a8db60a836003fd5dd03bbd74167d0e02aecd49358dfe01e69ea932dfde2"
+    },
+    {
+      "bytes": 4572,
+      "file": "gravity-mvp/src/app/api/ai-calls/dev-simulate/route.ts",
+      "sha256": "ab1d6bf93feefbb70cd08af39073490fb17692d918e63aaf523309b0b9cd9b1e"
+    },
+    {
+      "bytes": 6865,
+      "file": "gravity-mvp/src/app/api/ai-calls/mock/route.ts",
+      "sha256": "0186d77b55263b39b3e6247570ad1dcdf1c4800ca58be0c352557aee943ac90e"
+    },
+    {
+      "bytes": 16607,
+      "file": "gravity-mvp/src/app/api/ai-calls/sessions/[id]/finalize/route.ts",
+      "sha256": "c5859afe7a4ebeb4a8ebb9057265ac45ce656ae55186ff2ecda479097dc74c62"
+    },
+    {
+      "bytes": 3583,
+      "file": "gravity-mvp/src/app/api/ai-calls/sessions/[id]/state/route.ts",
+      "sha256": "ace89135fb5ec41c89ad3eaa605cd599158d396534155343beb5fa50f40e196d"
+    },
+    {
+      "bytes": 2120,
+      "file": "gravity-mvp/src/app/api/ai-calls/sessions/[id]/transcript-item/route.ts",
+      "sha256": "72b8e50640325822198a7a9f6f4383054aa2451fe885446133f5853011070d19"
+    },
+    {
+      "bytes": 1940,
+      "file": "gravity-mvp/src/app/api/ai-calls/sessions/by-fs-uuid/[fsUuid]/route.ts",
+      "sha256": "8a606e19720846a21f334fd76dd5fb9927f039e5c90c4e3b6b4f10cd6cdddbda"
+    },
+    {
+      "bytes": 7237,
+      "file": "gravity-mvp/src/app/api/ai-calls/start/route.ts",
+      "sha256": "76008c834e6e262aa4131f2e46f1cf36f2de3713774edcf8cdaa12d1f35732e3"
+    },
+    {
+      "bytes": 7821,
+      "file": "gravity-mvp/src/app/api/attachments/[id]/route.ts",
+      "sha256": "162b2ec92073ca82db4d2ad9877881cee2d50450fd7cf9dca2a0b3eb27079866"
+    },
+    {
+      "bytes": 1673,
+      "file": "gravity-mvp/src/app/api/avito/accounts/[id]/acknowledge/route.ts",
+      "sha256": "4a3ce828134411d9f7e0494c2ad44e155b3ed66d2fee97cbce1eb6a12119481d"
+    },
+    {
+      "bytes": 1967,
+      "file": "gravity-mvp/src/app/api/avito/accounts/[id]/check-session/route.ts",
+      "sha256": "25932102309caea54d871a82c1cc4e8d5fa675473f8c05a368f10eed242f729a"
+    },
+    {
+      "bytes": 853,
+      "file": "gravity-mvp/src/app/api/avito/accounts/[id]/collect-responses/route.ts",
+      "sha256": "b301d4653b9e1fa5e7982fb6bed1dacb1cbf5dcb3e35a27e478949c62ecfa305"
+    },
+    {
+      "bytes": 2641,
+      "file": "gravity-mvp/src/app/api/avito/accounts/[id]/context-export/route.ts",
+      "sha256": "99bfff8965cbd4dbc30bfcaf9f41ffc02ebc3dd6c0f5047aa475c9320a941bec"
+    },
+    {
+      "bytes": 2285,
+      "file": "gravity-mvp/src/app/api/avito/accounts/[id]/note/route.ts",
+      "sha256": "a27c2b080ec8d082bbf581dc4f99374855537d9d2c604d94413f4ef91f6ce003"
+    },
+    {
+      "bytes": 1798,
+      "file": "gravity-mvp/src/app/api/avito/accounts/[id]/open-login-window/route.ts",
+      "sha256": "153cfb6456f3e149c0a2fac9c207e5676bcfa2513fdad0f813eaf9c8b1d90290"
+    },
+    {
+      "bytes": 857,
+      "file": "gravity-mvp/src/app/api/avito/accounts/[id]/pause/route.ts",
+      "sha256": "a8ee0c94e9492e8df1d859b5ad7622c53c81ccf6d56f2f0e5aef990bfd3e1600"
+    },
+    {
+      "bytes": 1796,
+      "file": "gravity-mvp/src/app/api/avito/accounts/[id]/reauth-completed/route.ts",
+      "sha256": "d3946d305b64366800bb4f5db118fb526e0a8df061d2522a6dd641a4d9435752"
+    },
+    {
+      "bytes": 946,
+      "file": "gravity-mvp/src/app/api/avito/accounts/[id]/resume/route.ts",
+      "sha256": "c1541d2e55ed99e0e203b683c9381163b6f2c3075b839b3f3f92d43a9bb6f019"
+    },
+    {
+      "bytes": 2702,
+      "file": "gravity-mvp/src/app/api/avito/accounts/[id]/retry/route.ts",
+      "sha256": "5aab37fdfda487b410043bd04c4efc612dc4da1bf51a58d3f3a219c190a716b3"
+    },
+    {
+      "bytes": 2576,
+      "file": "gravity-mvp/src/app/api/avito/accounts/[id]/route.ts",
+      "sha256": "ffbcf329c5dd77023b32a7411cd93e81094297f9eb57298f632f436f2d543180"
+    },
+    {
+      "bytes": 5588,
+      "file": "gravity-mvp/src/app/api/avito/accounts/route.ts",
+      "sha256": "e663a4299d2da4f3a5d7474b60ba3ca275d76552d6c55a3a7fec1fd58410f71e"
+    },
+    {
+      "bytes": 730,
+      "file": "gravity-mvp/src/app/api/avito/activity-log/route.ts",
+      "sha256": "54ccaee5280fb03bc0ca0963a5e9ee4f7dd0b12b967630cfa3e6161e4b2c4c1a"
+    },
+    {
+      "bytes": 1881,
+      "file": "gravity-mvp/src/app/api/avito/responses/[id]/mark-processed/route.ts",
+      "sha256": "f267088658750e7e53682fd7479dbaf546505d1bcdcbfe8b1ac21ab4ce955b4c"
+    },
+    {
+      "bytes": 2147,
+      "file": "gravity-mvp/src/app/api/avito/responses/route.ts",
+      "sha256": "d2049b9e7e7efd9edb68a5d4fe74c64e78fff89f0d2b48b14d6f097e0959b50f"
+    },
+    {
+      "bytes": 5179,
+      "file": "gravity-mvp/src/app/api/avito/settings/route.ts",
+      "sha256": "ac511daa899269a5056a17e816a6c0851c190c26e086b6a88cb69e24200f781c"
+    },
+    {
+      "bytes": 3411,
+      "file": "gravity-mvp/src/app/api/avito/settings/telegram/test/route.ts",
+      "sha256": "aa941af9f3e237790949726a1484b4e1a4f49aceebfcbeadd248ea2000354054"
+    },
+    {
+      "bytes": 2688,
+      "file": "gravity-mvp/src/app/api/bot-link/route.ts",
+      "sha256": "f223751dad9103966de5d85f12226fbbea1aa2d8174f63672bca533f835f702d"
+    },
+    {
+      "bytes": 3612,
+      "file": "gravity-mvp/src/app/api/bot-users/route.ts",
+      "sha256": "46caef15c01be964678661b55f444781d1dc446d38a41921ef8ce40f057a21ba"
+    },
+    {
+      "bytes": 2486,
+      "file": "gravity-mvp/src/app/api/calls/[id]/recording/route.ts",
+      "sha256": "d7e505b043a07ca79c7f383976c97649b1f23d0928353e18d6136e44eb14c502"
+    },
+    {
+      "bytes": 1532,
+      "file": "gravity-mvp/src/app/api/calls/[id]/route.ts",
+      "sha256": "093f957c4bb77894ce1d28f91641586dcfc1b2f9841ec0d0c43d724f656517a0"
+    },
+    {
+      "bytes": 1633,
+      "file": "gravity-mvp/src/app/api/calls/cancel/route.ts",
+      "sha256": "377f5150ce1b4d3e0d29e052f95521f1b5bbaba66203e6ea7c7782dfba1d24e1"
+    },
+    {
+      "bytes": 1442,
+      "file": "gravity-mvp/src/app/api/calls/originate/route.ts",
+      "sha256": "6bbed3d5f0c86c74297b86cf5c11b0f7c9d22d6ad6ed2b99d1fec61df5a86f98"
+    },
+    {
+      "bytes": 1402,
+      "file": "gravity-mvp/src/app/api/calls/route.ts",
+      "sha256": "af6666894120158e0f7e6667f90ddd006b9c54c7a7d296eb6308268ceb51ef65"
+    },
+    {
+      "bytes": 1898,
+      "file": "gravity-mvp/src/app/api/calls/sip-credentials/route.ts",
+      "sha256": "abcb28449a4bf890cf680578d33d56b175719ce6d62af243647b3fe08205a55e"
+    },
+    {
+      "bytes": 12503,
+      "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
+      "sha256": "a9d2ea865f36407f590e2c6e08305f9e7e8b72d9ce8f3ea944cf95cb499a6c51"
+    },
+    {
+      "bytes": 1837,
+      "file": "gravity-mvp/src/app/api/calls/stream/route.ts",
+      "sha256": "ba73b4a27550ee211a786528a38611895a63922b18ddec80ce7442bee92fd0ca"
+    },
+    {
+      "bytes": 2100,
+      "file": "gravity-mvp/src/app/api/channels/accounts/route.ts",
+      "sha256": "6b59d696e71af52ea0ec03a862abce5541aaadff2b0079a2d619d39782a42670"
+    },
+    {
+      "bytes": 6302,
+      "file": "gravity-mvp/src/app/api/channels/check-reachability/route.ts",
+      "sha256": "3f80ed57be5a201535a73bb0368b56403de7ab2294d8af16d3b0c455d0d9a75c"
+    },
+    {
+      "bytes": 810,
+      "file": "gravity-mvp/src/app/api/chats/[id]/assign/route.ts",
+      "sha256": "f7dc14d8cc1981331351e98341921bbb6c74406c5361d116b243cfbc5b5dd855"
+    },
+    {
+      "bytes": 507,
+      "file": "gravity-mvp/src/app/api/chats/[id]/read/route.ts",
+      "sha256": "372c822b1d6df0155133cf5472402db19b26e76a553245a096a7e8d4c015f9cc"
+    },
+    {
+      "bytes": 511,
+      "file": "gravity-mvp/src/app/api/chats/[id]/reopen/route.ts",
+      "sha256": "008dcf468405ecf9639ce9fb4294d316a57077546e07ae6131abb048cf38f131"
+    },
+    {
+      "bytes": 513,
+      "file": "gravity-mvp/src/app/api/chats/[id]/resolve/route.ts",
+      "sha256": "affcb64d293039928a01315fbaa9f16eb239538d6c657b55ad159dc29bd8d9c4"
+    },
+    {
+      "bytes": 515,
+      "file": "gravity-mvp/src/app/api/chats/[id]/unassign/route.ts",
+      "sha256": "d2aaac38b691ec7bdb2d1c0ffbe1012ce973febbd728b75b0042a74037e152a7"
+    },
+    {
+      "bytes": 1965,
+      "file": "gravity-mvp/src/app/api/chats/find-max/route.ts",
+      "sha256": "10debc4a2a745dd9c23f6645aa14cb5037b6fbd15852414744c8a830751c4a05"
+    },
+    {
+      "bytes": 1526,
+      "file": "gravity-mvp/src/app/api/contacts/[id]/channel-status/route.ts",
+      "sha256": "23f5b5dfd37f5d23bc57b55c12cf4747e45af1a1344272f01355297d72df707d"
+    },
+    {
+      "bytes": 5251,
+      "file": "gravity-mvp/src/app/api/contacts/[id]/chats/route.ts",
+      "sha256": "7e912c1ce717d2dde41d968f6e36ffd96d38951a6a7a45df81c206154e4bea9f"
+    },
+    {
+      "bytes": 1464,
+      "file": "gravity-mvp/src/app/api/contacts/[id]/merge-to/[targetId]/route.ts",
+      "sha256": "ceab4210dfb589719b1558e54ab1bfd408f7598881ae7e7d3a0f6027cb84c40a"
+    },
+    {
+      "bytes": 1385,
+      "file": "gravity-mvp/src/app/api/contacts/[id]/merge/route.ts",
+      "sha256": "aef997b91d69ac326015b834471e9beb436c2a23276d766f9be6b42b7275943d"
+    },
+    {
+      "bytes": 2916,
+      "file": "gravity-mvp/src/app/api/contacts/[id]/phones/[phoneId]/route.ts",
+      "sha256": "34f30a8c056e1272c6d05a99e0f1b4079886aa589bef5f2a6330bf46a1eddfe6"
+    },
+    {
+      "bytes": 3327,
+      "file": "gravity-mvp/src/app/api/contacts/[id]/phones/route.ts",
+      "sha256": "f4e8d83a89585f9c9de616f8af88c3534831e3c4010d21e70e647c0b3f49a384"
+    },
+    {
+      "bytes": 7116,
+      "file": "gravity-mvp/src/app/api/contacts/[id]/route.ts",
+      "sha256": "8fe75e80b0c10dcb3b0529f592beb9b59e3f09d7633a3996c68d0cc3533abdf6"
+    },
+    {
+      "bytes": 6845,
+      "file": "gravity-mvp/src/app/api/contacts/search/route.ts",
+      "sha256": "8ef4a6b65795db9f3c4633e5135f391c0926853189d635b13bd15c6647d22282"
+    },
+    {
+      "bytes": 4222,
+      "file": "gravity-mvp/src/app/api/contacts/start-conversation/route.ts",
+      "sha256": "66272650ce03502cbd1230700a3bd574b145e94b9c86745059e766d120a6a556"
+    },
+    {
+      "bytes": 688,
+      "file": "gravity-mvp/src/app/api/cron/auto-close-tasks/route.ts",
+      "sha256": "3764eae8bd4126fb871b50aee91c000fb8529b1f38ead106072c9ff9bb3a5363"
+    },
+    {
+      "bytes": 506,
+      "file": "gravity-mvp/src/app/api/cron/enforce-followup/route.ts",
+      "sha256": "2f07ce824c744c4964fa5f3a480cf141090a29e2383f97311b44517a248e6454"
+    },
+    {
+      "bytes": 482,
+      "file": "gravity-mvp/src/app/api/cron/escalations/route.ts",
+      "sha256": "1973382e3dc6543fb905801b8e7bebf01c45cf64131696c15a35f893c3e760ab"
+    },
+    {
+      "bytes": 539,
+      "file": "gravity-mvp/src/app/api/cron/init-telegram/route.ts",
+      "sha256": "1f1720792c1f19632df260621b3fbfd8e2d8d31f434eb4659ab4f15745391ecf"
+    },
+    {
+      "bytes": 752,
+      "file": "gravity-mvp/src/app/api/cron/pattern-alerts/route.ts",
+      "sha256": "c514f054060216bf569fa9747658199477e9c0fdadaeb71a910a82ac9c67c863"
+    },
+    {
+      "bytes": 499,
+      "file": "gravity-mvp/src/app/api/cron/sla-escalation/route.ts",
+      "sha256": "5d1d728aafb75b77e5d28c1606ee5a315ec3339f98d1147fabfb10033df233b7"
+    },
+    {
+      "bytes": 703,
+      "file": "gravity-mvp/src/app/api/cron/stability-check/route.ts",
+      "sha256": "576993fc737ea9656fed243a1a5e28ec0cae32a8b14d251de37fd4625cd4976a"
+    },
+    {
+      "bytes": 3980,
+      "file": "gravity-mvp/src/app/api/cron/sync-scraper/route.ts",
+      "sha256": "cd3ed8412bb774a84f81e51a133f98216ffd95581a85941a2809dbe98551546d"
+    },
+    {
+      "bytes": 2026,
+      "file": "gravity-mvp/src/app/api/cron/sync-trips/route.ts",
+      "sha256": "d2a0c7f0443cdd733f58c593f6930401d092ac3ecc903e48b919b2138deb6456"
+    },
+    {
+      "bytes": 3808,
+      "file": "gravity-mvp/src/app/api/debug-db/cleanup-chats/route.ts",
+      "sha256": "6b56c35938a46e95050153cb3e98aa43af75d862fa7ccbcf56441104191a891f"
+    },
+    {
+      "bytes": 1017,
+      "file": "gravity-mvp/src/app/api/debug-db/find-message/route.ts",
+      "sha256": "53abb2c514ab579ab20c25906296f2d722146ddeae651f6e1b903fac1d4c1ceb"
+    },
+    {
+      "bytes": 663,
+      "file": "gravity-mvp/src/app/api/debug-db/force-sync/route.ts",
+      "sha256": "0bb4910561d57acb7415ee1eb82631ac807f199871d7ab90be2807346e38a055"
+    },
+    {
+      "bytes": 679,
+      "file": "gravity-mvp/src/app/api/debug-db/init-connection/route.ts",
+      "sha256": "de24bc68fda4b1bd6f1e08de7db91d65d8f4f57121917259b4be805d30a63173"
+    },
+    {
+      "bytes": 862,
+      "file": "gravity-mvp/src/app/api/debug-db/list-all-chats/route.ts",
+      "sha256": "fcf0c0b4d89a0cb1684251723d13d5e34b3836d9afecb2beefb64c8eb97c0d26"
+    },
+    {
+      "bytes": 410,
+      "file": "gravity-mvp/src/app/api/debug-db/list-connections/route.ts",
+      "sha256": "c08d0f384dedcd692b82d5717686287eff2c3d61328a2c26dfdb92fe917bd512"
+    },
+    {
+      "bytes": 795,
+      "file": "gravity-mvp/src/app/api/debug-db/route.ts",
+      "sha256": "b8e00a6ef135d0c31e038eca216d25c4d070352eaf944c42f2c91c0f7f110001"
+    },
+    {
+      "bytes": 888,
+      "file": "gravity-mvp/src/app/api/debug-db/tg-import/route.ts",
+      "sha256": "143f6e4a58ae363ecf993f113822ef7db4442343cf4818a3999e46cb1ca141ea"
+    },
+    {
+      "bytes": 2977,
+      "file": "gravity-mvp/src/app/api/debug-db/wa-diag/route.ts",
+      "sha256": "a369558257d9e77b5f4d4af4890a9a4d52b1d0ee08075dd9a776a2501dc1d2b2"
+    },
+    {
+      "bytes": 5504,
+      "file": "gravity-mvp/src/app/api/debug-db/wa-store/route.ts",
+      "sha256": "74c27afb5e85b201dd2b0b7c7865ba7fded16a022fbe43f9e5cb8e434ae44629"
+    },
+    {
+      "bytes": 2177,
+      "file": "gravity-mvp/src/app/api/drivers-search/route.ts",
+      "sha256": "c4d9c263f9f93fe88bc6ccb8af5329af88181f27219473369b5184a4883dabb5"
+    },
+    {
+      "bytes": 2067,
+      "file": "gravity-mvp/src/app/api/groups/visibility/route.ts",
+      "sha256": "50b8f8dc7b005b95f21b83d25162e7df1b87a3d468337bbfd4d6f2678fc5a76c"
+    },
+    {
+      "bytes": 2241,
+      "file": "gravity-mvp/src/app/api/health/infra/route.ts",
+      "sha256": "f660fb96ee2070b442260c69897ab0e003a6ac984f24a5fdc67c683cc073b0a6"
+    },
+    {
+      "bytes": 11349,
+      "file": "gravity-mvp/src/app/api/health/route.ts",
+      "sha256": "c6922df8b0f4782f8150acc34e756d577dfc10312104429295569c488fff7f71"
+    },
+    {
+      "bytes": 2981,
+      "file": "gravity-mvp/src/app/api/import-jobs/[id]/route.ts",
+      "sha256": "b7617752a87265a5293d5a6004bc681a4e2a1e8a37813383e0a2a3f9b8ea07e7"
+    },
+    {
+      "bytes": 4361,
+      "file": "gravity-mvp/src/app/api/internal/ai-call-keys/route.ts",
+      "sha256": "715c91ad2e76ad33296d46a80afefc23ba7ef8ef26d540609d4b794a6f679d61"
+    },
+    {
+      "bytes": 2647,
+      "file": "gravity-mvp/src/app/api/leads/new/metrics/route.ts",
+      "sha256": "4863dd452116014150f0fe78859ff09e95448b1fb65d5104634759348dfbd25d"
+    },
+    {
+      "bytes": 3769,
+      "file": "gravity-mvp/src/app/api/leads/new/route.ts",
+      "sha256": "ee858f59930ac0c154b2c819eeefc62df1ba8bc0f86e8f80a289e62f3f9bcd59"
+    },
+    {
+      "bytes": 4532,
+      "file": "gravity-mvp/src/app/api/leads/sync/route.ts",
+      "sha256": "4b7cc317a68cfb825ee94e48884cf14a3b0a767fb894b9924ab47e11f9412243"
+    },
+    {
+      "bytes": 841,
+      "file": "gravity-mvp/src/app/api/max-scraper/import-progress/route.ts",
+      "sha256": "791289b34f165f42e098611b9fa2ede2a4f7ddfd5055c724356eff166400b1db"
+    },
+    {
+      "bytes": 951,
+      "file": "gravity-mvp/src/app/api/max-scraper/qr/route.ts",
+      "sha256": "d281f2955d42253a40cd3fb630a55381d99c4e2614e4cb27f08bbd7b0db8b766"
+    },
+    {
+      "bytes": 852,
+      "file": "gravity-mvp/src/app/api/max-scraper/restart/route.ts",
+      "sha256": "881f6fb02d99cb3da61f0b906ac634a69330fa510e737195923e9e4dd9328ea5"
+    },
+    {
+      "bytes": 1066,
+      "file": "gravity-mvp/src/app/api/max-scraper/status/route.ts",
+      "sha256": "063626f2002a9f022b839efe9c176059f79ffa4502bb2f271de67e9ff5bfdd64"
+    },
+    {
+      "bytes": 1222,
+      "file": "gravity-mvp/src/app/api/messages/conversations/route.ts",
+      "sha256": "1f6c7234d057a7bf52255790b81ee0208be5d10c896f0c4c2da7689d1f27f0e5"
+    },
+    {
+      "bytes": 1938,
+      "file": "gravity-mvp/src/app/api/messages/delete/route.ts",
+      "sha256": "dbbe2d5122503721f4f2af49387c89aade48a19dcf37b6956853565258f5cbc1"
+    },
+    {
+      "bytes": 2281,
+      "file": "gravity-mvp/src/app/api/messages/drivers/[id]/channels/route.ts",
+      "sha256": "a8be804ea8cb6eeb3bc4500aaf9990cbde667a070d2965693d08ffe9f5c24860"
+    },
+    {
+      "bytes": 1819,
+      "file": "gravity-mvp/src/app/api/messages/drivers/search/route.ts",
+      "sha256": "8384bd08b50d8dc5afa8f6b8eeaf2b1bc3de51349cd398b4fc3857ef872609ee"
+    },
+    {
+      "bytes": 2738,
+      "file": "gravity-mvp/src/app/api/messages/profiles/route.ts",
+      "sha256": "95f28c3f3f8ce418609840df23ba6df4919884bf7ccd9df0d27116a6c28b5c86"
+    },
+    {
+      "bytes": 8055,
+      "file": "gravity-mvp/src/app/api/messages/reaction/route.ts",
+      "sha256": "89497868380f8f502e87d94c831cd35cc29e0b3427104d475a8a69f41e9d18ab"
+    },
+    {
+      "bytes": 1518,
+      "file": "gravity-mvp/src/app/api/messages/route.ts",
+      "sha256": "202cce83c5b5052fcfa54a1f6df6eddfbbc405aa043207c43f090e3e8aa6ddea"
+    },
+    {
+      "bytes": 2633,
+      "file": "gravity-mvp/src/app/api/messages/send-image/route.ts",
+      "sha256": "bdc65c6383c2a309033d6858f42f69f735354f989dc295a50fcae57067d32b5a"
+    },
+    {
+      "bytes": 9936,
+      "file": "gravity-mvp/src/app/api/messages/send-media/route.ts",
+      "sha256": "20c2d7916d9d61e995196b45c4793c472c8275a21c9e65718d57589fec0f3e66"
+    },
+    {
+      "bytes": 4047,
+      "file": "gravity-mvp/src/app/api/messages/start-chat/route.ts",
+      "sha256": "26c3e78980e9b3b070fb174fb9e4536e347d19d6488eb77a650c3f2d3ddfd537"
+    },
+    {
+      "bytes": 2931,
+      "file": "gravity-mvp/src/app/api/messages/stream/[chatId]/route.ts",
+      "sha256": "1d33c4aadff0344c7392e65c25d57f6b4e6e7ecf50b5fc99ef6dfda95cd229a2"
+    },
+    {
+      "bytes": 1137,
+      "file": "gravity-mvp/src/app/api/monitoring/attention/[id]/route.ts",
+      "sha256": "e91c457da0395674c4f9c7d7d8c48239dcdda1b1fe61df6feeeb7afcadec1db9"
+    },
+    {
+      "bytes": 1333,
+      "file": "gravity-mvp/src/app/api/monitoring/attention/route.ts",
+      "sha256": "da1875574dbba02b04191b0cdedc9d9e3ca0fe39cb7c3ad113a129baf72bf696"
+    },
+    {
+      "bytes": 1663,
+      "file": "gravity-mvp/src/app/api/monitoring/drivers/[id]/attention/route.ts",
+      "sha256": "a46ce59c35b316485bf3a3ecc14fcbe607dafa1d67b6cd579f356fb40dd75221"
+    },
+    {
+      "bytes": 1342,
+      "file": "gravity-mvp/src/app/api/monitoring/drivers/[id]/event/route.ts",
+      "sha256": "f053a0fcfe4a552c985dd705c5f5c3d6d8968f5697aed4e44d13af158d18e029"
+    },
+    {
+      "bytes": 950,
+      "file": "gravity-mvp/src/app/api/monitoring/drivers/[id]/events/route.ts",
+      "sha256": "7dc2cead7bdea79dfef6c30e0cb2ced5c6946590aef30fbb66955b0b3ea7caa2"
+    },
+    {
+      "bytes": 5167,
+      "file": "gravity-mvp/src/app/api/monitoring/drivers/[id]/fleet-check/route.ts",
+      "sha256": "8c08da5536bd0711ec1ecb95c78fc60524c137c57210e7b70ff1e94b8df1138f"
+    },
+    {
+      "bytes": 4145,
+      "file": "gravity-mvp/src/app/api/monitoring/drivers/route.ts",
+      "sha256": "294a37d0f26e9beb20709348150476af98ce3ebdd99bede692aefebe4bdbc537"
+    },
+    {
+      "bytes": 3157,
+      "file": "gravity-mvp/src/app/api/monitoring/fleet-check/callback/route.ts",
+      "sha256": "d8ab599b3329e2f4e4294415222444443d7372703c2b95036f5b78846e6aa14a"
+    },
+    {
+      "bytes": 1775,
+      "file": "gravity-mvp/src/app/api/monitoring/guardrails/route.ts",
+      "sha256": "9e50cee0c768bd9b9b96bff20d333cec0998001573d2a36c646a2fbd5355e4ba"
+    },
+    {
+      "bytes": 1502,
+      "file": "gravity-mvp/src/app/api/monitoring/stability/route.ts",
+      "sha256": "bd62a09080ea781836abd3dc6ab001c3b96194a1ce0395f155de8e0584d22399"
+    },
+    {
+      "bytes": 20895,
+      "file": "gravity-mvp/src/app/api/monitoring/sync/route.ts",
+      "sha256": "d0edc13dba2482aebb09e1a3006be66ddda87b7af684f6c5ebf1cb3e53273a32"
+    },
+    {
+      "bytes": 5082,
+      "file": "gravity-mvp/src/app/api/settings/ai-call-keys/route.ts",
+      "sha256": "b3edffa5ec8183ab42e7efccd4f8cd0d5410c4415ddad24142d6830fe6fea53f"
+    },
+    {
+      "bytes": 7011,
+      "file": "gravity-mvp/src/app/api/settings/ai-call-keys/test/route.ts",
+      "sha256": "1ad15ce6ceb941da5d302a1f3120341ffc133e1168a26c69b3901c8d9f85dace"
+    },
+    {
+      "bytes": 898,
+      "file": "gravity-mvp/src/app/api/settings/ai-call-projects/route.ts",
+      "sha256": "64c8fa7abcf8d5e65d353e8f7d0520a17b675ecc4706ccab9970eddbd2db8e63"
+    },
+    {
+      "bytes": 3420,
+      "file": "gravity-mvp/src/app/api/settings/ai-call-scenarios/[id]/route.ts",
+      "sha256": "a43959f092e7fdd4bfa77f92b42cf54049ae84bf84511925c888efd25ef96c47"
+    },
+    {
+      "bytes": 2848,
+      "file": "gravity-mvp/src/app/api/settings/ai-call-scenarios/route.ts",
+      "sha256": "cd631109b736a700b6562f49c5db99f8e0724932740885437c5864579fea2215"
+    },
+    {
+      "bytes": 3957,
+      "file": "gravity-mvp/src/app/api/settings/telephony-ai/route.ts",
+      "sha256": "65e2139a78a309b24099e93ba1e163bfc335fc4d75d96d463b9443dd17c4a9f1"
+    },
+    {
+      "bytes": 8136,
+      "file": "gravity-mvp/src/app/api/settings/telephony-connection/route.ts",
+      "sha256": "9b4a2e1c5979e00086327867191b70abc2b7d591a2c8f82bfd34e6011e942fb8"
+    },
+    {
+      "bytes": 5932,
+      "file": "gravity-mvp/src/app/api/settings/telephony-status/route.ts",
+      "sha256": "1ede92769b1aee07586e8dfcdf200fbf7e47d883077cc2e199856e5793261c92"
+    },
+    {
+      "bytes": 1205,
+      "file": "gravity-mvp/src/app/api/tasks/bulk-care/route.ts",
+      "sha256": "79d1dab1999d1e1a9a7c46803f372c57b35a6f586f6b8cb0f56d5e300c12707a"
+    },
+    {
+      "bytes": 1245,
+      "file": "gravity-mvp/src/app/api/tasks/reassign/route.ts",
+      "sha256": "d5f8b2ca367b7049568f7435d220c113edf968a1dedf116469734fe7b9f0f3d1"
+    },
+    {
+      "bytes": 1319,
+      "file": "gravity-mvp/src/app/api/tasks/resolve-escalation/route.ts",
+      "sha256": "b7fccd9f96e8baab734951e4fcdc7bc54d1526f11bd39482f4d931bb06f2f7c0"
+    },
+    {
+      "bytes": 3096,
+      "file": "gravity-mvp/src/app/api/test-car/route.ts",
+      "sha256": "2308e2711bee2571f63df20b959ee0643fefcac4e6d07826332563b861efdc59"
+    },
+    {
+      "bytes": 2718,
+      "file": "gravity-mvp/src/app/api/test-driver/route.ts",
+      "sha256": "3edcac46619d796bb44dc7ded7bf960b27c60b06d5a5c1d0a4cd51690f1aaa77"
+    },
+    {
+      "bytes": 5195,
+      "file": "gravity-mvp/src/app/api/tg-media/[fileId]/route.ts",
+      "sha256": "817330803b7cf0cb8cc4008273f6132ac29bcfe4ed97a906419118277f07869e"
+    },
+    {
+      "bytes": 1295,
+      "file": "gravity-mvp/src/app/api/transport/health/route.ts",
+      "sha256": "02b7c71aed5741c2b58be283591c51c0f4657ee81716aaf105e8fcbc720ab0b5"
+    },
+    {
+      "bytes": 2523,
+      "file": "gravity-mvp/src/app/api/webhook/max/reaction/route.ts",
+      "sha256": "4ebfe1d2300b3938c6b96e137f982a708af0d63835b50c43d98b3ba8cb422220"
+    },
+    {
+      "bytes": 12068,
+      "file": "gravity-mvp/src/app/api/webhook/max/route.ts",
+      "sha256": "284c3d0f463d01eacc945ddb677b88fa14d6f6b815bb055b4405b9cc323b17f8"
+    },
+    {
+      "bytes": 4250,
+      "file": "gravity-mvp/src/app/api/webhook/max/sync-names/route.ts",
+      "sha256": "ece9cacb4fc2af7e63c674f6fd7b07cbafa14d260f3460b1d68c7bf1382a3558"
+    },
+    {
+      "bytes": 1722,
+      "file": "gravity-mvp/src/app/api/webhook/max/unlinked-chats/route.ts",
+      "sha256": "ae1c0736c7e8b4363cbebb8545e3e3b4f954f2ca284c27a939ac256d133f992f"
+    },
+    {
+      "bytes": 18765,
+      "file": "gravity-mvp/src/app/api/webhook/telegram/route.ts",
+      "sha256": "5ea442a08bf584083c80094a7b7a8f69beddc56c8cb1965fb66e07a3277e33d6"
+    },
+    {
+      "bytes": 7665,
+      "file": "gravity-mvp/src/app/api/webhooks/avito/route.ts",
+      "sha256": "2772ba2c0be2cb271e5da224aa21aa754de045f4803441ef3a892dbc84b2a4f5"
+    },
+    {
+      "bytes": 41419,
+      "file": "gravity-mvp/src/app/api/webhooks/bot/route.ts",
+      "sha256": "25bf678220787cde4b4dd5b3723bfc44bad56ce530e726be1e10a0349b4bbcf3"
+    },
+    {
+      "bytes": 24462,
+      "file": "gravity-mvp/src/app/api/webhooks/max/route.ts",
+      "sha256": "6798e7a275d8957edb5894d4f3056a6dda48475df603d71b705790697331c267"
+    },
+    {
+      "bytes": 1494,
+      "file": "gravity-mvp/src/app/api/whatsapp/delete/route.ts",
+      "sha256": "9ea412c437e27ce34b9a5df93ad81c61192e892e93c589180432b79d6038d403"
+    },
+    {
+      "bytes": 19016,
+      "file": "gravity-mvp/src/app/calls/[id]/CallDetailClient.tsx",
+      "sha256": "a9b257b3e9a6439a44327e117d147a1c71fc5e47dc6043440186176eff263891"
+    },
+    {
+      "bytes": 2224,
+      "file": "gravity-mvp/src/app/calls/[id]/page.tsx",
+      "sha256": "c597aa2e7a902cec12db8d5e72680ab8be735d8e44a3ad3200dddfed0642f10e"
+    },
+    {
+      "bytes": 657,
+      "file": "gravity-mvp/src/app/calls/page.tsx",
+      "sha256": "40d321d9515297d484a8263f5f1133e496f79dcd6ad1d8e90d21386549ce16a4"
+    },
+    {
+      "bytes": 19409,
+      "file": "gravity-mvp/src/app/calls/stats/CallsStatsClient.tsx",
+      "sha256": "a5bbe41749fd5518f9776f808cbb0df38a46648c49b1f09bd5d165539a206bf9"
+    },
+    {
+      "bytes": 1393,
+      "file": "gravity-mvp/src/app/calls/stats/page.tsx",
+      "sha256": "2c98ec858ddd3d5a44eafc979248e057a6604414f0275d16fe06fe68bb89400e"
+    },
+    {
+      "bytes": 288,
+      "file": "gravity-mvp/src/app/communications/auto-messages/page.tsx",
+      "sha256": "cb173a865143ec5d05f2a492d3a3ec2e2625b8001b7c341babeddc8dfce8fa92"
+    },
+    {
+      "bytes": 378,
+      "file": "gravity-mvp/src/app/communications/page.tsx",
+      "sha256": "48885517028bf39bc2a71aa47151744fc6267856416c3397e861dae02dfc6e9d"
+    },
+    {
+      "bytes": 288,
+      "file": "gravity-mvp/src/app/communications/templates/page.tsx",
+      "sha256": "0a46e79f9bc952270b635466c95ae20c521b8c07b1c69ecf98493c2f133db2df"
+    },
+    {
+      "bytes": 292,
+      "file": "gravity-mvp/src/app/control/attention/page.tsx",
+      "sha256": "9af5ea775ab116d9374f2300f4d3e14e2f33461ac340a802f4e35dbec5965d1f"
+    },
+    {
+      "bytes": 293,
+      "file": "gravity-mvp/src/app/control/churn-risk/page.tsx",
+      "sha256": "3bf314795add5f6dfe1bda6e4ca40f1831da1dbb903f19edd606f26121ec5032"
+    },
+    {
+      "bytes": 294,
+      "file": "gravity-mvp/src/app/control/launch-risk/page.tsx",
+      "sha256": "92d5dbe9d75f2822a46f872d18ac0e0d928650d1525c014d4c87e958f818056e"
+    },
+    {
+      "bytes": 292,
+      "file": "gravity-mvp/src/app/control/no-orders/page.tsx",
+      "sha256": "13f18e8195ac08fa9824ae9b16ea2bcb7b5886a517197665e5d0021b92feb55d"
+    },
+    {
+      "bytes": 9264,
+      "file": "gravity-mvp/src/app/dashboard/actions.ts",
+      "sha256": "6818e943313b3b5a30daf656a8c7e0c9227f283f757a409086b7aeb60c41baa9"
+    },
+    {
+      "bytes": 2377,
+      "file": "gravity-mvp/src/app/dashboard/components/DashboardCard.tsx",
+      "sha256": "ca969b9baa95dccbccfa4b746c37af8281a110418b061b4c30811891ee6c3735"
+    },
+    {
+      "bytes": 2699,
+      "file": "gravity-mvp/src/app/dashboard/components/DashboardKPI.tsx",
+      "sha256": "2569d87b2792551ba637313a3d743b7896a062872c8216bdf2b7a8a7cb1d43c3"
+    },
+    {
+      "bytes": 2698,
+      "file": "gravity-mvp/src/app/dashboard/components/ParkHeatmap.tsx",
+      "sha256": "5a949901ce4048cc7129c3a23bc9ae0590380f22d253fdfa458424db9e15a88e"
+    },
+    {
+      "bytes": 3315,
+      "file": "gravity-mvp/src/app/dashboard/components/PromotionTable.tsx",
+      "sha256": "999871b21b5f8df447c1e8c8e9a16e600ec5a725791d55f365d1a4fa909b0045"
+    },
+    {
+      "bytes": 5330,
+      "file": "gravity-mvp/src/app/dashboard/components/RiskDriversTable.tsx",
+      "sha256": "1cd9c01e7263fe69cf0e1d00fbccbd244b749467dacd6a27d5dad6d35c3bbeec"
+    },
+    {
+      "bytes": 3198,
+      "file": "gravity-mvp/src/app/dashboard/components/SegmentChart.tsx",
+      "sha256": "26b1fd3b85fb1a39ce50102e5dd6f51a9b3b7a68f73a5b0857c4ddaea8fbb9ab"
+    },
+    {
+      "bytes": 2873,
+      "file": "gravity-mvp/src/app/dashboard/components/TripsChart.tsx",
+      "sha256": "14c1afc35f8b4cf3defcbb37c1701825b0ace6c4c32099a378c8f03aac4dfcdc"
+    },
+    {
+      "bytes": 41970,
+      "file": "gravity-mvp/src/app/drivers/DriversClient.tsx",
+      "sha256": "7fba693d54bbad5c429d37ed311fb12ed1ae07f71a083c63491c572997c1e5dc"
+    },
+    {
+      "bytes": 12122,
+      "file": "gravity-mvp/src/app/drivers/[id]/DriverTimeline.tsx",
+      "sha256": "f0544e650717b5b6b286ecc283b46a3afff06fd03ec6f0324cfa0623b00b2274"
+    },
+    {
+      "bytes": 4209,
+      "file": "gravity-mvp/src/app/drivers/[id]/TelegramLinkClient.tsx",
+      "sha256": "e2be8e2e0363ce41b00abc21e8f8d07f34915bda7c2b82dc52b0c522a540055d"
+    },
+    {
+      "bytes": 2428,
+      "file": "gravity-mvp/src/app/drivers/[id]/actions.ts",
+      "sha256": "f4f5b11767b29c2f509a95bd797e945511abb8f2b6002ffece15030c74215aaf"
+    },
+    {
+      "bytes": 14998,
+      "file": "gravity-mvp/src/app/drivers/[id]/page.tsx",
+      "sha256": "ca55c43e4bf5f9e4307d44e0e1a388b92d58d90ba153815d3f973156c1e05529"
+    },
+    {
+      "bytes": 1514,
+      "file": "gravity-mvp/src/app/drivers/[id]/timeline-actions.ts",
+      "sha256": "efb03d45031864ee24ebfd4d2a39ed296320dda746521e5be9725123bb4e8f2e"
+    },
+    {
+      "bytes": 26822,
+      "file": "gravity-mvp/src/app/drivers/actions.ts",
+      "sha256": "ebcf7d309cf4c468a173b41974189c81dd085a0760cb15d113d3757f16690512"
+    },
+    {
+      "bytes": 18194,
+      "file": "gravity-mvp/src/app/drivers/archive/ArchiveClient.tsx",
+      "sha256": "1d06c1364ff88f4463207840b6b4c0da50d2896f0cba2f318c9d1334ad1a6288"
+    },
+    {
+      "bytes": 282,
+      "file": "gravity-mvp/src/app/drivers/archive/page.tsx",
+      "sha256": "9417921ea855dce0db2eebf4ac72f68de8935dc1c636a39f02422b512fdcec18"
+    },
+    {
+      "bytes": 17159,
+      "file": "gravity-mvp/src/app/drivers/cards/CardsClient.tsx",
+      "sha256": "29bdcafcfb2997c2f9f99861bf0ccb5f27bb880cf70bafd94f035d9f418d0f3b"
+    },
+    {
+      "bytes": 280,
+      "file": "gravity-mvp/src/app/drivers/cards/page.tsx",
+      "sha256": "b240612a0c73e8968ae2c12b1c9aafea0f3e6f9e68ef045da59d9a27e9bfdf6a"
+    },
+    {
+      "bytes": 4230,
+      "file": "gravity-mvp/src/app/drivers/components/ActivityCell.tsx",
+      "sha256": "7345cc6eaf11ac99bb6d451178541820663342d4c522e7a4ed0d0fb6f01de599"
+    },
+    {
+      "bytes": 1016,
+      "file": "gravity-mvp/src/app/drivers/components/ActivityGrid.tsx",
+      "sha256": "332841ae01c030b880157288a13154fc243e7d6acab346087b56df2a0fecd9c0"
+    },
+    {
+      "bytes": 8900,
+      "file": "gravity-mvp/src/app/drivers/components/CustomDateRangePicker.tsx",
+      "sha256": "33103f248f10fa60ca0362ce83a20b80695a9887e81727ec474c38cf75f91faa"
+    },
+    {
+      "bytes": 4827,
+      "file": "gravity-mvp/src/app/drivers/components/DriverCard.tsx",
+      "sha256": "374e5ce3bd8347c75f33671e4de57145676f42045fb73569a65de67448115db7"
+    },
+    {
+      "bytes": 3309,
+      "file": "gravity-mvp/src/app/drivers/components/DriverCardGrid.tsx",
+      "sha256": "6f32058a86de3da343f62d224f541ac2f563fbcd6e66c9a4b9d5b9039603830a"
+    },
+    {
+      "bytes": 10215,
+      "file": "gravity-mvp/src/app/drivers/components/DriverFilters.tsx",
+      "sha256": "8b86ba0a77a298c135459121b1e82997ddea669b5f45c181c99e07881ee4dba2"
+    },
+    {
+      "bytes": 1347,
+      "file": "gravity-mvp/src/app/drivers/components/DriverScoreBar.tsx",
+      "sha256": "6e5a12303b96d0758faf400c97c3200339a20a583d20cda708dc4260d5151de9"
+    },
+    {
+      "bytes": 770,
+      "file": "gravity-mvp/src/app/drivers/components/ScoringDot.tsx",
+      "sha256": "6521af9b04ebc1cc8fc5e73874b523c49bf9a3a1dc831399d548a3a45672010e"
+    },
+    {
+      "bytes": 1080,
+      "file": "gravity-mvp/src/app/drivers/components/SegmentBadge.tsx",
+      "sha256": "c4ff566d646a3841b1e72f9a2305ce8598b8acd96081fd132a18b7e2fbb4a134"
+    },
+    {
+      "bytes": 3174,
+      "file": "gravity-mvp/src/app/drivers/components/SegmentCards.tsx",
+      "sha256": "921be8c906adcfafe06f45ff514c5b60f22127d43d01fb8fe190e5e95e1b05d7"
+    },
+    {
+      "bytes": 14970,
+      "file": "gravity-mvp/src/app/drivers/components/SegmentationSettings.tsx",
+      "sha256": "f4cdb5a18c93973e1b231bb67e894c3996f34796e17ddcd4cbb0469bcb2545bd"
+    },
+    {
+      "bytes": 7641,
+      "file": "gravity-mvp/src/app/drivers/components/YandexSyncControl.tsx",
+      "sha256": "734ead0971485a02f4d4474c4b26526b24bf6d04a718a15fa50be21085940a0b"
+    },
+    {
+      "bytes": 2345,
+      "file": "gravity-mvp/src/app/drivers/page.tsx",
+      "sha256": "dde0df5b8389b44acdb0cdcd6f728b08edfecd1ffb1e7cef750e70345eaeb8b7"
+    },
+    {
+      "bytes": 3798,
+      "file": "gravity-mvp/src/app/drivers/segmentation-actions.ts",
+      "sha256": "a850ca1bd98be5ff342eaf83dde56443e65be46cf64a6761dc785ed06f88adf2"
+    },
+    {
+      "bytes": 4711,
+      "file": "gravity-mvp/src/app/globals.css",
+      "sha256": "d88b08c291a05d012af4b24d68816a7704a96d76a70959dce89b22d06101305d"
+    },
+    {
+      "bytes": 13022,
+      "file": "gravity-mvp/src/app/inbox/InboxClient.tsx",
+      "sha256": "ce811f22a0383d68f414c14b84f33372c9b45624ae5090c1cc6000b2d6098ea6"
+    },
+    {
+      "bytes": 3882,
+      "file": "gravity-mvp/src/app/inbox/actions.ts",
+      "sha256": "e2f1213aac2e364d732e9cbe9c004c69584f7be175e329c695776b5ffe51c620"
+    },
+    {
+      "bytes": 1307,
+      "file": "gravity-mvp/src/app/inbox/page.tsx",
+      "sha256": "fbae0e52f49691efaad200569df57d2fe9b147131d6f87c1cecd545790dc71c6"
+    },
+    {
+      "bytes": 2079,
+      "file": "gravity-mvp/src/app/layout.tsx",
+      "sha256": "5ca93d01f456f82b4c7b86764b99c1a942120823b299580de55fbaaab36195ec"
+    },
+    {
+      "bytes": 290,
+      "file": "gravity-mvp/src/app/leads/connected/page.tsx",
+      "sha256": "5034cc3791810e44e9c19ca23815e9cdc8cc82f76293aef43e328cede228f30c"
+    },
+    {
+      "bytes": 292,
+      "file": "gravity-mvp/src/app/leads/in-progress/page.tsx",
+      "sha256": "efe0baced4121ed7d725e82c71655b285510afa957fe3a776d48252391167b4c"
+    },
+    {
+      "bytes": 23060,
+      "file": "gravity-mvp/src/app/leads/new/page.tsx",
+      "sha256": "33361bf70db366e9452f1468bfc4b4163cdca0b1657de1db183c6358998667d0"
+    },
+    {
+      "bytes": 290,
+      "file": "gravity-mvp/src/app/leads/no-orders/page.tsx",
+      "sha256": "113dcdf1908d2ad2b2b27c6628fdfcb4ded2ffc75837533a4034ce00eb7d43b0"
+    },
+    {
+      "bytes": 353,
+      "file": "gravity-mvp/src/app/leads/page.tsx",
+      "sha256": "40f80f135ed1582657f7e3f01ba672fc36bb7069b390141aebcb15e971b01631"
+    },
+    {
+      "bytes": 2318,
+      "file": "gravity-mvp/src/app/login/page.tsx",
+      "sha256": "c29241d7654dc11608798ea38da295a5be2c80d504e545d2401ee776ffe36c7e"
+    },
+    {
+      "bytes": 3114,
+      "file": "gravity-mvp/src/app/logs/page.tsx",
+      "sha256": "8f7d695dc4374eef724952451e85bee1312856e9842fa0f7be8aa95006e11f78"
+    },
+    {
+      "bytes": 1699,
+      "file": "gravity-mvp/src/app/map/page.tsx",
+      "sha256": "2835ce8f3ca3886f930d683ec1cbc096b61e12acbb4e2bc0b78ee9f90f64aad1"
+    },
+    {
+      "bytes": 10916,
+      "file": "gravity-mvp/src/app/max-actions.ts",
+      "sha256": "1e57f361e10625858c0724dec230ada8103c0a6ded46de2a653eab83dd338756"
+    },
+    {
+      "bytes": 18185,
+      "file": "gravity-mvp/src/app/messages/components/AiCoachModal.tsx",
+      "sha256": "8a0e5976ed61a974bf8b3497339565a4b617a291c299ca3c51df6564bc7d8da9"
+    },
+    {
+      "bytes": 2964,
+      "file": "gravity-mvp/src/app/messages/components/AiInternToggle.tsx",
+      "sha256": "9aa08c4b093c6ad5bad54e2ad7ba7dc49f7b03a30ae0491d4d835ed4d514ca83"
+    },
+    {
+      "bytes": 10344,
+      "file": "gravity-mvp/src/app/messages/components/AiProposedReplyBubble.tsx",
+      "sha256": "86649b2a5774712c77bb1a198268e0c539b7de72defe13e31fbfcadce1d18e59"
+    },
+    {
+      "bytes": 17363,
+      "file": "gravity-mvp/src/app/messages/components/CallDetailDrawer.tsx",
+      "sha256": "4b50ca9aa9d62e05bde4ad633af4bbd46d8c005da93d4257faf74ae9d41684a7"
+    },
+    {
+      "bytes": 10934,
+      "file": "gravity-mvp/src/app/messages/components/ChatChannelTabs.tsx",
+      "sha256": "3abdd2344e6b6bf0139965e38fda825fdb73fc652b27c339e7b82cf61e72a438"
+    },
+    {
+      "bytes": 39883,
+      "file": "gravity-mvp/src/app/messages/components/ChatHeader.tsx",
+      "sha256": "382ff266eb4b8f65b6a35122b061236bbfb052b7ea8c4697f8fdffcaef9e4fb3"
+    },
+    {
+      "bytes": 65454,
+      "file": "gravity-mvp/src/app/messages/components/ChatList.tsx",
+      "sha256": "6c1a993d0df24639cf5d191369de7580a2edf161da4ee08256add83606d6baa8"
+    },
+    {
+      "bytes": 19539,
+      "file": "gravity-mvp/src/app/messages/components/ChatWorkspace.tsx",
+      "sha256": "6e35882256286c54c2988ef8ecdd6b3a6e2348ebf747b71b15b5152ccffd2835"
+    },
+    {
+      "bytes": 869,
+      "file": "gravity-mvp/src/app/messages/components/ChatsLayout.tsx",
+      "sha256": "bc2a6b8093ff58bb3561fc745da967b148b5791e7479bd19f7995cd480efddb4"
+    },
+    {
+      "bytes": 94037,
+      "file": "gravity-mvp/src/app/messages/components/ContactProfileDrawer.tsx",
+      "sha256": "b5a96ee22dbc645dad8adb4bb50c4473f317ccba2d8e8e8c2ec52812cf598076"
+    },
+    {
+      "bytes": 2785,
+      "file": "gravity-mvp/src/app/messages/components/DeleteMessageModal.tsx",
+      "sha256": "4077133a64e6a4b0b295ff19f1544c0a319d15ae27fd11f34d111162b93eae65"
+    },
+    {
+      "bytes": 5033,
+      "file": "gravity-mvp/src/app/messages/components/DriverTasksWidget.tsx",
+      "sha256": "e3be7dc80c21437b7ffbbdfb2806aad76851b9509ff42f58235190ef653bcdfc"
+    },
+    {
+      "bytes": 10914,
+      "file": "gravity-mvp/src/app/messages/components/EmojiPicker.tsx",
+      "sha256": "d78bec3196b232c433d8752615e8a18b16ce4a2d98fffe086b121cf1da882463"
+    },
+    {
+      "bytes": 11087,
+      "file": "gravity-mvp/src/app/messages/components/ImageLightbox.tsx",
+      "sha256": "83f8d8463d02da8eccf29535abe93a800fa03da576b66ec9462c2f70c55316be"
+    },
+    {
+      "bytes": 10451,
+      "file": "gravity-mvp/src/app/messages/components/ImproveDraftPopover.tsx",
+      "sha256": "9e758332522494e1048b2a9fe8da5c1f486f3ff325cbe1a162577306b99d0280"
+    },
+    {
+      "bytes": 5795,
+      "file": "gravity-mvp/src/app/messages/components/LeadStatusBadge.tsx",
+      "sha256": "4aed31cdaba773d2951a078b19f3ddb8b4df8229693d64c9ce1b747e6d4099ed"
+    },
+    {
+      "bytes": 2890,
+      "file": "gravity-mvp/src/app/messages/components/LearnFromReplyBanner.tsx",
+      "sha256": "6fc7df1a504afb8c1827f714be632e7af641797546f0dc08fc7fd825b22c51e1"
+    },
+    {
+      "bytes": 6591,
+      "file": "gravity-mvp/src/app/messages/components/LinkContactModal.tsx",
+      "sha256": "a9c2bcf357f6e5f14bede548ee8a21ab1b6e430aa982a6083499e3c4a5445dea"
+    },
+    {
+      "bytes": 5618,
+      "file": "gravity-mvp/src/app/messages/components/MessageContextMenu.tsx",
+      "sha256": "26e7c3d1bd7048f47445fc0e651eec8dcb82c5fa0efda528ddf70f67c107391a"
+    },
+    {
+      "bytes": 58005,
+      "file": "gravity-mvp/src/app/messages/components/MessageFeed.tsx",
+      "sha256": "5f7cd9cdf192254904092ae8561f29c4e9e2e40357b116c6115aae83d2a7dc04"
+    },
+    {
+      "bytes": 41033,
+      "file": "gravity-mvp/src/app/messages/components/MessageInputArea.tsx",
+      "sha256": "7cc01fa303ecb25c11f3849b3f03f15b65f7e6350ce790f1f3c89a280daa3f32"
+    },
+    {
+      "bytes": 3721,
+      "file": "gravity-mvp/src/app/messages/components/MessagesShell.tsx",
+      "sha256": "4cd907ee2ae327868017045f0cea4b762b929014b2a0291db0069f668a38bb21"
+    },
+    {
+      "bytes": 840,
+      "file": "gravity-mvp/src/app/messages/components/MiniSidebar.tsx",
+      "sha256": "9f021590351b9fc568f7bd010dc8f7a6f4ed10b33cd6f8bc426885c819b17e0d"
+    },
+    {
+      "bytes": 30725,
+      "file": "gravity-mvp/src/app/messages/components/NewChatPopover.tsx",
+      "sha256": "541acbe56b7ca5248794c599b4cd2d924b787306c7d1e461006efd7747f146e0"
+    },
+    {
+      "bytes": 16381,
+      "file": "gravity-mvp/src/app/messages/components/QuickReplyPopover.tsx",
+      "sha256": "a43008639a48702c1f4c10cd0041217eefff4b7835cb39f46608854cf2da45c4"
+    },
+    {
+      "bytes": 2708,
+      "file": "gravity-mvp/src/app/messages/components/QuickReplySuggestions.tsx",
+      "sha256": "e37145aecc4d959ddea246d5a5a51529a279e0f2e71893d6d0b3d958be588c93"
+    },
+    {
+      "bytes": 3135,
+      "file": "gravity-mvp/src/app/messages/components/__tests__/canonical_contact_title_source_test.py",
+      "sha256": "70fda59eac07657581acb5a4dfb75be64878b7da018f7aef62da5b59cb5ec08d"
+    },
+    {
+      "bytes": 1302,
+      "file": "gravity-mvp/src/app/messages/components/__tests__/media_caption_input_source_test.py",
+      "sha256": "647a6c4d768146bc205e8870a8a44e491f2918b4ef2bc15c89f5f125e68b3f15"
+    },
+    {
+      "bytes": 3706,
+      "file": "gravity-mvp/src/app/messages/components/__tests__/reachability_ui_source_test.py",
+      "sha256": "5aa95225b13dfaa7d95cdbcf3edbce59177c38e00d6e795749b9971a44913278"
+    },
+    {
+      "bytes": 1672,
+      "file": "gravity-mvp/src/app/messages/hooks/useChannelStatus.ts",
+      "sha256": "1a93d76523b7d38cc4a1846f544d7de51376165973d44e57d0d3fe4bc19b8112"
+    },
+    {
+      "bytes": 1988,
+      "file": "gravity-mvp/src/app/messages/hooks/useChatNavigation.ts",
+      "sha256": "f4511ae3b64d465bfd292c1bc6e14e5956375c7c770534c45e38a50d214a5f2b"
+    },
+    {
+      "bytes": 4908,
+      "file": "gravity-mvp/src/app/messages/hooks/useContact.ts",
+      "sha256": "30d0b1995e5192ad8f5a4197aad08f00eb6a5783f8ee5583bb3455b405699d2a"
+    },
+    {
+      "bytes": 2344,
+      "file": "gravity-mvp/src/app/messages/hooks/useContactSearch.ts",
+      "sha256": "0bd94c493b1075295948f7ad9f0971c16fdd18c4acb53c82633440d8f9fe2245"
+    },
+    {
+      "bytes": 10679,
+      "file": "gravity-mvp/src/app/messages/hooks/useConversations.ts",
+      "sha256": "9709bf902bfc66eb019d0bfe01f02d42424c00bba8e679cd2c98501c620d3974"
+    },
+    {
+      "bytes": 19313,
+      "file": "gravity-mvp/src/app/messages/hooks/useMessages.ts",
+      "sha256": "a828bc2584d765b0208c4a426067efbbb06cc2437095d8034652374e7578c38d"
+    },
+    {
+      "bytes": 7184,
+      "file": "gravity-mvp/src/app/messages/hooks/useProposedReply.ts",
+      "sha256": "5686a220643126f44474dd94764655848aa9d74fead3e26d398c791e35532c5d"
+    },
+    {
+      "bytes": 9760,
+      "file": "gravity-mvp/src/app/messages/hooks/useScrollController.test.ts",
+      "sha256": "05b79e1c1baacaf99d2e075984bd24ab64310d1e38e479bf00083d38651b5346"
+    },
+    {
+      "bytes": 22675,
+      "file": "gravity-mvp/src/app/messages/hooks/useScrollController.ts",
+      "sha256": "4276afb5556d21b6d695e4746fe224cca48da7ce1e8b727d0d09672130ba8971"
+    },
+    {
+      "bytes": 3017,
+      "file": "gravity-mvp/src/app/messages/hooks/useStartConversation.ts",
+      "sha256": "a5530175de78a23009232b83684f00aa911698911e96ae7b0b28d15b0c6b248f"
+    },
+    {
+      "bytes": 3103,
+      "file": "gravity-mvp/src/app/messages/improve-draft-actions.ts",
+      "sha256": "abf8d8e317025aa7ef5b749090d58f1f6d892ac32205b5ed68a4b703faf3dfa2"
+    },
+    {
+      "bytes": 1326,
+      "file": "gravity-mvp/src/app/messages/layout.tsx",
+      "sha256": "b6f259358cdb17c5a4ee78a2a1470bcf1bebcfdd899afff133b5cd5372fcac5f"
+    },
+    {
+      "bytes": 2995,
+      "file": "gravity-mvp/src/app/messages/learn-from-outbound-actions.ts",
+      "sha256": "4f00b2ac578fd00ecc7dc2f349268eead512493b40dd8e00bff065de8159242f"
+    },
+    {
+      "bytes": 4222,
+      "file": "gravity-mvp/src/app/messages/link-chat-actions.ts",
+      "sha256": "90ec6fedf2646f4f97a7d7727ded47724cefd1cdab16b80a615b4c4b86a4080c"
+    },
+    {
+      "bytes": 5600,
+      "file": "gravity-mvp/src/app/messages/page.tsx",
+      "sha256": "659f1641148d81549c7be971f40ebdc43adf28208044c3d071cf4693a2a7fbb8"
+    },
+    {
+      "bytes": 21172,
+      "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
+      "sha256": "61ec276a426ab6f26f60e549f1ed1072a704401f1c49554b96b3012a4c72d06b"
+    },
+    {
+      "bytes": 4368,
+      "file": "gravity-mvp/src/app/messages/utils/humanize-ai-reason.ts",
+      "sha256": "aaf3cdf46ce1089309065c94b61c5ed129b2fff9b454fafa47b0e37ecfc07c94"
+    },
+    {
+      "bytes": 12456,
+      "file": "gravity-mvp/src/app/messages/utils/message-utils.ts",
+      "sha256": "c8b9c23b47c8a5baee7328e4d2bd5f3626d5e05a34dba58a209e3df56561bbca"
+    },
+    {
+      "bytes": 10387,
+      "file": "gravity-mvp/src/app/monitoring/MonitoringClient.tsx",
+      "sha256": "1cb0a74cf1fd06bff9db180ff0a1161df3ca18ca7d29532e115930b6d217fd6d"
+    },
+    {
+      "bytes": 2852,
+      "file": "gravity-mvp/src/app/monitoring/components/ActionButtons.tsx",
+      "sha256": "20d0130c25d493cce6d66c6ac0f0f2ef14c3a4553b360cbea32f5b9c031d94e8"
+    },
+    {
+      "bytes": 4156,
+      "file": "gravity-mvp/src/app/monitoring/components/AddToAttentionModal.tsx",
+      "sha256": "98c19ef535cdf930d7203ef071872f99e4d5df96ba923818a3cad96996ea5e3c"
+    },
+    {
+      "bytes": 7568,
+      "file": "gravity-mvp/src/app/monitoring/components/AllDriversSection.tsx",
+      "sha256": "953b149af22f7b2ebead02bbd2f4f7e47b1a98181c3e79384162efda6d480ee8"
+    },
+    {
+      "bytes": 3999,
+      "file": "gravity-mvp/src/app/monitoring/components/AttentionSection.tsx",
+      "sha256": "48b5c79c3ca53048c50fc376b58320b1accf1a03c1e2c1693557667c10d65b1e"
+    },
+    {
+      "bytes": 13192,
+      "file": "gravity-mvp/src/app/monitoring/components/DriverHoverCard.tsx",
+      "sha256": "28f72ad0a967ac6ee3823da83cbb092fbe653847ef912d6490fa2f8a452741dc"
+    },
+    {
+      "bytes": 3071,
+      "file": "gravity-mvp/src/app/monitoring/components/FleetCheckModal.tsx",
+      "sha256": "86e32de619c044901e49ba8ebd4e8b4d788109f5dcaf7d5dfefc95e66be6b662"
+    },
+    {
+      "bytes": 1468,
+      "file": "gravity-mvp/src/app/monitoring/components/HistoryIcons.tsx",
+      "sha256": "99b69748f5d7f254511f24d772a3ba62edf726dcaf8560f06c79b96d2f216f28"
+    },
+    {
+      "bytes": 1774,
+      "file": "gravity-mvp/src/app/monitoring/components/StatsBar.tsx",
+      "sha256": "6ce89d2bcee9e0b38bea4c966814aaaa1994e0d8d5bf70a03ef58a33d5f609d0"
+    },
+    {
+      "bytes": 2399,
+      "file": "gravity-mvp/src/app/monitoring/components/Toast.tsx",
+      "sha256": "e7187e1da9865af9814b190028630b3b2f88045eda37bc04fc215791f5de0c8b"
+    },
+    {
+      "bytes": 1678,
+      "file": "gravity-mvp/src/app/monitoring/lib/constants.ts",
+      "sha256": "ae76d7721b15c6c5a38b71c778270226da41b3ab60f82a5b96d82356a55ab43e"
+    },
+    {
+      "bytes": 2211,
+      "file": "gravity-mvp/src/app/monitoring/lib/types.ts",
+      "sha256": "87a7b1da318f5917d946a3ac5bd00a6317f79995159eac9ac28d7e9a06a6c513"
+    },
+    {
+      "bytes": 4192,
+      "file": "gravity-mvp/src/app/monitoring/page.tsx",
+      "sha256": "157c96712e351235dd451080b8605c4e6bed9a6f5457788a42d4c1b3cef436dd"
+    },
+    {
+      "bytes": 18340,
+      "file": "gravity-mvp/src/app/monitoring/system-health/SystemHealthContent.tsx",
+      "sha256": "0048e572f96d341f51053769826964e456a62a3f6c349e4f85df79ca0c175fab"
+    },
+    {
+      "bytes": 3908,
+      "file": "gravity-mvp/src/app/monitoring/system-health/actions.ts",
+      "sha256": "68605427c7eb22b381355e1d69c70a8addbc6ffcbf2a24c06c12f625a1230eb4"
+    },
+    {
+      "bytes": 290,
+      "file": "gravity-mvp/src/app/monitoring/system-health/page.tsx",
+      "sha256": "7084c0b9cedc9792bc038908df3ff905f4a42550e8b4333561399f0c6e531eff"
+    },
+    {
+      "bytes": 16458,
+      "file": "gravity-mvp/src/app/my-day/MyDayContent.tsx",
+      "sha256": "c573be22ca57422c212c9545e486d19c235e15063a97eb7827d28885edb56986"
+    },
+    {
+      "bytes": 5442,
+      "file": "gravity-mvp/src/app/my-day/actions.ts",
+      "sha256": "fd4e753c5e51f3c25cea9133ca5fe838bab7572be59c8f33fa543fcad6785a27"
+    },
+    {
+      "bytes": 757,
+      "file": "gravity-mvp/src/app/my-day/page.tsx",
+      "sha256": "1dd7ee0898ab2b119ace75008714dd9b29b7069ddad46b23e0ae033483d583f2"
+    },
+    {
+      "bytes": 2157,
+      "file": "gravity-mvp/src/app/page.tsx",
+      "sha256": "5f4865efe0794b56ce4a7124934a5484c9c1865130e8644ce7f2d454a6a5c46d"
+    },
+    {
+      "bytes": 287,
+      "file": "gravity-mvp/src/app/promotions/active/page.tsx",
+      "sha256": "a8b277eeb56b18adcaa69ef97bd01a8a9b23acb7d177d21f8b1876ed1d8d80fa"
+    },
+    {
+      "bytes": 291,
+      "file": "gravity-mvp/src/app/promotions/efficiency/page.tsx",
+      "sha256": "dd1188fa3c28d321ead7368d256eb465d5bdf9f2c72c44d38c7714f30cec294b"
+    },
+    {
+      "bytes": 287,
+      "file": "gravity-mvp/src/app/promotions/ending/page.tsx",
+      "sha256": "c5e6e38973274b0edb84fcab4435c81bcc50b1682cc5b831e6122f9494566f80"
+    },
+    {
+      "bytes": 288,
+      "file": "gravity-mvp/src/app/promotions/history/page.tsx",
+      "sha256": "005e2060b048f7448488f39f86edc20d4eccd173766ac08c1525edee276848f0"
+    },
+    {
+      "bytes": 360,
+      "file": "gravity-mvp/src/app/promotions/page.tsx",
+      "sha256": "025139f3232ef83071f613a3eb7e60735f03e698f97ed6d807b8215e74d81d24"
+    },
+    {
+      "bytes": 287,
+      "file": "gravity-mvp/src/app/resources/accounts/page.tsx",
+      "sha256": "c278d88f24fb8d774161f93db29272c5b27a3e3b34c36ed43fb1a4cae2168f79"
+    },
+    {
+      "bytes": 287,
+      "file": "gravity-mvp/src/app/resources/bindings/page.tsx",
+      "sha256": "738eff68362394e52027f4aef1a8eebeacbf0326dd29f67348c890cc0500367f"
+    },
+    {
+      "bytes": 283,
+      "file": "gravity-mvp/src/app/resources/cars/page.tsx",
+      "sha256": "e881f48eff1f16001a7c2567355e4747ed2cd282082a574f2f625a74f75c3f8f"
+    },
+    {
+      "bytes": 286,
+      "file": "gravity-mvp/src/app/resources/numbers/page.tsx",
+      "sha256": "57cadf2299109fc492a456a6b40f2f8370696757356d42d7cfac61b70e5abdb8"
+    },
+    {
+      "bytes": 455841,
+      "file": "gravity-mvp/src/app/settings/ai/AiControlCenterClient.tsx",
+      "sha256": "84c310bf76ac7538a10a5c3daedeae54a7a5576123835a094c88b6ae56734e94"
+    },
+    {
+      "bytes": 117868,
+      "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+      "sha256": "297e9fb8bc6053fa80238334b4df66eea45b988582dd09157cb1de1378c2c034"
+    },
+    {
+      "bytes": 3993,
+      "file": "gravity-mvp/src/app/settings/ai/page.tsx",
+      "sha256": "b0755c51aa01b87224e05a15c9e81a237cafa8b9ca8532f6e1f5ed3ca6da9ab2"
+    },
+    {
+      "bytes": 8580,
+      "file": "gravity-mvp/src/app/settings/api/page.tsx",
+      "sha256": "07e155cc7e2f12779ff7a5275925d8639fc8c0f2b1e50432f57b37009be74548"
+    },
+    {
+      "bytes": 22462,
+      "file": "gravity-mvp/src/app/settings/avito-access/page.tsx",
+      "sha256": "6571ba09ad9efc4bf8b465e4d93ef4fab6e0c7443a1862dcf72234dd94a85cd5"
+    },
+    {
+      "bytes": 8735,
+      "file": "gravity-mvp/src/app/settings/dictionaries/page.tsx",
+      "sha256": "b7b56ac0b229715041f459e3338121c13b3488f74a197ee4f7a336b7c3a615fa"
+    },
+    {
+      "bytes": 2411,
+      "file": "gravity-mvp/src/app/settings/integrations/_components/TelephonyTabs.tsx",
+      "sha256": "1fa174a67b8763590b1ec2059076a5e290cd53e6dd60646abf9715bbd5faedc8"
+    },
+    {
+      "bytes": 22377,
+      "file": "gravity-mvp/src/app/settings/integrations/ai-call-help/ai-call/AiCallHelpClient.tsx",
+      "sha256": "ee7a715e0b201a5e0b03ee69f1d56012503ccf5c6396411642c53af2f66b069a"
+    },
+    {
+      "bytes": 833,
+      "file": "gravity-mvp/src/app/settings/integrations/ai-call-help/ai-call/page.tsx",
+      "sha256": "6f7b9eb6176eece1537d5ffdb6b40bf6b44a2881cace9c1228fa77814d52e765"
+    },
+    {
+      "bytes": 22112,
+      "file": "gravity-mvp/src/app/settings/integrations/ai-call-help/ai-control-center/AiControlCenterHelpClient.tsx",
+      "sha256": "220c3318e5068739cdc906db73bdcce835ab6ee2a6618b7ea2e30db5268a2128"
+    },
+    {
+      "bytes": 1162,
+      "file": "gravity-mvp/src/app/settings/integrations/ai-call-help/ai-control-center/page.tsx",
+      "sha256": "490921e9db530c0cf078047b4d55106760b0af6af73486b64753837172f0a8a2"
+    },
+    {
+      "bytes": 4092,
+      "file": "gravity-mvp/src/app/settings/integrations/ai-call-help/page.tsx",
+      "sha256": "cbc35f6419b4576c7dfe8460ecddbeff16a7e0289b10cd0ad5ae8fddcbd5b2e7"
+    },
+    {
+      "bytes": 20590,
+      "file": "gravity-mvp/src/app/settings/integrations/ai-call-keys/AiCallKeysClient.tsx",
+      "sha256": "87a8a1140ed9630cbba53831496a820cfe4fc2d3dd1dcb3ef438fdbbb99b19fc"
+    },
+    {
+      "bytes": 37591,
+      "file": "gravity-mvp/src/app/settings/integrations/ai-call-scenarios/AiCallScenariosClient.tsx",
+      "sha256": "1138b7be3df1f79ae1d89ecda31a5f6368262f4f469c4bacf7f43a47d503d2e6"
+    },
+    {
+      "bytes": 1956,
+      "file": "gravity-mvp/src/app/settings/integrations/ai-call-scenarios/page.tsx",
+      "sha256": "8e5e9e967a94f5a14763f73753ac22d09e26a599374b4dcecfeee88d0a2576e3"
+    },
+    {
+      "bytes": 24588,
+      "file": "gravity-mvp/src/app/settings/integrations/ai-knowledge-help/AiKnowledgeHelpClient.tsx",
+      "sha256": "acb952c89ff8b60786f269c5129208519e631e1190a7114331ea5f92504b9174"
+    },
+    {
+      "bytes": 1139,
+      "file": "gravity-mvp/src/app/settings/integrations/ai-knowledge-help/page.tsx",
+      "sha256": "967f3d7268a619a2fb6f60ae779eeec998c3d6e956bcbf2547d63daae1a33fb5"
+    },
+    {
+      "bytes": 12764,
+      "file": "gravity-mvp/src/app/settings/integrations/avito/_ActivityLogView.tsx",
+      "sha256": "146720b9b308c00296e9d009dcb7b642b18f9df62357ab3e8398806986b78448"
+    },
+    {
+      "bytes": 1060,
+      "file": "gravity-mvp/src/app/settings/integrations/avito/_api-client.ts",
+      "sha256": "1aed6f184196cc051fae8c787ee8aca96558d68ad842180db2446e83565a3e7e"
+    },
+    {
+      "bytes": 7081,
+      "file": "gravity-mvp/src/app/settings/integrations/avito/_types.ts",
+      "sha256": "0f790e03d53cd3a465e697f2260f95f8d21d5315ad49dc9b9c1982ed929dbbab"
+    },
+    {
+      "bytes": 88254,
+      "file": "gravity-mvp/src/app/settings/integrations/avito/page.tsx",
+      "sha256": "cbdd07ea175f91545b39847f221ec9282a325684ae0dfeb204b2e8cfda318761"
+    },
+    {
+      "bytes": 15524,
+      "file": "gravity-mvp/src/app/settings/integrations/bot/BotPageClient.tsx",
+      "sha256": "7428e3ff74b862702b498812e34f22d4836f811540fc0d84a6617f2284b9e9f6"
+    },
+    {
+      "bytes": 670,
+      "file": "gravity-mvp/src/app/settings/integrations/bot/page.tsx",
+      "sha256": "b3a80832d8e9da92f57918fc56364f362e694373cd2908a67ae9880f79591fd9"
+    },
+    {
+      "bytes": 33674,
+      "file": "gravity-mvp/src/app/settings/integrations/max/MaxLoginClient.tsx",
+      "sha256": "d6adfe3ee5a4e6649e0050d39ab056a4dacbbd1a5671d5f3189642220640690b"
+    },
+    {
+      "bytes": 1444,
+      "file": "gravity-mvp/src/app/settings/integrations/max/page.tsx",
+      "sha256": "dff2ab0622c20348432a1fbd12776976aa96e0f51d634413200736deb06bf045"
+    },
+    {
+      "bytes": 33262,
+      "file": "gravity-mvp/src/app/settings/integrations/telegram/TelegramLoginClient.tsx",
+      "sha256": "7b76bdf33c7a757f8a9fa673549640fba94047f57669739d0c1ca054079f5bb1"
+    },
+    {
+      "bytes": 9192,
+      "file": "gravity-mvp/src/app/settings/integrations/telegram/TelegramManualLinkClient.tsx",
+      "sha256": "27c67f0258e2a30f79cb99117d93d542d06e0d484e42c04c11365b80bf365d0e"
+    },
+    {
+      "bytes": 2559,
+      "file": "gravity-mvp/src/app/settings/integrations/telegram/page.tsx",
+      "sha256": "eec3fda56b43fed3417c6cfc29800034f6125fd4ed58cedbe4f0a6572676adb2"
+    },
+    {
+      "bytes": 37762,
+      "file": "gravity-mvp/src/app/settings/integrations/telephony-ai/TelephonyAiClient.tsx",
+      "sha256": "1ed5d834d8e789ec52f5d5f8aee4c6590224997dcf81e6870a2b2fb7b0af2c57"
+    },
+    {
+      "bytes": 1218,
+      "file": "gravity-mvp/src/app/settings/integrations/telephony-ai/page.tsx",
+      "sha256": "f37eb35e801621c5e4efe7d7ddaa76b4c847b8874f6fac088e76150d89df912a"
+    },
+    {
+      "bytes": 19246,
+      "file": "gravity-mvp/src/app/settings/integrations/telephony/TelephonyConnectionClient.tsx",
+      "sha256": "f49e0b700f78641838e4404a4da5b4859e648b7c88a874d4301557a712f0f819"
+    },
+    {
+      "bytes": 930,
+      "file": "gravity-mvp/src/app/settings/integrations/telephony/page.tsx",
+      "sha256": "d149098bbe73d11e44d8ecc9a0c1402af43ba44dcc1f487d33d439424b1aa14d"
+    },
+    {
+      "bytes": 37283,
+      "file": "gravity-mvp/src/app/settings/integrations/whatsapp/WhatsAppDashboard.tsx",
+      "sha256": "d7035c2daddc7b4c7f4b83c31fefcb641cde22807b2ecc886e5a9cc2c632a4eb"
+    },
+    {
+      "bytes": 1665,
+      "file": "gravity-mvp/src/app/settings/integrations/whatsapp/page.tsx",
+      "sha256": "6b1d7a3b08f99cc9a92b2c96b76f3909e3f847ef3453a2e3f7305d322cbf9847"
+    },
+    {
+      "bytes": 14861,
+      "file": "gravity-mvp/src/app/settings/integrations/whatsapp/whatsapp-actions.ts",
+      "sha256": "8b0c1b9b77363ec40933f0cd0cefe1f8afd1b281198332f971d7800549b3fc30"
+    },
+    {
+      "bytes": 1366,
+      "file": "gravity-mvp/src/app/settings/page.tsx",
+      "sha256": "72665a0502362d50eb7d5908fc21e7aa0539b6a0668ee8e301de473a5e3af73b"
+    },
+    {
+      "bytes": 9195,
+      "file": "gravity-mvp/src/app/settings/scenarios/[id]/fields/ScenarioFieldsSettingsClient.tsx",
+      "sha256": "e88a794296a1748bb8a9ae184ab9c7b102bf8e1481086c28c1b909e752649ca3"
+    },
+    {
+      "bytes": 1426,
+      "file": "gravity-mvp/src/app/settings/scenarios/[id]/fields/page.tsx",
+      "sha256": "8b46ebfc7030b928b8c32485819b868b496985fb4214c35eb94e757d9077629b"
+    },
+    {
+      "bytes": 1307,
+      "file": "gravity-mvp/src/app/settings/scenarios/actions.ts",
+      "sha256": "d7ddaf5a511b70065ba513e6a2b83bf757c38013cfdd2a03f2f0207e9a0b70ee"
+    },
+    {
+      "bytes": 5632,
+      "file": "gravity-mvp/src/app/settings/scoring/ScoringSettingsClient.tsx",
+      "sha256": "d54298646b9aa944c91c7f472948b513618b55214bffc21b835c847aaba736b0"
+    },
+    {
+      "bytes": 958,
+      "file": "gravity-mvp/src/app/settings/scoring/actions.ts",
+      "sha256": "35f64e42644e959a64aab0e3fde7e27e4c149f05ab25d6a518fe881f4895924b"
+    },
+    {
+      "bytes": 828,
+      "file": "gravity-mvp/src/app/settings/scoring/page.tsx",
+      "sha256": "a82778ee38147eab67dbb45b6b829c763d73dcef44505794c3851730ce3c07b5"
+    },
+    {
+      "bytes": 12329,
+      "file": "gravity-mvp/src/app/settings/triggers/TriggerSettingsClient.tsx",
+      "sha256": "bd43e69e4f2c0b475a9103e3671f38f1d3848aff9db5a0206c0f785f5a1d8405"
+    },
+    {
+      "bytes": 1610,
+      "file": "gravity-mvp/src/app/settings/triggers/actions.ts",
+      "sha256": "38e21692f45e6fe777aa4fd7f7281cb0d40e53cbb3b0e9d1b2ae60105b791131"
+    },
+    {
+      "bytes": 762,
+      "file": "gravity-mvp/src/app/settings/triggers/page.tsx",
+      "sha256": "fc58ccc20630b8f35506c0faa97b5a1bf6e0b8ca86945ed40414984a2047df5c"
+    },
+    {
+      "bytes": 43811,
+      "file": "gravity-mvp/src/app/tasks/actions.ts",
+      "sha256": "ff9a50a452877262a15e951007a41bb842c0a04103a50234cf30f3f78b3b0052"
+    },
+    {
+      "bytes": 3382,
+      "file": "gravity-mvp/src/app/tasks/case-actions.ts",
+      "sha256": "c001f7149d46ca2f8e4a1d6a78dd5b810d541056c20549da5dabf12474165445"
+    },
+    {
+      "bytes": 12315,
+      "file": "gravity-mvp/src/app/tasks/components/BulkCareModal.tsx",
+      "sha256": "58d5a611e4fabe5cf675c12041ed092a574920f6a0a97c00e87fab60702309c5"
+    },
+    {
+      "bytes": 4399,
+      "file": "gravity-mvp/src/app/tasks/components/ChurnExtraFilters.tsx",
+      "sha256": "52d8d38e6a23ee01db50c4a622cbe30a34d22253a8d4ab1195eb3e43710162df"
+    },
+    {
+      "bytes": 5672,
+      "file": "gravity-mvp/src/app/tasks/components/GlobalTaskCreateModal.tsx",
+      "sha256": "85721ecb146a9522bdb6b8ba0465cb9e91e42b00eb50794ad016489f207adc19"
+    },
+    {
+      "bytes": 6772,
+      "file": "gravity-mvp/src/app/tasks/components/RootCauseModal.tsx",
+      "sha256": "2425afeb306b5940c43290c5bc71a4ce5d8d085f09a9a389556bb5213ed7a99a"
+    },
+    {
+      "bytes": 3424,
+      "file": "gravity-mvp/src/app/tasks/components/ScenarioFieldBadge.tsx",
+      "sha256": "ed5ff6bb4bd36e4697a959b04e1f2af4a78e7b604cf70a1bed530a5dc4216b5a"
+    },
+    {
+      "bytes": 4404,
+      "file": "gravity-mvp/src/app/tasks/components/TaskBoardView.tsx",
+      "sha256": "fc7a436c3d0d633fb11c37902f6aa02eba3b9ead17ddaff3fcc67ac05d9443c8"
+    },
+    {
+      "bytes": 15290,
+      "file": "gravity-mvp/src/app/tasks/components/TaskCard.tsx",
+      "sha256": "5dae75d7b482e56eb01773b3a0dca562a410da81e997f1636beec5321cdef0d2"
+    },
+    {
+      "bytes": 5131,
+      "file": "gravity-mvp/src/app/tasks/components/TaskCaseBlock.tsx",
+      "sha256": "6c551f05e62f18346c2126c6dc982018799d98ab7e49a9ded24ef6dcbb36bf6f"
+    },
+    {
+      "bytes": 12256,
+      "file": "gravity-mvp/src/app/tasks/components/TaskCaseBlockHeader.tsx",
+      "sha256": "e620e7ebf5008e6dd29d22ba2091c49ae350fd0150b113f97a9c409beb87260c"
+    },
+    {
+      "bytes": 9985,
+      "file": "gravity-mvp/src/app/tasks/components/TaskCaseInlineActions.tsx",
+      "sha256": "91b57293c4695d4599b9d84a5c75b673996d394ad9ecd821dd0209b5d52ab7b1"
+    },
+    {
+      "bytes": 14292,
+      "file": "gravity-mvp/src/app/tasks/components/TaskCaseListHeader.tsx",
+      "sha256": "8b9f5009150735c1268b3f52293f162eeb66d7ddb6464fe9f61b444bc6392e27"
+    },
+    {
+      "bytes": 10861,
+      "file": "gravity-mvp/src/app/tasks/components/TaskCaseRow.tsx",
+      "sha256": "2a3aa2a843c30efd9f6464e637a498e99618cfac99a6ce69ecff18c22dd1489d"
+    },
+    {
+      "bytes": 3446,
+      "file": "gravity-mvp/src/app/tasks/components/TaskControlChips.tsx",
+      "sha256": "dfeb03505a739cc2b1a835a43f8cdafeda32c46b6631cc14498b0f817449f3b5"
+    },
+    {
+      "bytes": 21596,
+      "file": "gravity-mvp/src/app/tasks/components/TaskCreateModal.tsx",
+      "sha256": "9445770a490d825b3e742bdbe15ae2c012208bb69c83590730099b983f4b6603"
+    },
+    {
+      "bytes": 17510,
+      "file": "gravity-mvp/src/app/tasks/components/TaskDetailsPane.tsx",
+      "sha256": "96be93bd2e12ed6ead7bf68739f87e825a02809c41fa033c785e1fbce49a9c8d"
+    },
+    {
+      "bytes": 18573,
+      "file": "gravity-mvp/src/app/tasks/components/TaskListColumnsSettings.tsx",
+      "sha256": "b8a8049cfef7ce2b900430bce5121187d1699781aabd9ad167f15b285bf084fc"
+    },
+    {
+      "bytes": 4925,
+      "file": "gravity-mvp/src/app/tasks/components/TaskListDensitySwitcher.tsx",
+      "sha256": "cb842a64110242b8e8177013792f9701c0e1ea46f0922251d7fbea88ecd17654"
+    },
+    {
+      "bytes": 21594,
+      "file": "gravity-mvp/src/app/tasks/components/TaskListExcelButtons.tsx",
+      "sha256": "a8f8096396d8c45a12302962a1efaab4d44f05c182f938589aa95b0506f9efcd"
+    },
+    {
+      "bytes": 18047,
+      "file": "gravity-mvp/src/app/tasks/components/TaskListFiltersPopover.tsx",
+      "sha256": "4877cdc39ba85faf993eeafcf319bbbb0f4d376213fbf5e7641053b74ee900b4"
+    },
+    {
+      "bytes": 2326,
+      "file": "gravity-mvp/src/app/tasks/components/TaskListModeSwitcher.tsx",
+      "sha256": "c13a684d474eaf51c53311074876ad28ceb9cb68fa1308fe4632c8bb113546d0"
+    },
+    {
+      "bytes": 9033,
+      "file": "gravity-mvp/src/app/tasks/components/TaskListPresetsMenu.tsx",
+      "sha256": "9fd28beb4f726998d809330573f3c702ff8d0af45db0281562f05bb490dcd5a4"
+    },
+    {
+      "bytes": 8197,
+      "file": "gravity-mvp/src/app/tasks/components/TaskListRow.tsx",
+      "sha256": "1075c44fa547351878710575784dc65685449f492b65c9330d2637b901270bbb"
+    },
+    {
+      "bytes": 11727,
+      "file": "gravity-mvp/src/app/tasks/components/TaskListView.tsx",
+      "sha256": "682c1fd60b1c5f64aebfa083c2575a8c82b276f25e20b069b4f17f74b6e26bce"
+    },
+    {
+      "bytes": 9976,
+      "file": "gravity-mvp/src/app/tasks/components/TaskTimelineView.tsx",
+      "sha256": "0b2978bb9b6b1e7f1304b42a8d595cd38a7e4b2a758bd339a5d4eb8c45fe97c6"
+    },
+    {
+      "bytes": 1954,
+      "file": "gravity-mvp/src/app/tasks/components/TaskToastContainer.tsx",
+      "sha256": "08e985559a117eb5f34db9f42b55efbad9d8afeb7b4ff2ef11300e84c9be5124"
+    },
+    {
+      "bytes": 17297,
+      "file": "gravity-mvp/src/app/tasks/components/TasksToolbar.tsx",
+      "sha256": "b7c589295f49925415116c1df88c0962716840ac106d3bd37c01d388ea4aaebb"
+    },
+    {
+      "bytes": 1704,
+      "file": "gravity-mvp/src/app/tasks/components/details/ChatOriginSection.tsx",
+      "sha256": "2430eeb50bfd688c5e7be8b7c7da981fbedfd145603492079db8c67199256dc0"
+    },
+    {
+      "bytes": 5464,
+      "file": "gravity-mvp/src/app/tasks/components/details/CloseReasonModal.tsx",
+      "sha256": "8ccfd5fe9adec140a14d3b3107ba6f8412ecf1dded81f76a9b82c53b77b4d7b9"
+    },
+    {
+      "bytes": 1332,
+      "file": "gravity-mvp/src/app/tasks/components/details/ContactActionButtons.tsx",
+      "sha256": "048352e31d1cb880f2fcf285bacb27a0255dd5c0825b5fe89bcf9b25f34871f6"
+    },
+    {
+      "bytes": 3995,
+      "file": "gravity-mvp/src/app/tasks/components/details/ContactResultModal.tsx",
+      "sha256": "1ba24bcdcdf3352c42a1eb749427cd8f4df6d14c3b5b2e76292d4b382c087170"
+    },
+    {
+      "bytes": 2724,
+      "file": "gravity-mvp/src/app/tasks/components/details/DriverContactCard.tsx",
+      "sha256": "f934df81656a338726f36d8087b72f73f14467c02c1c97f6571542cf0338e4f7"
+    },
+    {
+      "bytes": 7242,
+      "file": "gravity-mvp/src/app/tasks/components/details/LastContactSection.tsx",
+      "sha256": "bebf36dabb1dc5a200b7bb2e854184ac6d80a9a12498d2c8fc4e89698c689dc1"
+    },
+    {
+      "bytes": 3107,
+      "file": "gravity-mvp/src/app/tasks/components/details/NextActionSection.tsx",
+      "sha256": "f8d6ebebb86ec9460f4649fc44aa4612e7695ea786240ed2db8b75c3b294f3d8"
+    },
+    {
+      "bytes": 6023,
+      "file": "gravity-mvp/src/app/tasks/components/details/ScenarioContextSection.tsx",
+      "sha256": "5aa58dd2139c374a793bf39a9c95971da574b930cb3a64570604ee6bdfa9e6cb"
+    },
+    {
+      "bytes": 12311,
+      "file": "gravity-mvp/src/app/tasks/components/details/ScenarioFieldsSection.tsx",
+      "sha256": "a6a6a9cec386ffcbee9b40f03da5a52d27fe393fd5c9df786cdbbead0bb37b13"
+    },
+    {
+      "bytes": 395,
+      "file": "gravity-mvp/src/app/tasks/components/details/TaskDescription.tsx",
+      "sha256": "58d905db39cf6e3d1dd111e4c4f7db3653ab3916e00e10fb52d7c5b468c13f3d"
+    },
+    {
+      "bytes": 12724,
+      "file": "gravity-mvp/src/app/tasks/components/details/TaskDetailHeader.tsx",
+      "sha256": "ec6250c9435079bfdb5d790e964d02be9e9cb29f2cc7a2b54d793be132f3a022"
+    },
+    {
+      "bytes": 1470,
+      "file": "gravity-mvp/src/app/tasks/components/details/TaskFooterActions.tsx",
+      "sha256": "2e8e6077bd7629f5f76b1a4a82b90713a6b280b2123766a5cfb2c6cd5b6c5311"
+    },
+    {
+      "bytes": 41341,
+      "file": "gravity-mvp/src/app/tasks/components/details/TaskHistorySection.tsx",
+      "sha256": "79b883562fcfd6c4c4569bfb004d74cd1a2f118dd8638daee4b153b4871d52af"
+    },
+    {
+      "bytes": 5307,
+      "file": "gravity-mvp/src/app/tasks/components/details/TaskMetaFields.tsx",
+      "sha256": "b98bc9a439d1c623df4377f343cee20fabc29649d0cc4dd94e2a1fd16c834b8a"
+    },
+    {
+      "bytes": 16330,
+      "file": "gravity-mvp/src/app/tasks/components/details/TaskOperationalHeader.tsx",
+      "sha256": "af816ba5cc49185307274277546b9728efa56f0efced019169d643c8082f8f4b"
+    },
+    {
+      "bytes": 34762,
+      "file": "gravity-mvp/src/app/tasks/excel-actions.ts",
+      "sha256": "94b5b04cf70b44ff5130ade11e5211f1ba04bac0fe8153867a6fa214cb37c0e6"
+    },
+    {
+      "bytes": 3442,
+      "file": "gravity-mvp/src/app/tasks/page.tsx",
+      "sha256": "b941ce1629774135395a281e03fd7039ca4dd81bb002857feda968062c7e4a65"
+    },
+    {
+      "bytes": 4248,
+      "file": "gravity-mvp/src/app/team-overview/InterventionActionModal.tsx",
+      "sha256": "e856ad9c2d5d318b8f4d009300dd19805afcd30235c3fce391a51f2a5914fb1f"
+    },
+    {
+      "bytes": 13097,
+      "file": "gravity-mvp/src/app/team-overview/ReassignModal.tsx",
+      "sha256": "352db9c755cb8e98b41f3d9418f4b7f82fb79a25ff1c9c689801f5237ec9100b"
+    },
+    {
+      "bytes": 58673,
+      "file": "gravity-mvp/src/app/team-overview/TeamOverviewContent.tsx",
+      "sha256": "162b0f6d0bf85bb4968b51c430a4d1e65b5600666c91c4d91d37328e903af7c8"
+    },
+    {
+      "bytes": 38620,
+      "file": "gravity-mvp/src/app/team-overview/actions.ts",
+      "sha256": "4f3a79097ea7a7b03e75647d57d5b833f635e9cd941b3525fbfb2c8768f750ac"
+    },
+    {
+      "bytes": 896,
+      "file": "gravity-mvp/src/app/team-overview/page.tsx",
+      "sha256": "3f5e659a264b575f2309054582ea95b986744bb0f675b34e603a0dab39f09881"
+    },
+    {
+      "bytes": 77839,
+      "file": "gravity-mvp/src/app/tg-actions.ts",
+      "sha256": "e64b4ff57ae9584fbe6ede00799e8f979acf3c98e81c6c29ba3871a7426e9a3f"
+    },
+    {
+      "bytes": 5721,
+      "file": "gravity-mvp/src/app/tg-bot-actions.ts",
+      "sha256": "f3ba8519cb5c8292a03afa6bcc151a109f153bd27b57132e9ae3f6220aa97aaf"
+    },
+    {
+      "bytes": 2080,
+      "file": "gravity-mvp/src/app/tg-bot-broadcast.ts",
+      "sha256": "711b0082afceaa751efffa4055aa8dfaa838bc4ac70140a1e97f8dd5fc5e0b5b"
+    },
+    {
+      "bytes": 9181,
+      "file": "gravity-mvp/src/app/users/page.tsx",
+      "sha256": "5eb6250ddaa59599acfea72cfbde8346dcd4da51a7846905bc7ff109a2e85429"
+    },
+    {
+      "bytes": 26614,
+      "file": "gravity-mvp/src/components/ChannelSyncBlock.tsx",
+      "sha256": "98424a06b2a606afbf65210bdfa3d27afe8727823b3d434d49a041fd9f2e9d3f"
+    },
+    {
+      "bytes": 2199,
+      "file": "gravity-mvp/src/components/Header.tsx",
+      "sha256": "1da760bb40f564b22199896712ecca7b83b8442a77e960f95907a6cc42703647"
+    },
+    {
+      "bytes": 1355,
+      "file": "gravity-mvp/src/components/NeumorphicButton.tsx",
+      "sha256": "9b57943247dd9335a880034e7f44aecf93d81863bd61cdef7a34e76d862e0581"
+    },
+    {
+      "bytes": 303,
+      "file": "gravity-mvp/src/components/NeumorphicCard.tsx",
+      "sha256": "228807dbc63dbd99ac1ea620e4266c92f791625d30a8beb0fd98f886013e82d1"
+    },
+    {
+      "bytes": 962,
+      "file": "gravity-mvp/src/components/NeumorphicInput.tsx",
+      "sha256": "bcd162d5581a32ee2bc58ab288368ce570984ef6ee0295b23da5ea74357fb2c2"
+    },
+    {
+      "bytes": 15331,
+      "file": "gravity-mvp/src/components/Sidebar.tsx",
+      "sha256": "02d1e118064fcbb75b188ab0f2bd3a50908912576a479d8faeb53c6d75e520f6"
+    },
+    {
+      "bytes": 1586,
+      "file": "gravity-mvp/src/components/__tests__/mobile_sidebar_source_test.py",
+      "sha256": "778532daf1631f4d741cdd2e400f70f4866029c142da7faba674e569e4d8ba4b"
+    },
+    {
+      "bytes": 9497,
+      "file": "gravity-mvp/src/components/layout/GlobalSearch.tsx",
+      "sha256": "bcd6bcf125dac008f502d2d0fff698dea660fed210c416f055e5c5edcfee246e"
+    },
+    {
+      "bytes": 571,
+      "file": "gravity-mvp/src/components/layout/PageHeader.tsx",
+      "sha256": "66f849c6db0a49dc265a69c424526a3ef0f7c80d4101d34526dc928df60027b1"
+    },
+    {
+      "bytes": 2247,
+      "file": "gravity-mvp/src/components/layout/PageShell.tsx",
+      "sha256": "0a4e7ac1d0814c57417d836112fd26ba2a938e968047bd7983b661a10f7c93c0"
+    },
+    {
+      "bytes": 6634,
+      "file": "gravity-mvp/src/components/layout/TopBar.tsx",
+      "sha256": "897cb98cc484b26d7c56d378f46e15b2c5a76a1c5ee45fc1c995d8d32b88b14a"
+    },
+    {
+      "bytes": 60788,
+      "file": "gravity-mvp/src/components/messenger/Messenger.tsx",
+      "sha256": "3b26d60005a0bbde8a39a0c2b9a89265b163df5832e1fc1936db9442c28be2a1"
+    },
+    {
+      "bytes": 4928,
+      "file": "gravity-mvp/src/components/sip/ActiveCallPopup.tsx",
+      "sha256": "de451669345a2f46b5d301d17d90b5a32366d67fedacda914c3f0aed69e070a3"
+    },
+    {
+      "bytes": 4523,
+      "file": "gravity-mvp/src/components/sip/AiMockCallButton.tsx",
+      "sha256": "0f43b263af489520593cb4548bf65431ac6d10632099242f1b0a6d664874983b"
+    },
+    {
+      "bytes": 6395,
+      "file": "gravity-mvp/src/components/sip/CallButton.tsx",
+      "sha256": "5ab9e748a912b3b2b6f074a97c789f5eef0c1d454b68a45e7fc200c964599cb2"
+    },
+    {
+      "bytes": 5914,
+      "file": "gravity-mvp/src/components/sip/CallToolbar.tsx",
+      "sha256": "0e51508aaf50aa19a5d16e986747cab79a72aa7ece095aed8d49d959b085893b"
+    },
+    {
+      "bytes": 7752,
+      "file": "gravity-mvp/src/components/sip/CallsList.tsx",
+      "sha256": "a3170cf9229a7f5f209da37973bd220da5824b76468a8046cff198ec9e016303"
+    },
+    {
+      "bytes": 11028,
+      "file": "gravity-mvp/src/components/sip/IncomingCallPopup.tsx",
+      "sha256": "72f6f3865a092a7033b41e62bc22d17c0c3ecd5c208c340a4f8233cf07671dff"
+    },
+    {
+      "bytes": 2509,
+      "file": "gravity-mvp/src/components/sip/__tests__/incoming_call_alert_source_test.py",
+      "sha256": "0a51fc07de93548ea78e6a6b8d6dafb03092019fd6f0954842628e21adbaaa46"
+    },
+    {
+      "bytes": 1599,
+      "file": "gravity-mvp/src/components/sip/__tests__/sip_reconnect_source_test.py",
+      "sha256": "30341a6bb35c5632cda3760c4db9050bc2b9339e079472f699b1dc114f2c27cd"
+    },
+    {
+      "bytes": 994,
+      "file": "gravity-mvp/src/components/sip/__tests__/stale_call_reconcile_source_test.py",
+      "sha256": "c83dd063f9b2edf885b3f29a955fbd5757fd5b08c0e221b5a90d18f6cf74e087"
+    },
+    {
+      "bytes": 1248,
+      "file": "gravity-mvp/src/components/ui/DashboardTabs.tsx",
+      "sha256": "02329436556426c64936dccd51342ad62362e632b30382ddf35d20ec4fe6296a"
+    },
+    {
+      "bytes": 11368,
+      "file": "gravity-mvp/src/components/ui/DateTimePicker.tsx",
+      "sha256": "c2955035ffcb3fc20186783f83806968f16f033f49ddb5fd696bf6987cafdd28"
+    },
+    {
+      "bytes": 942,
+      "file": "gravity-mvp/src/components/ui/EmptyState.tsx",
+      "sha256": "943049c446d1647a039d105ebbdf799ae71af037e50ca1ad55b5f036009f597f"
+    },
+    {
+      "bytes": 276,
+      "file": "gravity-mvp/src/components/ui/PageContainer.tsx",
+      "sha256": "3a003513d87a360647cac36faaeef4e9130683c91b3171c2033eedb881bd8cf4"
+    },
+    {
+      "bytes": 4158,
+      "file": "gravity-mvp/src/components/ui/SectionDescription.tsx",
+      "sha256": "22e5ac66f03e700198e84f895c5928f11ae02a6162747f5547c895fdf9438106"
+    },
+    {
+      "bytes": 1425,
+      "file": "gravity-mvp/src/components/ui/avatar.tsx",
+      "sha256": "debb764da9bcd484cde22cc636aeacff0d7ed3101b2386d7eb555982da533121"
+    },
+    {
+      "bytes": 1472,
+      "file": "gravity-mvp/src/components/ui/badge.tsx",
+      "sha256": "212b9b32f0482ca8053642278d10a90b9ca737048e35d63a1b51046e5d8c4677"
+    },
+    {
+      "bytes": 2059,
+      "file": "gravity-mvp/src/components/ui/button.tsx",
+      "sha256": "193a770b2034c1c39e0dd1e52316c2b29209d2abac3b7e05cdeb72476d03049d"
+    },
+    {
+      "bytes": 1968,
+      "file": "gravity-mvp/src/components/ui/card.tsx",
+      "sha256": "fabcb8bfd089e2a7fa6ffa6bedc8b2fd0fd61fc8d005e59ecd7fec001ef964f7"
+    },
+    {
+      "bytes": 1072,
+      "file": "gravity-mvp/src/components/ui/checkbox.tsx",
+      "sha256": "43b4223dbe790ff5921d0987906d732dd2c2bb64f9a3daab747c82db21057d84"
+    },
+    {
+      "bytes": 3853,
+      "file": "gravity-mvp/src/components/ui/dialog.tsx",
+      "sha256": "5b5ae3d39dad4b35200240dceff5e8e5ae0c5efbaa34f8cf7d92623762573c22"
+    },
+    {
+      "bytes": 7314,
+      "file": "gravity-mvp/src/components/ui/dropdown-menu.tsx",
+      "sha256": "4c6e8929b2ad5898139021c8b183416ba3244f684f1c886b460ebe76a77963d2"
+    },
+    {
+      "bytes": 911,
+      "file": "gravity-mvp/src/components/ui/input.tsx",
+      "sha256": "bc5d8cbe962a096a79bd84383d6890112972187090bf2379fbad456db15daf40"
+    },
+    {
+      "bytes": 726,
+      "file": "gravity-mvp/src/components/ui/label.tsx",
+      "sha256": "2fb25b4e4cd569c3167c8b489b34154d7a5c37f6c1f30092e1ec37cb72efff3a"
+    },
+    {
+      "bytes": 5638,
+      "file": "gravity-mvp/src/components/ui/select.tsx",
+      "sha256": "5a385155ab3243fb06d4ed476b6af4334436e3cb070a2497f13f4b5b264711ee"
+    },
+    {
+      "bytes": 772,
+      "file": "gravity-mvp/src/components/ui/separator.tsx",
+      "sha256": "e4ac4697af0980333e58ba3b6b562b0ed877c1efe8637027360adaa6d24b2e62"
+    },
+    {
+      "bytes": 4284,
+      "file": "gravity-mvp/src/components/ui/sheet.tsx",
+      "sha256": "f83d4ac945c7c04fb5f7c48550506d271dab168edc71f5f033f4176db14eb3ac"
+    },
+    {
+      "bytes": 261,
+      "file": "gravity-mvp/src/components/ui/skeleton.tsx",
+      "sha256": "a72a9d8fc1c1999b5411a33391c5e70048863c5865629077280e943ca85689a8"
+    },
+    {
+      "bytes": 836,
+      "file": "gravity-mvp/src/components/ui/sonner.tsx",
+      "sha256": "b659109e4ba084a78db7f20966a76509cb3919b9a0ab18f1d170e3b6339a413a"
+    },
+    {
+      "bytes": 1155,
+      "file": "gravity-mvp/src/components/ui/switch.tsx",
+      "sha256": "c6a34912ca2e8c4116f6eb1c1fdb8f8f9ae0aa0e9dc4cad99ff19c556663029b"
+    },
+    {
+      "bytes": 3063,
+      "file": "gravity-mvp/src/components/ui/table.tsx",
+      "sha256": "39b08f92104bccc6223a4d3f41130366cbac62513081e4070b7d0b08e843a176"
+    },
+    {
+      "bytes": 2005,
+      "file": "gravity-mvp/src/components/ui/tabs.tsx",
+      "sha256": "38212e9efd7f351757b4ab234582541f8a27e9709fc0aa97f2b1fa004af8913f"
+    },
+    {
+      "bytes": 1267,
+      "file": "gravity-mvp/src/components/ui/tooltip.tsx",
+      "sha256": "ce6afa34fb9dae51053a863b4c3f7c6e55f3da23b00149f31a8e4402bc963be0"
+    },
+    {
+      "bytes": 10205,
+      "file": "gravity-mvp/src/config/navigation-domains.ts",
+      "sha256": "86cb8cfed28e2e8b9aca1ee0d6e989f27612b3f37a79998ae16eb4b98ca0e2cf"
+    },
+    {
+      "bytes": 5658,
+      "file": "gravity-mvp/src/config/navigation.ts",
+      "sha256": "8a2956fd4eb246727505a3ca89cb246421b2c6dc1efae687615d5cc15994ffc2"
+    },
+    {
+      "bytes": 21734,
+      "file": "gravity-mvp/src/config/sections.ts",
+      "sha256": "b08b541250c523cd1db058ec989b39a9515ceb5b46b1343e40b32ee4962b301e"
+    },
+    {
+      "bytes": 5097,
+      "file": "gravity-mvp/src/data/dictionaries.json",
+      "sha256": "f936573c34c6365d8944dc2ce96567813b6a5bc8dd175f4ac7b066b534505899"
+    },
+    {
+      "bytes": 815,
+      "file": "gravity-mvp/src/data/users.json",
+      "sha256": "a2599f6042b80c10504b392a455da03908bfd10c1dcdc6ac500c8e01f9334309"
+    },
+    {
+      "bytes": 5231,
+      "file": "gravity-mvp/src/hooks/use-task-mutations.ts",
+      "sha256": "5ea573d092d7cfab9372a0dcb1f98ade1ccc7d873ea44ce0a699b8faa22b8932"
+    },
+    {
+      "bytes": 2125,
+      "file": "gravity-mvp/src/hooks/use-tasks-query.ts",
+      "sha256": "1266f8cd77f89f7773db61a55317226751360bee9d58d91ec4e7beec816ede27"
+    },
+    {
+      "bytes": 21336,
+      "file": "gravity-mvp/src/instrumentation.ts",
+      "sha256": "f5fc503131853f3275696a5bb96f6c96c5250093e76672c9377cbcf584fa252c"
+    },
+    {
+      "bytes": 22316,
+      "file": "gravity-mvp/src/lib/ContactMergeService.ts",
+      "sha256": "2703c58b12e4c30907f338b05bf48678dce2c98889c66336494780e1c0d7cbba"
+    },
+    {
+      "bytes": 14052,
+      "file": "gravity-mvp/src/lib/ContactService.ts",
+      "sha256": "25a35f2e8306a84cab4f6976abb0ae09550c203d7faef2d4f5fbc0032fa53659"
+    },
+    {
+      "bytes": 5878,
+      "file": "gravity-mvp/src/lib/ConversationWorkflowService.ts",
+      "sha256": "0a9978df762b12c95edf53ee294ef46552f1c145250d4d221d9a82f658446f9c"
+    },
+    {
+      "bytes": 10543,
+      "file": "gravity-mvp/src/lib/DriverMatchService.ts",
+      "sha256": "b9670f9d8243c631631c2ec70140df39d7d55a327b34ef0bb76620faee3e6d5b"
+    },
+    {
+      "bytes": 9149,
+      "file": "gravity-mvp/src/lib/IntegrityChecker.ts",
+      "sha256": "e7f9c78b0ea4f374da601c443545025e832df901ef58cb4a34da9ac0173d79cb"
+    },
+    {
+      "bytes": 55711,
+      "file": "gravity-mvp/src/lib/MessageService.ts",
+      "sha256": "71c75bce80de35943ca2753196281f7a0ae98765c619b3a9816fe64e20316e46"
+    },
+    {
+      "bytes": 3020,
+      "file": "gravity-mvp/src/lib/OperationalJobs.ts",
+      "sha256": "0b9a8123ff9e290966b1ecfd49f511161fda59797aa55c13bf533e73da8c07b4"
+    },
+    {
+      "bytes": 2656,
+      "file": "gravity-mvp/src/lib/ReachabilityService.ts",
+      "sha256": "fc5edd2e6f643265cd9ca5c72382bfd69bcb2751093efb64e3c15bec53cbfd50"
+    },
+    {
+      "bytes": 9282,
+      "file": "gravity-mvp/src/lib/RetentionCleanup.ts",
+      "sha256": "8bcc91e1eb72b9a381b2a31c6ad756c814925eedbff206648c6db5cb7ff2b96d"
+    },
+    {
+      "bytes": 10352,
+      "file": "gravity-mvp/src/lib/TransportRegistry.ts",
+      "sha256": "7b3333eea11b397ea577061d77a7f98569c692f4bf13ace6ceb6db1bcefe8937"
+    },
+    {
+      "bytes": 6868,
+      "file": "gravity-mvp/src/lib/YandexFleetService.ts",
+      "sha256": "b4c198267a013f9d378a060ed0941b468e594ea99e86747a0896fd6943406eb9"
+    },
+    {
+      "bytes": 13518,
+      "file": "gravity-mvp/src/lib/__tests__/contact-resolution-service.test.ts",
+      "sha256": "de38face82fd9ebb7c230762ab2aebd9f099dac0bd65a237c718f3519f084b7d"
+    },
+    {
+      "bytes": 22503,
+      "file": "gravity-mvp/src/lib/__tests__/driver-matching-safety.test.ts",
+      "sha256": "3b6f9310e0fa9c907da75c324435a4b20ca39ee72935b5ac12f5ebd30431233d"
+    },
+    {
+      "bytes": 4329,
+      "file": "gravity-mvp/src/lib/__tests__/driver_matching_safety_source_test.py",
+      "sha256": "277293c9ae76cd3a97337cbbb3c54bfa0d11eb1d49e55a3d8eb322195268542a"
+    },
+    {
+      "bytes": 6284,
+      "file": "gravity-mvp/src/lib/__tests__/health.test.js",
+      "sha256": "9f184b9930024c5fff238d00a6f0a9ad9bcc438f0b41599e123aa5206dc61376"
+    },
+    {
+      "bytes": 14962,
+      "file": "gravity-mvp/src/lib/__tests__/max-contact-resolution-shadow.test.ts",
+      "sha256": "ca158c9afcf5930b01c692f4615c4c3036e007c401f60fb9a867e6957dd9cff7"
+    },
+    {
+      "bytes": 602,
+      "file": "gravity-mvp/src/lib/__tests__/max_ui_send_status_source_test.py",
+      "sha256": "6151fb3133a1005854057025cb4911c89103c76b1e27fd3c3b38bf8369238d99"
+    },
+    {
+      "bytes": 11296,
+      "file": "gravity-mvp/src/lib/ai-call/__tests__/event-emitter.test.js",
+      "sha256": "6811f01fb468c69904bd5dc85aa242b7ec9fb0aa46d568cfa41f27ac4c875f33"
+    },
+    {
+      "bytes": 11599,
+      "file": "gravity-mvp/src/lib/ai-call/__tests__/outcome-mapper.test.js",
+      "sha256": "f43230db121f806e50a3259a3e565ce7499ed20b6630fb75fb484d6c1f0f5bbe"
+    },
+    {
+      "bytes": 12388,
+      "file": "gravity-mvp/src/lib/ai-call/__tests__/scenario-schema.test.js",
+      "sha256": "3b5ef2ae858e97f38afd5db9c7a3d9bd261ff15c03f51d7e9bfa534424f4ad12"
+    },
+    {
+      "bytes": 5070,
+      "file": "gravity-mvp/src/lib/ai-call/__tests__/state-helpers.test.js",
+      "sha256": "dec02fdd25f55bd4e674c52d2a665fd834ca2ade5084ebbcc7a23ffc68d9be4f"
+    },
+    {
+      "bytes": 4429,
+      "file": "gravity-mvp/src/lib/ai-call/crypto.ts",
+      "sha256": "e8a66438e6044c48014607c54d3f63430673e83ee5755f12c9f8da06bc72d8a7"
+    },
+    {
+      "bytes": 14873,
+      "file": "gravity-mvp/src/lib/ai-call/default-scenario.ts",
+      "sha256": "689adf6437f9bccc1ee437fd2405984c6d1ee346ec53a94f5fd52eb32f7e02e3"
+    },
+    {
+      "bytes": 14957,
+      "file": "gravity-mvp/src/lib/ai-call/devSimulator.ts",
+      "sha256": "133033c77d581447b4310949f105550530ee8f2cb8e6bd6126496f0409016dfd"
+    },
+    {
+      "bytes": 4240,
+      "file": "gravity-mvp/src/lib/ai-call/esl-originate.ts",
+      "sha256": "88e7c596ff8d84043a394e65da8454f1da45cdda62deca75164831889e72600a"
+    },
+    {
+      "bytes": 7418,
+      "file": "gravity-mvp/src/lib/ai-call/event-emitter.js",
+      "sha256": "85f09ee03532e7fc976c2a914fb028a41216edd56d008e4e2284a604e3322980"
+    },
+    {
+      "bytes": 5000,
+      "file": "gravity-mvp/src/lib/ai-call/init-proxy.ts",
+      "sha256": "89e2e6bb6948ceff88eb9e5bec575a6f4bd1d716512408228097897dcd4ad152"
+    },
+    {
+      "bytes": 2349,
+      "file": "gravity-mvp/src/lib/ai-call/keys-status.ts",
+      "sha256": "396871f37acf871fbf1ea65d5330901fcca0ca6424ecafde761934f7f22daae5"
+    },
+    {
+      "bytes": 7854,
+      "file": "gravity-mvp/src/lib/ai-call/mock-payload.ts",
+      "sha256": "f3039b87e50a8d876ea1a1f1ce3f5abf1403e5f9aa2ef26103d9bdccb8182aaa"
+    },
+    {
+      "bytes": 7175,
+      "file": "gravity-mvp/src/lib/ai-call/outcome-mapper.js",
+      "sha256": "d2d2a95700591ba243953c0932253a2cb0ffc83df97cfcbe7a8f7db96f835b0e"
+    },
+    {
+      "bytes": 8813,
+      "file": "gravity-mvp/src/lib/ai-call/provider-settings.ts",
+      "sha256": "9d27230a216ddd74c368bbf62023eec934d0e314a70078cd8af454f88a54d892"
+    },
+    {
+      "bytes": 2569,
+      "file": "gravity-mvp/src/lib/ai-call/proxy-fetch.ts",
+      "sha256": "f35a7f4598e01ea15ccb8cdfa038ace34028f5ff1fd2a825ad31a33ccc3613b6"
+    },
+    {
+      "bytes": 9108,
+      "file": "gravity-mvp/src/lib/ai-call/scenario-schema.js",
+      "sha256": "9d055ca8b04fcc0664fc3f67c1dbefe7e7c6bb0b0afccc148172b71843e9353f"
+    },
+    {
+      "bytes": 10989,
+      "file": "gravity-mvp/src/lib/ai-call/scenarios.ts",
+      "sha256": "21421c56862d725fca27fc10e3b4da82634539bd7d4c1de4ff50b748e370695b"
+    },
+    {
+      "bytes": 3282,
+      "file": "gravity-mvp/src/lib/ai-call/state-helpers.js",
+      "sha256": "6af64007d3b11f29882ed760d491f7ccb49b4129e47948f83434a091534008d4"
+    },
+    {
+      "bytes": 8992,
+      "file": "gravity-mvp/src/lib/ai-call/types.ts",
+      "sha256": "c0e8f5d4d62ca9ae62cc41b0c3570bd6ce0882637acb261a24a4d04be2d85508"
+    },
+    {
+      "bytes": 4814,
+      "file": "gravity-mvp/src/lib/ai/improveDraft.ts",
+      "sha256": "3d7e84b2f80349e2fd33018ea41bfd975ab6b3b14efad0c26e4e8d8dd6645a57"
+    },
+    {
+      "bytes": 32924,
+      "file": "gravity-mvp/src/lib/ai/knowledge/Extractor.ts",
+      "sha256": "060912ba26beab085762cb947a48411f23f8fe13db4bc75e6fb35fccf95dd552"
+    },
+    {
+      "bytes": 4373,
+      "file": "gravity-mvp/src/lib/ai/knowledge/Retriever.rerank.ts",
+      "sha256": "9a9fed2513456ee6c8e0a1be382ace581edf3bbfa15b7354a9e7155c6ecb07a0"
+    },
+    {
+      "bytes": 15472,
+      "file": "gravity-mvp/src/lib/ai/knowledge/Retriever.ts",
+      "sha256": "9e8a4bfd44c81e48991d22ed1bb84205e39ba00114b55b94590b0e146a23db58"
+    },
+    {
+      "bytes": 4641,
+      "file": "gravity-mvp/src/lib/ai/knowledge/auditLog.ts",
+      "sha256": "b5d7d3b644d256ea55fb2906f6bd990f19b1189096e9c932ddb8f512375b0235"
+    },
+    {
+      "bytes": 5606,
+      "file": "gravity-mvp/src/lib/ai/knowledge/callTranscriptBuilder.ts",
+      "sha256": "f59aa128a3bdbdd79890c8af1fb6f704fe9d0a29b012939cd6bf8bc40f5b2b1f"
+    },
+    {
+      "bytes": 8109,
+      "file": "gravity-mvp/src/lib/ai/knowledge/coach.ts",
+      "sha256": "43958810ce06b730d79c15e17239b5c587e6e0aee77e48803b93191dcd471dae"
+    },
+    {
+      "bytes": 10886,
+      "file": "gravity-mvp/src/lib/ai/knowledge/explainability.ts",
+      "sha256": "43055e025a20615b1b969efee276cb4f0d4961863bd32793b4ffb6810fd43e61"
+    },
+    {
+      "bytes": 21438,
+      "file": "gravity-mvp/src/lib/ai/knowledge/extractionPrompt.ts",
+      "sha256": "475052b9552c4971f79dba4cb6ac10c214930ae9a3b1f19dc83ebdb632b8e071"
+    },
+    {
+      "bytes": 1822,
+      "file": "gravity-mvp/src/lib/ai/knowledge/featureFlags.ts",
+      "sha256": "638ba5a51793ff6ecd7cd4e049b8fb83d006c6cf6b4e0c6f8b3b5c33ee204f82"
+    },
+    {
+      "bytes": 9972,
+      "file": "gravity-mvp/src/lib/ai/knowledge/legacyMigration.ts",
+      "sha256": "028bf7c1fc1c96ada2a652728d6fdd8fd95b0bc4ac9d321b441b999c2fbacffe"
+    },
+    {
+      "bytes": 12325,
+      "file": "gravity-mvp/src/lib/ai/knowledge/pairBuilder.ts",
+      "sha256": "1d7ed3a0c526ca4967bac7cc4d46d7804fc2ccda95919d27dcace2dc0b1f3816"
+    },
+    {
+      "bytes": 11973,
+      "file": "gravity-mvp/src/lib/ai/knowledge/queries.ts",
+      "sha256": "2da95a6a5bb9bb4acee386a981d1541595ffcb58343b03d5866a1e99d860eb23"
+    },
+    {
+      "bytes": 21420,
+      "file": "gravity-mvp/src/lib/ai/knowledge/readiness.ts",
+      "sha256": "914da04db2e4c5a59a852ac9e9a8fa3c0dd841bccab6a6f1b8365124bb0d5ea4"
+    },
+    {
+      "bytes": 5183,
+      "file": "gravity-mvp/src/lib/ai/knowledge/retrievalPrompt.ts",
+      "sha256": "999bd03279b367d6ae9e324f9f51a97465a6d66795453f4dd88d021f5c7200b5"
+    },
+    {
+      "bytes": 9723,
+      "file": "gravity-mvp/src/lib/ai/knowledge/textUtils.ts",
+      "sha256": "4fe66e585b9bdc1b05b15a99bec0fbb46e9d1a825bf3a33dce0746356379a7ed"
+    },
+    {
+      "bytes": 9202,
+      "file": "gravity-mvp/src/lib/ai/knowledge/trustedGuard.ts",
+      "sha256": "434e82d60ed5bb2ebf6ac96c33266737d5b4a54ba5bf0d177fc58f785922da0e"
+    },
+    {
+      "bytes": 4330,
+      "file": "gravity-mvp/src/lib/aiCallAnalysis/config.ts",
+      "sha256": "eabbac8177921c8b64920bf8f767648533a1b1b1ba4ac460bb1d019a622bd70b"
+    },
+    {
+      "bytes": 17046,
+      "file": "gravity-mvp/src/lib/aiCallAnalysis/prompt.ts",
+      "sha256": "169a9c6151968698214c64b0b1070e7d28191ae1f36ea8c2ee0e4a409ecffbc6"
+    },
+    {
+      "bytes": 11464,
+      "file": "gravity-mvp/src/lib/aiCallAnalysis/qualifyPrompt.ts",
+      "sha256": "0a85af3d451cc87bdc520e2e8f3c1fb91f04990483440904615520fcaa202e52"
+    },
+    {
+      "bytes": 5134,
+      "file": "gravity-mvp/src/lib/avito/helpers.ts",
+      "sha256": "0a918b964c01b022c5183ab8566f8dac90a9a5ac456616d8ba482d895405869b"
+    },
+    {
+      "bytes": 16769,
+      "file": "gravity-mvp/src/lib/avito/incident-export.ts",
+      "sha256": "85a8b00b714608655aabec21577e14e1969dc31a2bfa0908cd2c79ffd76ca516"
+    },
+    {
+      "bytes": 2296,
+      "file": "gravity-mvp/src/lib/callStreamBus.ts",
+      "sha256": "0f24a5e7a5dc884edefa03ac1a0ed340183b81fcb71cee70601bb08fa1342285"
+    },
+    {
+      "bytes": 6603,
+      "file": "gravity-mvp/src/lib/calls/status.ts",
+      "sha256": "e8d016cd54cd9988fe0aca7b84fe94cc5fec14b38c6dc801d4c13eb7f568ec3d"
+    },
+    {
+      "bytes": 2423,
+      "file": "gravity-mvp/src/lib/communications.ts",
+      "sha256": "26ac2f793047a7b78046c29e033e22f7c403c3b5923fdaae73f9e694fb32baaf"
+    },
+    {
+      "bytes": 14826,
+      "file": "gravity-mvp/src/lib/config-validator.ts",
+      "sha256": "f76ec976df2de5a505eed84072f521a21bd90cabcdd6068eb9063de9b81f5a96"
+    },
+    {
+      "bytes": 4016,
+      "file": "gravity-mvp/src/lib/contactDisplay.ts",
+      "sha256": "395e778fecada4143135a8b3e84671dfa2a409f3590019ea698492fdcd2e35a5"
+    },
+    {
+      "bytes": 11704,
+      "file": "gravity-mvp/src/lib/contacts/ContactResolutionService.ts",
+      "sha256": "14c24330d1fff644ad10ff846e6ba0ac068dd9b9fefe9441080ec97572a79e0a"
+    },
+    {
+      "bytes": 2684,
+      "file": "gravity-mvp/src/lib/contacts/contact-resolution-shadow.types.ts",
+      "sha256": "c54d32c1d37c28e137554d57e0178a7ea5c120d973efb3d48c1ac871ce06442d"
+    },
+    {
+      "bytes": 3021,
+      "file": "gravity-mvp/src/lib/contacts/contact-resolution.types.ts",
+      "sha256": "715656bab9e5a496d20ccd6cd8d606e620b8542027c1c0d43babb65c32f1e2df"
+    },
+    {
+      "bytes": 8192,
+      "file": "gravity-mvp/src/lib/contacts/max-contact-resolution-shadow.ts",
+      "sha256": "4405d7431b341e45b77508da145f676f3c604069533a554ecddd96da5f93ba54"
+    },
+    {
+      "bytes": 7596,
+      "file": "gravity-mvp/src/lib/contacts/yandex-link.ts",
+      "sha256": "494e38a1a22fd34360385dcc23c19e19982fde545739ce1f5d7f2c0eb72735e8"
+    },
+    {
+      "bytes": 5857,
+      "file": "gravity-mvp/src/lib/cron-health.ts",
+      "sha256": "3de275690bf8cb17387810b931017b58250533be606d1d504b97bc1355064a3e"
+    },
+    {
+      "bytes": 1833,
+      "file": "gravity-mvp/src/lib/dictionaries/dictionary-service.ts",
+      "sha256": "da9b7b509199937079ebf478c1d7ac4747b472c3df2a5bf31449dbe9934d0f1a"
+    },
+    {
+      "bytes": 4988,
+      "file": "gravity-mvp/src/lib/execution-lock.ts",
+      "sha256": "a22f467bef5050751802f50795cab0a1fe462e6ab428f721a9492054be5d0d3f"
+    },
+    {
+      "bytes": 6974,
+      "file": "gravity-mvp/src/lib/failure-detection.ts",
+      "sha256": "79aa621580201c4522f8ce1282de2b3220c6d9968ecf38200383c61e124a1b4e"
+    },
+    {
+      "bytes": 34037,
+      "file": "gravity-mvp/src/lib/freeswitch/EslClient.ts",
+      "sha256": "e9018b9160d6d3c235e38676863f58fd82678b1ad0825e5e7c7798e04390e8c2"
+    },
+    {
+      "bytes": 12567,
+      "file": "gravity-mvp/src/lib/freeswitch/__tests__/recording-upload-retry.test.js",
+      "sha256": "e44569a9c421f8aaa20e812d3744cf5d0a20719ba97555ae83b6b0b4474ba26e"
+    },
+    {
+      "bytes": 8663,
+      "file": "gravity-mvp/src/lib/freeswitch/recording-upload-retry.js",
+      "sha256": "9a5da05247b592d4f08ac7aa629edaa05a63089a4e89ab8b859ad21405fdd126"
+    },
+    {
+      "bytes": 8505,
+      "file": "gravity-mvp/src/lib/freeswitch/recordingProcessor.ts",
+      "sha256": "f62876195300d9f1209a8b754e352996cd951462c7f2b0f3dfbb1192f403f9e1"
+    },
+    {
+      "bytes": 3708,
+      "file": "gravity-mvp/src/lib/health-helpers.js",
+      "sha256": "6845695de9e30c2606a2c6c821e8923281cb7e0d0dec75f8b028b428f9681027"
+    },
+    {
+      "bytes": 7877,
+      "file": "gravity-mvp/src/lib/health.ts",
+      "sha256": "91617c58a8c06d6b676aca71f1ad7085a1795a14a118a9e3b7675b347f8f5968"
+    },
+    {
+      "bytes": 12497,
+      "file": "gravity-mvp/src/lib/leads/intake.ts",
+      "sha256": "96dfa5304f4c8c7c45647bd9f3675426dd570de006ba8ff4b43c20533373e217"
+    },
+    {
+      "bytes": 4733,
+      "file": "gravity-mvp/src/lib/leads/mappers/avito.ts",
+      "sha256": "6e72275ab03ea63d35657d0f81a050d1f696c755447e7bcd1c727e11c3d9b9f0"
+    },
+    {
+      "bytes": 4436,
+      "file": "gravity-mvp/src/lib/leads/types.ts",
+      "sha256": "e38ae4caf66916a2360c6fbc7fdcdb32d6319861f399d63611aa6b967f73cf9e"
+    },
+    {
+      "bytes": 2415,
+      "file": "gravity-mvp/src/lib/messageEvents.ts",
+      "sha256": "37b69fb1a05fbd6cf0bcbd15c046fb2021ddc224475c87e0a6b3e9d5786bc209"
+    },
+    {
+      "bytes": 1873,
+      "file": "gravity-mvp/src/lib/messageStreamBus.ts",
+      "sha256": "5c28b470102f64cfe64f722ed125ee8f96bb25a989e6b896bfc7bfb3f36b39e4"
+    },
+    {
+      "bytes": 3126,
+      "file": "gravity-mvp/src/lib/mock/dashboardData.ts",
+      "sha256": "c10bdb02099b58d34527a45c6d121cb71b392905531e727b8958412525b25a34"
+    },
+    {
+      "bytes": 1879,
+      "file": "gravity-mvp/src/lib/openaiClient.ts",
+      "sha256": "c131e6385fa54c6ef1126b9e859c9ab8936df94cb83aab484300d5f0125b5db4"
+    },
+    {
+      "bytes": 1127,
+      "file": "gravity-mvp/src/lib/opsLog.ts",
+      "sha256": "70e0509550e44f4079a9b82612030e81b5e6860aeac9da86ea635b86d04fa6db"
+    },
+    {
+      "bytes": 6984,
+      "file": "gravity-mvp/src/lib/perf-monitor.ts",
+      "sha256": "a49d6f308030e41883876ca5f01b3414d30a9004958ef9309546e977eeea7389"
+    },
+    {
+      "bytes": 2129,
+      "file": "gravity-mvp/src/lib/phoneUtils.ts",
+      "sha256": "61e5c420e69381add94822786d6630bfdea035f72e352d83e0de48d7ddf489c6"
+    },
+    {
+      "bytes": 3364,
+      "file": "gravity-mvp/src/lib/pipeline/ChannelAdapterRegistry.ts",
+      "sha256": "2548b3c218a308c51f929958ac1ac170ba607331e20e2449ced8e48421cbbae3"
+    },
+    {
+      "bytes": 7209,
+      "file": "gravity-mvp/src/lib/pipeline/ContextBuilder.ts",
+      "sha256": "02c9fce8985b478fcc9405dbe94d44f019fa702a407ccd7a0195d79fe1c7120c"
+    },
+    {
+      "bytes": 2039,
+      "file": "gravity-mvp/src/lib/pipeline/DecisionEngine.ts",
+      "sha256": "f568c110496a06141667059e63cedf16ab6ce1635c5bc43032effcbe04a7cee0"
+    },
+    {
+      "bytes": 2223,
+      "file": "gravity-mvp/src/lib/pipeline/IntentClassifier.ts",
+      "sha256": "8b85bfce929bd16707f900cea5683d53374e923010d9fab8429e2b202619388c"
+    },
+    {
+      "bytes": 10316,
+      "file": "gravity-mvp/src/lib/pipeline/PipelineWorker.ts",
+      "sha256": "b4989aaa2679e565f9af6b415c3d899f023264a19e63c174c4149a327e93a9a0"
+    },
+    {
+      "bytes": 3989,
+      "file": "gravity-mvp/src/lib/pipeline/ResponseGenerator.ts",
+      "sha256": "96d3a27ef975af3bfae3f9491f0cb291097908125ac4592d22fa2540d8cce863"
+    },
+    {
+      "bytes": 6761,
+      "file": "gravity-mvp/src/lib/pipeline/llmClient.ts",
+      "sha256": "f277bb169caef3adea16d90c471d4f0e126a8516a7047b26936a6cae16865280"
+    },
+    {
+      "bytes": 7249,
+      "file": "gravity-mvp/src/lib/pipeline/shadowReply.ts",
+      "sha256": "6c6b8d5941da36ef9c135a100ba8e90ca7485dae59e29f3ec378847fcd361417"
+    },
+    {
+      "bytes": 273,
+      "file": "gravity-mvp/src/lib/prisma.ts",
+      "sha256": "c751773098e75842515f8b83410e44ee78395d072226e80208a7264b05d11121"
+    },
+    {
+      "bytes": 13971,
+      "file": "gravity-mvp/src/lib/queue/analyzeWorker.ts",
+      "sha256": "a8243c2f0ff5bd0c78361f1440a2bf9b9ba68a3083dd085fcc23418ab273c593"
+    },
+    {
+      "bytes": 2025,
+      "file": "gravity-mvp/src/lib/queue/connection.ts",
+      "sha256": "dc667017c4b30c92969fe187625e5582c74fd6d3c9cc874be4131abc7a199255"
+    },
+    {
+      "bytes": 1723,
+      "file": "gravity-mvp/src/lib/queue/index.ts",
+      "sha256": "a2c6326e826005e0dfa6c5efa497350f7e0690e33f24a29f2555cc9bdccedc87"
+    },
+    {
+      "bytes": 3095,
+      "file": "gravity-mvp/src/lib/queue/queues.ts",
+      "sha256": "0669a9ca1f690fe8b31b0cf7bf899857d00d67fed9cfbad3e7bcc7cabd997ee2"
+    },
+    {
+      "bytes": 6344,
+      "file": "gravity-mvp/src/lib/queue/transcribeWorker.ts",
+      "sha256": "d6a084833df8d0155bb9c8839e57340438dabcf8d87999bc5138da9a8321c26e"
+    },
+    {
+      "bytes": 6069,
+      "file": "gravity-mvp/src/lib/retry.ts",
+      "sha256": "d832c664b01801888af03f7114b47cc93a357f1a9d58b731b4b15447d87727b8"
+    },
+    {
+      "bytes": 6660,
+      "file": "gravity-mvp/src/lib/runtime-guardrails.ts",
+      "sha256": "c4ef28fa439fd7005f9359a7cd4ce9329c153887090a232e10d87219eba21360"
+    },
+    {
+      "bytes": 11371,
+      "file": "gravity-mvp/src/lib/scoring.ts",
+      "sha256": "1c2b13a703277358b9c343efd46b2a8474e9b0d3529f24263c63055dbb63d11b"
+    },
+    {
+      "bytes": 45117,
+      "file": "gravity-mvp/src/lib/sip/SipContext.tsx",
+      "sha256": "d9fc5d0055d87a1d577d5f0bd25e4628f661a8b0ad37ec4b205cfd5cc908a6eb"
+    },
+    {
+      "bytes": 3773,
+      "file": "gravity-mvp/src/lib/sip/__tests__/callAlertAudio.test.ts",
+      "sha256": "2d6b6e779f1192d858c3524b3b9abc76b9cf5c209ec9a65affbda0edcfbcc912"
+    },
+    {
+      "bytes": 704,
+      "file": "gravity-mvp/src/lib/sip/__tests__/extensions.test.ts",
+      "sha256": "f729df3d376de26e5063c4c4bf3dcb8568a38c05c6eaaf2419fa91f57d4b0252"
+    },
+    {
+      "bytes": 4164,
+      "file": "gravity-mvp/src/lib/sip/callAlertAudio.ts",
+      "sha256": "8b6cd6047ac4853f5317cc60bcf5b7d7a61aa9910cebabdc4eb0f69118758d97"
+    },
+    {
+      "bytes": 1477,
+      "file": "gravity-mvp/src/lib/sip/extensions.ts",
+      "sha256": "246fd2049a46450b1ef2f1e538f0d7d29f92904c757cdd6f5ae5dd13982a41d9"
+    },
+    {
+      "bytes": 13294,
+      "file": "gravity-mvp/src/lib/stability-check.ts",
+      "sha256": "8335fce2da09d9c6666ec6c7618849e2813170547cd27dfb47eec940e127e344"
+    },
+    {
+      "bytes": 2872,
+      "file": "gravity-mvp/src/lib/storage/minio.ts",
+      "sha256": "71111216e1083d4f8c87764b99760e5fd2011ba5605db517fed328a3069bc55c"
+    },
+    {
+      "bytes": 2368,
+      "file": "gravity-mvp/src/lib/tasks/capacity-config.ts",
+      "sha256": "fb5495536ec474fea43564c511bd46ecb2400958457c075053aa4ca34e93d0a0"
+    },
+    {
+      "bytes": 498,
+      "file": "gravity-mvp/src/lib/tasks/completion-config.ts",
+      "sha256": "060730eaeea4daf443fc0ac9b00547886d0ae5c5ddf5f29d2b97b145927700c8"
+    },
+    {
+      "bytes": 3987,
+      "file": "gravity-mvp/src/lib/tasks/control-signals.ts",
+      "sha256": "8ed3474be9d766cb44ab0afbc05b3100ab6c3b6fc0fea4cd44df79a900040273"
+    },
+    {
+      "bytes": 239,
+      "file": "gravity-mvp/src/lib/tasks/escalation-config.ts",
+      "sha256": "16d01797b39f36180fcae723811559c465e07925a42394c8a20f6f8a865bea31"
+    },
+    {
+      "bytes": 19098,
+      "file": "gravity-mvp/src/lib/tasks/excel-contract.ts",
+      "sha256": "f4577d671445c25d8f1d290c37a9b0b060caf8303692d605588a302f986220ce"
+    },
+    {
+      "bytes": 332,
+      "file": "gravity-mvp/src/lib/tasks/followup-config.ts",
+      "sha256": "741634a9188554f07b1b86ed3d27f1bd775f6578fcd4b3f9b67ad18469217f59"
+    },
+    {
+      "bytes": 779,
+      "file": "gravity-mvp/src/lib/tasks/intervention-action-config.ts",
+      "sha256": "cb67e57c68c1042dad562c3400eb3496ecdc48b94a7e5a8c6aa8695a991d7501"
+    },
+    {
+      "bytes": 2413,
+      "file": "gravity-mvp/src/lib/tasks/intervention-aging-config.ts",
+      "sha256": "175c7a621cfab17cf0064c2bce08978cd26ddfe636abfc056896c40a8f2587c6"
+    },
+    {
+      "bytes": 2224,
+      "file": "gravity-mvp/src/lib/tasks/intervention-config.ts",
+      "sha256": "4e21b39bff29b98e44fa0d8953a65097a582aa164e617b94042f3300e3588835"
+    },
+    {
+      "bytes": 1675,
+      "file": "gravity-mvp/src/lib/tasks/intervention-outcome-config.ts",
+      "sha256": "dd581d0cd7a0ea2fdd21160094c485e2d83ab6415cf44110f8addc3c82343a9a"
+    },
+    {
+      "bytes": 21440,
+      "file": "gravity-mvp/src/lib/tasks/list-columns.ts",
+      "sha256": "78d06ffcf8f976032d595285d6c845f54041ecfc57d2c5a241c52ee97bedcb72"
+    },
+    {
+      "bytes": 20255,
+      "file": "gravity-mvp/src/lib/tasks/list-renderers.tsx",
+      "sha256": "5c7c58f5d79b6a7cf86e91290b4a1ec9901d961e2c115aef7eb87372db2c34a8"
+    },
+    {
+      "bytes": 5525,
+      "file": "gravity-mvp/src/lib/tasks/list-schema.ts",
+      "sha256": "30cfaaab8ecb32f40ebed557b08a8c2362807554997a300cda277ae6a2aa49fc"
+    },
+    {
+      "bytes": 3244,
+      "file": "gravity-mvp/src/lib/tasks/list-views.ts",
+      "sha256": "0dd921fcb791b88402d73ab1717a436700a4d5ba8b9b8a68a1cd5bf1be203c74"
+    },
+    {
+      "bytes": 16235,
+      "file": "gravity-mvp/src/lib/tasks/manager-health-config.ts",
+      "sha256": "b911692a7f5e735af482c0a202e5c86b5900ed7d89fbd16fcd1339c9ffef7b47"
+    },
+    {
+      "bytes": 5732,
+      "file": "gravity-mvp/src/lib/tasks/offer-rules.ts",
+      "sha256": "906bb0ff5ae9bddf01a8be46e9537e1f58279a0a3d06abe4de80b461de307e44"
+    },
+    {
+      "bytes": 549,
+      "file": "gravity-mvp/src/lib/tasks/outcome-timing-config.ts",
+      "sha256": "9ad69b1e7826d546619d6eb724cdfbeaf2ad2a22e0314209728eda2cdd7645d9"
+    },
+    {
+      "bytes": 508,
+      "file": "gravity-mvp/src/lib/tasks/pattern-config.ts",
+      "sha256": "43f77219ac6c3d0a0b4b9597cb85101dc47f173b3676f4b5efcdfae85987a0e2"
+    },
+    {
+      "bytes": 2136,
+      "file": "gravity-mvp/src/lib/tasks/reliability-config.ts",
+      "sha256": "94f676a73031ad86cfe621594eb3a4a46e1feb190becad86b26a157bffbc2656"
+    },
+    {
+      "bytes": 980,
+      "file": "gravity-mvp/src/lib/tasks/response-config.ts",
+      "sha256": "dc97c4c735eea95f711b6adee87c506fb533807de060562c3c2930c32d9c2024"
+    },
+    {
+      "bytes": 1678,
+      "file": "gravity-mvp/src/lib/tasks/risk-config.ts",
+      "sha256": "fe769dba592e02342a4c1f80cbe1fefc603b5a4b5e25ece4f809ae4950377589"
+    },
+    {
+      "bytes": 698,
+      "file": "gravity-mvp/src/lib/tasks/root-cause-config.ts",
+      "sha256": "80bdbf53b21187581e670b730f4f238ba68146d14a3a99f65582ad3bac5baa22"
+    },
+    {
+      "bytes": 572,
+      "file": "gravity-mvp/src/lib/tasks/root-cause-persistence-config.ts",
+      "sha256": "771f477b694b1f5d2e9fccf8dfdefb1debcb8546962196d7c3a61c875852f565"
+    },
+    {
+      "bytes": 21096,
+      "file": "gravity-mvp/src/lib/tasks/scenario-config.ts",
+      "sha256": "72561314e4031a678e8be11541c1a0b8b076c71977c7aec38de5552613afabd7"
+    },
+    {
+      "bytes": 12351,
+      "file": "gravity-mvp/src/lib/tasks/scenario-fields.ts",
+      "sha256": "361a662d4f97cda83cc4ab28a562f07d21c7637beb8de4f68cabf1551005739d"
+    },
+    {
+      "bytes": 484,
+      "file": "gravity-mvp/src/lib/tasks/scenario-settings-types.ts",
+      "sha256": "70dd7ded87c4b098c4753557b37c8d925f146446a60b838958386475e2aee615"
+    },
+    {
+      "bytes": 6328,
+      "file": "gravity-mvp/src/lib/tasks/scenario-settings.ts",
+      "sha256": "70ab1d5a3c9a44af0cf845307f89e39d2f19758328a847b4021346fc6631c471"
+    },
+    {
+      "bytes": 1069,
+      "file": "gravity-mvp/src/lib/tasks/task-event-service.ts",
+      "sha256": "938dbdd85c2259b32d0999bc952fa9da36c2a4aec54693a2d1b1ff7ec83e6738"
+    },
+    {
+      "bytes": 1427,
+      "file": "gravity-mvp/src/lib/tasks/toast-store.ts",
+      "sha256": "6185143ccb7152e3a15a917fb2d3abdefccdf3eb3d50ce87ce30d87620c2a924"
+    },
+    {
+      "bytes": 8849,
+      "file": "gravity-mvp/src/lib/tasks/types.ts",
+      "sha256": "cf8f93c0e2145962c45141f227a23688c9c479ad2a0e5d185d8247572d474d11"
+    },
+    {
+      "bytes": 1671,
+      "file": "gravity-mvp/src/lib/tasks/usage.ts",
+      "sha256": "f6fa9c90c3cac918760acc7ed3b79fd9e574042f80c468eae26fc46bf7ccb122"
+    },
+    {
+      "bytes": 2580,
+      "file": "gravity-mvp/src/lib/tasks/volatility-config.ts",
+      "sha256": "d59b3a90d8083907f5ee5f372815d46ee24dc82cede227375de64621dd4cdf43"
+    },
+    {
+      "bytes": 604,
+      "file": "gravity-mvp/src/lib/tasks/workload-config.ts",
+      "sha256": "4ca023d8bb2e6c5c0bc73af40230557985d868bbb28013f09c96f4b601e1180e"
+    },
+    {
+      "bytes": 33869,
+      "file": "gravity-mvp/src/lib/triggers.ts",
+      "sha256": "090c5770da1dc67b84ec994108cb7e8414a6a57be992e38342151f139981178e"
+    },
+    {
+      "bytes": 5927,
+      "file": "gravity-mvp/src/lib/users/__tests__/login.test.js",
+      "sha256": "5c5fbc7722b869f43c7cbc9e3fea2076d82591e3d660c43555fe2a0bec317daf"
+    },
+    {
+      "bytes": 8252,
+      "file": "gravity-mvp/src/lib/users/__tests__/user-crud.test.js",
+      "sha256": "3c46d7ebcbc3b3f0ccdc0577634ad42c01fd6ce1c6fed4c5768ea1c6e19dfde0"
+    },
+    {
+      "bytes": 3493,
+      "file": "gravity-mvp/src/lib/users/__tests__/user-service.test.js",
+      "sha256": "92f286eb5309b362efbf33d4b9a66cf759a42c20993bd8c54206a07a4887de76"
+    },
+    {
+      "bytes": 9166,
+      "file": "gravity-mvp/src/lib/users/auth-helpers.js",
+      "sha256": "c935ead6eaa8e19be1b71124c6bf6fbe7d6053d77173fc446171f1a21b4af95a"
+    },
+    {
+      "bytes": 8775,
+      "file": "gravity-mvp/src/lib/users/user-service.ts",
+      "sha256": "cc026e94b3907bf3d4271a6f3d79d9dd05d04e67bc2439a4cab0baa185ef2f6f"
+    },
+    {
+      "bytes": 168,
+      "file": "gravity-mvp/src/lib/utils.ts",
+      "sha256": "54b12b8b66c7dfee6c564eb906814b1017361f3d5539e774313d733756bf1834"
+    },
+    {
+      "bytes": 7897,
+      "file": "gravity-mvp/src/lib/whatsapp/WhatsAppCleanup.ts",
+      "sha256": "0c0659b90ad603265d6edd73654e04fcca8099594f8721bb875d60f172e10870"
+    },
+    {
+      "bytes": 122225,
+      "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
+      "sha256": "a8a41d9a9c225fb9e8317408599a21dad64ce29e7f792bece24dffedf22448be"
+    },
+    {
+      "bytes": 1673,
+      "file": "gravity-mvp/src/lib/whatsapp/__tests__/wa_reachability_source_test.py",
+      "sha256": "bcab4d8d44aa2cc2895397835de46c966f705f6aab81c82e1e513cd981c977e3"
+    },
+    {
+      "bytes": 3049,
+      "file": "gravity-mvp/src/lib/whatsapp/enrichChatName.ts",
+      "sha256": "41bef6a06acf5370f81edd02b63a6804b573b73289882abf2758ef36d23cd087"
+    },
+    {
+      "bytes": 6513,
+      "file": "gravity-mvp/src/lib/yandexSync.ts",
+      "sha256": "24d1c6b717723125c088b93872e541904cec640f481619a0f7e591efb6c7a1ef"
+    },
+    {
+      "bytes": 759,
+      "file": "gravity-mvp/src/providers/QueryProvider.tsx",
+      "sha256": "861490b925b2859a0bb92f9f39138f423fad2f1edb8680c995e3e20188d7238e"
+    },
+    {
+      "bytes": 422,
+      "file": "gravity-mvp/src/scripts/force-clear-locks.ts",
+      "sha256": "83f0a4d520d7c0b6259317495b3840458cd3378b4fc8787a553a38ada8b6ff61"
+    },
+    {
+      "bytes": 10253,
+      "file": "gravity-mvp/src/store/list-view-store.ts",
+      "sha256": "fa8f5c247feb3386c15602d77a40ea6244f61feecf3f804e9b3a4bce637f3286"
+    },
+    {
+      "bytes": 12068,
+      "file": "gravity-mvp/src/store/tasks-selectors.ts",
+      "sha256": "5b9bdca6a2815cc9f5db25c676432fde34d895af4251f962832ad1d55bf2cb09"
+    },
+    {
+      "bytes": 4797,
+      "file": "gravity-mvp/src/store/tasks-store.ts",
+      "sha256": "69b8b3fc3117c8f706093c5f11673e51019617359bb84d7e680737f6980e5022"
+    },
+    {
+      "bytes": 213,
+      "file": "max-web-scraper/check-contacts.js",
+      "sha256": "e83f633a30d47218cb5fd912e648c23812974897aa76da798245db76535fac5d"
+    },
+    {
+      "bytes": 2156,
+      "file": "max-web-scraper/contacts/ContactStore.js",
+      "sha256": "58320224027d7c01e6715e4a3a42dc0176343670759a252d7e4d7e55293ddc61"
+    },
+    {
+      "bytes": 1255,
+      "file": "max-web-scraper/debug.js",
+      "sha256": "bb385e6b97381093fd1f24acb708680dddebbd6d12499c5174d28fb46fb17f34"
+    },
+    {
+      "bytes": 10187,
+      "file": "max-web-scraper/discovery/discover.js",
+      "sha256": "d39ab54c09a9db9dd0002b7d0ea3c87801f2be9fe10999b1c2ace5313972d037"
+    },
+    {
+      "bytes": 281465,
+      "file": "max-web-scraper/index.js",
+      "sha256": "5848e64c46a13e8066ee4d4c89ca87671d643ea8db702f7daf304b22d73efcf6"
+    },
+    {
+      "bytes": 4988,
+      "file": "max-web-scraper/lib/MaxCleanup.js",
+      "sha256": "87b82a1a2d3037a858c4e08457e8c559bbfb59fe8180032d3de09862c21298ff"
+    },
+    {
+      "bytes": 54376,
+      "file": "max-web-scraper/maxBrowser.js",
+      "sha256": "0ee44f986ac28df2df36e6e473db44754f1218c342cd51e4bd0dfb0c64d533d6"
+    },
+    {
+      "bytes": 8913,
+      "file": "max-web-scraper/media/MediaPipeline.js",
+      "sha256": "8d7f1c52b73af746072d4dfc5eb840eb35bc191403fee8e8888d472c4b5dce5f"
+    },
+    {
+      "bytes": 496,
+      "file": "max-web-scraper/package.json",
+      "sha256": "69617ad655529f4f5ab77bfc2bb5682b939e9b1a8877b98d86ed950d2198fabd"
+    },
+    {
+      "bytes": 373,
+      "file": "max-web-scraper/parse.js",
+      "sha256": "f296088412dbe494ed497bf7d028e247e8c8e21ebc2d9df3b8024c29c62b1e48"
+    },
+    {
+      "bytes": 593,
+      "file": "max-web-scraper/parse2.js",
+      "sha256": "fc7259456ec29ecb617b8f260415b024fa150ac8accfed493ebf8846fda45032"
+    },
+    {
+      "bytes": 5705,
+      "file": "max-web-scraper/parser/MessageParser.js",
+      "sha256": "21e03db247d3efac53efc2736bfc49fbf24eb9ca10969a698e9659a3332407e4"
+    },
+    {
+      "bytes": 420,
+      "file": "max-web-scraper/restart-graceful.js",
+      "sha256": "61e399dc69f4b54e936ab8444a3c5af80ea776ffc1732863a99c55977f4e285a"
+    },
+    {
+      "bytes": 324,
+      "file": "max-web-scraper/scripts/stop_process.js",
+      "sha256": "53bd0152db7de547b0ec77a0bc0bb6e64fe50c0fa93538e88e40041d27cc398b"
+    },
+    {
+      "bytes": 8412,
+      "file": "max-web-scraper/session/SessionController.js",
+      "sha256": "dca9fc7d4022beca657b6ef4eafeafb7cfa252413236c9f6c97022567bccc405"
+    },
+    {
+      "bytes": 15009,
+      "file": "max-web-scraper/sync/InitialHistorySync.js",
+      "sha256": "04103e874b66c7d5951b980408652feb5c200bb8cb0bb471558ab6880c6b10c9"
+    },
+    {
+      "bytes": 6000,
+      "file": "max-web-scraper/sync/MessageSync.js",
+      "sha256": "187e89020aa7652378f203d5538ef5f087fd2fbe3a40fb1e10bc166c75c2a16c"
+    },
+    {
+      "bytes": 9296,
+      "file": "max-web-scraper/sync/NameSync.js",
+      "sha256": "32f08b25ed745188f1d4ecca4ac892324f855fa0ce4a2e1836a91a60f11b2693"
+    },
+    {
+      "bytes": 2372,
+      "file": "max-web-scraper/test-full-outbound.js",
+      "sha256": "dcdf18237203044c55d87d62d840e7603a0b651d337d4962846e5b76e41f9f46"
+    },
+    {
+      "bytes": 1097,
+      "file": "max-web-scraper/test-send-correct.js",
+      "sha256": "46b78312296d8563b1d1c28667de3e2418b30504b170cbd600b978558a648ea4"
+    },
+    {
+      "bytes": 1812,
+      "file": "max-web-scraper/test-send.js",
+      "sha256": "0a3ec179a8f38d7cdb003696332bcc38c9d4bed0547f05a933fd25a8393979d4"
+    },
+    {
+      "bytes": 441,
+      "file": "max-web-scraper/test-webhook.js",
+      "sha256": "99478e3c36dc5faf56457629ce5a41ea8239724036e659ef3039939f8387b39c"
+    },
+    {
+      "bytes": 49,
+      "file": "max-web-scraper/test.js",
+      "sha256": "0ada0dfcecebe1af6ad94776197dfd97414f245574866c0c9c63cb4d5906b7a8"
+    },
+    {
+      "bytes": 1635,
+      "file": "max-web-scraper/test/max-dom-bidirectional-mirror-source.test.py",
+      "sha256": "a796fe52e053aa523602286bf1d0adaaeb7445e308881c521a4a19a731960a37"
+    },
+    {
+      "bytes": 1150,
+      "file": "max-web-scraper/test/max-dom-phone-enrichment-source.test.py",
+      "sha256": "fcf5753b8ecd5114c8007e50b01e857659a7bff4a1af7795ee9f5aa0f181e954"
+    },
+    {
+      "bytes": 1601,
+      "file": "max-web-scraper/test/max-known-chats-catchup-source.test.py",
+      "sha256": "3085b24fb72e270cd1bd60b7572030e60a10c315b29d6bfe5a2828c1727c349c"
+    },
+    {
+      "bytes": 6957,
+      "file": "max-web-scraper/test/max-media-caption-source.test.js",
+      "sha256": "3d6a3c2be398b7ca668031435e3491368c8e2ceb48926bdd36d34a5b163f0aca"
+    },
+    {
+      "bytes": 19781,
+      "file": "max-web-scraper/test/max-text-contract-source.test.js",
+      "sha256": "b05fd171ef937ddc18841c2ac54d5907bd33ae717bbe05f967921a050c38334e"
+    },
+    {
+      "bytes": 7760,
+      "file": "max-web-scraper/test/max-text-stability.test.js",
+      "sha256": "4ecf7b63b0209511e76fab2e7a198db31b3207f57cbb923af416b5b632381c15"
+    },
+    {
+      "bytes": 980,
+      "file": "max-web-scraper/test/max-text-ui-paste-source.test.py",
+      "sha256": "d64f2fb3ae3cb92de5eb2982c2ed5b8ca5c678af7ed0941befbbc52ded34f3b0"
+    },
+    {
+      "bytes": 1486,
+      "file": "max-web-scraper/test/max-ui-delivered-without-provider-id-source.test.py",
+      "sha256": "2039065d874e5cb70df0e51fd1faca02aa302c1b4a3532da739a2f7d1e0ed1e1"
+    },
+    {
+      "bytes": 702,
+      "file": "max-web-scraper/test/max-ui-resolve-send-status-source.test.py",
+      "sha256": "c472b433a75b4649f39a390222d409a7da4afcf75b4ea87c43d8b02b4721b460"
+    },
+    {
+      "bytes": 844,
+      "file": "max-web-scraper/test/max-ui-send-dom-fallback-guard-source.test.py",
+      "sha256": "be596826dd26f278eca356fca283148aa5028f115e7e965d8912d633aca3d936"
+    },
+    {
+      "bytes": 5388,
+      "file": "max-web-scraper/test/reachability-contract-source.test.js",
+      "sha256": "a3bfa1371028c5d556b39894edd65540f9d3df9cfd917dfabb6250dbb4b7c3c9"
+    },
+    {
+      "bytes": 831,
+      "file": "max-web-scraper/test3.js",
+      "sha256": "cfb47edc3cc22804bb89b86c6d5ce21c02faa81585bf27529495a0e8d71424a9"
+    },
+    {
+      "bytes": 100541,
+      "file": "max-web-scraper/transport/TransportInterceptor.js",
+      "sha256": "7d4978e8a43abc346c44ba2edc3c7c0ab02a45859f8ba1ec35ca2a89555a4d67"
+    },
+    {
+      "bytes": 556,
+      "file": "telephony/compare-invites.sh",
+      "sha256": "e5eb2f9d8154b508a92a1d3ecad923d14fcf4b72d2e5d5cb321cd28458c61bf4"
+    },
+    {
+      "bytes": 1006,
+      "file": "telephony/conf/autoload_configs/acl.conf.xml",
+      "sha256": "bac65314830937c754dc5f76870a8759912c12e9b36adce1c1aa1baf39528f2d"
+    },
+    {
+      "bytes": 1066,
+      "file": "telephony/conf/autoload_configs/event_socket.conf.xml",
+      "sha256": "ccd88951131f4efa54012773fc0d6edee9ec2b22fdf3c0aa3a7f44331ca89415"
+    },
+    {
+      "bytes": 1000,
+      "file": "telephony/conf/autoload_configs/logfile.conf.xml",
+      "sha256": "75a036a3ac22260bccdcdfad482deebeee51aa170a283575583edf5d13180178"
+    },
+    {
+      "bytes": 3842,
+      "file": "telephony/conf/dialplan/default/02_megafon_inbound.xml",
+      "sha256": "07e8f9455552cc6d2bb0f8d52ced11ab58f806fa6fdcbb4d2536d7b229a2d0ee"
+    },
+    {
+      "bytes": 2351,
+      "file": "telephony/conf/dialplan/default/03_user_outbound.xml",
+      "sha256": "e69aac5113532c3bd612b1a99f9df4a9a9c215ae873d2517485c44a5baa4433a"
+    },
+    {
+      "bytes": 1923,
+      "file": "telephony/conf/dialplan/default/99_audio_fork_test.xml",
+      "sha256": "ff2563a9db5cbb9e85716cc95e51f39ac31c012d0d7977fa726576117fa442e5"
+    },
+    {
+      "bytes": 579,
+      "file": "telephony/conf/dialplan/public/00_inbound_did.xml",
+      "sha256": "8a0a128f087bd81fcaac1b6d6fad4228bce7b7729f0b7642d3fee0eccdfad606"
+    },
+    {
+      "bytes": 931,
+      "file": "telephony/conf/directory/default/101.xml",
+      "sha256": "f331b03f1808c9f4d15cdeb5f4b7ff65a7408f02a0f248a1cb0d7e4db17a2918"
+    },
+    {
+      "bytes": 777,
+      "file": "telephony/conf/directory/default/102.xml",
+      "sha256": "b32a4c778174f43e7314a590e4ebc2b97aab33c025ef0459c9392036cdea2095"
+    },
+    {
+      "bytes": 924,
+      "file": "telephony/conf/directory/default/103.xml",
+      "sha256": "29401a9f8a694b1b8e14a63ccf497de83c8c457b0cb8b183658ee84deb1437c2"
+    },
+    {
+      "bytes": 1518,
+      "file": "telephony/conf/sip_profiles/external/megafon.xml",
+      "sha256": "dd453fc9e6bef4163933b542b542f2c67ebd66c55f325dc5009d2b89a2a99ab4"
+    },
+    {
+      "bytes": 6884,
+      "file": "telephony/conf/sip_profiles/internal.xml",
+      "sha256": "11be68015a5b38a51148c006324533dafe0050a47661d0bfa85681be53b9e27b"
+    },
+    {
+      "bytes": 4179,
+      "file": "telephony/conf/vars.xml",
+      "sha256": "969290a9919daa272daf6c09dd5e84cbea1ccbee4806722502667044ddf7a9ab"
+    },
+    {
+      "bytes": 3989,
+      "file": "telephony/docker-compose.yml",
+      "sha256": "c0d4db8ba88a78d737d363273fa461391a7ef3c02931471a44d6f4d10f14fac5"
+    },
+    {
+      "bytes": 331,
+      "file": "telephony/find-browser-invite.sh",
+      "sha256": "20903643c9388f74a4523e1472d1c2fa155e7561eccd1a2aebc9cd51bdd3f077"
+    },
+    {
+      "bytes": 5028,
+      "file": "telephony/setup-mod-audio-fork.sh",
+      "sha256": "2f2ce91eb54466a10b66b26500e72159f12383ac1da50f30f54b03b6ae8c052a"
+    },
+    {
+      "bytes": 2727,
+      "file": "telephony/tests/test_inbound_ring_group.py",
+      "sha256": "55d20f0c3a04390eebafcd15102912560df4ee1e401f4663699ad6d3f241ab24"
+    },
+    {
+      "bytes": 678,
+      "file": "telephony/trace-bridge.sh",
+      "sha256": "6f899c28fee1a166df4911fba7ee93f3c03d11c1a367fdd53d4ebc36db453f33"
+    },
+    {
+      "bytes": 393,
+      "file": "telephony/trace-last-call.sh",
+      "sha256": "563a33ce8801269ee2b84804912c2760c7687b55e6b8192def433896ace68596"
+    },
+    {
+      "bytes": 509,
+      "file": "telephony/turnserver.conf",
+      "sha256": "24501917a686cb567310d659e830db6c7a156af2f5b709f10ef082a797faae22"
+    },
+    {
+      "bytes": 3512,
+      "file": "telephony/wsl-build-fs.sh",
+      "sha256": "44ed40e2db09f9b31ee7ebebd4e3aa09a3102271e163c64fdfc59614d2d8555e"
+    },
+    {
+      "bytes": 1342,
+      "file": "telephony/wsl-setup-coturn.sh",
+      "sha256": "6248bdf34435dbdbf07fa99704851bca1545b8da9d9c91a503c41dc88f3073b0"
+    },
+    {
+      "bytes": 3630,
+      "file": "telephony/wsl-setup-fs.sh",
+      "sha256": "c0f9ffa805d3e8d89f9e3f789cc3f52aef908b40e9efda6919cafbaf265de27b"
+    },
+    {
+      "bytes": 2688,
+      "file": "tg-bot/prisma/migrations/20260223211509_add_is_linear_to_survey/migration.sql",
+      "sha256": "1e6f4be04902cc74473bb37b512acb3d1c3ce1010ad696dea48e8969f762fc8e"
+    },
+    {
+      "bytes": 126,
+      "file": "tg-bot/prisma/migrations/migration_lock.toml",
+      "sha256": "693566b52c49db47a2b0901d12400aa3d710d13a49f4a2a154b80c0505ed737c"
+    },
+    {
+      "bytes": 4672,
+      "file": "tg-bot/prisma/schema.prisma",
+      "sha256": "341fda1d50c85361de4ab19d45125639b62d68a5bdc79ac545c8c29f621c27fd"
+    },
+    {
+      "bytes": 1277,
+      "file": "tg-bot/src/app.js",
+      "sha256": "15d68e86fee4afbdbf3b14aa092466e2757add116ee5cc1c230fdf8be71aa4c5"
+    },
+    {
+      "bytes": 17726,
+      "file": "tg-bot/src/bot.js",
+      "sha256": "e6f2ca3405731f46488128936ab3be4d09136e9c7a69277f3ee01824a226e052"
+    },
+    {
+      "bytes": 696,
+      "file": "tg-bot/src/config.js",
+      "sha256": "9d5ff3c831cbeaee9c107ce2af1decbb5d070cbd967ed25c11d8896609325b8d"
+    },
+    {
+      "bytes": 8395,
+      "file": "tg-bot/src/database.js",
+      "sha256": "b76dd7ecaf004c627ea6d11ebd4a0c5b7e2862499b8df71053dbba9a9e68cb81"
+    },
+    {
+      "bytes": 5724,
+      "file": "tg-bot/src/handlers/admin.js",
+      "sha256": "5d0cf208936dd6670511de53d7cbc1d2f485b314f0ef0da1eaf28c89dedd126a"
+    },
+    {
+      "bytes": 6979,
+      "file": "tg-bot/src/handlers/balanceLimit.js",
+      "sha256": "0d3492113fb58917d66905ed66d65b6ea6f88c28518f9240c848553415ea3321"
+    },
+    {
+      "bytes": 15745,
+      "file": "tg-bot/src/handlers/carManagement.js",
+      "sha256": "44dd9608641568d14df0287abde6d29b3ee4902b8f08a0962e8e7cdfae7b5f76"
+    },
+    {
+      "bytes": 6173,
+      "file": "tg-bot/src/handlers/connection.js",
+      "sha256": "272744b5c42718d094e002f2701d303ead71d0697bb0ae9821106e775078631a"
+    },
+    {
+      "bytes": 14218,
+      "file": "tg-bot/src/handlers/driverOrder.js",
+      "sha256": "228b1be6809b51dde501614a427f08aa3e4a8db79b77c1c1b930c0f0d2f2c542"
+    },
+    {
+      "bytes": 10967,
+      "file": "tg-bot/src/handlers/dynamicSurvey.js",
+      "sha256": "4ee968dfd04ecc646529ca09e369d4b0542ddd4aabd8202387eeae5ef7925bcd"
+    },
+    {
+      "bytes": 2428,
+      "file": "tg-bot/src/handlers/menu.js",
+      "sha256": "7f967ebedfd42bc3d70ac9932cbaf92aab15154a590be529e3a46a9565b0cb50"
+    },
+    {
+      "bytes": 4676,
+      "file": "tg-bot/src/handlers/parkSelect.js",
+      "sha256": "8ac26561dfe6c01d6e3d430bd2fb3e587c4c4e88218421524d0ba8bda8f58ea8"
+    },
+    {
+      "bytes": 5046,
+      "file": "tg-bot/src/handlers/quickLimit.js",
+      "sha256": "dd7b08c16536db37b4461d2b764724290a3744b1c36b5327e96a83feb72888e5"
+    },
+    {
+      "bytes": 16586,
+      "file": "tg-bot/src/handlers/start.js",
+      "sha256": "3b8987980212d939f1fa937f125b5c9694494844e9c8a363c7a1aec6ecc3fb7f"
+    },
+    {
+      "bytes": 9067,
+      "file": "tg-bot/src/handlers/survey.js",
+      "sha256": "bcafbb4f2ee569ea0acfc82fde783fd9a62f455588a19dacef24725795f1c8b8"
+    },
+    {
+      "bytes": 1333,
+      "file": "tg-bot/src/middleware/auth.js",
+      "sha256": "71589c8572df0c143ced6632983a836f4a54f9aa7fa880d052a783e8f5af0d3a"
+    },
+    {
+      "bytes": 1355,
+      "file": "tg-bot/src/routes/admin/analytics.js",
+      "sha256": "7e65617ac3719b7e33688483140c58256d4354e3cbcaf3435a48903599e07e54"
+    },
+    {
+      "bytes": 2914,
+      "file": "tg-bot/src/routes/admin/bots.js",
+      "sha256": "48f70366965bee668e8be70cd689dabd145fa231a6f2e3f8f8bfe74b6ecda668"
+    },
+    {
+      "bytes": 6296,
+      "file": "tg-bot/src/routes/admin/dashboard.js",
+      "sha256": "5627c826bad2c7113f59b2c558a35a59288d405e3684467c6730d9774edcb69f"
+    },
+    {
+      "bytes": 681,
+      "file": "tg-bot/src/routes/admin/index.js",
+      "sha256": "8e03df7186e588d4c2626cfbf9742986fe1a53b77e609a68f512c325ccd1ab4e"
+    },
+    {
+      "bytes": 16951,
+      "file": "tg-bot/src/routes/admin/surveys.js",
+      "sha256": "76f75f14584a4936d0cba70f9143891c1f5627b3ddee27a83764c35dec9f4271"
+    },
+    {
+      "bytes": 8582,
+      "file": "tg-bot/src/routes/admin/users.js",
+      "sha256": "f79d7643666077af7f67856a4af8843a379ff05b42b5207cf3670ad07da73654"
+    },
+    {
+      "bytes": 1188,
+      "file": "tg-bot/src/routes/crm.js",
+      "sha256": "a8e2e41dfe4594f3b185f6535f7f298e29538c94c7fbe006f6608a640fbeaa9e"
+    },
+    {
+      "bytes": 6937,
+      "file": "tg-bot/src/routes/webhooks.js",
+      "sha256": "6e7ced2ab99bc2e2f6a5bf20bf7d11b282cb08aa5cc67226782a7e4977a9e47c"
+    },
+    {
+      "bytes": 5458,
+      "file": "tg-bot/src/services/analytics.js",
+      "sha256": "6faccbc63f60decf5d6eb932d2de702cfd3f8c57668b8ac3d74bb8b368c7cd53"
+    },
+    {
+      "bytes": 2495,
+      "file": "tg-bot/src/services/crmHealth.js",
+      "sha256": "613403cdc1ff9264e018c339aabb31e2caacb7147ed59a76c4638243efbc3455"
+    },
+    {
+      "bytes": 9234,
+      "file": "tg-bot/src/services/crmIntegration.js",
+      "sha256": "d17829e5f0f4792fa3429538f80ef5d6e094ba5877ce37730b970e5c24327386"
+    },
+    {
+      "bytes": 5225,
+      "file": "tg-bot/src/services/sheets.js",
+      "sha256": "22ca6efd448396f5d92dcec326517a056cce7e44975f64b4c1f93dc892296060"
+    },
+    {
+      "bytes": 2904,
+      "file": "tg-bot/src/services/telegramService.js",
+      "sha256": "237661d879a121901d0e21193a5123f9c3df30510ba294e3bf7927fb60b841bf"
+    },
+    {
+      "bytes": 2018,
+      "file": "tg-bot/src/services/userService.js",
+      "sha256": "dcbc5be5a12bcb8bc978e58abf5e1ab258a2ea55cd9dccd52c9538f394844361"
+    },
+    {
+      "bytes": 594,
+      "file": "tg-bot/src/utils/log-interceptor.js",
+      "sha256": "030c1d0200df8b1dfe82ebb78f706cb6c7c7809263fbb2cb22271705c53437b9"
+    },
+    {
+      "bytes": 658,
+      "file": "tg-bot/src/utils/logger.js",
+      "sha256": "69bc60d5d5a03f3bce707ab3ccc833c3533a7c9e4694d09a7f4b1d0a52a1e076"
+    },
+    {
+      "bytes": 4814,
+      "file": "tg-bot/tg-bot-frontend/components/CustomSelect.js",
+      "sha256": "5e2662323a67af0f7a48abea428fdd3b1559f12870fdc20efe6ef9e57a237497"
+    },
+    {
+      "bytes": 1347,
+      "file": "tg-bot/tg-bot-frontend/components/Header.js",
+      "sha256": "ce82f706d516a2ffe33f5919a04f56ec3631e0ae6dbf5b41416452eadbba849a"
+    },
+    {
+      "bytes": 1140,
+      "file": "tg-bot/tg-bot-frontend/components/Layout.js",
+      "sha256": "262cd86f63acfa994b4a61474caf22d30c08f860a6ca7da00f470938c2b81df3"
+    },
+    {
+      "bytes": 4458,
+      "file": "tg-bot/tg-bot-frontend/components/Sidebar.js",
+      "sha256": "54661044c6b2975a784a72c38bcb86324412a5623f7d3bd7ccf8ffbf39f01086"
+    },
+    {
+      "bytes": 2184,
+      "file": "tg-bot/tg-bot-frontend/context/AuthContext.js",
+      "sha256": "fd3a79223ed75f30cddc082883bb95f72e90fa62c6e35582be02daeffaf7a7a0"
+    },
+    {
+      "bytes": 93,
+      "file": "tg-bot/tg-bot-frontend/jsconfig.json",
+      "sha256": "427893e2f9fb008191f613ab969db7d5aac3a08b2f442bb3d0441ad3b9e40f9f"
+    },
+    {
+      "bytes": 2866,
+      "file": "tg-bot/tg-bot-frontend/lib/api.js",
+      "sha256": "2e4e22680734559c0393cb2cf26c1d50ffe34a832be0d5ac764e0598195d3bef"
+    },
+    {
+      "bytes": 347,
+      "file": "tg-bot/tg-bot-frontend/next.config.mjs",
+      "sha256": "78c883b703324343d46006d6def4917b78c357bf73c7d6882f19dd4732914164"
+    },
+    {
+      "bytes": 501,
+      "file": "tg-bot/tg-bot-frontend/package.json",
+      "sha256": "6c02123b02f58c4564dc16f2aa688c3e5abb6e69e9248a0dca21de82d756c5cb"
+    },
+    {
+      "bytes": 730,
+      "file": "tg-bot/tg-bot-frontend/pages/_app.js",
+      "sha256": "19db297ad2734b0633a0fdc142648409dc8803ea3250b6e2e735bfd3c9c323f4"
+    },
+    {
+      "bytes": 257,
+      "file": "tg-bot/tg-bot-frontend/pages/_document.js",
+      "sha256": "db90f87ec2f43038e7af699dede542f0773cca6ce2948beeb7f37913cea0733c"
+    },
+    {
+      "bytes": 1848,
+      "file": "tg-bot/tg-bot-frontend/pages/api/export.js",
+      "sha256": "86a468718b722a3d8adf17d8d43c8c9871778cc983a1a387e21bea96c8cb8ed1"
+    },
+    {
+      "bytes": 171,
+      "file": "tg-bot/tg-bot-frontend/pages/api/hello.js",
+      "sha256": "02dc990f97314784430cbcd3c045af151de1de922f8c28f2e6fbb1d0e416e2ea"
+    },
+    {
+      "bytes": 10450,
+      "file": "tg-bot/tg-bot-frontend/pages/bots.js",
+      "sha256": "d08397ce21c3c1603c55e6121b4639d7944747bcad2610ac378f66a8b750e569"
+    },
+    {
+      "bytes": 14244,
+      "file": "tg-bot/tg-bot-frontend/pages/bots/[id].js",
+      "sha256": "6f0f4b72fb90d25436f58199cf36abbf347064085e6740a6c004e0e3f6416185"
+    },
+    {
+      "bytes": 12656,
+      "file": "tg-bot/tg-bot-frontend/pages/index.js",
+      "sha256": "7443674adc117bf7c5b34e838d86741817ff635858ccb5715e63d72cad64cc8f"
+    },
+    {
+      "bytes": 2207,
+      "file": "tg-bot/tg-bot-frontend/pages/login.js",
+      "sha256": "5e75898269cec5c5c0a1b0914d536dc84201ec95ae6da66cd18f09909f367519"
+    },
+    {
+      "bytes": 74218,
+      "file": "tg-bot/tg-bot-frontend/pages/surveys/[id].js",
+      "sha256": "417b4891ce7ae6394a9eafb880563c7a46e613233f338268f61555cd70874dd6"
+    },
+    {
+      "bytes": 23690,
+      "file": "tg-bot/tg-bot-frontend/pages/surveys/index.js",
+      "sha256": "568359e06a230f82301028aa1c737a878ace8ac5a9ecdaa5ea0aaa8e1858e406"
+    },
+    {
+      "bytes": 4152,
+      "file": "tg-bot/tg-bot-frontend/pages/users/[id].js",
+      "sha256": "0df57e4fe94719cb52b4ae7e59924345e5af1550f466fd50847c763b13c2f588"
+    },
+    {
+      "bytes": 23938,
+      "file": "tg-bot/tg-bot-frontend/pages/users/index.js",
+      "sha256": "99bff75e612587e281bf18492a16569a2b0783d9e02a35c2088b2b1b7c2c75e4"
+    },
+    {
+      "bytes": 135,
+      "file": "tg-bot/tg-bot-frontend/postcss.config.mjs",
+      "sha256": "ac31e2a95ef64fe27ceb4124e101675273107aae2e33bc490b01d919e7f03646"
+    },
+    {
+      "bytes": 1599,
+      "file": "tg-bot/tg-bot-frontend/styles/globals.css",
+      "sha256": "8e67531a83a6ab6d474a5011adeb17e71affe14576a087f50630d8030b4ad7dc"
+    },
+    {
+      "bytes": 978,
+      "file": "tg-bot/tg-bot-frontend/tailwind.config.js",
+      "sha256": "2e18792edbd9099b585964a5d6dc2d3ebd3509f72268d9eac9b021169cfc2c6a"
+    },
+    {
+      "bytes": 7257,
+      "file": "tools/audio-bridge-day1/__tests__/build-tools.test.js",
+      "sha256": "2948f62bb07b851ff08ae780c3c5b8d8845ec33262b1cb3fce1cad7822919648"
+    },
+    {
+      "bytes": 3610,
+      "file": "tools/audio-bridge-day1/__tests__/fetch-once.test.js",
+      "sha256": "ed6c5fee4056fc8921c9b4b96bb04194592b9515ec37865c61e9ad857c06dcc3"
+    },
+    {
+      "bytes": 12912,
+      "file": "tools/audio-bridge-day1/__tests__/finalize-retry.test.js",
+      "sha256": "e1b095b6f76e8830dc518dc59955049eb5022a6f5f4a797f7f457fd51a770fe5"
+    },
+    {
+      "bytes": 9496,
+      "file": "tools/audio-bridge-day1/__tests__/greeting-variants-integration.test.js",
+      "sha256": "834801185406edf6cf3cdd3ea34cb6a7dc837f37212c7393a23cb941df6ec83b"
+    },
+    {
+      "bytes": 7093,
+      "file": "tools/audio-bridge-day1/__tests__/greeting-variants.test.js",
+      "sha256": "b6ce02841abb2a466dfbda3ab9149e724d5d0c8348258ca38a461b485f3d22ef"
+    },
+    {
+      "bytes": 4194,
+      "file": "tools/audio-bridge-day1/__tests__/inactivity-watchdog.test.js",
+      "sha256": "362e3bff106364391dc5fadc6f64994cb3e374e4fb80c77cfaa73c913a21a27c"
+    },
+    {
+      "bytes": 8138,
+      "file": "tools/audio-bridge-day1/__tests__/prompt-fragments-integration.test.js",
+      "sha256": "5c1cf166a5e80f30dfa34165ebdf952f11f4a8ca8bfe8aa82f5f3084ad6f16de"
+    },
+    {
+      "bytes": 14499,
+      "file": "tools/audio-bridge-day1/__tests__/prompt-fragments.test.js",
+      "sha256": "991d9f9c948dfcc6d5309caced71c7a0847ee40ab5c3ed46c5499710a65c1414"
+    },
+    {
+      "bytes": 14668,
+      "file": "tools/audio-bridge-day1/__tests__/recovery-integration.test.js",
+      "sha256": "9660ca65db9c35a574e6bbca032db05f276f970f3d7d56f3e003e7c3563a9ddc"
+    },
+    {
+      "bytes": 10469,
+      "file": "tools/audio-bridge-day1/__tests__/recovery-policy.test.js",
+      "sha256": "9948bcd665bd512265d85f7a99b836ea54c57f9c1b6eead3d26ba320cace070e"
+    },
+    {
+      "bytes": 11556,
+      "file": "tools/audio-bridge-day1/__tests__/silence-timer.test.js",
+      "sha256": "66a5c70b43b009bf05fc5f00232099d2a87f8468110c819f0d72805de9c17fb4"
+    },
+    {
+      "bytes": 12126,
+      "file": "tools/audio-bridge-day1/__tests__/stt-garbage-integration.test.js",
+      "sha256": "b7ea1b4a871c5eaaa2b52b7bd65e7101da7a467fa8cfa5a77c6494f96ad5875d"
+    },
+    {
+      "bytes": 9825,
+      "file": "tools/audio-bridge-day1/__tests__/stt-garbage.test.js",
+      "sha256": "73ff8f0e83a3ac4de7ac5a63e237e663c12e95e59f48307a856070faf9a334cc"
+    },
+    {
+      "bytes": 36113,
+      "file": "tools/audio-bridge-day1/call-session.js",
+      "sha256": "abe74d0f7a4024dfc63b99a1926f20fee15e33b18412fd41291eb6644e93137f"
+    },
+    {
+      "bytes": 8670,
+      "file": "tools/audio-bridge-day1/crm-client.js",
+      "sha256": "218a86a506eda8470e4d175625cff80bce5cab5f1d0cf617e967995b8ca086cf"
+    },
+    {
+      "bytes": 1449,
+      "file": "tools/audio-bridge-day1/gen-test-wav.js",
+      "sha256": "4d3c9e35c826aef15f77dfc46c33ebd88a6c18f6f683c4307f7e4a728d7ba5b1"
+    },
+    {
+      "bytes": 4093,
+      "file": "tools/audio-bridge-day1/greeting-variants.js",
+      "sha256": "fa02901eb2a696f84fde303982e08a848cb62078705d79974d49e7da055451e4"
+    },
+    {
+      "bytes": 2368,
+      "file": "tools/audio-bridge-day1/inactivity-watchdog.js",
+      "sha256": "4173f1a78557e13d64417fd9e5ba727dfb38b657d29573b3a7446f4976cc0871"
+    },
+    {
+      "bytes": 2284,
+      "file": "tools/audio-bridge-day1/init-proxy.js",
+      "sha256": "fe90f7e377202f9c1a001276fe966229cbbac363a666713db78bf2f331594c00"
+    },
+    {
+      "bytes": 16801,
+      "file": "tools/audio-bridge-day1/llm-client.js",
+      "sha256": "30dfa018019b2d8324442646824031671b42eabe7e4e8aa9fbb11ff9ac1b17ec"
+    },
+    {
+      "bytes": 7202,
+      "file": "tools/audio-bridge-day1/openai-tts.js",
+      "sha256": "623181eafa263db209eb98b83148933ceb5fc075cf3f763080fedea5f83f1ab6"
+    },
+    {
+      "bytes": 2243,
+      "file": "tools/audio-bridge-day1/opsLog.js",
+      "sha256": "8ffed9c34ab6ac41dd6687e21d8607afc4c3c540ee5d32c523c45f6466f01ba1"
+    },
+    {
+      "bytes": 556,
+      "file": "tools/audio-bridge-day1/package.json",
+      "sha256": "a5533f77a766b7e8573464decfb77d8b693e1694b7628ce74cfc91365fa970fd"
+    },
+    {
+      "bytes": 10796,
+      "file": "tools/audio-bridge-day1/prompt-fragments.js",
+      "sha256": "7ef8b36e9eae3fd7ef3f0578c0e86ed9051b3591a2b3e17f49a8825b957f1960"
+    },
+    {
+      "bytes": 1484,
+      "file": "tools/audio-bridge-day1/proxy-fetch.js",
+      "sha256": "ef72b83a79f677b0c2fdc92ce8ee64e0936380ed430253c45bb2656d2cb8a3a6"
+    },
+    {
+      "bytes": 6283,
+      "file": "tools/audio-bridge-day1/recovery-policy.js",
+      "sha256": "f1cb2d4467d37aa5486f46ff0721b7ceed06e863b70eb372ce3f49155bf23745"
+    },
+    {
+      "bytes": 10511,
+      "file": "tools/audio-bridge-day1/retry-helpers.js",
+      "sha256": "53f13b0adb32cb76822b32aebc3b25a0e3689cff9d5fe62bf3b9369ede3b9375"
+    },
+    {
+      "bytes": 2384,
+      "file": "tools/audio-bridge-day1/runtime-config.js",
+      "sha256": "076c6ca64ef2756a073963bc01aa926909e4b9bfc78e50ef4a56523427258764"
+    },
+    {
+      "bytes": 4684,
+      "file": "tools/audio-bridge-day1/scripts/analyze_call_audio.js",
+      "sha256": "95f8fc94860082a90c52ff97ff29cc7d890c5baa6cacfae2ed395f3a7af94fe9"
+    },
+    {
+      "bytes": 5421,
+      "file": "tools/audio-bridge-day1/scripts/analyze_local_wav.js",
+      "sha256": "b5b7b1f64ae6bf3bca6bd06173e152665a203b41b7e348ff1e16ef41ed0df1c2"
+    },
+    {
+      "bytes": 4604,
+      "file": "tools/audio-bridge-day1/scripts/analyze_rtp_pacing.js",
+      "sha256": "59de0fe2355284fd28566456f4f99407ab5bd4e7bc9bb176b89e237e89a7b2a6"
+    },
+    {
+      "bytes": 3710,
+      "file": "tools/audio-bridge-day1/scripts/capture_rtp_to_megafon.sh",
+      "sha256": "026b908e18e0ea65b2316306921be577a8f6980474944e397685867cf97c928b"
+    },
+    {
+      "bytes": 1994,
+      "file": "tools/audio-bridge-day1/scripts/diag_upload_server.py",
+      "sha256": "f8948f7be4deb9624be2f862275d36043f1b21fcf7f224d8ecc41cb80e864afa"
+    },
+    {
+      "bytes": 5142,
+      "file": "tools/audio-bridge-day1/scripts/diff_wav_samples.js",
+      "sha256": "f686b76aad28d321da64d4825b9abe44545e93c74734f58c21d7ebd28f46562a"
+    },
+    {
+      "bytes": 6324,
+      "file": "tools/audio-bridge-day1/scripts/generate_23_listening_set.js",
+      "sha256": "a22916aae049e7fb184fb55a75e05ee23ab472900737b92ce2e32f1d05c829c1"
+    },
+    {
+      "bytes": 1203,
+      "file": "tools/audio-bridge-day1/scripts/inject_dropouts.py",
+      "sha256": "3ad1e252a51cfdecc7c149ff752351942b805794d98dd13569bad125ff55cd1d"
+    },
+    {
+      "bytes": 6066,
+      "file": "tools/audio-bridge-day1/scripts/probe_tts_pipeline.js",
+      "sha256": "6d8ad760ed31b28fa149e18d2acb32a8e48577f7fdbedaa9018287b4e8bd9f18"
+    },
+    {
+      "bytes": 5709,
+      "file": "tools/audio-bridge-day1/scripts/probe_yandex_tts.js",
+      "sha256": "392039a1ecc40209b5353ed152a3d73890c2168904b80aa5de8ba5f93bf286b7"
+    },
+    {
+      "bytes": 8773,
+      "file": "tools/audio-bridge-day1/scripts/run_quality_matrix.js",
+      "sha256": "25154710a4f3f5729fdcc791a4aecaa8cf7d8dda393bc035c8bfe1a5383439e8"
+    },
+    {
+      "bytes": 3892,
+      "file": "tools/audio-bridge-day1/scripts/run_softphone_sequence.js",
+      "sha256": "b9c6df263e3e444a4995c78baa9f201dc7e52ca5d0c29bca3d1f93819e30491d"
+    },
+    {
+      "bytes": 1680,
+      "file": "tools/audio-bridge-day1/scripts/score_browser_capture.sh",
+      "sha256": "45ea6fee2b1c068dc6815aa749beb0d157939238f5c687a8ef4c1ef04f367a13"
+    },
+    {
+      "bytes": 6530,
+      "file": "tools/audio-bridge-day1/scripts/score_quality.py",
+      "sha256": "082e94d0f1726c804c37d0e168d91abf7d1f8ac1a581a6c76b98ea26f14e3405"
+    },
+    {
+      "bytes": 5258,
+      "file": "tools/audio-bridge-day1/scripts/test_fs_playback_only.js",
+      "sha256": "f61e1cdc785a4bf05dcaac27b7d157733310c50b1b3f46f15faf55406f43cacf"
+    },
+    {
+      "bytes": 11804,
+      "file": "tools/audio-bridge-day1/scripts/test_mod_audio_fork.js",
+      "sha256": "7922da58dca3ef8458f36f4dbd60fcc9c4dde4061d3ac341e4983db23b892b18"
+    },
+    {
+      "bytes": 5066,
+      "file": "tools/audio-bridge-day1/scripts/test_softphone_playback.js",
+      "sha256": "2f44c23dd3759729e594d2f8aefb3c5ebd8155bca0baef3292c7e8f3533b4819"
+    },
+    {
+      "bytes": 4206,
+      "file": "tools/audio-bridge-day1/scripts/webrtc_capture_auto.js",
+      "sha256": "3e6509372e76959ac5e77630d91f02634a57d0597aa587ecc92aa7a83bd56f5e"
+    },
+    {
+      "bytes": 6297,
+      "file": "tools/audio-bridge-day1/scripts/webrtc_inbound_capture.js",
+      "sha256": "c4c35a75b5afcacdd3ba459d12bfa87edce4cff83f4767f4ccafda7e8202f008"
+    },
+    {
+      "bytes": 43381,
+      "file": "tools/audio-bridge-day1/server.js",
+      "sha256": "677dc87584c24dc671901b056c0ff5953427c647e20cff97f9eb29b86da54b52"
+    },
+    {
+      "bytes": 5242,
+      "file": "tools/audio-bridge-day1/stt-garbage.js",
+      "sha256": "5fcba069f142584532f98c3b6e6234c6d6a540d020c2c2f19bd02c620870e75f"
+    },
+    {
+      "bytes": 3338,
+      "file": "tools/audio-bridge-day1/stt-router.js",
+      "sha256": "0c35e6e3c56a55c9fcfc417d3c89386f00cddd0689d007a209e1b36c86019055"
+    },
+    {
+      "bytes": 1874,
+      "file": "tools/audio-bridge-day1/tts-router.js",
+      "sha256": "6c354deb65dc74e0db187b034f6971b093b769f8057fd7f15effe79f8596fbb5"
+    },
+    {
+      "bytes": 6113,
+      "file": "tools/audio-bridge-day1/whisper-stt.js",
+      "sha256": "f5c668e8714fd616ce76379d7e111d63330396abe53e23660161cfb99f36d3cd"
+    },
+    {
+      "bytes": 14430,
+      "file": "tools/audio-bridge-day1/yandex-stt.js",
+      "sha256": "690cdd18ced5a85c95543c4e4bc1106eb5011c166d9a7a01fd9a28df5b1402f5"
+    },
+    {
+      "bytes": 3004,
+      "file": "tools/audio-bridge-day1/yandex-tts.js",
+      "sha256": "88b70bac3ca225f5b6814c819a7881aafb5c7f53d04597bf9b04b3b54519c822"
+    },
+    {
+      "bytes": 1787,
+      "file": "yandex-fleet-scraper/prisma/schema.prisma",
+      "sha256": "b47e7a5e3edab84004568da09373a6fb701df95a43ad02fabb990e1aafb10668"
+    },
+    {
+      "bytes": 15158,
+      "file": "yandex-fleet-scraper/src/api.ts",
+      "sha256": "83bc3057cf303d12567de1c3cf7ac0c2bd775c7b1023015f28e6ad49ad40dba4"
+    },
+    {
+      "bytes": 1185,
+      "file": "yandex-fleet-scraper/src/lib/encryption.ts",
+      "sha256": "c5ff4ec6f4bef86c4f88ad7e782734e3aa5c15da620751966a372b36811e1e81"
+    },
+    {
+      "bytes": 11987,
+      "file": "yandex-fleet-scraper/src/lib/parser.ts",
+      "sha256": "6fcd0ac948fd2951c138e125c542f959d01c37d7efdaf4a7442bbc4374dc1b70"
+    },
+    {
+      "bytes": 5897,
+      "file": "yandex-fleet-scraper/src/scripts/auto-login.ts",
+      "sha256": "3a05965d9e4a42286b24f1bb7f1f950a6448953d88f3799bc7836f7ed6e51b91"
+    },
+    {
+      "bytes": 845,
+      "file": "yandex-fleet-scraper/src/scripts/heal-account.ts",
+      "sha256": "3f2458de5018230a8ee9ece84026d0b22856b41ba5e42efc7bb156da43568f4a"
+    },
+    {
+      "bytes": 9181,
+      "file": "yandex-fleet-scraper/src/scripts/import-chrome-cookies.ts",
+      "sha256": "4fc6d1aa9edddf90ec5dfb3a69909a9f516617b7a92f3592ddfcdd8c6894c8d1"
+    },
+    {
+      "bytes": 3055,
+      "file": "yandex-fleet-scraper/src/scripts/login.ts",
+      "sha256": "d8ec76b05c703292fdf0a5a40bae830975d84bbe6129e46d95408b2274073373"
+    },
+    {
+      "bytes": 10994,
+      "file": "yandex-fleet-scraper/src/scripts/probe-active-flow.ts",
+      "sha256": "491cc59decfb5a05a4aa5b8038b9c3a6f0ae09ca9294b98e97ab24b21192b898"
+    },
+    {
+      "bytes": 7261,
+      "file": "yandex-fleet-scraper/src/scripts/probe-driver-actions-cdp.ts",
+      "sha256": "bc327b3fd97a724a4755d38d0a23db4edb52bd48d0c80f827263e14daf4ea68d"
+    },
+    {
+      "bytes": 9674,
+      "file": "yandex-fleet-scraper/src/scripts/probe-driver-actions.ts",
+      "sha256": "18848d2fbd5279bf9f10b82c4f7fc06e1a696037ba1eeab7aced335e5ab217b4"
+    },
+    {
+      "bytes": 3368,
+      "file": "yandex-fleet-scraper/src/scripts/probe-find-driver-id.ts",
+      "sha256": "2b7605590c7aad8af0095aa1f8233b07b05ee1975971b60e9763cc84044e27e1"
+    },
+    {
+      "bytes": 6484,
+      "file": "yandex-fleet-scraper/src/scripts/probe-map-driver-actions.ts",
+      "sha256": "a964c9174ec65c59b3a1ae035608e1cb182d889fa4e2c970cd31afcb7556bbb3"
+    },
+    {
+      "bytes": 13197,
+      "file": "yandex-fleet-scraper/src/scripts/probe-order-actions.ts",
+      "sha256": "9439e0ba8d7f071efcfb11ca2e9a9d8b813ece58c37e7c8fd15cf0dab71c285a"
+    },
+    {
+      "bytes": 4519,
+      "file": "yandex-fleet-scraper/src/scripts/probe-parks.ts",
+      "sha256": "7cd1be54bbca846442d7909464d46571cf087b793e3171686e56047b210b75a1"
+    },
+    {
+      "bytes": 56104,
+      "file": "yandex-fleet-scraper/src/worker.ts",
+      "sha256": "45e9d6942ad5fdf11da7e31c748b45754ef0d07807e2ece72537daa1aa3788a3"
+    }
+  ],
+  "inputs": {
+    "analyzer": {
+      "path": "tools/architecture/analyze-architecture.mjs",
+      "sha256": "45eb124f2fb0bb666157bdb6b1e5e5bbd4f52745660ef8e41aed2b0ceb67d047"
+    },
+    "baseline": {
+      "path": "architecture/baseline/v1/authoritative-baseline.json",
+      "sha256": "4921691dbbac0125eb73f29769287b269d62eeba4d86d5242a35aab05cbd4c1f"
+    },
+    "module_rules": {
+      "path": "architecture/evidence/v1/module-rules.json",
+      "sha256": "23d8ad3ca59b4206cbba7a748698c3ca26b9d0751c2cfc32d0228aeb55178a46"
+    },
+    "ownership_rules": {
+      "path": "architecture/evidence/v1/ownership-rules.json",
+      "sha256": "6fb6481cdd14324a06136aac5e7526032bcf0293bc7ee09621eb5be5e2679ede"
+    }
+  },
+  "outputs": [
+    "module-inventory.json",
+    "dependency-graph.json",
+    "write-sites.json",
+    "data-ownership-candidates.json",
+    "provider-dependencies.json",
+    "credential-access.json",
+    "runtime-interactions.json",
+    "shared-hotspots.json"
+  ],
+  "schema_version": 1,
+  "source_snapshot_sha256": "2713db175062bb673dcca2d97e80c2ae204a2f257438036c6db2506587dfad7d",
+  "totals": {
+    "files": 845,
+    "input_bytes": 7092338
+  }
+}

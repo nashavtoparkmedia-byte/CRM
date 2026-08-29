@@ -1,0 +1,52 @@
+{
+  "schema": "yoko.crm.context-isolation-verification.v1",
+  "milestone": "CRM-ARCH-007-WORK-MANAGEMENT",
+  "verified_at": "2026-08-09T15:18:37Z",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "source_identity": {
+    "base_commit": "f77a797b459986ea1b84a8fd9db8261e3b25a814",
+    "candidate_identity": "bound by architecture/isolation/work-management/v1/SHA256SUMS and the resulting gate commit",
+    "consumer_before_sha256": "4f3a79097ea7a7b03e75647d57d5b833f635e9cd941b3525fbfb2c8768f750ac",
+    "consumer_after_sha256": "b01c8ab8e92ae6f0a0ff1d215f21d22bca6a4b9a676756681ca7b421c747d89f",
+    "protected_task_event_service_sha256": "938dbdd85c2259b32d0999bc952fa9da36c2a4aec54693a2d1b1ff7ec83e6738"
+  },
+  "architecture": {
+    "production_files": 778,
+    "contexts": 16,
+    "findings": 1526,
+    "exceptions": 1526,
+    "finding_digest": "26447c14597696d330cef3e8abf22143443827471bc926b3711d9a11044c09b7",
+    "exception_registry_sha256": "5050599037b52673345f0e0ba0b935c63884d9b45516ca69dce9a76c2bed8fbc",
+    "retired_exact_exceptions": 3,
+    "uncovered": 0,
+    "stale": 0,
+    "expired": 0
+  },
+  "tests": {
+    "context_manifest_controls": "PASS",
+    "architecture_enforcement": "PASS 1526/1526",
+    "architecture_enforcement_tests": "16/16 PASS",
+    "contract_boundary_controls": "21/21 PASS",
+    "outbox_controls": "14/14 PASS",
+    "identity_boundary_controls": "12/12 PASS",
+    "work_management_boundary_controls": "12/12 PASS",
+    "create_task_contract_tests": "11/11 PASS",
+    "outbox_tests": "16/16 PASS",
+    "identity_contract_tests": "13/13 PASS",
+    "assignment_contract_tests": "10/10 PASS",
+    "protected_identity_tests": "33/33 PASS",
+    "protected_calling_tests": "93/93 PASS"
+  },
+  "static_quality": {
+    "new_files_eslint": "0 findings",
+    "consumer_eslint": "5 inherited / 5 candidate / 0 new rule occurrences",
+    "typescript": "28 inherited / 28 candidate / 0 normalized differences"
+  },
+  "production": {
+    "deployed": false,
+    "source_mutated": false,
+    "database_mutated": false,
+    "services_restarted_or_reloaded": [],
+    "reason": "source gate only; production mutation preflight not opened"
+  }
+}

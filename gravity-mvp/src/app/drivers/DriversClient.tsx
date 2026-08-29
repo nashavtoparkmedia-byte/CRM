@@ -17,12 +17,11 @@ import {
 } from "lucide-react"
 import { SegmentCards } from "./components/SegmentCards"
 import { SegmentationSettings } from "./components/SegmentationSettings"
-import { sendMaxMessage } from "../max-actions"
-import { sendTelegramMessage } from "../tg-actions"
-import { logManagerCall } from "./actions"
+import { sendMaxDriverMessageV1 } from "@/infrastructure/fleet/driver-max-messaging"
+import { sendOperationalTelegramTextV1 } from "@/infrastructure/telegram/operational-capabilities"
 import type { DriverWithCells } from "./actions"
 
-import { cn } from "@/lib/utils"
+import { cn } from "@/infrastructure/ui/class-names"
 
 import {
     Table,
@@ -31,7 +30,7 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/components/ui/table"
+} from "@/infrastructure/ui/table"
 
 import { ActivityGrid } from "./components/ActivityGrid"
 import { ScoringDot } from "./components/ScoringDot"
@@ -39,6 +38,18 @@ import { DriverFilters } from "./components/DriverFilters"
 import { YandexSyncControl } from "./components/YandexSyncControl"
 
 // ─── Props ─────────────────────────────────────────────────────────────────
+
+async function recordManagerCommunication(driverId: string, activity: "call" | "message") {
+    const response = await fetch(
+        `/api/platform/drivers/${encodeURIComponent(driverId)}/manager-communication`,
+        {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ activity }),
+        },
+    )
+    if (!response.ok) throw new Error(`Failed to record manager communication (${response.status})`)
+}
 
 interface DriversClientProps {
     initialDrivers: DriverWithCells[]
@@ -108,9 +119,9 @@ function SendMessageModal({
         setStatus("sending")
         try {
             if (channel === "telegram") {
-                await sendTelegramMessage(phone, message, selectedConnection)
+                await sendOperationalTelegramTextV1(phone, message, selectedConnection)
             } else {
-                await sendMaxMessage(phone, message, { 
+                await sendMaxDriverMessageV1(phone, message, {
                     connectionId: selectedConnection,
                     isPersonal: channel === "max",
                     name: driver.fullName
@@ -426,7 +437,7 @@ export default function DriversClient({
 
     const handleCallClick = async (driver: DriverWithCells, e: React.MouseEvent) => {
         e.stopPropagation()
-        await logManagerCall(driver.id)
+        await recordManagerCommunication(driver.id, "call")
     }
 
     return (

@@ -24,14 +24,14 @@ const modesl = _require('modesl') as { Connection: any }
 const Connection = modesl.Connection
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { opsLog } from '@/lib/opsLog'
-import { normalizePhoneE164 } from '@/lib/phoneUtils'
-import { broadcastCall } from '@/lib/callStreamBus'
-import { broadcastChatMessage } from '@/lib/messageStreamBus'
-import { getSipExtensionForUser } from '@/lib/sip/extensions'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
+import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
+import { broadcastCall } from '@/modules/calling/internal/call-stream'
+import { getSipExtensionForUser, getUserIdForSipExtension } from '@/lib/sip/extensions'
 import { processRecording } from '@/lib/freeswitch/recordingProcessor'
-import { ContactService } from '@/lib/ContactService'
+import { resolveContactByPhoneV1 } from '@/modules/contacts/public/v1'
 import { mapHangupCauseToStatus, callStatusLabel, type CallDirection } from '@/lib/calls/status'
+import { projectCompletedCallTimelineV1 } from '@/modules/calling/public/v1/completed-call-timeline-projection'
 
 const FS_ESL_HOST = process.env.FS_ESL_HOST ?? '127.0.0.1'
 const FS_ESL_PORT = Number(process.env.FS_ESL_PORT ?? 8021)
@@ -54,7 +54,14 @@ declare global {
     var __eslReconnectTimer: NodeJS.Timeout | null
     // eslint-disable-next-line no-var
     var __eslReconnectDelay: number | undefined
+    // eslint-disable-next-line no-var
+    var __eslCallReconcileTimer: NodeJS.Timeout | null
+    // eslint-disable-next-line no-var
+    var __eslCallReconcileRunning: boolean | undefined
 }
+
+const STALE_CALL_GRACE_MS = 90_000
+const CALL_RECONCILE_INTERVAL_MS = 30_000
 
 // modesl is a CJS module — its `Connection` import is a runtime value, not a
 // TypeScript type. Type accessor expressions like `Connection | null` thus
@@ -91,6 +98,7 @@ function connect(): void {
         opsLog('info', 'esl_connected', { operation: 'esl' })
         reconnectDelay = 2000
         conn.subscribe(EVENTS_OF_INTEREST.join(' '))
+        ensureStaleCallReconciler()
     })
 
     conn.on('esl::event::CHANNEL_CREATE::*', (evt: any) => {
@@ -127,6 +135,132 @@ function connect(): void {
     })
 
     setConnection(conn)
+}
+
+function uuidExists(conn: any, fsUuid: string): Promise<boolean | null> {
+    return new Promise(resolve => {
+        let settled = false
+        const finish = (value: boolean | null) => {
+            if (settled) return
+            settled = true
+            clearTimeout(timeout)
+            resolve(value)
+        }
+        const timeout = setTimeout(() => finish(null), 2500)
+
+        try {
+            conn.api(`uuid_exists ${fsUuid}`, (res: any) => {
+                const body = (typeof res?.getBody === 'function' ? res.getBody() : String(res)).trim().toLowerCase()
+                if (body === 'true') finish(true)
+                else if (body === 'false') finish(false)
+                else finish(null)
+            })
+        } catch {
+            finish(null)
+        }
+    })
+}
+
+/**
+ * Recover Call rows when the ESL listener misses a terminal event (for
+ * example during a short reconnect or process restart). FreeSWITCH remains
+ * the source of truth: a row is finalized only after `uuid_exists` confirms
+ * that its channel is gone. The grace period avoids touching fresh rows while
+ * CHANNEL_CREATE / CHANNEL_HANGUP_COMPLETE are still racing through ESL.
+ */
+export async function reconcileStaleCalls(): Promise<number> {
+    if ((globalThis as any).__eslCallReconcileRunning) return 0
+    const conn = getConnection()
+    if (!conn) return 0
+
+    ;(globalThis as any).__eslCallReconcileRunning = true
+    let recovered = 0
+    try {
+        const candidates = await prisma.call.findMany({
+            where: {
+                status: { in: ['ringing', 'active'] },
+                fsUuid: { not: null },
+                startedAt: { lt: new Date(Date.now() - STALE_CALL_GRACE_MS) },
+            },
+            // Operators care about the call that just disappeared first.
+            // Older historical backlog is still drained in later batches.
+            orderBy: { startedAt: 'desc' },
+            take: 100,
+        })
+
+        for (const call of candidates) {
+            if (!call.fsUuid) continue
+            const exists = await uuidExists(conn, call.fsUuid)
+            if (exists !== false) continue
+
+            const endedAt = new Date()
+            const status = call.status === 'active'
+                ? 'completed'
+                : call.direction === 'inbound' ? 'missed' : 'no_answer'
+            const durationSec = call.answeredAt
+                ? Math.max(1, Math.round((endedAt.getTime() - call.answeredAt.getTime()) / 1000))
+                : null
+
+            // Guard against a real hangup handler winning the race after our
+            // uuid_exists check. Only the still-stale state may be replaced.
+            const result = await prisma.call.updateMany({
+                where: { id: call.id, status: call.status },
+                data: {
+                    status: status as any,
+                    endedAt,
+                    durationSec,
+                    hangupCause: 'RECOVERED_STALE_CHANNEL',
+                },
+            })
+            if (result.count === 0) continue
+
+            const updated = await prisma.call.findUnique({ where: { id: call.id } })
+            if (!updated) continue
+            recovered++
+            opsLog('warn', 'stale_call_recovered', {
+                operation: 'call',
+                callId: updated.id,
+                fsUuid: updated.fsUuid ?? undefined,
+                status,
+            })
+            broadcastCall({
+                type: 'ended',
+                data: {
+                    callId: updated.id,
+                    endedAt: updated.endedAt!.toISOString(),
+                    durationSec: updated.durationSec,
+                    status,
+                },
+            })
+            try {
+                await syncCallToChat(updated)
+            } catch (err: any) {
+                opsLog('error', 'stale_call_chat_sync_failed', {
+                    operation: 'call',
+                    callId: updated.id,
+                    error: err.message,
+                })
+            }
+        }
+    } finally {
+        ;(globalThis as any).__eslCallReconcileRunning = false
+    }
+    return recovered
+}
+
+function ensureStaleCallReconciler(): void {
+    void reconcileStaleCalls().catch(err =>
+        opsLog('error', 'stale_call_reconcile_failed', { operation: 'call', error: err.message })
+    )
+    if ((globalThis as any).__eslCallReconcileTimer) return
+
+    const timer = setInterval(() => {
+        void reconcileStaleCalls().catch(err =>
+            opsLog('error', 'stale_call_reconcile_failed', { operation: 'call', error: err.message })
+        )
+    }, CALL_RECONCILE_INTERVAL_MS)
+    timer.unref()
+    ;(globalThis as any).__eslCallReconcileTimer = timer
 }
 
 function scheduleReconnect(): void {
@@ -232,7 +366,7 @@ async function handleChannelCreate(evt: any): Promise<void> {
         // unifies under one card automatically.
         if (!contactId) {
             try {
-                const resolved = await ContactService.resolveByPhone(e164, displayName)
+                const resolved = await resolveContactByPhoneV1(e164, displayName)
                 if (resolved) {
                     contactId = resolved.contact.id
                     displayName = displayName ?? resolved.contact.displayName
@@ -275,17 +409,22 @@ async function handleChannelCreate(evt: any): Promise<void> {
             contactId: contactId ?? undefined,
         })
 
-        broadcastCall({
-            type: 'incoming',
-            data: {
-                callId: call.id,
-                fromNumber: call.fromNumber,
-                toNumber: call.toNumber,
-                driverId,
-                contactId,
-                displayName,
-            },
-        })
+        // Only a real inbound trunk leg is an attention event. Outbound
+        // click-to-call rows pass through the same CHANNEL_CREATE handler but
+        // must not make every open CRM browser play an incoming ringtone.
+        if (direction === 'inbound') {
+            broadcastCall({
+                type: 'incoming',
+                data: {
+                    callId: call.id,
+                    fromNumber: call.fromNumber,
+                    toNumber: call.toNumber,
+                    driverId,
+                    contactId,
+                    displayName,
+                },
+            })
+        }
     } catch (err: any) {
         // P2002 = unique constraint (fsUuid already exists) — dedupe is intentional
         if (err.code === 'P2002') return
@@ -322,7 +461,7 @@ async function handleChannelAnswer(evt: any): Promise<void> {
     // We don't broadcast 'answered' from this branch — the trunk leg's
     // ANSWER carries the canonical answeredAt timestamp.
     const answeringExtension = header(evt, 'Caller-Callee-ID-Number')
-    const managerId = answeringExtension ? extensionToUserId(answeringExtension) : null
+    const managerId = answeringExtension ? getUserIdForSipExtension(answeringExtension) : null
     if (!managerId || managerId === call.managerId) return
 
     await prisma.call.update({
@@ -417,39 +556,6 @@ export async function syncCallToChat(call: any): Promise<void> {
     if (!peer) return
     const externalChatId = `phone:${peer}`
 
-    let chat = await prisma.chat.findUnique({ where: { externalChatId } })
-    if (!chat) {
-        chat = await prisma.chat.create({
-            data: {
-                channel: 'phone',
-                externalChatId,
-                contactId: call.contactId,
-                driverId: call.driverId ?? undefined,
-                name: peer,
-            },
-        })
-    } else if (!chat.contactId || (call.driverId && !chat.driverId)) {
-        chat = await prisma.chat.update({
-            where: { id: chat.id },
-            data: {
-                contactId: chat.contactId ?? call.contactId,
-                driverId: chat.driverId ?? call.driverId ?? undefined,
-            },
-        })
-    }
-
-    // Idempotency: don't double-insert if this Call was already synced.
-    // If the existing row's label/status doesn't match the latest Call state
-    // (e.g. we re-ran sync after status finalized), update it in place
-    // instead of skipping — keeps the chat label fresh.
-    const existing = await prisma.message.findFirst({
-        where: {
-            chatId: chat.id,
-            type: 'call',
-            metadata: { path: ['callId'], equals: call.id } as any,
-        },
-    })
-
     const direction = call.direction as 'inbound' | 'outbound'
     const content = callStatusLabel(direction, call.status, call.durationSec)
     // Keep `disposition` for one release for backward-compat with any
@@ -459,88 +565,24 @@ export async function syncCallToChat(call: any): Promise<void> {
         call.status === 'rejected' || call.status === 'busy' ? 'rejected' :
         'missed'
 
-    if (existing) {
-        const oldMeta = (existing.metadata ?? {}) as any
-        if (existing.content !== content || oldMeta.status !== call.status || oldMeta.durationSec !== (call.durationSec ?? null)) {
-            await prisma.message.update({
-                where: { id: existing.id },
-                data: {
-                    content,
-                    metadata: {
-                        callId: call.id,
-                        status: call.status,
-                        disposition,
-                        durationSec: call.durationSec ?? null,
-                    } as any,
-                },
-            })
-            broadcastChatMessage(chat.id, {
-                id: existing.id,
-                chatId: chat.id,
-                channel: 'phone',
-                type: 'call',
-                direction: call.direction,
-                content,
-                sentAt: existing.sentAt,
-                metadata: { callId: call.id, status: call.status, disposition, durationSec: call.durationSec ?? null },
-            })
-        }
-        return
-    }
-
-    const created = await prisma.message.create({
-        data: {
-            chatId: chat.id,
-            channel: 'phone',
-            type: 'call',
-            direction: call.direction,
-            content,
-            sentAt: call.startedAt,
-            // 'delivered' — calls aren't text messages awaiting delivery,
-            // they're historical records. This also keeps them safe from
-            // MessageService.recoverStuckMessages which scans status='sent'.
-            status: 'delivered',
-            metadata: {
-                callId: call.id,
-                status: call.status,
-                disposition, // legacy field, kept for one release
-                durationSec: call.durationSec ?? null,
-            } as any,
-        },
-    })
-
-    await prisma.chat.update({
-        where: { id: chat.id },
-        data: {
-            lastMessageAt: call.endedAt ?? new Date(),
-            lastInboundAt: call.direction === 'inbound' ? (call.endedAt ?? new Date()) : undefined,
-            lastOutboundAt: call.direction === 'outbound' ? (call.endedAt ?? new Date()) : undefined,
-        },
-    })
-
-    // Push the new message to /api/messages/stream subscribers so the open
-    // chat tab paints it without a refresh.
-    broadcastChatMessage(chat.id, {
-        id: created.id,
-        chatId: chat.id,
-        channel: 'phone',
-        type: 'call',
-        direction: call.direction,
+    await projectCompletedCallTimelineV1({
+        externalChatId,
+        contactId: call.contactId,
+        driverId: call.driverId ?? null,
+        peer,
+        callId: call.id,
+        direction,
+        callStatus: call.status,
+        durationSec: call.durationSec ?? null,
         content,
-        sentAt: created.sentAt,
-        metadata: created.metadata,
+        disposition,
+        startedAt: call.startedAt,
+        endedAt: call.endedAt ?? null,
     })
 }
 
 // Status mapping moved to src/lib/calls/status.ts — single source of truth
 // for the FS-cause → Call.status → UI label/color/icon pipeline.
-
-function extensionToUserId(extension: string): string | null {
-    // Reverse mapping from sip/extensions.ts — small enough to inline
-    if (extension === '101') return 'u1'
-    if (extension === '102') return 'u2'
-    return null
-}
 
 /**
  * Click-to-call: originate a call from a manager's extension to an external

@@ -18,7 +18,7 @@
 import { Search } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Input } from "@/components/ui/input";
+import { Input } from "@/infrastructure/ui/input";
 
 type ResultRow = {
   kind: "avito_account" | "avito_response";

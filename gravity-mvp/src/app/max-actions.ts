@@ -2,17 +2,36 @@
 
 import { revalidatePath } from "next/cache"
 import { prisma } from "@/lib/prisma"
+import { DELETE_CONVERSATIONS_BY_ID_COMMAND_V1, DELETE_LEGACY_EXTERNAL_CONVERSATIONS_COMMAND_V1, DELETE_QUEUED_MESSAGES_FOR_CONNECTION_COMMAND_V1, DELIVER_QUEUED_MESSAGES_FOR_CONNECTION_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { deleteConversationsByIdV1, deleteLegacyExternalConversationsV1, deleteQueuedMessagesForConnectionV1, deliverQueuedMessagesForConnectionV1 } from '@/modules/messaging/public/v1'
+import { projectMaxConnectionMetadata } from '@/modules/max-channel/public/v1/max-connection-public-metadata'
+import { requireIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
+import { cleanupDanglingContactIdentitiesV1 } from '@/modules/contacts/public/v1'
 
 // Get all saved MAX bots
 export async function getMaxConnections() {
+    await requireIntegrationAdminAccess()
     try {
         const connections = await prisma.maxConnection.findMany({
             orderBy: [
                 { isDefault: 'desc' },
                 { createdAt: 'desc' },
             ],
+            select: {
+                id: true,
+                name: true,
+                isActive: true,
+                isDefault: true,
+                createdAt: true,
+                updatedAt: true,
+            },
         })
-        return connections
+        return connections.map(connection => projectMaxConnectionMetadata({
+            ...connection,
+            // botToken is required by the persistence schema. Its value is
+            // intentionally not selected for a browser-facing list.
+            credentialConfigured: true,
+        }))
     } catch (error) {
         console.error("Error fetching MAX connections:", error)
         return []
@@ -21,6 +40,7 @@ export async function getMaxConnections() {
 
 // Add a new MAX bot token
 export async function addMaxConnection(botToken: string, name: string) {
+    await requireIntegrationAdminAccess()
     if (!botToken || !botToken.trim()) {
         throw new Error("Token is required")
     }
@@ -42,19 +62,36 @@ export async function addMaxConnection(botToken: string, name: string) {
                 botToken: botToken.trim(),
                 name: name.trim() || "MAX Bot",
                 isDefault,
-            }
+            },
+            select: {
+                id: true,
+                name: true,
+                isActive: true,
+                isDefault: true,
+                createdAt: true,
+                updatedAt: true,
+            },
         })
 
         revalidatePath("/max")
-        return { success: true, connection: newConnection }
-    } catch (error: any) {
-        console.error("Failed to add MAX connection:", error)
-        throw new Error(error.message || "Failed to add bot")
+        return {
+            success: true,
+            connection: projectMaxConnectionMetadata({
+                ...newConnection,
+                credentialConfigured: true,
+            }),
+        }
+    } catch {
+        // Prisma errors may embed invocation arguments. Never log or return an
+        // error object from a mutation that carried a bot token.
+        console.error("Failed to add MAX connection")
+        throw new Error("Failed to add bot")
     }
 }
 
 // Disconnect/Remove a MAX bot
 export async function disconnectMax(id: string) {
+    await requireIntegrationAdminAccess()
     try {
         const connection = await prisma.maxConnection.findUnique({ where: { id } })
         if (!connection) return { success: false, error: "Not found" }
@@ -83,6 +120,7 @@ export async function disconnectMax(id: string) {
 }
 
 export async function pauseMaxConnection(id: string, deleteMessages: boolean) {
+    await requireIntegrationAdminAccess()
     console.log(`[MAX-ACTIONS] pauseMaxConnection id=${id} deleteMessages=${deleteMessages}`)
     await prisma.maxConnection.update({
         where: { id },
@@ -95,6 +133,7 @@ export async function pauseMaxConnection(id: string, deleteMessages: boolean) {
 }
 
 export async function resumeMaxConnection(id: string, catchUp: boolean) {
+    await requireIntegrationAdminAccess()
     console.log(`[MAX-ACTIONS] resumeMaxConnection id=${id} catchUp=${catchUp}`)
     if (catchUp) {
         // Flush buffered MAX messages from unified table
@@ -104,21 +143,22 @@ export async function resumeMaxConnection(id: string, catchUp: boolean) {
         })
         if (buffered.length > 0) {
             const ids = buffered.map((m: any) => m.id)
-            await (prisma as any).message.updateMany({ where: { id: { in: ids } }, data: { status: 'delivered', metadata: { connectionId: id, buffered: false } } })
             const chatIds = [...new Set(buffered.map((m: any) => m.chatId))] as string[]
-            for (const chatId of chatIds) {
+            const conversations = chatIds.map(chatId => {
                 const latest = buffered.filter((m: any) => m.chatId === chatId).sort((a: any, b: any) => new Date(b.sentAt).getTime() - new Date(a.sentAt).getTime())[0]
-                await (prisma.chat as any).update({ where: { id: chatId }, data: { lastMessageAt: latest.sentAt } })
-            }
+                return { id: chatId, lastMessageAt: latest.sentAt as Date }
+            })
+            await deliverQueuedMessagesForConnectionV1({ contract: DELIVER_QUEUED_MESSAGES_FOR_CONNECTION_COMMAND_V1, connectionId: id, messageIds: ids, conversations })
         }
     } else {
-        await (prisma as any).message.deleteMany({ where: { status: 'queued', channel: 'max', metadata: { path: ['connectionId'], equals: id } } }).catch(() => {})
+        await deleteQueuedMessagesForConnectionV1({ contract: DELETE_QUEUED_MESSAGES_FOR_CONNECTION_COMMAND_V1, connectionId: id }).catch(() => {})
     }
     await prisma.maxConnection.update({ where: { id }, data: { isActive: true } as any })
     revalidatePath('/settings/integrations/max')
 }
 
 export async function deleteMaxMessages(id: string) {
+    await requireIntegrationAdminAccess()
     console.log(`[MAX-ACTIONS] deleteMaxMessages connectionId=${id}`)
     const chats = await (prisma.chat as any).findMany({
         where: { channel: 'max' },
@@ -136,16 +176,13 @@ export async function deleteMaxMessages(id: string) {
 
     try {
         // Use raw SQL for reliable bulk deletion — CASCADE handles Messages → Attachments → EventLogs
-        await (prisma as any).$executeRawUnsafe(
-            `DELETE FROM "Chat" WHERE channel = 'max'`
-        )
+        await deleteLegacyExternalConversationsV1({ contract: DELETE_LEGACY_EXTERNAL_CONVERSATIONS_COMMAND_V1 })
         console.log(`[MAX-ACTIONS] Successfully deleted ${chatIds.length} MAX chats and all related data`)
     } catch (e: any) {
         console.error(`[MAX-ACTIONS] DELETE failed:`, e.message)
         // Fallback: delete in order if raw SQL fails
         try {
-            await (prisma.message as any).deleteMany({ where: { chatId: { in: chatIds } } })
-            await (prisma.chat as any).deleteMany({ where: { id: { in: chatIds } } })
+            await deleteConversationsByIdV1({ contract: DELETE_CONVERSATIONS_BY_ID_COMMAND_V1, conversationIds: chatIds })
             console.log(`[MAX-ACTIONS] Fallback deletion succeeded`)
         } catch (e2: any) {
             console.error(`[MAX-ACTIONS] Fallback deletion also failed:`, e2.message)
@@ -156,8 +193,7 @@ export async function deleteMaxMessages(id: string) {
     // Cleanup dangling identities (scoped to affected contacts)
     if (contactIds.length > 0) {
         try {
-            const { ContactService } = await import('@/lib/ContactService')
-            await ContactService.cleanupDanglingIdentities(contactIds)
+            await cleanupDanglingContactIdentitiesV1(contactIds)
         } catch (e: any) {
             console.error(`[MAX-ACTIONS] Identity cleanup failed:`, e.message)
         }
@@ -167,6 +203,7 @@ export async function deleteMaxMessages(id: string) {
 
 // Update settings (name, default status)
 export async function updateMaxConnectionSettings(id: string, name: string, isDefault: boolean) {
+    await requireIntegrationAdminAccess()
     try {
         if (isDefault) {
             // Unset current default
@@ -194,7 +231,7 @@ export async function updateMaxConnectionSettings(id: string, name: string, isDe
 
 // Send a message via MAX Personal Account (Web Scraper)
 // target can be a MAX internal chatId (e.g. "201482140") or a phone number (e.g. "79222155750")
-export async function sendMaxPersonalMessage(target: string, message: string, name?: string, quotedMsgId?: string) {
+export async function sendMaxPersonalMessage(target: string, message: string, name?: string, quotedMsgId?: string, uiChatId?: string, clientMessageId?: string) {
     if (!target || !message) {
         throw new Error("Target (chatId or phone) and message are required")
     }
@@ -208,7 +245,7 @@ export async function sendMaxPersonalMessage(target: string, message: string, na
         const response = await fetch(`${maxScraperUrl}/send-message`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ chatId: cleanTarget, message, quotedMsgId })
+            body: JSON.stringify({ chatId: cleanTarget, message, quotedMsgId, uiChatId, clientMessageId })
         })
 
         const data = await response.json().catch(() => ({}))
@@ -216,7 +253,17 @@ export async function sendMaxPersonalMessage(target: string, message: string, na
             throw new Error(data.error || "Failed to send message via Scraper")
         }
 
-        return { success: true, externalId: data.externalId || null, resolvedChatId: data.chatId || null }
+        const externalId = typeof data.externalId === 'string'
+            ? data.externalId
+            : (typeof data.maxMessageId === 'string' ? data.maxMessageId : null)
+
+        return {
+            success: true,
+            externalId,
+            resolvedChatId: data.chatId ? String(data.chatId) : null,
+            deliveryConfirmed: Boolean(data.deliveryConfirmed),
+            deliveryStatus: data.deliveryStatus || data.status || null,
+        }
     } catch (error: any) {
         console.error("MAX Personal Send Error:", error)
         throw new Error(error.message || "Failed to call scraper API")
@@ -224,13 +271,13 @@ export async function sendMaxPersonalMessage(target: string, message: string, na
 }
 
 // Send a message via MAX (Bot or Personal)
-export async function sendMaxMessage(phone: string, message: string, options?: { name?: string, connectionId?: string, isPersonal?: boolean, quotedMsgId?: string }) {
+export async function sendMaxMessage(phone: string, message: string, options?: { name?: string, connectionId?: string, isPersonal?: boolean, quotedMsgId?: string, uiChatId?: string, clientMessageId?: string }) {
     if (!phone || !message) {
         throw new Error("Phone and message are required")
     }
 
     if (options?.isPersonal) {
-        return await sendMaxPersonalMessage(phone, message, options.name, options.quotedMsgId)
+        return await sendMaxPersonalMessage(phone, message, options.name, options.quotedMsgId, options.uiChatId, options.clientMessageId)
     }
 
     try {

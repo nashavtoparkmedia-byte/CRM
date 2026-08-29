@@ -16,10 +16,6 @@ class UserService {
         return await db.getUserState(telegramId);
     }
 
-    async upsertConnectionLocal(telegramId, username, data) {
-        await db.upsertConnectionLocal(telegramId, username, data);
-    }
-
     // Update user data
     async updateUser(telegramId, data) {
         await db.updateUser(telegramId, data);
@@ -48,13 +44,7 @@ class UserService {
     // Get user activity statistics
     async getUserActivity(telegramId) {
         try {
-            const actions = await db.all(
-                `SELECT action_type, COUNT(*) as count 
-                 FROM actions 
-                 WHERE telegram_id = ? 
-                 GROUP BY action_type`,
-                [telegramId.toString()]
-            );
+            const actions = await db.allUserActivity(telegramId.toString());
             return actions;
         } catch (err) {
             logger.error('Error getting user activity:', err);

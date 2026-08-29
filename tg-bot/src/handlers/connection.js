@@ -79,17 +79,6 @@ async function handleConnectionData(ctx) {
     }
 
     if (typeFound) {
-        // Save locally - only use snake_case keys for SQLite
-        const localData = {
-            status: dataToUpdate.Status
-        };
-        if (dataToUpdate.phone) localData.phone = dataToUpdate.phone;
-        if (dataToUpdate.full_name) localData.full_name = dataToUpdate.full_name;
-        if (dataToUpdate.vu_link) localData.vu_link = dataToUpdate.vu_link;
-        if (dataToUpdate.sts_link) localData.sts_link = dataToUpdate.sts_link;
-
-        await userService.upsertConnectionLocal(userId, username, localData);
-
         // Save to Sheets (async)
         sheetsService.upsertConnectionRow(userId, username, dataToUpdate).catch(err => logger.error('Sync to Sheets failed:', err));
 
@@ -122,7 +111,7 @@ async function notifyAdmin(ctx, type) {
 <b>ID:</b> <code>${userId}</code>
 <b>Получено:</b> ${type}
 
-Данные сохранены в базе и Google Sheets.`;
+Данные сохранены в Google Sheets.`;
 
     try {
         await ctx.telegram.sendMessage(ADMIN_TARGET, message, {

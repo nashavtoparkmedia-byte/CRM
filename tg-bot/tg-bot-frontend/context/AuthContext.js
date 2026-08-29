@@ -4,51 +4,51 @@ import { useRouter } from 'next/router';
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-    const [token, setToken] = useState(null);
+    const [authenticated, setAuthenticated] = useState(false);
     const [loading, setLoading] = useState(true);
     const router = useRouter();
 
     useEffect(() => {
-        // SSO-lite: the parent CRM embeds this panel in an iframe and injects
-        // Basic Auth credentials via `#auth=<base64(user:pass)>`. Read it first
-        // and let it OVERWRITE any stale token in localStorage (a token whose
-        // password no longer matches ADMIN_PASS would otherwise brick the panel
-        // with permanent 401 and no way to re-login). Then strip the hash.
-        let injected = null;
-        if (typeof window !== 'undefined' && window.location.hash.startsWith('#auth=')) {
-            const raw = window.location.hash.slice('#auth='.length);
-            injected = decodeURIComponent(raw);
-            if (injected) {
-                localStorage.setItem('crm_token', injected);
-                // Remove the hash so the credential doesn't linger in the URL.
-                window.history.replaceState(null, '', window.location.pathname + window.location.search);
-            }
-        }
-
-        const storedToken = injected || localStorage.getItem('crm_token');
-        if (storedToken) {
-            setToken(storedToken);
-        }
-        setLoading(false);
+        let active = true;
+        fetch('/api/auth/session', { credentials: 'same-origin', cache: 'no-store' })
+            .then(response => {
+                if (active) setAuthenticated(response.ok);
+            })
+            .catch(() => {
+                if (active) setAuthenticated(false);
+            })
+            .finally(() => {
+                if (active) setLoading(false);
+            });
+        return () => { active = false; };
     }, []);
 
-    const login = (username, password) => {
-        // For MVP, simply base64 encode for Basic Auth.
-        // In production, this would call an API to get a JWT.
-        const credentials = Buffer.from(`${username}:${password}`).toString('base64');
-        localStorage.setItem('crm_token', credentials);
-        setToken(credentials);
-        router.push('/');
+    const login = async (username, password) => {
+        const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password }),
+        });
+        if (!response.ok) {
+            setAuthenticated(false);
+            throw new Error(response.status === 401 ? 'Неверный логин или пароль' : 'Сервис авторизации недоступен');
+        }
+        setAuthenticated(true);
+        await router.push('/');
     };
 
-    const logout = () => {
-        localStorage.removeItem('crm_token');
-        setToken(null);
-        router.push('/login');
+    const logout = async () => {
+        try {
+            await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+        } finally {
+            setAuthenticated(false);
+            await router.push('/login');
+        }
     };
 
     return (
-        <AuthContext.Provider value={{ token, loading, login, logout }}>
+        <AuthContext.Provider value={{ authenticated, loading, login, logout }}>
             {children}
         </AuthContext.Provider>
     );

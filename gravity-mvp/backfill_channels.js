@@ -1,5 +1,6 @@
 require('dotenv').config()
 const { PrismaClient } = require('@prisma/client')
+const { backfillMessageChannelV1 } = require('./src/modules/messaging/public/v1/legacy-prisma-chat-backfill-adapter')
 const prisma = new PrismaClient()
 
 async function main() {
@@ -12,12 +13,9 @@ async function main() {
   for (const chat of chats) {
     // Sync all messages for this chat to its current channel
     // This handles both NULL and mismatches
-    const count = await prisma.$executeRawUnsafe(`
-      UPDATE "Message" 
-      SET channel = '${chat.channel}'::"ChatChannel"
-      WHERE "chatId" = '${chat.id}' 
-      AND (channel IS NULL OR channel != '${chat.channel}'::"ChatChannel")
-    `)
+    const messages = await prisma.message.findMany({ where: { chatId: chat.id, OR: [{ channel: null }, { channel: { not: chat.channel } }] }, select: { id: true } })
+    for (const message of messages) await backfillMessageChannelV1(message.id, chat.channel)
+    const count = messages.length
     
     if (count > 0) {
       console.log(`Updated ${count} messages for chat ${chat.id} -> ${chat.channel}`)

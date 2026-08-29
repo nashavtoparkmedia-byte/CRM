@@ -50,7 +50,8 @@ export async function GET() {
       crmPullEnabled: parseBool('crm_pull_enabled', true),
     })
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message ?? 'unknown' }, { status: 500 })
+    console.warn('[avito-settings] request failed')
+    return NextResponse.json({ error: 'request failed' }, { status: 500 })
   }
 }
 
@@ -111,6 +112,7 @@ export async function PATCH(req: Request) {
     await upsertBool('crm_pull_enabled', body.crmPullEnabled)
     return NextResponse.json({ ok: true })
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message ?? 'unknown' }, { status: 500 })
+    console.warn('[avito-settings] update failed')
+    return NextResponse.json({ error: 'request failed' }, { status: 500 })
   }
 }

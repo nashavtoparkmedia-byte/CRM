@@ -17,8 +17,12 @@ export async function GET() {
         ])
 
         // Robust fetch for Telegram and Bots via $queryRaw to avoid Client out-of-sync 500s
-        const tgConnections: any[] = await prisma.$queryRaw`SELECT * FROM "TelegramConnection" WHERE "isActive" = true`
-        const bots: any[] = await prisma.$queryRaw`SELECT * FROM "bots" WHERE "is_active" = true`
+        const tgConnections: Array<{ id: string; name: string | null; phoneNumber: string | null }> = await prisma.$queryRaw`
+            SELECT "id", "name", "phoneNumber" FROM "TelegramConnection" WHERE "isActive" = true
+        `
+        const bots: Array<{ id: string; name: string | null; username: string | null }> = await prisma.$queryRaw`
+            SELECT "id", "name", "username" FROM "bots" WHERE "is_active" = true
+        `
 
         function serialize(obj: any): any {
             return JSON.parse(JSON.stringify(obj, (key, value) =>

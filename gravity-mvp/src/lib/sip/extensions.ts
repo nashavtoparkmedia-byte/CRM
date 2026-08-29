@@ -26,6 +26,12 @@ export function getSipExtensionForUser(userId: string): SipExtension | null {
     return EXTENSIONS[userId] ?? null
 }
 
+/** Resolve the CRM owner of the extension that won an inbound ring group. */
+export function getUserIdForSipExtension(extension: string): string | null {
+    const match = Object.entries(EXTENSIONS).find(([, sip]) => sip.extension === extension)
+    return match?.[0] ?? null
+}
+
 /** All known extensions, used by the inbound dialplan helper and stats. */
 export function listExtensions(): string[] {
     return Object.values(EXTENSIONS).map(e => e.extension)

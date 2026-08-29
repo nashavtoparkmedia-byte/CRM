@@ -5,6 +5,7 @@ const userService = require('../services/userService');
 const sheetsService = require('../services/sheets');
 const logger = require('../utils/logger');
 const config = require('../config');
+const { ensureBotMappingV1 } = require('../public-bot-maintenance');
 
 function crmParkRequest(action, payload) {
     return new Promise((resolve) => {
@@ -350,28 +351,11 @@ async function handleStart(ctx) {
         await userService.logAction(from.id, from.username, 'START_COMMAND', { payload: startPayload });
 
         // IMPORTANT: Ensure the bot exists in Prisma DB so surveys work
-        const { PrismaClient } = require('@prisma/client');
-        const prisma = new PrismaClient();
         const botToken = config.botToken?.trim() || '';
         let botDb = null;
         try {
             if (botToken) {
-                botDb = await prisma.bot.findFirst({
-                    where: { token: botToken },
-                    include: { surveys: true }
-                });
-                if (!botDb) {
-                    logger.info(`Auto-creating bot in DB on /start with token ${botToken.substring(0, 8)}...`);
-                    botDb = await prisma.bot.create({
-                        data: {
-                            token: botToken,
-                            name: config.botName || 'Main Bot',
-                            surveys: { create: {} }
-                        }
-                    });
-                } else if (!botDb.surveys || botDb.surveys.length === 0) {
-                    await prisma.survey.create({ data: { botId: botDb.id } });
-                }
+                botDb = await ensureBotMappingV1({ token: botToken, name: config.botName || 'Main Bot' });
             }
         } catch (dbErr) {
             logger.error('Error auto-creating bot in DB:', dbErr.message);
@@ -397,7 +381,6 @@ async function handleStart(ctx) {
         } catch (analyticsErr) {
             logger.error('Failed to log BOT_STARTED event:', analyticsErr.message);
         } finally {
-            await prisma.$disconnect();
         }
 
         // Update Google Sheets with "Opened" status

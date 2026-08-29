@@ -6,9 +6,16 @@ import { IntegrityChecker, type IntegrityReportSummary } from '@/lib/IntegrityCh
 import { getSlowOperations, getPerfSummary, type SlowOperationEntry, type PerfSummaryEntry } from '@/lib/perf-monitor'
 import { getActiveLocks, type ActiveLock } from '@/lib/execution-lock'
 import { getRecentStabilityReports, type StabilityReportSummary } from '@/lib/stability-check'
-import { validateAllConfigs, validateCronSchedules, getRecentConfigChanges, type ConfigValidationResult, type CronScheduleValidation, type ConfigChangeEntry } from '@/lib/config-validator'
+import {
+    listRecentConfigurationChangesV1,
+    validateOperationalConfigurationV1,
+    validateOperationalCronSchedulesV1,
+    type ConfigurationChangeEntryV1,
+    type OperationalConfigurationValidationV1,
+    type OperationalCronScheduleValidationV1,
+} from '@/modules/configuration/public/v1/operational-configuration-health'
 import { checkRuntimeGuardrails, type GuardrailCheckResult } from '@/lib/runtime-guardrails'
-import { OperationalJobs } from '@/lib/OperationalJobs'
+import { listOperationalJobStatesV1 } from '@/modules/operations-observability/public/v1/operational-job-registry'
 
 export interface SystemHealthData {
     cronSummary: CronHealthSummaryEntry[]
@@ -18,10 +25,10 @@ export interface SystemHealthData {
     perfSummary: PerfSummaryEntry[]
     activeLocks: ActiveLock[]
     stabilityReports: StabilityReportSummary[]
-    configValidation: ConfigValidationResult
-    cronValidation: CronScheduleValidation
+    configValidation: OperationalConfigurationValidationV1
+    cronValidation: OperationalCronScheduleValidationV1
     runtimeGuardrails: GuardrailCheckResult
-    recentConfigChanges: ConfigChangeEntry[]
+    recentConfigChanges: ConfigurationChangeEntryV1[]
     backgroundJobs: Record<string, {
         isRunning: boolean
         lastRunAt: string | null
@@ -57,17 +64,17 @@ export async function getSystemHealthData(): Promise<SystemHealthData> {
     ])
 
     // Config validation (synchronous)
-    const configValidation = validateAllConfigs()
-    const cronValidation = validateCronSchedules()
+    const configValidation = validateOperationalConfigurationV1()
+    const cronValidation = validateOperationalCronSchedulesV1()
 
     // Runtime guardrails + config changes (async)
     const [runtimeGuardrails, recentConfigChanges] = await Promise.all([
         checkRuntimeGuardrails().catch(() => ({ status: 'ok' as const, violations: [], checkedAt: new Date().toISOString() })),
-        getRecentConfigChanges(5).catch(() => [] as ConfigChangeEntry[]),
+        listRecentConfigurationChangesV1(5).catch(() => [] as ConfigurationChangeEntryV1[]),
     ])
 
     // Background jobs state (in-memory, synchronous)
-    const rawJobs = OperationalJobs.getAllJobStates()
+    const rawJobs = listOperationalJobStatesV1()
     const backgroundJobs: SystemHealthData['backgroundJobs'] = {}
     for (const [name, state] of Object.entries(rawJobs)) {
         backgroundJobs[name] = {

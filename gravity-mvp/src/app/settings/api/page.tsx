@@ -1,5 +1,5 @@
-import { getApiConnections } from '../../actions'
-import ApiListClient from '../../ApiListClient'
+import { getApiConnections } from '@/modules/fleet-operations/public/v1/yandex-fleet-operations'
+import ApiListClient from '@/modules/fleet-operations/public/v1/client-ui/ApiListClient'
 import {
     Table,
     TableBody,
@@ -7,10 +7,11 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { PageContainer } from '@/components/ui/PageContainer'
-import { PageHeader } from '@/components/layout/PageHeader'
+} from "@/infrastructure/ui/table"
+import { Badge } from "@/infrastructure/ui/badge"
+import { PageContainer } from '@/infrastructure/ui/PageContainer'
+import { PageHeader } from '@/infrastructure/ui/PageHeader'
+import { requireIntegrationAdminPageAccess } from '@/modules/identity-access/public/v1'
 
 export const dynamic = 'force-dynamic'
 
@@ -121,6 +122,7 @@ const API_ENDPOINTS = [
 ]
 
 export default async function ApiSettingsPage() {
+    await requireIntegrationAdminPageAccess('/settings/api')
     const connections = await getApiConnections()
 
     return (

@@ -1,0 +1,33 @@
+{
+  "schema": "yoko.crm.ledger-reconciliation-bootstrap-executor-review.v1",
+  "artifact_sha256": "db571de22ad7fe9110bd339992c4caec58598b311c547b9543bd560db5dcc29d",
+  "package_sha256": "ababe50bcb0d3597786b1c77118867b1d700a5629bb2719892ce5ae4927a4738",
+  "verdict": "PASS_EXECUTOR_REVIEW_CRITIC_STILL_REQUIRED",
+  "checks": {
+    "root_escape": "ABSENT",
+    "sudoers_widening": "ABSENT_BYTE_IDENTICAL",
+    "runtime_abi_widening": "ABSENT",
+    "enabled_profile_widening": "ABSENT_EXACT_FIVE_ZERO_ARGUMENT",
+    "dynamic_ledger_authorization": "ABSENT_EXACT_DIGEST_AND_COUNT",
+    "database_identity_widening": "ABSENT_EXACT_SHA256",
+    "migration_widening": "ABSENT_FIXED_NAME_AND_SHA256",
+    "unrelated_ledger_drift": "NEGATIVE_FIXTURE_FAILS",
+    "wrong_target_checksum": "NEGATIVE_FIXTURE_FAILS",
+    "duplicate_or_inactive_non_target_record": "PARSER_FAILS",
+    "preview_and_recovery_binding": "EXACT_NORMALIZED_BASELINE_REUSED",
+    "predecessor_rollback": "PINNED_2.0.0-6_PACKAGE_AND_SELF_CHECK",
+    "bootstrap_production_effect": "NONE",
+    "deterministic_package_rebuild": "PASS",
+    "deterministic_bundle_rebuild": "PASS",
+    "offline_tests": "67/67 PASS"
+  },
+  "unchanged_installed_artifact_sha256": {
+    "runtime_core": "0cdeeb4ba43abe50f80fed1580ad7b0729bf83358932ece2974b3faedafed57a",
+    "policy": "8727373b0c6ec79c9abf82f1aaaa58abc2bae67e96aa96a602ac419f308db0e0",
+    "sudoers": "6e6b7cb2a088cc92fa7aee747adca46c64b4b96d1224be21117be5adef488c06",
+    "migration": "433b0d503f054ed6a8161a059e2650d5e401829dabe8c9d992a1d1763eef0016",
+    "source_archive": "c43d6e6ea0735b7a5dad9117822df24b7ec0133685c69b8c13b50effc7c9f808"
+  },
+  "production_mutation_during_review": false,
+  "owner_command_authorized": false
+}

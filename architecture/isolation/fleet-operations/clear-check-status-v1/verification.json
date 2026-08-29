@@ -1,0 +1,30 @@
+{
+  "schema": "yoko.crm.context-isolation-verification.v1",
+  "milestone": "CRM-ARCH-007-FLEET-CLEAR-CHECK-STATUS",
+  "verified_at": "2026-08-09T17:49:09Z",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "architecture": {
+    "files": 847,
+    "contexts": 16,
+    "findings": 1505,
+    "exceptions": 1505,
+    "finding_digest": "725a72c7126ec4467c9cb5334230bbb86ab00ad3d75a07d487cee68ad853b986",
+    "registry_sha256": "b3ba5f6d3aef2d908511aa3323dcb3cfec0424e6de9c2cec5fc811c2caccb377",
+    "dependency_cycles": 0
+  },
+  "tests": {
+    "fleet_clear_check_status_behavior": "9/9 PASS",
+    "fleet_clear_check_status_controls": "12/12 PASS",
+    "contract_controls": "78/78 PASS",
+    "enforcement": "16/16 PASS",
+    "auth": "33/33 PASS",
+    "calling": "93/93 PASS",
+    "current_baseline_context_contract_outbox_identity_work_management_contacts_fleet_and_messaging_controls": "PASS"
+  },
+  "typescript": "28 baseline / 28 candidate / 0 normalized file-code-message differences",
+  "eslint": "0 base script/new-file diagnostics / 0 candidate diagnostics",
+  "execution_performed": false,
+  "historical_evidence_note": "CRM-ARCH-002 evidence remains checksum-authoritative for its frozen input identity; its byte-count validator is not reinterpreted as a current-tree validator.",
+  "secret_values_read_or_emitted": false,
+  "production_mutated": false
+}

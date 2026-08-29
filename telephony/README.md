@@ -9,7 +9,7 @@ call events and originate calls.
 - **Stage 1** — FreeSWITCH registered to Megafon, outbound calls work
 - **Stage 2** — Prisma `Call` model, ESL listener writing call lifecycle to DB,
   React WebRTC softphone in CRM browser, incoming call popup, click-to-call
-  from driver / contact cards, calls history list, internal extensions (101, 102),
+  from driver / contact cards, calls history list, internal extensions (101–103),
   forking dialplan (rings every registered manager simultaneously)
 - **Stage 3** — Stereo call recording (WAV → MP3, libmp3lame 64kbps),
   MinIO object storage as part of this compose, audio player in calls list
@@ -121,7 +121,10 @@ Each manager gets one extension (101, 102, ...) defined in
 - **Linphone on their phone** — manual setup, see [LINPHONE_SETUP.md](./LINPHONE_SETUP.md)
 
 Forking is configured in `conf/dialplan/default/02_megafon_inbound.xml`:
-every incoming call rings every registered extension simultaneously.
+every incoming call rings every live registration for extensions 101–103
+simultaneously. Several computers/browser profiles may register the same
+extension; the first device to answer takes the call and every other leg is
+cancelled automatically.
 
 ## Known limitations on Windows + Docker Desktop
 

@@ -1,5 +1,6 @@
 require('dotenv').config();
 const { PrismaClient } = require('@prisma/client');
+const { upsertDriverDaySummaryV1 } = require('./src/modules/fleet-operations/public/v1/legacy-prisma-driver-history-maintenance-adapter');
 const prisma = new PrismaClient();
 
 async function backfillTrips(days) {
@@ -105,11 +106,7 @@ async function backfillTrips(days) {
             for (const [dateStr, trips] of driverDates.entries()) {
                 const dateObj = new Date(`${dateStr}T00:00:00.000Z`);
                 upsertPromises.push(
-                    prisma.driverDaySummary.upsert({
-                        where: { driverId_date: { driverId: driver.id, date: dateObj } },
-                        update: { tripCount: trips },
-                        create: { driverId: driver.id, date: dateObj, tripCount: trips },
-                    })
+                    upsertDriverDaySummaryV1(driver.id, dateObj, trips)
                 );
             }
             updatedCount++;

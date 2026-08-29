@@ -164,35 +164,42 @@ export async function migrateLegacyKnowledgeBaseCore(actor: string): Promise<Leg
                 continue
             }
 
-            await prisma.$executeRaw`
-                INSERT INTO "AiKnowledgeItem" (
+            await prisma.$executeRawUnsafe(
+                `INSERT INTO "AiKnowledgeItem" (
                     id, "sectionId", title, "canonicalStatement", tags,
                     confidence, "sourceCount", "uniqueManagerCount",
                     status, "isActive", "safetyLevel",
                     "isVerified", "verifiedBy", "verifiedAt",
                     "createdBy", "createdAt", "updatedAt"
-                ) VALUES (
-                    ${itemId}, ${sectionId},
-                    ${title}, ${statement},
-                    ${tags}::text[],
+                 ) VALUES (
+                    $1, $2, $3, $4, $5::text[],
                     0.95, 1, 1,
                     'active'::"AiKnowledgeStatus", true, 'normal'::"AiKnowledgeSafety",
-                    true, ${actor}, NOW(),
-                    ${actor}, NOW(), NOW()
-                )
-            `
-            await prisma.$executeRaw`
-                INSERT INTO "AiKnowledgeSource" (
+                    true, $6, NOW(), $7, NOW(), NOW()
+                 )`,
+                itemId,
+                sectionId,
+                title,
+                statement,
+                tags,
+                actor,
+                actor,
+            )
+            await prisma.$executeRawUnsafe(
+                `INSERT INTO "AiKnowledgeSource" (
                     id, "itemId", "originType",
                     "messageId", "chatId", channel, "managerUserId",
                     excerpt, "excerptHash", confidence, "occurredAt", "createdAt"
-                ) VALUES (
-                    ${sourceId}, ${itemId}, 'manual_entry',
-                    NULL, NULL, NULL, ${actor},
-                    ${'[мигрировано из legacy KB: ' + title + ']'},
-                    ${excerptHash}, 1.0, NOW(), NOW()
-                )
-            `
+                 ) VALUES (
+                    $1, $2, 'manual_entry', NULL, NULL, NULL, $3,
+                    $4, $5, 1.0, NOW(), NOW()
+                 )`,
+                sourceId,
+                itemId,
+                actor,
+                '[мигрировано из legacy KB: ' + title + ']',
+                excerptHash,
+            )
             // Load freshly inserted snapshot для audit.after.
             const afterRows = await prisma.$queryRaw<any[]>`
                 SELECT

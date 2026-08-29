@@ -1,6 +1,6 @@
 import { getTelephonyAiConfig } from '@/lib/aiCallAnalysis/config'
 import { DEFAULT_SYSTEM_PROMPT } from '@/lib/aiCallAnalysis/prompt'
-import { getCurrentUser } from '@/lib/users/user-service'
+import { getCurrentUserIdentityV1 as getCurrentUser } from '@/modules/identity-access/public/v1/user-directory'
 import TelephonyAiClient from '@/app/settings/integrations/telephony-ai/TelephonyAiClient'
 
 export const dynamic = 'force-dynamic'

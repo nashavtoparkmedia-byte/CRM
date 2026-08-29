@@ -11,7 +11,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { Bookmark, BookmarkPlus, Check, Pencil, Trash2, X } from 'lucide-react'
-import { useListViewStore, type UserPreset } from '@/store/list-view-store'
+import { useListViewStore, type UserPreset } from '@/modules/work-management/public/v1/client-state/list-view-store'
 import { getDefaultViewId } from '@/lib/tasks/list-views'
 import { recordUsage } from '@/lib/tasks/usage'
 

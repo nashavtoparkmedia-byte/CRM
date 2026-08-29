@@ -1,13 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useTasksStore } from '@/store/tasks-store'
-import { getDictionaries } from '@/lib/dictionaries/dictionary-service'
+import { useTasksStore } from '@/modules/work-management/public/v1/client-state/task-store'
+import { getTaskDictionariesV1 } from '@/modules/work-management/public/v1/task-dictionary-catalog'
 import { useRouter } from 'next/navigation'
-import { getUsers } from '@/lib/users/user-service'
-import { useSelectedTask } from '@/store/tasks-selectors'
-import { useTaskDetailQuery } from '@/hooks/use-tasks-query'
-import { useUpdateTask, useResolveTask } from '@/hooks/use-task-mutations'
+import { listUserIdentitiesV1 as getUsers } from '@/modules/identity-access/public/v1/user-directory'
+import { useSelectedTask } from '@/modules/work-management/public/v1/client-state/task-selectors'
+import { useTaskDetailQuery } from '@/modules/work-management/public/v1/client-state/use-tasks-query'
+import { useUpdateTask, useResolveTask } from '@/modules/work-management/public/v1/client-state/use-task-mutations'
 import { addTaskAction, correctTaskAction } from '@/app/tasks/actions'
 import { Bell } from 'lucide-react'
 import ContactResultModal from './details/ContactResultModal'
@@ -97,7 +97,7 @@ export default function TaskDetailsPane() {
     const [isClosing, setIsClosing] = useState(false)
 
     useEffect(() => {
-        getDictionaries().then(setDicts)
+        getTaskDictionariesV1().then(setDicts)
         getUsers().then(setUsers)
     }, [])
 
@@ -392,4 +392,3 @@ export default function TaskDetailsPane() {
         </div>
     )
 }
-

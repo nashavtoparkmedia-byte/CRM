@@ -1,0 +1,33 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1",
+  "milestone": "CRM-ARCH-007-FLEET-INBOX-PUBLIC",
+  "base_commit": "2fed07d99da8e11b078b5f77738faaf8640f1558",
+  "captured_at": "2026-08-09T16:40:14Z",
+  "consumers": {
+    "inbox": {
+      "file": "gravity-mvp/src/app/inbox/InboxClient.tsx",
+      "sha256": "ce811f22a0383d68f414c14b84f33372c9b45624ae5090c1cc6000b2d6098ea6"
+    },
+    "segment_badge": {
+      "file": "gravity-mvp/src/app/drivers/components/SegmentBadge.tsx",
+      "sha256": "c4ff566d646a3841b1e72f9a2305ce8598b8acd96081fd132a18b7e2fbb4a134"
+    },
+    "legacy_manager_call": {
+      "file": "gravity-mvp/src/app/drivers/actions.ts",
+      "sha256": "ebcf7d309cf4c468a173b41974189c81dd085a0760cb15d113d3757f16690512"
+    }
+  },
+  "behavior": [
+    "Inbox awaits manager-call completion before showing the transient logged state",
+    "manager-call failures remain visible and prevent the success state",
+    "the exact driver id is forwarded",
+    "segment labels, fallback, colors, classes and rendering remain unchanged",
+    "all existing legacy SegmentBadge consumers retain the same named export"
+  ],
+  "out_of_scope": [
+    "legacy manager-call persistence decomposition",
+    "DriverDaySummary and CommunicationEvent writes inside drivers/actions.ts",
+    "other Inbox Platform Shell imports",
+    "production activation"
+  ]
+}

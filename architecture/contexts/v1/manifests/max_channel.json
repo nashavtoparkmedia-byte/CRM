@@ -1,0 +1,158 @@
+{
+  "allowed_dependencies": [
+    {
+      "context": "messaging",
+      "surface": "messaging.public"
+    },
+    {
+      "context": "contacts",
+      "surface": "contacts.public"
+    },
+    {
+      "context": "fleet_operations",
+      "surface": "fleet_operations.public"
+    },
+    {
+      "context": "identity_access",
+      "surface": "identity_access.public"
+    }
+  ],
+  "commands": [
+    "SendMaxMessageCommand.v1",
+    "SynchronizeMaxHistoryCommand.v1",
+    "ResolveMaxIdentityCommand.v1"
+  ],
+  "compatibility_strategy": "Keep production scraper and Personal MAX lineages unchanged; dual-run owner commands before redirecting mirrored writes.",
+  "context": {
+    "id": "max_channel",
+    "name": "MAX Channel"
+  },
+  "credential_relationships": {
+    "database_models": [
+      "MaxConnection"
+    ],
+    "environment_names": [
+      "CRM_WEBHOOK_URL",
+      "HISTORY_IMPORT_MODE",
+      "MAX_NAME_SYNC_INTERVAL_MS",
+      "MAX_SCRAPER_URL",
+      "NEXT_PUBLIC_MAX_SCRAPER_PHONE",
+      "PORT"
+    ],
+    "policy": "Names and access locations only. Values stay inside the owning adapter and never cross a public contract."
+  },
+  "events": [
+    "MaxMessageObserved.v1",
+    "MaxSessionChanged.v1"
+  ],
+  "evidence": {
+    "dependency_edges": 6,
+    "source_snapshot_sha256": "2713db175062bb673dcca2d97e80c2ae204a2f257438036c6db2506587dfad7d",
+    "write_sites_requiring_migration": 11
+  },
+  "forbidden_dependencies": [
+    "credentialValuesInContracts",
+    "directForeignPrismaWrites",
+    "foreign_contact_storage",
+    "foreign_message_storage",
+    "providerImplementationImportsOutsideOwningContext",
+    "unversionedCrossContextPayloads"
+  ],
+  "foreign_write_migration_plans": [
+    "migration_22eff9f42e71a832",
+    "migration_577f6451590e697c",
+    "migration_891ed67c317c43a7",
+    "migration_a5a1040630dc288c"
+  ],
+  "internal_surface": [
+    "gravity-mvp/src/app/max-actions.ts",
+    "gravity-mvp/src/lib/providers/max-personal",
+    "max-web-scraper"
+  ],
+  "owned_data": [
+    {
+      "current_writer_modules": [],
+      "id": "gravity-mvp/prisma/schema.prisma:DriverMax",
+      "mapped_table": null,
+      "model": "DriverMax",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "max_provider"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:MaxConnection",
+      "mapped_table": null,
+      "model": "MaxConnection",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [],
+      "id": "gravity-mvp/prisma/schema.prisma:MaxPersonalSession",
+      "mapped_table": null,
+      "model": "MaxPersonalSession",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    }
+  ],
+  "owned_paths": [
+    "gravity-mvp/src/app/max-actions.ts",
+    "gravity-mvp/src/lib/providers/max-personal",
+    "gravity-mvp/src/modules/max-channel",
+    "max-web-scraper"
+  ],
+  "owner": {
+    "accountability": "MAX Channel bounded-context owner",
+    "context": "max_channel"
+  },
+  "protected": true,
+  "provider_relationships": [
+    {
+      "adapter_modules": [
+        "max_provider",
+        "max_scraper"
+      ],
+      "name": "max",
+      "role": "channel provider"
+    }
+  ],
+  "public_surface": [
+    "MaxDeliveryPort.v1",
+    "MaxReachability.v1",
+    "MaxSessionStatus.v1",
+    "MaxDriverMessaging.v1"
+  ],
+  "responsibility": "MAX provider session, scraping/mirroring and Personal MAX delivery integration.",
+  "schema": "yoko.crm.module-manifest.v1",
+  "technical_modules": [
+    "max_provider",
+    "max_scraper"
+  ],
+  "verification": {
+    "architecture_checks": [
+      "node tools/architecture/validate-context-manifests.mjs",
+      "node tools/architecture/enforce-architecture.mjs",
+      "node tools/architecture/test-architecture-enforcement.mjs"
+    ],
+    "blast_radius": {
+      "consumer_contexts": [
+        "configuration"
+      ],
+      "owner_context": "max_channel",
+      "provider_scope": "PROVIDER_SPECIFIC",
+      "provider_siblings": []
+    },
+    "build_checks": [
+      "node tools/architecture/check-typescript-baseline.mjs"
+    ],
+    "contract_tests": [
+      "node tools/architecture/validate-contract-registry.mjs",
+      "node tools/architecture/check-contract-boundaries.mjs"
+    ],
+    "module_tests": [
+      "node tools/architecture/check-driver-max-messaging-boundary.mjs",
+      "node tools/architecture/check-messaging-max-message-boundary.mjs",
+      "node tools/architecture/check-messaging-max-attachments-boundary.mjs"
+    ]
+  },
+  "version": 1
+}

@@ -1,0 +1,20 @@
+{
+  "schema": "yoko.crm.owner-bootstrap-remediation-map.v1",
+  "rejected_artifact_sha256": "579d9e346e41edfd25ac81a40b271a4bfa129fc9c9f7c9b652581f7e58645201",
+  "rejected_artifact_status": "REJECTED_SUPERSEDED_NEVER_EXECUTE",
+  "current_source_status": "REMEDIATION_PRESENT_EXACT_SHA_CRITIC_PASS",
+  "findings": [
+    {
+      "id": "THIRTEENTH-CRITIC-001",
+      "remediation": "Fresh and recovery migration paths now persist and reconcile an audited DATABASE_RUNNER_RETIRE_INTENT containing exact runner identities and the exact prospective terminal state before the first docker rm. Retrying that intent tolerates only Docker's exact not-found result for an already retired object, revalidates any surviving stopped object's full sealed identity before removal, rechecks the applied database ledger, and only then writes the audited terminal state. Public database-status fails closed while retirement is pending.",
+      "evidence": [
+        "src/crm-activation-profile.py::_database_migrate",
+        "src/crm-activation-profile.py::_retire_production_runners",
+        "src/crm-activation-profile.py::_database_status_profile",
+        "tests/test_package_and_runtime.py::test_partial_runner_retirement_recovers_from_durable_intent_before_terminal_state",
+        "tests/test_package_and_runtime.py::test_terminal_runner_retirement_accepts_exact_partial_absence",
+        "tests/test_package_and_runtime.py::test_database_status_rejects_runner_retire_intent_without_db_read_or_cleanup"
+      ]
+    }
+  ]
+}

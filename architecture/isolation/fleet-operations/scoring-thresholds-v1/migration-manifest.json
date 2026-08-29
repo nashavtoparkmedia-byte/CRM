@@ -1,0 +1,28 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1",
+  "milestone": "CRM-ARCH-007-FLEET-SCORING",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "fc43a3170f43b0166c0733c4c22de6d7bd1061b3",
+  "context": "fleet_operations",
+  "caller_context": "configuration",
+  "plan": {
+    "id": "migration_56494330426e3744",
+    "site_id": "write_08c0886b73384f03384c",
+    "file": "gravity-mvp/src/app/settings/scoring/actions.ts",
+    "model": "ScoringThreshold",
+    "method": "upsert"
+  },
+  "contract": "fleet_operations.UpdateScoringThresholdsCommand.v1",
+  "dependency_amendment": "configuration -> fleet_operations.public",
+  "consumer_before_sha256": "35f64e42644e959a64aab0e3fde7e27e4c149f05ab25d6a518fe881f4895924b",
+  "consumer_after_sha256": "c5f71d9ff39d5b331698c4b15b8f1519cc0439e716931a100fcaf4ce0c00c0fe",
+  "enforcement": {
+    "before": 1521,
+    "after": 1520,
+    "retired": [
+      "arch_b22ccea6b28c2b6937faf463"
+    ],
+    "new_capacity": 0
+  },
+  "rollback": "fc43a3170f43b0166c0733c4c22de6d7bd1061b3"
+}

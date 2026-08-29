@@ -1,0 +1,30 @@
+{
+  "schema": "yoko.crm.context-isolation-verification.v1",
+  "milestone": "CRM-ARCH-007-MESSAGING-WHATSAPP-ATTACHMENT",
+  "verified_at": "2026-08-09T17:25:22Z",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "architecture": {
+    "files": 836,
+    "contexts": 16,
+    "findings": 1508,
+    "exceptions": 1508,
+    "finding_digest": "983a01da5713b16186c00bc2ab5c7c134a9c5d84f6348ca4e387e72bdce3a56e",
+    "registry_sha256": "2f18831fd27c90d2ecfeb683627d4bc19f5cfbf9ab2941bf995107ede1f46fba",
+    "dependency_cycles": 0
+  },
+  "tests": {
+    "messaging_whatsapp_attachment_behavior": "12/12 PASS",
+    "messaging_whatsapp_attachment_controls": "14/14 PASS",
+    "contract_controls": "68/68 PASS",
+    "whatsapp_reachability_source": "2/2 PASS",
+    "enforcement": "16/16 PASS",
+    "auth": "33/33 PASS",
+    "calling": "93/93 PASS",
+    "current_baseline_context_contract_outbox_identity_work_management_contacts_fleet_and_messaging_controls": "PASS"
+  },
+  "typescript": "28 baseline / 28 candidate / 0 normalized file-code-message differences; three inherited WhatsApp diagnostics shifted one line only",
+  "eslint": "62 inherited WhatsApp-service diagnostics / 62 candidate diagnostics; new owner and contract files 0",
+  "historical_evidence_note": "CRM-ARCH-002 evidence remains checksum-authoritative for its frozen input identity; its byte-count validator is not reinterpreted as a current-tree validator.",
+  "secret_values_read_or_emitted": false,
+  "production_mutated": false
+}

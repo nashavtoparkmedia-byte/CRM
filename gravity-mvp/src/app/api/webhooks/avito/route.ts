@@ -27,6 +27,8 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { ingestLead, updateLeadPhone } from '@/lib/leads/intake'
+import { RESOLVE_CONVERSATION_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { resolveConversationV1 } from '@/modules/messaging/public/v1'
 
 interface AvitoWebhookEvent {
   source: 'avito'
@@ -181,9 +183,9 @@ export async function POST(request: Request) {
           select: { crm_chat_id: true } as any,
         }) as any
         if (row?.crm_chat_id) {
-          await prisma.chat.update({
-            where: { id: row.crm_chat_id },
-            data: { requiresResponse: false, status: 'resolved' },
+          await resolveConversationV1({
+            contract: RESOLVE_CONVERSATION_COMMAND_V1,
+            chatId: row.crm_chat_id,
           })
         }
         return NextResponse.json({ ok: true })

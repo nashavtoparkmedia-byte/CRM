@@ -1,0 +1,12 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "CRM-ARCH-007-CONTACTS-TELEGRAM-NAME",
+  "amendments": [
+    {
+      "context": "contacts",
+      "add_commands": ["ResolveContactCommand.v2"],
+      "reason": "Coexist with v1 because channel-authority promotion has different semantics from placeholder-only promotion."
+    }
+  ]
+}

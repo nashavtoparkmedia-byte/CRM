@@ -1,8 +1,11 @@
 "use server"
 
 import { prisma } from "@/lib/prisma"
-import { ContactService } from "@/lib/ContactService"
 import { revalidatePath } from "next/cache"
+import { SET_CONTACT_DISPLAY_NAME_COMMAND_V1 } from "@/contracts/contacts/v1"
+import { resolveChannelContactOperationV1, setContactDisplayNameV1 } from "@/modules/contacts/public/v1"
+import { ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1 } from "@/contracts/messaging/v1"
+import { ensureConversationContactLinkV1 } from "@/modules/messaging/public/v1"
 
 /**
  * PR-О: Server actions для UI «Привязать контакт» в чатах.
@@ -47,7 +50,7 @@ export async function searchDriversForLinking(query: string): Promise<DriverSear
  * Привязать chat к указанному Driver. Обновляет:
  *   — chat.driverId, chat.name (driver.fullName)
  *   — Contact.displayName (если placeholder)
- *   — Создаёт ContactIdentity если нужно (через ContactService.resolveContact)
+ *   — Создаёт ContactIdentity если нужно (через публичную Contacts capability)
  */
 export async function linkChatToDriverManually(chatId: string, driverId: string): Promise<{ success: true } | { error: string }> {
     try {
@@ -74,28 +77,27 @@ export async function linkChatToDriverManually(chatId: string, driverId: string)
         const phoneDigits = (driver.phone ?? '').replace(/\D/g, '')
         if (phoneDigits.length >= 10 && (chat.channel === 'whatsapp' || chat.channel === 'max' || chat.channel === 'phone')) {
             try {
-                const contactResult = await ContactService.resolveContact(
+                const contactResult = await resolveChannelContactOperationV1(
                     chat.channel as any,
                     phoneDigits,
                     phoneDigits,
                     driver.fullName,
                 )
-                await ContactService.ensureChatLinked(chat.id, contactResult.contact.id, contactResult.identity.id)
+                await ensureConversationContactLinkV1({
+                    contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
+                    chatId: chat.id,
+                    contactId: contactResult.contact.id,
+                    contactIdentityId: contactResult.identity.id,
+                })
             } catch (err: any) {
                 console.warn(`[linkChatToDriverManually] ContactService failed (non-blocking): ${err.message}`)
             }
         } else if (chat.contactId) {
-            // Просто обновим displayName у existing Contact, если он placeholder
-            const contact = await prisma.contact.findUnique({
-                where: { id: chat.contactId },
-                select: { id: true, displayName: true },
+            await setContactDisplayNameV1({
+                contract: SET_CONTACT_DISPLAY_NAME_COMMAND_V1,
+                contactId: chat.contactId,
+                displayName: driver.fullName,
             })
-            if (contact) {
-                await prisma.contact.update({
-                    where: { id: contact.id },
-                    data: { displayName: driver.fullName },
-                })
-            }
         }
 
         revalidatePath('/messages')

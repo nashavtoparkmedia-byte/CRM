@@ -167,9 +167,15 @@ async function main() {
     }
     if (playwrightCookies.length === 0) throw new Error('no cookies extracted, aborting');
 
-    // Sample log
-    const sample = playwrightCookies.slice(0, 6).map(c => `${c.domain}/${c.name}=${(c.value || '').slice(0, 12)}…`);
-    console.log('   sample:', sample);
+    // Cookie values are session credentials. Diagnostics may identify the
+    // imported records, but must never print value bytes or prefixes.
+    const sample = playwrightCookies.slice(0, 6).map(c => ({
+        domain: c.domain,
+        name: c.name,
+        httpOnly: c.httpOnly,
+        secure: c.secure,
+    }));
+    console.log('   imported cookie metadata (values redacted):', sample);
 
     // ── 5) Push into .bot_profile ──
     if (!fs.existsSync(BOT_PROFILE_DIR)) fs.mkdirSync(BOT_PROFILE_DIR, { recursive: true });

@@ -1,0 +1,26 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1",
+  "milestone": "CRM-ARCH-007-WORK-MANAGEMENT-INBOX",
+  "base_commit": "5d6116a495bfca65a95c1caaae65eff92e701ab4",
+  "captured_at": "2026-08-09T15:28:54Z",
+  "consumer": {
+    "file": "gravity-mvp/src/app/inbox/actions.ts",
+    "sha256": "e2f1213aac2e364d732e9cbe9c004c69584f7be175e329c695776b5ffe51c620",
+    "operation": "resolveTask",
+    "behavior": [
+      "accept only done or skipped at the typed server-action boundary",
+      "update ManagerTask by the supplied task identifier",
+      "set status to the supplied resolution",
+      "set resolvedAt from a new Date at write time",
+      "set resolvedBy to manager",
+      "surface persistence failures",
+      "revalidate /inbox only after persistence succeeds"
+    ]
+  },
+  "protected_scope": {
+    "messages_timeline_changed": false,
+    "provider_paths_changed": false,
+    "credential_paths_changed": false,
+    "schema_changed": false
+  }
+}

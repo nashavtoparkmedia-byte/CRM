@@ -1,0 +1,3 @@
+# Review 1 — executor
+
+`PASS_WITH_SCOPE_CONFIRMED`. All three planned `KnowledgeBaseEntry` writes now cross strict AI Knowledge v1 commands. The owner adapter uses `create`, `updateMany` and `deleteMany`, so no generic SQL or fail-closed tagged interpolation is added. Authorization, empty-patch behavior, idempotent missing-row update/delete behavior, response shape, failure visibility and success-only revalidation are preserved. One shared application timestamp replaces database `NOW()` per write; within-write equality is preserved and ordering relative to database-generated timestamps is explicitly not claimed. No action, model, transport, database or production operation executed.

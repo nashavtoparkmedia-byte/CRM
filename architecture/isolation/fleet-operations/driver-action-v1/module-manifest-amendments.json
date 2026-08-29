@@ -1,0 +1,1 @@
+{"schema":"yoko.crm.module-manifest-amendments.v1","version":1,"milestone":"CRM-ARCH-007-FLEET-DRIVER-ACTION","amendments":[{"context":"fleet_operations","add_commands":["RecordDriverActionCommand.v1","MirrorDriverActionResultCommand.v1"],"reason":"Route the bot bridge's complete four-site DriverAction persistence plan through the assigned Fleet owner boundary."}]}

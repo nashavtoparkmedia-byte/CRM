@@ -1,11 +1,11 @@
 import { getDriversWithCells } from './actions'
-import { getTelegramConnections } from '../tg-actions'
+import { listOperationalTelegramConnectionsV1 } from '@/infrastructure/telegram/operational-capabilities'
 import DriversClient from './DriversClient'
-import { SectionDescription } from '@/components/ui/SectionDescription'
+import { SectionDescription } from '@/infrastructure/ui/SectionDescription'
 
 export const dynamic = 'force-dynamic'
 
-import { PageContainer } from '@/components/ui/PageContainer'
+import { PageContainer } from '@/infrastructure/ui/PageContainer'
 
 export default async function DriversPage({
     searchParams,
@@ -44,7 +44,7 @@ export default async function DriversPage({
         excludeInactive,
     })
     
-    const telegramConnections = await getTelegramConnections()
+    const telegramConnections = await listOperationalTelegramConnectionsV1()
 
     return (
         <PageContainer>

@@ -1,0 +1,17 @@
+{
+  "schema": "yoko.crm.architecture-exception-registry.v1",
+  "version": 1,
+  "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
+  "base_commit": "024680591c188a34ae79594d92d47854648c73c8",
+  "generated_from": "current source tree bound by finding_digest",
+  "finding_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+  "policy": {
+    "exact_fingerprint_only": true,
+    "stale_exceptions_fail": true,
+    "expired_exceptions_fail": true,
+    "uncovered_violations_fail": true,
+    "deadline": "2026-12-31"
+  },
+  "summary": {},
+  "exceptions": []
+}

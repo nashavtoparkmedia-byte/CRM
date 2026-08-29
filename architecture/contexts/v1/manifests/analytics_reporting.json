@@ -1,0 +1,115 @@
+{
+  "allowed_dependencies": [
+    {
+      "context": "contacts",
+      "surface": "contacts.public"
+    },
+    {
+      "context": "fleet_operations",
+      "surface": "fleet_operations.public"
+    },
+    {
+      "context": "work_management",
+      "surface": "work_management.public"
+    },
+    {
+      "context": "messaging",
+      "surface": "messaging.public"
+    },
+    {
+      "context": "calling",
+      "surface": "calling.public"
+    },
+    {
+      "context": "identity_access",
+      "surface": "identity_access.public"
+    }
+  ],
+  "commands": [
+    "RefreshProjectionCommand.v1"
+  ],
+  "compatibility_strategy": "Preserve current dashboards; eliminate operational writes by moving intervention/task changes to owner commands.",
+  "context": {
+    "id": "analytics_reporting",
+    "name": "Analytics and Reporting"
+  },
+  "credential_relationships": {
+    "database_models": [],
+    "environment_names": [],
+    "policy": "Names and access locations only. Values stay inside the owning adapter and never cross a public contract."
+  },
+  "events": [
+    "ProjectionRefreshed.v1"
+  ],
+  "evidence": {
+    "dependency_edges": 4,
+    "source_snapshot_sha256": "2713db175062bb673dcca2d97e80c2ae204a2f257438036c6db2506587dfad7d",
+    "write_sites_requiring_migration": 6
+  },
+  "forbidden_dependencies": [
+    "credentialValuesInContracts",
+    "directForeignPrismaWrites",
+    "operational_domain_write",
+    "providerImplementationImportsOutsideOwningContext",
+    "provider_implementation",
+    "unversionedCrossContextPayloads"
+  ],
+  "foreign_write_migration_plans": [
+    "migration_3b35a508fa1bce00",
+    "migration_420421d559f606ce",
+    "migration_7f387b2b1d46c88f"
+  ],
+  "internal_surface": [
+    "gravity-mvp/src/app/analytics",
+    "gravity-mvp/src/app/dashboard",
+    "gravity-mvp/src/app/team-overview"
+  ],
+  "owned_data": [],
+  "owned_paths": [
+    "gravity-mvp/src/app/analytics",
+    "gravity-mvp/src/app/dashboard",
+    "gravity-mvp/src/app/team-overview",
+    "gravity-mvp/src/modules/analytics-reporting"
+  ],
+  "owner": {
+    "accountability": "Analytics and Reporting bounded-context owner",
+    "context": "analytics_reporting"
+  },
+  "protected": true,
+  "provider_relationships": [],
+  "public_surface": [
+    "AnalyticsQuery.v1",
+    "DashboardProjection.v1"
+  ],
+  "responsibility": "Read models, dashboards and aggregate reporting without ownership of operational domain state.",
+  "schema": "yoko.crm.module-manifest.v1",
+  "technical_modules": [
+    "analytics"
+  ],
+  "verification": {
+    "architecture_checks": [
+      "node tools/architecture/validate-context-manifests.mjs",
+      "node tools/architecture/enforce-architecture.mjs",
+      "node tools/architecture/test-architecture-enforcement.mjs"
+    ],
+    "blast_radius": {
+      "consumer_contexts": [
+        "platform_shell"
+      ],
+      "owner_context": "analytics_reporting",
+      "provider_scope": "NOT_APPLICABLE",
+      "provider_siblings": []
+    },
+    "build_checks": [
+      "node tools/architecture/check-typescript-baseline.mjs"
+    ],
+    "contract_tests": [
+      "node tools/architecture/validate-contract-registry.mjs",
+      "node tools/architecture/check-contract-boundaries.mjs"
+    ],
+    "module_tests": [
+      "node tools/architecture/check-analytics-dashboard-boundary.mjs"
+    ]
+  },
+  "version": 1
+}

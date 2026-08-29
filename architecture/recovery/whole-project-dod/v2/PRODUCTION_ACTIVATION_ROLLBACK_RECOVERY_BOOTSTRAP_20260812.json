@@ -1,0 +1,91 @@
+{
+  "accepted_corrected_release": {
+    "commit": "7aea2823efe50e13a156540993d424594025e403",
+    "parent_accepted_source": "af9646f51c1274d718d83eb4c78faf92f214a184",
+    "source_archive_sha256": "be616b7d528bc111717d237bcd745a8b106302897e702be4b8af1b8643cba26d",
+    "tree": "dbb380be0775d41b246248a9fe8fbf99bcb38d22",
+    "validation": {
+      "health_contract_tests": "17/17 PASS",
+      "next_production_build": "PASS",
+      "security_boundary_tests": "34/34 PASS"
+    }
+  },
+  "activation_attempt": {
+    "automatic_rollback": "PREDECESSOR_RESTORED",
+    "candidate_image_id": "sha256:5ee4bdc2242b24a8f8c2c3ef71d18e0f20c9b3b0df8810517553b4097d03936c",
+    "candidate_source_commit": "af9646f51c1274d718d83eb4c78faf92f214a184",
+    "durable_runtime_phase": "RELEASE_ACTIVATION_ROLLBACK_INTENT",
+    "result": "TARGET_HEALTH_FAILED",
+    "root_causes": [
+      "The predecessor health route counted delivered outbound history as stuck although recovery only handles externalId-null non-call messages.",
+      "The Redis infrastructure probe did not authenticate against the password-protected production Redis service.",
+      "Runtime 2.0.0-7 reapplied target-only health gates while attempting to durably accept the restored predecessor."
+    ]
+  },
+  "captured_at": "2026-08-12T18:54:28Z",
+  "current_cluster": "PRODUCTION_ACTIVATION_WAITING_FOR_EXACT_RUNTIME_2_0_0_8_BOOTSTRAP",
+  "current_production": {
+    "audit_last_digest": "ade04359a4a016ec3fb8c9b66063f138e5a5882cd38dd7d64160d0a757839e6d",
+    "audit_records": 9,
+    "audit_state": "VALID",
+    "compose_config_hash": "4c1adad9993cb54c5723a202df6a3d3786709e0a01e42fff24d2230a83a411da",
+    "database_identity_sha256": "ed88dfeaad2a3dc2e759590d295992cd06531d4403d896ded00b21ea667be1c9",
+    "gravity_container_id": "f2604662889815d31e449ab52b14e053da9b4fb9598cd72e209b4ccd5014b700",
+    "gravity_health": "healthy",
+    "gravity_image_id": "sha256:b36751e5a6d2b52e7a7676ee5babcd70f496111e9715e5056f6338d04b028f68",
+    "gravity_restart_count": 0,
+    "migration_count": 62,
+    "migration_ledger_sha256": "a50f1a8988f79c85059354d6b2d45e9e8ed07284fc27c78d98face6680f25dfc",
+    "outbox_catalog_sha256": "ef0bce36bca8283b491a966ff3886644a8887f4bded3deebbec7ce559ac2defe",
+    "outbox_counts": {
+      "dead": 0,
+      "pending": 0,
+      "processing": 0,
+      "published": 0
+    },
+    "outbox_migration_state": "APPROVED_OUTBOX_APPLIED",
+    "release_state": "SEALED_PREDECESSOR_RESTORED"
+  },
+  "database_migration": {
+    "backup_bytes": 194477048,
+    "backup_sha256": "31bc226112ba63909f6bb2d22dd2d873b342684aad8b82fe6a25bf5d99ee5d41",
+    "expand_only_rollback_policy": "KEEP_EXPAND_ONLY_OBJECTS",
+    "migration_name": "20260809140000_add_domain_outbox",
+    "migration_sha256": "433b0d503f054ed6a8161a059e2650d5e401829dabe8c9d992a1d1763eef0016",
+    "preview_restore": "VERIFIED",
+    "production_result": "APPLIED_AND_EXACT"
+  },
+  "exact_next_action": "Owner executes only the checksum-pinned manifest.json.owner_command for the accepted Runtime 2.0.0-8 bootstrap. After YOKO_ACTIVATION_BOOTSTRAP_OK, autonomous recovery verifies the installed identity, closes the exact v7 rollback intent, revalidates backup and migrated DB, reseals the corrected candidate without another production migration, activates it and continues production acceptance.",
+  "installed_runtime": {
+    "package_version": "2.0.0-7",
+    "profile_id": "crm-af9646f5-gravity-outbox-v1",
+    "runtime_abi": "2.0.0"
+  },
+  "normal_success_phrase_emitted": false,
+  "project_status": "YOKO CRM MODULAR ARCHITECTURE TRANSFORMATION NOT READY",
+  "recovery_bootstrap": {
+    "bootstrap_tar": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-recovery-v1/dist/yoko-crm-activation-recovery-7aea2823-v3.tar",
+    "bootstrap_tar_sha256": "b9a5d5f250e9d2a96ef4199200f1f6db52bdbe5fb9c23d74c45d2cce4bc63df7",
+    "capability_widening": false,
+    "debian_package_sha256": "c342889473f29d37cab47a8b6a88f21aa165d646a910b65dcee9b1a0a62d0289",
+    "deterministic_double_build": "PASS",
+    "independent_critic": "PASS",
+    "independent_critic_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-recovery-v1/evidence/INDEPENDENT_RECOVERY_BOOTSTRAP_CRITIC_B9A5D5F2.json",
+    "independent_critic_sha256": "f3d7881ebb4a1925e59e45ffcd4d1d6d9916551362161451409a54b169bf07e0",
+    "manifest": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-recovery-v1/manifest.json",
+    "offline_tests": "74/74 PASS",
+    "package_version": "2.0.0-8",
+    "production_mutations_during_preparation": 0,
+    "runtime_abi": "2.0.0",
+    "sudoers_widening": false
+  },
+  "recovery_transition": {
+    "allowed_compose_config_hash_transition": "6db5dbf0f52f8d8e4fd30c1fcaf658c04a72c7f8ec034c3b38436792b8939014 -> 4c1adad9993cb54c5723a202df6a3d3786709e0a01e42fff24d2230a83a411da",
+    "allowed_container_id": "f2604662889815d31e449ab52b14e053da9b4fb9598cd72e209b4ccd5014b700",
+    "all_other_runtime_semantics": "EXACT_OR_FAIL_CLOSED",
+    "database_reexecution_on_retry": false,
+    "expected_terminal_result": "ROLLED_BACK_RECOVERED"
+  },
+  "schema": "yoko.crm.production-activation-rollback-recovery-bootstrap.v1",
+  "stop_condition": "NEW_GENUINE_PRIVILEGED_PRIMITIVE_EXACT_RUNTIME_2_0_0_8_PACKAGE_INSTALL"
+}

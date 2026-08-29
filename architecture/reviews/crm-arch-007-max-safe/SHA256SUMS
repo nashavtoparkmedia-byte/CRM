@@ -1,0 +1,8 @@
+051a2f8bd2d93d7410705e7bc610d8dab1bc4ea1f0854bea09a773190c72f212  architecture/enforcement/v1/exceptions.json
+94ba44ea015f4e6dbac12db812066ca84f133dc8c8b4b6953f70eeab58fc5f24  architecture/enforcement/v1/policy.json
+5a4701d206ed15981ac3b729968257318f65ef01cc4c6867238a1d53d63cfb73  architecture/enforcement/v1/legacy-write-supplement.json
+d436849a55fab8df4e81a07128230d4760ce26362bde906bf23a1a989c3b1f83  architecture/reviews/crm-arch-007-max-safe/ACCEPTANCE_CHECKLIST.md
+8ddc5d5a1ce02d2cde234600fd878149efadfec2ff22965a61766452ac7558d2  architecture/reviews/crm-arch-007-max-safe/CRM-ARCH-007-ARCHITECTURE-LEAD-REVIEW.md
+d74892d42268824ebe448a46100944a00623edfbcbec4f181b4c83d56c33a85a  architecture/reviews/crm-arch-007-max-safe/MUTATION_LEDGER.json
+b539263ef21d17803f7b9145c22fed764f07c13a240ec6fcde86e5ca5b7a0d2d  architecture/reviews/crm-arch-007-max-safe/remaining-write-classification.json
+9e9f0cc5bf537c0e16673c3e921dacc707a512f5181da0b41250bfd72ea9f6df  architecture/reviews/crm-arch-007-max-safe/verification.json

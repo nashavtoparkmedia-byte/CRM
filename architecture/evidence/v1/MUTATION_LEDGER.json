@@ -1,0 +1,16 @@
+{
+  "schema": "yoko.crm.architecture-mutation-ledger.v1",
+  "milestone": "CRM-ARCH-002",
+  "generated_at": "2026-08-09T13:23:07Z",
+  "production_mutations": [],
+  "runtime_mutations": [],
+  "database_mutations": [],
+  "protected_worktree_mutations": [],
+  "architecture_worktree_changes": [
+    "versioned static analyzer and validation suite",
+    "deterministic machine-readable architecture evidence artifacts",
+    "targeted code inspection and two internal reviews",
+    "delegated technical gate record"
+  ],
+  "result": "NO_PRODUCTION_RUNTIME_DATABASE_OR_PROTECTED_WORKTREE_MUTATION"
+}

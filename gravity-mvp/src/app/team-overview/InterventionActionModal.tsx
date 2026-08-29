@@ -1,7 +1,11 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { INTERVENTION_ACTIONS, INTERVENTION_ACTION_LABELS, type InterventionAction } from '@/lib/tasks/intervention-action-config'
+import {
+    INTERVENTION_ACTIONS,
+    INTERVENTION_ACTION_LABELS,
+    type InterventionAction,
+} from '@/modules/work-management/public/v1/team-operational-policy'
 import { logInterventionAction } from './actions'
 
 interface InterventionActionModalProps {

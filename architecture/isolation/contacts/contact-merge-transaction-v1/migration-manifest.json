@@ -1,0 +1,105 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1",
+  "milestone": "CRM-ARCH-007R-CONTACT-MERGE-TRANSACTION",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "78097c58e99de2abd2983557c61bb72c2e6381b6",
+  "source_commit": "51e4734d781d7d998f3beba393e397c125c72ef2",
+  "implementation_commits": [
+    "51e4734d781d7d998f3beba393e397c125c72ef2"
+  ],
+  "context": "contacts",
+  "owner_contexts": ["contacts", "messaging", "work_management", "fleet_operations"],
+  "plan": {
+    "id": "contact-merge-transaction-v1",
+    "legacy_facade": "gravity-mvp/src/lib/ContactMergeService.ts",
+    "handler": "gravity-mvp/src/modules/contacts/public/v1/contact-merge-handler.ts",
+    "unit_of_work_adapter": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
+    "protected_routes": [
+      "gravity-mvp/src/app/api/contacts/[id]/merge/route.ts",
+      "gravity-mvp/src/app/api/contacts/[id]/merge-to/[targetId]/route.ts"
+    ],
+    "role": "production_source_unexecuted"
+  },
+  "contracts": [
+    "contacts.MergeContactsCommand.v1"
+  ],
+  "manifest": {
+    "contacts_command_predeclared": true,
+    "module_manifest_amendment_added": false,
+    "dependency_amendment_added": false
+  },
+  "ownership": {
+    "contacts": "preconditions, Contact/ContactIdentity/ContactPhone/ContactMerge mutations, ordered lock and exact unit-of-work coordination",
+    "messaging": "four named Chat mutation shapes bound to the shared transaction; no Message or attachment writer",
+    "work_management": "one named Task contact reassignment bound to the shared transaction",
+    "fleet_operations": "Driver reads only, including the manual-merge lookup at the legacy in-transaction position",
+    "generic_persistence_capabilities": 0
+  },
+  "unit_of_work": {
+    "simple_link_transaction": "Prisma default options",
+    "full_merge_transaction_timeout_ms": 15000,
+    "public_transaction_or_prisma_type_exposed": false,
+    "sql_or_table_selector_exposed": false,
+    "arbitrary_predicate_or_data_exposed": false,
+    "adapter_chat_update_many_sites": 4,
+    "adapter_task_update_many_sites": 1,
+    "adapter_message_write_sites": 0,
+    "approved_writer_file_model_pairs": 2
+  },
+  "dependency": {
+    "added": [],
+    "effective_added_dependencies": 0,
+    "dependency_relationships": 106,
+    "dependency_cycles": 0,
+    "reverse_owner_dependency_added": false
+  },
+  "enforcement": {
+    "baseline_registry_commit": "78097c58e99de2abd2983557c61bb72c2e6381b6",
+    "baseline_findings": 1369,
+    "baseline_direct_foreign_prisma_write": 74,
+    "baseline_direct_provider_transport_access": 38,
+    "baseline_internal_module_import": 374,
+    "baseline_non_public_cross_context_import": 530,
+    "baseline_undeclared_dependency": 353,
+    "retired_fingerprints": [
+      "arch_685d58bf6135c0a58831dfcc",
+      "arch_a7ee5f0785619cfd3f0e6dfc",
+      "arch_d7413aea9d72985c278fe418",
+      "arch_d0c62264533a26a4f0fa20f9",
+      "arch_b2b6ea914aeeb21bc4d05e1e",
+      "arch_6caa1cd481f67b76d5822f4e",
+      "arch_f6549f8d0460c4466a8e7e90",
+      "arch_a58c1499e09adb9ac966d09a"
+    ],
+    "actual_findings": 1361,
+    "actual_exceptions": 1361,
+    "actual_direct_foreign_prisma_write": 66,
+    "actual_direct_provider_transport_access": 38,
+    "actual_internal_module_import": 374,
+    "actual_non_public_cross_context_import": 530,
+    "actual_undeclared_dependency": 353,
+    "actual_removed": 8,
+    "actual_added": 0,
+    "actual_semantic_shared_changes": 0,
+    "location_metadata_rebased": 0,
+    "finding_digest": "fd306ea9812b7c9285bbdb7e0eaf2eae2b21abc538fb45354ce235d3c3bdeeac",
+    "registry_sha256": "7cb1481fcd232e2de200bb905141c052404e2cc8fdd8bfcca3e25bc111bd1133",
+    "registry_deterministic": true
+  },
+  "rollback_proof": {
+    "fake_transaction_failure_injection": "PASS",
+    "failure_injection_tests": 35,
+    "physical_postgresql": "DEFERRED_CLOSED_DATABASE_AND_RUNTIME_PATH",
+    "physical_gap": "real rollback, row-lock contention, constraints and timeout behavior remain unexecuted"
+  },
+  "verified_at": "2026-08-10T07:59:31Z",
+  "source_control_mutation": {
+    "module_rule": false,
+    "module_policy": true,
+    "strict_registry": true,
+    "source_only": true
+  },
+  "execution_performed": false,
+  "execution_scope": "offline source analysis, isolated unit tests and fake transaction staging only; no production or persistence execution",
+  "rollback": "78097c58e99de2abd2983557c61bb72c2e6381b6"
+}

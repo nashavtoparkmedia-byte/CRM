@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
-import { validateAllConfigs } from '@/lib/config-validator'
-import { validateCronSchedules } from '@/lib/config-validator'
-import { getRecentConfigChanges } from '@/lib/config-validator'
+import {
+    listRecentConfigurationChangesV1,
+    validateOperationalConfigurationV1,
+    validateOperationalCronSchedulesV1,
+} from '@/modules/configuration/public/v1/operational-configuration-health'
 import { checkRuntimeGuardrails } from '@/lib/runtime-guardrails'
 
 export const dynamic = 'force-dynamic'
@@ -19,11 +21,11 @@ export const dynamic = 'force-dynamic'
  */
 export async function GET() {
     try {
-        const configValidation = validateAllConfigs()
-        const cronValidation = validateCronSchedules()
+        const configValidation = validateOperationalConfigurationV1()
+        const cronValidation = validateOperationalCronSchedulesV1()
         const [runtimeGuardrails, recentChanges] = await Promise.all([
             checkRuntimeGuardrails(),
-            getRecentConfigChanges(10),
+            listRecentConfigurationChangesV1(10),
         ])
 
         const allValid = configValidation.valid && cronValidation.valid

@@ -1,0 +1,51 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1",
+  "version": 1,
+  "milestone": "CRM-ARCH-007",
+  "context": "identity_access",
+  "base_commit": "99af9c696198c47089e1d6727580724d4df1e571",
+  "consumer": "gravity-mvp/src/components/layout/TopBar.tsx",
+  "contracts": [
+    "identity_access.CurrentUserQuery.v1",
+    "identity_access.ListUserIdentitiesQuery.v1",
+    "identity_access.AuthenticateUserCommand.v1",
+    "identity_access.EndUserSessionCommand.v1"
+  ],
+  "owner_adapter": "gravity-mvp/src/modules/identity-access/public/v1/legacy-user-service-adapter.ts",
+  "legacy_authority": "gravity-mvp/src/lib/users/user-service.ts",
+  "removed_exception_fingerprints": [
+    "arch_5ca012440a09264441f44e62",
+    "arch_e0bf468866fecebf784b8762",
+    "arch_a69cb0a7030c07563278a0d0",
+    "arch_cb2c8730a6c39a792a6631ba",
+    "arch_ac8506d59c99476cd7477bdb",
+    "arch_494ea10e1c67e560cb37536a"
+  ],
+  "before": {
+    "consumer_internal_import_sites": 3,
+    "architecture_exceptions": 1535
+  },
+  "after": {
+    "consumer_internal_import_sites": 0,
+    "consumer_architecture_findings": 0,
+    "architecture_exceptions": 1529,
+    "finding_digest": "3f74627b399aacc586df494779b763d86c35886a77fb25cdc7325ff1a4c1004c",
+    "exception_registry_sha256": "4893de3d2aef918f70906bb7dfd7c30ab0df72c7b7fc35affc3fd2f21b8ab00b"
+  },
+  "data": {
+    "owned_entity": "CrmUser",
+    "foreign_writes_before": 0,
+    "foreign_writes_after": 0,
+    "schema_change": false,
+    "database_migration": false
+  },
+  "deployment": {
+    "performed": false,
+    "production_mutated": false
+  },
+  "rollback": {
+    "type": "SOURCE_REVERT",
+    "target": "99af9c696198c47089e1d6727580724d4df1e571",
+    "legacy_implementation_removed": false
+  }
+}

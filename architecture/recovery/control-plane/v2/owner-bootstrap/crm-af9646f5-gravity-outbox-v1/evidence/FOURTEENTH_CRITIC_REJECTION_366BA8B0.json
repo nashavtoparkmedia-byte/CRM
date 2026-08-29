@@ -1,0 +1,17 @@
+{
+  "schema": "yoko.crm.owner-bootstrap-critic.v1",
+  "artifact_sha256": "366ba8b0a622c2d25df7f676d679ac59efb9177e1155d15c7a2dc9aed7fdc70f",
+  "package_sha256": "e3a0ce20b255e42c7335d403f90bc0992ee918ccba3a056436aa749b5402bd66",
+  "status": "REJECTED_SUPERSEDED_NEVER_EXECUTE",
+  "verdict": "REJECT",
+  "repository_mutation_by_critic": false,
+  "production_mutation_by_critic": false,
+  "findings": [
+    {
+      "id": "FOURTEENTH-CRITIC-001",
+      "finding": "The retire-intent recovery validator required every retained outer value to equal its nested terminal value. Real migration state legitimately replaces the pre-migration migration_ledger_sha256 with the applied post-migration digest, so every realistic retirement recovery failed with PRODUCTION_RUNNER_RETIRE_STATE_INVALID before retirement.",
+      "required_remediation": "Define the exact allowed state transition by preserving every retained field except the explicitly permitted migration ledger digest and terminal phase/timestamp fields, and cover it with a realistic pre-hash to post-hash recovery regression."
+    }
+  ],
+  "owner_command_authorized": false
+}

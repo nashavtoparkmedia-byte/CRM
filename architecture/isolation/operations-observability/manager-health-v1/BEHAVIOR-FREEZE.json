@@ -1,0 +1,52 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1",
+  "milestone": "CRM-ARCH-007R-MANAGER-HEALTH",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "61f0afc9c22590d3344dfbcea6c5f4a580459a7d",
+  "source_commit": "8aeccb755b3fad942a69a23799f76f7a480f4d4f",
+  "captured_at": "2026-08-10T03:59:45Z",
+  "verified_at": "2026-08-10T03:59:45Z",
+  "consumer": "gravity-mvp/src/app/team-overview/actions.ts",
+  "consumer_before_sha256": "f9529a3d36604c938035c2ed4b4064c15ff3c5e17634668b88e512190c2cf2db",
+  "consumer_after_sha256": "2fea6763e1eba0247589c4b0f9ea0a88e4571f67ffe102c57660d34140cc21bc",
+  "pure_module": "gravity-mvp/src/lib/tasks/manager-health-config.ts",
+  "pure_module_before_sha256": "b911692a7f5e735af482c0a202e5c86b5900ed7d89fbd16fcd1339c9ffef7b47",
+  "pure_module_after_sha256": "58931ef529031ca72e104b315cf8a296547a9196963f5f05490f77b72771ef5f",
+  "behavior": [
+    "the complete health_snapshots and health_score_history repository boundary moves to Operations Observability while Analytics Reporting retains score computation, trend computation, map construction and presentation orchestration",
+    "manager-health-config.ts remains Work Management-owned pure configuration, calculations and data shapes with no Prisma, SQL or Operations dependency",
+    "the process-local compatibility latch begins false, returns immediately only after a successful prior ensure, and becomes true only after all four DDL statements complete",
+    "compatibility DDL remains four separate sequential nontransactional statements in the inherited order: snapshot table, decline_streak compatibility column, history table, then history index",
+    "a failed DDL statement leaves the latch false so a later call retries from the first statement; concurrent first callers remain uncoalesced and can each execute the idempotent four-statement sequence",
+    "the four compatibility DDL strings remain byte-identical, unqualified and database-clock based",
+    "empty snapshot saves and empty history reads return before compatibility ensure",
+    "previous snapshot reads still ensure first, use the same unordered fixed projection, propagate failures and build a caller-owned Map where a later duplicate manager row wins without changing its first insertion position",
+    "the primary snapshot upsert remains one atomic PostgreSQL statement with caller order and duplicate manager IDs preserved; duplicate conflicts therefore retain same-statement cardinality failure and atomic rollback",
+    "the primary upsert failure remains visible and prevents any history append attempt",
+    "history append remains a second nontransactional statement, uses its own statement-stable database NOW(), retains the strict recorded_at greater-than one-hour predicate and remains failure-tolerant with the exact existing log prefix",
+    "history rows are not deduplicated or reordered before the append statement",
+    "history reads retain the database NOW() window, manager_id and recorded_at ascending order, default seven-day period and Math.min-only upper cap of thirty days",
+    "negative and fractional history periods remain accepted on the existing consumer path; a new public caller cannot request a window greater than thirty days",
+    "history ensure, query and mapping failures retain the exact existing catch, log prefix and empty-or-partial Map return semantics",
+    "stored health_level values retain the compatibility cast rather than acquiring runtime row validation",
+    "primary and history writes retain separate autocommit boundaries and may receive different database timestamps",
+    "the existing Analytics to Operations public dependency is reused; no Work-to-Operations edge, reverse dependency or cycle is added",
+    "no transaction, retry wrapper, promise latch, deduplication, lower period bound, clock substitution or rollback compensation is added"
+  ],
+  "bounded_drift": [
+    "fixed bound UNNEST statements replace dynamically interpolated VALUES SQL, removing quote injection capacity while preserving input correlation, order, duplicate behavior, atomicity and database clock semantics",
+    "generated SQL text, PostgreSQL parameter coercion details, error class/message and recorded query text can differ from the legacy interpolated statements",
+    "strict versioned request parsing can reject malformed envelopes, unsupported versions, extra fields, empty manager identifiers, invalid health levels and non-finite numeric values earlier than the legacy raw path",
+    "the public history parser rejects periods greater than thirty days instead of silently broadening repository authority; the existing consumer still performs the inherited Math.min cap before calling it",
+    "owner-side snake-case to camel-case mapping and public-handler frames add negligible in-process timing and can change stack traces without changing successful values",
+    "finite fractional score or streak values remain contract-valid for compatibility even though the actual health computation produces integers; database cast errors or coercion are surfaced by the owner write"
+  ],
+  "out_of_scope": [
+    "manager-health scoring, thresholds, stability, risk persistence or intervention business-policy changes",
+    "schema migration design, removal of compatibility DDL or compatibility tables",
+    "the inherited Analytics imports of Work Management pure configuration",
+    "contact topology, contact merge, AI governance, Calling configuration and remaining unsafe-fragment slices",
+    "raw-write-owner-overrides and frozen CRM-ARCH-003 ownership evidence regeneration",
+    "database access, repository execution, scheduler execution, service or runtime activation, deployment and production mutation"
+  ]
+}

@@ -1,5 +1,5 @@
 import { withCronLogging } from '@/lib/cron-health'
-import { evaluateEscalations } from '@/lib/triggers'
+import { evaluateOperationalFollowupEscalationsV1 } from '@/modules/work-management/public/v1/operational-trigger-evaluations'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,6 +10,6 @@ export const dynamic = 'force-dynamic'
  * follow-up deadline has passed. Safe to call multiple times.
  */
 export const GET = withCronLogging('escalations', async () => {
-    const result = await evaluateEscalations()
+    const result = await evaluateOperationalFollowupEscalationsV1()
     return { ok: true, escalated: result.escalated }
 })

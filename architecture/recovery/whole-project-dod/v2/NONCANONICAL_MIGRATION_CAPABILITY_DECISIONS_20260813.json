@@ -1,0 +1,1183 @@
+{
+  "schema": "yoko.crm.reviewed-noncanonical-migration-capability-decisions.v1",
+  "version": 1,
+  "review": {
+    "status": "COMPLETED_SOURCE_SPECIFIC_REVIEW",
+    "reviewed_by": "YOKO_CRM_ARCHITECTURE_REMEDIATION",
+    "policy": "This is an explicit review input, not an analyzer-derived allowlist. Every listed path is byte-pinned and every site must match one enumerated owner/reachability/write tuple; an absent site remains unauthorized."
+  },
+  "path_decisions": [
+    {
+      "path": "deploy/docker-compose.production.yml",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "lifecycle_evidence_status": "REVIEWED_DEPLOYMENT_SCHEMA_COMMAND",
+      "rationale": "Production compose executes the Yandex fleet Prisma schema command during deployment, so its database write is migration-only rather than application runtime.",
+      "expected_site_signatures": [
+        "00c96dc7c8cb5eb013f0eec0427d677a1ecfc39d1e8c91343927830d014823a1"
+      ]
+    },
+    {
+      "path": "gravity-mvp/Dockerfile",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "lifecycle_evidence_status": "REVIEWED_CONTAINER_MIGRATE_DEPLOY_COMMAND",
+      "rationale": "Production container command invokes Prisma migrate deploy before starting the application, so its database write is migration-only rather than application runtime.",
+      "expected_site_signatures": [
+        "20042cbc917b8cccb95945e464b43aabc7eb1b57c5ca3da4476cc1b72e77eed9"
+      ]
+    },
+    {
+      "path": "gravity-mvp/scripts/baseline-vps.sh",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_MANUAL_BASELINE",
+      "lifecycle_evidence_status": "REVIEWED_PRODUCTION_MIGRATION_BASELINE",
+      "rationale": "Explicit operator baseline records reviewed production migrations as applied without becoming a runtime writer.",
+      "expected_site_signatures": [
+        "fb0765906652f3c3eb19a70e1eb8201b5b1e3be232f1e1e0dc69494d759fde52"
+      ]
+    },
+    {
+      "path": "gravity-mvp/add_partial_index.sql",
+      "functional_owner": "task_management",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "lifecycle_evidence_status": "REVIEWED_STANDALONE_SQL_INDEX_MIGRATION",
+      "rationale": "Standalone operator-run SQL creates the exact tasks index; it is not a runtime writer.",
+      "expected_site_signatures": [
+        "c099548aaa9f0871ea1cc7475912c648b58f64f43308d0bf100b315a39890bcb"
+      ]
+    },
+    {
+      "path": "gravity-mvp/fix_channels.sql",
+      "functional_owner": "messaging",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "lifecycle_evidence_status": "REVIEWED_STANDALONE_SQL_CHANNEL_REPAIR",
+      "rationale": "Standalone operator-run SQL repairs exact Message channel values; it is not a runtime writer.",
+      "expected_site_signatures": [
+        "8a143f3442c3be46652085300b45087ed7c13692b73f9758aece667e6ec47a9e",
+        "a407cdaca37366769948e02c7d37c96c1f30520932fabd46f370a94c48d86bf0"
+      ]
+    },
+    {
+      "path": "gravity-mvp/prisma/migrations/20260805073000_add_bot_user_registry/migration.sql",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "lifecycle_evidence_status": "REVIEWED_NONCANONICAL_ACTIVE_VARIANT",
+      "rationale": "Active Prisma migration variant is deploy-reachable but byte-distinct from its sealed archive authority capture, so it is reviewed independently.",
+      "expected_site_signatures": [
+        "14fe0850fcf8396347395a92cf156c63c5a0d71993b2afb2366aea79424f7351",
+        "83e0be59af263a981a335be90b9ae96753e1e875a8eb0d6b99e7e6980dee12c2",
+        "8fccd2669fdedf8a50ba991543cac838e695b48bcad771d2331128744966fb4a",
+        "cfcda68641efe0ed8f60ba16e1983e2198d0287bff667efb7e10faaf9dd21423",
+        "d90e9741cbd096b748ba7d8e4f5bb946ed0d7082deb5ceda01d4dd00d09c2d42",
+        "e7b96dc48493f1241ffca56a620837fdab095565dc7c063d8e85a841b6b38154"
+      ]
+    },
+    {
+      "path": "gravity-mvp/prisma/migrations/20260805093000_prune_unverified_bot_registry_backfill/migration.sql",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "lifecycle_evidence_status": "REVIEWED_NONCANONICAL_ACTIVE_VARIANT",
+      "rationale": "Active Prisma migration variant is deploy-reachable but byte-distinct from its sealed archive authority capture, so it is reviewed independently.",
+      "expected_site_signatures": [
+        "b199065823bbc3f0584d6a1b38cfd4e0c76e94e914bc58c3fcdcb8363ab2e50b"
+      ]
+    },
+    {
+      "path": "gravity-mvp/prisma/migrations/20260805110000_restore_linked_bot_registry/migration.sql",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "lifecycle_evidence_status": "REVIEWED_NONCANONICAL_ACTIVE_VARIANT",
+      "rationale": "Active Prisma migration variant is deploy-reachable but byte-distinct from its sealed archive authority capture, so it is reviewed independently.",
+      "expected_site_signatures": [
+        "0ff9642cf11720e899ad611c8133fa5f981eba484091cd2c062b36317f38a6cb"
+      ]
+    },
+    {
+      "path": "gravity-mvp/scripts/add-scenario-field-settings-table.js",
+      "functional_owner": "task_management",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "lifecycle_evidence_status": "REVIEWED_ONE_SHOT_SCHEMA_SCRIPT",
+      "rationale": "Explicit one-shot script creates and indexes only scenario_field_settings under operator invocation.",
+      "expected_site_signatures": [
+        "0034cdfc35ab80ac588d9c763dda10b06435603dfeebffc14c93fe6961deceae",
+        "ed67f1db0653d928ae864aa4c637241f296b76aef56950cf7008f2eadc49bcac"
+      ]
+    },
+    {
+      "path": "gravity-mvp/scripts/backfill-scenario-data.js",
+      "functional_owner": "task_management",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "lifecycle_evidence_status": "REVIEWED_ONE_SHOT_TASK_BACKFILL",
+      "rationale": "Explicit one-shot script backfills only task scenario data under operator invocation.",
+      "expected_site_signatures": [
+        "a962a2fdac7c3c993837f0ab130fe1e13c36b876fd6d34a8e56d617da6e56f9f"
+      ]
+    },
+    {
+      "path": "gravity-mvp/scripts/migrate-contacts.ts",
+      "functional_owner": "contacts",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "lifecycle_evidence_status": "REVIEWED_CONTACTS_CONTROLLED_MIGRATION",
+      "rationale": "Explicit operator-run contacts migration has separately enumerated cross-owner task and messaging exceptions below.",
+      "expected_site_signatures": [
+        "03841ee7269cde33ac0338c8da7daafdc9f1dd787eef2a64367ec4d28e222bd0",
+        "102a1698c96e3dfd05f21fdc840c3ee2d28e641b488b16765a936f50a0c8ee66",
+        "15db98f84f1cfe5b929932f5d550423d63d0cdfe41e4c0e6d50715e0fa977424",
+        "6ec19d2408c23a56727f1ab05b2514ae9dbd20d7420eb1231ea6eb7adacc3b6e",
+        "77e9a1ad0c3e790fd22c06f619dfcb7ad0270a644b99624c8a478a5a216cd060",
+        "87c81fa7c493e67bd292efea7dd1494ea9571c211dd84ba25fe7262c0cbf0d54",
+        "a336fa130fa93547fa640e9bacd80299ad8afd28e8b7ebc669ddd5a67d5b530d",
+        "a7bb579420666341312247c8ba0cb7b7e5cd1eb149bad7b40489d11ac803c02a",
+        "b2cf150f126b8f87fede1fc4e031c3cf5c17872d0ca2c78eb54932550e4656d8",
+        "b37ce9b5ea619ba68122f91b284a37bce900dbd3ed9a4256b5a133f20462eba4",
+        "d9d88cd19ab15a7ad54550926e114f0934a9bc4becd4034fba50b201b1b10b79",
+        "e2437e44902cb7387eb871eccd3076e165596cdae4019f4d72affdde6f53ae5b"
+      ]
+    },
+    {
+      "path": "gravity-mvp/scripts/migrate-scenario-from-metadata.ts",
+      "functional_owner": "task_management",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "lifecycle_evidence_status": "REVIEWED_TASK_SCENARIO_MIGRATION",
+      "rationale": "Explicit operator-run script updates the exact task scenario target once.",
+      "expected_site_signatures": [
+        "774f170415e96018ac5b9430dd02beff9631a5764c6eb3e9818aff0d737124a6"
+      ]
+    },
+    {
+      "path": "gravity-mvp/scripts/recover-wa-unified-from-legacy.js",
+      "functional_owner": "messaging",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "lifecycle_evidence_status": "REVIEWED_MESSAGING_RECOVERY_MIGRATION",
+      "rationale": "Explicit operator-run recovery imports only the exact legacy WhatsApp message target.",
+      "expected_site_signatures": [
+        "1804dac0259cf69cec475ab7986a0ce99124481ee6eb2fc07d97f400048b0d82"
+      ]
+    },
+    {
+      "path": "scripts/migrate-data-apply.sh",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "lifecycle_evidence_status": "REVIEWED_PRODUCTION_RESTORE_MIGRATION",
+      "rationale": "Explicit production data-migration entrypoint recreates schema grants and restores the reviewed production database.",
+      "expected_site_signatures": [
+        "110237bf5255d6ad4d2f16bc89bd38c11d45e75047ef589231698fe1cf2c55e6",
+        "1c6697b84d5591fa711b6af06418e920271bc8a0a2d50ac6e04f57c9f62eb7c4",
+        "205d1ceadc0dd197bc21ad52b4c11aa252cd7d0146debd06a3a1e592daaaad74",
+        "2d375d50425d4ebfcdae9f253de9d7512072f7448c5dd653b31beeb32fc885a1",
+        "6e58a444585e3d01ab32d1aff7b7c249b80fc07b86d9a9963a418869ae18e6d2"
+      ]
+    },
+    {
+      "path": "scripts/deploy.sh",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_MANUAL_DEPLOYMENT",
+      "lifecycle_evidence_status": "REVIEWED_OPERATOR_MIGRATE_DEPLOY_COMMAND",
+      "rationale": "Explicit deployment entrypoint invokes Prisma migrate deploy before application startup, so its database write is migration-only.",
+      "expected_site_signatures": [
+        "2f63589b29d8ca9c3fc9a2395a36c59204aaa960f4c9b4ffac26be8a7fcf778f"
+      ]
+    },
+    {
+      "path": "scripts/restore-pg.sh",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_MANUAL_RESTORE",
+      "lifecycle_evidence_status": "REVIEWED_PRODUCTION_DATABASE_RESTORE",
+      "rationale": "Explicit restore entrypoint replaces and restores only the reviewed production database.",
+      "expected_site_signatures": [
+        "80034cf7e367c26352d1d89a3d7f06429081347883db528536714927908e4085",
+        "97face0b14d933ca17fb894fde2d5eb7153c9f67251566367f1b14f8194ffb32",
+        "f661f1e776d6dd842255444759e9cf185969ef79e7662a152959630e15e7af66"
+      ]
+    },
+    {
+      "path": "tg-bot/prisma/migrations/20260223211509_add_is_linear_to_survey/migration.sql",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "lifecycle_evidence_status": "REVIEWED_SEPARATE_TG_SQLITE_MIGRATION",
+      "rationale": "Separate TG-bot Prisma migration targets the TG-bot PostgreSQL schema and is explicitly excluded from the 62-row Gravity production migration authority.",
+      "expected_site_signatures": [
+        "396980c54d65db94ee7d3275be101007a09eaacc848b357eda7b92d0a74e70af",
+        "3b518f861500d4ca9df0fbfcf1ce9b6c8674eeec698ee80b1b72d251989b2b7b",
+        "3ee0870919940d07e708d5e5c39dd402e9b2a5860a4dce96465260e912e85ce7",
+        "4078578bb2f65186bf240e3126bb099580cac5336c21fae8155d9892e393114a",
+        "5787ed7b15de992ca2e2f4f53d8251203d6213ec783a4e1ea3516ddd136b0f0c",
+        "78b0365566187f3319bffe003785aa141978e9f8248e13415cd38d0a9d1fcf0d",
+        "793d9e9292e2a9e3d847ca77cce328e5f4dcfa8084baf8d25eab7a7ce1ee084a",
+        "8d057f6bde098f1012afec97cd923539dc9a0d364067d40bfff9646b13c61863",
+        "8f29c5b77c3c8408e24f847c06cfa9b844970b707a9ac9a34e8d12038483bb89",
+        "b25fa19f40411ec59286aac3d3d6312adc3093729bee7d84c101afce1afda5a9",
+        "d81f9a400d3f0999128c4feeb23e2bec0b8259396873e5bd4edef31805c8b61c",
+        "e55a8048fbea69cbd91d5e7a0138b11813eb000143ee7ebdaa21a8e93aa24e1f",
+        "fb5ff95710a9f33b89231fb986202031f40b764662ef3813bb597b64dbc3b2e7"
+      ]
+    }
+  ],
+  "site_owner_overrides": {
+    "b37ce9b5ea619ba68122f91b284a37bce900dbd3ed9a4256b5a133f20462eba4": "messaging",
+    "d9d88cd19ab15a7ad54550926e114f0934a9bc4becd4034fba50b201b1b10b79": "task_management"
+  },
+  "site_decisions": [
+    {
+      "site_signature": "0034cdfc35ab80ac588d9c763dda10b06435603dfeebffc14c93fe6961deceae",
+      "path": "gravity-mvp/scripts/add-scenario-field-settings-table.js",
+      "source_sha256": "e9697e2aabaeaf33f243e3fc21c3ff8271ce38a8d3c283d91db687456c81c947",
+      "line": 23,
+      "column": 15,
+      "method": "$executeRawUnsafe",
+      "functional_owner": "task_management",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "scenario_field_settings",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Explicit one-shot script creates and indexes only scenario_field_settings under operator invocation."
+    },
+    {
+      "site_signature": "00c96dc7c8cb5eb013f0eec0427d677a1ecfc39d1e8c91343927830d014823a1",
+      "path": "deploy/docker-compose.production.yml",
+      "source_sha256": "ff4a96e97c586d8dc26cf36170defc3eb2da5a1bac9f62a6fc31aeb208e44013",
+      "line": 452,
+      "column": 54,
+      "method": "mixed-script-command:prisma db push",
+      "functional_owner": "fleet_operations",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "writes": [
+        {
+          "kind": "SCHEMA",
+          "exact_name": "yandex-fleet-scraper/prisma/schema.prisma",
+          "operation": "mixed-script-command:prisma db push"
+        }
+      ],
+      "review_rationale": "The committed reviewed maintenance capability and exact source bytes jointly authorize only this site tuple.",
+      "existing_capability_id": "mmc.reviewed.v1.fleet_operations.yandex_schema_db_push"
+    },
+    {
+      "site_signature": "03841ee7269cde33ac0338c8da7daafdc9f1dd787eef2a64367ec4d28e222bd0",
+      "path": "gravity-mvp/scripts/migrate-contacts.ts",
+      "source_sha256": "17c25cc9f4f2645bdb0f6f8ac1a19031965567a4ad110db622bde4c72622d2d1",
+      "line": 529,
+      "column": 37,
+      "method": "create",
+      "functional_owner": "contacts",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "writes": [
+        {
+          "kind": "MODEL",
+          "exact_name": "contactPhone",
+          "operation": "create"
+        }
+      ],
+      "review_rationale": "Explicit operator-run contacts migration has separately enumerated cross-owner task and messaging exceptions below."
+    },
+    {
+      "site_signature": "0ff9642cf11720e899ad611c8133fa5f981eba484091cd2c062b36317f38a6cb",
+      "path": "gravity-mvp/prisma/migrations/20260805110000_restore_linked_bot_registry/migration.sql",
+      "source_sha256": "cd7ebed3043b4d4989ca1a57aeab34b808aa7ec56f8479e97d5063ada7c4dc70",
+      "line": 1,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "BotUserRegistry",
+          "operation": "INSERT"
+        }
+      ],
+      "review_rationale": "Active Prisma migration variant is deploy-reachable but byte-distinct from its sealed archive authority capture, so it is reviewed independently."
+    },
+    {
+      "site_signature": "102a1698c96e3dfd05f21fdc840c3ee2d28e641b488b16765a936f50a0c8ee66",
+      "path": "gravity-mvp/scripts/migrate-contacts.ts",
+      "source_sha256": "17c25cc9f4f2645bdb0f6f8ac1a19031965567a4ad110db622bde4c72622d2d1",
+      "line": 180,
+      "column": 29,
+      "method": "create",
+      "functional_owner": "contacts",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "writes": [
+        {
+          "kind": "MODEL",
+          "exact_name": "contact",
+          "operation": "create"
+        }
+      ],
+      "review_rationale": "Explicit operator-run contacts migration has separately enumerated cross-owner task and messaging exceptions below."
+    },
+    {
+      "site_signature": "110237bf5255d6ad4d2f16bc89bd38c11d45e75047ef589231698fe1cf2c55e6",
+      "path": "scripts/migrate-data-apply.sh",
+      "source_sha256": "273c450c56a5daa82887405f1bce2daefbabd060e4a084ebb960897fb1d43098",
+      "line": 82,
+      "column": 44,
+      "method": "mixed-script-sql",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "writes": [
+        {
+          "kind": "SCHEMA",
+          "exact_name": "public",
+          "operation": "CREATE_SCHEMA"
+        }
+      ],
+      "review_rationale": "Explicit production data-migration entrypoint recreates schema grants and restores the reviewed production database."
+    },
+    {
+      "site_signature": "14fe0850fcf8396347395a92cf156c63c5a0d71993b2afb2366aea79424f7351",
+      "path": "gravity-mvp/prisma/migrations/20260805073000_add_bot_user_registry/migration.sql",
+      "source_sha256": "4ab782d2533e999f808f5be8cf56e33da8f6490bade0743c19e01ae8198fbe32",
+      "line": 48,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "BotUserRegistry",
+          "operation": "INSERT"
+        }
+      ],
+      "review_rationale": "Active Prisma migration variant is deploy-reachable but byte-distinct from its sealed archive authority capture, so it is reviewed independently."
+    },
+    {
+      "site_signature": "15db98f84f1cfe5b929932f5d550423d63d0cdfe41e4c0e6d50715e0fa977424",
+      "path": "gravity-mvp/scripts/migrate-contacts.ts",
+      "source_sha256": "17c25cc9f4f2645bdb0f6f8ac1a19031965567a4ad110db622bde4c72622d2d1",
+      "line": 209,
+      "column": 17,
+      "method": "update",
+      "functional_owner": "contacts",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "writes": [
+        {
+          "kind": "MODEL",
+          "exact_name": "contact",
+          "operation": "update"
+        }
+      ],
+      "review_rationale": "Explicit operator-run contacts migration has separately enumerated cross-owner task and messaging exceptions below."
+    },
+    {
+      "site_signature": "1804dac0259cf69cec475ab7986a0ce99124481ee6eb2fc07d97f400048b0d82",
+      "path": "gravity-mvp/scripts/recover-wa-unified-from-legacy.js",
+      "source_sha256": "24c9d7c81359ff7452417f7338bacaebe7c97c2e94c3e5188103be3747420d13",
+      "line": 84,
+      "column": 15,
+      "method": "create",
+      "functional_owner": "messaging",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "writes": [
+        {
+          "kind": "MODEL",
+          "exact_name": "message",
+          "operation": "create"
+        }
+      ],
+      "review_rationale": "Explicit operator-run recovery imports only the exact legacy WhatsApp message target."
+    },
+    {
+      "site_signature": "1c6697b84d5591fa711b6af06418e920271bc8a0a2d50ac6e04f57c9f62eb7c4",
+      "path": "scripts/migrate-data-apply.sh",
+      "source_sha256": "273c450c56a5daa82887405f1bce2daefbabd060e4a084ebb960897fb1d43098",
+      "line": 82,
+      "column": 6,
+      "method": "mixed-script-sql",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "writes": [
+        {
+          "kind": "SCHEMA",
+          "exact_name": "public",
+          "operation": "DROP_SCHEMA"
+        }
+      ],
+      "review_rationale": "Explicit production data-migration entrypoint recreates schema grants and restores the reviewed production database."
+    },
+    {
+      "site_signature": "20042cbc917b8cccb95945e464b43aabc7eb1b57c5ca3da4476cc1b72e77eed9",
+      "path": "gravity-mvp/Dockerfile",
+      "source_sha256": "ed00cec7e761d63209a7da67fcbea5b7c8c0fb165c0f2243c650ee35f1f97336",
+      "line": 139,
+      "column": 23,
+      "method": "mixed-script-command:prisma migrate deploy",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "writes": [
+        {
+          "kind": "SCHEMA",
+          "exact_name": "gravity-mvp/prisma/schema.prisma",
+          "operation": "mixed-script-command:prisma migrate deploy"
+        }
+      ],
+      "review_rationale": "The committed reviewed maintenance capability and exact source bytes jointly authorize only this site tuple.",
+      "existing_capability_id": "mmc.reviewed.v1.production_migration_authority.gravity_container_migrate_deploy"
+    },
+    {
+      "site_signature": "205d1ceadc0dd197bc21ad52b4c11aa252cd7d0146debd06a3a1e592daaaad74",
+      "path": "scripts/migrate-data-apply.sh",
+      "source_sha256": "273c450c56a5daa82887405f1bce2daefbabd060e4a084ebb960897fb1d43098",
+      "line": 82,
+      "column": 112,
+      "method": "mixed-script-sql",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "writes": [
+        {
+          "kind": "DATABASE",
+          "exact_name": "postgresql-production-database",
+          "operation": "GRANT"
+        }
+      ],
+      "review_rationale": "Explicit production data-migration entrypoint recreates schema grants and restores the reviewed production database."
+    },
+    {
+      "site_signature": "2d375d50425d4ebfcdae9f253de9d7512072f7448c5dd653b31beeb32fc885a1",
+      "path": "scripts/migrate-data-apply.sh",
+      "source_sha256": "273c450c56a5daa82887405f1bce2daefbabd060e4a084ebb960897fb1d43098",
+      "line": 84,
+      "column": 31,
+      "method": "mixed-script-command:pg_restore",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "writes": [
+        {
+          "kind": "DATABASE",
+          "exact_name": "postgresql-production-database",
+          "operation": "mixed-script-command:pg_restore"
+        }
+      ],
+      "review_rationale": "The committed reviewed maintenance capability and exact source bytes jointly authorize only this site tuple.",
+      "existing_capability_id": "mmc.reviewed.v1.production_migration_authority.migrate_data_restore"
+    },
+    {
+      "site_signature": "2f63589b29d8ca9c3fc9a2395a36c59204aaa960f4c9b4ffac26be8a7fcf778f",
+      "path": "scripts/deploy.sh",
+      "source_sha256": "9331e8157e11b4ab829cb1b75074ddcc0ad4ff19e467e62f72b30d4f9d86dad3",
+      "line": 91,
+      "column": 41,
+      "method": "mixed-script-command:prisma migrate deploy",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_MANUAL_DEPLOYMENT",
+      "writes": [
+        {
+          "kind": "SCHEMA",
+          "exact_name": "gravity-mvp/prisma/schema.prisma",
+          "operation": "mixed-script-command:prisma migrate deploy"
+        }
+      ],
+      "review_rationale": "The committed reviewed maintenance capability and exact source bytes jointly authorize only this site tuple.",
+      "existing_capability_id": "mmc.reviewed.v1.production_migration_authority.deploy_script_migrate_deploy"
+    },
+    {
+      "site_signature": "396980c54d65db94ee7d3275be101007a09eaacc848b357eda7b92d0a74e70af",
+      "path": "tg-bot/prisma/migrations/20260223211509_add_is_linear_to_survey/migration.sql",
+      "source_sha256": "1e6f4be04902cc74473bb37b512acb3d1c3ce1010ad696dea48e8969f762fc8e",
+      "line": 80,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "users",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Separate TG-bot Prisma migration targets the TG-bot PostgreSQL schema and is explicitly excluded from the 62-row Gravity production migration authority."
+    },
+    {
+      "site_signature": "3b518f861500d4ca9df0fbfcf1ce9b6c8674eeec698ee80b1b72d251989b2b7b",
+      "path": "tg-bot/prisma/migrations/20260223211509_add_is_linear_to_survey/migration.sql",
+      "source_sha256": "1e6f4be04902cc74473bb37b512acb3d1c3ce1010ad696dea48e8969f762fc8e",
+      "line": 14,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "surveys",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Separate TG-bot Prisma migration targets the TG-bot PostgreSQL schema and is explicitly excluded from the 62-row Gravity production migration authority."
+    },
+    {
+      "site_signature": "3ee0870919940d07e708d5e5c39dd402e9b2a5860a4dce96465260e912e85ce7",
+      "path": "tg-bot/prisma/migrations/20260223211509_add_is_linear_to_survey/migration.sql",
+      "source_sha256": "1e6f4be04902cc74473bb37b512acb3d1c3ce1010ad696dea48e8969f762fc8e",
+      "line": 86,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "answers",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Separate TG-bot Prisma migration targets the TG-bot PostgreSQL schema and is explicitly excluded from the 62-row Gravity production migration authority."
+    },
+    {
+      "site_signature": "4078578bb2f65186bf240e3126bb099580cac5336c21fae8155d9892e393114a",
+      "path": "tg-bot/prisma/migrations/20260223211509_add_is_linear_to_survey/migration.sql",
+      "source_sha256": "1e6f4be04902cc74473bb37b512acb3d1c3ce1010ad696dea48e8969f762fc8e",
+      "line": 83,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "answers",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Separate TG-bot Prisma migration targets the TG-bot PostgreSQL schema and is explicitly excluded from the 62-row Gravity production migration authority."
+    },
+    {
+      "site_signature": "5787ed7b15de992ca2e2f4f53d8251203d6213ec783a4e1ea3516ddd136b0f0c",
+      "path": "tg-bot/prisma/migrations/20260223211509_add_is_linear_to_survey/migration.sql",
+      "source_sha256": "1e6f4be04902cc74473bb37b512acb3d1c3ce1010ad696dea48e8969f762fc8e",
+      "line": 54,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "answers",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Separate TG-bot Prisma migration targets the TG-bot PostgreSQL schema and is explicitly excluded from the 62-row Gravity production migration authority."
+    },
+    {
+      "site_signature": "6e58a444585e3d01ab32d1aff7b7c249b80fc07b86d9a9963a418869ae18e6d2",
+      "path": "scripts/migrate-data-apply.sh",
+      "source_sha256": "273c450c56a5daa82887405f1bce2daefbabd060e4a084ebb960897fb1d43098",
+      "line": 82,
+      "column": 66,
+      "method": "mixed-script-sql",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "writes": [
+        {
+          "kind": "DATABASE",
+          "exact_name": "postgresql-production-database",
+          "operation": "GRANT"
+        }
+      ],
+      "review_rationale": "Explicit production data-migration entrypoint recreates schema grants and restores the reviewed production database."
+    },
+    {
+      "site_signature": "6ec19d2408c23a56727f1ab05b2514ae9dbd20d7420eb1231ea6eb7adacc3b6e",
+      "path": "gravity-mvp/scripts/migrate-contacts.ts",
+      "source_sha256": "17c25cc9f4f2645bdb0f6f8ac1a19031965567a4ad110db622bde4c72622d2d1",
+      "line": 287,
+      "column": 13,
+      "method": "create",
+      "functional_owner": "contacts",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "writes": [
+        {
+          "kind": "MODEL",
+          "exact_name": "contactIdentity",
+          "operation": "create"
+        }
+      ],
+      "review_rationale": "Explicit operator-run contacts migration has separately enumerated cross-owner task and messaging exceptions below."
+    },
+    {
+      "site_signature": "774f170415e96018ac5b9430dd02beff9631a5764c6eb3e9818aff0d737124a6",
+      "path": "gravity-mvp/scripts/migrate-scenario-from-metadata.ts",
+      "source_sha256": "67c6cd35aae1a05d02968949c6f0acd78335db00f81fa02d096d382751e6915a",
+      "line": 33,
+      "column": 15,
+      "method": "update",
+      "functional_owner": "task_management",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "writes": [
+        {
+          "kind": "MODEL",
+          "exact_name": "task",
+          "operation": "update"
+        }
+      ],
+      "review_rationale": "Explicit operator-run script updates the exact task scenario target once."
+    },
+    {
+      "site_signature": "77e9a1ad0c3e790fd22c06f619dfcb7ad0270a644b99624c8a478a5a216cd060",
+      "path": "gravity-mvp/scripts/migrate-contacts.ts",
+      "source_sha256": "17c25cc9f4f2645bdb0f6f8ac1a19031965567a4ad110db622bde4c72622d2d1",
+      "line": 386,
+      "column": 13,
+      "method": "create",
+      "functional_owner": "contacts",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "writes": [
+        {
+          "kind": "MODEL",
+          "exact_name": "contactIdentity",
+          "operation": "create"
+        }
+      ],
+      "review_rationale": "Explicit operator-run contacts migration has separately enumerated cross-owner task and messaging exceptions below."
+    },
+    {
+      "site_signature": "78b0365566187f3319bffe003785aa141978e9f8248e13415cd38d0a9d1fcf0d",
+      "path": "tg-bot/prisma/migrations/20260223211509_add_is_linear_to_survey/migration.sql",
+      "source_sha256": "1e6f4be04902cc74473bb37b512acb3d1c3ce1010ad696dea48e8969f762fc8e",
+      "line": 2,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "bots",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Separate TG-bot Prisma migration targets the TG-bot PostgreSQL schema and is explicitly excluded from the 62-row Gravity production migration authority."
+    },
+    {
+      "site_signature": "793d9e9292e2a9e3d847ca77cce328e5f4dcfa8084baf8d25eab7a7ce1ee084a",
+      "path": "tg-bot/prisma/migrations/20260223211509_add_is_linear_to_survey/migration.sql",
+      "source_sha256": "1e6f4be04902cc74473bb37b512acb3d1c3ce1010ad696dea48e8969f762fc8e",
+      "line": 71,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "users",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Separate TG-bot Prisma migration targets the TG-bot PostgreSQL schema and is explicitly excluded from the 62-row Gravity production migration authority."
+    },
+    {
+      "site_signature": "80034cf7e367c26352d1d89a3d7f06429081347883db528536714927908e4085",
+      "path": "scripts/restore-pg.sh",
+      "source_sha256": "d8a988c6866c149924e6654d93a04105f45bed272297d48668507baa516938d5",
+      "line": 82,
+      "column": 1,
+      "method": "mixed-script-sql",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_MANUAL_RESTORE",
+      "writes": [
+        {
+          "kind": "DATABASE",
+          "exact_name": "postgresql-production-database",
+          "operation": "DROP_DATABASE"
+        }
+      ],
+      "review_rationale": "Explicit restore entrypoint replaces and restores only the reviewed production database."
+    },
+    {
+      "site_signature": "83e0be59af263a981a335be90b9ae96753e1e875a8eb0d6b99e7e6980dee12c2",
+      "path": "gravity-mvp/prisma/migrations/20260805073000_add_bot_user_registry/migration.sql",
+      "source_sha256": "4ab782d2533e999f808f5be8cf56e33da8f6490bade0743c19e01ae8198fbe32",
+      "line": 14,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "BotUserRegistry",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Active Prisma migration variant is deploy-reachable but byte-distinct from its sealed archive authority capture, so it is reviewed independently."
+    },
+    {
+      "site_signature": "87c81fa7c493e67bd292efea7dd1494ea9571c211dd84ba25fe7262c0cbf0d54",
+      "path": "gravity-mvp/scripts/migrate-contacts.ts",
+      "source_sha256": "17c25cc9f4f2645bdb0f6f8ac1a19031965567a4ad110db622bde4c72622d2d1",
+      "line": 590,
+      "column": 38,
+      "method": "create",
+      "functional_owner": "contacts",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "writes": [
+        {
+          "kind": "MODEL",
+          "exact_name": "contactIdentity",
+          "operation": "create"
+        }
+      ],
+      "review_rationale": "Explicit operator-run contacts migration has separately enumerated cross-owner task and messaging exceptions below."
+    },
+    {
+      "site_signature": "8a143f3442c3be46652085300b45087ed7c13692b73f9758aece667e6ec47a9e",
+      "path": "gravity-mvp/fix_channels.sql",
+      "source_sha256": "68402d3af1247d665654e0c14ceeb07c42f08e695affec372343a36eb56a9390",
+      "line": 1,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "messaging",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "Message",
+          "operation": "UPDATE"
+        }
+      ],
+      "review_rationale": "Standalone operator-run SQL repairs exact Message channel values; it is not a runtime writer."
+    },
+    {
+      "site_signature": "8d057f6bde098f1012afec97cd923539dc9a0d364067d40bfff9646b13c61863",
+      "path": "tg-bot/prisma/migrations/20260223211509_add_is_linear_to_survey/migration.sql",
+      "source_sha256": "1e6f4be04902cc74473bb37b512acb3d1c3ce1010ad696dea48e8969f762fc8e",
+      "line": 26,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "questions",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Separate TG-bot Prisma migration targets the TG-bot PostgreSQL schema and is explicitly excluded from the 62-row Gravity production migration authority."
+    },
+    {
+      "site_signature": "8f29c5b77c3c8408e24f847c06cfa9b844970b707a9ac9a34e8d12038483bb89",
+      "path": "tg-bot/prisma/migrations/20260223211509_add_is_linear_to_survey/migration.sql",
+      "source_sha256": "1e6f4be04902cc74473bb37b512acb3d1c3ce1010ad696dea48e8969f762fc8e",
+      "line": 65,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "bots",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Separate TG-bot Prisma migration targets the TG-bot PostgreSQL schema and is explicitly excluded from the 62-row Gravity production migration authority."
+    },
+    {
+      "site_signature": "8fccd2669fdedf8a50ba991543cac838e695b48bcad771d2331128744966fb4a",
+      "path": "gravity-mvp/prisma/migrations/20260805073000_add_bot_user_registry/migration.sql",
+      "source_sha256": "4ab782d2533e999f808f5be8cf56e33da8f6490bade0743c19e01ae8198fbe32",
+      "line": 1,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "BotUserRegistry",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Active Prisma migration variant is deploy-reachable but byte-distinct from its sealed archive authority capture, so it is reviewed independently."
+    },
+    {
+      "site_signature": "97face0b14d933ca17fb894fde2d5eb7153c9f67251566367f1b14f8194ffb32",
+      "path": "scripts/restore-pg.sh",
+      "source_sha256": "d8a988c6866c149924e6654d93a04105f45bed272297d48668507baa516938d5",
+      "line": 83,
+      "column": 1,
+      "method": "mixed-script-sql",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_MANUAL_RESTORE",
+      "writes": [
+        {
+          "kind": "DATABASE",
+          "exact_name": "postgresql-production-database",
+          "operation": "CREATE_DATABASE"
+        }
+      ],
+      "review_rationale": "Explicit restore entrypoint replaces and restores only the reviewed production database."
+    },
+    {
+      "site_signature": "a336fa130fa93547fa640e9bacd80299ad8afd28e8b7ebc669ddd5a67d5b530d",
+      "path": "gravity-mvp/scripts/migrate-contacts.ts",
+      "source_sha256": "17c25cc9f4f2645bdb0f6f8ac1a19031965567a4ad110db622bde4c72622d2d1",
+      "line": 537,
+      "column": 23,
+      "method": "update",
+      "functional_owner": "contacts",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "writes": [
+        {
+          "kind": "MODEL",
+          "exact_name": "contact",
+          "operation": "update"
+        }
+      ],
+      "review_rationale": "Explicit operator-run contacts migration has separately enumerated cross-owner task and messaging exceptions below."
+    },
+    {
+      "site_signature": "a407cdaca37366769948e02c7d37c96c1f30520932fabd46f370a94c48d86bf0",
+      "path": "gravity-mvp/fix_channels.sql",
+      "source_sha256": "68402d3af1247d665654e0c14ceeb07c42f08e695affec372343a36eb56a9390",
+      "line": 2,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "messaging",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "Message",
+          "operation": "UPDATE"
+        }
+      ],
+      "review_rationale": "Standalone operator-run SQL repairs exact Message channel values; it is not a runtime writer."
+    },
+    {
+      "site_signature": "a7bb579420666341312247c8ba0cb7b7e5cd1eb149bad7b40489d11ac803c02a",
+      "path": "gravity-mvp/scripts/migrate-contacts.ts",
+      "source_sha256": "17c25cc9f4f2645bdb0f6f8ac1a19031965567a4ad110db622bde4c72622d2d1",
+      "line": 200,
+      "column": 31,
+      "method": "create",
+      "functional_owner": "contacts",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "writes": [
+        {
+          "kind": "MODEL",
+          "exact_name": "contactPhone",
+          "operation": "create"
+        }
+      ],
+      "review_rationale": "Explicit operator-run contacts migration has separately enumerated cross-owner task and messaging exceptions below."
+    },
+    {
+      "site_signature": "a962a2fdac7c3c993837f0ab130fe1e13c36b876fd6d34a8e56d617da6e56f9f",
+      "path": "gravity-mvp/scripts/backfill-scenario-data.js",
+      "source_sha256": "e39851c10c4e31849985765c844fa053e542bd205065d328c9f4de1413370546",
+      "line": 166,
+      "column": 19,
+      "method": "$executeRaw",
+      "functional_owner": "task_management",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "tasks",
+          "operation": "UPDATE"
+        }
+      ],
+      "review_rationale": "Explicit one-shot script backfills only task scenario data under operator invocation."
+    },
+    {
+      "site_signature": "b199065823bbc3f0584d6a1b38cfd4e0c76e94e914bc58c3fcdcb8363ab2e50b",
+      "path": "gravity-mvp/prisma/migrations/20260805093000_prune_unverified_bot_registry_backfill/migration.sql",
+      "source_sha256": "6a45f92c153438a6267cbb7342cdb2594d5d8496af2348248adb7d0be934ce71",
+      "line": 3,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "BotUserRegistry",
+          "operation": "DELETE"
+        }
+      ],
+      "review_rationale": "Active Prisma migration variant is deploy-reachable but byte-distinct from its sealed archive authority capture, so it is reviewed independently."
+    },
+    {
+      "site_signature": "b25fa19f40411ec59286aac3d3d6312adc3093729bee7d84c101afce1afda5a9",
+      "path": "tg-bot/prisma/migrations/20260223211509_add_is_linear_to_survey/migration.sql",
+      "source_sha256": "1e6f4be04902cc74473bb37b512acb3d1c3ce1010ad696dea48e8969f762fc8e",
+      "line": 77,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "questions",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Separate TG-bot Prisma migration targets the TG-bot PostgreSQL schema and is explicitly excluded from the 62-row Gravity production migration authority."
+    },
+    {
+      "site_signature": "b2cf150f126b8f87fede1fc4e031c3cf5c17872d0ca2c78eb54932550e4656d8",
+      "path": "gravity-mvp/scripts/migrate-contacts.ts",
+      "source_sha256": "17c25cc9f4f2645bdb0f6f8ac1a19031965567a4ad110db622bde4c72622d2d1",
+      "line": 355,
+      "column": 31,
+      "method": "create",
+      "functional_owner": "contacts",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "writes": [
+        {
+          "kind": "MODEL",
+          "exact_name": "contactPhone",
+          "operation": "create"
+        }
+      ],
+      "review_rationale": "Explicit operator-run contacts migration has separately enumerated cross-owner task and messaging exceptions below."
+    },
+    {
+      "site_signature": "b37ce9b5ea619ba68122f91b284a37bce900dbd3ed9a4256b5a133f20462eba4",
+      "path": "gravity-mvp/scripts/migrate-contacts.ts",
+      "source_sha256": "17c25cc9f4f2645bdb0f6f8ac1a19031965567a4ad110db622bde4c72622d2d1",
+      "line": 629,
+      "column": 15,
+      "method": "update",
+      "functional_owner": "messaging",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "writes": [
+        {
+          "kind": "MODEL",
+          "exact_name": "chat",
+          "operation": "update"
+        }
+      ],
+      "review_rationale": "Explicit operator-run contacts migration has separately enumerated cross-owner task and messaging exceptions below."
+    },
+    {
+      "site_signature": "c099548aaa9f0871ea1cc7475912c648b58f64f43308d0bf100b315a39890bcb",
+      "path": "gravity-mvp/add_partial_index.sql",
+      "source_sha256": "ae33730fd89adffdbd94e930b86811e099a56e34e03edb3f21eb5da268b4691a",
+      "line": 1,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "task_management",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "tasks",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Standalone operator-run SQL creates the exact tasks index; it is not a runtime writer."
+    },
+    {
+      "site_signature": "cfcda68641efe0ed8f60ba16e1983e2198d0287bff667efb7e10faaf9dd21423",
+      "path": "gravity-mvp/prisma/migrations/20260805073000_add_bot_user_registry/migration.sql",
+      "source_sha256": "4ab782d2533e999f808f5be8cf56e33da8f6490bade0743c19e01ae8198fbe32",
+      "line": 34,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "BotUserRegistry",
+          "operation": "INSERT"
+        }
+      ],
+      "review_rationale": "Active Prisma migration variant is deploy-reachable but byte-distinct from its sealed archive authority capture, so it is reviewed independently."
+    },
+    {
+      "site_signature": "d81f9a400d3f0999128c4feeb23e2bec0b8259396873e5bd4edef31805c8b61c",
+      "path": "tg-bot/prisma/migrations/20260223211509_add_is_linear_to_survey/migration.sql",
+      "source_sha256": "1e6f4be04902cc74473bb37b512acb3d1c3ce1010ad696dea48e8969f762fc8e",
+      "line": 68,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "surveys",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Separate TG-bot Prisma migration targets the TG-bot PostgreSQL schema and is explicitly excluded from the 62-row Gravity production migration authority."
+    },
+    {
+      "site_signature": "d90e9741cbd096b748ba7d8e4f5bb946ed0d7082deb5ceda01d4dd00d09c2d42",
+      "path": "gravity-mvp/prisma/migrations/20260805073000_add_bot_user_registry/migration.sql",
+      "source_sha256": "4ab782d2533e999f808f5be8cf56e33da8f6490bade0743c19e01ae8198fbe32",
+      "line": 21,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "BotUserRegistry",
+          "operation": "INSERT"
+        }
+      ],
+      "review_rationale": "Active Prisma migration variant is deploy-reachable but byte-distinct from its sealed archive authority capture, so it is reviewed independently."
+    },
+    {
+      "site_signature": "d9d88cd19ab15a7ad54550926e114f0934a9bc4becd4034fba50b201b1b10b79",
+      "path": "gravity-mvp/scripts/migrate-contacts.ts",
+      "source_sha256": "17c25cc9f4f2645bdb0f6f8ac1a19031965567a4ad110db622bde4c72622d2d1",
+      "line": 694,
+      "column": 13,
+      "method": "update",
+      "functional_owner": "task_management",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "writes": [
+        {
+          "kind": "MODEL",
+          "exact_name": "task",
+          "operation": "update"
+        }
+      ],
+      "review_rationale": "Explicit operator-run contacts migration has separately enumerated cross-owner task and messaging exceptions below."
+    },
+    {
+      "site_signature": "e2437e44902cb7387eb871eccd3076e165596cdae4019f4d72affdde6f53ae5b",
+      "path": "gravity-mvp/scripts/migrate-contacts.ts",
+      "source_sha256": "17c25cc9f4f2645bdb0f6f8ac1a19031965567a4ad110db622bde4c72622d2d1",
+      "line": 511,
+      "column": 33,
+      "method": "create",
+      "functional_owner": "contacts",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "writes": [
+        {
+          "kind": "MODEL",
+          "exact_name": "contact",
+          "operation": "create"
+        }
+      ],
+      "review_rationale": "Explicit operator-run contacts migration has separately enumerated cross-owner task and messaging exceptions below."
+    },
+    {
+      "site_signature": "e55a8048fbea69cbd91d5e7a0138b11813eb000143ee7ebdaa21a8e93aa24e1f",
+      "path": "tg-bot/prisma/migrations/20260223211509_add_is_linear_to_survey/migration.sql",
+      "source_sha256": "1e6f4be04902cc74473bb37b512acb3d1c3ce1010ad696dea48e8969f762fc8e",
+      "line": 40,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "users",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Separate TG-bot Prisma migration targets the TG-bot PostgreSQL schema and is explicitly excluded from the 62-row Gravity production migration authority."
+    },
+    {
+      "site_signature": "e7b96dc48493f1241ffca56a620837fdab095565dc7c063d8e85a841b6b38154",
+      "path": "gravity-mvp/prisma/migrations/20260805073000_add_bot_user_registry/migration.sql",
+      "source_sha256": "4ab782d2533e999f808f5be8cf56e33da8f6490bade0743c19e01ae8198fbe32",
+      "line": 16,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "BotUserRegistry",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Active Prisma migration variant is deploy-reachable but byte-distinct from its sealed archive authority capture, so it is reviewed independently."
+    },
+    {
+      "site_signature": "ed67f1db0653d928ae864aa4c637241f296b76aef56950cf7008f2eadc49bcac",
+      "path": "gravity-mvp/scripts/add-scenario-field-settings-table.js",
+      "source_sha256": "e9697e2aabaeaf33f243e3fc21c3ff8271ce38a8d3c283d91db687456c81c947",
+      "line": 7,
+      "column": 15,
+      "method": "$executeRawUnsafe",
+      "functional_owner": "task_management",
+      "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "scenario_field_settings",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Explicit one-shot script creates and indexes only scenario_field_settings under operator invocation."
+    },
+    {
+      "site_signature": "f661f1e776d6dd842255444759e9cf185969ef79e7662a152959630e15e7af66",
+      "path": "scripts/restore-pg.sh",
+      "source_sha256": "d8a988c6866c149924e6654d93a04105f45bed272297d48668507baa516938d5",
+      "line": 87,
+      "column": 34,
+      "method": "mixed-script-command:pg_restore",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_MANUAL_RESTORE",
+      "writes": [
+        {
+          "kind": "DATABASE",
+          "exact_name": "postgresql-production-database",
+          "operation": "mixed-script-command:pg_restore"
+        }
+      ],
+      "review_rationale": "The committed reviewed maintenance capability and exact source bytes jointly authorize only this site tuple.",
+      "existing_capability_id": "mmc.reviewed.v1.production_migration_authority.production_restore"
+    },
+    {
+      "site_signature": "fb0765906652f3c3eb19a70e1eb8201b5b1e3be232f1e1e0dc69494d759fde52",
+      "path": "gravity-mvp/scripts/baseline-vps.sh",
+      "source_sha256": "3c217d23d2819d0ff6b59119ecc79b525b914f3e0e9d609bfd4f630fe129e2f2",
+      "line": 18,
+      "column": 9,
+      "method": "mixed-script-command:prisma migrate resolve",
+      "functional_owner": "production_migration_authority",
+      "production_reachability": "CONFIRMED_MANUAL_BASELINE",
+      "writes": [
+        {
+          "kind": "SCHEMA",
+          "exact_name": "gravity-mvp/prisma/schema.prisma",
+          "operation": "mixed-script-command:prisma migrate resolve"
+        }
+      ],
+      "review_rationale": "The committed reviewed maintenance capability and exact source bytes jointly authorize only this site tuple.",
+      "existing_capability_id": "mmc.reviewed.v1.production_migration_authority.baseline_migrate_resolve"
+    },
+    {
+      "site_signature": "fb5ff95710a9f33b89231fb986202031f40b764662ef3813bb597b64dbc3b2e7",
+      "path": "tg-bot/prisma/migrations/20260223211509_add_is_linear_to_survey/migration.sql",
+      "source_sha256": "1e6f4be04902cc74473bb37b512acb3d1c3ce1010ad696dea48e8969f762fc8e",
+      "line": 74,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "telegram_channel",
+      "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "surveys",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Separate TG-bot Prisma migration targets the TG-bot PostgreSQL schema and is explicitly excluded from the 62-row Gravity production migration authority."
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "schema": "yoko.crm.owner-bootstrap-remediation-map.v1",
+  "rejected_artifact_sha256": "385815cdb4fa6c840bb3b5ffaa60e228622737dc720b802ff9c4d3ec59bcad70",
+  "rejected_artifact_status": "REJECTED_SUPERSEDED_NEVER_EXECUTE",
+  "current_source_status": "REMEDIATION_PRESENT_EXACT_SHA_CRITIC_PASS",
+  "findings": [
+    {
+      "id": "SEVENTH-CRITIC-001",
+      "remediation": "The transaction context records its exact active flock descriptor and every fixed subprocess receives only that descriptor through pass_fds. If Runtime dies, a surviving Docker CLI keeps the same exclusive lock alive; recovery remains ACTIVATION_TRANSACTION_BUSY until the CLI completes, after which recovery freshly observes and quiesces the final Docker state. A real parent-kill POSIX regression proves the contender remains blocked while the child lives and succeeds only after child exit.",
+      "evidence": [
+        "src/crm-activation-profile.py::_lock",
+        "src/crm-activation-profile.py::_run",
+        "tests/test_package_and_runtime.py::test_spawned_fixed_child_inherits_transaction_lock_until_it_exits",
+        "tests/test_package_and_runtime.py::test_profile_subprocesses_receive_only_the_active_transaction_lock_fd"
+      ]
+    }
+  ]
+}

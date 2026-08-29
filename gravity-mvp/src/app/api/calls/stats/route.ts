@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
-import { getUsers } from '@/lib/users/user-service'
+import { listUserIdentitiesV1 as getUsers } from '@/modules/identity-access/public/v1/user-directory'
 
 /**
  * GET /api/calls/stats?from=YYYY-MM-DD&to=YYYY-MM-DD&managerId=u1

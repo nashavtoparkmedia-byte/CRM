@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 /**
  * Seed: 2 дефолтных профиля AI-агента + назначить активным первый.
  *
@@ -13,8 +12,9 @@
  * Запуск:  cd D:/Github/CRM/gravity-mvp && node scripts/seed_ai_profiles.js
  */
 
-const { PrismaClient } = require('@prisma/client')
-const prisma = new PrismaClient()
+/* eslint-disable @typescript-eslint/no-require-imports */
+
+const { seedAiProfilesV1 } = require('../src/modules/calling/public/v1/legacy-prisma-seed-ai-profiles-adapter')
 
 const PROFILES = [
     {
@@ -67,35 +67,14 @@ const PROFILES = [
 
 async function main() {
     console.log('=== Seed AI agent profiles ===\n')
-
-    const created = []
-    for (const p of PROFILES) {
-        const existing = await prisma.aiAgentProfile.findFirst({ where: { name: p.name } })
-        if (existing) {
-            console.log(`[profile] SKIP «${p.name}» — уже существует (id=${existing.id})`)
-            created.push(existing)
-            continue
-        }
-        const row = await prisma.aiAgentProfile.create({ data: p })
-        console.log(`[profile] INSERT «${p.name}» (id=${row.id})`)
-        created.push(row)
-    }
-
-    // Назначить первый из созданных активным — только если в config'е ещё
-    // не выбран activeProfileId. Иначе уважаем выбор админа.
-    const config = await prisma.aiAgentConfig.findUnique({ where: { id: 'singleton' } })
-    if (!config) {
-        console.log('\n[config] singleton не найден — пропускаем activeProfile (запусти seed_ai_defaults.js)')
-    } else if (config.activeProfileId) {
-        const cur = await prisma.aiAgentProfile.findUnique({ where: { id: config.activeProfileId } })
-        console.log(`\n[config] активный профиль уже задан: «${cur?.name ?? '?'}» — не трогаем`)
-    } else if (created[0]) {
-        await prisma.aiAgentConfig.update({
-            where: { id: 'singleton' },
-            data: { activeProfileId: created[0].id },
-        })
-        console.log(`\n[config] назначен активным «${created[0].name}»`)
-    }
+    const result = await seedAiProfilesV1(PROFILES)
+    for (const profile of result.created) console.log(`[profile] ready «${profile.name}» (id=${profile.id})`)
+    const configMessage = {
+        missing: '[config] singleton не найден — пропускаем activeProfile (запусти seed_ai_defaults.js)',
+        already_selected: '[config] активный профиль уже задан — не трогаем',
+        selected: `[config] назначен активным «${result.created[0]?.name ?? '?'}»`,
+    }[result.configStatus]
+    if (configMessage) console.log(`\n${configMessage}`)
 
     console.log('\n✅ Готово. Открой /settings/ai → Правила → блок «Стиль общения».')
 }
@@ -105,4 +84,3 @@ main()
         console.error('❌ Ошибка:', e.message)
         process.exit(1)
     })
-    .finally(() => prisma.$disconnect())

@@ -1,0 +1,21 @@
+{
+  "schema": "yoko.crm.module-candidate-integration.v1",
+  "version": 1,
+  "candidate_context": "__MODULE_ID__",
+  "status": "CANDIDATE_NOT_INTEGRATED",
+  "manifest": "architecture/contexts/v1/manifests/__MODULE_ID__.json",
+  "entrypoints": [
+    "tools/architecture/generated/__MODULE_SLUG__-module-test.mjs",
+    "tools/architecture/generated/__MODULE_SLUG__-contract-test.mjs",
+    "tools/architecture/generated/__MODULE_SLUG__-architecture-check.mjs",
+    "tools/architecture/generated/__MODULE_SLUG__-build-check.mjs"
+  ],
+  "merge_requirements": {
+    "decisions": ["add the context to context-decisions.json", "assign its technical module in module-inventory.json", "assign each owned data record in data-ownership-candidates.json"],
+    "index": ["add a hashed manifest entry to context-index.json", "add hashes for generated entrypoints if they become indexed controls", "regenerate and verify context-index hashes"],
+    "dependencies": ["record any accepted public dependency in dependency-transition-plan.json", "regenerate final-dependency-source.json and final-dependency-current.json", "prove the allowed dependency graph remains acyclic"],
+    "writes": ["add a foreign-write migration plan before any cross-owner write is introduced", "rerun the authoritative write and credential inventories"]
+  },
+  "non_assertions": ["This candidate is not a live context-index member.", "This candidate does not assign live technical modules or data ownership.", "This candidate does not authorize provider or credential access."],
+  "instructions": "architecture/contexts/v1/candidates/__MODULE_ID__.integration.md"
+}

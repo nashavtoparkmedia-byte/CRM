@@ -1,0 +1,98 @@
+{
+  "schema": "yoko.crm.context-isolation-verification.v1",
+  "milestone": "CRM-ARCH-007R-CONTACT-MERGE-TRANSACTION",
+  "base_commit": "78097c58e99de2abd2983557c61bb72c2e6381b6",
+  "source_commit": "51e4734d781d7d998f3beba393e397c125c72ef2",
+  "verified_at": "2026-08-10T07:59:31Z",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "architecture": {
+    "files": 1007,
+    "contexts": 16,
+    "dependency_relationships": 106,
+    "effective_added_dependencies": 0,
+    "dependency_cycles": 0,
+    "findings": 1361,
+    "exceptions": 1361,
+    "direct_foreign_prisma_write": 66,
+    "direct_provider_transport_access": 38,
+    "internal_module_import": 374,
+    "non_public_cross_context_import": 530,
+    "undeclared_dependency": 353,
+    "registry_removed": 8,
+    "registry_added": 0,
+    "semantic_shared_entries_changed": 0,
+    "location_metadata_rebased": 0,
+    "finding_digest": "fd306ea9812b7c9285bbdb7e0eaf2eae2b21abc538fb45354ce235d3c3bdeeac",
+    "registry_sha256": "7cb1481fcd232e2de200bb905141c052404e2cc8fdd8bfcca3e25bc111bd1133",
+    "registry_deterministic": true,
+    "approved_infrastructure_writer_entries_for_slice": 2,
+    "approved_infrastructure_writer_models": ["Chat", "Task"],
+    "module_manifest_amendment_added": false
+  },
+  "tests": {
+    "contact_merge_transaction_coordinator": "10/10 PASS",
+    "contact_merge_handler_and_compatibility_facade_vitest": "61/61 PASS",
+    "fake_transaction_failure_injection": "35/35 PASS",
+    "architecture_enforcement_parser": "29/29 PASS",
+    "contract_boundary_controls": "131/131 PASS",
+    "context_manifest_validation": "PASS; 16 contexts, 106 relationships, 0 cycles",
+    "strict_architecture_enforcement": "1361/1361 PASS",
+    "current_cumulative_architecture_test_and_check_scripts": "130/130 PASS"
+  },
+  "rollback": {
+    "source_only_fake_transaction_staging": true,
+    "failure_injection_scenarios": 4,
+    "failure_injection_tests": 35,
+    "fake_committed_mutations_after_failure": 0,
+    "success_logs_after_failure": 0,
+    "physical_postgresql_accessed": false,
+    "physical_postgresql_status": "DEFERRED_CLOSED_DATABASE_AND_RUNTIME_PATH",
+    "not_proven": [
+      "physical PostgreSQL rollback",
+      "ordered row-lock contention",
+      "foreign-key and constraint interaction",
+      "physical transaction timeout behavior"
+    ]
+  },
+  "typescript": {
+    "diagnostics": 28,
+    "classification": "inherited",
+    "modified_or_new_slice_diagnostics": 0,
+    "normalization": "sorted diagnostic file(line,column):TS-code",
+    "normalized_base_sha256": "2d3847300874a4cc5b419e22e9b1d4b53dc9d3d56a9576f49f2ec37b32db5245",
+    "normalized_current_sha256": "2d3847300874a4cc5b419e22e9b1d4b53dc9d3d56a9576f49f2ec37b32db5245",
+    "normalized_diagnostics_identical": true
+  },
+  "eslint": {
+    "modified_or_new_application_source_and_test_files": 8,
+    "errors": 0,
+    "warnings": 0,
+    "new_errors": 0,
+    "new_warnings": 0
+  },
+  "protected_surfaces": {
+    "api_routes_byte_identical": 2,
+    "messages_drawer_byte_identical": true,
+    "message_service_byte_identical": true,
+    "message_write_sites_added": 0,
+    "provider_transport_sites_added": 0
+  },
+  "secret_safety": {
+    "scanned_scope": "source commit delta, policy/registry delta and complete evidence package",
+    "private_key_blocks": 0,
+    "credential_assignment_literals": 0,
+    "secret_values_read_or_emitted": false
+  },
+  "checksums": "26/26 PASS",
+  "git_diff_check": "PASS",
+  "policy_source_mutated": true,
+  "registry_source_mutated": true,
+  "module_rule_source_mutated": false,
+  "source_control_only": true,
+  "offline_source_analysis_and_unit_tests_executed": true,
+  "database_accessed": false,
+  "contact_merge_mutation_executed_against_database": false,
+  "production_application_runtime_or_provider_invoked": false,
+  "secret_values_read_or_emitted": false,
+  "production_mutated": false
+}

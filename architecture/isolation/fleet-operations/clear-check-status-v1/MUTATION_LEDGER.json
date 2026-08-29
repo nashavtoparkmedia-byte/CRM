@@ -1,0 +1,17 @@
+{
+  "schema": "yoko.crm.mutation-ledger.v1",
+  "milestone": "CRM-ARCH-007-FLEET-CLEAR-CHECK-STATUS",
+  "source": [
+    "ClearFleetCheckStatus v1 contract",
+    "Fleet owner handler and standalone legacy Prisma adapter",
+    "one Platform Shell maintenance-script migration",
+    "one Fleet command manifest amendment",
+    "one exact exception retirement, controls and evidence"
+  ],
+  "production": [],
+  "database": [],
+  "services": [],
+  "deployment": [],
+  "maintenance_script_executed": false,
+  "secret_values_read_or_emitted": false
+}

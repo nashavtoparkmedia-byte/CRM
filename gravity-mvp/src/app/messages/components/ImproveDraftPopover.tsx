@@ -15,7 +15,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { Sparkles, Loader2, X, Check, RefreshCw } from 'lucide-react'
 import { improveDraftAction } from '../improve-draft-actions'
-import type { ImprovePreset } from '@/lib/ai/improveDraft'
+import type {
+    MessageDraftImprovePresetV1 as ImprovePreset,
+} from '@/modules/messaging/public/v1/draft-improvement'
 
 interface Props {
     chatId:    string

@@ -1,0 +1,1 @@
+{"schema":"yoko.crm.module-manifest-amendments.v1","version":1,"milestone":"CRM-ARCH-007-FLEET-DRIVER-IMPORT","amendments":[{"context":"fleet_operations","add_commands":["ResolveImportedDriverCommand.v1"],"reason":"Expose license-first Excel-import driver resolution through the assigned Fleet owner boundary."}]}

@@ -21,7 +21,7 @@
 import { useMemo, useState } from 'react'
 import { GripVertical, EyeOff } from 'lucide-react'
 import type { ResolvedLayout, ResolvedColumn } from '@/lib/tasks/list-schema'
-import { useListViewStore } from '@/store/list-view-store'
+import { useListViewStore } from '@/modules/work-management/public/v1/client-state/list-view-store'
 import { recordUsage } from '@/lib/tasks/usage'
 
 interface Props {

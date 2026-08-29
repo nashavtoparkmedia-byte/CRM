@@ -1,0 +1,1048 @@
+{
+  "context_surfaces": [
+    {
+      "capabilities": [
+        "KnowledgeCitation.v1",
+        "KnowledgeCoach.v1",
+        "KnowledgeExtractionExecution.v1",
+        "KnowledgeGovernanceAudit.v1",
+        "KnowledgeLegacyMigration.v1",
+        "KnowledgeQuery.v1",
+        "KnowledgeRetrievalVersion.v1",
+        "KnowledgeTextSimilarity.v1",
+        "ProposedReply.v1"
+      ],
+      "commands": [
+        "ExtractKnowledgeCommand.v1",
+        "ProposeReplyCommand.v1",
+        "UpdateRetrievalPolicyCommand.v1"
+      ],
+      "consumer_contexts": [
+        "configuration",
+        "messaging",
+        "platform_shell"
+      ],
+      "events": [
+        "KnowledgeExtracted.v1",
+        "ReplyProposed.v1",
+        "RetrievalPolicyChanged.v1"
+      ],
+      "id": "ai_knowledge.public.v1",
+      "owner_context": "ai_knowledge",
+      "source_roots": [
+        "gravity-mvp/src/contracts/ai-knowledge",
+        "gravity-mvp/src/modules/ai-knowledge"
+      ],
+      "status": "active",
+      "verification": [
+        "node tools/architecture/check-contract-boundaries.mjs",
+        "node tools/architecture/validate-contract-registry.mjs"
+      ]
+    },
+    {
+      "capabilities": [
+        "AnalyticsQuery.v1",
+        "DashboardProjection.v1"
+      ],
+      "commands": [
+        "RefreshProjectionCommand.v1"
+      ],
+      "consumer_contexts": [
+        "platform_shell"
+      ],
+      "events": [
+        "ProjectionRefreshed.v1"
+      ],
+      "id": "analytics_reporting.public.v1",
+      "owner_context": "analytics_reporting",
+      "source_roots": [
+        "gravity-mvp/src/modules/analytics-reporting"
+      ],
+      "status": "active",
+      "verification": [
+        "node tools/architecture/check-contract-boundaries.mjs",
+        "node tools/architecture/validate-contract-registry.mjs"
+      ]
+    },
+    {
+      "capabilities": [
+        "AvitoResponseView.v1",
+        "LeadIntakePort.v1",
+        "LeadView.v1"
+      ],
+      "commands": [
+        "CollectAvitoResponsesCommand.v1",
+        "CreateLeadFromResponseCommand.v1"
+      ],
+      "consumer_contexts": [
+        "configuration"
+      ],
+      "events": [
+        "AvitoResponseCollected.v1",
+        "LeadAccepted.v1"
+      ],
+      "id": "avito_acquisition.public.v1",
+      "owner_context": "avito_acquisition",
+      "source_roots": [],
+      "status": "active",
+      "verification": [
+        "node tools/architecture/check-contract-boundaries.mjs",
+        "node tools/architecture/validate-contract-registry.mjs"
+      ]
+    },
+    {
+      "capabilities": [
+        "AiCallProviderSettings.v1",
+        "AiCallProviderStatus.v1",
+        "AiCallScenarioManagement.v1",
+        "AiInternControl.v1",
+        "CallAlertAudio.v1",
+        "CallAnalysisView.v1",
+        "CallControlPort.v1",
+        "CallStatusPolicy.v1",
+        "CallView.v1",
+        "CallingClientUi.v1",
+        "CallingOpenAiChatCompletion.v1",
+        "CallingRuntime.v1",
+        "CompletedCallTimelineProjectionPort.v1",
+        "RecordingRecovery.v1",
+        "SipClientContext.v1",
+        "TelephonyProviderHealth.v1"
+      ],
+      "commands": [
+        "AnalyzeCallCommand.v1",
+        "FinalizeCallCommand.v1",
+        "SetAiInternStateCommand.v1",
+        "StartCallCommand.v1",
+        "TranscribeCallCommand.v1"
+      ],
+      "consumer_contexts": [
+        "ai_knowledge",
+        "analytics_reporting",
+        "configuration",
+        "edge_delivery",
+        "messaging",
+        "operations_observability",
+        "platform_shell"
+      ],
+      "events": [
+        "CallAnalyzed.v1",
+        "CallCompleted.v1",
+        "CallStarted.v1",
+        "CallTranscribed.v1"
+      ],
+      "id": "calling.public.v1",
+      "owner_context": "calling",
+      "source_roots": [
+        "gravity-mvp/src/contracts/calling",
+        "gravity-mvp/src/modules/calling"
+      ],
+      "status": "active",
+      "verification": [
+        "node tools/architecture/check-contract-boundaries.mjs",
+        "node tools/architecture/validate-contract-registry.mjs"
+      ]
+    },
+    {
+      "capabilities": [
+        "ConfigurationView.v1",
+        "OperationalConfigurationHealth.v1",
+        "OperationsMonitoringPolicy.v1",
+        "ScenarioConfiguration.v1"
+      ],
+      "commands": [
+        "UpdateConfigurationCommand.v1",
+        "ValidateConfigurationCommand.v1"
+      ],
+      "consumer_contexts": [
+        "operations_observability",
+        "platform_shell"
+      ],
+      "events": [
+        "ConfigurationChanged.v1",
+        "ConfigurationValidationFailed.v1"
+      ],
+      "id": "configuration.public.v1",
+      "owner_context": "configuration",
+      "source_roots": [
+        "gravity-mvp/src/modules/configuration"
+      ],
+      "status": "active",
+      "verification": [
+        "node tools/architecture/check-contract-boundaries.mjs",
+        "node tools/architecture/validate-contract-registry.mjs"
+      ]
+    },
+    {
+      "capabilities": [
+        "ContactDisplayPolicy.v1",
+        "ContactIdentityMaintenance.v1",
+        "ContactLookup.v1",
+        "ContactReachability.v1",
+        "ContactResolution.v1",
+        "ContactView.v1",
+        "MaxContactResolutionShadow.v1",
+        "PhoneIdentityUtilities.v1",
+        "YandexDriverContactLink.v1"
+      ],
+      "commands": [
+        "AttachContactIdentityCommand.v1",
+        "MergeContactsCommand.v1",
+        "ResolveContactCommand.v1"
+      ],
+      "consumer_contexts": [
+        "analytics_reporting",
+        "avito_acquisition",
+        "calling",
+        "fleet_operations",
+        "max_channel",
+        "messaging",
+        "platform_shell",
+        "telegram_channel",
+        "whatsapp_channel",
+        "work_management"
+      ],
+      "events": [
+        "ContactIdentityAttached.v1",
+        "ContactResolved.v1",
+        "ContactsMerged.v1"
+      ],
+      "id": "contacts.public.v1",
+      "owner_context": "contacts",
+      "source_roots": [
+        "gravity-mvp/src/contracts/contacts",
+        "gravity-mvp/src/modules/contacts"
+      ],
+      "status": "active",
+      "verification": [
+        "node tools/architecture/check-contract-boundaries.mjs",
+        "node tools/architecture/validate-contract-registry.mjs"
+      ]
+    },
+    {
+      "capabilities": [
+        "ExternalHttpRoutes.v1"
+      ],
+      "commands": [],
+      "consumer_contexts": [],
+      "events": [],
+      "id": "edge_delivery.public.v1",
+      "owner_context": "edge_delivery",
+      "source_roots": [],
+      "status": "active",
+      "verification": [
+        "node tools/architecture/check-contract-boundaries.mjs",
+        "node tools/architecture/validate-contract-registry.mjs"
+      ]
+    },
+    {
+      "capabilities": [
+        "ApiConnectionClientUi.v1",
+        "CommunicationEventRetention.v1",
+        "DriverCheckResult.v1",
+        "DriverCommunicationEvent.v1",
+        "DriverMatch.v1",
+        "DriverView.v1",
+        "FleetMonitoringPolicy.v1",
+        "FleetMonitoringViews.v1",
+        "FleetSyncStatus.v1",
+        "ManagerDriverCommunication.v1",
+        "ScheduledScraperCheckDispatch.v1",
+        "ScheduledYandexSync.v1",
+        "YandexFleetOperations.v1"
+      ],
+      "commands": [
+        "RecordDriverCommunicationEventCommand.v1",
+        "RecordManagerDriverCommunicationCommand.v1",
+        "RunCommunicationEventRetentionCommand.v1",
+        "RunDriverCheckCommand.v1",
+        "SynchronizeFleetCommand.v1",
+        "UpdateDriverStateCommand.v1"
+      ],
+      "consumer_contexts": [
+        "analytics_reporting",
+        "max_channel",
+        "messaging",
+        "operations_observability",
+        "platform_shell",
+        "telegram_channel",
+        "whatsapp_channel",
+        "work_management"
+      ],
+      "events": [
+        "DriverCheckCompleted.v1",
+        "DriverUpdated.v1",
+        "FleetSyncCompleted.v1"
+      ],
+      "id": "fleet_operations.public.v1",
+      "owner_context": "fleet_operations",
+      "source_roots": [
+        "gravity-mvp/src/contracts/fleet-operations",
+        "gravity-mvp/src/modules/fleet-operations"
+      ],
+      "status": "active",
+      "verification": [
+        "node tools/architecture/check-contract-boundaries.mjs",
+        "node tools/architecture/validate-contract-registry.mjs"
+      ]
+    },
+    {
+      "capabilities": [
+        "CrmUserQuery.v1",
+        "CurrentUserQuery.v1",
+        "IntegrationAdminAuthorization.v1",
+        "ListUserIdentitiesQuery.v1",
+        "UserIdentity.v1"
+      ],
+      "commands": [
+        "AuthenticateIntegrationAdminCommand.v1",
+        "AuthenticateUserCommand.v1",
+        "EndIntegrationAdminSessionCommand.v1",
+        "EndUserSessionCommand.v1"
+      ],
+      "consumer_contexts": [
+        "analytics_reporting",
+        "avito_acquisition",
+        "calling",
+        "configuration",
+        "contacts",
+        "fleet_operations",
+        "max_channel",
+        "messaging",
+        "operations_observability",
+        "platform_shell",
+        "telegram_channel",
+        "whatsapp_channel",
+        "work_management"
+      ],
+      "events": [
+        "UserAuthenticated.v1"
+      ],
+      "id": "identity_access.public.v1",
+      "owner_context": "identity_access",
+      "source_roots": [
+        "gravity-mvp/src/contracts/identity-access",
+        "gravity-mvp/src/modules/identity-access"
+      ],
+      "status": "active",
+      "verification": [
+        "node tools/architecture/check-contract-boundaries.mjs",
+        "node tools/architecture/validate-contract-registry.mjs"
+      ]
+    },
+    {
+      "capabilities": [
+        "MaxDeliveryPort.v1",
+        "MaxDriverMessaging.v1",
+        "MaxReachability.v1",
+        "MaxSessionStatus.v1"
+      ],
+      "commands": [
+        "ResolveMaxIdentityCommand.v1",
+        "SendMaxMessageCommand.v1",
+        "SynchronizeMaxHistoryCommand.v1"
+      ],
+      "consumer_contexts": [
+        "configuration"
+      ],
+      "events": [
+        "MaxMessageObserved.v1",
+        "MaxSessionChanged.v1"
+      ],
+      "id": "max_channel.public.v1",
+      "owner_context": "max_channel",
+      "source_roots": [
+        "gravity-mvp/src/modules/max-channel"
+      ],
+      "status": "active",
+      "verification": [
+        "node tools/architecture/check-contract-boundaries.mjs",
+        "node tools/architecture/validate-contract-registry.mjs"
+      ]
+    },
+    {
+      "capabilities": [
+        "ChannelConversationWorkflow.v1",
+        "ChannelSyncClient.v1",
+        "ChannelSyncOperations.v1",
+        "CompletedCallTimelineProjector.v1",
+        "ConversationView.v1",
+        "DeliveryRecoveryOperations.v1",
+        "DraftImprovement.v1",
+        "MessageStream.v1",
+        "MessageView.v1",
+        "PersistedMessageIngress.v1",
+        "TransportRegistryHealth.v1",
+        "TransportRegistryLifecycle.v1"
+      ],
+      "commands": [
+        "AttachMessageMediaCommand.v1",
+        "ImportMessageHistoryCommand.v1",
+        "ReceiveMessageCommand.v1",
+        "SendMessageCommand.v1"
+      ],
+      "consumer_contexts": [
+        "analytics_reporting",
+        "avito_acquisition",
+        "max_channel",
+        "platform_shell",
+        "telegram_channel",
+        "whatsapp_channel"
+      ],
+      "events": [
+        "ConversationChanged.v1",
+        "MessageReceived.v1",
+        "MessageSent.v1"
+      ],
+      "id": "messaging.public.v1",
+      "owner_context": "messaging",
+      "source_roots": [
+        "gravity-mvp/src/contracts/messaging",
+        "gravity-mvp/src/modules/messaging",
+        "gravity-mvp/src/modules/messaging/internal/ai-reply-pipeline"
+      ],
+      "status": "active",
+      "verification": [
+        "node tools/architecture/check-contract-boundaries.mjs",
+        "node tools/architecture/validate-contract-registry.mjs"
+      ]
+    },
+    {
+      "capabilities": [
+        "HealthSnapshot.v1",
+        "IntegrityReport.v1",
+        "OperationalAlert.v1",
+        "OperationalJobRegistry.v1",
+        "ScheduledFleetCronRoutes.v1",
+        "ScheduledMaintenanceOperations.v1"
+      ],
+      "commands": [
+        "RecordHealthSnapshotCommand.v1",
+        "RunIntegrityCheckCommand.v1",
+        "RunRetentionCommand.v1"
+      ],
+      "consumer_contexts": [
+        "platform_shell"
+      ],
+      "events": [
+        "HealthChanged.v1",
+        "IntegrityViolationDetected.v1",
+        "RetentionCompleted.v1"
+      ],
+      "id": "operations_observability.public.v1",
+      "owner_context": "operations_observability",
+      "source_roots": [
+        "gravity-mvp/src/contracts/operations-observability",
+        "gravity-mvp/src/modules/operations-observability"
+      ],
+      "status": "active",
+      "verification": [
+        "node tools/architecture/check-contract-boundaries.mjs",
+        "node tools/architecture/validate-contract-registry.mjs"
+      ]
+    },
+    {
+      "capabilities": [
+        "PlatformHealth.v1",
+        "UiComposition.v1"
+      ],
+      "commands": [],
+      "consumer_contexts": [
+        "edge_delivery"
+      ],
+      "events": [
+        "PlatformHealthChanged.v1",
+        "PlatformStarted.v1"
+      ],
+      "id": "platform_shell.public.v1",
+      "owner_context": "platform_shell",
+      "source_roots": [
+        "gravity-mvp/src/modules/platform-shell"
+      ],
+      "status": "active",
+      "verification": [
+        "node tools/architecture/check-contract-boundaries.mjs",
+        "node tools/architecture/validate-contract-registry.mjs"
+      ]
+    },
+    {
+      "capabilities": [
+        "BotSurveyApi.v1",
+        "BotUserProfileCommands.v1",
+        "TelegramConnectionMetadataQuery.v1",
+        "TelegramDeliveryPort.v1",
+        "TelegramReachability.v1",
+        "TelegramRuntimeOperations.v1"
+      ],
+      "commands": [
+        "LinkTelegramDriverCommand.v1",
+        "PublishTelegramSurveyCommand.v1",
+        "RecordBotUserProfileCommand.v1",
+        "SendTelegramMessageCommand.v1"
+      ],
+      "consumer_contexts": [
+        "configuration",
+        "edge_delivery"
+      ],
+      "events": [
+        "TelegramDriverLinked.v1",
+        "TelegramMessageObserved.v1"
+      ],
+      "id": "telegram_channel.public.v1",
+      "owner_context": "telegram_channel",
+      "source_roots": [
+        "gravity-mvp/src/contracts/telegram-channel",
+        "gravity-mvp/src/modules/telegram-channel"
+      ],
+      "status": "active",
+      "verification": [
+        "node tools/architecture/check-contract-boundaries.mjs",
+        "node tools/architecture/validate-contract-registry.mjs"
+      ]
+    },
+    {
+      "capabilities": [
+        "WhatsAppDeliveryPort.v1",
+        "WhatsAppReachability.v1",
+        "WhatsAppRuntimeOperations.v1",
+        "WhatsAppSessionStatus.v1",
+        "WhatsAppStoreInspection.v1"
+      ],
+      "commands": [
+        "SendWhatsAppMessageCommand.v1",
+        "SynchronizeWhatsAppHistoryCommand.v1"
+      ],
+      "consumer_contexts": [
+        "configuration"
+      ],
+      "events": [
+        "WhatsAppMessageObserved.v1",
+        "WhatsAppSessionChanged.v1"
+      ],
+      "id": "whatsapp_channel.public.v1",
+      "owner_context": "whatsapp_channel",
+      "source_roots": [
+        "gravity-mvp/src/modules/whatsapp-channel"
+      ],
+      "status": "active",
+      "verification": [
+        "node tools/architecture/check-contract-boundaries.mjs",
+        "node tools/architecture/validate-contract-registry.mjs"
+      ]
+    },
+    {
+      "capabilities": [
+        "OperationalTriggerEvaluations.v1",
+        "ScenarioCatalog.v1",
+        "TaskDictionaryCatalog.v1",
+        "TaskQuery.v1",
+        "TaskReassignment.v1",
+        "TaskUsageSummary.v1",
+        "TaskView.v1",
+        "TeamOperationalPolicy.v1",
+        "WorkManagementClientState.v1"
+      ],
+      "commands": [
+        "AssignTaskCommand.v1",
+        "CompleteTaskCommand.v1",
+        "CreateTaskCommand.v1",
+        "ReassignTasksCommand.v1",
+        "RecordTaskUsageCommand.v1"
+      ],
+      "consumer_contexts": [
+        "analytics_reporting",
+        "calling",
+        "messaging",
+        "platform_shell"
+      ],
+      "events": [
+        "TaskAssigned.v1",
+        "TaskCompleted.v1",
+        "TaskCreated.v1"
+      ],
+      "id": "work_management.public.v1",
+      "owner_context": "work_management",
+      "source_roots": [
+        "gravity-mvp/src/contracts/work-management",
+        "gravity-mvp/src/modules/work-management",
+        "gravity-mvp/src/modules/work-management/internal"
+      ],
+      "status": "active",
+      "verification": [
+        "node tools/architecture/check-contract-boundaries.mjs",
+        "node tools/architecture/validate-contract-registry.mjs"
+      ]
+    }
+  ],
+  "contracts": [
+    {
+      "consumer_sites": [
+        "gravity-mvp/src/app/api/ai-calls/mock/route.ts",
+        "gravity-mvp/src/app/api/ai-calls/sessions/[id]/finalize/route.ts"
+      ],
+      "id": "work_management.CreateTaskCommand.v1",
+      "kind": "command",
+      "legacy_adapter": "gravity-mvp/src/modules/work-management/public/v1/legacy-prisma-adapter.ts",
+      "migration_plan": "migration_e380f7963fd3d784",
+      "owner_context": "work_management",
+      "producer_contexts": [
+        "calling"
+      ],
+      "public_entry_point": "gravity-mvp/src/modules/work-management/public/v1/index.ts",
+      "runtime_validator": "parseCreateTaskCommandV1",
+      "source": "gravity-mvp/src/contracts/work-management/v1/create-task-command.ts",
+      "status": "representative_flow_migrated"
+    },
+    {
+      "id": "work_management.CreateTaskResult.v1",
+      "kind": "result",
+      "owner_context": "work_management",
+      "source": "gravity-mvp/src/contracts/work-management/v1/create-task-command.ts",
+      "status": "active"
+    }
+  ],
+  "coverage_policy": {
+    "interaction_identity": "<source_context>><target_context>.public.v1",
+    "manifest_dependency_coverage": "exact",
+    "provider_implementation_types": "forbidden",
+    "public_capability_coverage": "exact",
+    "unregistered_context_surface": "fail_closed"
+  },
+  "interactions": [
+    {
+      "id": "ai_knowledge>calling.public.v1",
+      "source_context": "ai_knowledge",
+      "target_context": "calling",
+      "target_surface": "calling.public",
+      "target_surface_id": "calling.public.v1"
+    },
+    {
+      "id": "analytics_reporting>calling.public.v1",
+      "source_context": "analytics_reporting",
+      "target_context": "calling",
+      "target_surface": "calling.public",
+      "target_surface_id": "calling.public.v1"
+    },
+    {
+      "id": "analytics_reporting>contacts.public.v1",
+      "source_context": "analytics_reporting",
+      "target_context": "contacts",
+      "target_surface": "contacts.public",
+      "target_surface_id": "contacts.public.v1"
+    },
+    {
+      "id": "analytics_reporting>fleet_operations.public.v1",
+      "source_context": "analytics_reporting",
+      "target_context": "fleet_operations",
+      "target_surface": "fleet_operations.public",
+      "target_surface_id": "fleet_operations.public.v1"
+    },
+    {
+      "id": "analytics_reporting>identity_access.public.v1",
+      "source_context": "analytics_reporting",
+      "target_context": "identity_access",
+      "target_surface": "identity_access.public",
+      "target_surface_id": "identity_access.public.v1"
+    },
+    {
+      "id": "analytics_reporting>messaging.public.v1",
+      "source_context": "analytics_reporting",
+      "target_context": "messaging",
+      "target_surface": "messaging.public",
+      "target_surface_id": "messaging.public.v1"
+    },
+    {
+      "id": "analytics_reporting>work_management.public.v1",
+      "source_context": "analytics_reporting",
+      "target_context": "work_management",
+      "target_surface": "work_management.public",
+      "target_surface_id": "work_management.public.v1"
+    },
+    {
+      "id": "avito_acquisition>contacts.public.v1",
+      "source_context": "avito_acquisition",
+      "target_context": "contacts",
+      "target_surface": "contacts.public",
+      "target_surface_id": "contacts.public.v1"
+    },
+    {
+      "id": "avito_acquisition>identity_access.public.v1",
+      "source_context": "avito_acquisition",
+      "target_context": "identity_access",
+      "target_surface": "identity_access.public",
+      "target_surface_id": "identity_access.public.v1"
+    },
+    {
+      "id": "avito_acquisition>messaging.public.v1",
+      "source_context": "avito_acquisition",
+      "target_context": "messaging",
+      "target_surface": "messaging.public",
+      "target_surface_id": "messaging.public.v1"
+    },
+    {
+      "id": "calling>contacts.public.v1",
+      "source_context": "calling",
+      "target_context": "contacts",
+      "target_surface": "contacts.public",
+      "target_surface_id": "contacts.public.v1"
+    },
+    {
+      "id": "calling>identity_access.public.v1",
+      "source_context": "calling",
+      "target_context": "identity_access",
+      "target_surface": "identity_access.public",
+      "target_surface_id": "identity_access.public.v1"
+    },
+    {
+      "id": "calling>work_management.public.v1",
+      "source_context": "calling",
+      "target_context": "work_management",
+      "target_surface": "work_management.public",
+      "target_surface_id": "work_management.public.v1"
+    },
+    {
+      "id": "configuration>ai_knowledge.public.v1",
+      "source_context": "configuration",
+      "target_context": "ai_knowledge",
+      "target_surface": "ai_knowledge.public",
+      "target_surface_id": "ai_knowledge.public.v1"
+    },
+    {
+      "id": "configuration>avito_acquisition.public.v1",
+      "source_context": "configuration",
+      "target_context": "avito_acquisition",
+      "target_surface": "avito_acquisition.public",
+      "target_surface_id": "avito_acquisition.public.v1"
+    },
+    {
+      "id": "configuration>calling.public.v1",
+      "source_context": "configuration",
+      "target_context": "calling",
+      "target_surface": "calling.public",
+      "target_surface_id": "calling.public.v1"
+    },
+    {
+      "id": "configuration>identity_access.public.v1",
+      "source_context": "configuration",
+      "target_context": "identity_access",
+      "target_surface": "identity_access.public",
+      "target_surface_id": "identity_access.public.v1"
+    },
+    {
+      "id": "configuration>max_channel.public.v1",
+      "source_context": "configuration",
+      "target_context": "max_channel",
+      "target_surface": "max_channel.public",
+      "target_surface_id": "max_channel.public.v1"
+    },
+    {
+      "id": "configuration>telegram_channel.public.v1",
+      "source_context": "configuration",
+      "target_context": "telegram_channel",
+      "target_surface": "telegram_channel.public",
+      "target_surface_id": "telegram_channel.public.v1"
+    },
+    {
+      "id": "configuration>whatsapp_channel.public.v1",
+      "source_context": "configuration",
+      "target_context": "whatsapp_channel",
+      "target_surface": "whatsapp_channel.public",
+      "target_surface_id": "whatsapp_channel.public.v1"
+    },
+    {
+      "id": "contacts>identity_access.public.v1",
+      "source_context": "contacts",
+      "target_context": "identity_access",
+      "target_surface": "identity_access.public",
+      "target_surface_id": "identity_access.public.v1"
+    },
+    {
+      "id": "edge_delivery>calling.public.v1",
+      "source_context": "edge_delivery",
+      "target_context": "calling",
+      "target_surface": "calling.public",
+      "target_surface_id": "calling.public.v1"
+    },
+    {
+      "id": "edge_delivery>platform_shell.public.v1",
+      "source_context": "edge_delivery",
+      "target_context": "platform_shell",
+      "target_surface": "platform_shell.public",
+      "target_surface_id": "platform_shell.public.v1"
+    },
+    {
+      "id": "edge_delivery>telegram_channel.public.v1",
+      "source_context": "edge_delivery",
+      "target_context": "telegram_channel",
+      "target_surface": "telegram_channel.public",
+      "target_surface_id": "telegram_channel.public.v1"
+    },
+    {
+      "id": "fleet_operations>contacts.public.v1",
+      "source_context": "fleet_operations",
+      "target_context": "contacts",
+      "target_surface": "contacts.public",
+      "target_surface_id": "contacts.public.v1"
+    },
+    {
+      "id": "fleet_operations>identity_access.public.v1",
+      "source_context": "fleet_operations",
+      "target_context": "identity_access",
+      "target_surface": "identity_access.public",
+      "target_surface_id": "identity_access.public.v1"
+    },
+    {
+      "id": "max_channel>contacts.public.v1",
+      "source_context": "max_channel",
+      "target_context": "contacts",
+      "target_surface": "contacts.public",
+      "target_surface_id": "contacts.public.v1"
+    },
+    {
+      "id": "max_channel>fleet_operations.public.v1",
+      "source_context": "max_channel",
+      "target_context": "fleet_operations",
+      "target_surface": "fleet_operations.public",
+      "target_surface_id": "fleet_operations.public.v1"
+    },
+    {
+      "id": "max_channel>identity_access.public.v1",
+      "source_context": "max_channel",
+      "target_context": "identity_access",
+      "target_surface": "identity_access.public",
+      "target_surface_id": "identity_access.public.v1"
+    },
+    {
+      "id": "max_channel>messaging.public.v1",
+      "source_context": "max_channel",
+      "target_context": "messaging",
+      "target_surface": "messaging.public",
+      "target_surface_id": "messaging.public.v1"
+    },
+    {
+      "id": "messaging>ai_knowledge.public.v1",
+      "source_context": "messaging",
+      "target_context": "ai_knowledge",
+      "target_surface": "ai_knowledge.public",
+      "target_surface_id": "ai_knowledge.public.v1"
+    },
+    {
+      "id": "messaging>calling.public.v1",
+      "source_context": "messaging",
+      "target_context": "calling",
+      "target_surface": "calling.public",
+      "target_surface_id": "calling.public.v1"
+    },
+    {
+      "id": "messaging>contacts.public.v1",
+      "source_context": "messaging",
+      "target_context": "contacts",
+      "target_surface": "contacts.public",
+      "target_surface_id": "contacts.public.v1"
+    },
+    {
+      "id": "messaging>fleet_operations.public.v1",
+      "source_context": "messaging",
+      "target_context": "fleet_operations",
+      "target_surface": "fleet_operations.public",
+      "target_surface_id": "fleet_operations.public.v1"
+    },
+    {
+      "id": "messaging>identity_access.public.v1",
+      "source_context": "messaging",
+      "target_context": "identity_access",
+      "target_surface": "identity_access.public",
+      "target_surface_id": "identity_access.public.v1"
+    },
+    {
+      "id": "messaging>work_management.public.v1",
+      "source_context": "messaging",
+      "target_context": "work_management",
+      "target_surface": "work_management.public",
+      "target_surface_id": "work_management.public.v1"
+    },
+    {
+      "id": "operations_observability>calling.public.v1",
+      "source_context": "operations_observability",
+      "target_context": "calling",
+      "target_surface": "calling.public",
+      "target_surface_id": "calling.public.v1"
+    },
+    {
+      "id": "operations_observability>configuration.public.v1",
+      "source_context": "operations_observability",
+      "target_context": "configuration",
+      "target_surface": "configuration.public",
+      "target_surface_id": "configuration.public.v1"
+    },
+    {
+      "id": "operations_observability>fleet_operations.public.v1",
+      "source_context": "operations_observability",
+      "target_context": "fleet_operations",
+      "target_surface": "fleet_operations.public",
+      "target_surface_id": "fleet_operations.public.v1"
+    },
+    {
+      "id": "operations_observability>identity_access.public.v1",
+      "source_context": "operations_observability",
+      "target_context": "identity_access",
+      "target_surface": "identity_access.public",
+      "target_surface_id": "identity_access.public.v1"
+    },
+    {
+      "id": "platform_shell>ai_knowledge.public.v1",
+      "source_context": "platform_shell",
+      "target_context": "ai_knowledge",
+      "target_surface": "ai_knowledge.public",
+      "target_surface_id": "ai_knowledge.public.v1"
+    },
+    {
+      "id": "platform_shell>analytics_reporting.public.v1",
+      "source_context": "platform_shell",
+      "target_context": "analytics_reporting",
+      "target_surface": "analytics_reporting.public",
+      "target_surface_id": "analytics_reporting.public.v1"
+    },
+    {
+      "id": "platform_shell>calling.public.v1",
+      "source_context": "platform_shell",
+      "target_context": "calling",
+      "target_surface": "calling.public",
+      "target_surface_id": "calling.public.v1"
+    },
+    {
+      "id": "platform_shell>configuration.public.v1",
+      "source_context": "platform_shell",
+      "target_context": "configuration",
+      "target_surface": "configuration.public",
+      "target_surface_id": "configuration.public.v1"
+    },
+    {
+      "id": "platform_shell>contacts.public.v1",
+      "source_context": "platform_shell",
+      "target_context": "contacts",
+      "target_surface": "contacts.public",
+      "target_surface_id": "contacts.public.v1"
+    },
+    {
+      "id": "platform_shell>fleet_operations.public.v1",
+      "source_context": "platform_shell",
+      "target_context": "fleet_operations",
+      "target_surface": "fleet_operations.public",
+      "target_surface_id": "fleet_operations.public.v1"
+    },
+    {
+      "id": "platform_shell>identity_access.public.v1",
+      "source_context": "platform_shell",
+      "target_context": "identity_access",
+      "target_surface": "identity_access.public",
+      "target_surface_id": "identity_access.public.v1"
+    },
+    {
+      "id": "platform_shell>messaging.public.v1",
+      "source_context": "platform_shell",
+      "target_context": "messaging",
+      "target_surface": "messaging.public",
+      "target_surface_id": "messaging.public.v1"
+    },
+    {
+      "id": "platform_shell>operations_observability.public.v1",
+      "source_context": "platform_shell",
+      "target_context": "operations_observability",
+      "target_surface": "operations_observability.public",
+      "target_surface_id": "operations_observability.public.v1"
+    },
+    {
+      "id": "platform_shell>work_management.public.v1",
+      "source_context": "platform_shell",
+      "target_context": "work_management",
+      "target_surface": "work_management.public",
+      "target_surface_id": "work_management.public.v1"
+    },
+    {
+      "id": "telegram_channel>contacts.public.v1",
+      "source_context": "telegram_channel",
+      "target_context": "contacts",
+      "target_surface": "contacts.public",
+      "target_surface_id": "contacts.public.v1"
+    },
+    {
+      "id": "telegram_channel>fleet_operations.public.v1",
+      "source_context": "telegram_channel",
+      "target_context": "fleet_operations",
+      "target_surface": "fleet_operations.public",
+      "target_surface_id": "fleet_operations.public.v1"
+    },
+    {
+      "id": "telegram_channel>identity_access.public.v1",
+      "source_context": "telegram_channel",
+      "target_context": "identity_access",
+      "target_surface": "identity_access.public",
+      "target_surface_id": "identity_access.public.v1"
+    },
+    {
+      "id": "telegram_channel>messaging.public.v1",
+      "source_context": "telegram_channel",
+      "target_context": "messaging",
+      "target_surface": "messaging.public",
+      "target_surface_id": "messaging.public.v1"
+    },
+    {
+      "id": "whatsapp_channel>contacts.public.v1",
+      "source_context": "whatsapp_channel",
+      "target_context": "contacts",
+      "target_surface": "contacts.public",
+      "target_surface_id": "contacts.public.v1"
+    },
+    {
+      "id": "whatsapp_channel>fleet_operations.public.v1",
+      "source_context": "whatsapp_channel",
+      "target_context": "fleet_operations",
+      "target_surface": "fleet_operations.public",
+      "target_surface_id": "fleet_operations.public.v1"
+    },
+    {
+      "id": "whatsapp_channel>identity_access.public.v1",
+      "source_context": "whatsapp_channel",
+      "target_context": "identity_access",
+      "target_surface": "identity_access.public",
+      "target_surface_id": "identity_access.public.v1"
+    },
+    {
+      "id": "whatsapp_channel>messaging.public.v1",
+      "source_context": "whatsapp_channel",
+      "target_context": "messaging",
+      "target_surface": "messaging.public",
+      "target_surface_id": "messaging.public.v1"
+    },
+    {
+      "id": "work_management>contacts.public.v1",
+      "source_context": "work_management",
+      "target_context": "contacts",
+      "target_surface": "contacts.public",
+      "target_surface_id": "contacts.public.v1"
+    },
+    {
+      "id": "work_management>fleet_operations.public.v1",
+      "source_context": "work_management",
+      "target_context": "fleet_operations",
+      "target_surface": "fleet_operations.public",
+      "target_surface_id": "fleet_operations.public.v1"
+    },
+    {
+      "id": "work_management>identity_access.public.v1",
+      "source_context": "work_management",
+      "target_context": "identity_access",
+      "target_surface": "identity_access.public",
+      "target_surface_id": "identity_access.public.v1"
+    }
+  ],
+  "schema": "yoko.crm.contract-registry.v1",
+  "version": 1,
+  "versioning_policy": {
+    "identifier": "<owner_context>.<ContractName>.v<major>",
+    "major_change": "add the new version beside the old version and migrate explicitly",
+    "provider_implementation_types": "forbidden",
+    "unsupported_version": "fail_closed"
+  }
+}

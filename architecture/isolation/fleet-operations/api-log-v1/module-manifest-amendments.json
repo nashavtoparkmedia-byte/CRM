@@ -1,0 +1,1 @@
+{"schema":"yoko.crm.module-manifest-amendments.v1","version":1,"milestone":"CRM-ARCH-007-FLEET-API-LOG","amendments":[{"context":"fleet_operations","add_commands":["DeleteApiLogsCommand.v1","RecordApiLogCommand.v1"],"reason":"Expose API-log lifecycle persistence through the assigned Fleet owner boundary."}]}

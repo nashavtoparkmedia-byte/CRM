@@ -6,8 +6,8 @@ import { ChevronLeft, ChevronRight, Search, ActivitySquare, RefreshCw } from "lu
 import type { DriverWithCells } from "../actions"
 import { syncArchivedDrivers } from "../actions"
 
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { Button } from "@/infrastructure/ui/button"
+import { Input } from "@/infrastructure/ui/input"
 import {
     Table,
     TableBody,
@@ -15,14 +15,14 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/components/ui/table"
+} from "@/infrastructure/ui/table"
 
-import { FleetCheckModal } from "@/app/monitoring/components/FleetCheckModal"
-import { ToastProvider, useToast } from "@/app/monitoring/components/Toast"
-import { ActionButtons } from "@/app/monitoring/components/ActionButtons"
-import { HistoryIcons } from "@/app/monitoring/components/HistoryIcons"
-import { DriverHoverCard } from "@/app/monitoring/components/DriverHoverCard"
-import { FLEET_STATUS_LABELS } from "@/app/monitoring/lib/constants"
+import { FleetCheckModal } from '@/modules/fleet-operations/public/v1/monitoring-ui/FleetCheckModal'
+import { ToastProvider, useToast } from '@/infrastructure/ui/Toast'
+import { ActionButtons } from '@/modules/fleet-operations/public/v1/monitoring-ui/ActionButtons'
+import { HistoryIcons } from '@/modules/fleet-operations/public/v1/monitoring-ui/HistoryIcons'
+import { DriverHoverCard } from '@/modules/fleet-operations/public/v1/monitoring-ui/DriverHoverCard'
+import { FLEET_STATUS_LABELS } from "@/modules/fleet-operations/public/v1/monitoring-policy"
 
 function getFleetStatusLabel(status: string | null, lastCheckAt: string | null): string {
     if (!status && !lastCheckAt) return 'не проверяли';

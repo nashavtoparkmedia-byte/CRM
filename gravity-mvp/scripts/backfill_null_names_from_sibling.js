@@ -14,6 +14,7 @@
  * Запуск: node scripts/backfill_null_names_from_sibling.js [--dry-run]
  */
 const { PrismaClient } = require('@prisma/client')
+const { backfillSiblingChatV1 } = require('../src/modules/messaging/public/v1/legacy-prisma-chat-name-maintenance-adapter')
 const prisma = new PrismaClient()
 const DRY_RUN = process.argv.includes('--dry-run')
 
@@ -79,7 +80,7 @@ async function main() {
         console.log(`  ${chat.externalChatId}: null → «${goodSibling.name}» (donor: ${goodSibling.id}${updates.driverId ? ', +driverId' : ''})`)
 
         if (!DRY_RUN) {
-            await prisma.chat.update({ where: { id: chat.id }, data: updates })
+            await backfillSiblingChatV1(chat.id, updates)
         }
         updated++
     }

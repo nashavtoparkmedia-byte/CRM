@@ -1,0 +1,15 @@
+# __MODULE_NAME__ candidate integration
+
+Status: `CANDIDATE_NOT_INTEGRATED`. This scaffold is deliberately absent from
+the live context index and must not be treated as an ownership decision.
+
+Before merging it as a live context, review and update together:
+
+1. `context-decisions.json`, module inventory, and data-ownership evidence.
+2. The manifest entry and all required SHA-256 entries in `context-index.json`.
+3. Dependency transition and final dependency artifacts, with an acyclic public-only graph.
+4. Foreign-write migration plans and fresh write/credential inventories if the module gains writes or credentials.
+
+Run the generated module, contract, architecture, and build entrypoints, then
+run the repository-wide manifest, enforcement, contract, TypeScript, write, and
+credential controls listed in `NEW_MODULE_OPERATIONS.md`.

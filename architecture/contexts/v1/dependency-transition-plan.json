@@ -1,0 +1,966 @@
+{
+  "historical_relationships": [
+    {
+      "allowed_target": false,
+      "current_import_count": 11,
+      "source_context": "ai_knowledge",
+      "source_module": "ai_knowledge",
+      "target_context": "platform_shell",
+      "target_module": "gravity_core",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 2,
+      "source_context": "analytics_reporting",
+      "source_module": "analytics",
+      "target_context": "fleet_operations",
+      "target_module": "drivers",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 3,
+      "source_context": "analytics_reporting",
+      "source_module": "analytics",
+      "target_context": "platform_shell",
+      "target_module": "gravity_core",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 21,
+      "source_context": "analytics_reporting",
+      "source_module": "analytics",
+      "target_context": "platform_shell",
+      "target_module": "gravity_ui",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 33,
+      "source_context": "analytics_reporting",
+      "source_module": "analytics",
+      "target_context": "work_management",
+      "target_module": "tasks",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 1,
+      "source_context": "avito_acquisition",
+      "source_module": "leads",
+      "target_context": "contacts",
+      "target_module": "contacts",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 20,
+      "source_context": "avito_acquisition",
+      "source_module": "avito",
+      "target_context": "platform_shell",
+      "target_module": "gravity_core",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 11,
+      "source_context": "avito_acquisition",
+      "source_module": "avito",
+      "target_context": "platform_shell",
+      "target_module": "gravity_ui",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 5,
+      "source_context": "avito_acquisition",
+      "source_module": "leads",
+      "target_context": "platform_shell",
+      "target_module": "gravity_core",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 9,
+      "source_context": "avito_acquisition",
+      "source_module": "leads",
+      "target_context": "platform_shell",
+      "target_module": "gravity_ui",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 1,
+      "source_context": "calling",
+      "source_module": "ai_calls",
+      "target_context": "configuration",
+      "target_module": "settings",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 1,
+      "source_context": "calling",
+      "source_module": "calls",
+      "target_context": "contacts",
+      "target_module": "contacts",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 6,
+      "source_context": "calling",
+      "source_module": "ai_calls",
+      "target_context": "identity_access",
+      "target_module": "users",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 7,
+      "source_context": "calling",
+      "source_module": "calls",
+      "target_context": "identity_access",
+      "target_module": "users",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 1,
+      "source_context": "calling",
+      "source_module": "calls",
+      "target_context": "messaging",
+      "target_module": "messages",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 5,
+      "source_context": "calling",
+      "source_module": "ai_calls",
+      "target_context": "operations_observability",
+      "target_module": "monitoring",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 8,
+      "source_context": "calling",
+      "source_module": "calls",
+      "target_context": "operations_observability",
+      "target_module": "monitoring",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 10,
+      "source_context": "calling",
+      "source_module": "ai_calls",
+      "target_context": "platform_shell",
+      "target_module": "gravity_core",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 19,
+      "source_context": "calling",
+      "source_module": "calls",
+      "target_context": "platform_shell",
+      "target_module": "gravity_core",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 1,
+      "source_context": "calling",
+      "source_module": "calls",
+      "target_context": "platform_shell",
+      "target_module": "gravity_ui",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 17,
+      "source_context": "configuration",
+      "source_module": "settings",
+      "target_context": "ai_knowledge",
+      "target_module": "ai_knowledge",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 7,
+      "source_context": "configuration",
+      "source_module": "settings",
+      "target_context": "calling",
+      "target_module": "ai_calls",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 2,
+      "source_context": "configuration",
+      "source_module": "settings",
+      "target_context": "calling",
+      "target_module": "calls",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 11,
+      "source_context": "configuration",
+      "source_module": "settings",
+      "target_context": "identity_access",
+      "target_module": "users",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 7,
+      "source_context": "configuration",
+      "source_module": "settings",
+      "target_context": "operations_observability",
+      "target_module": "monitoring",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 6,
+      "source_context": "configuration",
+      "source_module": "settings",
+      "target_context": "platform_shell",
+      "target_module": "gravity_core",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 22,
+      "source_context": "configuration",
+      "source_module": "settings",
+      "target_context": "platform_shell",
+      "target_module": "gravity_ui",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 1,
+      "source_context": "configuration",
+      "source_module": "settings",
+      "target_context": "telegram_channel",
+      "target_module": "telegram_provider",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 1,
+      "source_context": "configuration",
+      "source_module": "settings",
+      "target_context": "whatsapp_channel",
+      "target_module": "whatsapp_provider",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 16,
+      "source_context": "configuration",
+      "source_module": "settings",
+      "target_context": "work_management",
+      "target_module": "tasks",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 20,
+      "source_context": "contacts",
+      "source_module": "contacts",
+      "target_context": "platform_shell",
+      "target_module": "gravity_core",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 1,
+      "source_context": "fleet_operations",
+      "source_module": "drivers",
+      "target_context": "contacts",
+      "target_module": "contacts",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 3,
+      "source_context": "fleet_operations",
+      "source_module": "drivers",
+      "target_context": "max_channel",
+      "target_module": "max_provider",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 2,
+      "source_context": "fleet_operations",
+      "source_module": "drivers",
+      "target_context": "messaging",
+      "target_module": "messages",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 10,
+      "source_context": "fleet_operations",
+      "source_module": "drivers",
+      "target_context": "operations_observability",
+      "target_module": "monitoring",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 2,
+      "source_context": "fleet_operations",
+      "source_module": "yandex_fleet",
+      "target_context": "operations_observability",
+      "target_module": "monitoring",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 15,
+      "source_context": "fleet_operations",
+      "source_module": "drivers",
+      "target_context": "platform_shell",
+      "target_module": "gravity_core",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 34,
+      "source_context": "fleet_operations",
+      "source_module": "drivers",
+      "target_context": "platform_shell",
+      "target_module": "gravity_ui",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 9,
+      "source_context": "fleet_operations",
+      "source_module": "yandex_fleet",
+      "target_context": "platform_shell",
+      "target_module": "gravity_core",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 5,
+      "source_context": "fleet_operations",
+      "source_module": "drivers",
+      "target_context": "telegram_channel",
+      "target_module": "telegram_provider",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 2,
+      "source_context": "identity_access",
+      "source_module": "users",
+      "target_context": "platform_shell",
+      "target_module": "gravity_ui",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 5,
+      "source_context": "max_channel",
+      "source_module": "max_provider",
+      "target_context": "contacts",
+      "target_module": "contacts",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 2,
+      "source_context": "max_channel",
+      "source_module": "max_provider",
+      "target_context": "fleet_operations",
+      "target_module": "drivers",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 5,
+      "source_context": "max_channel",
+      "source_module": "max_provider",
+      "target_context": "messaging",
+      "target_module": "messages",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 1,
+      "source_context": "max_channel",
+      "source_module": "max_provider",
+      "target_context": "operations_observability",
+      "target_module": "monitoring",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 7,
+      "source_context": "max_channel",
+      "source_module": "max_provider",
+      "target_context": "platform_shell",
+      "target_module": "gravity_core",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 7,
+      "source_context": "max_channel",
+      "source_module": "max_provider",
+      "target_context": "platform_shell",
+      "target_module": "gravity_ui",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 4,
+      "source_context": "messaging",
+      "source_module": "messages",
+      "target_context": "ai_knowledge",
+      "target_module": "ai_knowledge",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 3,
+      "source_context": "messaging",
+      "source_module": "messages",
+      "target_context": "calling",
+      "target_module": "calls",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 1,
+      "source_context": "messaging",
+      "source_module": "messages",
+      "target_context": "configuration",
+      "target_module": "settings",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 4,
+      "source_context": "messaging",
+      "source_module": "messages",
+      "target_context": "contacts",
+      "target_module": "contacts",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 2,
+      "source_context": "messaging",
+      "source_module": "messages",
+      "target_context": "fleet_operations",
+      "target_module": "drivers",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 2,
+      "source_context": "messaging",
+      "source_module": "messages",
+      "target_context": "max_channel",
+      "target_module": "max_provider",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 1,
+      "source_context": "messaging",
+      "source_module": "messages",
+      "target_context": "operations_observability",
+      "target_module": "monitoring",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 33,
+      "source_context": "messaging",
+      "source_module": "messages",
+      "target_context": "platform_shell",
+      "target_module": "gravity_core",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 12,
+      "source_context": "messaging",
+      "source_module": "messages",
+      "target_context": "platform_shell",
+      "target_module": "gravity_ui",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 6,
+      "source_context": "messaging",
+      "source_module": "messages",
+      "target_context": "telegram_channel",
+      "target_module": "telegram_provider",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 6,
+      "source_context": "messaging",
+      "source_module": "messages",
+      "target_context": "whatsapp_channel",
+      "target_module": "whatsapp_provider",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 9,
+      "source_context": "messaging",
+      "source_module": "messages",
+      "target_context": "work_management",
+      "target_module": "tasks",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 3,
+      "source_context": "operations_observability",
+      "source_module": "monitoring",
+      "target_context": "calling",
+      "target_module": "calls",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 4,
+      "source_context": "operations_observability",
+      "source_module": "monitoring",
+      "target_context": "configuration",
+      "target_module": "settings",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 1,
+      "source_context": "operations_observability",
+      "source_module": "monitoring",
+      "target_context": "identity_access",
+      "target_module": "users",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 1,
+      "source_context": "operations_observability",
+      "source_module": "monitoring",
+      "target_context": "messaging",
+      "target_module": "messages",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 23,
+      "source_context": "operations_observability",
+      "source_module": "monitoring",
+      "target_context": "platform_shell",
+      "target_module": "gravity_core",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 15,
+      "source_context": "operations_observability",
+      "source_module": "monitoring",
+      "target_context": "platform_shell",
+      "target_module": "gravity_ui",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 2,
+      "source_context": "operations_observability",
+      "source_module": "monitoring",
+      "target_context": "telegram_channel",
+      "target_module": "telegram_provider",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 4,
+      "source_context": "operations_observability",
+      "source_module": "monitoring",
+      "target_context": "whatsapp_channel",
+      "target_module": "whatsapp_provider",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 7,
+      "source_context": "operations_observability",
+      "source_module": "monitoring",
+      "target_context": "work_management",
+      "target_module": "tasks",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 4,
+      "source_context": "platform_shell",
+      "source_module": "gravity_core",
+      "target_context": "ai_knowledge",
+      "target_module": "ai_knowledge",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 3,
+      "source_context": "platform_shell",
+      "source_module": "gravity_core",
+      "target_context": "analytics_reporting",
+      "target_module": "analytics",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 2,
+      "source_context": "platform_shell",
+      "source_module": "gravity_core",
+      "target_context": "calling",
+      "target_module": "ai_calls",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 4,
+      "source_context": "platform_shell",
+      "source_module": "gravity_core",
+      "target_context": "calling",
+      "target_module": "calls",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 5,
+      "source_context": "platform_shell",
+      "source_module": "gravity_ui",
+      "target_context": "calling",
+      "target_module": "calls",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 1,
+      "source_context": "platform_shell",
+      "source_module": "gravity_core",
+      "target_context": "configuration",
+      "target_module": "settings",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 1,
+      "source_context": "platform_shell",
+      "source_module": "gravity_ui",
+      "target_context": "configuration",
+      "target_module": "settings",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 6,
+      "source_context": "platform_shell",
+      "source_module": "gravity_core",
+      "target_context": "contacts",
+      "target_module": "contacts",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 1,
+      "source_context": "platform_shell",
+      "source_module": "gravity_core",
+      "target_context": "fleet_operations",
+      "target_module": "drivers",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 2,
+      "source_context": "platform_shell",
+      "source_module": "gravity_core",
+      "target_context": "fleet_operations",
+      "target_module": "yandex_fleet",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 3,
+      "source_context": "platform_shell",
+      "source_module": "gravity_ui",
+      "target_context": "identity_access",
+      "target_module": "users",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 1,
+      "source_context": "platform_shell",
+      "source_module": "gravity_core",
+      "target_context": "max_channel",
+      "target_module": "max_provider",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 5,
+      "source_context": "platform_shell",
+      "source_module": "gravity_core",
+      "target_context": "messaging",
+      "target_module": "messages",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 9,
+      "source_context": "platform_shell",
+      "source_module": "gravity_core",
+      "target_context": "operations_observability",
+      "target_module": "monitoring",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 3,
+      "source_context": "platform_shell",
+      "source_module": "gravity_core",
+      "target_context": "telegram_channel",
+      "target_module": "telegram_provider",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 6,
+      "source_context": "platform_shell",
+      "source_module": "gravity_core",
+      "target_context": "whatsapp_channel",
+      "target_module": "whatsapp_provider",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 2,
+      "source_context": "platform_shell",
+      "source_module": "gravity_core",
+      "target_context": "work_management",
+      "target_module": "tasks",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 10,
+      "source_context": "platform_shell",
+      "source_module": "gravity_ui",
+      "target_context": "work_management",
+      "target_module": "tasks",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 3,
+      "source_context": "telegram_channel",
+      "source_module": "telegram_provider",
+      "target_context": "contacts",
+      "target_module": "contacts",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 2,
+      "source_context": "telegram_channel",
+      "source_module": "telegram_provider",
+      "target_context": "fleet_operations",
+      "target_module": "drivers",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 5,
+      "source_context": "telegram_channel",
+      "source_module": "telegram_provider",
+      "target_context": "messaging",
+      "target_module": "messages",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 3,
+      "source_context": "telegram_channel",
+      "source_module": "telegram_provider",
+      "target_context": "operations_observability",
+      "target_module": "monitoring",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 6,
+      "source_context": "telegram_channel",
+      "source_module": "telegram_provider",
+      "target_context": "platform_shell",
+      "target_module": "gravity_core",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 10,
+      "source_context": "telegram_channel",
+      "source_module": "telegram_provider",
+      "target_context": "platform_shell",
+      "target_module": "gravity_ui",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 2,
+      "source_context": "whatsapp_channel",
+      "source_module": "whatsapp_provider",
+      "target_context": "contacts",
+      "target_module": "contacts",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 1,
+      "source_context": "whatsapp_channel",
+      "source_module": "whatsapp_provider",
+      "target_context": "fleet_operations",
+      "target_module": "drivers",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 4,
+      "source_context": "whatsapp_channel",
+      "source_module": "whatsapp_provider",
+      "target_context": "messaging",
+      "target_module": "messages",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 3,
+      "source_context": "whatsapp_channel",
+      "source_module": "whatsapp_provider",
+      "target_context": "operations_observability",
+      "target_module": "monitoring",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 5,
+      "source_context": "whatsapp_channel",
+      "source_module": "whatsapp_provider",
+      "target_context": "platform_shell",
+      "target_module": "gravity_core",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 5,
+      "source_context": "whatsapp_channel",
+      "source_module": "whatsapp_provider",
+      "target_context": "platform_shell",
+      "target_module": "gravity_ui",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 1,
+      "source_context": "work_management",
+      "source_module": "tasks",
+      "target_context": "analytics_reporting",
+      "target_module": "analytics",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 1,
+      "source_context": "work_management",
+      "source_module": "tasks",
+      "target_context": "configuration",
+      "target_module": "settings",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": true,
+      "current_import_count": 1,
+      "source_context": "work_management",
+      "source_module": "tasks",
+      "target_context": "identity_access",
+      "target_module": "users",
+      "transition": "route through target public surface; current direct imports are compatibility debt until migrated"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 1,
+      "source_context": "work_management",
+      "source_module": "tasks",
+      "target_context": "messaging",
+      "target_module": "messages",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 2,
+      "source_context": "work_management",
+      "source_module": "tasks",
+      "target_context": "operations_observability",
+      "target_module": "monitoring",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 10,
+      "source_context": "work_management",
+      "source_module": "tasks",
+      "target_context": "platform_shell",
+      "target_module": "gravity_core",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 42,
+      "source_context": "work_management",
+      "source_module": "tasks",
+      "target_context": "platform_shell",
+      "target_module": "gravity_ui",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    },
+    {
+      "allowed_target": false,
+      "current_import_count": 1,
+      "source_context": "work_management",
+      "source_module": "tasks",
+      "target_context": "telegram_channel",
+      "target_module": "telegram_provider",
+      "transition": "replace with owner command/query or move orchestration; then prohibit direct import"
+    }
+  ],
+  "historical_status": "ARCHIVED_BASELINE_EVIDENCE_NOT_CURRENT_DEPENDENCY_TRUTH",
+  "schema": "yoko.crm.historical-dependency-transition-plan.v1",
+  "summary": {
+    "allowed_but_requires_public_surface": 38,
+    "currently_forbidden": 68,
+    "relationships": 106
+  },
+  "version": 1
+}

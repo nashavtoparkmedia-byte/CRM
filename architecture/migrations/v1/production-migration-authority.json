@@ -1,0 +1,1910 @@
+{
+  "schema": "yoko.crm.production-migration-authority.v1",
+  "version": 1,
+  "predecessor_runtime": {
+    "artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+    "sanitized_inventory": "architecture/migrations/v1/predecessor-runtime-migration-inventory.json",
+    "image_migration_rows": 62,
+    "excluded_separate_migration": "20260223211509_add_is_linear_to_survey",
+    "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201",
+    "normalization": "canonical JSON sorting of the predecessor image inventory after excluding the physically separate TG-bot migration",
+    "repository_raw_capture": "architecture/migrations/v1/provenance/raw/runtime-20260808T205042Z.json.gz.b64",
+    "repository_raw_capture_sha256": "57c776c79c3212a649940824b278bf007856c77891979e4cd0e97fc9cb3129cf",
+    "repository_raw_capture_size": 244625
+  },
+  "current_target": {
+    "name": "20260809140000_add_domain_outbox",
+    "sha256": "433b0d503f054ed6a8161a059e2650d5e401829dabe8c9d992a1d1763eef0016"
+  },
+  "current_schema": {
+    "path": "gravity-mvp/prisma/schema.prisma",
+    "sha256": "287d39d324cd0a2b616eb7127cd520ea8ee5ce9d517620aafc5b07240cdf0b48",
+    "expected_replay_parity": "ZERO_PRISMA_DATAMODEL_DIFF",
+    "derivation": {
+      "starting_source_commit": "c6f352aec53fabe6415ace6c1ea73072f2d73ac6",
+      "merge_base": "e6a0a833fbb756216b058bfe326f9f9c77c4cc6d",
+      "production_history_ref": "refs/remotes/origin/feature/personal-max-text-canary-autonomous-20260728T211316Z",
+      "production_history_commit": "8a9e7f79d91268ee4baf11ae5c440041875de424",
+      "starting_schema_blob": "206c12c2452c439939a12c710202724aaff4f46c",
+      "merge_base_schema_blob": "8db86c3e703eea4db4e54c921c55d2a7ea00ced2",
+      "production_schema_blob": "29b6d217bd971d0c2f2b8a871fe20bef60c39c66",
+      "separate_recovered_field_migration": "20260717000000_add_driver_telegram_submitted_phone",
+      "clean_merge_sha256": "5d4ba9e942b4c2aa0210899d121008d0234875d176529229822206c8b98b7dc4",
+      "starting_schema_capture": {
+        "path": "architecture/migrations/v1/provenance/schema/starting-c6f352a.prisma.gz.b64",
+        "encoding": "base64(gzip-n)",
+        "capture_sha256": "9def109adf110847a708b45f3d1bd516722d83115055957400d8fe1a27b69697",
+        "capture_size": 33714,
+        "decoded_sha256": "cdedb7f65ef4077152a89acd9040ba6748c41eb89eceda5aff8d27ed7dfa8082",
+        "decoded_size": 88394
+      },
+      "merge_base_schema_capture": {
+        "path": "architecture/migrations/v1/provenance/schema/merge-base-e6a0a83.prisma.gz.b64",
+        "encoding": "base64(gzip-n)",
+        "capture_sha256": "bc9729ca42ebac02d40917bcea786ea5bbfc4ac5c43085716a8fda8e45079d7d",
+        "capture_size": 33029,
+        "decoded_sha256": "64a830b2973bfc685b029ffac0dc887d4f661ccdf4157c00e32b4dbb5067defd",
+        "decoded_size": 86629
+      },
+      "production_schema_capture": {
+        "path": "architecture/migrations/v1/provenance/schema/production-8a9e7f7.prisma.gz.b64",
+        "encoding": "base64(gzip-n)",
+        "capture_sha256": "ea23588e541b05516d9915eb0676d9f409245c18fa4bc1ede797ebdc94292d59",
+        "capture_size": 43238,
+        "decoded_sha256": "996801030613eaa90ef5c67cc9ee8cc4bc8615984dd62c2b0e3f24bb1c32419c",
+        "decoded_size": 133008
+      }
+    }
+  },
+  "migrations": [
+    {
+      "name": "0_init",
+      "sha256": "b4f1ff9935ecd0ce65f0f167051cbae1b949a0f30bc651754c77aa09a1c7dc4b",
+      "size": 16477,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/0_init/migration.sql"
+      },
+      "canonical_ordinal": 1,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260315184000_add_unified_messaging",
+      "sha256": "b9b53c05bc8d6d5b81efc4f36ea0bc7bc573a4c9ce1bdc9c9284196c333c4673",
+      "size": 3754,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260315184000_add_unified_messaging/migration.sql"
+      },
+      "canonical_ordinal": 2,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260328000000_add_system_direction_driver_max_personal_session",
+      "sha256": "2d374e353cf0154be06a4f2789b26518000f129d12fd89d3e3f217ca7ff543eb",
+      "size": 2241,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260328000000_add_system_direction_driver_max_personal_session/migration.sql"
+      },
+      "canonical_ordinal": 3,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260329000000_add_ai_status",
+      "sha256": "0a1274ba95a261922f9fc450ae9b5d095d2b577399eb9d60ef7335528bc3d9c6",
+      "size": 357,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260329000000_add_ai_status/migration.sql"
+      },
+      "canonical_ordinal": 4,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260329100000_add_ai_control_center",
+      "sha256": "5a7db01041418363746422115d51808dbf04c78f97e495aaf75c09c6ca5b49f9",
+      "size": 4683,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260329100000_add_ai_control_center/migration.sql"
+      },
+      "canonical_ordinal": 5,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260330000000_add_message_event_log_status",
+      "sha256": "4c0683990d4ad698dbc3aa6f66de4b55d827d01cff4c1fc6772bbd924c83c3d7",
+      "size": 436,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260330000000_add_message_event_log_status/migration.sql"
+      },
+      "canonical_ordinal": 6,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260403000000_add_task_model",
+      "sha256": "419085b28fb757507a15f9e331d39c25d885331b02a894c2c7fd3e9fb62e33ad",
+      "size": 3282,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260403000000_add_task_model/migration.sql"
+      },
+      "canonical_ordinal": 7,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260404000000_add_contact_model",
+      "sha256": "430000665535bc3e467f95b4920044f75266e72209823843460c6fb2d78bebca",
+      "size": 5692,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260404000000_add_contact_model/migration.sql"
+      },
+      "canonical_ordinal": 8,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260408000000_add_merge_driver_yandex_id",
+      "sha256": "63d9fd87124d46296e282ae19b3cc7ce3ca924da6e95e3d0a4f9180140475140",
+      "size": 75,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260408000000_add_merge_driver_yandex_id/migration.sql"
+      },
+      "canonical_ordinal": 9,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260408050000_add_chat_status_drift",
+      "sha256": "9b9689158d60c1d00f28e3dbfad31993232092039f8d0d25b7ef6e77e18e698d",
+      "size": 555,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260408050000_add_chat_status_drift/migration.sql"
+      },
+      "canonical_ordinal": 10,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260408100000_conversation_workflow",
+      "sha256": "6b624551109e3562d556e43d7ee783751eb5cf9b891f36094ff32592c0fe0289",
+      "size": 1472,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260408100000_conversation_workflow/migration.sql"
+      },
+      "canonical_ordinal": 11,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260410000000_add_chat_type_and_group_visibility",
+      "sha256": "0ef5875b4e8d84ff86fce041b803998231da0b589bf9c6c9dc91af46a5249141",
+      "size": 1345,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260410000000_add_chat_type_and_group_visibility/migration.sql"
+      },
+      "canonical_ordinal": 12,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260413000000_add_scenario_fields",
+      "sha256": "425e5536e973708c07efbd914b94e478364f49124e0e2ab4bad56eff9dd5db51",
+      "size": 784,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260413000000_add_scenario_fields/migration.sql"
+      },
+      "canonical_ordinal": 13,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260413100000_add_crm_user",
+      "sha256": "4431b7b9325c70036cfeef25b142dec49e3e354fa89c878414dbcddc38e5aba9",
+      "size": 323,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260413100000_add_crm_user/migration.sql"
+      },
+      "canonical_ordinal": 14,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260422000000_baseline_telephony_safety_scenarios",
+      "sha256": "115a9261e5472b262178ada6981053e17c9955e34981c9b0f44835a668e6af81",
+      "size": 10022,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260422000000_baseline_telephony_safety_scenarios/migration.sql"
+      },
+      "canonical_ordinal": 15,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260422100000_add_usage_events",
+      "sha256": "8c5dea21dc77d2a7b16455552fbb235523065cd9821df6ee67a76bff5392c2d7",
+      "size": 474,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260422100000_add_usage_events/migration.sql"
+      },
+      "canonical_ordinal": 16,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260426000000_add_avito_module",
+      "sha256": "466fb7545f0793cb3261244cfff052937735fd473d80ecd40fccaddcc0c1ac8f",
+      "size": 9344,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260426000000_add_avito_module/migration.sql"
+      },
+      "canonical_ordinal": 17,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260426010000_add_avito_lead_intake",
+      "sha256": "c340816ba720ac571636b665e9cdbc85af5e28ad449ab137ad9ff3f84862c610",
+      "size": 2133,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260426010000_add_avito_lead_intake/migration.sql"
+      },
+      "canonical_ordinal": 18,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260514000000_drop_android_telephony",
+      "sha256": "01042cdd45171426bd1811f23cd882cf658bf6b175818d78749c4aafdda0a8f2",
+      "size": 956,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260514000000_drop_android_telephony/migration.sql"
+      },
+      "canonical_ordinal": 19,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260514120000_add_call_model",
+      "sha256": "16816f68d6f320e256d6527d9009115f5d8bb5289e5de20ddb0501ff30c300a3",
+      "size": 2095,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260514120000_add_call_model/migration.sql"
+      },
+      "canonical_ordinal": 20,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260514130000_add_telephony_ai_config",
+      "sha256": "3543378fd36076a58321de77c6c30ed66a76564ec3936c7ac03cc67d0303e9b2",
+      "size": 586,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260514130000_add_telephony_ai_config/migration.sql"
+      },
+      "canonical_ordinal": 21,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260514230000_add_message_channel_drift",
+      "sha256": "1cac458f5799853f38e09febaf80964efe5a62751086705028f2fe9a942df02f",
+      "size": 383,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260514230000_add_message_channel_drift/migration.sql"
+      },
+      "canonical_ordinal": 22,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260515000000_remove_yandex_pro_channel",
+      "sha256": "c2c78efecbf3a506d6512e635a981cd5422ec19dd874a3b3e9a5cd42faf5eb40",
+      "size": 949,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260515000000_remove_yandex_pro_channel/migration.sql"
+      },
+      "canonical_ordinal": 23,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260515180000_add_ai_call_models",
+      "sha256": "3e36bb6a5cc3c51e0854c734c0675ed45e20475fa0c36fffd236075f937bd63e",
+      "size": 2195,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260515180000_add_ai_call_models/migration.sql"
+      },
+      "canonical_ordinal": 24,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260517000000_add_ai_call_projects",
+      "sha256": "3d2dd6948fe22c60d47bd112e8de1f16f7c2c322757a21808c86d2487a844f58",
+      "size": 2505,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260517000000_add_ai_call_projects/migration.sql"
+      },
+      "canonical_ordinal": 25,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260518000000_add_ai_provider_settings",
+      "sha256": "61b56b954e3646f425c76ca28af642557af4fb2bd0394cfe88f4fb3b5f6a18e8",
+      "size": 890,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260518000000_add_ai_provider_settings/migration.sql"
+      },
+      "canonical_ordinal": 26,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260519200000_add_ai_agent_profile",
+      "sha256": "4ba4e07fa398102e1e870d4e72ddadb1307ad15342ce12451c981bfb8b114add",
+      "size": 1354,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260519200000_add_ai_agent_profile/migration.sql"
+      },
+      "canonical_ordinal": 27,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260520210000_add_cancelled_callstatus",
+      "sha256": "cb78ec0bd95839ad03e052bb06bc81ac024d3354f87986b99dcb4ca2b24c428c",
+      "size": 722,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260520210000_add_cancelled_callstatus/migration.sql"
+      },
+      "canonical_ordinal": 28,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260520210100_add_temporary_contact_phones",
+      "sha256": "fc60f4bee3b2394eefa5e0bc5c5711cfebc2336f6e1a254d657937ec1658c93c",
+      "size": 732,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260520210100_add_temporary_contact_phones/migration.sql"
+      },
+      "canonical_ordinal": 29,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260520213000_add_ai_outcome_layer",
+      "sha256": "51dda8c0a4a8983465b6a857e27ead3a85822dd8003ddc678e58b48cec84d3e9",
+      "size": 3488,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260520213000_add_ai_outcome_layer/migration.sql"
+      },
+      "canonical_ordinal": 30,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260520220000_add_ai_call_event",
+      "sha256": "a353537e9ac00cb97420d3f68f91415de855420721cb7d9ec460c095bd71cd06",
+      "size": 2255,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260520220000_add_ai_call_event/migration.sql"
+      },
+      "canonical_ordinal": 31,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260520223000_add_stt_suspicious_pattern_event",
+      "sha256": "abbb9abbeeca053ee8059a83981847fd5c9472adf45c959227e546ceebaadf13",
+      "size": 743,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260520223000_add_stt_suspicious_pattern_event/migration.sql"
+      },
+      "canonical_ordinal": 32,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260520230000_add_recovery_attempted_event",
+      "sha256": "b1aa4434d381a5809e9c9acbde76fa180d6af95b0ff9688a479056c7addc8e53",
+      "size": 535,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260520230000_add_recovery_attempted_event/migration.sql"
+      },
+      "canonical_ordinal": 33,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260520233000_add_scenario_greeting_variants",
+      "sha256": "a27e7d32aa769c4f270f362505de67c55a6e8805ca576cdbe36e27570008eb3a",
+      "size": 620,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260520233000_add_scenario_greeting_variants/migration.sql"
+      },
+      "canonical_ordinal": 34,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260520240000_add_scenario_prompt_fragments",
+      "sha256": "339d50112b2914708451626ba906edf949abcce032faca5451d519430d51b1ed",
+      "size": 695,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260520240000_add_scenario_prompt_fragments/migration.sql"
+      },
+      "canonical_ordinal": 35,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260520250000_add_ai_knowledge_core_foundation",
+      "sha256": "3059245fd0e17e5853539ed0d15a3c92ebb2f4241c97a1d25d70450a16909fd4",
+      "size": 7483,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260520250000_add_ai_knowledge_core_foundation/migration.sql"
+      },
+      "canonical_ordinal": 36,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260520260000_add_extraction_snapshot_fields",
+      "sha256": "9bda07d4fd48ed7c2399c91c8bb0183adc6ffa758cc746125efb30dfbe10ca87",
+      "size": 1893,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260520260000_add_extraction_snapshot_fields/migration.sql"
+      },
+      "canonical_ordinal": 37,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260520270000_add_knowledge_audit_log",
+      "sha256": "5b889355e824e48a5c7a55a25bcb90029602bec165e584e32785e190ccdc18bc",
+      "size": 1834,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260520270000_add_knowledge_audit_log/migration.sql"
+      },
+      "canonical_ordinal": 38,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260520280000_add_retrieval_policy_and_traces",
+      "sha256": "8238d402bd20afd0a770696ae54d9386a2138d203a86fa78dcf7485a6b6bb18b",
+      "size": 2894,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260520280000_add_retrieval_policy_and_traces/migration.sql"
+      },
+      "canonical_ordinal": 39,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260522000000_add_source_provenance_and_disable",
+      "sha256": "9c76a1c60d3e4d8b89f0b8e18cf3910e3290f3ce6bc6ea1515b3fc0c3f2d4ec9",
+      "size": 1117,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260522000000_add_source_provenance_and_disable/migration.sql"
+      },
+      "canonical_ordinal": 40,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260612000000_sync_schema_drift",
+      "sha256": "f9c8c99b36018c99db922be2da05f50c3939f0646640d6c67aac0eb25bfd2a82",
+      "size": 5846,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260612000000_sync_schema_drift/migration.sql"
+      },
+      "canonical_ordinal": 41,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260616000000_add_park_name_and_active_park",
+      "sha256": "c2e1bbceda04331775b78c452fbe8e9df63caf5eaf26786fd68a159800381dc4",
+      "size": 233,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260616000000_add_park_name_and_active_park/migration.sql"
+      },
+      "canonical_ordinal": 42,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260712000000_multi_park_driver_profiles",
+      "sha256": "bedeb492b1d8bccdd4009bb8ad28c5c2235a07dc2f3370b289996f2c6ce80458",
+      "size": 2222,
+      "storage": "archive",
+      "provenance": {
+        "kind": "fetched_ref",
+        "ref": "refs/remotes/origin/feature/personal-max-text-canary-autonomous-20260728T211316Z",
+        "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260712000000_multi_park_driver_profiles/migration.sql",
+        "resolved_commit": "8a9e7f79d91268ee4baf11ae5c440041875de424",
+        "source_blob": "f80f94511f4c3a06e518e9c00b7b5e03cb172112",
+        "source_path": "gravity-mvp/prisma/migrations/20260712000000_multi_park_driver_profiles/migration.sql"
+      },
+      "canonical_ordinal": 43,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260713000000_stable_park_identity",
+      "sha256": "76bd61570363bb8d7f7a8952a593e8a4e02c70e570c1197cfaf3a7ee5fc22f5d",
+      "size": 2800,
+      "storage": "archive",
+      "provenance": {
+        "kind": "fetched_ref",
+        "ref": "refs/remotes/origin/feature/personal-max-text-canary-autonomous-20260728T211316Z",
+        "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260713000000_stable_park_identity/migration.sql",
+        "resolved_commit": "8a9e7f79d91268ee4baf11ae5c440041875de424",
+        "source_blob": "0b39a78013701051ba50155d73de847632c939cd",
+        "source_path": "gravity-mvp/prisma/migrations/20260713000000_stable_park_identity/migration.sql"
+      },
+      "canonical_ordinal": 44,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260713010000_driver_profile_person_resolution",
+      "sha256": "7699653d907f6c96433a5bcf18b3f769ba659bd34694dac990ac2ba30abee99e",
+      "size": 717,
+      "storage": "archive",
+      "provenance": {
+        "kind": "fetched_ref",
+        "ref": "refs/remotes/origin/feature/personal-max-text-canary-autonomous-20260728T211316Z",
+        "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260713010000_driver_profile_person_resolution/migration.sql",
+        "resolved_commit": "8a9e7f79d91268ee4baf11ae5c440041875de424",
+        "source_blob": "9de1cf48a48d8e88cd78ab2afa1be1acc69db30d",
+        "source_path": "gravity-mvp/prisma/migrations/20260713010000_driver_profile_person_resolution/migration.sql"
+      },
+      "canonical_ordinal": 45,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260717000000_add_driver_telegram_submitted_phone",
+      "sha256": "03013fdf531f45c3b012c13fa15581be29f6399019f5b1dd308c4f8c407ae7e5",
+      "size": 457,
+      "storage": "archive",
+      "provenance": {
+        "kind": "evidence_snapshot",
+        "artifact": "/opt/codex-work/crm-arch-000-evidence/20260808T070726Z/files/gravity-mvp/prisma/migrations/20260717000000_add_driver_telegram_submitted_phone/migration.sql",
+        "artifact_sha256": "03013fdf531f45c3b012c13fa15581be29f6399019f5b1dd308c4f8c407ae7e5",
+        "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260717000000_add_driver_telegram_submitted_phone/migration.sql",
+        "repository_package_root": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z",
+        "package_member": "files/gravity-mvp/prisma/migrations/20260717000000_add_driver_telegram_submitted_phone/migration.sql",
+        "package_sha256": "ba987cb23ebf6be8111b59f423ca6d2aadd6b508e82281365c60a870f1bc0a3c"
+      },
+      "canonical_ordinal": 46,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260726162043_add_max_raw_transport_journal",
+      "sha256": "880b6add9c6c4cc567dc0a68ad9736770fc8a71097f5f480583ac2aec4398ade",
+      "size": 5908,
+      "storage": "archive",
+      "provenance": {
+        "kind": "fetched_ref",
+        "ref": "refs/remotes/origin/feature/personal-max-text-canary-autonomous-20260728T211316Z",
+        "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260726162043_add_max_raw_transport_journal/migration.sql",
+        "resolved_commit": "8a9e7f79d91268ee4baf11ae5c440041875de424",
+        "source_blob": "06c63a56d47e60e4e2ca9158cf68d92eaf34b1c7",
+        "source_path": "gravity-mvp/prisma/migrations/20260726162043_add_max_raw_transport_journal/migration.sql"
+      },
+      "canonical_ordinal": 47,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260726190658_add_max_route_registry",
+      "sha256": "843064e4cf5b537c24571c6357feaf3bd808916ddae1e2cbfd10f40ecb4b6730",
+      "size": 11738,
+      "storage": "archive",
+      "provenance": {
+        "kind": "fetched_ref",
+        "ref": "refs/remotes/origin/feature/personal-max-text-canary-autonomous-20260728T211316Z",
+        "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260726190658_add_max_route_registry/migration.sql",
+        "resolved_commit": "8a9e7f79d91268ee4baf11ae5c440041875de424",
+        "source_blob": "ed30f05e54a5d2b7b04425e446fe64c873f7c194",
+        "source_path": "gravity-mvp/prisma/migrations/20260726190658_add_max_route_registry/migration.sql"
+      },
+      "canonical_ordinal": 48,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260726205437_add_max_inbound_normalization",
+      "sha256": "bdb122ef18c366c9201cb3a6bbe40bcea0696348c1721742f91ea9843014ab26",
+      "size": 9148,
+      "storage": "archive",
+      "provenance": {
+        "kind": "fetched_ref",
+        "ref": "refs/remotes/origin/feature/personal-max-text-canary-autonomous-20260728T211316Z",
+        "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260726205437_add_max_inbound_normalization/migration.sql",
+        "resolved_commit": "8a9e7f79d91268ee4baf11ae5c440041875de424",
+        "source_blob": "c1d242b010473ddaac8b9381629324d809fb7c73",
+        "source_path": "gravity-mvp/prisma/migrations/20260726205437_add_max_inbound_normalization/migration.sql"
+      },
+      "canonical_ordinal": 49,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260726215715_add_max_per_chat_outbound_actor",
+      "sha256": "25b8d26123d83173243fcec4a8a66d9fb6aa2622603e164b06720c2ea1b37c2b",
+      "size": 8540,
+      "storage": "archive",
+      "provenance": {
+        "kind": "fetched_ref",
+        "ref": "refs/remotes/origin/feature/personal-max-text-canary-autonomous-20260728T211316Z",
+        "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260726215715_add_max_per_chat_outbound_actor/migration.sql",
+        "resolved_commit": "8a9e7f79d91268ee4baf11ae5c440041875de424",
+        "source_blob": "f37d0e2a1858e1cbb5540bd9fe761d90d7d48979",
+        "source_path": "gravity-mvp/prisma/migrations/20260726215715_add_max_per_chat_outbound_actor/migration.sql"
+      },
+      "canonical_ordinal": 50,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260726225737_add_max_dispatch_ledger",
+      "sha256": "eea7bd6d591b60fe1ac71bd1a77e1e9c82a48d41b99f8b338efa55f65f561f26",
+      "size": 25101,
+      "storage": "archive",
+      "provenance": {
+        "kind": "fetched_ref",
+        "ref": "refs/remotes/origin/feature/personal-max-text-canary-autonomous-20260728T211316Z",
+        "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260726225737_add_max_dispatch_ledger/migration.sql",
+        "resolved_commit": "8a9e7f79d91268ee4baf11ae5c440041875de424",
+        "source_blob": "3f99cb38bdc649cf7db0d641da1ffc83fd496d9b",
+        "source_path": "gravity-mvp/prisma/migrations/20260726225737_add_max_dispatch_ledger/migration.sql"
+      },
+      "canonical_ordinal": 51,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260727053744_add_max_provider_confirmation_matcher",
+      "sha256": "030bcc6a2d0c96e9d5fcb59c62ef29e885c45fe538c2cc80b3ab514279fa87ec",
+      "size": 24090,
+      "storage": "archive",
+      "provenance": {
+        "kind": "fetched_ref",
+        "ref": "refs/remotes/origin/feature/personal-max-text-canary-autonomous-20260728T211316Z",
+        "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260727053744_add_max_provider_confirmation_matcher/migration.sql",
+        "resolved_commit": "8a9e7f79d91268ee4baf11ae5c440041875de424",
+        "source_blob": "9bdef8be4731dbf979ec710a19c9cefac367f1da",
+        "source_path": "gravity-mvp/prisma/migrations/20260727053744_add_max_provider_confirmation_matcher/migration.sql"
+      },
+      "canonical_ordinal": 52,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260727141925_add_max_shadow_semantic_comparison",
+      "sha256": "b39a2f1478e6314fe8c9adeb38cb058b1590ace7310c85d561dfdeb2139af890",
+      "size": 16697,
+      "storage": "archive",
+      "provenance": {
+        "kind": "fetched_ref",
+        "ref": "refs/remotes/origin/feature/personal-max-text-canary-autonomous-20260728T211316Z",
+        "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260727141925_add_max_shadow_semantic_comparison/migration.sql",
+        "resolved_commit": "8a9e7f79d91268ee4baf11ae5c440041875de424",
+        "source_blob": "fd3ba16cf5f38456e9c3f71d689b1f33f5903dea",
+        "source_path": "gravity-mvp/prisma/migrations/20260727141925_add_max_shadow_semantic_comparison/migration.sql"
+      },
+      "canonical_ordinal": 53,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260727154647_add_max_capture_ingress",
+      "sha256": "ec6a388fef65db7d544096b00d980ce09e12ee9ec35c45619f867a51df59c9f7",
+      "size": 773,
+      "storage": "archive",
+      "provenance": {
+        "kind": "fetched_ref",
+        "ref": "refs/remotes/origin/feature/personal-max-text-canary-autonomous-20260728T211316Z",
+        "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260727154647_add_max_capture_ingress/migration.sql",
+        "resolved_commit": "8a9e7f79d91268ee4baf11ae5c440041875de424",
+        "source_blob": "18dbc0245b1c218433a2fdee28235056971459a1",
+        "source_path": "gravity-mvp/prisma/migrations/20260727154647_add_max_capture_ingress/migration.sql"
+      },
+      "canonical_ordinal": 54,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260728213000_add_max_account_session_owner",
+      "sha256": "a541540b9093e8532c3f4b0e13f2a1136b770830d880b648e87cd2bb9b88991c",
+      "size": 3479,
+      "storage": "archive",
+      "provenance": {
+        "kind": "fetched_ref",
+        "ref": "refs/remotes/origin/feature/personal-max-text-canary-autonomous-20260728T211316Z",
+        "introduced_by": "b562dea608942c47c2b0ade6f87fed77a10b54a0",
+        "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260728213000_add_max_account_session_owner/migration.sql",
+        "resolved_commit": "8a9e7f79d91268ee4baf11ae5c440041875de424",
+        "source_blob": "4af909fcb389e19ff1c8ea3cf243f0bf2d04207a",
+        "source_path": "gravity-mvp/prisma/migrations/20260728213000_add_max_account_session_owner/migration.sql"
+      },
+      "canonical_ordinal": 55,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260728214000_add_max_outbound_shadow_plan",
+      "sha256": "2a1f5bc06b3e14ccfc1e4006aae34545e907805e5775e5556a1c86e07aaccc67",
+      "size": 4638,
+      "storage": "archive",
+      "provenance": {
+        "kind": "fetched_ref",
+        "ref": "refs/remotes/origin/feature/personal-max-text-canary-autonomous-20260728T211316Z",
+        "introduced_by": "efbdcd893b222ed5e2e4246d2b8e01cb3b094056",
+        "later_present_at": "dfce596b2f69e9a9004ae04cc550bf26be90a35c",
+        "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260728214000_add_max_outbound_shadow_plan/migration.sql",
+        "resolved_commit": "8a9e7f79d91268ee4baf11ae5c440041875de424",
+        "source_blob": "fc6eb6211f812ecadb11d83ff9872cfea1e09c98",
+        "source_path": "gravity-mvp/prisma/migrations/20260728214000_add_max_outbound_shadow_plan/migration.sql"
+      },
+      "canonical_ordinal": 56,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260805073000_add_bot_user_registry",
+      "sha256": "ef2df9ac72e1cec7d9ce00cc81e5e13eaf35161d0cfd20c379e82cec24cf4b0c",
+      "size": 3539,
+      "storage": "archive",
+      "provenance": {
+        "kind": "root_broker_untracked_capture",
+        "root_broker_package": "architecture/migrations/v1/provenance/root-broker/20260808T122923Z",
+        "raw_git_state_sha256": "6318696f1d66d7bb7451d3a097b20846ace850fd954d1737905aeb33d4ce8f13",
+        "untracked_record": {
+          "mode": "0644",
+          "path": "gravity-mvp/prisma/migrations/20260805073000_add_bot_user_registry/migration.sql",
+          "sensitive_path": false,
+          "sha256": "ef2df9ac72e1cec7d9ce00cc81e5e13eaf35161d0cfd20c379e82cec24cf4b0c",
+          "size": 3539,
+          "working_blob": "32eef929cf8568809c5886f0571ac53e35dd1215"
+        },
+        "supporting_patch": {
+          "migration_name": "20260805073000_add_bot_user_registry",
+          "path": "architecture/migrations/v1/provenance/root-broker/patches/_bot_registry_prod_20260805.patch",
+          "sha256": "3744122e0f505a1af24043f20c1401fd3df633ea80b08aabeb48dcfd54349f4e",
+          "size": 54109
+        },
+        "supplemental_root_tree": {
+          "authority": "SUPPLEMENTAL_NON_AUTHORIZING",
+          "tree": "9c4d4291c5d530d2ef1238bffd9b5d2737e9b13f",
+          "path": "gravity-mvp/prisma/migrations/20260805073000_add_bot_user_registry/migration.sql",
+          "blob": "32eef929cf8568809c5886f0571ac53e35dd1215"
+        },
+        "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260805073000_add_bot_user_registry/migration.sql"
+      },
+      "noncanonical_source_variant": {
+        "path": "gravity-mvp/prisma/migrations/20260805073000_add_bot_user_registry/migration.sql",
+        "sha256": "4ab782d2533e999f808f5be8cf56e33da8f6490bade0743c19e01ae8198fbe32",
+        "size": 1827,
+        "provenance": {
+          "kind": "current_source_git_commit",
+          "commit": "8b31944658808589485406be8dd712423ea9833a",
+          "reason": "same-name source is not the immutable predecessor image byte sequence; archived canonical bytes govern replay"
+        }
+      },
+      "canonical_ordinal": 57,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260805093000_prune_unverified_bot_registry_backfill",
+      "sha256": "0b1bfbb272692e281bc4037c4fc8e8246e64656603fc64b53a9179d2e6731871",
+      "size": 409,
+      "storage": "archive",
+      "provenance": {
+        "kind": "root_broker_untracked_capture",
+        "root_broker_package": "architecture/migrations/v1/provenance/root-broker/20260808T122923Z",
+        "raw_git_state_sha256": "6318696f1d66d7bb7451d3a097b20846ace850fd954d1737905aeb33d4ce8f13",
+        "untracked_record": {
+          "mode": "0644",
+          "path": "gravity-mvp/prisma/migrations/20260805093000_prune_unverified_bot_registry_backfill/migration.sql",
+          "sensitive_path": false,
+          "sha256": "0b1bfbb272692e281bc4037c4fc8e8246e64656603fc64b53a9179d2e6731871",
+          "size": 409,
+          "working_blob": "1d587c53577347ddbb57c3b8d589f8c39465c0aa"
+        },
+        "supporting_patch": {
+          "migration_name": "20260805093000_prune_unverified_bot_registry_backfill",
+          "path": "architecture/migrations/v1/provenance/root-broker/patches/_bot_registry_cleanup_prod_20260805.patch",
+          "sha256": "ffcf6faef49247a5e7157b94860a5694b38196948a497fa4b50453bc7c979bda",
+          "size": 782
+        },
+        "supplemental_root_tree": {
+          "authority": "SUPPLEMENTAL_NON_AUTHORIZING",
+          "tree": "9c4d4291c5d530d2ef1238bffd9b5d2737e9b13f",
+          "path": "gravity-mvp/prisma/migrations/20260805093000_prune_unverified_bot_registry_backfill/migration.sql",
+          "blob": "1d587c53577347ddbb57c3b8d589f8c39465c0aa"
+        },
+        "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260805093000_prune_unverified_bot_registry_backfill/migration.sql"
+      },
+      "noncanonical_source_variant": {
+        "path": "gravity-mvp/prisma/migrations/20260805093000_prune_unverified_bot_registry_backfill/migration.sql",
+        "sha256": "6a45f92c153438a6267cbb7342cdb2594d5d8496af2348248adb7d0be934ce71",
+        "size": 238,
+        "provenance": {
+          "kind": "current_source_git_commit",
+          "commit": "8b31944658808589485406be8dd712423ea9833a",
+          "reason": "same-name source is not the immutable predecessor image byte sequence; archived canonical bytes govern replay"
+        }
+      },
+      "canonical_ordinal": 58,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260805100000_add_bot_registry_profile_check",
+      "sha256": "0d7690ccd5514597b0ea89bd7ab1a8ff0830752b7810933a894e27e48b63de72",
+      "size": 88,
+      "storage": "active",
+      "provenance": {
+        "kind": "predecessor_image_exact",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260805100000_add_bot_registry_profile_check/migration.sql"
+      },
+      "canonical_ordinal": 59,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260805110000_restore_linked_bot_registry",
+      "sha256": "b84f066aca9a197050247d5958771c213c6d9d142bd242ba1f8769974a9bcaa4",
+      "size": 639,
+      "storage": "archive",
+      "provenance": {
+        "kind": "root_broker_untracked_capture",
+        "root_broker_package": "architecture/migrations/v1/provenance/root-broker/20260808T122923Z",
+        "raw_git_state_sha256": "6318696f1d66d7bb7451d3a097b20846ace850fd954d1737905aeb33d4ce8f13",
+        "untracked_record": {
+          "mode": "0644",
+          "path": "gravity-mvp/prisma/migrations/20260805110000_restore_linked_bot_registry/migration.sql",
+          "sensitive_path": false,
+          "sha256": "b84f066aca9a197050247d5958771c213c6d9d142bd242ba1f8769974a9bcaa4",
+          "size": 639,
+          "working_blob": "901894736817062b87b01dcdc481f35cfd10e578"
+        },
+        "supporting_patch": {
+          "migration_name": "20260805110000_restore_linked_bot_registry",
+          "path": "architecture/migrations/v1/provenance/root-broker/patches/_bot_profile_linked_registry_prod_20260805.patch",
+          "sha256": "4a86d9ca805d32fb15276a875462abc60b4b7644bf47b591fa9bdef301b2820e",
+          "size": 994
+        },
+        "supplemental_root_tree": {
+          "authority": "SUPPLEMENTAL_NON_AUTHORIZING",
+          "tree": "9c4d4291c5d530d2ef1238bffd9b5d2737e9b13f",
+          "path": "gravity-mvp/prisma/migrations/20260805110000_restore_linked_bot_registry/migration.sql",
+          "blob": "901894736817062b87b01dcdc481f35cfd10e578"
+        },
+        "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260805110000_restore_linked_bot_registry/migration.sql"
+      },
+      "noncanonical_source_variant": {
+        "path": "gravity-mvp/prisma/migrations/20260805110000_restore_linked_bot_registry/migration.sql",
+        "sha256": "cd7ebed3043b4d4989ca1a57aeab34b808aa7ec56f8479e97d5063ada7c4dc70",
+        "size": 466,
+        "provenance": {
+          "kind": "current_source_git_commit",
+          "commit": "8b31944658808589485406be8dd712423ea9833a",
+          "reason": "same-name source is not the immutable predecessor image byte sequence; archived canonical bytes govern replay"
+        }
+      },
+      "canonical_ordinal": 60,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260806181500_repair_max_sergey_mirror_timeline",
+      "sha256": "f20b04408f621d95d31796f590391ac5f421cf12c09627082263b3c865aec265",
+      "size": 1604,
+      "storage": "archive",
+      "provenance": {
+        "kind": "git_commit",
+        "commit": "74657f827153babbe601a2765bf6c526efbb73d2",
+        "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260806181500_repair_max_sergey_mirror_timeline/migration.sql",
+        "source_path": "gravity-mvp/prisma/migrations/20260806181500_repair_max_sergey_mirror_timeline/migration.sql",
+        "source_blob": "a805d5d2ecbf80aeb0c73532924bbbec0192614e"
+      },
+      "canonical_ordinal": 61,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "exact_finite_predecessor_runtime_inventory",
+          "runtime_artifact": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/runtime.json",
+          "observed_at": "2026-08-08T20:50:42Z",
+          "image_migration_rows": 62,
+          "normalized_pre_outbox_digest": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    },
+    {
+      "name": "20260809140000_add_domain_outbox",
+      "sha256": "433b0d503f054ed6a8161a059e2650d5e401829dabe8c9d992a1d1763eef0016",
+      "size": 1338,
+      "storage": "active",
+      "provenance": {
+        "kind": "current_target_source",
+        "path": "gravity-mvp/prisma/migrations/20260809140000_add_domain_outbox/migration.sql",
+        "repository_capture": "gravity-mvp/prisma/migrations/20260809140000_add_domain_outbox/migration.sql"
+      },
+      "canonical_ordinal": 62,
+      "live_ledger": {
+        "status": "FINISHED_ACTIVE",
+        "proof": {
+          "kind": "post_outbox_runtime_database_status",
+          "acceptance_artifact": "architecture/recovery/whole-project-dod/v2/PRODUCTION_ACTIVATION_ACCEPTANCE_20260812.json",
+          "runtime_package_version": "2.0.0-9",
+          "migration_count": 62,
+          "migration_ledger_sha256": "a50f1a8988f79c85059354d6b2d45e9e8ed07284fc27c78d98face6680f25dfc",
+          "migration_state": "APPROVED_OUTBOX_APPLIED",
+          "outbox_catalog_state": "EXACT"
+        },
+        "applied_timestamp": {
+          "value": null,
+          "availability": "UNAVAILABLE",
+          "provenance": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T204949Z-operator/raw/db-migration.json: DATABASE_IDENTITY_PROBE_FAILED"
+        }
+      }
+    }
+  ],
+  "inventory_digest": "dc29667f6f72842a9d9452f5aff44f49f6296cfde111da6bc5daca6c83aec669",
+  "provenance_evidence": {
+    "git_object_lineage": {
+      "schema": "yoko.crm.production-migration-git-object-lineage.v1",
+      "path": "architecture/migrations/v1/provenance/git/production-migration-lineage-v1.json",
+      "sha256": "b18df326af497a449d90465c44c17c097c5244d80b8d01e078465fa89086e699",
+      "size": 316756,
+      "object_count": 125,
+      "claim_count": 14
+    },
+    "snapshot_package": {
+      "schema": "crm-arch-000r-production-only-evidence-v1",
+      "root": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z",
+      "snapshot_id": "20260808T070726Z",
+      "package_digest_algorithm": "crm-arch-000r-package-digest-v1",
+      "package_sha256": "ba987cb23ebf6be8111b59f423ca6d2aadd6b508e82281365c60a870f1bc0a3c",
+      "ledger_path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/PACKAGE_CONTENTS.tsv",
+      "ledger_sha256": "ba987cb23ebf6be8111b59f423ca6d2aadd6b508e82281365c60a870f1bc0a3c",
+      "ledger_size": 3448,
+      "digest_path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/PACKAGE_SHA256",
+      "digest_sha256": "2973052a3179d3d44161e98848bc55ebce192795a67e63f13c4733b95aa2f4f9",
+      "digest_size": 87,
+      "manifest_path": "architecture/migrations/v1/provenance/snapshot/20260808T070726Z/manifest.json",
+      "manifest_sha256": "b42c1e3bae282422694edcedbd5fe47dba529d0a5f86e8fc2df938510059cee4",
+      "manifest_size": 28060,
+      "ledger_members": 30,
+      "package_files": 32
+    },
+    "root_broker_package": {
+      "schema": "CRM-ARCH-000R-EVIDENCE-MANIFEST-1",
+      "root": "architecture/migrations/v1/provenance/root-broker/20260808T122923Z",
+      "original_evidence_root": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T122923Z",
+      "manifest_path": "architecture/migrations/v1/provenance/root-broker/20260808T122923Z/MANIFEST.json",
+      "manifest_sha256": "d05ccb1d63315c2a24c8627e718d724961014e2f8b93959445d25d9ed84b1c7f",
+      "manifest_size": 1487,
+      "checksums_path": "architecture/migrations/v1/provenance/root-broker/20260808T122923Z/SHA256SUMS",
+      "checksums_sha256": "09366be1d2b0a7b85e39336745c2b311ef60836e97adc172548fae3df550a355",
+      "checksums_size": 3791,
+      "checksummed_members": 35,
+      "package_files": 37,
+      "raw_git_state_path": "architecture/migrations/v1/provenance/root-broker/20260808T122923Z/production-git-index/raw/production-git-state.raw.json",
+      "raw_git_state_sha256": "6318696f1d66d7bb7451d3a097b20846ace850fd954d1737905aeb33d4ce8f13",
+      "raw_git_state_size": 50282,
+      "normalized_git_state_path": "architecture/migrations/v1/provenance/root-broker/20260808T122923Z/production-git-index/normalized/production-git-state.normalized.json",
+      "normalized_git_state_sha256": "6318696f1d66d7bb7451d3a097b20846ace850fd954d1737905aeb33d4ce8f13",
+      "normalized_git_state_size": 50282,
+      "capture_path": "architecture/migrations/v1/provenance/root-broker/20260808T122923Z/production-git-index/production-git-state.capture.json",
+      "capture_sha256": "159915c52e09c5c7aa419d8dcb96006544fbae97ed7b00102f1e12c968dff82d",
+      "capture_size": 435,
+      "secret_safety_report_path": "architecture/migrations/v1/provenance/root-broker/20260808T122923Z/normalized/secret-safety-report.json",
+      "secret_safety_report_sha256": "fa466d994c0ed0de63b977f02f40c5fead188610c96f1d19de532d405cfa5202",
+      "secret_safety_report_size": 759,
+      "patch_root": "architecture/migrations/v1/provenance/root-broker/patches",
+      "patches": [
+        {
+          "migration_name": "20260805073000_add_bot_user_registry",
+          "path": "architecture/migrations/v1/provenance/root-broker/patches/_bot_registry_prod_20260805.patch",
+          "sha256": "3744122e0f505a1af24043f20c1401fd3df633ea80b08aabeb48dcfd54349f4e",
+          "size": 54109
+        },
+        {
+          "migration_name": "20260805093000_prune_unverified_bot_registry_backfill",
+          "path": "architecture/migrations/v1/provenance/root-broker/patches/_bot_registry_cleanup_prod_20260805.patch",
+          "sha256": "ffcf6faef49247a5e7157b94860a5694b38196948a497fa4b50453bc7c979bda",
+          "size": 782
+        },
+        {
+          "migration_name": "20260805110000_restore_linked_bot_registry",
+          "path": "architecture/migrations/v1/provenance/root-broker/patches/_bot_profile_linked_registry_prod_20260805.patch",
+          "sha256": "4a86d9ca805d32fb15276a875462abc60b4b7644bf47b591fa9bdef301b2820e",
+          "size": 994
+        }
+      ]
+    }
+  }
+}

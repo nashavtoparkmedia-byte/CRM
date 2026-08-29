@@ -1,0 +1,22 @@
+{
+  "schema": "yoko.crm.owner-bootstrap-critic.v1",
+  "artifact_sha256": "b4313a588b269fec2fa5728cf312ae65da6cdd395f13f48e0316901450abd703",
+  "package_sha256": "0ec595d49529630279b8d79e9e246ebaa867c9b092ddecd0d897f20bd23412a4",
+  "status": "REJECTED_SUPERSEDED_NEVER_EXECUTE",
+  "verdict": "REJECT",
+  "repository_mutation_by_critic": false,
+  "production_mutation_by_critic": false,
+  "findings": [
+    {
+      "id": "FIFTEENTH-CRITIC-001",
+      "finding": "Activation recovery and rollback consumed the current production Compose and environment files without revalidating their sealed preflight hashes. Changed environment values could survive the existing semantic postcheck because it compared environment names rather than values.",
+      "required_remediation": "Every activation and rollback Compose operation must revalidate the secure exact Compose file and the sealed environment hash immediately before Docker configuration and mutation, including recovery and ALREADY paths."
+    },
+    {
+      "id": "FIFTEENTH-CRITIC-002",
+      "finding": "Explicit rollback audited but did not persist ROLLBACK_INTENT before Compose mutation and did not accept that phase on retry. A crash with the old image installed but unhealthy left state ACTIVATED and retry failed rather than resuming rollback.",
+      "required_remediation": "Persist and audit a durable rollback intent before the first mutation, accept it on retry, and rerun the finite rollback when the exact old image is present but not healthy."
+    }
+  ],
+  "owner_command_authorized": false
+}

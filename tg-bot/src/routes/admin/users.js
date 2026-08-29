@@ -40,7 +40,9 @@ router.get('/', async (req, res, next) => {
             take: parseInt(take),
             orderBy: { createdAt: 'desc' },
             include: {
-                bot: true,
+                bot: {
+                    select: { id: true, name: true, username: true, isActive: true }
+                },
                 answers: {
                     include: { question: true }
                 },
@@ -128,7 +130,10 @@ router.post('/:id/message', async (req, res, next) => {
 
         const user = await req.prisma.user.findUnique({
             where: { id },
-            include: { bot: true }
+            select: {
+                telegramId: true,
+                bot: { select: { token: true } }
+            }
         });
 
         if (!user) return res.status(404).json({ error: 'User not found' });
@@ -172,7 +177,10 @@ router.post('/broadcast', async (req, res, next) => {
             whereClause.answers = { none: {} };
         }
 
-        const bot = await req.prisma.bot.findUnique({ where: { id: botId } });
+        const bot = await req.prisma.bot.findUnique({
+            where: { id: botId },
+            select: { token: true }
+        });
         if (!bot) return res.status(404).json({ error: 'Bot not found' });
 
         const targetUsers = await req.prisma.user.findMany({

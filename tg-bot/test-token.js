@@ -1,4 +1,5 @@
 const { Telegraf } = require('telegraf');
+const { redactText } = require('./src/security/redactSecrets');
 require('dotenv').config();
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
@@ -13,6 +14,6 @@ bot.telegram.getMe()
     })
     .catch((err) => {
         console.error('FAILURE: Bot token is invalid or network error!');
-        console.error(err.message);
+        console.error(redactText(err.message));
         process.exit(1);
     });

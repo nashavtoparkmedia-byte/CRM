@@ -46,6 +46,21 @@ export interface ContactDriver {
     dismissedAt: string | null
 }
 
+export interface CanonicalContactSummary {
+    displayName: string
+    primaryPhone: string | null
+    displayTitle: string
+    currentMainDriverProfile: {
+        id: string
+        fullName: string
+        phone: string | null
+        segment: string | null
+    } | null
+    currentChannel: string | null
+    providerIdentities: { channel: string; externalId: string; displayName: string | null }[]
+    channelCount: number
+}
+
 export interface Contact {
     id: string
     displayName: string
@@ -63,6 +78,7 @@ export interface Contact {
     identities: ContactIdentity[]
     chats: ContactChat[]
     driver: ContactDriver | null
+    canonicalSummary?: CanonicalContactSummary
     mergeHistory: any[]
 }
 

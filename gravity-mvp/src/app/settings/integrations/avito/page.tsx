@@ -33,12 +33,12 @@ import {
   Inbox,
 } from 'lucide-react';
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/infrastructure/ui/button';
+import { Badge } from '@/infrastructure/ui/badge';
+import { Card } from '@/infrastructure/ui/card';
+import { Input } from '@/infrastructure/ui/input';
+import { Label } from '@/infrastructure/ui/label';
+import { Checkbox } from '@/infrastructure/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -46,20 +46,20 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/infrastructure/ui/dialog';
 import {
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
-} from '@/components/ui/tabs';
+} from '@/infrastructure/ui/tabs';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
+} from '@/infrastructure/ui/tooltip';
+import { cn } from '@/infrastructure/ui/class-names';
 import { api } from './_api-client';
 import {
   accountAction,
@@ -1542,7 +1542,7 @@ export default function AccountsPage() {
       `  • все собранные отклики этого аккаунта\n` +
       `  • все попытки раскрытия телефонов\n` +
       `  • история snapshot'ов\n` +
-      `  • папка Chromium-профиля на диске (${acc.profilePath})\n\n` +
+      `  • папка Chromium-профиля на диске (управляется системой)\n\n` +
       `История Activity Log сохранится для аудита.\n` +
       `Операция необратима.`;
     if (!window.confirm(msg)) return;

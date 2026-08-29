@@ -1,0 +1,16 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1",
+  "milestone": "CRM-ARCH-007-CONTACTS-TELEGRAM",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "b0ef1c270d5b12328308bd1c548c47108a1517ec",
+  "context": "contacts",
+  "caller_context": "telegram_channel",
+  "plan": {"id": "migration_2fa76a81f50975bf", "site_id": "write_afe2302f54f9f07d2dc8", "file": "gravity-mvp/src/app/api/webhook/telegram/route.ts", "model": "ContactIdentity", "method": "update"},
+  "contract": "contacts.AttachContactIdentityCommand.v1",
+  "generic_profile": ["handle", "givenName", "familyName"],
+  "legacy_mapping": {"handle": "username", "givenName": "firstName", "familyName": "lastName"},
+  "consumer_before_sha256": "5ea442a08bf584083c80094a7b7a8f69beddc56c8cb1965fb66e07a3277e33d6",
+  "consumer_after_sha256": "420991e3e0660244f43933330115574169ff847758da424eb6007cc1017bc8d5",
+  "enforcement": {"before": 1524, "after": 1523, "retired": ["arch_75dc4e94ad9e24e6ca7bb93a"], "new_capacity": 0},
+  "rollback": "b0ef1c270d5b12328308bd1c548c47108a1517ec"
+}

@@ -1,0 +1,46 @@
+{
+  "schema": "yoko.crm.remaining-write-classification.v3",
+  "milestone": "CRM-ARCH-007R-FINAL-SOURCE-GATE",
+  "source_commit": "024680591c188a34ae79594d92d47854648c73c8",
+  "corrected_pre_retirement_total": 115,
+  "false_ambiguity_retired": 12,
+  "genuine_pre_retirement_total": 103,
+  "classes": [
+    {
+      "class": "CROSS_OWNER_TOPOLOGY_OR_TRANSACTION_WORKFLOW",
+      "authorized": 22,
+      "retired": 22,
+      "remaining": 0
+    },
+    {
+      "class": "BOUNDED_MULTI_TABLE_REPOSITORY_RELOCATION",
+      "authorized": 12,
+      "retired": 12,
+      "remaining": 0
+    },
+    {
+      "class": "SECURITY_SENSITIVE_AI_SETTINGS_DECOMPOSITION",
+      "authorized": 21,
+      "retired": 21,
+      "remaining": 0
+    },
+    {
+      "class": "UNSAFE_OR_UNPROVEN_SQL_FRAGMENT_HARDENING",
+      "authorized": 48,
+      "retired": 48,
+      "remaining": 0
+    }
+  ],
+  "direct_foreign_prisma_write_remaining": 0,
+  "sum_verified": true,
+  "non_write_exception_inventory": {
+    "direct_provider_transport_access": 38,
+    "internal_module_import": 374,
+    "non_public_cross_context_import": 530,
+    "undeclared_dependency": 353,
+    "total": 1295,
+    "review_deadline": "2026-12-31"
+  },
+  "production_mutated": false,
+  "deployed": false
+}

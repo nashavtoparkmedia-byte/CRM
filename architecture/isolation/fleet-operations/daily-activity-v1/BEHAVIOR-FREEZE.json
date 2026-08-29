@@ -1,0 +1,26 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1",
+  "milestone": "CRM-ARCH-007-FLEET-DAILY-ACTIVITY",
+  "base_commit": "58cfd054e6b55840d0c5d26a1edcad61a6e0e301",
+  "captured_at": "2026-08-09T16:29:37Z",
+  "consumer": "gravity-mvp/src/lib/communications.ts",
+  "consumer_sha256": "26ac2f793047a7b78046c29e033e22f7c403c3b5923fdaae73f9e694fb32baaf",
+  "behavior": [
+    "compute local day start with setHours(0, 0, 0, 0)",
+    "persist CommunicationEvent before any DriverDaySummary operation",
+    "outbound auto message sets hadAutoMessage",
+    "other outbound message sets hadManagerMessage",
+    "call sets hadManagerCall",
+    "auto_message sets hadAutoMessage and goal_achieved sets hadGoalAchieved",
+    "unmatched events do not touch DriverDaySummary",
+    "upsert uses the same driver and day for selector and create",
+    "summary persistence failures remain visible and the created event is returned on success"
+  ],
+  "out_of_scope": [
+    "CommunicationEvent ownership or persistence",
+    "timeline reads",
+    "Inbox legacy Fleet imports",
+    "database schema or data",
+    "production activation"
+  ]
+}

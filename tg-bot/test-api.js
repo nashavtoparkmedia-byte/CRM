@@ -1,4 +1,9 @@
 const http = require('http');
+require('dotenv').config();
+
+if (!process.env.ADMIN_USER || !process.env.ADMIN_PASS) {
+    throw new Error('ADMIN_USER and ADMIN_PASS are required');
+}
 
 console.log('Testing GET http://localhost:3001/api/admin/surveys');
 
@@ -7,7 +12,7 @@ const req = http.get({
     port: 3001,
     path: '/api/admin/surveys',
     headers: {
-        'Authorization': 'Basic ' + Buffer.from('admin:admin').toString('base64')
+        'Authorization': 'Basic ' + Buffer.from(`${process.env.ADMIN_USER}:${process.env.ADMIN_PASS}`).toString('base64')
     }
 }, (res) => {
     let data = '';

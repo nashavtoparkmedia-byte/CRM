@@ -1,11 +1,11 @@
-import { getDashboardStats } from './dashboard/actions'
-import { DashboardKPI } from './dashboard/components/DashboardKPI'
-import { DashboardCard } from './dashboard/components/DashboardCard'
+import { getDashboardStatsV1 as getDashboardStats } from '@/modules/analytics-reporting/public/v1/dashboard-query'
+import { DashboardKpiV1 as DashboardKPI } from '@/modules/analytics-reporting/public/v1/dashboard-kpi-view'
+import { DashboardCardV1 as DashboardCard } from '@/modules/analytics-reporting/public/v1/dashboard-card-view'
 import { dashboardCards } from '@/lib/mock/dashboardData'
-import { SectionDescription } from '@/components/ui/SectionDescription'
-import { PageContainer } from '@/components/ui/PageContainer'
-import { PageHeader } from '@/components/layout/PageHeader'
-import { DashboardTabs } from '@/components/ui/DashboardTabs'
+import { SectionDescription } from '@/infrastructure/ui/SectionDescription'
+import { PageContainer } from '@/infrastructure/ui/PageContainer'
+import { PageHeader } from '@/infrastructure/ui/PageHeader'
+import { DashboardTabs } from '@/infrastructure/ui/DashboardTabs'
 
 export const dynamic = 'force-dynamic'
 

@@ -1,0 +1,47 @@
+{
+  "schema": "yoko.crm.authoritative-write-scan-record.v1",
+  "generated_at": "2026-08-11T06:58:31.735843Z",
+  "authority": "Bounded authoritative whole-repository scan after exact historical-dead and controlled-migration lifecycle evidence; no owner shortcut, not READY.",
+  "inputs": {
+    "previous_baseline_sha256": "977a7b1e45fda23df25786eb48115f2e6435269cd098a8b428daff369421df92",
+    "lifecycle_registry": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
+    "analyzer": "tools/architecture/v2/analyze.mjs",
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_LIFECYCLE_MIGRATION_DEAD.json"
+  },
+  "output": {
+    "baseline": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json",
+    "baseline_sha256": "4abfe0f72fb96caf36036eadd8ee3c831651fa8988bf437b538e38759ee0ee22",
+    "analysis_sha256": "65af50ebe1029b121a33d405fab63a03e8d7f4bf1c2e4e06f79d2dedaf25ed3e",
+    "triage_sha256": "3889825fcd94837d750bc130de9cbaccefcc3c79af5f30cb68812d8ee8169556"
+  },
+  "execution": {
+    "ambiguous_candidates": 204,
+    "complete": true,
+    "elapsed_ms": 368930.219198,
+    "failures": [],
+    "files_completed": 1695,
+    "files_discovered": 1695,
+    "mode": "fresh_process_per_javascript_surface",
+    "progress_every": 150,
+    "worker_failures": 0,
+    "worker_limit": 4,
+    "worker_timeout_ms": 120000,
+    "worker_timeouts": 0,
+    "writes_discovered": 1445
+  },
+  "summary": {
+    "ambiguous_writes": 204,
+    "discovered_write_sites": 1445,
+    "foreign_writes": 0,
+    "historical_dead_writes": 18,
+    "migration_only_writes": 500,
+    "operational_script_writes": 155,
+    "owner_writes": 489,
+    "parse_findings": 0,
+    "raw_sql_writes": 836,
+    "test_writes": 234,
+    "tracked_executable_surfaces": 1695,
+    "unreviewed_operational_surfaces": 0
+  },
+  "verdict": "NOT_READY_REQUIRES_AMBIGUITY_AND_OPERATIONAL_CLOSURE"
+}

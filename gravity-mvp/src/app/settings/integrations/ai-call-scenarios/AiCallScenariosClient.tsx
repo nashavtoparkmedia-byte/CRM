@@ -9,7 +9,7 @@ import {
     Plus, Pencil, Trash2, X, GripVertical, HelpCircle, KeyRound, FolderTree, BookOpen,
 } from 'lucide-react'
 import type { AiCallScenarioQuestion } from '@/lib/ai-call/types'
-import type { AiCallKeysStatus } from '@/lib/ai-call/keys-status'
+import type { AiCallProviderStatusV1 as AiCallKeysStatus } from '@/modules/calling/public/v1/ai-call-provider-status'
 import { AiCallKeysSection } from '../ai-call-keys/AiCallKeysClient'
 
 interface ProjectRow {

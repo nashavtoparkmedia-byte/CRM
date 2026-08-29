@@ -1,0 +1,75 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1",
+  "milestone": "CRM-ARCH-007R-MANUAL-DRIVER-TELEGRAM-DELIVERY",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "4d27223b6950c0c824e762675fe2af960d69f0f7",
+  "source_commit": "144cb01fafb1c98dc9f9cf5ac07d6fa8273969ac",
+  "implementation_commits": [
+    "0b96f133c4ec5def6a98975dd83d6f8b8a75f6a6",
+    "144cb01fafb1c98dc9f9cf5ac07d6fa8273969ac"
+  ],
+  "context": "platform_shell",
+  "owner_contexts": ["telegram_channel"],
+  "plan": {
+    "id": "manual-driver-telegram-delivery-v1",
+    "route": "gravity-mvp/src/app/api/platform/drivers/[id]/telegram-link/route.ts",
+    "orchestrator": "gravity-mvp/src/modules/platform-shell/internal/driver-telegram-link-orchestrator.ts",
+    "retired_action": "gravity-mvp/src/app/drivers/[id]/actions.ts",
+    "role": "production_source_inactive"
+  },
+  "contracts": [
+    "telegram_channel.SaveManualDriverTelegramLinkCommand.v1",
+    "telegram_channel.RemoveManualDriverTelegramLinkCommand.v1",
+    "telegram_channel.NotifyManualDriverTelegramLinkCommand.v1"
+  ],
+  "ownership": {
+    "platform_shell": "same-origin HTTP delivery, sequential orchestration, handled error projection and path revalidation",
+    "telegram_channel": "manual DriverTelegram persistence and optional bot notification transport",
+    "fleet_operations": "unchanged page read and browser UI",
+    "generic_persistence_capabilities": 0
+  },
+  "dependency": {
+    "added": [],
+    "effective_added_dependencies": 0,
+    "dependency_relationships": 106,
+    "dependency_cycles": 0,
+    "reverse_owner_to_platform_shell": false
+  },
+  "enforcement": {
+    "baseline_registry_commit": "4d27223b6950c0c824e762675fe2af960d69f0f7",
+    "baseline_findings": 1375,
+    "baseline_direct_foreign_prisma_write": 78,
+    "baseline_direct_provider_transport_access": 38,
+    "baseline_internal_module_import": 375,
+    "baseline_non_public_cross_context_import": 531,
+    "baseline_undeclared_dependency": 353,
+    "retired_fingerprints": [
+      "arch_2be842f1d2e1f76e47324c08",
+      "arch_61fa64659cd9e262d431f445"
+    ],
+    "actual_findings": 1373,
+    "actual_exceptions": 1373,
+    "actual_direct_foreign_prisma_write": 76,
+    "actual_direct_provider_transport_access": 38,
+    "actual_internal_module_import": 375,
+    "actual_non_public_cross_context_import": 531,
+    "actual_undeclared_dependency": 353,
+    "actual_removed": 2,
+    "actual_added": 0,
+    "actual_semantic_shared_changes": 0,
+    "location_metadata_rebased": 9,
+    "finding_digest": "aa2ef63d616a1a1dbdba895b0ee1bab7bba08ad0967336668f2e7f0c0bc31ea1",
+    "registry_sha256": "8c52f1a614cd85a1f4f243884836fe16b64d61628d75c28ddb167540468c4a82",
+    "registry_deterministic": true
+  },
+  "verified_at": "2026-08-10T06:43:26Z",
+  "source_control_mutation": {
+    "module_rule": false,
+    "module_policy": true,
+    "strict_registry": true,
+    "source_only": true
+  },
+  "execution_performed": false,
+  "execution_scope": "no production or persistence execution; offline source analysis and isolated unit tests only",
+  "rollback": "4d27223b6950c0c824e762675fe2af960d69f0f7"
+}

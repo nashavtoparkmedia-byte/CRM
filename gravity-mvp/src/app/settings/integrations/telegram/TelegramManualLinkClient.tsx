@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/infrastructure/ui/card"
+import { Button } from "@/infrastructure/ui/button"
+import { Input } from "@/infrastructure/ui/input"
 import { getUnlinkedTelegramUsers, linkTelegramUserToDriver } from '../../../tg-bot-actions'
-import { getDrivers } from '../../../actions'
+import { getDrivers } from '@/modules/fleet-operations/public/v1/yandex-fleet-operations'
 import { Link2, Search, UserCheck } from 'lucide-react'
 
 export default function TelegramManualLinkClient() {

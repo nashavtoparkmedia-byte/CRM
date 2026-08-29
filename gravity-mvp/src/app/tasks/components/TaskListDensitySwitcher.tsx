@@ -15,7 +15,7 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { Rows2, Rows4, ChevronDown, Check } from 'lucide-react'
-import { useListViewStore } from '@/store/list-view-store'
+import { useListViewStore } from '@/modules/work-management/public/v1/client-state/list-view-store'
 import { getSystemView, getDefaultViewId } from '@/lib/tasks/list-views'
 import { recordUsage } from '@/lib/tasks/usage'
 import type { ListRowDensity } from '@/lib/tasks/list-schema'

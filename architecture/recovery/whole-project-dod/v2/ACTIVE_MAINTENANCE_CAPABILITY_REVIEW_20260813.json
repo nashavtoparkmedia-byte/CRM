@@ -1,0 +1,190 @@
+{
+  "schema": "yoko.crm.reviewed-active-maintenance-capabilities.v1",
+  "reviewed_at": "2026-08-13T00:00:00Z",
+  "policy": "Every approval is bound to exact source path, current analyzer site signature, enumerated lifecycle and reachability, data owner, target kind, target and operation. This artifact grants no file, directory, model-family or wildcard authority.",
+  "capabilities": [
+    {
+      "capability_id": "mmc.reviewed.v1.production_migration_authority.baseline_migrate_resolve",
+      "status": "APPROVED",
+      "approved": true,
+      "source": { "path": "gravity-mvp/scripts/baseline-vps.sh", "source_sha256": "3c217d23d2819d0ff6b59119ecc79b525b914f3e0e9d609bfd4f630fe129e2f2", "entrypoint": "one-time production database baseline loop", "site_signatures": ["fb0765906652f3c3eb19a70e1eb8201b5b1e3be232f1e1e0dc69494d759fde52"] },
+      "lifecycle": "MIGRATION",
+      "lifecycle_evidence_status": "REVIEWED_OPERATOR_BASELINE_ENTRYPOINT",
+      "lifecycle_evidence": "The exact script records each checked migration as applied when baselining an existing production database.",
+      "functional_owner": "platform_shell",
+      "target": { "kind": "SCHEMA", "data_owner": "production_migration_authority", "exact_names": ["gravity-mvp/prisma/schema.prisma"], "operations": ["mixed-script-command:prisma migrate resolve"] },
+      "invocation": { "production_reachability": "CONFIRMED_MANUAL_BASELINE", "current_caller": "operator invoking gravity-mvp/scripts/baseline-vps.sh" },
+      "recurring": false,
+      "cross_domain": false
+    },
+    {
+      "capability_id": "mmc.reviewed.v1.production_migration_authority.migrate_data_restore",
+      "status": "APPROVED",
+      "approved": true,
+      "source": { "path": "scripts/migrate-data-apply.sh", "source_sha256": "273c450c56a5daa82887405f1bce2daefbabd060e4a084ebb960897fb1d43098", "entrypoint": "explicit production data migration restore step", "site_signatures": ["2d375d50425d4ebfcdae9f253de9d7512072f7448c5dd653b31beeb32fc885a1"] },
+      "lifecycle": "MIGRATION",
+      "lifecycle_evidence_status": "REVIEWED_MANUAL_DATA_MIGRATION_ENTRYPOINT",
+      "lifecycle_evidence": "The exact script restores an operator-selected dump into the named production PostgreSQL database.",
+      "functional_owner": "platform_shell",
+      "target": { "kind": "DATABASE", "data_owner": "production_migration_authority", "exact_names": ["postgresql-production-database"], "operations": ["mixed-script-command:pg_restore"] },
+      "invocation": { "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION", "current_caller": "operator invoking scripts/migrate-data-apply.sh" },
+      "recurring": false,
+      "cross_domain": false
+    },
+    {
+      "capability_id": "mmc.reviewed.v1.production_migration_authority.production_restore",
+      "status": "APPROVED",
+      "approved": true,
+      "source": { "path": "scripts/restore-pg.sh", "source_sha256": "d8a988c6866c149924e6654d93a04105f45bed272297d48668507baa516938d5", "entrypoint": "explicit production PostgreSQL restore step", "site_signatures": ["f661f1e776d6dd842255444759e9cf185969ef79e7662a152959630e15e7af66"] },
+      "lifecycle": "MIGRATION",
+      "lifecycle_evidence_status": "REVIEWED_MANUAL_RESTORE_ENTRYPOINT",
+      "lifecycle_evidence": "The exact restore script recreates and restores only the named production PostgreSQL database from an operator-selected dump.",
+      "functional_owner": "platform_shell",
+      "target": { "kind": "DATABASE", "data_owner": "production_migration_authority", "exact_names": ["postgresql-production-database"], "operations": ["mixed-script-command:pg_restore"] },
+      "invocation": { "production_reachability": "CONFIRMED_MANUAL_RESTORE", "current_caller": "operator invoking scripts/restore-pg.sh" },
+      "recurring": false,
+      "cross_domain": false
+    },
+    {
+      "capability_id": "mmc.reviewed.v1.fleet_operations.yandex_schema_db_push",
+      "status": "APPROVED",
+      "approved": true,
+      "source": { "path": "deploy/docker-compose.production.yml", "source_sha256": "ff4a96e97c586d8dc26cf36170defc3eb2da5a1bac9f62a6fc31aeb208e44013", "entrypoint": "yandex-fleet-scraper production container command", "site_signatures": ["00c96dc7c8cb5eb013f0eec0427d677a1ecfc39d1e8c91343927830d014823a1"] },
+      "lifecycle": "MIGRATION",
+      "lifecycle_evidence_status": "REVIEWED_ACTIVE_DEPLOYMENT_ENTRYPOINT",
+      "lifecycle_evidence": "Production compose applies the checked scraper schema before starting the API.",
+      "functional_owner": "platform_shell",
+      "target": { "kind": "SCHEMA", "data_owner": "fleet_operations", "exact_names": ["yandex-fleet-scraper/prisma/schema.prisma"], "operations": ["mixed-script-command:prisma db push"] },
+      "invocation": { "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT", "current_caller": "deploy/docker-compose.production.yml yandex-fleet-scraper command" },
+      "recurring": true,
+      "cross_domain": false
+    },
+    {
+      "capability_id": "mmc.reviewed.v1.production_migration_authority.gravity_container_migrate_deploy",
+      "status": "APPROVED",
+      "approved": true,
+      "source": { "path": "gravity-mvp/Dockerfile", "source_sha256": "ed00cec7e761d63209a7da67fcbea5b7c8c0fb165c0f2243c650ee35f1f97336", "entrypoint": "gravity-mvp production container CMD", "site_signatures": ["20042cbc917b8cccb95945e464b43aabc7eb1b57c5ca3da4476cc1b72e77eed9"] },
+      "lifecycle": "MIGRATION",
+      "lifecycle_evidence_status": "REVIEWED_ACTIVE_DEPLOYMENT_ENTRYPOINT",
+      "lifecycle_evidence": "The production container applies only the checked finite Prisma migration catalog before application start.",
+      "functional_owner": "platform_shell",
+      "target": { "kind": "SCHEMA", "data_owner": "production_migration_authority", "exact_names": ["gravity-mvp/prisma/schema.prisma"], "operations": ["mixed-script-command:prisma migrate deploy"] },
+      "invocation": { "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT", "current_caller": "gravity-mvp Dockerfile CMD" },
+      "recurring": true,
+      "cross_domain": false
+    },
+    {
+      "capability_id": "mmc.reviewed.v1.production_migration_authority.deploy_script_migrate_deploy",
+      "status": "APPROVED",
+      "approved": true,
+      "source": { "path": "scripts/deploy.sh", "source_sha256": "9331e8157e11b4ab829cb1b75074ddcc0ad4ff19e467e62f72b30d4f9d86dad3", "entrypoint": "project deployment script migration step", "site_signatures": ["2f63589b29d8ca9c3fc9a2395a36c59204aaa960f4c9b4ffac26be8a7fcf778f"] },
+      "lifecycle": "MIGRATION",
+      "lifecycle_evidence_status": "REVIEWED_ACTIVE_DEPLOYMENT_ENTRYPOINT",
+      "lifecycle_evidence": "The deployment script explicitly applies the checked Prisma migration catalog for gravity-mvp.",
+      "functional_owner": "platform_shell",
+      "target": { "kind": "SCHEMA", "data_owner": "production_migration_authority", "exact_names": ["gravity-mvp/prisma/schema.prisma"], "operations": ["mixed-script-command:prisma migrate deploy"] },
+      "invocation": { "production_reachability": "CONFIRMED_MANUAL_DEPLOYMENT", "current_caller": "operator invoking scripts/deploy.sh" },
+      "recurring": true,
+      "cross_domain": false
+    },
+    {
+      "capability_id": "mmc.reviewed.v1.messaging.cleanup_group_chat_rows",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/scripts/cleanup-group-chats.sql",
+        "source_sha256": "a7e857d35e8ff79d1ab77baa5f3b1f7d4d08e10219211b2768bb8b8716db1787",
+        "entrypoint": "manual transaction after the diagnostics in the same SQL file",
+        "site_signatures": [
+          "1dde17910d6ede26e63fea7f13eeb237a27f299dc3c25186fa9686400b466a68",
+          "3496c5c9535bc1d5b0cce4adf17e8516310c3260b20407856d5fd5f2ff54c4ec",
+          "c13b2ed496ae9c0a869281cd3db6f4ba560cffb50f5a10573e2702527fa49acc"
+        ]
+      },
+      "lifecycle": "CLEANUP",
+      "lifecycle_evidence_status": "REVIEWED_ACTIVE_OPERATOR_ENTRYPOINT",
+      "lifecycle_evidence": "The file is a self-contained transaction explicitly instructing an operator to review its diagnostic SELECTs before executing cleanup.",
+      "functional_owner": "messaging",
+      "target": { "kind": "TABLE", "data_owner": "messaging", "exact_names": ["Chat"], "operations": ["UPDATE"] },
+      "invocation": { "production_reachability": "CONFIRMED_MANUAL_OPERATOR", "current_caller": "database operator executing this exact file" },
+      "recurring": false,
+      "cross_domain": false
+    },
+    {
+      "capability_id": "mmc.reviewed.v1.contacts.cleanup_group_identities",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/scripts/cleanup-group-chats.sql",
+        "source_sha256": "a7e857d35e8ff79d1ab77baa5f3b1f7d4d08e10219211b2768bb8b8716db1787",
+        "entrypoint": "manual transaction after the diagnostics in the same SQL file",
+        "site_signatures": ["94c8e6d4c7d0f3203debaf993aaa75f5127d6629d76b607f94f380494c170fd5"]
+      },
+      "lifecycle": "CLEANUP",
+      "lifecycle_evidence_status": "REVIEWED_ACTIVE_OPERATOR_ENTRYPOINT",
+      "lifecycle_evidence": "The DELETE is bounded to orphan Telegram group identities and guarded by two exact NOT IN predicates inside the reviewed transaction.",
+      "functional_owner": "contacts",
+      "target": { "kind": "TABLE", "data_owner": "contacts", "exact_names": ["ContactIdentity"], "operations": ["DELETE"] },
+      "invocation": { "production_reachability": "CONFIRMED_MANUAL_OPERATOR", "current_caller": "database operator executing this exact file" },
+      "recurring": false,
+      "cross_domain": false
+    },
+    {
+      "capability_id": "mmc.reviewed.v1.fleet_operations.heal_driver_locks",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "yandex-fleet-scraper/src/scripts/heal-account.ts",
+        "source_sha256": "3f2458de5018230a8ee9ece84026d0b22856b41ba5e42efc7bb156da43568f4a",
+        "entrypoint": "direct tsx invocation of the exact script",
+        "site_signatures": ["e612b01af0e81e264b6971606630a77fc9f05b9eea363a99394c0883d66ae087"]
+      },
+      "lifecycle": "RECOVERY",
+      "lifecycle_evidence_status": "REVIEWED_ACTIVE_OPERATOR_ENTRYPOINT",
+      "lifecycle_evidence": "Source identifies the operation as clearing CRM fleet-check locks; it is not referenced by an automatic package or deployment entrypoint.",
+      "functional_owner": "fleet_operations",
+      "target": { "kind": "TABLE", "data_owner": "fleet_operations", "exact_names": ["Driver"], "operations": ["UPDATE"] },
+      "invocation": { "production_reachability": "CONFIRMED_MANUAL_OPERATOR", "current_caller": "operator invoking the exact recovery script" },
+      "recurring": false,
+      "cross_domain": false
+    },
+    {
+      "capability_id": "mmc.reviewed.v1.fleet_operations.heal_scraper_account",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "yandex-fleet-scraper/src/scripts/heal-account.ts",
+        "source_sha256": "3f2458de5018230a8ee9ece84026d0b22856b41ba5e42efc7bb156da43568f4a",
+        "entrypoint": "direct tsx invocation of the exact script",
+        "site_signatures": ["471ffbd6e25a65d5ec8f22324ad15e16b2d16ce6c8e9bc40baf8cde0b5a2d7cc"]
+      },
+      "lifecycle": "RECOVERY",
+      "lifecycle_evidence_status": "REVIEWED_ACTIVE_OPERATOR_ENTRYPOINT",
+      "lifecycle_evidence": "Source resets only Account healthScore, failureStreak and state after an explicit recovery invocation.",
+      "functional_owner": "fleet_operations",
+      "target": { "kind": "MODEL", "data_owner": "fleet_operations", "exact_names": ["account"], "operations": ["updateMany"] },
+      "invocation": { "production_reachability": "CONFIRMED_MANUAL_OPERATOR", "current_caller": "operator invoking the exact recovery script" },
+      "recurring": false,
+      "cross_domain": false
+    },
+    {
+      "capability_id": "mmc.reviewed.v1.fleet_operations.clear_scraper_checks",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "yandex-fleet-scraper/src/scripts/heal-account.ts",
+        "source_sha256": "3f2458de5018230a8ee9ece84026d0b22856b41ba5e42efc7bb156da43568f4a",
+        "entrypoint": "direct tsx invocation of the exact script",
+        "site_signatures": ["49b065b542d96b5a3066df557bef14efd66d5519872ebe51737ae8f6b25e602c"]
+      },
+      "lifecycle": "RECOVERY",
+      "lifecycle_evidence_status": "REVIEWED_ACTIVE_OPERATOR_ENTRYPOINT",
+      "lifecycle_evidence": "Source performs exactly one Check deleteMany after the account health reset; no other target is authorized.",
+      "functional_owner": "fleet_operations",
+      "target": { "kind": "MODEL", "data_owner": "fleet_operations", "exact_names": ["check"], "operations": ["deleteMany"] },
+      "invocation": { "production_reachability": "CONFIRMED_MANUAL_OPERATOR", "current_caller": "operator invoking the exact recovery script" },
+      "recurring": false,
+      "cross_domain": false
+    }
+  ]
+}

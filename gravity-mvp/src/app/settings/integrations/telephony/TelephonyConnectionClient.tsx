@@ -5,7 +5,7 @@ import {
     Save, AlertCircle, CheckCircle2, Loader2, RefreshCw,
     Eye, EyeOff, Info, ExternalLink,
 } from "lucide-react"
-import TelephonyTabs from "../_components/TelephonyTabs"
+import TelephonyTabs from '@/modules/calling/public/v1/client-ui/TelephonyTabs'
 
 interface ParamMap {
     username?: string

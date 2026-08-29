@@ -4,7 +4,10 @@ import { useState } from 'react'
 import {
     AlertCircle, Loader2, PlugZap, Save, Trash2, Eye, EyeOff,
 } from 'lucide-react'
-import type { AiCallKeysStatus, KeyStatus } from '@/lib/ai-call/keys-status'
+import type {
+    AiCallProviderKeyStatusV1 as KeyStatus,
+    AiCallProviderStatusV1 as AiCallKeysStatus,
+} from '@/modules/calling/public/v1/ai-call-provider-status'
 import type { Provider, Key } from '@/lib/ai-call/provider-settings'
 
 interface Props {

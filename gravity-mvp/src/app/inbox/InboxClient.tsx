@@ -15,11 +15,22 @@ import {
 } from "lucide-react"
 import type { InboxTask } from "./actions"
 import { resolveTask } from "./actions"
-import { logManagerCall } from "../drivers/actions"
-import { SegmentBadge } from "../drivers/components/SegmentBadge"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { SegmentBadge } from "@/modules/fleet-operations/public/v1/segment-badge"
+import { Button } from "@/infrastructure/ui/button"
+import { Input } from "@/infrastructure/ui/input"
 import Link from "next/link"
+
+async function recordManagerCommunication(driverId: string, activity: "call" | "message") {
+    const response = await fetch(
+        `/api/platform/drivers/${encodeURIComponent(driverId)}/manager-communication`,
+        {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ activity }),
+        },
+    )
+    if (!response.ok) throw new Error(`Failed to record manager communication (${response.status})`)
+}
 
 // ─── Priority badge ────────────────────────────────────────────────────────
 
@@ -54,7 +65,7 @@ function TaskCard({
     const [callLogged, setCallLogged] = useState(false)
 
     const handleCall = async () => {
-        await logManagerCall(task.driverId)
+        await recordManagerCommunication(task.driverId, "call")
         setCallLogged(true)
         setTimeout(() => setCallLogged(false), 2000)
     }

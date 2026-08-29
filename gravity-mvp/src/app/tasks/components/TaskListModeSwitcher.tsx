@@ -5,7 +5,7 @@
 //   Operational / Control / Table (churn scenario on MVP)
 // ═══════════════════════════════════════════════════════════════════
 
-import { useListViewStore } from '@/store/list-view-store'
+import { useListViewStore } from '@/modules/work-management/public/v1/client-state/list-view-store'
 import { getSystemViews, getDefaultViewId } from '@/lib/tasks/list-views'
 import { recordUsage } from '@/lib/tasks/usage'
 import { Briefcase, Eye, Table2 } from 'lucide-react'

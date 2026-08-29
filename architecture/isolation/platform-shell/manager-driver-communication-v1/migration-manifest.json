@@ -1,0 +1,76 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1",
+  "milestone": "CRM-ARCH-007R-MANAGER-DRIVER-COMMUNICATION",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "6abb89a99984fa01d97aa335df11525a6c022a81",
+  "source_commit": "b817a5f522c7c8ffde7bc083e33c1ae426fe6e34",
+  "implementation_commits": [
+    "b817a5f522c7c8ffde7bc083e33c1ae426fe6e34"
+  ],
+  "context": "platform_shell",
+  "owner_contexts": ["fleet_operations"],
+  "plan": {
+    "id": "manager-driver-communication-v1",
+    "route": "gravity-mvp/src/app/api/platform/drivers/[id]/manager-communication/route.ts",
+    "orchestrator": "gravity-mvp/src/modules/platform-shell/internal/manager-driver-communication-orchestrator.ts",
+    "retired_legacy_functions": ["logManagerCall", "logManagerMessage"],
+    "retired_runtime_facade": "gravity-mvp/src/modules/fleet-operations/public/v1/log-manager-call-action.ts",
+    "role": "production_source_unexecuted"
+  },
+  "contracts": [
+    "fleet_operations.RecordDriverDailyActivityCommand.v1",
+    "fleet_operations.RecordManagerDriverCommunicationCommand.v1"
+  ],
+  "ownership": {
+    "platform_shell": "same-origin HTTP delivery and exact sequential owner orchestration",
+    "fleet_operations": "local-day DriverDaySummary and manager CommunicationEvent persistence",
+    "browser_consumers": "four existing UI files with five call or message logging invocations",
+    "generic_persistence_capabilities": 0
+  },
+  "dependency": {
+    "added": [],
+    "effective_added_dependencies": 0,
+    "dependency_relationships": 106,
+    "dependency_cycles": 0,
+    "reverse_owner_to_platform_shell": false
+  },
+  "enforcement": {
+    "baseline_registry_commit": "6abb89a99984fa01d97aa335df11525a6c022a81",
+    "baseline_findings": 1373,
+    "baseline_direct_foreign_prisma_write": 76,
+    "baseline_direct_provider_transport_access": 38,
+    "baseline_internal_module_import": 375,
+    "baseline_non_public_cross_context_import": 531,
+    "baseline_undeclared_dependency": 353,
+    "retired_fingerprints": [
+      "arch_ce923859decc649ec34a6d0e",
+      "arch_8517b60c63ce289762108662",
+      "arch_5177b0c1500997d42e141a7d",
+      "arch_2a58415a7a6fec18c263ca6b"
+    ],
+    "actual_findings": 1369,
+    "actual_exceptions": 1369,
+    "actual_direct_foreign_prisma_write": 74,
+    "actual_direct_provider_transport_access": 38,
+    "actual_internal_module_import": 374,
+    "actual_non_public_cross_context_import": 530,
+    "actual_undeclared_dependency": 353,
+    "actual_removed": 4,
+    "actual_added": 0,
+    "actual_semantic_shared_changes": 0,
+    "location_metadata_rebased": 17,
+    "finding_digest": "918f44b1818f1c4b379c257a744e8dfd02bab3eeb4fd1bdd25d372a7ca83a75b",
+    "registry_sha256": "4a763f770b58b4fd48b1b6674fb4d804d0ca2b3c25608361b2fed8125f625c83",
+    "registry_deterministic": true
+  },
+  "verified_at": "2026-08-10T07:20:25Z",
+  "source_control_mutation": {
+    "module_rule": false,
+    "module_policy": true,
+    "strict_registry": true,
+    "source_only": true
+  },
+  "execution_performed": false,
+  "execution_scope": "no production or persistence execution; offline source analysis and isolated unit tests only",
+  "rollback": "6abb89a99984fa01d97aa335df11525a6c022a81"
+}

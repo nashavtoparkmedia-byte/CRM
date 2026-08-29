@@ -1,9 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Prisma client types
    for AiProviderSetting may not be regenerated on every dev box. */
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUser } from '@/lib/users/user-service'
-import { getAiCallKeysStatus } from '@/lib/ai-call/keys-status'
-import { saveValue, deleteValue, type Provider, type Key } from '@/lib/ai-call/provider-settings'
+import { getCurrentUserIdentityV1 as getCurrentUser } from '@/modules/identity-access/public/v1/user-directory'
+import { getAiCallProviderStatusV1 } from '@/modules/calling/public/v1/ai-call-provider-status'
+import {
+    deleteAiCallProviderSettingV1,
+    saveAiCallProviderSettingV1,
+    type AiCallProvider as Provider,
+    type AiCallProviderSettingKey as Key,
+} from '@/modules/calling/public/v1/ai-call-provider-settings'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,7 +29,7 @@ export async function GET() {
     if (user.role !== 'Администратор' && user.role !== 'Руководитель') {
         return NextResponse.json({ error: 'forbidden' }, { status: 403 })
     }
-    const status = await getAiCallKeysStatus()
+    const status = await getAiCallProviderStatusV1()
     return NextResponse.json(status)
 }
 
@@ -80,7 +85,7 @@ export async function POST(req: NextRequest) {
     // Secret iff it's an apiKey. folderId is public, mockMode is a boolean
     // string — neither needs encryption.
     const isSecret = key === 'apiKey'
-    await saveValue(provider, key, value, { secret: isSecret })
+    await saveAiCallProviderSettingV1(provider, key, value, { secret: isSecret })
     return NextResponse.json({ ok: true })
 }
 
@@ -106,7 +111,7 @@ export async function DELETE(req: NextRequest) {
         return NextResponse.json({ error: 'invalid_provider_key_pair' }, { status: 400 })
     }
 
-    await deleteValue(provider, key)
+    await deleteAiCallProviderSettingV1(provider, key)
     return NextResponse.json({ ok: true })
 }
 

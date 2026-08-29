@@ -1,0 +1,32 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1",
+  "milestone": "CRM-ARCH-007-FLEET-DAILY-ACTIVITY",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "58cfd054e6b55840d0c5d26a1edcad61a6e0e301",
+  "context": "fleet_operations",
+  "caller_context": "messaging",
+  "plan": {
+    "id": "migration_0f4314be5092e299",
+    "site_id": "write_a4998030a26da93d246f",
+    "file": "gravity-mvp/src/lib/communications.ts",
+    "model": "DriverDaySummary",
+    "method": "upsert"
+  },
+  "contract": "fleet_operations.RecordDriverDailyActivityCommand.v1",
+  "dependency_amendment": "messaging -> fleet_operations.public",
+  "consumer_before_sha256": "26ac2f793047a7b78046c29e033e22f7c403c3b5923fdaae73f9e694fb32baaf",
+  "consumer_after_sha256": "7b3925c15239262f033803d12d3d96ffdb2e9d4fca83f122105d140a1f9bc720",
+  "enforcement": {
+    "before": 1519,
+    "after": 1516,
+    "retired": [
+      "arch_4eabcd90fd5c1c74aa4b51f1",
+      "arch_f370116627758105c33680b0",
+      "arch_99b65b6a830de08d52d24dbd"
+    ],
+    "retirement_reason": "one migrated write plus two undeclared-dependency findings made stale by the reviewed graph edge",
+    "remaining_inbox_non_public_findings": 4,
+    "new_capacity": 0
+  },
+  "rollback": "58cfd054e6b55840d0c5d26a1edcad61a6e0e301"
+}

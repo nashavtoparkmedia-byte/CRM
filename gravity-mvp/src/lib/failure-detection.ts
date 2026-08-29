@@ -7,23 +7,9 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { FAILURE_DETECTION_CONFIG_V1 } from '@/modules/configuration/public/v1/operations-monitoring-policy'
 
-export const FAILURE_DETECTION_CONFIG = {
-    /** Time window for failure counting (hours) */
-    windowHours: 24,
-    /** Consecutive errors threshold for warning */
-    warningConsecutiveErrors: 2,
-    /** Consecutive errors threshold for critical */
-    criticalConsecutiveErrors: 5,
-    /** Error rate % threshold for warning (within window) */
-    warningErrorRatePct: 20,
-    /** Error rate % threshold for critical (within window) */
-    criticalErrorRatePct: 50,
-    /** Maximum hours since last successful execution before stale warning */
-    staleWarningHours: 2,
-    /** Maximum hours since last successful execution before stale critical */
-    staleCriticalHours: 6,
-}
+export const FAILURE_DETECTION_CONFIG = FAILURE_DETECTION_CONFIG_V1
 
 export type AlertStatus = 'normal' | 'warning' | 'critical' | 'stale' | 'unknown'
 

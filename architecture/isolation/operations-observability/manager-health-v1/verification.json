@@ -1,0 +1,71 @@
+{
+  "schema": "yoko.crm.context-isolation-verification.v1",
+  "milestone": "CRM-ARCH-007R-MANAGER-HEALTH",
+  "base_commit": "61f0afc9c22590d3344dfbcea6c5f4a580459a7d",
+  "source_commit": "8aeccb755b3fad942a69a23799f76f7a480f4d4f",
+  "verified_at": "2026-08-10T03:59:45Z",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "source": {
+    "consumer": "gravity-mvp/src/app/team-overview/actions.ts",
+    "consumer_before_sha256": "f9529a3d36604c938035c2ed4b4064c15ff3c5e17634668b88e512190c2cf2db",
+    "consumer_after_sha256": "2fea6763e1eba0247589c4b0f9ea0a88e4571f67ffe102c57660d34140cc21bc",
+    "pure_module": "gravity-mvp/src/lib/tasks/manager-health-config.ts",
+    "pure_module_before_sha256": "b911692a7f5e735af482c0a202e5c86b5900ed7d89fbd16fcd1339c9ffef7b47",
+    "pure_module_after_sha256": "58931ef529031ca72e104b315cf8a296547a9196963f5f05490f77b72771ef5f",
+    "retired_fingerprints": [
+      "arch_880b7dfae43971c822502b90",
+      "arch_3251166f174bce021d52ecef",
+      "arch_10ee9720cfdccbead6e5ce70",
+      "arch_c03fd6c4c21c0595bbc73678",
+      "arch_4115f2efad420d474a99e256",
+      "arch_9379c33dd717fc04b6f50ea3"
+    ]
+  },
+  "architecture": {
+    "files": 970,
+    "contexts": 16,
+    "dependency_relationships": 106,
+    "effective_added_dependencies": 0,
+    "dependency_cycles": 0,
+    "findings": 1408,
+    "exceptions": 1408,
+    "direct_foreign_prisma_write": 85,
+    "undeclared_dependency": 370,
+    "registry_removed": 6,
+    "registry_added": 0,
+    "changed_shared_entries": 0,
+    "finding_digest": "f1508b169b806c8a8b2b6cdf2ff5feb0b3235296d9fb24fa93e3c955242f10e8",
+    "registry_sha256": "fc04f70cb1a6898275a6ad70668f67245d994802a4e55f10e996b47b49881f1d",
+    "registry_deterministic": true
+  },
+  "tests": {
+    "operations_manager_health_repository": "12/12 PASS",
+    "operations_manager_health_consumer_orchestration": "13/13 PASS",
+    "operations_manager_health_boundary": "27/27 PASS",
+    "architecture_enforcement_parser": "29/29 PASS",
+    "contract_boundary_controls": "120/120 PASS",
+    "current_cumulative_architecture_test_and_check_scripts": "118/118 PASS"
+  },
+  "typescript": {
+    "diagnostics": 28,
+    "classification": "inherited",
+    "modified_or_new_slice_diagnostics": 0,
+    "normalized_base_sha256": "4bc87f13a0d8807e2e1ca0c79d5719cdfa743c69c6e8443e63626951b9457a17",
+    "normalized_current_sha256": "4bc87f13a0d8807e2e1ca0c79d5719cdfa743c69c6e8443e63626951b9457a17",
+    "normalized_diagnostics_identical": true
+  },
+  "eslint": {
+    "new_source_errors": 0,
+    "consumer_inherited_errors": 5
+  },
+  "checksums": "27/27 PASS",
+  "policy_source_mutated": true,
+  "registry_source_mutated": true,
+  "source_control_only": true,
+  "raw_write_owner_override_mutated": false,
+  "raw_write_owner_override_disposition": "intentionally frozen CRM-ARCH-003 ownership evidence; out of scope",
+  "database_accessed": false,
+  "manager_health_repository_executed_against_database": false,
+  "secret_values_read_or_emitted": false,
+  "production_mutated": false
+}

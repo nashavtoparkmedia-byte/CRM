@@ -11,10 +11,10 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useMemo } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/infrastructure/ui/dialog'
 import { SlidersHorizontal, RotateCcw } from 'lucide-react'
-import { useTasksStore } from '@/store/tasks-store'
-import { useTopParks } from '@/store/tasks-selectors'
+import { useTasksStore } from '@/modules/work-management/public/v1/client-state/task-store'
+import { useTopParks } from '@/modules/work-management/public/v1/client-state/task-selectors'
 import { getScenarioFilterableFields, SCENARIOS } from '@/lib/tasks/scenario-config'
 import type { ScenarioFieldDef } from '@/lib/tasks/scenario-config'
 import { TASK_TYPES, type TaskFilters } from '@/lib/tasks/types'

@@ -3,16 +3,27 @@
 import { useState } from "react"
 import { Send, Phone, TrendingUp } from "lucide-react"
 import type { DriverCard as DriverCardType } from "../actions"
-import { logManagerCall } from "../actions"
 import { ActivityGrid } from "./ActivityGrid"
 import { SegmentBadge } from "./SegmentBadge"
 import { ScoringDot } from "./ScoringDot"
 import { DriverScoreBar } from "./DriverScoreBar"
-import { Button } from "@/components/ui/button"
+import { Button } from "@/infrastructure/ui/button"
 
 interface DriverCardProps {
     driver: DriverCardType
     onMessage: (driver: DriverCardType) => void
+}
+
+async function recordManagerCommunication(driverId: string, activity: "call" | "message") {
+    const response = await fetch(
+        `/api/platform/drivers/${encodeURIComponent(driverId)}/manager-communication`,
+        {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ activity }),
+        },
+    )
+    if (!response.ok) throw new Error(`Failed to record manager communication (${response.status})`)
 }
 
 export function DriverCard({ driver, onMessage }: DriverCardProps) {
@@ -20,7 +31,7 @@ export function DriverCard({ driver, onMessage }: DriverCardProps) {
 
     const handleCall = async (e: React.MouseEvent) => {
         e.stopPropagation()
-        await logManagerCall(driver.id)
+        await recordManagerCommunication(driver.id, "call")
         setCallLogged(true)
         setTimeout(() => setCallLogged(false), 2000)
     }

@@ -1,0 +1,129 @@
+{
+  "schema": "yoko.crm.accepted-clean-release-commit.v2",
+  "status": "ACCEPTED",
+  "commit": "REPLACE_WITH_FULL_COMMIT",
+  "tree": "REPLACE_WITH_FULL_TREE",
+  "authoritative_ci": {
+    "schema": "yoko.crm.hosted-authoritative-ci-attestation.v1",
+    "provider": "github-actions",
+    "repository": "nashavtoparkmedia-byte/CRM",
+    "source": {
+      "commit": "REPLACE_WITH_FULL_COMMIT",
+      "tree": "REPLACE_WITH_FULL_TREE"
+    },
+    "workflow": {
+      "path": ".github/workflows/architecture-enforcement.yml",
+      "sha256": "REPLACE_WITH_WORKFLOW_SHA256"
+    },
+    "runner": {
+      "path": "tools/architecture/run-authoritative-ci.mjs",
+      "sha256": "REPLACE_WITH_RUNNER_SHA256"
+    },
+    "run": {
+      "id": "REPLACE_WITH_GITHUB_RUN_ID",
+      "attempt": "REPLACE_WITH_GITHUB_RUN_ATTEMPT",
+      "url": "REPLACE_WITH_GITHUB_RUN_HTML_URL",
+      "head_sha": "REPLACE_WITH_FULL_COMMIT",
+      "conclusion": "success"
+    },
+    "check": {
+      "id": "REPLACE_WITH_GITHUB_CHECK_RUN_ID",
+      "name": "architecture",
+      "url": "REPLACE_WITH_ARCHITECTURE_JOB_URL",
+      "head_sha": "REPLACE_WITH_FULL_COMMIT",
+      "conclusion": "success"
+    },
+    "jobs": [
+      {
+        "id": "REPLACE_WITH_ARCHITECTURE_JOB_ID",
+        "name": "architecture",
+        "url": "REPLACE_WITH_ARCHITECTURE_JOB_URL",
+        "head_sha": "REPLACE_WITH_FULL_COMMIT",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": "REPLACE_WITH_GRAVITY_ARTIFACT_JOB_ID",
+        "name": "gravity-artifact",
+        "url": "REPLACE_WITH_GRAVITY_ARTIFACT_JOB_URL",
+        "head_sha": "REPLACE_WITH_FULL_COMMIT",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ],
+    "artifact": {
+      "id": "REPLACE_WITH_GITHUB_ARTIFACT_ID",
+      "name": "REPLACE_WITH_GRAVITY_IMAGE_FULL_COMMIT_ARTIFACT_NAME",
+      "url": "REPLACE_WITH_GITHUB_ARTIFACT_URL",
+      "expired": false,
+      "size_in_bytes": "REPLACE_WITH_GITHUB_ARTIFACT_ZIP_BYTES",
+      "digest": "sha256:REPLACE_WITH_GITHUB_ARTIFACT_ZIP_SHA256",
+      "workflow_run_id": "REPLACE_WITH_GITHUB_RUN_ID",
+      "head_sha": "REPLACE_WITH_FULL_COMMIT"
+    },
+    "controls": {
+      "count": 52,
+      "catalog_sha256": "7268cb0b049390bee10aebf53277c1f771b04670ed5c59ae022db0e9ff317680",
+      "semantic_catalog_sha256": "24ad32ba5a97e617e34bd19a3bcb2109807bf946636737d02b12fd7607185483",
+      "catalog": [
+        "authoritative-ci-inventory",
+        "whole-repository-credential-inventory",
+        "fresh-credential-verification",
+        "whole-repository-write-scan",
+        "fresh-write-verification",
+        "fresh-migration-write-site-authorizations",
+        "original-dod-canonical-mapping",
+        "original-dod-canonical-mapping-negatives",
+        "manifest-policy",
+        "manifest-negatives",
+        "executable-path-ownership-negatives",
+        "final-dependency-artifact",
+        "module-scaffold-negatives",
+        "production-migration-authority",
+        "production-migration-authority-negatives",
+        "production-migration-default-clean-checkout",
+        "production-migration-runtime-semantics",
+        "source-only-runtime-v10-contract",
+        "production-migration-committed-runtime-inventory",
+        "production-migration-canonical-replay",
+        "production-migration-predecessor-recovery-replay",
+        "architecture-policy",
+        "architecture-negatives",
+        "write-analyzer-negatives",
+        "write-runner-negatives",
+        "write-gate-negatives",
+        "surface-lifecycle-negatives",
+        "ambiguity-reconciliation",
+        "scoped-ownership-negatives",
+        "maintenance-capability-negatives",
+        "credential-field-registry",
+        "credential-analyzer-negatives",
+        "credential-inventory-negatives",
+        "credential-boundary-negatives",
+        "credential-gate-negatives",
+        "credential-migration-boundary",
+        "contract-registry-policy",
+        "contract-registry-negatives",
+        "contract-policy",
+        "contract-behavior",
+        "outbox-policy",
+        "outbox-behavior-negatives",
+        "static-sql-policy",
+        "typescript-baseline-negatives",
+        "typescript-baseline",
+        "blast-radius-negatives",
+        "blast-radius",
+        "boundary-control-lifecycle-negatives",
+        "all-current-boundaries",
+        "independent-source-critic",
+        "gravity-security",
+        "tg-bot-security"
+      ]
+    }
+  },
+  "source_only": true,
+  "migration_sql_change_from_7aea": false,
+  "schema_sync_to_production_authority": true,
+  "accepted_by": "REPLACE_WITH_REVIEW_AUTHORITY",
+  "accepted_at": "REPLACE_WITH_TIMESTAMP"
+}

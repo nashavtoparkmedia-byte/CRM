@@ -1,0 +1,38 @@
+# syntax=docker/dockerfile:1.7
+# Low-disk deployment path: rebuild Next.js, then overlay only .next onto the
+# currently installed production image. Runtime dependencies and persistent
+# data remain untouched.
+FROM node:20-bookworm-slim AS deps
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY package.json package-lock.json* ./
+COPY prisma ./prisma
+RUN npm ci --no-audit --no-fund
+
+FROM node:20-bookworm-slim AS builder
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN npx prisma generate
+ARG NEXT_PUBLIC_AVITO_LEADS_URL=""
+ARG NEXT_PUBLIC_MAX_SCRAPER_PHONE=""
+ARG NEXT_PUBLIC_FORCE_SHOW_ALL_CHANNELS=""
+ENV NEXT_PUBLIC_AVITO_LEADS_URL=$NEXT_PUBLIC_AVITO_LEADS_URL
+ENV NEXT_PUBLIC_MAX_SCRAPER_PHONE=$NEXT_PUBLIC_MAX_SCRAPER_PHONE
+ENV NEXT_PUBLIC_FORCE_SHOW_ALL_CHANNELS=$NEXT_PUBLIC_FORCE_SHOW_ALL_CHANNELS
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=production
+RUN npm run build
+
+# This is the image currently running in production. BuildKit resolves the
+# existing local image before replacing the same tag at export time.
+FROM crm/gravity-mvp:multi-park-scheduler-629b108-20260713T152852Z AS runner
+USER root
+COPY --from=builder --chown=app:app /app/.next /app/.next
+COPY --from=builder --chown=app:app /app/prisma /app/prisma
+COPY --from=builder --chown=app:app /app/node_modules/.prisma/client /app/node_modules/.prisma/client
+COPY --from=builder --chown=app:app /app/node_modules/@prisma/client /app/node_modules/@prisma/client
+USER app

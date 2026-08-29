@@ -1,0 +1,23 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1",
+  "milestone": "CRM-ARCH-007-CONTACTS-MANUAL-LINK-NAME",
+  "base_commit": "bb4fbc79ab659be81af6822f03f0af7c99e7f865",
+  "captured_at": "2026-08-09T16:20:33Z",
+  "consumer": "gravity-mvp/src/app/messages/link-chat-actions.ts",
+  "consumer_sha256": "90ec6fedf2646f4f97a7d7727ded47724cefd1cdab16b80a615b4c4b86a4080c",
+  "behavior": [
+    "enter this path only when the phone-identity path is ineligible and chat.contactId exists",
+    "look up the existing Contact before attempting an update",
+    "missing Contact is a no-op",
+    "existing Contact displayName is set to driver.fullName without placeholder or authority filtering",
+    "persistence failures reach the outer action error translation",
+    "successful action still revalidates /messages"
+  ],
+  "out_of_scope": [
+    "Chat and Driver persistence",
+    "ContactService resolve and ensure-link flow",
+    "search behavior and UI",
+    "database schema or data",
+    "production activation"
+  ]
+}

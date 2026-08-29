@@ -3,7 +3,7 @@ import { MonitoringClient } from './MonitoringClient';
 import { RECENT_EVENTS_MAX, RECENT_EVENTS_DAYS, SCRAPER_BASE_URL } from './lib/constants';
 import type { MonitoringDriver, MonitoringStats, AttentionItem } from './lib/types';
 import type { EventType } from './lib/constants';
-import { SectionDescription } from '@/components/ui/SectionDescription';
+import { SectionDescription } from '@/infrastructure/ui/SectionDescription';
 
 // Fetch scraper stats with graceful degradation
 async function getScraperStats(): Promise<{ checksUsedToday: number | null; checksLimitToday: number }> {
@@ -25,7 +25,7 @@ async function getScraperStats(): Promise<{ checksUsedToday: number | null; chec
     }
 }
 
-import { PageContainer } from '@/components/ui/PageContainer';
+import { PageContainer } from '@/infrastructure/ui/PageContainer';
 
 export default async function MonitoringPage() {
     const [driversRaw, total, attentionRaw, attentionTotal, scraperStats] = await Promise.all([

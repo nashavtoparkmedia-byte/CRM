@@ -20,7 +20,7 @@ async function checkDriver() {
   });
 
   console.log(JSON.stringify(drivers, null, 2));
-  await prisma.\$disconnect();
+  await prisma.$disconnect();
 }
 
 checkDriver();

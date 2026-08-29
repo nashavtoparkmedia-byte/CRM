@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client'
+import { normalizeChatExternalIdV1, moveChatMessagesV1, deleteChatV1, refreshChatLastMessageAtV1 } from './src/modules/messaging/public/v1/legacy-prisma-chat-backfill-adapter.js'
 
 const prisma = new PrismaClient()
 
@@ -7,10 +8,7 @@ async function main() {
     const primaryChatId = 'cmms4a8py0001vpnsde1ex208'
     
     // 1. Update primary chat external ID
-    await prisma.chat.update({
-        where: { id: primaryChatId },
-        data: { externalChatId: 'whatsapp:79222155750' }
-    })
+    await normalizeChatExternalIdV1(primaryChatId, 'whatsapp:79222155750')
     console.log(`Updated primary chat ${primaryChatId} to use standard whatsapp:PHONE external ID.`)
 
     const duplicateChats = [
@@ -23,14 +21,11 @@ async function main() {
         if (!chat) continue;
 
         // Move all messages to primary chat
-        const updateRes = await prisma.message.updateMany({
-            where: { chatId: dChatId },
-            data: { chatId: primaryChatId }
-        })
+        const updateRes = await moveChatMessagesV1(dChatId, primaryChatId)
         console.log(`Moved ${updateRes.count} messages from duplicate chat ${dChatId} to primary`)
         
         // Delete the duplicate chat
-        await prisma.chat.delete({ where: { id: dChatId } })
+        await deleteChatV1(dChatId)
         console.log(`Deleted duplicate chat ${dChatId}`)
     }
 
@@ -41,10 +36,7 @@ async function main() {
     })
     
     if (lastMsg) {
-        await prisma.chat.update({
-            where: { id: primaryChatId },
-            data: { lastMessageAt: lastMsg.sentAt }
-        })
+        await refreshChatLastMessageAtV1(primaryChatId, lastMsg.sentAt)
     }
     console.log('Cleanup complete. The UI should now show 2342 and 2343 correctly.')
 }

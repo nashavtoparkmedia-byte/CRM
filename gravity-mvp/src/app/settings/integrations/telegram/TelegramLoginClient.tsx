@@ -2,21 +2,22 @@
 
 import { useState, useEffect } from 'react'
 import { CheckCircle2, QrCode, LogOut, Loader2, Send, Plus, Star, Edit2, PauseCircle, PlayCircle, Trash2 } from 'lucide-react'
-import { getTelegramAuthQR, checkTelegramAuthStatus, disconnectTelegram, submitTelegram2FAPassword, updateTelegramConnectionSettings, pauseTelegramConnection, resumeTelegramConnection, deleteConnectionMessages } from '../../../tg-actions'
-import ChannelSyncBlock from "@/components/ChannelSyncBlock"
+import { getTelegramAuthQR, getTelegramAuthQRFromSavedConnection, checkTelegramAuthStatus, disconnectTelegram, submitTelegram2FAPassword, updateTelegramConnectionSettings, pauseTelegramConnection, resumeTelegramConnection, deleteConnectionMessages } from '../../../tg-actions'
+import type { TelegramConnectionPublicMetadata } from '@/modules/telegram-channel/public/v1/telegram-connection-public-metadata'
+import ChannelSyncBlock from "@/modules/messaging/public/v1/client-ui/channel-sync-block"
 
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
+import { Button } from "@/infrastructure/ui/button"
+import { Input } from "@/infrastructure/ui/input"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/infrastructure/ui/dialog"
 
-export default function TelegramLoginClient({ initialConnections = [] }: { initialConnections: any[] }) {
+export default function TelegramLoginClient({ initialConnections = [] }: { initialConnections: TelegramConnectionPublicMetadata[] }) {
     const [isAddingNew, setIsAddingNew] = useState(initialConnections.length === 0)
     
     const hasExisting = initialConnections.length > 0
     
     // Auth Form State
     const [apiId, setApiId] = useState(hasExisting ? initialConnections[0].apiId.toString() : '')
-    const [apiHash, setApiHash] = useState(hasExisting ? initialConnections[0].apiHash : '')
+    const [apiHash, setApiHash] = useState('')
     const [qrUrl, setQrUrl] = useState<string | null>(null)
     const [loginId, setLoginId] = useState<string | null>(null)
     const [status, setStatus] = useState<string>('idle')
@@ -40,7 +41,9 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
         setLoading(true)
         setStatus('generating_qr')
         try {
-            const { loginId, qrUrl } = await getTelegramAuthQR(Number(apiId), apiHash)
+            const { loginId, qrUrl } = hasExisting
+                ? await getTelegramAuthQRFromSavedConnection(initialConnections[0].id)
+                : await getTelegramAuthQR(Number(apiId), apiHash)
             setQrUrl(qrUrl)
             setLoginId(loginId)
             setStatus('awaiting_scan')
@@ -57,7 +60,7 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
         if (status === 'awaiting_scan' && loginId) {
             interval = setInterval(async () => {
                 try {
-                    const { status: newStatus, qrUrl: newQrUrl } = await checkTelegramAuthStatus(loginId, Number(apiId), apiHash)
+                    const { status: newStatus, qrUrl: newQrUrl } = await checkTelegramAuthStatus(loginId)
                     
                     if (newQrUrl && newQrUrl !== qrUrl) {
                         setQrUrl(newQrUrl)
@@ -84,7 +87,7 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
             }, 3000)
         }
         return () => clearInterval(interval)
-    }, [status, loginId, apiId, apiHash])
+    }, [status, loginId, qrUrl])
 
     const handle2FASubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -127,7 +130,7 @@ export default function TelegramLoginClient({ initialConnections = [] }: { initi
         window.location.reload()
     }
 
-    const handleSetDefault = async (conn: any) => {
+    const handleSetDefault = async (conn: TelegramConnectionPublicMetadata) => {
         if (conn.isDefault) return
         await updateTelegramConnectionSettings(conn.id, conn.name || 'Account', true)
         window.location.reload()

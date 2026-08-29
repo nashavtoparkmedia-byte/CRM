@@ -1,0 +1,27 @@
+{
+  "artifact_sha256": "b9a5d5f250e9d2a96ef4199200f1f6db52bdbe5fb9c23d74c45d2cce4bc63df7",
+  "captured_at": "2026-08-12T18:53:51Z",
+  "deb_sha256": "c342889473f29d37cab47a8b6a88f21aa165d646a910b65dcee9b1a0a62d0289",
+  "findings": [],
+  "independent_checks": {
+    "byte_exact_package_and_bundle_rebuild": "PASS",
+    "exact_source_to_git_archive": "PASS",
+    "offline_tests": "74/74 PASS",
+    "pinned_v7_compose_hash_transition_and_negative_drift": "PASS",
+    "shellcheck": "PASS",
+    "sudoers_validation": "PASS",
+    "tar_safety_and_payload_integrity": "PASS",
+    "v7_core_policy_sudoers_migration_parity": "PASS"
+  },
+  "review_scope": {
+    "database_retry": "Exact DB identity, migration ledger, backup hash and size, restore proof, preview proof and already-applied migration are revalidated; retry does not rerun the production migration.",
+    "installer": "Offline root-only zero-argument bootstrap, activation guard, exact predecessor rollback and interrupted-install reconciliation; no production or activation-profile invocation.",
+    "rollback_intent": "Only the pinned inherited v7 Compose config-hash transition 6db5dbf0f52f8d8e4fd30c1fcaf658c04a72c7f8ec034c3b38436792b8939014 to 4c1adad9993cb54c5723a202df6a3d3786709e0a01e42fff24d2230a83a411da is accepted on recovered container f2604662889815d31e449ab52b14e053da9b4fb9598cd72e209b4ccd5014b700, with every other semantic field, command and predecessor image exact.",
+    "target_health": "Strict HTTP/application, infrastructure and outbox startup gates remain separate from the narrow predecessor-compatible rollback health gate."
+  },
+  "schema": "yoko.crm.independent-recovery-bootstrap-critic.v1",
+  "source_archive_sha256": "be616b7d528bc111717d237bcd745a8b106302897e702be4b8af1b8643cba26d",
+  "source_commit": "7aea2823efe50e13a156540993d424594025e403",
+  "source_tree": "dbb380be0775d41b246248a9fe8fbf99bcb38d22",
+  "verdict": "PASS"
+}

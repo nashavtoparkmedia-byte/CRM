@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
+const { resetDriverDaySummaryV1, upsertDriverDaySummaryV1 } = require('../src/modules/fleet-operations/public/v1/legacy-prisma-driver-history-maintenance-adapter');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 
@@ -128,13 +130,7 @@ async function main() {
     for (const driver of drivers) {
         const driverDates = tripCounts.get(driver.yandexDriverId);
         
-        await prisma.driverDaySummary.updateMany({
-            where: {
-                driverId: driver.id,
-                date: { gte: startDate, lte: endDate }
-            },
-            data: { tripCount: 0 }
-        });
+        await resetDriverDaySummaryV1(driver.id, startDate, endDate);
         cleared++;
 
         if (!driverDates) continue;
@@ -143,17 +139,7 @@ async function main() {
             // Strictly enforce UTC representation of the correctly formatted YMD string
             const dateObj = new Date(`${dateStr}T00:00:00.000Z`);
 
-            await prisma.driverDaySummary.upsert({
-                where: {
-                    driverId_date: { driverId: driver.id, date: dateObj },
-                },
-                update: { tripCount: trips },
-                create: {
-                    driverId: driver.id,
-                    date: dateObj,
-                    tripCount: trips,
-                },
-            });
+            await upsertDriverDaySummaryV1(driver.id, dateObj, trips);
         }
         updated++;
     }

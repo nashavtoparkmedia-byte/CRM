@@ -48,13 +48,20 @@
       <action application="set" data="recording_file=/var/lib/freeswitch/recordings/${uuid}.wav"/>
       <action application="set" data="execute_on_answer=record_session /var/lib/freeswitch/recordings/${uuid}.wav"/>
 
-      <!-- Bridge directly to user/103 (browser softphone).
-           Multi-user simultaneous ring via bridge is incompatible with
-           BRIDGE_BLEG mode on the Megafon inbound leg — it only calls the
-           first element. Use a single destination for now; ring groups can
-           be added later via ESL originate or loopback. -->
+      <!-- Do not let early media or one unavailable browser select/fail the
+           whole group before a manager actually answers. -->
+      <action application="set" data="ignore_early_media=true"/>
+      <action application="set" data="fail_on_single_reject=false"/>
       <action application="set" data="call_timeout=30"/>
-      <action application="bridge" data="user/103"/>
+
+      <!-- Ring every active registration for extensions 101/102/103.
+           sofia_contact expands multiple browser/device registrations for
+           each extension into a parallel contact list. The :_: enterprise
+           delimiter dispatches the three extension groups independently;
+           this avoids the BRIDGE_BLEG behaviour previously observed with a
+           plain comma-separated user/101,user/102,user/103 bridge. The first
+           browser to answer wins and FreeSWITCH cancels every other leg. -->
+      <action application="bridge" data="${sofia_contact(internal/101@${domain_name})}:_:${sofia_contact(internal/102@${domain_name})}:_:${sofia_contact(internal/103@${domain_name})}"/>
     </condition>
   </extension>
 </include>

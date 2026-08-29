@@ -7,7 +7,7 @@ import {
     RECENT_EVENTS_DAYS,
     SCRAPER_BASE_URL,
     SCRAPER_STATS_CACHE_TTL_MS,
-} from '@/app/monitoring/lib/constants';
+} from '@/modules/fleet-operations/public/v1/monitoring-policy';
 
 // In-memory cache for scraper stats (graceful degradation)
 let scraperStatsCache: { data: any; timestamp: number } | null = null;

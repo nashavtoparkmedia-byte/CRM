@@ -1,0 +1,15 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "CRM-ARCH-007-MESSAGING-MAX-ATTACHMENTS",
+  "amendments": [
+    {
+      "context": "messaging",
+      "add_commands": [
+        "AttachMessageMediaCommand.v2",
+        "DeleteMessageMediaCommand.v1"
+      ],
+      "reason": "Preserve accepted non-null-size attachment v1 while exposing MAX nullable-size attachment and deletion semantics explicitly."
+    }
+  ]
+}

@@ -22,10 +22,30 @@ export async function GET() {
   try {
     const rows = await prisma.avito_accounts.findMany({
       orderBy: { id: 'asc' },
+      select: {
+        id: true, name: true, login_phone: true, notes: true, status: true,
+        last_auth_at: true, last_scan_at: true, last_success_at: true,
+        reauth_required_at: true, last_error: true, stable_id: true,
+        retry_required: true, last_scan_page_kind: true, last_scan_reason: true,
+        last_scan_next_action: true, last_manual_retry_at: true,
+        last_manual_retry_job_id: true, last_manual_retry_outcome: true,
+        acknowledged_at: true, attention_severity: true, operator_note: true,
+        responses_poll_interval_sec: true, last_collect_responses_at: true,
+        auto_reply_text: true, last_collect_page_kind: true,
+        last_collect_duration_ms: true, last_collect_new_count: true,
+        last_collect_refreshed_count: true, last_collect_phone_success_count: true,
+        last_collect_phone_failed_count: true, collect_fail_count_24h: true,
+        ip_blocked_count_24h: true, login_required_count_24h: true,
+        collect_fail_count_updated_at: true, ip_blocked_count_updated_at: true,
+        login_required_count_updated_at: true, auto_paused_at: true,
+        auto_pause_reason: true, created_at: true, updated_at: true,
+        profile_path: true,
+      },
     })
     return NextResponse.json(rows.map(toCamel))
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message ?? 'unknown' }, { status: 500 })
+    console.warn('[avito-accounts] list failed')
+    return NextResponse.json({ error: 'request failed' }, { status: 500 })
   }
 }
 
@@ -39,7 +59,7 @@ function toCamel(a: any) {
     name: a.name,
     loginPhone: a.login_phone,
     notes: a.notes,
-    profilePath: a.profile_path,
+    profileManaged: Boolean(a.profile_path),
     status: a.status,
     lastAuthAt: a.last_auth_at,
     lastScanAt: a.last_scan_at,
@@ -132,14 +152,15 @@ export async function POST(request: Request) {
 
     await logActivity('account', updated.id, 'created', {
       name: updated.name,
-      profilePath,
+      profileManaged: true,
       autoReplyConfigured: autoReplyText !== null,
     })
 
     return NextResponse.json(toCamel(updated), { status: 201 })
   } catch (err: any) {
+    console.warn('[avito-accounts] create failed')
     return NextResponse.json(
-      { error: err?.message ?? 'unknown' },
+      { error: 'request failed' },
       { status: 500 },
     )
   }

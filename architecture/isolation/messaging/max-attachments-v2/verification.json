@@ -1,0 +1,32 @@
+{
+  "schema": "yoko.crm.context-isolation-verification.v1",
+  "milestone": "CRM-ARCH-007-MESSAGING-MAX-ATTACHMENTS",
+  "verified_at": "2026-08-09T17:38:04Z",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "architecture": {
+    "files": 844,
+    "contexts": 16,
+    "findings": 1506,
+    "exceptions": 1506,
+    "finding_digest": "b835d93c385b77e6308156adf401214e9bdb2fa67ada1a1887b3157c9eeb5613",
+    "registry_sha256": "e2bc04e5e386631ead06eb4c6ee2ec25935593bc482044b7b97403cd995f0b3f",
+    "dependency_cycles": 0
+  },
+  "tests": {
+    "messaging_max_attachments_behavior": "15/15 PASS",
+    "messaging_max_attachments_controls": "14/14 PASS",
+    "contract_controls": "75/75 PASS",
+    "max_contact_shadow": "30/30 PASS",
+    "enforcement": "16/16 PASS",
+    "auth": "33/33 PASS",
+    "calling": "93/93 PASS",
+    "current_baseline_context_contract_outbox_identity_work_management_contacts_fleet_and_messaging_controls": "PASS"
+  },
+  "typescript": "28 baseline / 28 candidate / 0 normalized file-code-message differences",
+  "eslint": "0 base MAX-route/new-file diagnostics / 0 candidate diagnostics",
+  "accepted_v1_sha256": "3991133df680329f3e0d2e9ce950e04f15a1ed164f0c2359158b0687cf40ed35",
+  "inherited_stale_max_ui_source_test_sha256": "6151fb3133a1005854057025cb4911c89103c76b1e27fd3c3b38bf8369238d99 byte-identical base/candidate; EXC-006 unchanged",
+  "historical_evidence_note": "CRM-ARCH-002 evidence remains checksum-authoritative for its frozen input identity; its byte-count validator is not reinterpreted as a current-tree validator.",
+  "secret_values_read_or_emitted": false,
+  "production_mutated": false
+}

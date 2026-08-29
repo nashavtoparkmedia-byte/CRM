@@ -1,26 +1,24 @@
 import 'dotenv/config';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
-import { Queue } from 'bullmq';
 import { PrismaClient } from '@prisma/client';
-import { Redis } from 'ioredis';
 import crypto from 'crypto';
 import client from 'prom-client';
+import { createCheckHistoryQueueV1, createFleetRedisV1 } from './infrastructure/bullmq.js';
 
 const prisma = new PrismaClient();
 const fastify = Fastify({ logger: true });
 
-// Setup Redis connection for BullMQ
-const redisConnection = {
-    host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || '6379'),
-    ...(process.env.REDIS_PASSWORD ? { password: process.env.REDIS_PASSWORD } : {}),
-};
+// Admin API DTO: provider session material is never serialized to callers.
+const accountAdminMetadataSelect = {
+    id: true, name: true, state: true, healthScore: true, failureStreak: true,
+    lastKnownChecksLeft: true, lastSuccessAt: true, lastFailureAt: true,
+} as const;
 
-const checksQueue = new Queue('check-history', { connection: redisConnection });
+const checksQueue = createCheckHistoryQueueV1();
 
 // Direct Redis client for driver-action task state. Result lives 1h.
-const redis = new Redis(redisConnection);
+const redis = createFleetRedisV1();
 const DRIVER_ACTION_TTL_SEC = 3600;
 const driverActionKey = (taskId: string) => `driver-action:${taskId}`;
 
@@ -237,7 +235,8 @@ fastify.post('/admin/accounts', async (request, reply) => {
     if (!name) return reply.status(400).send({ error: 'Name is required' });
 
     const account = await prisma.account.create({
-        data: { name, state: 'NEED_REAUTH' } // New accounts need auth before becoming ACTIVE
+        data: { name, state: 'NEED_REAUTH' }, // New accounts need auth before becoming ACTIVE
+        select: accountAdminMetadataSelect,
     });
     await updateMetrics();
     return account;
@@ -247,7 +246,10 @@ fastify.put('/admin/accounts/:id/state', async (request, reply) => {
     const { id } = request.params as any;
     const { state, force } = request.body as any;
 
-    const account = await prisma.account.findUnique({ where: { id } });
+    const account = await prisma.account.findUnique({
+        where: { id },
+        select: { id: true, state: true, storageStateEncrypted: true },
+    });
     if (!account) return reply.status(404).send({ error: 'Account not found' });
 
     // Guard against moving to ACTIVE without force bypass or valid storage
@@ -257,7 +259,8 @@ fastify.put('/admin/accounts/:id/state', async (request, reply) => {
 
     const updated = await prisma.account.update({
         where: { id },
-        data: { state }
+        data: { state },
+        select: accountAdminMetadataSelect,
     });
 
     await updateMetrics();

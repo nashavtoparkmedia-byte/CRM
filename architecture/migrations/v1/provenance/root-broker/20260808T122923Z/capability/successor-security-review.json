@@ -1,0 +1,31 @@
+{
+  "reviewed_at": "2026-08-08T12:58:00Z",
+  "verdict": "PASS",
+  "release_blocking_findings": 0,
+  "source_sha256": "00bbd2a7fdc93a653db2f2891426d43185a33dd236b631feca83b2e2ef226306",
+  "tests_sha256": "6c74f060297f75faa5c70ad8c8942248c6e9582fe5cb765a333e2de44d22055b",
+  "sudoers_sha256": "8aaf3d3256f068f4564c49b5e046f11edb96536afa81a4d8e3ec675632da17a7",
+  "package_sha256": "af6512b446a662734f292fda3f3f861500dd9610657bfd7f9cbfcca4551a9e47",
+  "rebuild_sha256": "af6512b446a662734f292fda3f3f861500dd9610657bfd7f9cbfcca4551a9e47",
+  "independent_fd_audit": "PASS",
+  "command_surface": [
+    "docker-provenance",
+    "production-index-metadata",
+    "runtime-content-manifest",
+    "self-check"
+  ],
+  "git_binary_or_function_surface_present": false,
+  "messages_traversal_surface_present": false,
+  "index_path_component_open_no_follow": true,
+  "index_fd_name_identity_bound": true,
+  "index_same_inode_reopen_verified": true,
+  "index_repeat_hash_verified": true,
+  "whole_chain_repeat_verified": true,
+  "caller_supplied_paths_or_arguments": false,
+  "index_bytes_emitted": false,
+  "free_switch_secret_roots_excluded": true,
+  "sudoers_exact_argv_and_no_setenv": true,
+  "archive_root_ownership_and_modes_verified": true,
+  "maintainer_scripts": [],
+  "non_blocking_test_gap": "No dedicated replacement exactly between the first descriptor close and second reopen; the implementation compares full identity and hash and fails closed for that case."
+}

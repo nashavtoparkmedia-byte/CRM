@@ -1,0 +1,29 @@
+{
+  "schema": "yoko.crm.representative-contract-flow.v1",
+  "milestone": "CRM-ARCH-004",
+  "flow": "Calling AI follow-up -> Work Management task creation",
+  "migration_plan": "migration_e380f7963fd3d784",
+  "producer_context": "calling",
+  "owner_context": "work_management",
+  "command": "work_management.CreateTaskCommand.v1",
+  "result": "work_management.CreateTaskResult.v1",
+  "producer_sites": [
+    {
+      "file": "gravity-mvp/src/app/api/ai-calls/mock/route.ts",
+      "former_write": "prisma.task.create",
+      "current_entry_point": "createTaskV1"
+    },
+    {
+      "file": "gravity-mvp/src/app/api/ai-calls/sessions/[id]/finalize/route.ts",
+      "former_write": "prisma.task.create",
+      "current_entry_point": "createTaskV1"
+    }
+  ],
+  "owner_entry_point": "gravity-mvp/src/modules/work-management/public/v1/index.ts",
+  "provider_neutral_handler": "gravity-mvp/src/modules/work-management/public/v1/create-task-handler.ts",
+  "compatibility_adapter": "gravity-mvp/src/modules/work-management/public/v1/legacy-prisma-adapter.ts",
+  "sites_in_plan": 2,
+  "sites_migrated": 2,
+  "direct_foreign_task_creates_remaining_in_plan": 0,
+  "production_deployed": false
+}

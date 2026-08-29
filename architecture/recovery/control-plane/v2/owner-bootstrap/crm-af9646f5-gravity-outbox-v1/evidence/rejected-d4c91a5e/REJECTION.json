@@ -1,0 +1,22 @@
+{
+  "schema": "yoko.crm.owner-bootstrap-critic.v1",
+  "artifact_sha256": "d4c91a5ee2d05850b6e1d6360e9ac2d359ce7c428391d3246f0a037132bf081d",
+  "status": "REJECTED_STALE_NEVER_EXECUTE",
+  "verdict": "REJECT",
+  "owner_command_authorized": false,
+  "supersedable_only_by": "A newly sealed artifact with a distinct SHA256 and a fresh independent PASS bound to that exact SHA256.",
+  "findings": [
+    "sealed tar was stale relative to reviewed source",
+    "bootstrap rollback could falsely report success under Bash conditional errexit semantics",
+    "bootstrap was not interruption-idempotent",
+    "required review manifests and procedures were outside the sealed tar",
+    "production migration used anonymous Docker runners that could survive client timeout",
+    "durable production migration interruption recovery was absent",
+    "production DATABASE_URL was not bound to the inspected database user and name",
+    "a stale backup could be reused across attempts",
+    "outbox catalog validation did not prove the complete exact schema",
+    "release activation interruption recovery was incomplete",
+    "activation postcheck did not pin command, user, workdir and entrypoint",
+    "audit serialization allowed concurrent service-restart mutations"
+  ]
+}

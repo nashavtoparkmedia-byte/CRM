@@ -1,0 +1,13 @@
+{
+  "schema": "yoko.crm.architecture-legacy-write-supplement.v1",
+  "version": 1,
+  "milestone": "CRM-ARCH-007R-STATIC-SQL-OWNERSHIP",
+  "reason": "All supplemental write forms are now either migrated or structurally recognized by the fail-closed static SQL ownership scanner. Historical CRM-ARCH-003 evidence remains immutable; no supplemental production write exception remains active.",
+  "sites": [],
+  "controls": {
+    "site_count": 0,
+    "exact_fingerprint_exceptions": true,
+    "wildcards": false,
+    "deadline": "2026-12-31"
+  }
+}

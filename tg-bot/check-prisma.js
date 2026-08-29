@@ -1,12 +1,16 @@
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
+const { sanitizeLogValue } = require('./src/security/redactSecrets');
 require('dotenv').config();
 
 async function checkDb() {
     const token = process.env.BOT_TOKEN;
-    console.log('Current BOT_TOKEN from .env:', token ? token.substring(0, 5) + '...' : 'MISSING');
+    const tokenStatus = token ? 'CONFIGURED' : 'MISSING';
+    console.log('Current BOT_TOKEN from .env:', tokenStatus);
 
-    const bots = await prisma.bot.findMany();
+    const bots = await prisma.bot.findMany({
+        select: { id: true, domain: true },
+    });
     console.log('Total bots in DB:', bots.length);
 
     const targetBot = await prisma.bot.findUnique({
@@ -22,11 +26,14 @@ async function checkDb() {
     } else {
         console.log('NO MATCH for current token.');
         if (bots.length > 0) {
-            console.log('Registered tokens in DB:');
-            bots.forEach(b => console.log(`- ${b.token.substring(0, 5)}... (${b.domain})`));
+            console.log('Registered bot mappings:');
+            bots.forEach(b => console.log(`- ${b.id} (${b.domain})`));
         }
     }
     process.exit(0);
 }
 
-checkDb();
+checkDb().catch(error => {
+    console.error('Database check failed:', sanitizeLogValue(error));
+    process.exit(1);
+});

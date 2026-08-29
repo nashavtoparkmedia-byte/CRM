@@ -1,5 +1,17 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getYandexConnectionCredentialsV1, listYandexConnectionCredentialsV1, listYandexConnectionMetadataV1 } from '@/modules/fleet-operations/public/v1/yandex-connection-capability'
+import { PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, RECORD_PENDING_BOT_LINK_REQUEST_COMMAND_V1, UPSERT_DRIVER_TELEGRAM_LINK_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
+import { patchDriverTelegramLinkV1, recordPendingBotLinkRequestV1, upsertDriverTelegramLinkV1 } from '@/modules/telegram-channel/public/v1'
+import {
+    APPEND_SYSTEM_NOTIFICATION_V1,
+    MARK_REQUIRES_RESPONSE_V1,
+    SEND_MESSAGE_COMMAND_V1,
+    UPDATE_CONVERSATION_COMMAND_V1,
+} from '@/contracts/messaging/v1'
+import { sendMessageV1, updateConversationV1 } from '@/modules/messaging/public/v1'
+import { MIRROR_DRIVER_ACTION_RESULT_COMMAND_V1, RECORD_DRIVER_ACTION_COMMAND_V1 } from '@/contracts/fleet-operations/v1'
+import { mirrorDriverActionResultV1, recordDriverActionV1 } from '@/modules/fleet-operations/public/v1'
 
 const BOT_API_URL = process.env.BOT_API_URL || 'http://localhost:4000/api/bot'
 
@@ -102,8 +114,8 @@ async function handleCheckLink(payload: any) {
 
         // Use driver's activeParkId if available — otherwise fall back to any connection
         const connection = mapping.activeParkId
-            ? await prisma.apiConnection.findFirst({ where: { parkId: mapping.activeParkId } })
-            : await prisma.apiConnection.findFirst({ orderBy: { createdAt: 'asc' } })
+            ? await getYandexConnectionCredentialsV1(undefined, mapping.activeParkId)
+            : await getYandexConnectionCredentialsV1()
         if (connection) {
             const headers: Record<string, string> = {
                 'X-Client-ID': connection.clid,
@@ -135,10 +147,7 @@ async function handleCheckLink(payload: any) {
                         carInfo = `${car.brand || ''} ${car.model || ''} ${car.plate || ''}`.trim()
                         console.log('[check_link] found car:', carInfo)
                         // Cache to DriverTelegram so future check_link calls skip Yandex pagination
-                        await prisma.driverTelegram.update({
-                            where: { id: mapping.id },
-                            data: { carLabel: carInfo }
-                        }).catch(() => {})
+                        await patchDriverTelegramLinkV1({ contract: PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, mappingId: mapping.id, patch: { carLabel: carInfo } }).catch(() => {})
                     }
                 }
             } else {
@@ -181,10 +190,7 @@ async function handleCheckLink(payload: any) {
                                         if (car) {
                                             carInfo = `${car.brand || ''} ${car.model || ''} ${car.plate || ''}`.trim()
                                             console.log('[check_link] phone-search fallback car:', carInfo)
-                                            await prisma.driverTelegram.update({
-                                                where: { id: mapping.id },
-                                                data: { carLabel: carInfo }
-                                            }).catch(() => {})
+                                            await patchDriverTelegramLinkV1({ contract: PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, mappingId: mapping.id, patch: { carLabel: carInfo } }).catch(() => {})
                                         }
                                     }
                                 }
@@ -256,7 +262,7 @@ async function handleSyncUser(payload: any) {
     console.log(`[Webhook] sync_user: TG ${telegramId}, Phone ${phone}`)
 
     // 1. Try to auto-link by phone via Yandex API — search ALL parks
-    const connections = await prisma.apiConnection.findMany({ orderBy: { createdAt: 'asc' } })
+    const connections = await listYandexConnectionCredentialsV1()
     const normalizedPhone = phone.replace(/[\s+\-()]/g, '')
 
     for (const connection of connections) {
@@ -299,11 +305,7 @@ async function handleSyncUser(payload: any) {
                     if (crmDriver) driverId = crmDriver.id
                 } catch { /* keep yandexId as fallback */ }
 
-                await prisma.driverTelegram.upsert({
-                    where: { driverId },
-                    update: { telegramId: BigInt(telegramId), username: username || null, activeParkId: connection.parkId },
-                    create: { driverId, telegramId: BigInt(telegramId), username: username || null, activeParkId: connection.parkId }
-                })
+                await upsertDriverTelegramLinkV1({ contract: UPSERT_DRIVER_TELEGRAM_LINK_COMMAND_V1, driverId, telegramId: BigInt(telegramId), username: username || null, activeParkId: connection.parkId })
 
                 console.log(`[Webhook] Auto-linked TG ${telegramId} → driver ${driverId} (${driverName}) park=${connection.name || connection.parkId}`)
                 await notifyDriverLinked(telegramId.toString(), driverName)
@@ -315,13 +317,10 @@ async function handleSyncUser(payload: any) {
     }
 
     // 2. Fallback: save as an unlinked message for manual manager review
-    await prisma.botChatMessage.create({
-        data: {
-            telegramId: BigInt(telegramId),
-            text: `[Запрос привязки] Телефон: ${phone}, @${username || 'нет'}`,
-            direction: 'INCOMING',
-            driverId: null
-        }
+    await recordPendingBotLinkRequestV1({
+        contract: RECORD_PENDING_BOT_LINK_REQUEST_COMMAND_V1,
+        telegramId: String(telegramId),
+        text: `[Запрос привязки] Телефон: ${phone}, @${username || 'нет'}`,
     })
 
     // Notify manager: drop a system message into the driver's existing TG chat
@@ -346,27 +345,21 @@ async function notifyManagerPendingLink({ telegramId, username, phone }: {
         const userLabel = username ? `@${username}` : `TG ID ${telegramId}`
         const phoneLabel = phone ? `+${phone.replace(/^\+/, '')}` : 'не известен'
 
-        await prisma.message.create({
-            data: {
-                chatId: chat.id,
-                direction: 'system',
-                type: 'system',
-                channel: 'telegram',
-                content: `⚠️ Запрос привязки TG Бота\n\nВодитель ${userLabel} не найден в Яндекс Флит.\nТелефон: ${phoneLabel}\nTG ID: ${telegramId}\n\nПривяжите вручную: карточка контакта → «Привязать к водителю».`,
-                status: 'sent',
-                externalId: `bot_link_req_${telegramId}_${Date.now()}`,
-                sentAt: new Date(),
-            },
+        await sendMessageV1({
+            contract: SEND_MESSAGE_COMMAND_V1,
+            operation: APPEND_SYSTEM_NOTIFICATION_V1,
+            chatId: chat.id,
+            channel: 'telegram',
+            content: `⚠️ Запрос привязки TG Бота\n\nВодитель ${userLabel} не найден в Яндекс Флит.\nТелефон: ${phoneLabel}\nTG ID: ${telegramId}\n\nПривяжите вручную: карточка контакта → «Привязать к водителю».`,
+            externalId: `bot_link_req_${telegramId}_${Date.now()}`,
+            sentAt: new Date().toISOString(),
         })
 
-        await prisma.chat.update({
-            where: { id: chat.id },
-            data: {
-                status: 'open',
-                requiresResponse: true,
-                unreadCount: { increment: 1 },
-                lastMessageAt: new Date(),
-            },
+        await updateConversationV1({
+            contract: UPDATE_CONVERSATION_COMMAND_V1,
+            operation: MARK_REQUIRES_RESPONSE_V1,
+            chatId: chat.id,
+            lastMessageAt: new Date().toISOString(),
         })
     } catch (err: any) {
         console.error('[notifyManagerPendingLink] Error:', err.message)
@@ -409,8 +402,8 @@ async function handleChangeLimit(payload: any) {
 
     // 2. Use the driver's active park connection
     const connection = mapping.activeParkId
-        ? await prisma.apiConnection.findFirst({ where: { parkId: mapping.activeParkId } })
-        : await prisma.apiConnection.findFirst({ orderBy: { createdAt: 'asc' } })
+        ? await getYandexConnectionCredentialsV1(undefined, mapping.activeParkId)
+        : await getYandexConnectionCredentialsV1()
 
     if (!connection) {
         return NextResponse.json({ error: 'No active Yandex API connection in CRM' }, { status: 500 })
@@ -532,10 +525,10 @@ async function handleSearchCarByPlate(payload: any) {
     if (telegramId) {
         const mapping = await prisma.driverTelegram.findFirst({ where: { telegramId: BigInt(telegramId) } })
         if (mapping?.activeParkId) {
-            connection = await prisma.apiConnection.findFirst({ where: { parkId: mapping.activeParkId } })
+            connection = await getYandexConnectionCredentialsV1(undefined, mapping.activeParkId)
         }
     }
-    if (!connection) connection = await prisma.apiConnection.findFirst({ orderBy: { createdAt: 'asc' } })
+    if (!connection) connection = await getYandexConnectionCredentialsV1()
     if (!connection) return NextResponse.json({ error: 'No Yandex connection' }, { status: 503 })
 
     const prefix = platePrefix.toUpperCase().replace(/\s/g, '')
@@ -593,8 +586,8 @@ async function handleUpdateDriverCar(payload: any) {
     if (!mapping?.driverId) return NextResponse.json({ error: 'NOT_LINKED' }, { status: 404 })
 
     const connection = mapping.activeParkId
-        ? await prisma.apiConnection.findFirst({ where: { parkId: mapping.activeParkId } })
-        : await prisma.apiConnection.findFirst({ orderBy: { createdAt: 'asc' } })
+        ? await getYandexConnectionCredentialsV1(undefined, mapping.activeParkId)
+        : await getYandexConnectionCredentialsV1()
     if (!connection) return NextResponse.json({ error: 'No Yandex connection' }, { status: 503 })
 
     const headers: Record<string, string> = {
@@ -672,7 +665,8 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
         })
     }
     if (!driver?.yandexDriverId) {
-        await prisma.driverAction.create({
+        await recordDriverActionV1({
+            contract: RECORD_DRIVER_ACTION_COMMAND_V1,
             data: {
                 driverId: mapping.driverId,
                 kind,
@@ -692,8 +686,8 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
     let effectiveYandexId = driver.yandexDriverId!
     try {
         const conn = mapping.activeParkId
-            ? await prisma.apiConnection.findFirst({ where: { parkId: mapping.activeParkId } })
-            : await prisma.apiConnection.findFirst({ orderBy: { createdAt: 'asc' } })
+            ? await getYandexConnectionCredentialsV1(undefined, mapping.activeParkId)
+            : await getYandexConnectionCredentialsV1()
         if (conn && driver.fullName) {
             const checkRes = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list', {
                 method: 'POST',
@@ -743,7 +737,8 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
         }
         scraperTaskId = json.taskId
     } catch (e: any) {
-        await prisma.driverAction.create({
+        await recordDriverActionV1({
+            contract: RECORD_DRIVER_ACTION_COMMAND_V1,
             data: {
                 driverId: driver.id,
                 kind,
@@ -760,7 +755,8 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
     }
 
     // 3. Audit row in CRM
-    const action = await prisma.driverAction.create({
+    const { action } = await recordDriverActionV1({
+        contract: RECORD_DRIVER_ACTION_COMMAND_V1,
         data: {
             driverId: driver.id,
             kind,
@@ -780,10 +776,7 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
 }
 
 async function handleListParks() {
-    const parks = await prisma.apiConnection.findMany({
-        select: { parkId: true, name: true },
-        orderBy: { createdAt: 'asc' }
-    })
+    const parks = await listYandexConnectionMetadataV1()
     return NextResponse.json({
         parks: parks.map(p => ({ parkId: p.parkId, name: p.name || p.parkId }))
     })
@@ -796,7 +789,7 @@ async function handleSetActivePark(payload: any) {
     const mapping = await prisma.driverTelegram.findFirst({ where: { telegramId: BigInt(telegramId) } })
     if (!mapping) return NextResponse.json({ error: 'NOT_LINKED' }, { status: 404 })
 
-    const park = await prisma.apiConnection.findFirst({ where: { parkId } })
+    const park = await getYandexConnectionCredentialsV1(undefined, parkId)
     if (!park) return NextResponse.json({ error: 'PARK_NOT_FOUND' }, { status: 404 })
 
     // Verify driver exists in this park via Yandex Fleet
@@ -840,7 +833,7 @@ async function handleSetActivePark(payload: any) {
         // Don't block if Yandex check fails — allow the switch
     }
 
-    await prisma.driverTelegram.update({ where: { id: mapping.id }, data: { activeParkId: parkId, carLabel: null, carId: null } })
+    await patchDriverTelegramLinkV1({ contract: PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, mappingId: mapping.id, patch: { activeParkId: parkId, carLabel: null, carId: null } })
     return NextResponse.json({ success: true, parkName: park.name || parkId })
 }
 
@@ -851,7 +844,7 @@ async function handleGetParkInfo(payload: any) {
     if (!mapping) return NextResponse.json({ linked: false })
     let parkName: string | null = null
     if (mapping.activeParkId) {
-        const park = await prisma.apiConnection.findFirst({ where: { parkId: mapping.activeParkId } })
+        const park = await getYandexConnectionCredentialsV1(undefined, mapping.activeParkId)
         parkName = park?.name || mapping.activeParkId
     }
     return NextResponse.json({ linked: true, activeParkId: mapping.activeParkId || null, parkName })
@@ -874,16 +867,15 @@ async function handlePollDriverAction(payload: any) {
 
     // Mirror state into DriverAction row (best-effort — race with parallel polls is fine).
     if (scraperState.status && scraperState.status !== 'PENDING') {
-        await prisma.driverAction.updateMany({
-            where: { scraperTaskId: taskId, status: 'PENDING' },
-            data: {
-                status: scraperState.status,
-                result: scraperState.result ?? undefined,
-                errorMessage: scraperState.errorMessage ?? null,
-                shortOrderId: scraperState.result?.shortOrderId ?? undefined,
-                orderId: scraperState.result?.orderLongId ?? undefined,
-                completedAt: new Date(),
-            },
+        await mirrorDriverActionResultV1({
+            contract: MIRROR_DRIVER_ACTION_RESULT_COMMAND_V1,
+            scraperTaskId: taskId,
+            status: scraperState.status,
+            result: scraperState.result ?? undefined,
+            errorMessage: scraperState.errorMessage ?? null,
+            shortOrderId: scraperState.result?.shortOrderId ?? undefined,
+            orderId: scraperState.result?.orderLongId ?? undefined,
+            completedAt: new Date(),
         }).catch(() => {})
     }
 

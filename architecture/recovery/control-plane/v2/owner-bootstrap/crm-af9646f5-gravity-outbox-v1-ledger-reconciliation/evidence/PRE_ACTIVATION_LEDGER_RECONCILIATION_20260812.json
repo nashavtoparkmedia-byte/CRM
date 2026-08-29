@@ -1,0 +1,78 @@
+{
+  "schema": "yoko.crm.pre-activation-ledger-reconciliation.v1",
+  "captured_at": "2026-08-12T17:17:44Z",
+  "production_mutation": false,
+  "installed_runtime": {
+    "package_version": "2.0.0-6",
+    "runtime_abi": "2.0.0",
+    "profile_id": "crm-af9646f5-gravity-outbox-v1",
+    "audit_state": "EMPTY",
+    "audit_record_count": 0,
+    "self_check": "PASS",
+    "gravity_health": "HEALTHY"
+  },
+  "bootstrap_identity_mapping": [
+    {
+      "identity_type": "OUTER_OWNER_BOOTSTRAP_TAR",
+      "sha256": "88a30f4fdf74c1f86d47f47c31edec824a887c172a69585c45eddceb85fb755e",
+      "artifact": "../crm-af9646f5-gravity-outbox-v1/dist/yoko-crm-activation-bootstrap-af9646f5-v1.tar",
+      "installed_destination": null
+    },
+    {
+      "identity_type": "INNER_INSTALLED_DEBIAN_PACKAGE",
+      "sha256": "597f58d813f7a0f3631b9d1778588db880c00e7df97d92a51cef385f8f4d8ba0",
+      "artifact": "inputs/yoko-privileged-runtime_2.0.0-6_all.deb",
+      "installed_destination": "dpkg:yoko-privileged-runtime=2.0.0-6"
+    }
+  ],
+  "read_only_database_status": {
+    "database_identity_sha256": "ed88dfeaad2a3dc2e759590d295992cd06531d4403d896ded00b21ea667be1c9",
+    "postgres_container_id": "57a09acd5b407d72934ea4cb398874fec60d25a815265b018ba9dd4ab5dbddda",
+    "postgres_image_id": "sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229",
+    "server_version_num": "160014",
+    "active_migration_count": 61,
+    "normalized_observation_sha256": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201",
+    "interrupted_target_migrations": 0,
+    "rolled_back_target_migrations": 0,
+    "target_outbox_catalog_state": "ABSENT",
+    "v6_classification": "DRIFTED",
+    "secret_values_emitted": false
+  },
+  "root_cause": {
+    "classification": "SEALED_PROFILE_BASELINE_OMISSION",
+    "v6_expected_pre_target_active_migrations": 48,
+    "live_pre_target_active_migrations": 61,
+    "omitted_historical_rows": 13,
+    "production_drift_or_bootstrap_database_mutation_proven": false,
+    "fail_closed_result": "PASS"
+  },
+  "successor_design": {
+    "package_version": "2.0.0-7",
+    "runtime_abi": "2.0.0",
+    "enabled_profiles_unchanged": [
+      "database-status",
+      "release-preflight",
+      "database-migrate",
+      "release-activate",
+      "rollback"
+    ],
+    "sudoers_widening": false,
+    "core_changed": false,
+    "policy_changed": false,
+    "source_archive_changed": false,
+    "migration_artifact_changed": false,
+    "baseline_authorization": "EXACT_NORMALIZED_OBSERVATION_SHA256_AND_DATABASE_IDENTITY",
+    "only_permitted_delta": "20260809140000_add_domain_outbox@433b0d503f054ed6a8161a059e2650d5e401829dabe8c9d992a1d1763eef0016",
+    "unrelated_ledger_drift": "FAIL_CLOSED"
+  },
+  "candidate": {
+    "bootstrap_tar_sha256": "db571de22ad7fe9110bd339992c4caec58598b311c547b9543bd560db5dcc29d",
+    "package_sha256": "ababe50bcb0d3597786b1c77118867b1d700a5629bb2719892ce5ae4927a4738",
+    "deterministic_double_build": "PASS",
+    "tests": "67/67 PASS",
+    "independent_critic": "PASS",
+    "independent_critic_artifact": "evidence/INDEPENDENT_LEDGER_BOOTSTRAP_CRITIC_DB571DE2.json",
+    "independent_critic_sha256": "9e2b8fe0d6cb98ae2aaa41e4951e6deaffe80256cb4068047f68f0974f23dc31",
+    "owner_command_authorized": true
+  }
+}

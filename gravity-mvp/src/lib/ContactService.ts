@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { ChatChannel } from '@prisma/client'
-import { normalizePhoneE164, parseExternalChatId, looksLikePhone } from '@/lib/phoneUtils'
+import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
 
 interface ResolveResult {
   contact: { id: string; displayName: string }
@@ -9,6 +9,15 @@ interface ResolveResult {
 }
 
 const MAX_RETRIES = 2
+
+function isTechnicalChannelName(value: string | null | undefined, externalId: string): boolean {
+  const name = String(value || '').trim()
+  if (!name) return true
+  if (name === externalId) return true
+  if (/@(?:lid|c\.us|s\.whatsapp\.net)$/i.test(name)) return true
+  if (/^(?:Контакт\s+)?WhatsApp$/i.test(name)) return true
+  return /^\+?[\d\s()\-]{10,}$/.test(name)
+}
 
 /**
  * ContactService — единый сервис для работы с контактами.
@@ -68,6 +77,20 @@ export class ContactService {
     })
 
     if (existingIdentity) {
+      if (normalized) {
+        const phoneLink = await this.attachPhoneToIdentity(
+          existingIdentity.contactId,
+          existingIdentity.id,
+          normalized,
+          { source: channel, confirmed: channel === 'whatsapp' },
+        )
+        if (phoneLink.kind === 'conflict') {
+          console.warn(
+            `[ContactService] Identity/phone conflict: identity=${existingIdentity.id} `
+            + `contact=${existingIdentity.contactId} phone=${normalized} owner=${phoneLink.otherContactId}`,
+          )
+        }
+      }
       console.log(`[ContactService] Resolved via identity: contact=${existingIdentity.contactId} channel=${channel} externalId=${externalId}`)
       return {
         contact: existingIdentity.contact,
@@ -247,7 +270,7 @@ export class ContactService {
     opts?: {
       isTemporary?: boolean
       expiresAt?: Date | null
-      source?: 'manual' | 'avito' | 'whatsapp' | 'telegram' | 'phone' | 'yandex'
+      source?: 'manual' | 'avito' | 'whatsapp' | 'telegram' | 'max' | 'phone' | 'yandex'
       label?: string | null
       makePrimary?: boolean
       deactivateTemporaries?: boolean
@@ -326,41 +349,123 @@ export class ContactService {
   }
 
   /**
-   * Ensure Chat has contactId, contactIdentityId, and driverId (if Contact is linked to a Driver).
+   * Attach a provider-confirmed phone to an existing channel identity without
+   * stealing a phone owned by another contact.
    */
-  static async ensureChatLinked(chatId: string, contactId: string, identityId: string): Promise<void> {
-    const updateData: any = {
-      contactId,
-      contactIdentityId: identityId,
-    }
+  static async attachPhoneToIdentity(
+    contactId: string,
+    identityId: string,
+    phone: string,
+    opts?: {
+      source?: 'manual' | 'avito' | 'whatsapp' | 'telegram' | 'max' | 'phone' | 'yandex'
+      confirmed?: boolean
+    },
+  ): Promise<
+    | { kind: 'added' | 'exists_same_contact'; phoneId: string; contactId: string }
+    | { kind: 'conflict'; otherContactId: string; otherContactName: string }
+  > {
+    const normalized = normalizePhoneE164(phone)
+    if (!normalized) throw new Error('Invalid phone number')
 
-    // Auto-link driverId if Contact is linked to a Driver and Chat doesn't have driverId yet
-    const chat = await prisma.chat.findUnique({
-      where: { id: chatId },
-      select: { driverId: true },
-    })
-
-    if (chat && !chat.driverId) {
-      const contact = await prisma.contact.findUnique({
+    const [identity, contact] = await Promise.all([
+      prisma.contactIdentity.findUnique({
+        where: { id: identityId },
+        select: {
+          id: true,
+          contactId: true,
+          externalId: true,
+          phoneId: true,
+          reachabilityStatus: true,
+          phone: { select: { phone: true, isActive: true, isPrimary: true, verifiedAt: true } },
+        },
+      }),
+      prisma.contact.findUnique({
         where: { id: contactId },
-        select: { yandexDriverId: true },
-      })
+        select: { id: true, displayName: true, displayNameSource: true, primaryPhoneId: true },
+      }),
+    ])
 
-      if (contact?.yandexDriverId) {
-        const driver = await prisma.driver.findUnique({
-          where: { yandexDriverId: contact.yandexDriverId },
-          select: { id: true },
-        })
-        if (driver) {
-          updateData.driverId = driver.id
-        }
-      }
+    if (!identity || identity.contactId !== contactId) {
+      throw new Error(`Identity ${identityId} does not belong to contact ${contactId}`)
+    }
+    if (!contact) throw new Error(`Contact ${contactId} not found`)
+
+    const makePrimary = !contact.primaryPhoneId
+    const updateTechnicalName = contact.displayNameSource === 'channel'
+      && isTechnicalChannelName(contact.displayName, identity.externalId)
+      && contact.displayName !== normalized
+
+    if (
+      identity.phoneId
+      && identity.phone?.phone === normalized
+      && identity.phone.isActive
+      && (!makePrimary || identity.phone.isPrimary)
+      && (!opts?.confirmed || (
+        identity.reachabilityStatus === 'confirmed'
+        && !!identity.phone.verifiedAt
+      ))
+      && !updateTechnicalName
+    ) {
+      return { kind: 'exists_same_contact', phoneId: identity.phoneId, contactId }
     }
 
-    await prisma.chat.update({
-      where: { id: chatId },
-      data: updateData,
-    })
+    let result
+    try {
+      result = await this.addPhoneToContact(contactId, normalized, {
+        source: opts?.source ?? 'manual',
+        makePrimary,
+      })
+    } catch (error: any) {
+      if (error?.code !== 'P2002') throw error
+      result = await this.addPhoneToContact(contactId, normalized, {
+        source: opts?.source ?? 'manual',
+        makePrimary,
+      })
+    }
+
+    if (result.kind === 'conflict') return result
+
+    const now = new Date()
+    const updates: any[] = [
+      prisma.contactPhone.update({
+        where: { id: result.phoneId },
+        data: {
+          isActive: true,
+          ...(opts?.confirmed ? { verifiedAt: now } : {}),
+          ...(makePrimary ? { isPrimary: true } : {}),
+        },
+      }),
+      prisma.contactIdentity.update({
+        where: { id: identityId },
+        data: {
+          phoneId: result.phoneId,
+          ...(opts?.confirmed ? {
+            reachabilityStatus: 'confirmed',
+            reachabilityCheckedAt: now,
+          } : {}),
+        },
+      }),
+    ]
+
+    if (makePrimary) {
+      updates.push(prisma.contact.update({
+        where: { id: contactId },
+        data: { primaryPhoneId: result.phoneId },
+      }))
+    }
+    if (updateTechnicalName) {
+      updates.push(prisma.contact.update({
+        where: { id: contactId },
+        data: { displayName: normalized },
+      }))
+    }
+
+    await prisma.$transaction(updates)
+    console.log(
+      `[ContactService] Attached phone ${normalized} to identity=${identityId} `
+      + `contact=${contactId} primary=${makePrimary}`,
+    )
+    return result
   }
 
   /**
@@ -374,14 +479,15 @@ export class ContactService {
   static async cleanupDanglingIdentities(contactIds: string[]): Promise<number> {
     if (contactIds.length === 0) return 0
 
-    const result = await prisma.$executeRaw`
-      DELETE FROM "ContactIdentity"
-      WHERE "contactId" = ANY(${contactIds}::text[])
-        AND id NOT IN (
-          SELECT "contactIdentityId" FROM "Chat"
-          WHERE "contactIdentityId" IS NOT NULL
-        )
-    `
+    const result = await prisma.$executeRawUnsafe(
+      `DELETE FROM "ContactIdentity"
+       WHERE "contactId" = ANY($1::text[])
+         AND id NOT IN (
+           SELECT "contactIdentityId" FROM "Chat"
+           WHERE "contactIdentityId" IS NOT NULL
+         )`,
+      contactIds,
+    )
     if (result > 0) {
       console.log(`[ContactService] Cleaned up ${result} dangling identities for ${contactIds.length} contacts`)
     }

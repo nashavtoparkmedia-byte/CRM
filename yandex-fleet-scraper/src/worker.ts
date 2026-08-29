@@ -1,25 +1,25 @@
 import 'dotenv/config';
-import { Worker, Job, UnrecoverableError } from 'bullmq';
 import { PrismaClient } from '@prisma/client';
 import { chromium } from 'playwright-extra';
 import type { Page, BrowserContext, Locator } from 'playwright';
 import stealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { parseDriverHistory } from './lib/parser.js';
-import { Redis } from 'ioredis';
 import fs from 'fs/promises';
 import path from 'path';
 import { expect } from '@playwright/test';
+import {
+    createCheckHistoryWorkerV1,
+    createFleetRedisV1,
+    fleetQueueConnection,
+    UnrecoverableError,
+    type Job,
+} from './infrastructure/bullmq.js';
 
 chromium.use(stealthPlugin());
 
 const prisma = new PrismaClient();
 
-const redisConnection = {
-    host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || '6379'),
-    ...(process.env.REDIS_PASSWORD ? { password: process.env.REDIS_PASSWORD } : {}),
-};
-const redis = new Redis(redisConnection);
+const redis = createFleetRedisV1();
 
 const WATCHDOG_TIMEOUT_MS = 60000;
 const ARTIFACTS_DIR = path.join(process.cwd(), '.artifacts');
@@ -1164,10 +1164,7 @@ async function dispatchJob(job: Job) {
 }
 
 // Start Worker
-const worker = new Worker('check-history', dispatchJob, {
-    connection: redisConnection,
-    concurrency: 1
-});
+const worker = createCheckHistoryWorkerV1(dispatchJob);
 
 worker.on('completed', job => console.log(`✨ Job ${job.id} has completed!`));
 worker.on('failed', (job, err) => console.error(`❌ Job ${job?.id} has failed with ${err.message}`));

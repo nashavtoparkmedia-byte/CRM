@@ -1,0 +1,31 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1",
+  "milestone": "CRM-ARCH-007-AI-KNOWLEDGE-USAGE-LOG",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "426047fb80ae8d778c0e3de36df71340eca53367",
+  "context": "ai_knowledge",
+  "caller_context": "platform_shell",
+  "plan": {
+    "id": "migration_ca65203b883c6533",
+    "site_id": "write_19234456e203ccbc5cc0",
+    "file": "gravity-mvp/src/lib/pipeline/PipelineWorker.ts",
+    "model": "AiKnowledgeUsageLog",
+    "method": "$executeRaw",
+    "role": "production"
+  },
+  "contract": "ai_knowledge.RecordKnowledgeUsageCommand.v1",
+  "dependency": "platform_shell -> ai_knowledge.public pre-approved",
+  "command_amendment": "AI Knowledge adds RecordKnowledgeUsageCommand.v1",
+  "consumer_before_sha256": "b4989aaa2679e565f9af6b415c3d899f023264a19e63c174c4149a327e93a9a0",
+  "consumer_after_sha256": "45ea9956ce1809f5fd5d449e178941ef294babdde1f499cd6654ffbb73d98481",
+  "enforcement": {
+    "before": 1505,
+    "after": 1504,
+    "retired": [
+      "arch_689ed8a76f82c6b078b33d45"
+    ],
+    "new_capacity": 0
+  },
+  "execution_performed": false,
+  "rollback": "426047fb80ae8d778c0e3de36df71340eca53367"
+}

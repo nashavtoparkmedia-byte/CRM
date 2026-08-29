@@ -1,0 +1,25 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1",
+  "milestone": "CRM-ARCH-007-MESSAGING-LEAD-RECEIVE",
+  "base_commit": "61aad510960717943c75448863c8677de20fcff7",
+  "captured_at": "2026-08-09T16:49:54Z",
+  "consumer": "gravity-mvp/src/lib/leads/intake.ts",
+  "consumer_sha256": "96dfa5304f4c8c7c45647bd9f3675426dd570de006ba8ff4b43c20533373e217",
+  "behavior": [
+    "external id is source:msg:sourceExternalId",
+    "existing Message by externalId is reused without create",
+    "new Message is inbound text with delivered status",
+    "preview is trimmed when non-empty, otherwise candidate-name and generic fallbacks remain",
+    "chat id, received timestamp and source channel are preserved",
+    "metadata contains source, sourceExternalId and sourceMeta",
+    "returned Message id is exposed as ingestLead.messageId",
+    "persistence failures remain visible"
+  ],
+  "out_of_scope": [
+    "Contact and ContactIdentity flow",
+    "Chat find/create/update plan",
+    "temporary-phone handling",
+    "Task creation",
+    "database schema or production activation"
+  ]
+}

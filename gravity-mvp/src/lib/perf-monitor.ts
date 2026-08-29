@@ -7,22 +7,10 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { opsLog } from '@/lib/opsLog'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
+import { PERFORMANCE_MONITORING_CONFIG_V1 } from '@/modules/configuration/public/v1/operations-monitoring-policy'
 
-export const PERF_CONFIG = {
-    /** Default slow operation threshold (ms) */
-    defaultSlowThresholdMs: 5000,
-    /** Slow threshold for cron jobs (ms) */
-    cronSlowThresholdMs: 30000,
-    /** Slow threshold for API requests (ms) */
-    apiSlowThresholdMs: 3000,
-    /** Slow threshold for DB queries (ms) */
-    querySlowThresholdMs: 2000,
-    /** Maximum entries to keep in perf_log per cleanup cycle */
-    maxLogEntries: 10000,
-    /** Retention period for perf_log (days) */
-    retentionDays: 7,
-}
+export const PERF_CONFIG = PERFORMANCE_MONITORING_CONFIG_V1
 
 export type OperationType = 'cron' | 'api' | 'query' | 'background' | 'other'
 

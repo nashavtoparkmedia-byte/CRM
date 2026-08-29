@@ -1,0 +1,1 @@
+{"schema":"yoko.crm.module-manifest-amendments.v1","version":1,"milestone":"CRM-ARCH-007-MESSAGING-TELEGRAM-BINARY-MEDIA","amendments":[{"context":"messaging","add_commands":["AttachBinaryMessageMediaCommand.v1"],"reason":"Expose Telegram's in-memory binary MessageAttachment persistence through Messaging without changing URL-based attachment contracts."}]}

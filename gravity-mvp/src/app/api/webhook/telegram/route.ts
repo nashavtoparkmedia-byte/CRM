@@ -1,11 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendTelegramBotMessage } from '@/app/tg-bot-actions'
-import { changeDriverLimit } from '@/app/actions'
-import { DriverMatchService } from '@/lib/DriverMatchService'
-import { ContactService } from '@/lib/ContactService'
-import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
-import { opsLog } from '@/lib/opsLog'
+import { changeDriverLimit } from '@/modules/fleet-operations/public/v1/yandex-fleet-operations'
+import { channelDriverMatchV1 as DriverMatchService } from '@/modules/fleet-operations/public/v1/channel-driver-match'
+import { channelConversationWorkflowV1 as ConversationWorkflowService } from '@/modules/messaging/public/v1/channel-conversation-workflow'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
+import {
+    ATTACH_CONTACT_IDENTITY_COMMAND_V1,
+    REPLACE_IDENTITY_PROFILE_V1,
+} from '@/contracts/contacts/v1'
+import { attachContactIdentityV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
+import { PROMOTE_CHANNEL_DISPLAY_NAME_V2, RESOLVE_CONTACT_COMMAND_V2 } from '@/contracts/contacts/v2'
+import { resolveContactV2 } from '@/modules/contacts/public/v2'
+import { CREATE_CHANNEL_MESSAGE_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { createChannelMessageV1, ensureConversationContactLinkV1, linkMatchedDriverToConversationCapabilityV1, patchChannelConversationV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
+import { RECORD_BOT_USER_PROFILE_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
+import { recordBotUserProfileV1 } from '@/modules/telegram-channel/public/v1'
 
 export async function POST(req: NextRequest) {
     try {
@@ -28,40 +38,15 @@ export async function POST(req: NextRequest) {
             const sentAt = timestamp ? new Date(timestamp) : new Date()
             const groupExternalId = `telegram:group:${tgChatId}`
 
-            let unifiedChat = await (prisma.chat as any).upsert({
-                where: { externalChatId: groupExternalId },
-                update: { lastMessageAt: sentAt },
-                create: {
-                    externalChatId: groupExternalId,
-                    channel: 'telegram',
-                    chatType: chatType,       // 'group' | 'supergroup' | 'channel'
-                    name: chatTitle || `TG Group ${tgChatId}`,
-                    lastMessageAt: sentAt,
-                    metadata: { chatTitle, chatType }
-                }
-            })
+            let unifiedChat = (await upsertChannelConversationV1({ contract: UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, externalChatId: groupExternalId, channel: 'telegram', chatType: 'group', name: chatTitle || `TG Group ${tgChatId}`, metadata: { chatTitle, chatType } })).conversation as any
+            await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: sentAt } })
 
             // senderName priority: firstName > username > fallback ID
             const senderDisplay = firstName
                 ? (lastName ? `${firstName} ${lastName}` : firstName)
                 : (username ? `@${username}` : `User ${telegramId}`)
 
-            await (prisma.message as any).create({
-                data: {
-                    chatId: unifiedChat.id,
-                    direction: direction === 'OUTGOING' ? 'outbound' : 'inbound',
-                    content: text,
-                    channel: 'telegram',
-                    type: 'text',
-                    sentAt,
-                    status: 'delivered',
-                    metadata: {
-                        senderId: telegramId.toString(),
-                        senderName: senderDisplay,
-                        senderUsername: username || null
-                    }
-                }
-            })
+            await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: unifiedChat.id, direction: direction === 'OUTGOING' ? 'outbound' : 'inbound', content: text, channel: 'telegram', type: 'text', sentAt, status: 'delivered', externalId: `telegram:group:${tgChatId}:${sentAt.getTime()}`, metadata: { senderId: telegramId.toString(), senderName: senderDisplay, senderUsername: username || null } })
 
             // Lightweight workflow: only unreadCount + lastInboundAt (no requiresResponse, no status transition)
             if (direction !== 'OUTGOING') {
@@ -74,6 +59,15 @@ export async function POST(req: NextRequest) {
         // ── END GROUP BRANCH ──
 
         const tgIdBigInt = BigInt(telegramId)
+
+        await recordBotUserProfileV1({
+            contract: RECORD_BOT_USER_PROFILE_COMMAND_V1,
+            telegramId: tgIdBigInt,
+            username: username || null,
+            firstName: firstName || null,
+            lastName: lastName || null,
+            observedAt: new Date(),
+        })
 
         // Add the message to the DB for the CRM history
         const message = await prisma.botChatMessage.create({
@@ -112,19 +106,8 @@ export async function POST(req: NextRequest) {
             let retries = 3;
             while (retries > 0) {
                 try {
-                    unifiedChat = await (prisma.chat as any).upsert({
-                        where: { externalChatId },
-                        // PR-А: при update тоже обновляем name — для existing
-                        // чатов с устаревшим `TG <id>` имя приходит c новым
-                        // inbound и автоматически апдейтится. Live backfill.
-                        update: { lastMessageAt: sentAt, name: tgDisplayName },
-                        create: {
-                            externalChatId,
-                            channel: 'telegram',
-                            name: tgDisplayName,
-                            lastMessageAt: sentAt
-                        }
-                    })
+                    unifiedChat = (await upsertChannelConversationV1({ contract: UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, externalChatId, channel: 'telegram', name: tgDisplayName, chatType: 'private', metadata: {} })).conversation as any
+                    await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: sentAt, name: tgDisplayName } })
                     break; // Success
                 } catch (e: any) {
                     retries--;
@@ -138,7 +121,7 @@ export async function POST(req: NextRequest) {
 
             // Relink driver on every inbound if missing
             if (!unifiedChat.driverId) {
-                const linked = await DriverMatchService.linkChatToDriver(unifiedChat.id, { telegramId: telegramId.toString() })
+                const linked = await DriverMatchService.linkChatToDriver(unifiedChat.id, { telegramId: telegramId.toString() }, linkMatchedDriverToConversationCapabilityV1)
                 if (linked) {
                     unifiedChat = await (prisma.chat as any).findUnique({ where: { id: unifiedChat.id } })
                 }
@@ -148,7 +131,7 @@ export async function POST(req: NextRequest) {
             // ── Contact Model dual write ──────────────────────────────
             try {
                 // PR-А: Contact.displayName тоже приоритет — real name > @username
-                const contactResult = await ContactService.resolveContact(
+                const contactResult = await resolveChannelContactOperationV1(
                     'telegram',
                     telegramId.toString(),
                     null,  // Bot webhook не передаёт номер телефона
@@ -158,31 +141,28 @@ export async function POST(req: NextRequest) {
                 // so the header immediately reflects the username instead of old first_name.
                 // Does NOT touch contacts edited manually (displayNameSource = 'manual' or 'yandex').
                 if (!contactResult.isNew && username && tgDisplayName.startsWith('@')) {
-                    const existing = await prisma.contact.findUnique({
-                        where: { id: contactResult.contact.id },
-                        select: { displayNameSource: true },
+                    await resolveContactV2({
+                        contract: RESOLVE_CONTACT_COMMAND_V2,
+                        operation: PROMOTE_CHANNEL_DISPLAY_NAME_V2,
+                        contactId: contactResult.contact.id,
+                        candidateDisplayName: tgDisplayName,
                     })
-                    if (existing?.displayNameSource === 'channel') {
-                        await prisma.contact.update({
-                            where: { id: contactResult.contact.id },
-                            data: { displayName: tgDisplayName },
-                        })
-                    }
                 }
-                await ContactService.ensureChatLinked(
-                    unifiedChat.id,
-                    contactResult.contact.id,
-                    contactResult.identity.id,
-                )
+                await ensureConversationContactLinkV1({
+                    contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
+                    chatId: unifiedChat.id,
+                    contactId: contactResult.contact.id,
+                    contactIdentityId: contactResult.identity.id,
+                })
                 // Store username + name in identity metadata so the profile can show "Name (@username)"
-                await prisma.contactIdentity.update({
-                    where: { id: contactResult.identity.id },
-                    data: {
-                        metadata: {
-                            username:   username   || null,
-                            firstName:  firstName  || null,
-                            lastName:   lastName   || null,
-                        }
+                await attachContactIdentityV1({
+                    contract: ATTACH_CONTACT_IDENTITY_COMMAND_V1,
+                    operation: REPLACE_IDENTITY_PROFILE_V1,
+                    identityId: contactResult.identity.id,
+                    profile: {
+                        handle: username || null,
+                        givenName: firstName || null,
+                        familyName: lastName || null,
                     },
                 })
             } catch (contactErr: any) {
@@ -214,18 +194,7 @@ export async function POST(req: NextRequest) {
                 if (Array.isArray(attachments) && attachments.length > 0) {
                     msgMetadata.attachments = attachments
                 }
-                await (prisma.message as any).create({
-                    data: {
-                        chatId: unifiedChat.id,
-                        direction: msgDirection,
-                        content: text,
-                        channel: 'telegram',
-                        type: msgType,
-                        sentAt: sentAt,
-                        status: 'delivered',
-                        metadata: msgMetadata,
-                    }
-                })
+                await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: unifiedChat.id, direction: msgDirection, content: text, channel: 'telegram', type: msgType as any, sentAt, status: 'delivered', externalId: `telegram:${telegramId}:${sentAt.getTime()}`, metadata: msgMetadata })
 
                 // Workflow: update status/unread/requiresResponse
                 if (msgDirection === 'inbound') {

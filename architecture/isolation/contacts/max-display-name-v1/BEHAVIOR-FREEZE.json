@@ -1,0 +1,31 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1",
+  "milestone": "CRM-ARCH-007-CONTACTS-MAX",
+  "base_commit": "21b047ec8ffb3a73ec82aa35912bd5016c2faf8c",
+  "captured_at": "2026-08-09T15:38:43Z",
+  "consumer": {
+    "file": "gravity-mvp/src/app/api/webhook/max/sync-names/route.ts",
+    "sha256": "ece9cacb4fc2af7e63c674f6fd7b07cbafa14d260f3460b1d68c7bf1382a3558",
+    "behavior": [
+      "skip absent contact links",
+      "look up the linked Contact by id",
+      "skip a missing Contact",
+      "preserve a non-placeholder display name",
+      "replace empty, channel-id, numeric, or punctuation placeholders with the normalized useful MAX name",
+      "surface Contact persistence failure to the existing route catch"
+    ]
+  },
+  "protected_max_message_service": {
+    "file": "gravity-mvp/src/lib/MessageService.ts",
+    "baseline_sha256": "71c75bce80de35943ca2753196281f7a0ae98765c619b3a9816fe64e20316e46",
+    "candidate_sha256": "71c75bce80de35943ca2753196281f7a0ae98765c619b3a9816fe64e20316e46"
+  },
+  "excluded_scope": [
+    "MAX transport",
+    "MAX session state",
+    "credentials",
+    "Messaging Chat mutation",
+    "schema",
+    "runtime"
+  ]
+}

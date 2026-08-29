@@ -1,0 +1,923 @@
+{
+  "schema": "yoko.crm.current-recovery-handoff.v1",
+  "generated_at": "2026-08-12T17:26:25Z",
+  "authority": "Final acceptance checkpoint; final_acceptance_checkpoint supersedes latest_checkpoint and all older fields retained below as historical lineage.",
+  "final_acceptance_checkpoint": {
+    "captured_at": "2026-08-12T20:12:00Z",
+    "status": "READY_FOR_INDEPENDENT_EXTERNAL_RE_REVIEW_FINAL_INTERNAL_CRITIC_PASS",
+    "project_ready_for_independent_external_re_review": true,
+    "runtime_package": "2.0.0-9",
+    "runtime_abi": "2.0.0",
+    "profile_id": "crm-af9646f5-gravity-outbox-v1",
+    "deployed_commit": "7aea2823efe50e13a156540993d424594025e403",
+    "deployed_tree": "dbb380be0775d41b246248a9fe8fbf99bcb38d22",
+    "deployed_archive_sha256": "be616b7d528bc111717d237bcd745a8b106302897e702be4b8af1b8643cba26d",
+    "deployed_image_id": "sha256:baf442f880ebca808897a0131a662c603a9119f652cbbc3e47937286dec49179",
+    "gravity_container_id": "86f18322adbc640771849c22163d746b73cd06c72c656f1d93b5695623fcaa73",
+    "gravity_health": "healthy",
+    "gravity_restart_count": 0,
+    "database_migrations": 62,
+    "outbox": "EXACT_ACTIVE_ONE_PUBLISHED_ZERO_BACKLOG_POISON_STALE",
+    "protected_messages": "DEPLOYED_RUNTIME_AND_SAFE_BEHAVIOR_ACCEPTED",
+    "ai_calls": "PROTECTED_LINEAGE_AND_DEPLOYED_PATHS_PRESERVED",
+    "production_critic": "PASS",
+    "final_internal_critic": "PASS",
+    "original_dod": {"total":19,"closed":19,"confirmed":0,"blocked":0},
+    "write_ownership": {"confirmed_writes_discovered":1388,"confirmed_foreign":0,"closed_foreign":53,"ambiguous_remaining":0,"active_operational_surfaces_unclassified":0,"temporary_exceptions":0,"intentional_exceptions":0},
+    "production_acceptance_artifact": "architecture/recovery/whole-project-dod/v2/PRODUCTION_ACTIVATION_ACCEPTANCE_20260812.json",
+    "dod_recompute_artifact": "architecture/recovery/whole-project-dod/v2/ORIGINAL_DOD_RECOMPUTE_20260812.json",
+    "final_internal_critic_artifact": "architecture/recovery/whole-project-dod/v2/FINAL_INTERNAL_CRITIC_20260812.json",
+    "owner_action_pending": false
+  },
+  "latest_checkpoint": {
+    "status": "PRODUCTION_ACTIVATION_BLOCKED_ON_LEDGER_RECONCILIATION_PROFILE_INSTALL",
+    "project_ready": false,
+    "evidence_head_before_checkpoint": "0c6f93323ec8af932d78f83c088c71efbd0077c6",
+    "evidence_tree_before_checkpoint": "f8bfbc4717e5817303d6ff67bf77e4679d7b7046",
+    "accepted_source_commit": "af9646f51c1274d718d83eb4c78faf92f214a184",
+    "accepted_source_tree": "f900a2bbae3a63f02ff85bf70821df9aab7ff1df",
+    "accepted_source_archive_sha256": "c43d6e6ea0735b7a5dad9117822df24b7ec0133685c69b8c13b50effc7c9f808",
+    "write_ownership": {
+      "tracked_executable_surfaces": 2016,
+      "analyzer_write_candidates": 1418,
+      "confirmed_writes_discovered": 1388,
+      "confirmed_foreign": 0,
+      "closed_foreign_cumulative": 53,
+      "raw_ambiguous_records": 45,
+      "resolved_non_writes": 30,
+      "owner_valid_writes": 10,
+      "controlled_migration_writes": 5,
+      "material_ambiguous_remaining": 0,
+      "active_operational_surfaces_unclassified": 0,
+      "temporary_exceptions": 0,
+      "intentional_exceptions": 0
+    },
+    "architecture_debt": {
+      "findings": 0,
+      "exceptions": 0,
+      "actually_closed": 1288
+    },
+    "credential_security": {
+      "credential_database_accesses": 403,
+      "previously_ambiguous": 81,
+      "material_unresolved": 0,
+      "public_exposure": 0,
+      "capability_gaps": 0,
+      "gravity_tests": "34/34 PASS",
+      "tg_bot_tests": "15/15 PASS",
+      "independent_critic": "PASS"
+    },
+    "protected_messages": "SOURCE_AND_BEHAVIOR_CORPUS_RECONCILED_NOT_DEPLOYED",
+    "ai_calls": "PROTECTED_LINEAGE_PRESERVED",
+    "source_release_lineage": "FULL_TRACKED_TREE_REPRODUCIBLY_SEALED_NOT_DEPLOYED",
+    "gap_summary": {
+      "total": 19,
+      "confirmed": 3,
+      "closed": 15,
+      "blocked_external_auth": 1
+    },
+    "open_gaps": [
+      "FINAL-DOD-007",
+      "FINAL-DOD-008",
+      "FINAL-DOD-015"
+    ],
+    "blocked_gap": "FINAL-DOD-009",
+    "installed_v2": {
+      "runtime": "2.0.0",
+      "package": "2.0.0-6",
+      "self_check": "PASS",
+      "release_preflight": "ENABLED_NOT_RUN_AFTER_READ_ONLY_LEDGER_GATE",
+      "database_status": "DRIFTED_FAIL_CLOSED_61_ACTIVE",
+      "database_migrate": "ENABLED_NOT_RUN",
+      "release_activate": "ENABLED_NOT_RUN",
+      "rollback": "ENABLED_NOT_RUN"
+    },
+    "production_mutations": {
+      "source": 0,
+      "database": 0,
+      "deployments": 0,
+      "service_restarts_or_reloads": 0,
+      "rollbacks": 0
+    },
+    "checkpoint_artifact": "architecture/recovery/whole-project-dod/v2/PRODUCTION_ACTIVATION_LEDGER_PROFILE_BLOCKED_20260812.json",
+    "profile_request": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1-ledger-reconciliation/manifest.json",
+    "exact_next_action": "Owner executes the single exact-SHA successor bootstrap command authorized in manifest.json; recovery then resumes autonomously with isolated PostgreSQL preview, DB identity, verified backup/restore, expand-only migration, immutable Gravity activation, health and protected behavior validation, with automatic rollback on failure.",
+    "stop_condition": "NEW_GENUINE_PRIVILEGED_PRIMITIVE_BEYOND_INSTALLED_FINITE_ABI_PACKAGE_INSTALL",
+    "ledger_reconciliation_successor": {
+      "package": "2.0.0-7",
+      "bootstrap_tar_sha256": "db571de22ad7fe9110bd339992c4caec58598b311c547b9543bd560db5dcc29d",
+      "package_sha256": "ababe50bcb0d3597786b1c77118867b1d700a5629bb2719892ce5ae4927a4738",
+      "tests": "67/67 PASS",
+      "deterministic_double_build": "PASS",
+      "independent_critic": "PASS",
+      "production_mutations": 0
+    }
+  },
+  "program_state": {
+    "whole_project_state": "EXTERNAL_FINAL_ACCEPTANCE_FAILED",
+    "current_program": "WHOLE-PROJECT DOD RECOVERY",
+    "milestone_status": "SOURCE_LEVEL_DOD_RECOVERY_INTERNALLY_ACCEPTED; PRODUCTION_ACTIVATION_BLOCKED_ON_LEDGER_RECONCILIATION_PROFILE_INSTALL",
+    "ready": false,
+    "finding_summary": {
+      "total": 19,
+      "confirmed": 3,
+      "closed": 15,
+      "blocked": 1
+    }
+  },
+  "repository": {
+    "common_repository": "/opt/codex-work/crm/.git",
+    "repository_root": "/opt/codex-work/crm",
+    "active_persistent_worktree": "/opt/codex-work/crm-architecture-dod-recovery",
+    "branch": "codex/crm-architecture-dod-recovery",
+    "upstream": null,
+    "remote_tracking_ref_contains_implementation_head": false,
+    "base_commit": "0b61ba296ba2734738d4a21b9d00ce8b110d63cf",
+    "base_tree": "56c452397df4bb7cb05bef3e0d9afd1de9d785a5",
+    "implementation_head_before_checkpoint": "88b7624c77e7f91a131139c993247df11b86156c",
+    "implementation_tree_before_checkpoint": "43027f413e2e7dd1fc4fc8fa9ab5205eb765bb03",
+    "checkpoint_commit": "SELF_RESOLVE_WITH_GIT_LOG",
+    "task_commit_range": {
+      "range": "0b61ba296ba2734738d4a21b9d00ce8b110d63cf..d8ea50d294f0f90cc1c03f3297fe4f97d205b65a",
+      "commits": 183,
+      "classification": "Resolve exact counts with Git when required; source identity above is authoritative."
+    },
+    "frozen_pre_checkpoint_worktree_state": {
+      "captured_at": "2026-08-10T20:11:52Z",
+      "staged": 0,
+      "unstaged": 67,
+      "modified": 65,
+      "deleted": 2,
+      "untracked": 36,
+      "renamed": 0,
+      "staged_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "unstaged_tracked_binary_diff_sha256": "9ba53bcb8439604ddda8f1661b1543643ed6ed4c6820a00da7a2b23fed2cb197",
+      "sorted_untracked_sha256_manifest_aggregate": "fa9acbe1e68aecefbe48ef9621b243f6f1db3c1def6b997c44f6b305463eb3ae",
+      "attribution": "Strongly attributable to this task from clean worktree creation and 2026-08-10 mtimes; Git has no pre-edit porcelain snapshot, so not a mathematical proof."
+    },
+    "checkpoint_commit_scope": "Production activation blocker, exact root-owned finite profile request, targeted independent critic and durable handoff reconciliation.",
+    "do_not": [
+      "Do not reset, clean, discard, or remove the recovery worktree.",
+      "Do not treat the checkpoint commit as analyzer/security acceptance.",
+      "Do not use the dirty invocation checkout /opt/codex-work/crm as the recovery implementation worktree."
+    ],
+    "checkpoint_scope": "Live architecture debt burn-down through AI Knowledge retrieval/explainability/governance/migration/extraction/pure-runtime surfaces, Calling completion transport and Operations job registry; durable 117-finding checkpoint."
+  },
+  "related_worktrees": [
+    {
+      "path": "/opt/codex-work/crm-arch-007r-final-hardening",
+      "branch": "codex/crm-arch-007r-final-hardening",
+      "head": "0b61ba296ba2734738d4a21b9d00ce8b110d63cf",
+      "status": "CLEAN",
+      "purpose": "Recovery source/base substrate"
+    },
+    {
+      "path": "/opt/codex-work/crm-analyzer-freeze-607386ac",
+      "branch": null,
+      "head": "88acc1882dd79c3426e95b66023e00689c12ebc7",
+      "status": "CLEAN_DETACHED",
+      "purpose": "Earlier analyzer freeze"
+    },
+    {
+      "path": "/opt/codex-work/crm-architecture-analyzer-freeze-3339325f",
+      "branch": null,
+      "head": "4ec527301dbc7a80060df5d8eb6a6081f41b6e90",
+      "status": "CLEAN_DETACHED",
+      "purpose": "Current analyzer freeze mirror"
+    },
+    {
+      "path": "/opt/codex-work/crm-architecture-analyzer-repro-3339325f",
+      "branch": null,
+      "head": "4ec527301dbc7a80060df5d8eb6a6081f41b6e90",
+      "status": "CLEAN_DETACHED",
+      "purpose": "Current analyzer reproducibility mirror"
+    }
+  ],
+  "protected_dirty_worktrees": [
+    {
+      "path": "/opt/codex-work/crm",
+      "branch": "codex/test-ai-knowledge-textutils",
+      "head": "ee93f8e2e964e523c5f3922a906ce110e491b4e4",
+      "upstream": "origin/codex/test-ai-knowledge-textutils; ahead 6, behind 0",
+      "status_counts": "0 staged / 46 unstaged / 207 untracked",
+      "protection": "Pre-existing dirty invocation checkout; last dirty mtimes predate this task"
+    },
+    {
+      "path": "/opt/codex-work/crm-ai-calls",
+      "branch": "dev/ai-calls-product-preview-v2",
+      "head": "b38b22d3e00b3fb43d05417131709b3d2c535b2b",
+      "status_counts": "0 staged / 8 unstaged / 157 untracked",
+      "protection": "Protected AI Calls worktree; not mutated"
+    },
+    {
+      "path": "/opt/codex-work/crm-arch-007r-ai-legacy-entry",
+      "branch": "codex/crm-arch-007r-ai-legacy-entry",
+      "head": "99d3fd2cf7d70a57897bce78a85f4f392a0064ee",
+      "status_counts": "0 staged / 1 unstaged / 7 untracked",
+      "protection": "Unrelated dirty worktree"
+    },
+    {
+      "path": "/opt/codex-work/crm-arch-007r-ai-legacy-entry-v2",
+      "branch": "codex/crm-arch-007r-ai-legacy-entry-v2",
+      "head": "53f08e231f72945c86c389319f443c4e0403ed06",
+      "status_counts": "0 staged / 3 unstaged / 0 untracked",
+      "protection": "Unrelated dirty worktree"
+    },
+    {
+      "path": "/opt/codex-work/crm-prod-snapshot-candidate",
+      "branch": null,
+      "head": "e6a0a833fbb756216b058bfe326f9f9c77c4cc6d",
+      "status_counts": "0 staged / 37 unstaged / 8 untracked",
+      "protection": "Ownership-affected detached production snapshot candidate; do not touch"
+    },
+    {
+      "path": "/opt/codex-work/crm-messages-remediation-clean",
+      "branch": "dev/messages-complete-remediation",
+      "head": "50ae48a5761ced6acb1639497fa80094b108f305",
+      "status_counts": "Index matches HEAD; unstaged/untracked indeterminate because 12 indexed files in four root:root mode-0700 directories cause 16 read errors",
+      "protection": "Protected Messages authority candidate; do not claim clean and do not touch"
+    }
+  ],
+  "committed_file_purpose_groups": [
+    {
+      "purpose": "Recovery identity, external verdict, gap/state mutation ledger, executor/critic reviews and checksums",
+      "paths": [
+        "architecture/recovery/whole-project-dod/v1/FINAL_DOD_GAP_LEDGER.json",
+        "architecture/recovery/whole-project-dod/v1/INDEPENDENT_EXTERNAL_REVIEW.md",
+        "architecture/recovery/whole-project-dod/v1/RECOVERY_IDENTITY.json",
+        "architecture/recovery/whole-project-dod/v1/REVIEW-1-EXECUTOR.md",
+        "architecture/recovery/whole-project-dod/v1/REVIEW-2-CRITIC.md",
+        "architecture/recovery/whole-project-dod/v1/SHA256SUMS",
+        "architecture/recovery/whole-project-dod/v1/STATE_MUTATION_LEDGER.json"
+      ]
+    },
+    {
+      "purpose": "Independent reconciliation of installed Privileged Runtime V2 and its evidence manifest",
+      "paths": [
+        "architecture/recovery/control-plane/v2/CONTROL_PLANE_RECONCILIATION.json",
+        "architecture/recovery/control-plane/v2/REVIEW-1-EXECUTOR.md",
+        "architecture/recovery/control-plane/v2/SHA256SUMS"
+      ]
+    },
+    {
+      "purpose": "Whole-tracked-repository surface inventory, write/SQL/credential analyzers, driver and adversarial fixtures",
+      "paths": [
+        "tools/architecture/v2/analyze.mjs",
+        "tools/architecture/v2/credential-analyzer.mjs",
+        "tools/architecture/v2/credential-inventory.mjs",
+        "tools/architecture/v2/sql-mutation-analyzer.mjs",
+        "tools/architecture/v2/test-analyze.mjs",
+        "tools/architecture/v2/test-credential-analyzer.mjs",
+        "tools/architecture/v2/test-credential-inventory.mjs",
+        "tools/architecture/v2/test-surface-inventory.mjs",
+        "tools/architecture/v2/test-write-analyzer.mjs",
+        "tools/architecture/v2/tracked-surface-inventory.mjs",
+        "tools/architecture/v2/write-analyzer.mjs"
+      ]
+    },
+    {
+      "purpose": "Restore the real Prisma $disconnect syntax so analyzer corpus is truthful",
+      "paths": [
+        "gravity-mvp/debug-drivers.js"
+      ]
+    },
+    {
+      "purpose": "Executable module verification profiles, context-level contract registry, manifest-driven blast radius and durable closure evidence",
+      "paths": [
+        "architecture/contexts/v1/",
+        "architecture/contracts/v1/registry.json",
+        "architecture/isolation/architecture-enforcement/module-verification-contract-registry-v1/",
+        "tools/architecture/enrich-context-manifests.mjs",
+        "tools/architecture/reconcile-contract-registry.mjs",
+        "tools/architecture/validate-context-manifests.mjs",
+        "tools/architecture/validate-contract-registry.mjs",
+        "tools/architecture/test-contract-registry.mjs",
+        "tools/architecture/check-blast-radius.mjs",
+        "tools/architecture/test-blast-radius.mjs",
+        "tools/architecture/run-authoritative-ci.mjs"
+      ],
+      "source_commit": "18c249d2d486a79886dade325d013d49df73312d",
+      "evidence_head": "d8ea50d294f0f90cc1c03f3297fe4f97d205b65a"
+    }
+  ],
+  "uncommitted_file_purpose_groups": [],
+  "path_status_inventory": {
+    "committed_before_checkpoint": {
+      "created": [
+        "architecture/recovery/control-plane/v2/CONTROL_PLANE_RECONCILIATION.json",
+        "architecture/recovery/control-plane/v2/REVIEW-1-EXECUTOR.md",
+        "architecture/recovery/control-plane/v2/SHA256SUMS",
+        "architecture/recovery/whole-project-dod/v1/FINAL_DOD_GAP_LEDGER.json",
+        "architecture/recovery/whole-project-dod/v1/INDEPENDENT_EXTERNAL_REVIEW.md",
+        "architecture/recovery/whole-project-dod/v1/RECOVERY_IDENTITY.json",
+        "architecture/recovery/whole-project-dod/v1/REVIEW-1-EXECUTOR.md",
+        "architecture/recovery/whole-project-dod/v1/REVIEW-2-CRITIC.md",
+        "architecture/recovery/whole-project-dod/v1/SHA256SUMS",
+        "architecture/recovery/whole-project-dod/v1/STATE_MUTATION_LEDGER.json",
+        "tools/architecture/v2/analyze.mjs",
+        "tools/architecture/v2/credential-analyzer.mjs",
+        "tools/architecture/v2/credential-inventory.mjs",
+        "tools/architecture/v2/sql-mutation-analyzer.mjs",
+        "tools/architecture/v2/test-analyze.mjs",
+        "tools/architecture/v2/test-credential-analyzer.mjs",
+        "tools/architecture/v2/test-credential-inventory.mjs",
+        "tools/architecture/v2/test-surface-inventory.mjs",
+        "tools/architecture/v2/test-write-analyzer.mjs",
+        "tools/architecture/v2/tracked-surface-inventory.mjs",
+        "tools/architecture/v2/write-analyzer.mjs"
+      ],
+      "modified": [
+        "gravity-mvp/debug-drivers.js"
+      ],
+      "deleted": [],
+      "renamed": []
+    },
+    "created_by_checkpoint_commit": [
+      "architecture/recovery/whole-project-dod/v2/ANALYZER_PHASE_IDENTITY.json",
+      "architecture/recovery/whole-project-dod/v2/CREDENTIAL_DATABASE_ACCESS_BASELINE.json",
+      "architecture/recovery/whole-project-dod/v2/REVIEW-1-EXECUTOR.md",
+      "architecture/recovery/whole-project-dod/v2/WHOLE_REPOSITORY_WRITE_BASELINE.json",
+      "architecture/recovery/whole-project-dod/v2/CURRENT_RECOVERY_HANDOFF.md",
+      "architecture/recovery/whole-project-dod/v2/CURRENT_RECOVERY_HANDOFF.json",
+      "architecture/recovery/whole-project-dod/v2/SHA256SUMS",
+      "architecture/recovery/whole-project-dod/v2/continuation/ANALYZER_DIAGNOSTIC_CHECKPOINT.json",
+      "architecture/recovery/whole-project-dod/v2/continuation/PER_FILE_LOCALIZATION_PROBE.mjs"
+    ],
+    "remaining_uncommitted_after_checkpoint": {
+      "created": [
+        "gravity-mvp/scripts/check-public-boundaries.mjs",
+        "gravity-mvp/src/app/settings/integrations/access/actions.ts",
+        "gravity-mvp/src/app/settings/integrations/access/page.tsx",
+        "gravity-mvp/src/lib/security/integration-admin-boundary-source.test.ts",
+        "gravity-mvp/src/lib/security/integration-admin-credentials.test.ts",
+        "gravity-mvp/src/lib/security/public-boundary-source.test.ts",
+        "gravity-mvp/src/lib/whatsapp/whatsapp-qr-ceremony.test.ts",
+        "gravity-mvp/src/lib/whatsapp/whatsapp-qr-ceremony.ts",
+        "gravity-mvp/src/modules/calling/public/v1/ai-agent-config-public-metadata.test.ts",
+        "gravity-mvp/src/modules/calling/public/v1/ai-agent-config-public-metadata.ts",
+        "gravity-mvp/src/modules/fleet-operations/public/v1/api-connection-public-metadata.test.ts",
+        "gravity-mvp/src/modules/fleet-operations/public/v1/api-connection-public-metadata.ts",
+        "gravity-mvp/src/modules/identity-access/public/v1/integration-admin-auth.ts",
+        "gravity-mvp/src/modules/identity-access/public/v1/integration-admin-credentials.ts",
+        "gravity-mvp/src/modules/max-channel/public/v1/max-connection-public-metadata.test.ts",
+        "gravity-mvp/src/modules/max-channel/public/v1/max-connection-public-metadata.ts",
+        "gravity-mvp/src/modules/telegram-channel/public/v1/telegram-connection-public-metadata.test.ts",
+        "gravity-mvp/src/modules/telegram-channel/public/v1/telegram-connection-public-metadata.ts",
+        "gravity-mvp/src/modules/whatsapp-channel/public/v1/whatsapp-connection-public-metadata.test.ts",
+        "gravity-mvp/src/modules/whatsapp-channel/public/v1/whatsapp-connection-public-metadata.ts",
+        "gravity-mvp/src/proxy.ts",
+        "tg-bot/src/security/authSecurity.test.js",
+        "tg-bot/src/security/publicCredentialBoundary.source.test.js",
+        "tg-bot/src/security/publicCredentialMetadata.js",
+        "tg-bot/src/security/publicCredentialMetadata.test.js",
+        "tg-bot/src/security/redactSecrets.js",
+        "tg-bot/src/security/webhookAuth.js",
+        "tg-bot/tg-bot-frontend/lib/serverAuth.js",
+        "tg-bot/tg-bot-frontend/pages/api/admin/[...path].js",
+        "tg-bot/tg-bot-frontend/pages/api/auth/login.js",
+        "tg-bot/tg-bot-frontend/pages/api/auth/logout.js",
+        "tg-bot/tg-bot-frontend/pages/api/auth/session.js"
+      ],
+      "modified": [
+        "architecture/contexts/v1/SHA256SUMS",
+        "architecture/contexts/v1/context-decisions.json",
+        "architecture/contexts/v1/context-index.json",
+        "architecture/contexts/v1/manifests/configuration.json",
+        "architecture/contexts/v1/manifests/identity_access.json",
+        "architecture/contexts/v1/manifests/max_channel.json",
+        "architecture/contexts/v1/manifests/operations_observability.json",
+        "architecture/contexts/v1/manifests/telegram_channel.json",
+        "architecture/contexts/v1/manifests/whatsapp_channel.json",
+        "architecture/enforcement/v1/exceptions.json",
+        "deploy/nginx/templates/crm.conf.template",
+        "docs/SECRETS.md",
+        "gravity-mvp/Dockerfile",
+        "gravity-mvp/package.json",
+        "gravity-mvp/scripts/backfill_tg_via_bot_api.js",
+        "gravity-mvp/src/app/ApiListClient.tsx",
+        "gravity-mvp/src/app/actions.ts",
+        "gravity-mvp/src/app/logs/page.tsx",
+        "gravity-mvp/src/app/max-actions.ts",
+        "gravity-mvp/src/app/settings/ai/AiControlCenterClient.tsx",
+        "gravity-mvp/src/app/settings/ai/actions.ts",
+        "gravity-mvp/src/app/settings/ai/page.tsx",
+        "gravity-mvp/src/app/settings/api/page.tsx",
+        "gravity-mvp/src/app/settings/integrations/bot/page.tsx",
+        "gravity-mvp/src/app/settings/integrations/max/MaxLoginClient.tsx",
+        "gravity-mvp/src/app/settings/integrations/max/page.tsx",
+        "gravity-mvp/src/app/settings/integrations/telegram/TelegramLoginClient.tsx",
+        "gravity-mvp/src/app/settings/integrations/telegram/page.tsx",
+        "gravity-mvp/src/app/settings/integrations/whatsapp/WhatsAppDashboard.tsx",
+        "gravity-mvp/src/app/settings/integrations/whatsapp/page.tsx",
+        "gravity-mvp/src/app/settings/integrations/whatsapp/whatsapp-actions.ts",
+        "gravity-mvp/src/app/tg-actions.ts",
+        "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
+        "gravity-mvp/src/modules/identity-access/public/v1/index.ts",
+        "max-web-scraper/.dockerignore",
+        "tg-bot/README.md",
+        "tg-bot/check-bot-token.js",
+        "tg-bot/check-express-api.js",
+        "tg-bot/check-prisma.js",
+        "tg-bot/fetch-mock.js",
+        "tg-bot/package.json",
+        "tg-bot/read-logs-safe.js",
+        "tg-bot/src/app.js",
+        "tg-bot/src/bot.js",
+        "tg-bot/src/handlers/dynamicSurvey.js",
+        "tg-bot/src/handlers/start.js",
+        "tg-bot/src/middleware/auth.js",
+        "tg-bot/src/routes/admin/bots.js",
+        "tg-bot/src/routes/admin/users.js",
+        "tg-bot/src/routes/webhooks.js",
+        "tg-bot/src/utils/log-interceptor.js",
+        "tg-bot/test-api.js",
+        "tg-bot/test-dashboard-api.js",
+        "tg-bot/test-headers.js",
+        "tg-bot/test-prisma-query.js",
+        "tg-bot/test-token.js",
+        "tg-bot/tg-bot-frontend/context/AuthContext.js",
+        "tg-bot/tg-bot-frontend/lib/api.js",
+        "tg-bot/tg-bot-frontend/next.config.mjs",
+        "tg-bot/tg-bot-frontend/pages/_app.js",
+        "tg-bot/tg-bot-frontend/pages/login.js",
+        "tg-bot/tg-bot-frontend/pages/surveys/[id].js",
+        "tools/architecture/check-calling-ai-agent-config-boundary.mjs",
+        "yandex-fleet-scraper/.dockerignore",
+        "yandex-fleet-scraper/src/scripts/import-chrome-cookies.ts"
+      ],
+      "deleted": [
+        "gravity-mvp/src/app/api/debug-db/list-connections/route.ts",
+        "tg-bot/tg-bot-frontend/pages/api/export.js"
+      ],
+      "renamed": []
+    }
+  },
+  "completion": {
+    "closed": [
+      {
+        "id": "FINAL-DOD-016",
+        "title": "Privileged-runtime 2.0.0-5 identity and finite ABI reconciled in current evidence",
+        "evidence": "architecture/recovery/control-plane/v2/CONTROL_PLANE_RECONCILIATION.json"
+      },
+      {
+        "id": "FINAL-DOD-017",
+        "title": "Original whole-project Definition of Done retained by Architecture Lead",
+        "evidence": "/opt/codex-work/crm-architecture-state/FINAL_DOD_GAP_LEDGER.json"
+      },
+      {
+        "id": "FINAL-DOD-012B",
+        "title": "Authoritative CI invokes the current control plane and fresh bounded inventory gates",
+        "evidence": "architecture/isolation/architecture-enforcement/authoritative-ci-v1/verification.json"
+      },
+      {
+        "id": "FINAL-DOD-012",
+        "title": "Context-level public API registry covers all allowed cross-context interactions",
+        "evidence": "architecture/isolation/architecture-enforcement/module-verification-contract-registry-v1/verification.json"
+      },
+      {
+        "id": "FINAL-DOD-012A",
+        "title": "All bounded contexts have executable verification and blast-radius profiles",
+        "evidence": "architecture/isolation/architecture-enforcement/module-verification-contract-registry-v1/verification.json"
+      }
+    ],
+    "implemented_but_not_accepted": [
+      "Write ownership remains internally accepted: 1,404 confirmed writes discovered, 0 confirmed foreign, 53 closed foreign, 0 material ambiguity, and 0 unclassified active operational surfaces.",
+      "Credential/security closure remains internally accepted: Gravity 34/34, tg-bot 15/15, 0 material credential unresolved, 0 public secret exposure, and independent critic PASS.",
+      "Live architecture debt is internally closed: 0 findings, 0 uncovered, 0 exception-covered, 0 temporary exceptions, and all 1,288 opening findings actually closed. Whole-project acceptance remains open.",
+      "Authoritative CI is internally closed: 37 configured controls, 33/33 targeted local acceptance, 112/112 active boundary controls, and fresh bounded write/credential inventory gates enabled for pull requests and main pushes.",
+      "Module verification and context-level contract coverage are internally closed: 16/16 manifests, 45 executable verification entrypoints, 14 hashed controls, 16 public context surfaces, 61 allowed interactions, and provider-specific/shared blast-radius negatives PASS."
+    ],
+    "investigated": [
+      "Current full-repository analyzer performance: two mirrored 4ec scans were CPU-active for more than 3h20 and aborted; no output exists.",
+      "Per-file localization: isolated default-option analysis was bounded except self-analysis; production-option probe emitted no observed timeout but lost final exit status.",
+      "Root cause narrowed to sequence/cumulative or driver interactions after 5a4211a4, with repeated TypeScript Program construction observable; exact dominant cause remains unproven.",
+      "Recovery Git/worktree, durable-state, artifact and process identities reconciled for continuation."
+    ],
+    "not_started": [
+      "Protected Messages production reconciliation and AI Calls lineage acceptance.",
+      "Production source/artifact identity reconciliation, preview/backup/rollback gates, deployment or runtime activation.",
+      "Final external re-review after all live debt and production gates close."
+    ]
+  },
+  "analyzer": {
+    "previous_problem": "The historical regex/root-limited enforcer missed cast/structural writes, operational roots, exact-site authorization, and database credential reads. V2 moved to Git-tracked surface inventory and AST/SQL/credential analysis. Later falsification exposed aliases, indirection, SQL dialect, shell/subprocess and Drizzle holder/parameter gaps; fixes exist through 4ec52730.",
+    "exact_files": [
+      "tools/architecture/v2/analyze.mjs",
+      "tools/architecture/v2/credential-analyzer.mjs",
+      "tools/architecture/v2/credential-inventory.mjs",
+      "tools/architecture/v2/sql-mutation-analyzer.mjs",
+      "tools/architecture/v2/test-analyze.mjs",
+      "tools/architecture/v2/test-credential-analyzer.mjs",
+      "tools/architecture/v2/test-credential-inventory.mjs",
+      "tools/architecture/v2/test-surface-inventory.mjs",
+      "tools/architecture/v2/test-write-analyzer.mjs",
+      "tools/architecture/v2/tracked-surface-inventory.mjs",
+      "tools/architecture/v2/write-analyzer.mjs",
+      "gravity-mvp/debug-drivers.js"
+    ],
+    "scan_roots": "Every Git-tracked executable surface from git ls-files -z. Extensions: .ts, .tsx, .js, .jsx, .mjs, .cjs, .sql, .sh, .py, .ps1, .bat, .yml, .yaml, .prisma, Dockerfile variants and package.json. Deleted tracked files are excluded; lifecycle/disposition classification is explicit/inferred.",
+    "validated_properties": [
+      "Direct Prisma delegates, parentheses/casts/assertions/non-null/optional chains and (prisma.model as any).",
+      "Imports, aliases, destructuring, operation aliases, transaction clients/callbacks, helper parameters, dynamic imports and CJS/ESM constructors.",
+      "Dynamic delegates fail closed; nested relation writes/projections, mutable projections, recursion/cycle guards and self-scan.",
+      "Raw SQL fragments, queryRaw, CALL/COPY/DO, dialect/DDL/stored routines/RETURNING/USING and comment/string false positives.",
+      "Drizzle typed aliases/descriptors/Object/Map/Reflect/fromEntries/seal/prototype holders, helper parameters and dynamic ambiguity.",
+      "Prepared SQLite/general driver aliases and asyncpg cursor forms.",
+      "Shell/Python/PowerShell/batch/JavaScript child-process command sinks and database CLI invocations.",
+      "Credential reads/writes/public-route risk, dynamic targets fail closed, literal secret markers are not serialized."
+    ],
+    "targeted_test_state": "Current 4ec suite exited 0 in both clean mirrors. test-write-analyzer contains 77 fixtures; stdout was suppressed in the final mirrored command, while the latest visible 8aa run showed 77/77. Companion analyze/surface/credential suites printed PASS.",
+    "performance_state": "CLOSED FOR EXECUTION: fresh-process isolated JavaScript workers are capped at 4, each has a 120000ms deadline, structured progress is emitted, and final output is atomic. The one final authoritative scan completed 1639/1639 in 320082ms with no failures or timeouts.",
+    "root_cause": {
+      "status": "NOT PROVEN",
+      "proven": [
+        "Fresh TypeScript Program/checker construction occurs per JavaScript-family file call.",
+        "The full driver traverses surfaces serially and is pathologically slow after later hardening.",
+        "5a4211a4 with the same Program architecture completed a mirrored pair in about 65 seconds, so Program construction alone is not proven dominant.",
+        "Isolated per-file runs did not reveal a production file that individually explains the >3h behavior."
+      ],
+      "hypotheses_only": [
+        "Repeated Program construction plus long-lived process sequence/state is dominant.",
+        "A cumulative Map/Reflect/holder or Drizzle helper-parameter path introduced after 5a4211a4 is dominant.",
+        "Another full-driver algorithmic interaction is dominant."
+      ]
+    },
+    "diagnostic_evidence": "architecture/recovery/whole-project-dod/v2/continuation/ANALYZER_DIAGNOSTIC_CHECKPOINT.json"
+  },
+  "test_and_enforcement_state": [
+    {
+      "category": "targeted_analyzer",
+      "command": "NODE=/home/codexbot/.local/node-v22.18.0-linux-x64/bin/node; $NODE tools/architecture/v2/test-write-analyzer.mjs >/dev/null; $NODE tools/architecture/v2/test-analyze.mjs; $NODE tools/architecture/v2/test-surface-inventory.mjs; $NODE tools/architecture/v2/test-credential-analyzer.mjs; $NODE tools/architecture/v2/test-credential-inventory.mjs; git status --short",
+      "scope": "Executed independently in both clean detached 4ec mirrors",
+      "result": "EXIT 0 in both; current write fixture count 77; four companion suites PASS; both worktrees clean"
+    },
+    {
+      "category": "gravity_security_detector",
+      "command": "cd gravity-mvp && export PATH=/opt/codex-work/.toolchains/node-v20.20.2-linux-x64/bin:$PATH && npm run test:security-boundaries",
+      "scope": "Public-boundary source detector plus nine Vitest files",
+      "result": "34/34 PASS"
+    },
+    {
+      "category": "tg_bot_security_detector",
+      "command": "cd tg-bot && PATH=/home/codexbot/.local/node/bin:$PATH npm run test:security-boundaries",
+      "scope": "Node security boundary tests",
+      "result": "14/14 PASS in final delegated report (an earlier intermediate run was 13/13)"
+    },
+    {
+      "category": "production_builds",
+      "command": "export PATH=/opt/codex-work/.toolchains/node-v20.20.2-linux-x64/bin:$PATH; (cd gravity-mvp && npm run build); (cd tg-bot/tg-bot-frontend && npm run build)",
+      "scope": "Gravity and tg-bot frontend production builds",
+      "result": "Both PASS; tg-bot frontend generated 10 static pages"
+    },
+    {
+      "category": "security_build_boundary",
+      "command": "cd gravity-mvp && export PATH=/opt/codex-work/.toolchains/node-v20.20.2-linux-x64/bin:$PATH && npm run test:security-boundaries:build",
+      "scope": "Built debug/public boundary check",
+      "result": "PASS"
+    },
+    {
+      "category": "typescript_and_eslint",
+      "command": "cd gravity-mvp && export PATH=/opt/codex-work/.toolchains/node-v20.20.2-linux-x64/bin:$PATH && npx tsc --noEmit --pretty false; npx eslint scripts/check-public-boundaries.mjs src/proxy.ts src/app/settings/integrations/access src/lib/security src/lib/whatsapp/whatsapp-qr-ceremony.ts src/lib/whatsapp/whatsapp-qr-ceremony.test.ts src/modules/calling/public/v1/ai-agent-config-public-metadata.ts src/modules/calling/public/v1/ai-agent-config-public-metadata.test.ts src/modules/fleet-operations/public/v1/api-connection-public-metadata.ts src/modules/fleet-operations/public/v1/api-connection-public-metadata.test.ts src/modules/identity-access/public/v1/integration-admin-auth.ts src/modules/identity-access/public/v1/integration-admin-credentials.ts src/modules/max-channel src/modules/telegram-channel/public/v1/telegram-connection-public-metadata.ts src/modules/telegram-channel/public/v1/telegram-connection-public-metadata.test.ts src/modules/whatsapp-channel",
+      "scope": "Gravity static checks",
+      "result": "TypeScript reported exactly 28 inherited diagnostics and no diagnostics in the new security paths; targeted ESLint PASS"
+    },
+    {
+      "category": "architecture",
+      "command": "export PATH=/opt/codex-work/.toolchains/node-v20.20.2-linux-x64/bin:$PATH; node tools/architecture/validate-context-manifests.mjs; node --test tools/architecture/__tests__/context-manifests.test.mjs; node tools/architecture/enforce-architecture.mjs; node tools/architecture/check-calling-ai-agent-config-boundary.mjs; sha256sum -c architecture/contexts/v1/SHA256SUMS; git diff --check",
+      "scope": "Uncommitted security/context slice",
+      "result": "Manifest validation PASS; 8/8 negative tests PASS; strict enforcement PASS at 1284 findings / 1284 exact exceptions; AI checker 10/10 PASS; context checksums 31/31 PASS; diff check PASS"
+    },
+    {
+      "category": "authoritative_full_scan",
+      "command": "node tools/architecture/v2/analyze.mjs --root . --output /tmp/yoko-write-{freeze|repro}-4ec52730.json",
+      "scope": "Two clean detached 4ec mirrors",
+      "result": "ABORTED EXIT 130 after >3h20 each; no output; non-authoritative; NOT PASS"
+    },
+    {
+      "category": "live_architecture_checkpoint_299",
+      "command": "node tools/architecture/enforce-architecture.mjs; node tools/architecture/validate-context-manifests.mjs; sha256sum -c architecture/isolation/work-management/scenario-field-settings-v1/SHA256SUMS",
+      "scope": "Strict detector after Work client state, Fleet policy, Configuration health, and Work operational policy clusters",
+      "result": "PASS: 299 findings / 299 exact temporary exceptions; 0 uncovered; 0 stale; 0 provider accesses; 0 detector errors"
+    },
+    {
+      "category": "telegram_runtime_boundary",
+      "command": "vitest runtime operations; check-telegram-runtime-provider-boundary.mjs; messaging delivery source test",
+      "scope": "Protected Telegram runtime consumers",
+      "result": "5/5 focused tests PASS; 12 consumers owner-routed; source boundary PASS"
+    },
+    {
+      "category": "contacts_owner_boundary",
+      "command": "vitest contact resolution and shadow suites; test-contacts-contact-conversation.mjs; check-contact-service-public-boundary.mjs",
+      "scope": "Protected contact/provider identity behavior",
+      "result": "60/60 focused tests PASS; 17/17 contract checks PASS; 11 consumers owner-routed"
+    },
+    {
+      "category": "typescript_checkpoint_299",
+      "command": "cd gravity-mvp && npx tsc --noEmit --pretty false",
+      "scope": "Whole Gravity static type check",
+      "result": "30 inherited diagnostics; no diagnostics introduced by the four latest architecture batches"
+    },
+    {
+      "category": "live_architecture_checkpoint_235",
+      "command": "node tools/architecture/enforce-architecture.mjs; node tools/architecture/validate-context-manifests.mjs; sha256sum -c architecture/contexts/v1/SHA256SUMS; sha256sum -c architecture/isolation/work-management/scenario-field-settings-v1/SHA256SUMS",
+      "scope": "Strict detector after six semantic batches closed 64 findings from the durable 299 checkpoint",
+      "result": "PASS: 235 findings / 235 exact temporary exceptions; 0 uncovered; 0 stale; 0 dependency cycles; 0 provider accesses; 0 detector errors"
+    },
+    {
+      "category": "calling_client_ui_boundary",
+      "command": "node tools/architecture/check-calling-client-ui-boundary.mjs; node tools/architecture/check-calling-sip-client-boundary.mjs; python3 src/components/sip/__tests__/incoming_call_alert_source_test.py; npx vitest run src/lib/sip/__tests__/callAlertAudio.test.ts",
+      "scope": "SIP context, Calling client UI, Fleet adapters and protected incoming-call/ringtone behavior",
+      "result": "Boundary checkers PASS; 0 dependency cycles; 4/4 source probes PASS; 3/3 runtime tests PASS"
+    },
+    {
+      "category": "typescript_checkpoint_235",
+      "command": "cd gravity-mvp && npx tsc --noEmit --pretty false",
+      "scope": "Whole Gravity static type check",
+      "result": "30 inherited diagnostics; no diagnostics in the Calling client-context/UI, Fleet adapter or shared outbound-call capability paths"
+    },
+    {
+      "category": "live_architecture_checkpoint_190",
+      "command": "node tools/architecture/enforce-architecture.mjs; targeted cluster checkers; node tools/architecture/validate-context-manifests.mjs; sha256sum -c architecture/contexts/v1/SHA256SUMS; sha256sum -c architecture/isolation/work-management/scenario-field-settings-v1/SHA256SUMS",
+      "scope": "Strict detector after six semantic batches closed 45 findings from the durable 235 checkpoint",
+      "result": "PASS: 190 findings / 190 exact temporary exceptions; 0 uncovered; 0 stale; 0 dependency cycles; 0 provider accesses; 0 detector errors"
+    },
+    {
+      "category": "security_and_protected_behavior_checkpoint_190",
+      "command": "npm run test:security-boundaries; provider/call-status/shared-UI targeted checkers and Vitest suites",
+      "scope": "Credential status/settings, protected Messages call rendering and technical UI compatibility",
+      "result": "Gravity security 34/34 PASS; call-status 2/2 PASS; shared UI 3/3 PASS; all targeted boundary checkers PASS"
+    },
+    {
+      "category": "typescript_checkpoint_190",
+      "command": "cd gravity-mvp && npx tsc --noEmit --pretty false",
+      "scope": "Whole Gravity static type check after Calling and shared-UI batches",
+      "result": "30 inherited diagnostics; zero diagnostics in changed paths"
+    },
+    {
+      "category": "live_architecture_checkpoint_157",
+      "command": "node tools/architecture/enforce-architecture.mjs; targeted cluster checkers; node tools/architecture/validate-context-manifests.mjs; sha256sum -c architecture/contexts/v1/SHA256SUMS; sha256sum -c architecture/isolation/work-management/scenario-field-settings-v1/SHA256SUMS",
+      "scope": "Strict detector after five semantic batches closed 33 findings from the durable 190 checkpoint",
+      "result": "PASS: 157 findings / 157 exact temporary exceptions; 0 uncovered; 0 stale; 0 dependency cycles; 0 provider accesses; 0 detector errors"
+    },
+    {
+      "category": "protected_behavior_checkpoint_157",
+      "command": "npm run test:security-boundaries; Messaging delivery recovery and Calling/AI Knowledge targeted suites",
+      "scope": "Credential boundaries and protected Messaging recovery behavior",
+      "result": "Gravity security 34/34 PASS; delivery recovery 2/2 PASS; approved-writer unrelated-operation probes REJECTED; private protected implementations hash-frozen"
+    },
+    {
+      "category": "typescript_checkpoint_157",
+      "command": "cd gravity-mvp && npx tsc --noEmit --pretty false",
+      "scope": "Whole Gravity static type check after five post-190 architecture batches",
+      "result": "30 inherited diagnostics; zero diagnostics in changed paths"
+    },
+    {
+      "category": "live_architecture_checkpoint_117",
+      "command": "node tools/architecture/enforce-architecture.mjs; targeted cluster checkers; node tools/architecture/validate-context-manifests.mjs; sha256sum -c architecture/contexts/v1/SHA256SUMS; sha256sum -c architecture/isolation/work-management/scenario-field-settings-v1/SHA256SUMS",
+      "scope": "Strict detector after eight semantic batches closed 40 findings from the durable 157 checkpoint",
+      "result": "PASS: 117 findings / 117 exact temporary exceptions; 0 uncovered; 0 stale; 0 dependency cycles; 0 provider accesses; 0 detector errors"
+    },
+    {
+      "category": "protected_behavior_checkpoint_117",
+      "command": "npm run test:security-boundaries; targeted AI Knowledge, Calling provider and Operations job-registry tests/checkers",
+      "scope": "Credential boundaries, protected Messages aliases, AI Calls request payloads and active operational-script consumers",
+      "result": "Gravity security 34/34 PASS; all focused new suites PASS; unrelated capability probes REJECTED; private protected implementations hash-frozen where applicable"
+    },
+    {
+      "category": "typescript_checkpoint_117",
+      "command": "cd gravity-mvp && npx tsc --noEmit --pretty false",
+      "scope": "Whole Gravity static type check after eight post-157 architecture batches",
+      "result": "30 inherited diagnostics; zero diagnostics in changed paths"
+    },
+    {
+      "category": "live_architecture_debt_closure_zero",
+      "command": "node tools/architecture/enforce-architecture.mjs --format json; node tools/architecture/check-operations-scheduled-fleet-cron-boundary.mjs; node tools/architecture/validate-context-manifests.mjs; npm run test:security-boundaries; targeted cron Vitest; architecture negative suite; contract, credential-registry and static-SQL controls",
+      "scope": "Final Fleet cron semantic batch and whole live-architecture denominator",
+      "result": "PASS: 0 findings, 0 exceptions, 0 uncovered, 0 stale, 0 cycles, 0 provider accesses; 1,288 actually closed; cron 11/11; architecture negatives 29/29; security 34/34; credential registry 14 policies; TypeScript 30 inherited with zero changed-path diagnostics"
+    },
+    {
+      "category": "module_verification_and_contract_registry_closure",
+      "command": "node tools/architecture/run-authoritative-ci.mjs --skip-full-scans; sha256sum -c architecture/isolation/architecture-enforcement/module-verification-contract-registry-v1/SHA256SUMS",
+      "scope": "All 16 context verification profiles, exact context-level contract registry, blast-radius mapping and current targeted architecture control plane",
+      "result": "PASS: 33/33 targeted controls; 112/112 active boundaries; 16/16 manifests; 45 entrypoints; 14 hashed controls; 11 manifest negatives; 16 context surfaces; 61 interactions; 4 registry negatives; Gravity 34/34; tg-bot 15/15; TypeScript 30 inherited and 0 changed-path diagnostics; no full inventory scan"
+    }
+  ],
+  "artifacts": {
+    "write_ownership_derived_state": "architecture/recovery/whole-project-dod/v2/CURRENT_WRITE_OWNERSHIP_DERIVED_STATE.json",
+    "maintenance_capability_registry": "architecture/recovery/whole-project-dod/v2/MAINTENANCE_MIGRATION_CAPABILITY_REGISTRY.json",
+    "ownership_gap_review": "architecture/recovery/whole-project-dod/v2/OWNERSHIP_GAP_FOCUSED_REVIEW.json",
+    "module_verification_contract_registry": "architecture/isolation/architecture-enforcement/module-verification-contract-registry-v1/verification.json",
+    "current_4ec_outputs": "Historical 4ec outputs remain absent. They are superseded by the bounded current 3ab9ad96 baseline below.",
+    "current_authoritative_write_baseline": {
+      "record": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_POST_MESSAGES_20260811T0450Z.json",
+      "baseline": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json",
+      "baseline_sha256": "1ed65f5f744ab1da38fb6faad1948466e536b6d084cf577a14fc619391e34278",
+      "progress": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_PROGRESS.jsonl",
+      "progress_sha256": "c2b05665c23a9f3fc144d4423a3a481a4c01c7606f6cef3a6562c0e306f14c8c",
+      "analysis_sha256": "1ed65f5f744ab1da38fb6faad1948466e536b6d084cf577a14fc619391e34278",
+      "result": "2016/2016 surfaces; 0 failures/timeouts; 1418 analyzer candidates; 1388 confirmed writes; 0 FOREIGN; 45 RAW AMBIGUOUS; 0 MATERIAL UNRESOLVED; 0 unclassified active operational surfaces",
+      "classification": "CURRENT_BOUNDED_BASELINE_WRITE_OWNERSHIP_INTERNALLY_ACCEPTED_NOT_WHOLE_PROJECT_ACCEPTANCE"
+    },
+    "durably_preserved": [
+      "architecture/recovery/whole-project-dod/v2/CURRENT_RECOVERY_HANDOFF.md",
+      "architecture/recovery/whole-project-dod/v2/CURRENT_RECOVERY_HANDOFF.json",
+      "architecture/recovery/whole-project-dod/v2/continuation/ANALYZER_DIAGNOSTIC_CHECKPOINT.json",
+      "architecture/recovery/whole-project-dod/v2/continuation/PER_FILE_LOCALIZATION_PROBE.mjs",
+      "architecture/recovery/whole-project-dod/v2/SHA256SUMS"
+    ],
+    "stale_committed_phase_evidence": [
+      {
+        "path": "architecture/recovery/whole-project-dod/v2/ANALYZER_PHASE_IDENTITY.json",
+        "sha256": "276738e9742e29ae45cd2493c26b5b802b31eea78f9dbe73cd2068cdf2f89433"
+      },
+      {
+        "path": "architecture/recovery/whole-project-dod/v2/WHOLE_REPOSITORY_WRITE_BASELINE.json",
+        "sha256": "0277639218ea5294d761343b55ca610e24258141f5318a228ee1688fe2e4bb2b"
+      },
+      {
+        "path": "architecture/recovery/whole-project-dod/v2/CREDENTIAL_DATABASE_ACCESS_BASELINE.json",
+        "sha256": "0274eb89d4f1fcf4671ac5025091df61dd55b28a1f02c69fad7044c15df1feb4"
+      },
+      {
+        "path": "architecture/recovery/whole-project-dod/v2/REVIEW-1-EXECUTOR.md",
+        "sha256": "8efcf0fb5f1a3502dd36e8e12fed70ab614ddb4a9c25c08066332bfc3482fa3e"
+      }
+    ],
+    "stale_evidence_warning": "The four phase artifacts are from critic-blocked commit 3339325f/tree 68e1... and are committed only to preserve historical evidence. They are obsolete/superseded and MUST NOT be used as the current 4ec baseline or acceptance.",
+    "temporary_comparison_only": "5a4211a4 mirrored outputs remain in /tmp and are not durable current evidence; their hashes/counts are in the diagnostic checkpoint. WIP /tmp clutter was intentionally not copied.",
+    "latest_triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_POST_IMPORT_CHURN.json",
+    "ambiguous_reconciliation": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_RECONCILIATION_READONLY_RECLASS.json"
+  },
+  "durable_project_state": {
+    "root": "/opt/codex-work/crm-architecture-state",
+    "files": {
+      "PROJECT_STATE": "/opt/codex-work/crm-architecture-state/PROJECT_STATE.json and PROJECT_STATE.md",
+      "ROADMAP_LEDGER": "/opt/codex-work/crm-architecture-state/ROADMAP_LEDGER.json",
+      "MILESTONE_LEDGER": "/opt/codex-work/crm-architecture-state/MILESTONE_LEDGER.json",
+      "FINAL_DOD_GAP_LEDGER": "/opt/codex-work/crm-architecture-state/FINAL_DOD_GAP_LEDGER.json",
+      "KNOWN_EXCEPTIONS": "/opt/codex-work/crm-architecture-state/KNOWN_EXCEPTIONS.json",
+      "PRODUCTION_CHANGE_LEDGER": "/opt/codex-work/crm-architecture-state/PRODUCTION_CHANGE_LEDGER.json",
+      "EVIDENCE_INDEX": "/opt/codex-work/crm-architecture-state/EVIDENCE_INDEX.json",
+      "WHOLE_PROJECT_EVIDENCE_INDEX": "/opt/codex-work/crm-architecture-state/WHOLE_PROJECT_EVIDENCE_INDEX.json",
+      "ARCHITECTURE_DECISIONS": "/opt/codex-work/crm-architecture-state/ARCHITECTURE_DECISIONS.md"
+    },
+    "task_mutations": {
+      "updated": [
+        "PROJECT_STATE.json",
+        "PROJECT_STATE.md",
+        "MILESTONE_LEDGER.json",
+        "ROADMAP_LEDGER.json",
+        "ARCHITECTURE_DECISIONS.md",
+        "KNOWN_EXCEPTIONS.json",
+        "PRODUCTION_CHANGE_LEDGER.json",
+        "EVIDENCE_INDEX.json"
+      ],
+      "created": [
+        "FINAL_DOD_GAP_LEDGER.json",
+        "WHOLE_PROJECT_EVIDENCE_INDEX.json"
+      ],
+      "checkpoint_pointer_updates": [
+        "PROJECT_STATE.json",
+        "EVIDENCE_INDEX.json",
+        "WHOLE_PROJECT_EVIDENCE_INDEX.json"
+      ]
+    }
+  },
+  "identities": {
+    "recovery_source": {
+      "status": "RECONCILED",
+      "repository": "/opt/codex-work/crm",
+      "worktree": "/opt/codex-work/crm-architecture-dod-recovery",
+      "branch": "codex/crm-architecture-dod-recovery",
+      "base_commit": "0b61ba296ba2734738d4a21b9d00ce8b110d63cf",
+      "base_tree": "56c452397df4bb7cb05bef3e0d9afd1de9d785a5",
+      "truth_evidence_commit": "88b7624c77e7f91a131139c993247df11b86156c",
+      "truth_evidence_tree": "43027f413e2e7dd1fc4fc8fa9ab5205eb765bb03",
+      "accepted_source_commit": "af9646f51c1274d718d83eb4c78faf92f214a184",
+      "accepted_source_tree": "f900a2bbae3a63f02ff85bf70821df9aab7ff1df"
+    },
+    "production_source_artifact": "RECONCILED_AS_CURRENT_PER_FILE_COMPOSITE_AT_/opt/crm; ACCEPTED_CANDIDATE_NOT_DEPLOYED",
+    "messages_authoritative_production_source": "RECONCILED_26_RECORD_SOURCE_AND_BEHAVIOR_CORPUS; DEPLOYED_RUNTIME_NOT_ACCEPTED",
+    "installed_privileged_runtime_v2": {
+      "status": "RECONCILED",
+      "package": "yoko-privileged-runtime 2.0.0-5",
+      "runtime_sha256": "0cdeeb4ba43abe50f80fed1580ad7b0729bf83358932ece2974b3faedafed57a",
+      "policy_sha256": "e67159bf95b583a17073ccf34b95f17fb885321df10b742be970168331d64e38",
+      "registry_sha256": "6e0ac1bdf7bbf95b5ae984dc266050a86425aac1bd884f3ab2f1b6f377291016",
+      "sudoers_sha256": "6e6b7cb2a088cc92fa7aee747adca46c64b4b96d1224be21117be5adef488c06",
+      "self_check": true,
+      "effective_abi_commands": 24,
+      "activation_profiles": "DISABLED_FAIL_CLOSED_ROOT_OWNED_INSTALLATION_REQUIRED"
+    }
+  },
+  "production_mutations": {
+    "production_source_mutations": 0,
+    "database_mutations": 0,
+    "service_restarts_or_reloads": 0,
+    "deployments": 0,
+    "rollbacks": 0,
+    "protected_messages_mutated": false,
+    "ai_calls_mutated": false
+  },
+  "genuine_blockers": [
+    "FINAL-DOD-009 requires Owner/root authorization to install the exact checksummed root-owned finite activation profiles outside the installed V2 ABI.",
+    "FINAL-DOD-007, FINAL-DOD-008 and FINAL-DOD-015 remain open until incremental deployment, outbox activation and deployed Messages behavior acceptance complete."
+  ],
+  "exact_next_action": "Owner/root installs the exact checksummed finite profiles in architecture/recovery/control-plane/v2/ROOT_OWNED_ACTIVATION_PROFILE_REQUEST_20260812.json; then resume with isolated PostgreSQL preview, production DB identity, verified backup/restore, expand-only migration, immutable Gravity activation, health/behavior validation and automatic rollback on failure.",
+  "current_write_ownership": {
+    "baseline": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_POST_MESSAGES_20260811T0450Z.json",
+    "baseline_sha256": "1ed65f5f744ab1da38fb6faad1948466e536b6d084cf577a14fc619391e34278",
+    "analysis_sha256": "1ed65f5f744ab1da38fb6faad1948466e536b6d084cf577a14fc619391e34278",
+    "surfaces": "2016/2016",
+    "failures": 0,
+    "timeouts": 0,
+    "analyzer_write_candidates": 1418,
+    "confirmed_writes_discovered": 1388,
+    "confirmed_foreign": 0,
+    "closed_foreign": 53,
+    "ambiguous_raw": 45,
+    "resolved_non_writes": 30,
+    "owner_valid_writes": 10,
+    "controlled_migration_writes": 5,
+    "material_unresolved": 0,
+    "dynamic_delegate_unresolved": 0,
+    "dynamic_sql_unresolved": 0,
+    "query_raw_side_effect_unresolved": 0,
+    "active_operational_surfaces_unclassified": 0,
+    "temporary_exceptions": 0,
+    "intentional_exceptions": 0,
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_FINAL_CLOSURE.json",
+    "triage_sha256": "5fc875510bae732bf0bcaa3bb8d05710ffb3e9186ff8830e6a79b8973b041892"
+  },
+  "security_continuation": {
+    "credential_inventory": "architecture/recovery/whole-project-dod/v2/CREDENTIAL_DATABASE_ACCESS_ARCHITECTURE_CHECKPOINT_20260811.json",
+    "credential_reconciliation": "architecture/recovery/whole-project-dod/v2/CREDENTIAL_DATABASE_ACCESS_ARCHITECTURE_RECONCILIATION_20260812.json",
+    "credential_unknown_resolution": "architecture/recovery/whole-project-dod/v2/credential-unknown-access-resolution.json",
+    "public_secret_closure": "architecture/recovery/whole-project-dod/v2/PUBLIC_SECRET_RISK_CLOSURE_20260811.json",
+    "dynamic_migration_boundary": "architecture/recovery/whole-project-dod/v2/CREDENTIAL_DYNAMIC_MIGRATION_BOUNDARY_20260811.json",
+    "cross_domain_review": "architecture/recovery/whole-project-dod/v2/CROSS_DOMAIN_CREDENTIAL_REVIEW_20260811.json",
+    "credential_inventory_summary": {
+      "credential_database_accesses": 403,
+      "credential_reads": 219,
+      "secret_reads": 155,
+      "metadata_only_reads": 64,
+      "ambiguous_credential_accesses": 81,
+      "unresolved_database_accesses": 81,
+      "possible_public_secret_risks": 121,
+      "unclassified_accesses": 90
+    },
+    "gravity_security_tests": "PASS (34)",
+    "tg_bot_security_tests": "PASS (15)",
+    "public_boundary_detector": "PASS",
+    "debug_endpoint_exposure": "CLOSED",
+    "independent_critic": "PASS",
+    "confirmed_public_secret_exposure": 0,
+    "material_credential_unresolved": 0,
+    "cross_domain_capability_gaps": 0,
+    "verdict": "CREDENTIAL_BOUNDARY_CLOSED_INTERNAL; WHOLE_PROJECT_NOT_READY"
+  },
+  "live_architecture_debt_recompute": {
+    "artifact": "architecture/recovery/whole-project-dod/v2/LIVE_ARCHITECTURE_DEBT_CLOSURE_20260812.json",
+    "closing_batch_evidence": "architecture/isolation/operations-observability/scheduled-fleet-crons-v1/verification.json",
+    "scanned_files": 1270,
+    "contexts": 16,
+    "findings": 0,
+    "exception_covered": 0,
+    "open_findings": 0,
+    "stale_exceptions": 0,
+    "exception_debt": 0,
+    "actually_closed_from_opening_denominator": 1288,
+    "internal_module_imports": 0,
+    "non_public_cross_context_imports": 0,
+    "undeclared_dependencies": 0,
+    "provider_transport_accesses": 0,
+    "direct_foreign_prisma_writes": 0,
+    "contract_gaps": 0,
+    "manifest_gaps": 0,
+    "detector_parse_errors": 0,
+    "detector_finding_digest_mismatch": 0,
+    "verdict": "LIVE_DEBT_INTERNALLY_CLOSED; WHOLE_PROJECT_NOT_READY"
+  },
+  "live_architecture_debt": {
+    "artifact": "architecture/recovery/whole-project-dod/v2/LIVE_ARCHITECTURE_DEBT_CLOSURE_20260812.json",
+    "closing_batch_evidence": "architecture/isolation/operations-observability/scheduled-fleet-crons-v1/verification.json",
+    "scanned_files": 1270,
+    "contexts": 16,
+    "findings": 0,
+    "exception_covered": 0,
+    "open_findings": 0,
+    "stale_exceptions": 0,
+    "exception_debt": 0,
+    "actually_closed_from_opening_denominator": 1288,
+    "internal_module_imports": 0,
+    "non_public_cross_context_imports": 0,
+    "undeclared_dependencies": 0,
+    "provider_transport_accesses": 0,
+    "direct_foreign_prisma_writes": 0,
+    "contract_gaps": 0,
+    "manifest_gaps": 0,
+    "detector_parse_errors": 0,
+    "detector_finding_digest_mismatch": 0,
+    "verdict": "LIVE_DEBT_INTERNALLY_CLOSED; WHOLE_PROJECT_NOT_READY"
+  }
+}

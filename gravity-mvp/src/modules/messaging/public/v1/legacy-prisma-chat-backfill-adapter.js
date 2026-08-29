@@ -1,0 +1,125 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
+
+const { PrismaClient } = require('@prisma/client')
+
+/** Messaging-owned fixed maintenance capabilities for Chat backfills. */
+async function backfillLastInboundAtV1() {
+  const prisma = new PrismaClient()
+  try {
+    return await prisma.$executeRaw`
+      UPDATE "Chat" c
+      SET "lastInboundAt" = sub."maxInbound"
+      FROM (
+        SELECT m."chatId", MAX(m."sentAt") AS "maxInbound"
+        FROM "Message" m
+        WHERE m.direction = 'inbound'
+        GROUP BY m."chatId"
+      ) sub
+      WHERE c.id = sub."chatId"
+        AND (c."lastInboundAt" IS NULL OR c."lastInboundAt" < sub."maxInbound")
+    `
+  } finally {
+    await prisma.$disconnect()
+  }
+}
+
+async function backfillUnreadCountV1() {
+  const prisma = new PrismaClient()
+  try {
+    return await prisma.$executeRaw`
+      UPDATE "Chat" c
+      SET "unreadCount" = sub."unreadCount"
+      FROM (
+        SELECT m."chatId", COUNT(*) AS "unreadCount"
+        FROM "Message" m
+        WHERE m.direction = 'inbound'
+          AND m."sentAt" > COALESCE(
+            (SELECT MAX(m2."sentAt") FROM "Message" m2
+             WHERE m2."chatId" = m."chatId" AND m2.direction = 'outbound'),
+            '1970-01-01'::timestamptz
+          )
+        GROUP BY m."chatId"
+      ) sub
+      WHERE c.id = sub."chatId"
+        AND c."unreadCount" = 0
+        AND sub."unreadCount" > 0
+    `
+  } finally {
+    await prisma.$disconnect()
+  }
+}
+
+async function deleteUnifiedMessagesByIdsV1(ids) {
+  if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new TypeError('ids must be string[]')
+  const prisma = new PrismaClient(); try { return await prisma.message.deleteMany({ where: { id: { in: ids } } }) } finally { await prisma.$disconnect() }
+}
+async function markBackfilledOutboundDeliveredV1() {
+  const prisma = new PrismaClient(); try { return await prisma.message.updateMany({ where: { channel: 'whatsapp', direction: 'outbound', externalId: { not: null }, status: { in: ['failed', 'sent', 'queued'] } }, data: { status: 'delivered' } }) } finally { await prisma.$disconnect() }
+}
+async function deleteEmptyUnifiedChatsV1(ids) {
+  if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new TypeError('ids must be string[]')
+  const prisma = new PrismaClient(); try { return await prisma.chat.deleteMany({ where: { id: { in: ids } } }) } finally { await prisma.$disconnect() }
+}
+async function rewriteLidChatV1(chatId, externalChatId, name) {
+  if (![chatId, externalChatId, name].every(v => typeof v === 'string' && v.length > 0 && v.length <= 512)) throw new TypeError('bounded chat identity required')
+  const prisma = new PrismaClient(); try { return await prisma.chat.update({ where: { id: chatId }, data: { externalChatId, name } }) } finally { await prisma.$disconnect() }
+}
+async function moveMessageToChatV1(messageId, chatId) {
+  if (![messageId, chatId].every(v => typeof v === 'string' && v.length > 0)) throw new TypeError('messageId and chatId required')
+  const prisma = new PrismaClient(); try { return await prisma.message.update({ where: { id: messageId }, data: { chatId } }) } finally { await prisma.$disconnect() }
+}
+async function deleteUnifiedMessageV1(messageId) {
+  if (typeof messageId !== 'string' || !messageId) throw new TypeError('messageId required')
+  const prisma = new PrismaClient(); try { return await prisma.message.delete({ where: { id: messageId } }) } finally { await prisma.$disconnect() }
+}
+async function detachAndDeleteChatV1(chatId) {
+  if (typeof chatId !== 'string' || !chatId) throw new TypeError('chatId required')
+  const prisma = new PrismaClient(); try { await prisma.chat.update({ where: { id: chatId }, data: { contactIdentityId: null } }); return await prisma.chat.delete({ where: { id: chatId } }) } finally { await prisma.$disconnect() }
+}
+async function normalizeChatExternalIdV1(chatId, externalChatId) {
+  if (![chatId, externalChatId].every(v => typeof v === 'string' && v.length > 0 && v.length <= 512)) throw new TypeError('bounded chat identity required')
+  const prisma = new PrismaClient(); try { return await prisma.chat.update({ where: { id: chatId }, data: { externalChatId } }) } finally { await prisma.$disconnect() }
+}
+async function moveChatMessagesV1(fromChatId, toChatId) {
+  if (![fromChatId, toChatId].every(v => typeof v === 'string' && v.length > 0)) throw new TypeError('chat IDs required')
+  const prisma = new PrismaClient(); try { return await prisma.message.updateMany({ where: { chatId: fromChatId }, data: { chatId: toChatId } }) } finally { await prisma.$disconnect() }
+}
+async function deleteChatV1(chatId) {
+  if (typeof chatId !== 'string' || !chatId) throw new TypeError('chatId required')
+  const prisma = new PrismaClient(); try { return await prisma.chat.delete({ where: { id: chatId } }) } finally { await prisma.$disconnect() }
+}
+async function refreshChatLastMessageAtV1(chatId, lastMessageAt) {
+  if (typeof chatId !== 'string' || !chatId || !(lastMessageAt instanceof Date)) throw new TypeError('chatId and timestamp required')
+  const prisma = new PrismaClient(); try { return await prisma.chat.update({ where: { id: chatId }, data: { lastMessageAt } }) } finally { await prisma.$disconnect() }
+}
+async function wipeWhatsappUnifiedDataV1() {
+  const prisma = new PrismaClient(); try { const messages = await prisma.message.deleteMany({ where: { channel: 'whatsapp' } }); const chats = await prisma.chat.deleteMany({ where: { channel: 'whatsapp' } }); return { messages, chats } } finally { await prisma.$disconnect() }
+}
+async function backfillMessageChannelV1(messageId, channel) {
+  if (typeof messageId !== 'string' || !messageId || !['whatsapp', 'telegram', 'max', 'phone'].includes(channel)) throw new TypeError('bounded message channel input required')
+  const prisma = new PrismaClient(); try { return await prisma.message.update({ where: { id: messageId }, data: { channel } }) } finally { await prisma.$disconnect() }
+}
+async function markChannelOutboundDeliveredV1(channel) {
+  if (!['whatsapp', 'telegram', 'max', 'phone'].includes(channel)) throw new TypeError('unsupported channel')
+  const prisma = new PrismaClient(); try { return await prisma.message.updateMany({ where: { channel, direction: 'outbound', externalId: { not: null }, status: { in: ['failed', 'sent', 'queued'] } }, data: { status: 'delivered' } }) } finally { await prisma.$disconnect() }
+}
+async function mergeChatLinksV1(winnerId, links) {
+  if (typeof winnerId !== 'string' || !winnerId || !links || typeof links !== 'object') throw new TypeError('winnerId and links required')
+  const data = {}; for (const key of ['driverId', 'contactId', 'contactIdentityId']) if (links[key]) data[key] = links[key]
+  if (!Object.keys(data).length) return null
+  const prisma = new PrismaClient(); try { return await prisma.chat.update({ where: { id: winnerId }, data }) } finally { await prisma.$disconnect() }
+}
+async function deleteDuplicateAttachmentsV1(ids) {
+  if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')) throw new TypeError('attachment ids required')
+  const prisma = new PrismaClient(); try { return await prisma.messageAttachment.deleteMany({ where: { id: { in: ids } } }) } finally { await prisma.$disconnect() }
+}
+async function detachChatIdentityV1(chatId) {
+  if (typeof chatId !== 'string' || !chatId) throw new TypeError('chatId required')
+  const prisma = new PrismaClient(); try { return await prisma.chat.update({ where: { id: chatId }, data: { contactIdentityId: null } }) } finally { await prisma.$disconnect() }
+}
+async function refreshChatActivityV1(chatId, lastMessageAt, lastInboundAt, lastOutboundAt) {
+  if (typeof chatId !== 'string' || !chatId || !(lastMessageAt instanceof Date || lastMessageAt === null)) throw new TypeError('chatId and activity timestamps required')
+  const prisma = new PrismaClient(); try { return await prisma.chat.update({ where: { id: chatId }, data: { lastMessageAt, lastInboundAt, lastOutboundAt } }) } finally { await prisma.$disconnect() }
+}
+
+module.exports = { backfillLastInboundAtV1, backfillUnreadCountV1, deleteUnifiedMessagesByIdsV1, markBackfilledOutboundDeliveredV1, deleteEmptyUnifiedChatsV1, rewriteLidChatV1, moveMessageToChatV1, deleteUnifiedMessageV1, detachAndDeleteChatV1, normalizeChatExternalIdV1, moveChatMessagesV1, deleteChatV1, refreshChatLastMessageAtV1, wipeWhatsappUnifiedDataV1, backfillMessageChannelV1, markChannelOutboundDeliveredV1, mergeChatLinksV1, deleteDuplicateAttachmentsV1, detachChatIdentityV1, refreshChatActivityV1 }

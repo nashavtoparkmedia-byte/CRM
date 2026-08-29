@@ -1,4 +1,4 @@
-import { SectionDescription } from '@/components/ui/SectionDescription'
+import { SectionDescription } from '@/infrastructure/ui/SectionDescription'
 
 export default function AnalyticsPage() {
   return (

@@ -1,0 +1,32 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1",
+  "milestone": "CRM-ARCH-007-FLEET-CLEAR-CHECK-STATUS",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "05d1377ec808f611a0115b7d42dfe256ad4c010e",
+  "context": "fleet_operations",
+  "caller_context": "platform_shell",
+  "plan": {
+    "id": "migration_1e5e17cb2e9c36b5",
+    "site_id": "write_30faae9f6131b1ceedd9",
+    "file": "gravity-mvp/src/scripts/force-clear-locks.ts",
+    "model": "Driver",
+    "method": "updateMany",
+    "role": "script"
+  },
+  "contract": "fleet_operations.ClearFleetCheckStatusCommand.v1",
+  "operation": "clear_all_driver_fleet_check_statuses",
+  "dependency": "platform_shell -> fleet_operations.public pre-approved",
+  "command_amendment": "Fleet Operations adds ClearFleetCheckStatusCommand.v1",
+  "consumer_before_sha256": "83f0a4d520d7c0b6259317495b3840458cd3378b4fc8787a553a38ada8b6ff61",
+  "consumer_after_sha256": "1869989b2796ba6c3163e1a85cb44b752c6175d415334ce2a6c1ed5fc1062a36",
+  "enforcement": {
+    "before": 1506,
+    "after": 1505,
+    "retired": [
+      "arch_50af9958fd51a9581132014a"
+    ],
+    "new_capacity": 0
+  },
+  "execution_performed": false,
+  "rollback": "05d1377ec808f611a0115b7d42dfe256ad4c010e"
+}

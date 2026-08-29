@@ -1,7 +1,8 @@
 import Link from 'next/link'
 import { Bot, BookOpen } from 'lucide-react'
-import { PageContainer } from '@/components/ui/PageContainer'
-import { getCurrentUser } from '@/lib/users/user-service'
+import { PageContainer } from '@/infrastructure/ui/PageContainer'
+import { getCurrentUserIdentityV1 as getCurrentUser } from '@/modules/identity-access/public/v1/user-directory'
+import { requireIntegrationAdminPageAccess } from '@/modules/identity-access/public/v1'
 import AiControlCenterClient from './AiControlCenterClient'
 import {
     getAiConfig,
@@ -22,12 +23,15 @@ export const dynamic   = 'force-dynamic'
 export const revalidate = 0
 
 export default async function AiControlCenterPage() {
+    await requireIntegrationAdminPageAccess('/settings/ai')
+    const user = await getCurrentUser()
+    const canEdit = user?.role === 'Администратор' || user?.role === 'Руководитель'
+
     const [
-        user, config, kb, importJobs, logs, stats, profiles, activeProfileId,
+        config, kb, importJobs, logs, stats, profiles, activeProfileId,
         knowledgeSections, knowledgeStats, extractionJobs, extractionTier,
         knowledgeReadiness,
     ] = await Promise.all([
-        getCurrentUser(),
         getAiConfig(),
         getKnowledgeBase(),
         getAllImportJobs(10),
@@ -41,7 +45,6 @@ export default async function AiControlCenterPage() {
         getExtractionQualityTier(),
         getKnowledgeReadinessForUi(),
     ])
-    const canEdit = user?.role === 'Администратор' || user?.role === 'Руководитель'
 
     return (
         <PageContainer>

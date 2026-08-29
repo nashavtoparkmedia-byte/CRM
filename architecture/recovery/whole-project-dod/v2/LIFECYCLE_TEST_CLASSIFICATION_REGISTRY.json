@@ -1,0 +1,204 @@
+{
+  "schema": "yoko.crm.lifecycle-classification-registry.v1",
+  "generated_at": "2026-08-10T23:09:27.240Z",
+  "baseline_sha256": "118c886e4276f51f0e85f66abe9aa5db87c049e032b174fb99e492c2b37dbebe",
+  "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test harness writes remain visible and fail-closed.",
+  "summary": {
+    "classified_test": 32,
+    "unclassified_operational_remaining": 411
+  },
+  "surfaces": [
+    {
+      "path": "gravity-mvp/scripts/smoke_ai_persistence.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/smoke_dev_simulate.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/smoke_explainability_pr4.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/smoke_extraction_pr2.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/smoke_governance_pr2_5.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/smoke_knowledge_pr1.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/smoke_legacy_migration_pr5.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/smoke_pii_check.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/smoke_production_polish_pr5.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/smoke_readiness_pr5.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/smoke_retrieval_pr3.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/smoke_source_control_pr7.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/smoke_trusted_guard_pr6.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/verify-channel-lifecycle.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/verify-contact-merge-v2.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/verify-data.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/verify-deployment.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/verify-e2e-production.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/verify-fix.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/verify-fix.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/verify-lifecycle.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/verify-merge.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/verify-ops-iter2.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/verify-ops.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/verify-reliability.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/scripts/verify-workflow.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/verify_channels.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/verify-final-counts.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "gravity-mvp/verify-max-webhook.ts",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "tg-bot/verify-api-response.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "tg-bot/verify-integration.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    },
+    {
+      "path": "tg-bot/verify-unique-stats.js",
+      "lifecycle": "TEST",
+      "disposition": null,
+      "rationale": "Named verification/smoke harness; invoked for validation rather than application runtime. Database effects, if any, remain visible to ownership analysis."
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+{
+  "accepted_corrected_release": {
+    "commit": "7aea2823efe50e13a156540993d424594025e403",
+    "source_archive_sha256": "be616b7d528bc111717d237bcd745a8b106302897e702be4b8af1b8643cba26d",
+    "target_image_id": "sha256:baf442f880ebca808897a0131a662c603a9119f652cbbc3e47937286dec49179",
+    "target_tag": "yoko/crm-gravity-mvp:7aea2823efe50e13a156540993d424594025e403-profile-v1",
+    "tree": "dbb380be0775d41b246248a9fe8fbf99bcb38d22"
+  },
+  "captured_at": "2026-08-12T19:34:58Z",
+  "current_cluster": "PRODUCTION_ACTIVATION_WAITING_FOR_EXACT_RUNTIME_2_0_0_9_BOOTSTRAP",
+  "current_production": {
+    "audit_last_digest": "0dc531ab6d7c5eb3abc18d59757edf7bedb9e696cef7a3f61d183d5f9fdafb56",
+    "audit_records": 15,
+    "audit_state": "VALID",
+    "compose_config_hash": "4c1adad9993cb54c5723a202df6a3d3786709e0a01e42fff24d2230a83a411da",
+    "database_identity_sha256": "ed88dfeaad2a3dc2e759590d295992cd06531d4403d896ded00b21ea667be1c9",
+    "gravity_container_id": "53557ce80d417026ad819a701f74a0ef3c91972bdc3d49016f4b85063361ff19",
+    "gravity_health": "healthy",
+    "gravity_image_id": "sha256:b36751e5a6d2b52e7a7676ee5babcd70f496111e9715e5056f6338d04b028f68",
+    "gravity_restart_count": 0,
+    "migration_count": 62,
+    "migration_ledger_sha256": "a50f1a8988f79c85059354d6b2d45e9e8ed07284fc27c78d98face6680f25dfc",
+    "outbox_catalog_sha256": "ef0bce36bca8283b491a966ff3886644a8887f4bded3deebbec7ce559ac2defe",
+    "outbox_counts": {
+      "dead": 0,
+      "pending": 0,
+      "processing": 0,
+      "published": 0
+    },
+    "outbox_migration_state": "APPROVED_OUTBOX_APPLIED",
+    "release_state": "EXACT_PREDECESSOR_RESTORED_AFTER_CORRECTED_TARGET_HEALTH_GATE_FAILURE"
+  },
+  "database": {
+    "backup_bytes": 194477048,
+    "backup_sha256": "31bc226112ba63909f6bb2d22dd2d873b342684aad8b82fe6a25bf5d99ee5d41",
+    "migration_reexecution_during_v8_retry": false,
+    "migration_sha256": "433b0d503f054ed6a8161a059e2650d5e401829dabe8c9d992a1d1763eef0016",
+    "production_migration_result": "ALREADY_MIGRATED_AND_EXACT",
+    "rollback_policy": "KEEP_EXPAND_ONLY_OUTBOX_OBJECTS"
+  },
+  "exact_next_action": "Owner executes only manifest.json.owner_command for the accepted exact Runtime 2.0.0-9 bootstrap. After YOKO_ACTIVATION_BOOTSTRAP_OK, autonomous recovery verifies installed identity and audit, enters only from the exact v8 terminal ROLLED_BACK state, revalidates backup/database/source/current production, rebuilds the same corrected target without database mutation, activates it through the strict bounded health-stabilization gate, automatically rolls back on failure, and continues protected Messages, outbox, parity, AI Calls, production critic and final DoD acceptance.",
+  "installed_runtime": {
+    "audit_last_digest": "0dc531ab6d7c5eb3abc18d59757edf7bedb9e696cef7a3f61d183d5f9fdafb56",
+    "audit_records": 15,
+    "audit_state": "VALID",
+    "config_activate": "DISABLED",
+    "enabled_zero_argument_profiles": [
+      "database-status",
+      "release-preflight",
+      "database-migrate",
+      "release-activate",
+      "rollback"
+    ],
+    "generic_command_execution": false,
+    "package_sha256": "c342889473f29d37cab47a8b6a88f21aa165d646a910b65dcee9b1a0a62d0289",
+    "package_version": "2.0.0-8",
+    "profile_id": "crm-af9646f5-gravity-outbox-v1",
+    "runtime_abi": "2.0.0",
+    "self_check": "PASS",
+    "sudoers_widening": false
+  },
+  "normal_success_phrase_emitted": false,
+  "production_mutations_during_runtime_2_0_0_9_preparation": 0,
+  "project_status": "YOKO CRM MODULAR ARCHITECTURE TRANSFORMATION NOT READY",
+  "repository": {
+    "branch": "codex/crm-architecture-dod-recovery",
+    "checkpoint_parent_commit": "f60eefb976acfa90f6f351ec3013aaab32cff7d0",
+    "checkpoint_parent_tree": "522e049c69a71c1605ae4fd0c9cb60847fdf44ce",
+    "worktree": "/opt/codex-work/crm-architecture-dod-recovery"
+  },
+  "runtime_2_0_0_8_execution": {
+    "bootstrap_debian_sha256": "c342889473f29d37cab47a8b6a88f21aa165d646a910b65dcee9b1a0a62d0289",
+    "bootstrap_result": "INSTALLED_WITHOUT_PRODUCTION_MUTATION",
+    "bootstrap_tar_sha256": "b9a5d5f250e9d2a96ef4199200f1f6db52bdbe5fb9c23d74c45d2cce4bc63df7",
+    "corrected_activation": {
+      "automatic_rollback": "PASS_EXACT_PREDECESSOR_RESTORED",
+      "diagnostic_limit": "Runtime 2.0.0-8 did not retain the individual failed health predicate.",
+      "result": "ACTIVATION_FAILED_AUTOMATIC_ROLLBACK_OK",
+      "timing_evidence": "Production observation showed persisted messaging transports becoming ready approximately 27-31 seconds after predecessor recreate; this supports but does not prove the timing diagnosis.",
+      "target_health_policy": "FAIL_CLOSED"
+    },
+    "database_migrate": "ALREADY_MIGRATED_NO_MUTATION",
+    "inherited_rollback_intent_closure": "ROLLED_BACK_RECOVERED",
+    "release_preflight": "PREFLIGHT_READY_DATABASE_ALREADY_MIGRATED"
+  },
+  "runtime_2_0_0_9_successor": {
+    "bootstrap_tar": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-stabilization-v2/dist/yoko-crm-activation-stabilization-7aea2823-v4.tar",
+    "bootstrap_tar_sha256": "c7823d66ebabc57df7da4bb54c40ee8d78a05964cb7ac7f63bcf04941f7fc048",
+    "capability_widening": false,
+    "debian_package_sha256": "0c259741b4b58992acb830806e42db79ec87730f1b568a21e2879483d739be83",
+    "deterministic_debian_double_build": "PASS",
+    "deterministic_tar_double_build": "PASS",
+    "health_stabilization": {
+      "accepts_degraded_target_health": false,
+      "full_predicates": "APPLICATION_HTTP_200_STATUS_OK_AND_INFRA_HTTP_200_AND_OUTBOX_STARTED_WITHOUT_START_FAILED",
+      "late_success_after_deadline_accepted": false,
+      "maximum_seconds": 90,
+      "required_consecutive_successes": 2,
+      "timeout_action": "FAIL_CLOSED_AND_AUTOMATIC_ROLLBACK"
+    },
+    "independent_critic": "PASS",
+    "independent_critic_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-stabilization-v2/evidence/INDEPENDENT_STABILIZATION_BOOTSTRAP_CRITIC_C7823D66.json",
+    "independent_critic_sha256": "f5d8a3d8302a9080485835d4f9c40030d07c1d0d212cc843fee1cc4c12cb4dee",
+    "manifest": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-stabilization-v2/manifest.json",
+    "manifest_sha256": "156b356ff90a42b07f2a442437c17148ba8fe35c3f343b8598797d51fa8042aa",
+    "offline_tests": "77/77 PASS",
+    "package_version": "2.0.0-9",
+    "runtime_abi": "2.0.0",
+    "sudoers_widening": false,
+    "superseded_unauthorized_tar_sha256": "e7e26c10baee9b5e1c238da35b7228097642a2b440e557c0b079fdb60c9dadbb"
+  },
+  "schema": "yoko.crm.production-activation-health-stabilization-bootstrap.v1",
+  "stop_condition": "NEW_GENUINE_PRIVILEGED_PRIMITIVE_EXACT_RUNTIME_2_0_0_9_PACKAGE_INSTALL"
+}

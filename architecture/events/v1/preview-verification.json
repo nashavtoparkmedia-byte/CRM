@@ -1,0 +1,36 @@
+{
+  "schema": "yoko.crm.outbox-preview-verification.v1",
+  "verified_at": "2026-08-09T14:10:00Z",
+  "result": "PASS_SOURCE_PREVIEW",
+  "transaction_and_publisher_preview": {
+    "kind": "isolated in-memory transactional fixture",
+    "tests_passed": 16,
+    "tests_failed": 0,
+    "covered": [
+      "atomic commit",
+      "rollback on outbox append failure",
+      "idempotent replay",
+      "version validation",
+      "bounded retries",
+      "publish timeout",
+      "dead letter",
+      "stale claim recovery",
+      "batch cap",
+      "secret-safe error persistence"
+    ]
+  },
+  "architecture_controls": {
+    "passed": 14,
+    "failed": 0
+  },
+  "prisma_schema_validate": "PASS",
+  "prisma_schema_to_sql_diff": {
+    "status": "PASS",
+    "generated_sql_bytes": 72258,
+    "domain_outbox_table_occurrences": 1,
+    "domain_outbox_type_occurrences": 1
+  },
+  "postgresql_migration_execution": "NOT_EXECUTED_NO_ISOLATED_PREVIEW_DATABASE",
+  "production_activation": "NOT_AUTHORIZED",
+  "production_mutation": false
+}

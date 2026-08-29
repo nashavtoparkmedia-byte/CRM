@@ -1,0 +1,28 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1",
+  "milestone": "CRM-ARCH-007-CONTACTS-MANUAL-LINK-NAME",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "bb4fbc79ab659be81af6822f03f0af7c99e7f865",
+  "context": "contacts",
+  "caller_context": "messaging",
+  "plan": {
+    "id": "migration_30341c5551662f55",
+    "site_id": "write_5538470d45d761866f52",
+    "file": "gravity-mvp/src/app/messages/link-chat-actions.ts",
+    "model": "Contact",
+    "method": "update"
+  },
+  "contract": "contacts.SetContactDisplayNameCommand.v1",
+  "dependency": "messaging -> contacts.public pre-approved",
+  "consumer_before_sha256": "90ec6fedf2646f4f97a7d7727ded47724cefd1cdab16b80a615b4c4b86a4080c",
+  "consumer_after_sha256": "bef87e3fcc87831ddc46987a8430217cc960c7b7d5a1a370d25b72b3aa31d0d4",
+  "enforcement": {
+    "before": 1520,
+    "after": 1519,
+    "retired": [
+      "arch_39c65d1347adfdf464297efc"
+    ],
+    "new_capacity": 0
+  },
+  "rollback": "bb4fbc79ab659be81af6822f03f0af7c99e7f865"
+}

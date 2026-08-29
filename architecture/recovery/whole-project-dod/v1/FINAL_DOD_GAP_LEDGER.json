@@ -1,0 +1,317 @@
+{
+  "schema": "yoko.crm.final-dod-gap-ledger.v1",
+  "project": "YOKO CRM MODULAR ARCHITECTURE TRANSFORMATION",
+  "phase": "WHOLE_PROJECT_DOD_RECOVERY",
+  "status": "INTERNALLY_CLOSED_READY_FOR_INDEPENDENT_EXTERNAL_RE_REVIEW",
+  "updated_at": "2026-08-12T20:12:00Z",
+  "external_verdict": "YOKO CRM MODULAR ARCHITECTURE TRANSFORMATION NOT READY",
+  "current_internal_verdict": "YOKO CRM MODULAR ARCHITECTURE TRANSFORMATION READY FOR INDEPENDENT EXTERNAL RE-REVIEW",
+  "external_review": {
+    "task_id": "019feb29-bac2-7a51-84ff-df013bed1a93",
+    "turn_id": "019feb29-e0e4-7d62-8116-b347afda47f5",
+    "message_id": "msg_071c129ba3b53e1d016a79a7a1141c8191b9f3cd49e1266a26",
+    "timestamp": "2026-08-10T10:28:16.651Z",
+    "output_sha256": "4d0f743ca44d31f634924fa0e6c5fdfa46305310e5686c58bc44d1f78e89c2f6",
+    "session_jsonl": "/home/codexbot/.codex/sessions/2026/08/10/rollout-2026-08-10T10-13-28-019feb29-bac2-7a51-84ff-df013bed1a93.jsonl",
+    "session_jsonl_sha256": "210870a2aa7eb613ba4d46b2aaabaa4ee273dd2ed544296e8566ded4737dccce",
+    "preserved_copy": "architecture/recovery/whole-project-dod/v1/INDEPENDENT_EXTERNAL_REVIEW.md"
+  },
+  "recovery_contract": {
+    "path": "/home/codexbot/.codex/attachments/0ae5e57d-d452-478e-9539-a6dec5a947e0/pasted-text.txt",
+    "sha256": "f2279bbaa7793b8625e98d64d6cca2953d2eff5b2f15aa28aeab5303d7c632cc"
+  },
+  "status_vocabulary": [
+    "CONFIRMED",
+    "DISPROVEN_WITH_EVIDENCE",
+    "CLOSED",
+    "BLOCKED_BUSINESS",
+    "BLOCKED_IRREVERSIBLE",
+    "BLOCKED_EXTERNAL_AUTH"
+  ],
+  "previous_milestone": {
+    "id": "CRM-ARCH-007R",
+    "reclassified_as": "CRM-ARCH-007R — FOREIGN-WRITE SOURCE-GATE / ARCHITECTURE SUBSTRATE",
+    "review_commit": "0b61ba296ba2734738d4a21b9d00ce8b110d63cf",
+    "historical_ready_claim_preserved": true,
+    "whole_project_completion_claim": false
+  },
+  "findings": [
+    {
+      "id": "FINAL-DOD-001",
+      "category": "WRITE_ENFORCEMENT",
+      "severity": "CRITICAL",
+      "status": "CLOSED",
+      "title": "Delegate-cast and structurally equivalent writes are missed",
+      "source": "external review technical gap 1",
+      "evidence": [
+        "tools/architecture/enforce-architecture.mjs:625",
+        "gravity-mvp/src/app/tg-actions.ts:357",
+        "gravity-mvp/src/app/api/webhook/max/route.ts:131"
+      ],
+      "closure": "A structural analyzer detects direct, cast, parenthesized, optional, aliased, destructured, transaction-contained and raw mutation forms and has negative fixtures for each.",
+      "closure_evidence": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260811T131500Z.json and the preserved 77 write fixtures plus four companion suites"
+    },
+    {
+      "id": "FINAL-DOD-002",
+      "category": "REPOSITORY_COVERAGE",
+      "severity": "CRITICAL",
+      "status": "CLOSED",
+      "title": "Operational and other tracked executable surfaces are outside scan roots",
+      "source": "external review technical gap 2",
+      "evidence": [
+        "architecture/enforcement/v1/policy.json:4",
+        "gravity-mvp/scripts/import-churn-from-excel.js:102",
+        "external review found 166 direct Prisma-write call lines across 47 excluded scripts"
+      ],
+      "closure": "All tracked executable and mutation-capable SQL surfaces are inventoried, lifecycle-classified and governed; active operational scripts cannot bypass ownership.",
+      "closure_evidence": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json and AUTHORITATIVE_WRITE_SCAN_20260811T131500Z.json"
+    },
+    {
+      "id": "FINAL-DOD-003",
+      "category": "WRITE_AUTHORIZATION",
+      "severity": "CRITICAL",
+      "status": "CLOSED",
+      "title": "Approved writer authorization is overly broad at file plus model scope",
+      "source": "external review technical gap 3",
+      "evidence": [
+        "architecture/enforcement/v1/policy.json:37",
+        "tools/architecture/enforce-architecture.mjs:1060",
+        "isolated Chat.deleteMany negative probe passed unexpectedly"
+      ],
+      "closure": "Authorization is bound to a dedicated capability or exact structural model-operation responsibility; an unrelated write in an approved file fails.",
+      "closure_evidence": "tools/architecture/v2/test-maintenance-capability-policy.mjs, test-scoped-data-ownership.mjs, and owner-capability unrelated-operation probes"
+    },
+    {
+      "id": "FINAL-DOD-004",
+      "category": "CREDENTIAL_BOUNDARY",
+      "severity": "CRITICAL",
+      "status": "CLOSED",
+      "title": "Credential enforcement omits credential-model and database reads",
+      "source": "external review technical gap 4",
+      "evidence": [
+        "tools/architecture/enforce-architecture.mjs:1049",
+        "gravity-mvp/src/app/messages/improve-draft-actions.ts:22"
+      ],
+      "closure": "Credential entities and sensitive fields have declared owners, consumers use a credential broker or provider capability, and unauthorized database reads fail enforcement.",
+      "closure_evidence": "architecture/recovery/whole-project-dod/v2/CREDENTIAL_DATABASE_ACCESS_ARCHITECTURE_RECONCILIATION_20260812.json; 401 accesses, 0 material unresolved, 0 public exposure, 0 capability gaps"
+    },
+    {
+      "id": "FINAL-DOD-005",
+      "category": "SECURITY",
+      "severity": "CRITICAL",
+      "status": "CLOSED",
+      "title": "Debug endpoint can expose complete WhatsApp connection rows",
+      "source": "external review technical gap 4",
+      "evidence": [
+        "gravity-mvp/src/app/api/debug-db/list-connections/route.ts:4",
+        "gravity-mvp/prisma/schema.prisma:95"
+      ],
+      "closure": "The production-reachable route is removed or strictly hardened, no session or credential material can be returned, and security regressions prove redaction/denial."
+    },
+    {
+      "id": "FINAL-DOD-006",
+      "category": "PROTECTED_MESSAGES",
+      "severity": "CRITICAL",
+      "status": "CLOSED",
+      "title": "Architecture candidate is not reconciled with authoritative production Messages behavior",
+      "source": "external review technical gap 5",
+      "evidence": [
+        "architecture/baseline/v1/authoritative-baseline.json:5",
+        "architecture/baseline/v1/authoritative-baseline.json:215",
+        "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts:24",
+        "/opt/crm/gravity-mvp/src/lib/whatsapp/WhatsAppService.ts:24"
+      ],
+      "closure": "Every production delta is classified and required MAX, Telegram, WhatsApp, webhook, reconciliation, contact and delivery behavior is reimplemented inside the target boundaries with protected regression evidence.",
+      "closure_evidence": "26/26 protected Messages corpus records reconciled with zero unknown, owner-boundary and independent critic PASS; deployed acceptance in PRODUCTION_ACTIVATION_ACCEPTANCE_20260812.json"
+    },
+    {
+      "id": "FINAL-DOD-007",
+      "category": "RELEASE_LINEAGE",
+      "severity": "HIGH",
+      "status": "CLOSED",
+      "title": "Candidate is local, source-only and undeployed",
+      "source": "external review production/deployment gap 1",
+      "evidence": [
+        "architecture/reviews/crm-arch-007r-final/AUTHORITATIVE_SOURCE_MAP.json:16",
+        "/opt/codex-work/crm-architecture-state/PRODUCTION_CHANGE_LEDGER.json",
+        "review commit absent from normal remote/release refs at review time"
+      ],
+      "closure": "A reproducible integration/release lineage is durably preserved through the normal repository/release process and incremental production identities are recorded.",
+      "closure_evidence": "Production runs image sha256:baf442f880ebca808897a0131a662c603a9119f652cbbc3e47937286dec49179 with OCI revision 7aea2823efe50e13a156540993d424594025e403; archive be616b7d528bc111717d237bcd745a8b106302897e702be4b8af1b8643cba26d reproduces exactly"
+    },
+    {
+      "id": "FINAL-DOD-008",
+      "category": "OUTBOX",
+      "severity": "HIGH",
+      "status": "CLOSED",
+      "title": "Transactional outbox remains inactive scaffolding",
+      "source": "external review production/deployment gap 2",
+      "evidence": [
+        "architecture/events/v1/production-activation-gate.json:4"
+      ],
+      "closure": "Selected justified flows prove atomic append, publisher, idempotent consumer, retry/failure, schema version and observability in preview before gated activation.",
+      "closure_evidence": "Exact production outbox catalog; one published event and zero pending/processing/retry/dead/stale records across consecutive observations; 16/16 behavior and 14/14 architecture checks PASS"
+    },
+    {
+      "id": "FINAL-DOD-009",
+      "category": "PRIVILEGED_RUNTIME",
+      "severity": "HIGH",
+      "status": "CLOSED",
+      "title": "Finite V2 release, migration and rollback profiles were not enabled",
+      "source": "external review production/deployment gap 3",
+      "evidence": [
+        "/usr/local/share/yoko-privileged-runtime/policy.v2.json:129"
+      ],
+      "closure": "Current V2 is reconciled and existing bounded profile mechanisms safely support each finite release/configuration/migration/rollback operation without generic root.",
+      "closure_evidence": "Runtime 2.0.0-9 profile crm-af9646f5-gravity-outbox-v1 independently verified and used for exact preflight/migration/activation; rollback remains available; exact five zero-argument operations; config activation disabled"
+    },
+    {
+      "id": "FINAL-DOD-010",
+      "category": "ARCHITECTURE_DEBT",
+      "severity": "CRITICAL",
+      "status": "CLOSED",
+      "title": "The 1,295 PASS count is live exception-covered boundary debt",
+      "source": "external review architecture gap 1",
+      "evidence": [
+        "374 internal imports",
+        "530 non-public cross-context imports",
+        "353 undeclared dependencies",
+        "38 direct provider-transport accesses"
+      ],
+      "closure": "Critical boundary debt and broad temporary exceptions are eliminated context by context; residual exceptions are narrow, intentional and permanent-design only.",
+      "closure_evidence": "architecture/recovery/whole-project-dod/v2/LIVE_ARCHITECTURE_DEBT_CLOSURE_20260812.json; 0 findings and 0 exceptions from the 1,288 opening denominator"
+    },
+    {
+      "id": "FINAL-DOD-011",
+      "category": "PROVIDER_ISOLATION",
+      "severity": "CRITICAL",
+      "status": "CLOSED",
+      "title": "Domain and application code directly loads provider transports",
+      "source": "external review architecture gap 2",
+      "evidence": [
+        "gravity-mvp/src/lib/MessageService.ts:623"
+      ],
+      "closure": "All provider transport use is behind provider gateways/adapters and representative direct leakage fails a negative architecture test.",
+      "closure_evidence": "architecture/recovery/whole-project-dod/v2/LIVE_ARCHITECTURE_DEBT_CLOSURE_20260812.json; direct provider transport findings 0 and negative architecture controls PASS"
+    },
+    {
+      "id": "FINAL-DOD-012",
+      "category": "CONTRACT_COVERAGE",
+      "severity": "HIGH",
+      "status": "CLOSED",
+      "title": "Central contract coverage is incomplete",
+      "source": "external review architecture gap 3",
+      "evidence": [
+        "architecture/contracts/v1/registry.json:10",
+        "central registry contains only two Work Management entries"
+      ],
+      "closure": "Every meaningful cross-context interaction has the appropriate versioned public API, command, query, event or technical interface without ceremony for internal calls.",
+      "closure_evidence": "architecture/isolation/architecture-enforcement/module-verification-contract-registry-v1/verification.json; 16 context public surfaces, 61 exact allowed interactions, 2 preserved detailed contract records, and 4/4 negative registry properties"
+    },
+    {
+      "id": "FINAL-DOD-012A",
+      "category": "MODULE_MANIFESTS_BLAST_RADIUS",
+      "severity": "HIGH",
+      "status": "CLOSED",
+      "title": "Module manifests lack build, test and blast-radius mappings",
+      "source": "external review architecture gap 3",
+      "evidence": [
+        "architecture/contexts/v1/module-manifest.schema.json:6"
+      ],
+      "closure": "Each major module has schema-validated owned paths, public contracts, dependency and provider/credential relations, module tests, contract tests, build checks and architecture controls.",
+      "closure_evidence": "architecture/isolation/architecture-enforcement/module-verification-contract-registry-v1/verification.json; 16/16 verification profiles, 45 executable entrypoints, 14 hashed controls, 11/11 negative manifest properties, and provider-specific/shared blast-radius proofs"
+    },
+    {
+      "id": "FINAL-DOD-012B",
+      "category": "CI_COVERAGE",
+      "severity": "HIGH",
+      "status": "CLOSED",
+      "title": "CI omits later and current architecture controls",
+      "source": "external review architecture gap 3",
+      "evidence": [
+        ".github/workflows/architecture-enforcement.yml:44"
+      ],
+      "closure": "CI executes the current context, write, import, dependency, provider, credential, contract, outbox, exception, blast-radius and critical negative controls.",
+      "closure_evidence": "architecture/isolation/architecture-enforcement/authoritative-ci-v1/verification.json; commit 21b17f08607905a24f4a9e882091d5c1cab94160; 35 configured controls and 31/31 targeted local acceptance"
+    },
+    {
+      "id": "FINAL-DOD-013",
+      "category": "EVIDENCE_SCOPE",
+      "severity": "HIGH",
+      "status": "CLOSED",
+      "title": "Valid final checksums seal a selected but incomplete source-gate scope",
+      "source": "external review evidence gap 1",
+      "evidence": [
+        "80/80 outer entries valid",
+        "64/64 bundles valid",
+        "1614/1614 historical entries valid",
+        "write analyzer and repository-coverage gaps remain"
+      ],
+      "closure": "Historical evidence is retained and labeled; new current evidence independently seals corrected whole-repository controls and deployed claims.",
+      "closure_evidence": "Full tracked source at 7aea2823/tree dbb380be; deterministic archive be616b7d independently reproduced and bound to deployed image"
+    },
+    {
+      "id": "FINAL-DOD-014",
+      "category": "SOURCE_IDENTITY",
+      "severity": "HIGH",
+      "status": "CLOSED",
+      "title": "Advertised application and enforcement source identities are split",
+      "source": "external review evidence gap 2",
+      "evidence": [
+        "application source 024680591c188a34ae79594d92d47854648c73c8",
+        "review tree 0b61ba296ba2734738d4a21b9d00ce8b110d63cf"
+      ],
+      "closure": "One explicit lineage records source, architecture/evidence, release and production identities and each advertised identity independently reproduces its stated scope.",
+      "closure_evidence": "Exact source commit 7aea2823, tree dbb380be, archive be616b7d, image baf442f8 and deployed OCI revision 7aea2823 agree"
+    },
+    {
+      "id": "FINAL-DOD-015",
+      "category": "PROTECTED_MESSAGES_EVIDENCE",
+      "severity": "CRITICAL",
+      "status": "CLOSED",
+      "title": "Messages evidence did not exercise transports, webhooks, database or deployed services",
+      "source": "external review evidence gap 3",
+      "evidence": [
+        "architecture/reviews/crm-arch-007r-final/ACCEPTANCE_CHECKLIST.md:23"
+      ],
+      "closure": "Protected provider, webhook, persistence and deployed behavior are verified under secret-safe regression and health gates before Messages-affecting activation.",
+      "closure_evidence": "Deployed Gravity/provider services healthy with zero restarts; WhatsApp and Telegram 1/1 ready; zero degraded/stuck/retry/integrity errors; protected Messages, provider and security characterizations PASS"
+    },
+    {
+      "id": "FINAL-DOD-016",
+      "category": "RUNTIME_EVIDENCE",
+      "severity": "MEDIUM",
+      "status": "CLOSED",
+      "title": "Privileged-runtime evidence is stale relative to installed 2.0.0-5",
+      "source": "external review evidence gap 4",
+      "evidence": [
+        "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260809T123041Z-v2-live-reconciliation/CONTROL_PLANE_VERIFICATION.json:5",
+        "architecture/reviews/crm-arch-007r-final/AUTHORITATIVE_SOURCE_MAP.json:14",
+        "architecture/recovery/control-plane/v2/CONTROL_PLANE_RECONCILIATION.json"
+      ],
+      "closure": "Closed by current 2.0.0-5 reconciliation: package state, executable, policy, registry, 24-command sudo ABI, self-check, storage, audit and negative boundaries were refreshed without secret disclosure. Disabled activation profiles remain separately confirmed as FINAL-DOD-009."
+    },
+    {
+      "id": "FINAL-DOD-017",
+      "category": "SCOPE_DECISION",
+      "severity": "CRITICAL",
+      "status": "CLOSED",
+      "title": "Choose narrow 007R acceptance or retain the original whole-project Definition of Done",
+      "source": "external review business decision",
+      "evidence": [
+        "The Architecture Lead accepted the NOT READY verdict",
+        "Recovery contract f2279bbaa7793b8625e98d64d6cca2953d2eff5b2f15aa28aeab5303d7c632cc explicitly retains the original Definition of Done"
+      ],
+      "closure": "Closed by Architecture Lead decision: CRM-ARCH-007R is only the foreign-write source-gate substrate and whole-project recovery continues under the original Definition of Done."
+    }
+  ],
+  "summary": {
+    "total": 19,
+    "confirmed": 0,
+    "disproven_with_evidence": 0,
+    "closed": 19,
+    "blocked_business": 0,
+    "blocked_irreversible": 0,
+    "blocked_external_auth": 0
+  }
+}

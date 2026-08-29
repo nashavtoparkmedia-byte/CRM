@@ -5,21 +5,93 @@
 import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 import { revalidatePath } from 'next/cache'
-import { importTelegramHistory } from '@/app/tg-actions'
-import { importWhatsAppHistory } from '@/lib/whatsapp/WhatsAppService'
-import { getUsers } from '@/lib/users/user-service'
+import { getAiAgentProviderConfigV1 } from '@/modules/calling/public/v1/ai-agent-provider-capability'
+import { listUserIdentitiesV1 as getUsers } from '@/modules/identity-access/public/v1/user-directory'
+import {
+    ARCHIVE_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+    ARCHIVE_KNOWLEDGE_CONFLICT_MEMBER_COMMAND_V1,
+    ARCHIVE_KNOWLEDGE_ITEM_AFTER_SOURCE_DISABLE_COMMAND_V1,
+    ARCHIVE_KNOWLEDGE_ITEM_FOR_CORE_RESET_COMMAND_V1,
+    ATTACH_MANUAL_KNOWLEDGE_SOURCE_COMMAND_V1,
+    CLEAR_KNOWLEDGE_CONFLICT_GROUP_COMMAND_V1,
+    CLEAR_KNOWLEDGE_CONFLICT_WINNER_COMMAND_V1,
+    CREATE_LEGACY_KNOWLEDGE_ENTRY_COMMAND_V1,
+    CREATE_MANUAL_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+    DELETE_LEGACY_KNOWLEDGE_ENTRY_COMMAND_V1,
+    DISABLE_KNOWLEDGE_SOURCES_COMMAND_V1,
+    EDIT_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+    MARK_KNOWLEDGE_ITEM_SOURCES_DISABLED_COMMAND_V1,
+    QUEUE_KNOWLEDGE_EXTRACTION_COMMAND_V1,
+    RESTORE_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+    REVIEW_AI_DECISION_COMMAND_V1,
+    SUPERSEDE_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+    UNVERIFY_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+    UPDATE_LEGACY_KNOWLEDGE_ENTRY_COMMAND_V1,
+    UPDATE_RETRIEVAL_POLICY_COMMAND_V1,
+    VERIFY_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+    type KnowledgeGovernanceEditPatchV1,
+} from '@/contracts/ai-knowledge/v1'
+import {
+    archiveGovernanceKnowledgeItemV1,
+    archiveKnowledgeConflictMemberV1,
+    archiveKnowledgeItemAfterSourceDisableV1,
+    archiveKnowledgeItemForCoreResetV1,
+    attachManualKnowledgeSourceV1,
+    clearKnowledgeConflictGroupV1,
+    clearKnowledgeConflictWinnerV1,
+    createLegacyKnowledgeEntryV1,
+    createManualGovernanceKnowledgeItemV1,
+    deleteLegacyKnowledgeEntryV1,
+    disableKnowledgeSourcesV1,
+    editGovernanceKnowledgeItemV1,
+    markKnowledgeItemSourcesDisabledV1,
+    queueKnowledgeExtractionV1,
+    restoreGovernanceKnowledgeItemV1,
+    reviewAiDecisionV1,
+    supersedeGovernanceKnowledgeItemV1,
+    unverifyGovernanceKnowledgeItemV1,
+    updateLegacyKnowledgeEntryV1,
+    updateRetrievalPolicyV1,
+    verifyGovernanceKnowledgeItemV1,
+} from '@/modules/ai-knowledge/public/v1'
+import {
+    CREATE_AI_AGENT_PROFILE_COMMAND_V1,
+    DELETE_AI_AGENT_PROFILE_COMMAND_V1,
+    RECORD_SAVED_AI_CONNECTION_SUCCESS_COMMAND_V1,
+    SAVE_AI_AGENT_CONFIG_COMMAND_V1,
+    SAVE_EXTRACTION_QUALITY_TIER_COMMAND_V1,
+    SET_ACTIVE_AI_PROFILE_COMMAND_V1,
+    UPDATE_AI_AGENT_PROFILE_COMMAND_V1,
+} from '@/contracts/calling/v1'
+import {
+    captureAiAgentProviderCredentialV1,
+    createAiAgentProfileV1,
+    deleteAiAgentProfileV1,
+    recordSavedAiConnectionSuccessV1,
+    saveAiAgentConfigV1,
+    saveExtractionQualityTierV1,
+    setActiveAiProfileV1,
+    updateAiAgentProfileV1,
+} from '@/modules/calling/public/v1'
+import { projectAiAgentConfigMetadata } from '@/modules/calling/public/v1/ai-agent-config-public-metadata'
+import { requireIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
+import {
+    cancelImportJob as cancelOwnedImportJob,
+    createImportJob as createOwnedImportJob,
+    deleteImportJob as deleteOwnedImportJob,
+    getAllImportJobs as getOwnedImportJobs,
+    getConnectionTotalsForUi as getOwnedConnectionTotalsForUi,
+    getLastImportJob as getOwnedLastImportJob,
+    type ConnectionTotalsForUi,
+} from '@/modules/messaging/public/v1'
+export type { ConnectionTotalsForUi } from '@/modules/messaging/public/v1'
 
 // ─── Role guard ───────────────────────────────────────────────────
 //
-// UI уже скрывает кнопки настройки от менеджеров — но server actions
-// можно вызвать вручную через DevTools / fetch. Этот guard ставит
-// тот же чек на серверной стороне.
-//
-// ВАЖНО: НЕ используем общий getCurrentUser() — он fallback'ится на
-// `u3` (Руководитель) когда cookie crm_user_id отсутствует. Менеджер
-// мог бы удалить cookie через DevTools и обойти проверку. Здесь —
-// строгая логика: нет cookie → нет прав; пользователь не найден → нет
-// прав; роль не Администратор/Руководитель → нет прав.
+// UI hides configuration controls from managers, but server actions remain
+// directly callable. crm_user_id is an unsigned identity selector, so the
+// mutation boundary uses the independently authenticated integration-admin
+// session backed by the provisioned ADMIN_USER / ADMIN_PASS capability.
 //
 // Helper не exported: в файле с 'use server' все exported функции
 // становятся server actions, а нам нужна внутренняя проверка.
@@ -36,87 +108,69 @@ import { getUsers } from '@/lib/users/user-service'
 //   - create/update/deleteKnowledgeEntry
 //   - createImportJob / cancelImportJob / deleteImportJob
 async function assertCanEditAi() {
-    const cookieStore = await cookies()
-    const id = cookieStore.get('crm_user_id')?.value
-    if (!id) throw new Error('Недостаточно прав')
-    const users = await getUsers()
-    const user = users.find(u => u.id === id)
-    if (!user) throw new Error('Недостаточно прав')
-    if (user.role !== 'Администратор' && user.role !== 'Руководитель') {
-        throw new Error('Недостаточно прав')
-    }
+    // crm_user_id is an unsigned UI identity selector and cannot authorize
+    // credential/configuration changes. Require possession of the project
+    // administrator credential through the signed HttpOnly session instead.
+    await requireIntegrationAdminAccess()
 }
 
 // ─── AiAgentConfig ────────────────────────────────────────────────
 
 export async function getAiConfig() {
+    await requireIntegrationAdminAccess()
     try {
-        const rows = await prisma.$queryRaw<any[]>`SELECT * FROM "AiAgentConfig" WHERE id = 'singleton' LIMIT 1`
-        const cfg = rows[0] ?? null
+        const cfg = await getAiAgentProviderConfigV1()
         // activeChannels — String[] без DB-default. Частичный первый INSERT в
         // saveAiConfig мог оставить колонку NULL, и клиент падал на
         // config.activeChannels.map(...) → "Cannot read properties of null
         // (reading 'map')" (вся страница /settings/ai = client-side exception).
         // Коалесцируем к [] здесь — защищает всех consumer'ов разом.
-        if (cfg && cfg.activeChannels == null) cfg.activeChannels = []
-        return cfg
+        if (!cfg) return null
+        return projectAiAgentConfigMetadata({
+            ...cfg,
+            activeChannels: cfg.activeChannels ?? [],
+            lastConnectionCheckAt: cfg.lastConnectionCheckAt?.toISOString() ?? null,
+            createdAt: cfg.createdAt.toISOString(),
+            updatedAt: cfg.updatedAt.toISOString(),
+        })
     } catch { return null }
-}
-
-/** Поля AiAgentConfig с типом enum в Postgres. При raw UPDATE Prisma
- *  не может автокаст text → enum, и весь UPDATE падает с 42804.
- *  Решение: для этих полей подставляем `$N::"EnumType"` вместо просто
- *  `$N`. Остальные поля идут как обычно. */
-const ENUM_CASTS: Record<string, string> = {
-    provider: 'AiProviderType',
-    mode:     'AiAgentMode',
 }
 
 export async function saveAiConfig(data: Record<string, any>) {
     await assertCanEditAi()
     const fields = Object.keys(data)
     if (fields.length === 0) return null
+    const includesProviderCredential = fields.includes('providerCredential')
     try {
-        // Upsert вручную через raw SQL
-        const existing = await prisma.$queryRaw<any[]>`SELECT id FROM "AiAgentConfig" WHERE id = 'singleton' LIMIT 1`
-        if (existing.length === 0) {
-            // updatedAt is NOT NULL with NO db default (Prisma @updatedAt, which
-            // raw queries don't auto-fill). On the very first insert — when the
-            // singleton row doesn't exist yet — omitting it triggers 23502
-            // (NOT NULL violation). createdAt is fine (CURRENT_TIMESTAMP default).
-            // Strip any client-sent updatedAt and always set it to NOW() here.
-            const { updatedAt: _ignored, ...rest } = data as Record<string, any>
-            const allData = { id: 'singleton', ...rest }
-            const cols  = Object.keys(allData).map(k => `"${k}"`).join(', ')
-            const vals  = Object.values(allData)
-            const marks = Object.keys(allData).map((k, i) => {
-                const cast = ENUM_CASTS[k]
-                return cast ? `$${i + 1}::"${cast}"` : `$${i + 1}`
-            }).join(', ')
-            await prisma.$executeRawUnsafe(
-                `INSERT INTO "AiAgentConfig" (${cols}, "updatedAt") VALUES (${marks}, NOW())`,
-                ...vals,
-            )
-        } else {
-            const sets  = fields.map((k, i) => {
-                const cast = ENUM_CASTS[k]
-                return cast ? `"${k}" = $${i + 1}::"${cast}"` : `"${k}" = $${i + 1}`
-            }).join(', ')
-            const vals  = Object.values(data)
-            await prisma.$executeRawUnsafe(
-                `UPDATE "AiAgentConfig" SET ${sets}, "updatedAt" = NOW() WHERE id = 'singleton'`,
-                ...vals
-            )
+        const entries: Array<{ field: string; value: unknown }> = []
+        const safeResult: Record<string, any> = {}
+        for (const field of fields) {
+            if (field === 'providerCredential') {
+                entries.push({
+                    field: 'providerCredential',
+                    value: data[field] === null
+                        ? null
+                        : captureAiAgentProviderCredentialV1(data[field]),
+                })
+            } else if (field === 'apiKeyEncrypted') {
+                // Persistence field names are not part of the browser-facing API.
+                entries.push({ field: '__unsupported_provider_credential__', value: null })
+            } else {
+                entries.push({ field, value: data[field] })
+                safeResult[field] = data[field]
+            }
         }
+        await saveAiAgentConfigV1({ contract: SAVE_AI_AGENT_CONFIG_COMMAND_V1, entries })
         revalidatePath('/settings/ai')
-        return { id: 'singleton', ...data }
+        return { id: 'singleton', ...safeResult }
     } catch (e: any) {
-        // Раньше эта ошибка была silent — UI получал null и не знал что
-        // именно поле провайдер/режим попало в enum-mismatch и весь
-        // UPDATE откатился. Перебрасываем: handleSaveProvider /
-        // handleTestConnection покажут toast с реальной причиной.
-        console.error('[AI Config] saveAiConfig error:', e?.message ?? e)
-        throw new Error(`Не удалось сохранить настройки AI: ${e?.message ?? 'unknown error'}`)
+        // Credential-bearing persistence failures are deliberately generic:
+        // provider values never enter logs, action results or propagated errors.
+        const detail = includesProviderCredential
+            ? 'ошибка сохранения учётных данных'
+            : e?.message ?? 'unknown error'
+        console.error('[AI Config] saveAiConfig error:', detail)
+        throw new Error(`Не удалось сохранить настройки AI: ${detail}`)
     }
 }
 
@@ -127,18 +181,14 @@ export async function saveAiConfig(data: Record<string, any>) {
 export async function testSavedConnection() {
     await assertCanEditAi()
     try {
-        const rows = await prisma.$queryRaw<any[]>`
-            SELECT provider, "apiKeyEncrypted", "classificationModel"
-            FROM "AiAgentConfig" WHERE id = 'singleton' LIMIT 1
-        `
-        const cfg = rows[0]
+        const cfg = await getAiAgentProviderConfigV1()
         if (!cfg?.apiKeyEncrypted) {
             return { ok: false, error: 'Ключ не сохранён в БД' }
         }
         const result = await testAiConnection(
-            cfg.provider as string,
-            cfg.apiKeyEncrypted as string,
-            cfg.classificationModel as string,
+            cfg.provider,
+            cfg.apiKeyEncrypted,
+            cfg.classificationModel ?? 'claude-haiku-4-5',
         )
         // PR9.20: persist в БД только при УСПЕХЕ. Если auto-test
         // упал (network glitch, прокси отвалился, rate limit) —
@@ -147,12 +197,9 @@ export async function testSavedConnection() {
         // снова видит «нужна проверка».
         if (result.ok) {
             try {
-                await prisma.$executeRaw`
-                    UPDATE "AiAgentConfig"
-                    SET "connectionStatus" = 'ok',
-                        "lastConnectionCheckAt" = NOW()
-                    WHERE id = 'singleton'
-                `
+                await recordSavedAiConnectionSuccessV1({
+                    contract: RECORD_SAVED_AI_CONNECTION_SUCCESS_COMMAND_V1,
+                })
             } catch { /* silent */ }
         }
         return result
@@ -244,17 +291,7 @@ export async function createKnowledgeEntry(data: {
 }) {
     await assertCanEditAi()
     const id = `kb_${Date.now()}`
-    await prisma.$executeRaw`
-        INSERT INTO "KnowledgeBaseEntry" (id, title, category, "sampleQuestions", answer, tags, channels, active, priority, "createdAt", "updatedAt")
-        VALUES (
-            ${id}, ${data.title}, ${data.category},
-            ${JSON.stringify(data.sampleQuestions)}::jsonb,
-            ${data.answer},
-            ${data.tags}::text[],
-            ${data.channels}::text[],
-            true, ${data.priority}, NOW(), NOW()
-        )
-    `
+    await createLegacyKnowledgeEntryV1({ contract: CREATE_LEGACY_KNOWLEDGE_ENTRY_COMMAND_V1, entryId: id, data })
     revalidatePath('/settings/ai')
     return { id, ...data, active: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
 }
@@ -267,18 +304,13 @@ export async function updateKnowledgeEntry(id: string, data: Partial<{
     await assertCanEditAi()
     const fields = Object.keys(data)
     if (fields.length === 0) return
-    const sets = fields.map((k, i) => `"${k}" = $${i + 1}`).join(', ')
-    const vals = Object.values(data)
-    await prisma.$executeRawUnsafe(
-        `UPDATE "KnowledgeBaseEntry" SET ${sets}, "lastReviewedAt" = NOW(), "updatedAt" = NOW() WHERE id = $${vals.length + 1}`,
-        ...vals, id
-    )
+    await updateLegacyKnowledgeEntryV1({ contract: UPDATE_LEGACY_KNOWLEDGE_ENTRY_COMMAND_V1, entryId: id, patch: data })
     revalidatePath('/settings/ai')
 }
 
 export async function deleteKnowledgeEntry(id: string) {
     await assertCanEditAi()
-    await prisma.$executeRaw`DELETE FROM "KnowledgeBaseEntry" WHERE id = ${id}`
+    await deleteLegacyKnowledgeEntryV1({ contract: DELETE_LEGACY_KNOWLEDGE_ENTRY_COMMAND_V1, entryId: id })
     revalidatePath('/settings/ai')
 }
 
@@ -302,11 +334,7 @@ export async function getDecisionLogs(filters?: {
 
 export async function setOperatorVerdict(logId: string, verdict: 'good' | 'bad' | 'fixed') {
     try {
-        await prisma.$executeRaw`
-            UPDATE "AiDecisionLog"
-            SET "reviewedByOperator" = true, "operatorVerdict" = ${verdict}
-            WHERE id = ${logId}
-        `
+        await reviewAiDecisionV1({ contract: REVIEW_AI_DECISION_COMMAND_V1, logId, verdict })
         revalidatePath('/settings/ai')
     } catch { /* ignore */ }
 }
@@ -314,16 +342,11 @@ export async function setOperatorVerdict(logId: string, verdict: 'good' | 'bad' 
 // ─── HistoryImportJob ─────────────────────────────────────────────
 
 export async function getLastImportJob() {
-    try {
-        const rows = await prisma.$queryRaw<any[]>`SELECT * FROM "HistoryImportJob" ORDER BY "createdAt" DESC LIMIT 1`
-        return rows[0] ?? null
-    } catch { return null }
+    return getOwnedLastImportJob()
 }
 
 export async function getAllImportJobs(limit = 10) {
-    try {
-        return await prisma.$queryRaw<any[]>`SELECT * FROM "HistoryImportJob" ORDER BY "createdAt" DESC LIMIT ${limit}`
-    } catch { return [] }
+    return getOwnedImportJobs(limit)
 }
 
 export async function createImportJob(data: {
@@ -332,82 +355,15 @@ export async function createImportJob(data: {
     daysBack?: number
     connectionId?: string
 }) {
-    await assertCanEditAi()
-    const id = `job_${Date.now()}`
-    const daysBack = data.daysBack ?? null
-    const connId = data.connectionId ?? null
-    try {
-        await prisma.$executeRaw`
-            INSERT INTO "HistoryImportJob" (id, channels, mode, "daysBack", "connectionId", status, "chatsScanned", "contactsFound", "messagesImported", "createdAt")
-            VALUES (
-                ${id},
-                ${data.channels}::text[],
-                ${data.mode}::"AiImportMode",
-                ${daysBack},
-                ${connId},
-                'queued'::"AiImportStatus",
-                0, 0, 0,
-                NOW()
-            )
-        `
-    } catch (e: any) {
-        console.error('[AI Import] createImportJob error:', e.message)
-    }
-
-    const job = { id, ...data, connectionId: connId, status: 'queued', chatsScanned: 0, contactsFound: 0, messagesImported: 0, createdAt: new Date().toISOString() }
-    revalidatePath('/settings/ai')
-
-    if (data.channels.includes('max')) {
-        const scraperUrl = process.env.MAX_SCRAPER_URL || 'http://localhost:3005'
-        const crmUrl     = process.env.NEXTAUTH_URL    || 'http://localhost:3002'
-
-        fetch(`${scraperUrl}/import-history`, {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({
-                jobId:    id,
-                crmApiUrl: crmUrl,
-                mode:     data.mode,
-                daysBack: data.daysBack,
-            }),
-        }).catch(e => console.error('[AI Import] scraper call error:', e.message))
-    }
-
-    if (data.channels.includes('telegram')) {
-        importTelegramHistory(id, data.mode, data.daysBack, data.connectionId)
-            .catch(e => console.error('[AI Import] telegram import error:', e.message))
-    }
-
-    if (data.channels.includes('whatsapp')) {
-        importWhatsAppHistory(id, data.mode, data.daysBack, data.connectionId)
-            .catch(e => console.error('[AI Import] whatsapp import error:', e.message))
-    }
-
-    return job
+    return createOwnedImportJob(data)
 }
 
 export async function cancelImportJob(id: string) {
-    await assertCanEditAi()
-    try {
-        await prisma.$executeRaw`
-            UPDATE "HistoryImportJob"
-            SET status = 'failed'::"AiImportStatus", "resultType" = 'failed', "finishedAt" = NOW()
-            WHERE id = ${id} AND status IN ('queued'::"AiImportStatus", 'running'::"AiImportStatus")
-        `
-        revalidatePath('/settings/ai')
-    } catch (e: any) {
-        console.error('[AI Import] cancelImportJob error:', e.message)
-    }
+    return cancelOwnedImportJob(id)
 }
 
 export async function deleteImportJob(id: string) {
-    await assertCanEditAi()
-    try {
-        await prisma.$executeRaw`DELETE FROM "HistoryImportJob" WHERE id = ${id}`
-        revalidatePath('/settings/ai')
-    } catch (e: any) {
-        console.error('[AI Import] deleteImportJob error:', e.message)
-    }
+    return deleteOwnedImportJob(id)
 }
 
 // ─── Preflight: проверка доступности скрапера ────────────────────
@@ -549,25 +505,19 @@ export async function createAiProfile(data: {
 }) {
     await assertCanEditAi()
     if (!data.name?.trim()) throw new Error('Имя профиля обязательно')
-    // sortOrder = max+1 — новые профили идут в конец
-    const maxRow = await prisma.$queryRaw<any[]>`
-        SELECT COALESCE(MAX("sortOrder"), -1) AS max FROM "AiAgentProfile"
-    `
-    const sortOrder = Number(maxRow[0]?.max ?? -1) + 1
-    const row = await prisma.aiAgentProfile.create({
-        data: {
+    const result = await createAiAgentProfileV1({
+        contract: CREATE_AI_AGENT_PROFILE_COMMAND_V1,
+        profile: {
             name: data.name.trim(),
             description: data.description?.trim() || null,
             promptRole: data.promptRole?.trim() || null,
             promptTone: data.promptTone?.trim() || null,
             promptAllowed: data.promptAllowed?.trim() || null,
             promptForbidden: data.promptForbidden?.trim() || null,
-            isDefault: false,
-            sortOrder,
         },
     })
     revalidatePath('/settings/ai')
-    return row
+    return result.profile
 }
 
 export async function updateAiProfile(id: string, data: Partial<{
@@ -589,39 +539,24 @@ export async function updateAiProfile(id: string, data: Partial<{
     if (data.promptTone !== undefined)      patch.promptTone = data.promptTone?.trim() || null
     if (data.promptAllowed !== undefined)   patch.promptAllowed = data.promptAllowed?.trim() || null
     if (data.promptForbidden !== undefined) patch.promptForbidden = data.promptForbidden?.trim() || null
-    const row = await prisma.aiAgentProfile.update({ where: { id }, data: patch })
+    const result = await updateAiAgentProfileV1({ contract: UPDATE_AI_AGENT_PROFILE_COMMAND_V1, profileId: id, patch })
     revalidatePath('/settings/ai')
-    return row
+    return result.profile
 }
 
 export async function deleteAiProfile(id: string) {
     await assertCanEditAi()
     // Защита: дефолтные профили (seed) удалять нельзя — иначе админ
     // может случайно остаться без активного при пустой таблице.
-    const profile = await prisma.aiAgentProfile.findUnique({ where: { id } })
-    if (!profile) throw new Error('Профиль не найден')
-    if (profile.isDefault) {
-        throw new Error('Системный профиль удалить нельзя. Создайте свой или измените существующий.')
-    }
     // ON DELETE SET NULL в schema снимет activeProfileId, runtime
     // вернётся на legacy-поля config'а.
-    await prisma.aiAgentProfile.delete({ where: { id } })
+    await deleteAiAgentProfileV1({ contract: DELETE_AI_AGENT_PROFILE_COMMAND_V1, profileId: id })
     revalidatePath('/settings/ai')
 }
 
 export async function setActiveAiProfile(id: string | null) {
     await assertCanEditAi()
-    if (id) {
-        const exists = await prisma.aiAgentProfile.findUnique({ where: { id }, select: { id: true } })
-        if (!exists) throw new Error('Профиль не найден')
-    }
-    // Используем upsert чтобы не упасть, если AiAgentConfig.singleton
-    // ещё не создан (свежий деплой без seed'а).
-    await prisma.aiAgentConfig.upsert({
-        where: { id: 'singleton' },
-        update: { activeProfileId: id },
-        create: { id: 'singleton', activeProfileId: id, activeChannels: [] },
-    })
+    await setActiveAiProfileV1({ contract: SET_ACTIVE_AI_PROFILE_COMMAND_V1, profileId: id })
     revalidatePath('/settings/ai')
 }
 
@@ -633,24 +568,30 @@ export async function setActiveAiProfile(id: string | null) {
 // 'use server' file directive требует все экспорты как async-функции,
 // поэтому используем inline wrappers, а не re-export.
 
-import * as knowledgeQueries from '@/lib/ai/knowledge/queries'
+import {
+    getKnowledgeItemForControlCenterV1,
+    getKnowledgeItemSourceBadgesV1,
+    getKnowledgeStatsV1,
+    listKnowledgeExtractionJobsV1,
+    listKnowledgeItemsBySectionV1,
+    listKnowledgeSectionsV1,
+    type KnowledgeItemSourceBadgesV1,
+} from '@/modules/ai-knowledge/public/v1/knowledge-admin-read-model'
 export type {
-    KnowledgeSection,
-    KnowledgeItem,
-    KnowledgeSource,
-    KnowledgeStats,
-} from '@/lib/ai/knowledge/queries'
-export type {
-    ItemSourceBadges,
-    ItemSourceBadgeRow,
-} from '@/lib/ai/knowledge/queries'
+    KnowledgeSectionV1 as KnowledgeSection,
+    KnowledgeItemV1 as KnowledgeItem,
+    KnowledgeSourceV1 as KnowledgeSource,
+    KnowledgeStatsV1 as KnowledgeStats,
+    KnowledgeItemSourceBadgesV1 as ItemSourceBadges,
+    KnowledgeItemSourceBadgeRowV1 as ItemSourceBadgeRow,
+} from '@/modules/ai-knowledge/public/v1/knowledge-admin-read-model'
 
 export async function listKnowledgeSections() {
-    return knowledgeQueries.listKnowledgeSections()
+    return listKnowledgeSectionsV1()
 }
 
 export async function listItemsBySection(sectionId: string, opts?: { includeArchived?: boolean }) {
-    return knowledgeQueries.listItemsBySection(sectionId, opts ?? {})
+    return listKnowledgeItemsBySectionV1(sectionId, opts ?? {})
 }
 
 /** PR7.12: batch source badges для compact preview на карточке item.
@@ -658,11 +599,11 @@ export async function listItemsBySection(sectionId: string, opts?: { includeArch
  *  возвращает только агрегаты count'ов и connectionId, без PII excerpt. */
 export async function getItemSourceBadges(itemIds: string[]) {
     if (itemIds.length === 0) {
-        return {} as Record<string, knowledgeQueries.ItemSourceBadges>
+        return {} as Record<string, KnowledgeItemSourceBadgesV1>
     }
-    const map = await knowledgeQueries.getItemSourceBadges(itemIds)
+    const map = await getKnowledgeItemSourceBadgesV1(itemIds)
     // Server actions сериализуют только plain объекты, не Map.
-    const out: Record<string, knowledgeQueries.ItemSourceBadges> = {}
+    const out: Record<string, KnowledgeItemSourceBadgesV1> = {}
     for (const [k, v] of map.entries()) out[k] = v
     return out
 }
@@ -670,11 +611,11 @@ export async function getItemSourceBadges(itemIds: string[]) {
 // getItemWithSources объявлен ниже (PR2.5) с permission-фильтром sources.
 
 export async function getKnowledgeStats() {
-    return knowledgeQueries.getKnowledgeStats()
+    return getKnowledgeStatsV1()
 }
 
 export async function listExtractionJobs(limit?: number) {
-    return knowledgeQueries.listExtractionJobs(limit ?? 10)
+    return listKnowledgeExtractionJobsV1(limit ?? 10)
 }
 
 // ─── AI Knowledge Core — PR2 extraction actions ──────────────────
@@ -686,9 +627,13 @@ export async function listExtractionJobs(limit?: number) {
 //   - startKnowledgeExtraction / saveExtractionQualityTier —
 //     только Admin/Lead (тратит LLM-токены)
 
-import { runExtraction } from '@/lib/ai/knowledge/Extractor'
-import type { ExtractionScope } from '@/lib/ai/knowledge/pairBuilder'
-export type { ExtractionScope } from '@/lib/ai/knowledge/pairBuilder'
+import {
+    runQueuedKnowledgeExtractionV1 as runExtraction,
+    type KnowledgeExtractionScopeV1 as ExtractionScope,
+} from '@/modules/ai-knowledge/public/v1/knowledge-extraction-execution'
+export type {
+    KnowledgeExtractionScopeV1 as ExtractionScope,
+} from '@/modules/ai-knowledge/public/v1/knowledge-extraction-execution'
 
 /** Может ли текущий пользователь видеть source excerpts (PII risk).
  *  Совпадает с assertCanEditAi, но возвращает boolean без throw —
@@ -706,10 +651,10 @@ async function canViewKnowledgeSources(): Promise<boolean> {
 /** Полная карточка item с источниками. Sources возвращаются ТОЛЬКО
  *  Админу/Руководителю (PII risk). Manager получает sources=[]. */
 export async function getItemWithSources(itemId: string) {
-    const full = await knowledgeQueries.getItemWithSources(itemId)
     const allowed = await canViewKnowledgeSources()
-    if (allowed) return full
-    return { item: full.item, sources: [] as typeof full.sources }
+    return getKnowledgeItemForControlCenterV1(itemId, {
+        includeSourceExcerpts: allowed,
+    })
 }
 
 /** Создаёт AiExtractionJob + fire-and-forget runExtraction.
@@ -723,19 +668,7 @@ export async function startKnowledgeExtraction(
     const id = 'kbj_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)
     const scopeJson = JSON.stringify(scope ?? { mode: 'last_90d' })
 
-    await prisma.$executeRaw`
-        INSERT INTO "AiExtractionJob" (
-            id, status, "sourceType", scope,
-            "extractionQualityTier", "createdAt"
-        ) VALUES (
-            ${id},
-            'queued'::"AiExtractionStatus",
-            'chat_message'::"AiKnowledgeSourceOrigin",
-            ${scopeJson}::jsonb,
-            ${qualityTier},
-            NOW()
-        )
-    `
+    await queueKnowledgeExtractionV1({ contract: QUEUE_KNOWLEDGE_EXTRACTION_COMMAND_V1, jobId: id, scopeJson, qualityTier })
     revalidatePath('/settings/ai')
 
     // Fire-and-forget. Errors логируются внутри runExtraction.
@@ -778,12 +711,10 @@ export async function saveExtractionQualityTier(
     if (!['economy', 'balanced', 'quality'].includes(tier)) {
         throw new Error('Недопустимый tier')
     }
-    await prisma.$executeRaw`
-        UPDATE "AiAgentConfig"
-        SET "extractionQualityTier" = ${tier},
-            "updatedAt"             = NOW()
-        WHERE id = 'singleton'
-    `
+    await saveExtractionQualityTierV1({
+        contract: SAVE_EXTRACTION_QUALITY_TIER_COMMAND_V1,
+        tier,
+    })
     revalidatePath('/settings/ai')
 }
 
@@ -812,10 +743,10 @@ export async function getExtractionQualityTier(): Promise<'economy' | 'balanced'
 // JSON snapshots в AiKnowledgeAuditLog. Soft-delete only.
 
 import {
-    writeAuditEntry,
-    snapshotItem,
-    getKnowledgeAuditLog as getAuditLogRaw,
-} from '@/lib/ai/knowledge/auditLog'
+    appendKnowledgeGovernanceAuditV1 as writeAuditEntry,
+    snapshotKnowledgeGovernanceItemV1 as snapshotItem,
+    listKnowledgeGovernanceAuditV1 as getAuditLogRaw,
+} from '@/modules/ai-knowledge/public/v1/knowledge-governance-audit'
 
 /**
  * Возвращает userId текущего пользователя если он Admin/Lead, иначе
@@ -867,37 +798,31 @@ export async function editKnowledgeItem(id: string, patch: EditItemPatch): Promi
     const before = await loadItemForEdit(id)
     if (!before) throw new Error('Знание не найдено')
 
-    const sets: string[] = []
-    const vals: any[] = []
+    const normalizedPatch: KnowledgeGovernanceEditPatchV1 = {}
     if (patch.title !== undefined) {
         if (!patch.title.trim()) throw new Error('Заголовок не может быть пустым')
-        sets.push(`"title" = $${sets.length + 1}`)
-        vals.push(patch.title.trim())
+        normalizedPatch.title = patch.title.trim()
     }
     if (patch.canonicalStatement !== undefined) {
         if (!patch.canonicalStatement.trim()) throw new Error('Формулировка не может быть пустой')
-        sets.push(`"canonicalStatement" = $${sets.length + 1}`)
-        vals.push(patch.canonicalStatement.trim())
+        normalizedPatch.canonicalStatement = patch.canonicalStatement.trim()
     }
     if (patch.tags !== undefined) {
-        sets.push(`"tags" = $${sets.length + 1}::text[]`)
-        vals.push(patch.tags)
+        normalizedPatch.tags = patch.tags
     }
     if (patch.safetyLevel !== undefined) {
         if (!['normal', 'sensitive', 'requires_human'].includes(patch.safetyLevel)) {
             throw new Error('Недопустимый safetyLevel')
         }
-        sets.push(`"safetyLevel" = $${sets.length + 1}::"AiKnowledgeSafety"`)
-        vals.push(patch.safetyLevel)
+        normalizedPatch.safetyLevel = patch.safetyLevel
     }
-    if (sets.length === 0) return
+    if (Object.keys(normalizedPatch).length === 0) return
 
-    sets.push(`"updatedAt" = NOW()`)
-    vals.push(id)
-    await prisma.$executeRawUnsafe(
-        `UPDATE "AiKnowledgeItem" SET ${sets.join(', ')} WHERE id = $${vals.length}`,
-        ...vals,
-    )
+    await editGovernanceKnowledgeItemV1({
+        contract: EDIT_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+        itemId: id,
+        patch: normalizedPatch,
+    })
 
     const after = await loadItemForEdit(id)
     const changedFields = Object.keys(patch).filter(k => (patch as any)[k] !== undefined)
@@ -916,13 +841,10 @@ export async function archiveKnowledgeItem(id: string): Promise<void> {
     if (!before) throw new Error('Знание не найдено')
     if (before.status === 'archived') return
 
-    await prisma.$executeRaw`
-        UPDATE "AiKnowledgeItem"
-        SET status     = 'archived'::"AiKnowledgeStatus",
-            "isActive" = false,
-            "updatedAt" = NOW()
-        WHERE id = ${id}
-    `
+    await archiveGovernanceKnowledgeItemV1({
+        contract: ARCHIVE_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+        itemId: id,
+    })
     const after = await loadItemForEdit(id)
     await writeAuditEntry({
         itemId: id, actor, action: 'archived',
@@ -941,13 +863,10 @@ export async function restoreKnowledgeItem(id: string): Promise<void> {
         throw new Error('Знание заменено новым. Сначала уберите ссылку supersededByItemId.')
     }
 
-    await prisma.$executeRaw`
-        UPDATE "AiKnowledgeItem"
-        SET status     = 'active'::"AiKnowledgeStatus",
-            "isActive" = true,
-            "updatedAt" = NOW()
-        WHERE id = ${id}
-    `
+    await restoreGovernanceKnowledgeItemV1({
+        contract: RESTORE_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+        itemId: id,
+    })
     const after = await loadItemForEdit(id)
     await writeAuditEntry({
         itemId: id, actor, action: 'restored',
@@ -964,19 +883,16 @@ export async function verifyKnowledgeItem(id: string, verified: boolean): Promis
     if (before.isVerified === verified) return
 
     if (verified) {
-        await prisma.$executeRaw`
-            UPDATE "AiKnowledgeItem"
-            SET "isVerified" = true, "verifiedBy" = ${actor},
-                "verifiedAt" = NOW(), "updatedAt" = NOW()
-            WHERE id = ${id}
-        `
+        await verifyGovernanceKnowledgeItemV1({
+            contract: VERIFY_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+            itemId: id,
+            actorId: actor,
+        })
     } else {
-        await prisma.$executeRaw`
-            UPDATE "AiKnowledgeItem"
-            SET "isVerified" = false, "verifiedBy" = NULL,
-                "verifiedAt" = NULL, "updatedAt" = NOW()
-            WHERE id = ${id}
-        `
+        await unverifyGovernanceKnowledgeItemV1({
+            contract: UNVERIFY_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+            itemId: id,
+        })
     }
 
     const after = await loadItemForEdit(id)
@@ -1017,14 +933,11 @@ export async function supersedeKnowledgeItem(
         throw new Error('Цикл замены: эти знания уже ссылаются друг на друга')
     }
 
-    await prisma.$executeRaw`
-        UPDATE "AiKnowledgeItem"
-        SET status               = 'superseded'::"AiKnowledgeStatus",
-            "isActive"           = false,
-            "supersededByItemId" = ${newItemId},
-            "updatedAt"          = NOW()
-        WHERE id = ${oldItemId}
-    `
+    await supersedeGovernanceKnowledgeItemV1({
+        contract: SUPERSEDE_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+        oldItemId,
+        newItemId,
+    })
 
     const oldAfter = await loadItemForEdit(oldItemId)
     await writeAuditEntry({
@@ -1070,14 +983,10 @@ export async function resolveConflict(
             if (m.id === itemId) continue
             if (m.status === 'archived') continue
             const memberBefore = m
-            await prisma.$executeRaw`
-                UPDATE "AiKnowledgeItem"
-                SET status            = 'archived'::"AiKnowledgeStatus",
-                    "isActive"        = false,
-                    "conflictGroupId" = NULL,
-                    "updatedAt"       = NOW()
-                WHERE id = ${m.id}
-            `
+            await archiveKnowledgeConflictMemberV1({
+                contract: ARCHIVE_KNOWLEDGE_CONFLICT_MEMBER_COMMAND_V1,
+                itemId: m.id,
+            })
             const memberAfter = await loadItemForEdit(m.id)
             await writeAuditEntry({
                 itemId: m.id, actor, action: 'archived',
@@ -1085,11 +994,10 @@ export async function resolveConflict(
                 metadata: { reason: 'conflict_resolved_keep_other', winnerItemId: itemId },
             })
         }
-        await prisma.$executeRaw`
-            UPDATE "AiKnowledgeItem"
-            SET "conflictGroupId" = NULL, "updatedAt" = NOW()
-            WHERE id = ${itemId}
-        `
+        await clearKnowledgeConflictWinnerV1({
+            contract: CLEAR_KNOWLEDGE_CONFLICT_WINNER_COMMAND_V1,
+            itemId,
+        })
         const winnerAfter = await loadItemForEdit(itemId)
         await writeAuditEntry({
             itemId, actor, action: 'conflict_resolved',
@@ -1098,11 +1006,10 @@ export async function resolveConflict(
         })
     } else {
         // unmark_all
-        await prisma.$executeRaw`
-            UPDATE "AiKnowledgeItem"
-            SET "conflictGroupId" = NULL, "updatedAt" = NOW()
-            WHERE "conflictGroupId" = ${groupId}
-        `
+        await clearKnowledgeConflictGroupV1({
+            contract: CLEAR_KNOWLEDGE_CONFLICT_GROUP_COMMAND_V1,
+            conflictGroupId: groupId,
+        })
         for (const m of members) {
             const after = await loadItemForEdit(m.id)
             await writeAuditEntry({
@@ -1145,36 +1052,18 @@ export async function createManualKnowledgeItem(input: {
     tagSet.add('type:manual')
     const tags = [...tagSet].filter(t => t.trim())
 
-    await prisma.$executeRaw`
-        INSERT INTO "AiKnowledgeItem" (
-            id, "sectionId", title, "canonicalStatement", tags,
-            confidence, "sourceCount", "uniqueManagerCount",
-            status, "isActive", "safetyLevel",
-            "isVerified", "verifiedBy", "verifiedAt",
-            "createdBy", "createdAt", "updatedAt"
-        ) VALUES (
-            ${itemId}, ${input.sectionId},
-            ${input.title.trim()}, ${input.canonicalStatement.trim()},
-            ${tags}::text[],
-            0.95, 0, 0,
-            'active'::"AiKnowledgeStatus", true, ${safety}::"AiKnowledgeSafety",
-            true, ${actor}, NOW(),
-            ${actor}, NOW(), NOW()
-        )
-    `
+    await createManualGovernanceKnowledgeItemV1({
+        contract: CREATE_MANUAL_GOVERNANCE_KNOWLEDGE_ITEM_COMMAND_V1,
+        itemId,
+        sectionId: input.sectionId,
+        title: input.title.trim(),
+        canonicalStatement: input.canonicalStatement.trim(),
+        tags,
+        safetyLevel: safety,
+        actorId: actor,
+    })
     const sourceId = 'kbs_m_' + Math.random().toString(36).slice(2, 12)
-    const excerptHash = 'manual:' + itemId
-    await prisma.$executeRaw`
-        INSERT INTO "AiKnowledgeSource" (
-            id, "itemId", "originType",
-            "messageId", "chatId", channel, "managerUserId",
-            excerpt, "excerptHash", confidence, "occurredAt", "createdAt"
-        ) VALUES (
-            ${sourceId}, ${itemId}, 'manual_entry',
-            NULL, NULL, NULL, ${actor},
-            '[создано вручную администратором]', ${excerptHash}, 1.0, NOW(), NOW()
-        )
-    `
+    await attachManualKnowledgeSourceV1({ contract: ATTACH_MANUAL_KNOWLEDGE_SOURCE_COMMAND_V1, sourceId, itemId, actorId: actor })
 
     const after = await loadItemForEdit(itemId)
     await writeAuditEntry({
@@ -1192,10 +1081,10 @@ export async function createManualKnowledgeItem(input: {
 // Source-of-truth для shadow/runtime — env (см. featureFlags.ts).
 
 import {
-    isShadowModeEnabled,
-    isRuntimeEnabled,
-    getKnowledgeRuntimeMode,
-} from '@/lib/ai/knowledge/featureFlags'
+    getKnowledgeRuntimeModeV1 as getKnowledgeRuntimeMode,
+    isKnowledgeRuntimeEnabledV1 as isRuntimeEnabled,
+    isKnowledgeShadowModeEnabledV1 as isShadowModeEnabled,
+} from '@/modules/ai-knowledge/public/v1/knowledge-operational-status'
 
 export interface RetrievalPolicy {
     minConfidenceForReply:     number
@@ -1281,27 +1170,8 @@ export interface RetrievalPolicyPatch {
  */
 export async function saveRetrievalPolicy(patch: RetrievalPolicyPatch): Promise<void> {
     const actor = await requireAdminUserId()
-    const fields: string[] = []
-    const vals: any[] = []
-    const allowed: Array<keyof RetrievalPolicyPatch> = [
-        'minConfidenceForReply', 'sensitiveConfidenceMargin',
-        'minSourceCountForReply', 'verifiedScoreBoost',
-        'excludeArchived', 'excludeSuperseded', 'excludeDraft',
-        'conflictEscalates', 'rerankEnabled', 'rerankTopN', 'prefilterTopN',
-    ]
-    for (const k of allowed) {
-        if (patch[k] === undefined) continue
-        fields.push(`"${k}" = $${fields.length + 1}`)
-        vals.push(patch[k])
-    }
-    if (fields.length === 0) return
-    fields.push(`"updatedAt" = NOW()`)
-    fields.push(`"updatedBy" = $${vals.length + 1}`)
-    vals.push(actor)
-    await prisma.$executeRawUnsafe(
-        `UPDATE "AiRetrievalPolicy" SET ${fields.join(', ')} WHERE id = 'singleton'`,
-        ...vals,
-    )
+    const result = await updateRetrievalPolicyV1({ contract: UPDATE_RETRIEVAL_POLICY_COMMAND_V1, actorId: actor, patch })
+    if (!result.updated) return
     revalidatePath('/settings/ai')
 }
 
@@ -1348,18 +1218,18 @@ export async function getKnowledgeRuntimeStateForUi(): Promise<{
 // но sources=[].
 
 import {
-    getDecisionExplainability,
-    type ExplainabilityBundle,
-} from '@/lib/ai/knowledge/explainability'
-import { retrieve as runRetrieve } from '@/lib/ai/knowledge/Retriever'
+    getKnowledgeDecisionExplainabilityV1,
+    type KnowledgeExplainabilityBundleV1,
+} from '@/modules/ai-knowledge/public/v1/knowledge-explainability-read-model'
+import { previewKnowledgeRetrievalV1 } from '@/modules/ai-knowledge/public/v1/knowledge-retrieval'
 export type {
-    ExplainabilityBundle,
-    ExplainDecisionRow,
-    ExplainMessageRow,
-    ExplainUsageRow,
-    ExplainSourceRow,
-    ExplainAuditRow,
-} from '@/lib/ai/knowledge/explainability'
+    KnowledgeExplainabilityBundleV1 as ExplainabilityBundle,
+    KnowledgeExplainDecisionRowV1 as ExplainDecisionRow,
+    KnowledgeExplainMessageRowV1 as ExplainMessageRow,
+    KnowledgeExplainUsageRowV1 as ExplainUsageRow,
+    KnowledgeExplainSourceRowV1 as ExplainSourceRow,
+    KnowledgeExplainAuditRowV1 as ExplainAuditRow,
+} from '@/modules/ai-knowledge/public/v1/knowledge-explainability-read-model'
 
 /**
  * Bundle для UI explainability модалки. Server-side фильтрует sources
@@ -1368,11 +1238,11 @@ export type {
  */
 export async function getDecisionExplainabilityForUi(
     decisionLogId: string,
-): Promise<ExplainabilityBundle> {
-    const bundle = await getDecisionExplainability(decisionLogId)
+): Promise<KnowledgeExplainabilityBundleV1> {
     const allowed = await canViewKnowledgeSources()
-    if (allowed) return bundle
-    return { ...bundle, sources: [] }
+    return getKnowledgeDecisionExplainabilityV1(decisionLogId, {
+        includeSourceExcerpts: allowed,
+    })
 }
 
 export interface RetryPreviewResult {
@@ -1447,9 +1317,8 @@ export async function previewDecisionRetry(
     // 2. Retrieve (force runtime semantics)
     let retrieveOut
     try {
-        retrieveOut = await runRetrieve({
+        retrieveOut = await previewKnowledgeRetrievalV1({
             query: row.userContent,
-            shadowMode: false,
         })
     } catch (e: any) {
         console.error(`[retry-preview] retrieve failed: ${e?.message}`)
@@ -1488,15 +1357,18 @@ export async function previewDecisionRetry(
     }
 
     // 4. Generator call
-    const cfgRows = await prisma.$queryRaw<any[]>`
-        SELECT provider::text AS provider,
-               "apiKeyEncrypted" AS "apiKey",
-               "responseModel", language,
-               "promptRole", "promptTone", "promptAllowed", "promptForbidden",
-               "activeProfileId"
-        FROM "AiAgentConfig" WHERE id = 'singleton' LIMIT 1
-    `
-    const cfg = cfgRows[0]
+    const providerConfig = await getAiAgentProviderConfigV1()
+    const cfg = providerConfig && {
+        provider: providerConfig.provider,
+        apiKey: providerConfig.apiKeyEncrypted,
+        responseModel: providerConfig.responseModel,
+        language: providerConfig.language,
+        promptRole: providerConfig.promptRole,
+        promptTone: providerConfig.promptTone,
+        promptAllowed: providerConfig.promptAllowed,
+        promptForbidden: providerConfig.promptForbidden,
+        activeProfileId: providerConfig.activeProfileId,
+    }
     if (!cfg?.apiKey) {
         const totalMs = Date.now() - startedAt
         console.warn(`[retry-preview] no API key configured · total ${totalMs}ms`)
@@ -1625,17 +1497,17 @@ export async function previewDecisionRetry(
 // counts не несут чувствительных данных. Reuse logic в smoke.
 
 import {
-    getKnowledgeReadiness,
-} from '@/lib/ai/knowledge/readiness'
+    getKnowledgeReadinessV1 as getKnowledgeReadiness,
+} from '@/modules/ai-knowledge/public/v1/knowledge-operational-status'
 export type {
-    KnowledgeReadinessBundle,
-    KnowledgeReadinessCounts,
-    KnowledgeLastExtraction,
-    KnowledgeActivity7d,
-    KnowledgeHealth7d,
-    ReadinessCheck,
-    ReadinessCheckStatus,
-} from '@/lib/ai/knowledge/readiness'
+    KnowledgeReadinessBundleV1 as KnowledgeReadinessBundle,
+    KnowledgeReadinessCountsV1 as KnowledgeReadinessCounts,
+    KnowledgeLastExtractionV1 as KnowledgeLastExtraction,
+    KnowledgeActivity7dV1 as KnowledgeActivity7d,
+    KnowledgeHealth7dV1 as KnowledgeHealth7d,
+    KnowledgeReadinessCheckV1 as ReadinessCheck,
+    KnowledgeReadinessCheckStatusV1 as ReadinessCheckStatus,
+} from '@/modules/ai-knowledge/public/v1/knowledge-operational-status'
 
 /** Bundle для readiness row в шапке и для runtime warning модала.
  *  Подтягивается на page.tsx загрузке + после операций governance
@@ -1648,17 +1520,17 @@ export async function getKnowledgeReadinessForUi() {
 //
 // Перенос ручной KnowledgeBaseEntry → AiKnowledgeItem. Legacy KB НЕ
 // удаляется (reversible path). UI потом скрывает её под "Legacy".
-// Core логика — в `@/lib/ai/knowledge/legacyMigration`, чтобы smoke
-// мог дёрнуть её напрямую без cookie-context.
+// Controlled migration доступна только через узкую AI Knowledge capability;
+// smoke может вызывать owner-controlled core без cookie-context.
 
 import {
-    getLegacyMigrationPreviewCore,
-    migrateLegacyKnowledgeBaseCore,
-} from '@/lib/ai/knowledge/legacyMigration'
+    previewKnowledgeLegacyMigrationV1 as getLegacyMigrationPreviewCore,
+    executeKnowledgeLegacyMigrationV1 as migrateLegacyKnowledgeBaseCore,
+} from '@/modules/ai-knowledge/public/v1/knowledge-legacy-migration'
 export type {
-    LegacyMigrationPreview,
-    LegacyMigrationResult,
-} from '@/lib/ai/knowledge/legacyMigration'
+    KnowledgeLegacyMigrationPreviewV1 as LegacyMigrationPreview,
+    KnowledgeLegacyMigrationResultV1 as LegacyMigrationResult,
+} from '@/modules/ai-knowledge/public/v1/knowledge-legacy-migration'
 
 /** Preview без записи — для UI confirmation модала перед запуском. */
 export async function getLegacyMigrationPreview() {
@@ -2050,54 +1922,8 @@ export async function getChannelTotalsForUi(): Promise<ChannelTotalsRow[]> {
  *  total из таблицы Message. Пользователь читал это как «кто-то обманывает».
  *  Источник правды один — Message COUNT, агрегированный по
  *  COALESCE(wc.connectionId, c.metadata->>'connectionId'). */
-export interface ConnectionTotalsForUi {
-    messages:       number
-    chats:          number
-    contacts:       number
-    earliestSentAt: string | null
-    latestSentAt:   string | null
-}
 export async function getConnectionTotalsForUi(connectionId: string): Promise<ConnectionTotalsForUi> {
-    const empty: ConnectionTotalsForUi = {
-        messages: 0, chats: 0, contacts: 0,
-        earliestSentAt: null, latestSentAt: null,
-    }
-    if (!connectionId) return empty
-    try {
-        const rows = await prisma.$queryRaw<Array<{
-            messages: number
-            chats:    number
-            contacts: number
-            earliestSentAt: Date | null
-            latestSentAt:   Date | null
-        }>>`
-            SELECT
-                COUNT(*)::int                              AS messages,
-                COUNT(DISTINCT m."chatId")::int            AS chats,
-                COUNT(DISTINCT c."contactId")::int         AS contacts,
-                MIN(m."sentAt")                            AS "earliestSentAt",
-                MAX(m."sentAt")                            AS "latestSentAt"
-            FROM "Message" m
-            LEFT JOIN "Chat" c          ON c.id = m."chatId"
-            LEFT JOIN "WhatsAppChat" wc ON wc.id = c."externalChatId"
-            WHERE m.channel::text IN ('whatsapp', 'telegram', 'max')
-              AND COALESCE(wc."connectionId", c.metadata->>'connectionId') = ${connectionId}
-        `
-        const r = rows[0]
-        if (!r) return empty
-        return {
-            messages:       Number(r.messages ?? 0),
-            chats:          Number(r.chats ?? 0),
-            contacts:       Number(r.contacts ?? 0),
-            earliestSentAt: r.earliestSentAt ? new Date(r.earliestSentAt).toISOString() : null,
-            latestSentAt:   r.latestSentAt   ? new Date(r.latestSentAt).toISOString()   : null,
-        }
-    } catch (e: any) {
-        if (process.env.NODE_ENV !== 'production') {
-            console.error('[getConnectionTotalsForUi] failed:', e?.message)
-        }
-        return empty
-    }
+    return getOwnedConnectionTotalsForUi(connectionId)
 }
 
 export async function listChannelConnections(): Promise<ChannelConnection[]> {
@@ -2412,16 +2238,10 @@ export async function disableKnowledgeSource(input: {
     `
     const affectedItemIds = affectedItemRows.map(r => r.itemId)
 
-    const disabledCount = await prisma.$executeRaw`
-        UPDATE "AiKnowledgeSource"
-        SET "isActive" = false
-        WHERE channel::text = ${input.channel}
-          AND "connectionId" = ${input.connectionId}
-          AND "isActive" = true
-    `
+    const disabled = await disableKnowledgeSourcesV1({ contract: DISABLE_KNOWLEDGE_SOURCES_COMMAND_V1, channel: input.channel, connectionId: input.connectionId })
 
     const result: DisableSourceResult = {
-        sourcesDisabled:      Number(disabledCount),
+        sourcesDisabled:      disabled.disabledCount,
         itemsAutoArchived:    0,
         itemsKeptWithWarning: 0,
         itemsUnaffected:      0,
@@ -2467,12 +2287,10 @@ export async function disableKnowledgeSource(input: {
         if (shouldKeepActive) {
             const hasMarker = Array.isArray(item.tags) && item.tags.includes('sources_all_disabled')
             if (!hasMarker) {
-                await prisma.$executeRaw`
-                    UPDATE "AiKnowledgeItem"
-                    SET tags = array_append(tags, 'sources_all_disabled'),
-                        "updatedAt" = NOW()
-                    WHERE id = ${itemId}
-                `
+                await markKnowledgeItemSourcesDisabledV1({
+                    contract: MARK_KNOWLEDGE_ITEM_SOURCES_DISABLED_COMMAND_V1,
+                    itemId,
+                })
             }
             await writeAuditEntry({
                 itemId, actor,
@@ -2491,13 +2309,10 @@ export async function disableKnowledgeSource(input: {
             })
             result.itemsKeptWithWarning++
         } else {
-            await prisma.$executeRaw`
-                UPDATE "AiKnowledgeItem"
-                SET status = 'archived'::"AiKnowledgeStatus",
-                    "isActive" = false,
-                    "updatedAt" = NOW()
-                WHERE id = ${itemId}
-            `
+            await archiveKnowledgeItemAfterSourceDisableV1({
+                contract: ARCHIVE_KNOWLEDGE_ITEM_AFTER_SOURCE_DISABLE_COMMAND_V1,
+                itemId,
+            })
             await writeAuditEntry({
                 itemId, actor,
                 action: 'source_disabled',
@@ -2637,13 +2452,10 @@ export async function resetKnowledgeCore(
     // 3. Apply archive. Один statement per-id, чтобы writeAuditEntry
     //    видел per-item before/after — для UI explainability rollback.
     for (const item of rowsToArchive) {
-        await prisma.$executeRaw`
-            UPDATE "AiKnowledgeItem"
-            SET status = 'archived'::"AiKnowledgeStatus",
-                "isActive" = false,
-                "updatedAt" = NOW()
-            WHERE id = ${item.id}
-        `
+        await archiveKnowledgeItemForCoreResetV1({
+            contract: ARCHIVE_KNOWLEDGE_ITEM_FOR_CORE_RESET_COMMAND_V1,
+            itemId: item.id,
+        })
         await writeAuditEntry({
             itemId: item.id, actor,
             action: 'core_reset',

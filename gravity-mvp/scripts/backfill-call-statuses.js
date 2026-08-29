@@ -12,8 +12,11 @@
  *
  * Idempotent. Safe to re-run.
  */
+/* eslint-disable @typescript-eslint/no-require-imports */
 const { loadEnvConfig } = require('@next/env')
 loadEnvConfig(process.cwd())
+const { updateCallStatusV1 } = require('../src/modules/calling/public/v1/legacy-prisma-call-status-maintenance-adapter')
+const { updateCallMessageV1 } = require('../src/modules/messaging/public/v1/legacy-prisma-call-message-maintenance-adapter')
 const { PrismaClient } = require('@prisma/client')
 const prisma = new PrismaClient()
 
@@ -86,10 +89,7 @@ async function main() {
         const billsec = c.durationSec ?? 0
         const target = mapHangupCauseToStatus(c.hangupCause, billsec, c.direction)
         if (target !== c.status) {
-            await prisma.call.update({
-                where: { id: c.id },
-                data: { status: target },
-            })
+            await updateCallStatusV1(c.id, target)
             console.log(`  ${c.id.slice(-8)} ${c.direction.padEnd(8)} cause=${c.hangupCause.padEnd(22)} ${c.status} → ${target}`)
             updatedCalls++
         }
@@ -123,10 +123,7 @@ async function main() {
         }
 
         if (m.content !== newContent || meta.status !== call.status || (meta.durationSec ?? null) !== (call.durationSec ?? null)) {
-            await prisma.message.update({
-                where: { id: m.id },
-                data: { content: newContent, metadata: newMeta },
-            })
+            await updateCallMessageV1(m.id, newContent, newMeta)
             updatedMsgs++
         }
     }

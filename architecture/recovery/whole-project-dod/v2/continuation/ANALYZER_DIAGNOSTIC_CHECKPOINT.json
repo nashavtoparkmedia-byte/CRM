@@ -1,0 +1,112 @@
+{
+  "schema": "yoko.crm.write-analyzer-diagnostic-checkpoint.v1",
+  "captured_at": "2026-08-10T20:17:43Z",
+  "source": {
+    "commit": "4ec527301dbc7a80060df5d8eb6a6081f41b6e90",
+    "tree": "24fc3d4890d012e25707e05d0ef29aeae333abe6",
+    "node": "/home/codexbot/.local/node-v22.18.0-linux-x64/bin/node"
+  },
+  "current_process_state": {
+    "checked_at": "2026-08-10T20:11:12Z",
+    "matching_analyzer_or_credential_jobs": 0,
+    "matching_localization_jobs": 0,
+    "historical_pids_present": false,
+    "action_taken_during_checkpoint": "NONE; jobs had already exited"
+  },
+  "aborted_current_full_scans": [
+    {
+      "label": "freeze",
+      "worktree": "/opt/codex-work/crm-architecture-analyzer-freeze-3339325f",
+      "shell_pid": 1221688,
+      "node_pid": 1221692,
+      "exec_session": 14593,
+      "command": "/home/codexbot/.local/node-v22.18.0-linux-x64/bin/node tools/architecture/v2/analyze.mjs --root . --output /tmp/yoko-write-freeze-4ec52730.json",
+      "launched_at": "2026-08-10T16:25:26Z",
+      "measurement_at": "2026-08-10T19:46:21Z",
+      "wall_elapsed": "03:20:54",
+      "cpu_time": "03:18:19",
+      "cpu_percent": 98.7,
+      "rss_kib": 416656,
+      "stopped_at": "2026-08-10T19:47:05Z",
+      "exit_code": 130,
+      "output_file_exists": false
+    },
+    {
+      "label": "repro",
+      "worktree": "/opt/codex-work/crm-architecture-analyzer-repro-3339325f",
+      "shell_pid": 1221698,
+      "node_pid": 1221703,
+      "exec_session": 29849,
+      "command": "/home/codexbot/.local/node-v22.18.0-linux-x64/bin/node tools/architecture/v2/analyze.mjs --root . --output /tmp/yoko-write-repro-4ec52730.json",
+      "launched_at": "2026-08-10T16:25:26Z",
+      "measurement_at": "2026-08-10T19:46:21Z",
+      "wall_elapsed": "03:20:54",
+      "cpu_time": "03:18:06",
+      "cpu_percent": 98.6,
+      "rss_kib": 414264,
+      "stopped_at": "2026-08-10T19:47:06Z",
+      "exit_code": 130,
+      "output_file_exists": false
+    }
+  ],
+  "queued_but_never_started": [
+    "/home/codexbot/.local/node-v22.18.0-linux-x64/bin/node tools/architecture/v2/credential-inventory.mjs --root . --output /tmp/yoko-credential-freeze-4ec52730.json",
+    "/home/codexbot/.local/node-v22.18.0-linux-x64/bin/node tools/architecture/v2/credential-inventory.mjs --root . --output /tmp/yoko-credential-repro-4ec52730.json"
+  ],
+  "absent_current_outputs": [
+    "/tmp/yoko-write-freeze-4ec52730.json",
+    "/tmp/yoko-write-repro-4ec52730.json",
+    "/tmp/yoko-credential-freeze-4ec52730.json",
+    "/tmp/yoko-credential-repro-4ec52730.json"
+  ],
+  "stop_reason": "Two independent deterministic scans each consumed more than 198 CPU minutes without completing or producing output. The driver has no progress instrumentation and writes JSON only after the full return, so progress was unknown and the execution was not operationally bounded.",
+  "localization": {
+    "cold_default_options": {
+      "tracked_js_family_files": 1507,
+      "parallelism": 16,
+      "per_file_timeout_seconds": 15,
+      "started_at": "2026-08-10T19:47:21Z",
+      "finished_at": "2026-08-10T19:52:13Z",
+      "result": "Only tools/architecture/v2/write-analyzer.mjs exceeded 15 seconds; every other isolated file completed below the timeout."
+    },
+    "production_options": {
+      "parallelism": 16,
+      "per_file_timeout_seconds": 30,
+      "started_at": "2026-08-10T19:53:01Z",
+      "last_observed_at": "2026-08-10T19:58:37Z",
+      "result": "No timeout/nonzero candidate was observed, but final process exit was not captured (Unknown process id 73660). Diagnostic only, not authoritative completion.",
+      "probe_path": "architecture/recovery/whole-project-dod/v2/continuation/PER_FILE_LOCALIZATION_PROBE.mjs",
+      "probe_sha256": "d963f6be67c828b8c26db1eddd3cdc33452a4960148e8f691644715deb20b056"
+    }
+  },
+  "last_completed_but_superseded_pair": {
+    "commit": "5a4211a47130c7fe23aae407dab488bee64dfc63",
+    "tree_prefix": "7194e134",
+    "write_freeze": "/tmp/yoko-write-freeze-5a4211a4.json",
+    "write_repro": "/tmp/yoko-write-repro-5a4211a4.json",
+    "write_sha256": "faafd0868436ca95ff064093ed585c464a8fc4ca410c4dd3daa8a7ec93138575",
+    "write_bytes_each": 2833081,
+    "credential_freeze": "/tmp/yoko-credential-freeze-5a4211a4.json",
+    "credential_repro": "/tmp/yoko-credential-repro-5a4211a4.json",
+    "credential_sha256": "98f8113586c93eb840f873721cc722c98d4edd256943af0d090b66127d9b3326",
+    "credential_bytes_each": 591863,
+    "classification": "STALE_COMPARISON_ONLY; later analyzer commits 8aa469b8, d07d60f5 and 4ec52730 supersede it"
+  },
+  "proven": [
+    "Both current 4ec full scans were CPU-active for more than 3h20 wall time and did not complete.",
+    "Current full-scan output is absent and current whole-repository determinism is unproven.",
+    "analyzePrismaWriteSites creates a fresh TypeScript SourceFile, CompilerHost, Program and checker for each JavaScript-family file call.",
+    "The repository driver traverses Git-tracked executable surfaces serially and has no progress instrumentation.",
+    "Fresh-process isolated per-file default-option analysis was bounded except for the analyzer source itself; the production-option probe emitted no observed timeout before its exit status was lost.",
+    "RSS stayed approximately 414-417 MiB during the two long scans; this does not prove or disprove cumulative state cost."
+  ],
+  "not_proven_hypotheses": [
+    "Repeated TypeScript Program construction is the dominant cause.",
+    "Accumulated long-lived TypeScript/analyzer state is the dominant cause.",
+    "The regression is specifically Map/Reflect/holder or Drizzle helper-parameter resolution introduced after 5a4211a4.",
+    "A single production file is pathological when run in repository sequence."
+  ],
+  "root_cause_status": "NOT PROVEN",
+  "progress_classification": "PROGRESS UNKNOWN DUE TO MISSING INSTRUMENTATION; OPERATIONALLY PATHOLOGICAL/UNBOUNDED",
+  "exact_next_action": "Instrument and restructure write-analyzer execution into bounded isolated workers sized for the 4-CPU host while preserving existing AST semantics; run the 77 write-analyzer fixtures and the four companion suites, then execute exactly one instrumented authoritative whole-repository scan and materialize the current baseline."
+}

@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react"
 import { X, Search, Send, Loader2, AlertTriangle, Phone } from "lucide-react"
 import { useContactSearch, ContactSearchResult } from "../hooks/useContactSearch"
 import { useStartConversation } from "../hooks/useStartConversation"
-import { useSip } from "@/lib/sip/SipContext"
+import { useSip } from '@/modules/calling/public/v1/sip-client-context'
 import { toast } from "sonner"
 
 const CHANNELS = [
@@ -19,6 +19,13 @@ const CHANNEL_BADGE: Record<string, { label: string; cls: string }> = {
     telegram: { label: 'TG',  cls: 'bg-blue-50 text-blue-600' },
     max:      { label: 'MAX', cls: 'bg-purple-50 text-purple-600' },
     phone:    { label: 'Тел', cls: 'bg-orange-50 text-orange-600' },
+}
+
+type ReachabilityState = {
+    status?: 'confirmed' | 'unreachable' | 'checking'
+    reachable: boolean | null
+    retryable?: boolean
+    error?: string
 }
 
 interface NewChatPopoverProps {
@@ -42,14 +49,16 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
     const { loading: starting, error: startError, startByContact, startByPhone, clearError } = useStartConversation()
     const { startPlaceholderOutbound, setActiveCallFsUuid, status: sipStatus } = useSip()
 
-    // Pre-check reachability for new phone numbers on TG/WA
-    const [reachability, setReachability] = useState<{ reachable: boolean; error?: string } | null>(null)
+    // Pre-check reachability for new phone numbers on TG/WA/MAX.
+    // Operational failures stay "checking" and are retried; only confirmed
+    // provider answers are allowed to turn the UI green.
+    const [reachability, setReachability] = useState<ReachabilityState | null>(null)
     const [checking, setChecking] = useState(false)
 
     useEffect(() => {
         const channelDef = CHANNELS.find(c => c.id === selectedChannel)
         const dbChannel = channelDef?.dbChannel
-        const isCheckable = dbChannel === 'telegram' || dbChannel === 'whatsapp'
+        const isCheckable = dbChannel === 'telegram' || dbChannel === 'whatsapp' || dbChannel === 'max'
         const phoneValue = query.trim()
         const isPhoneInput = /^[\d\s\+\-\(\)]{7,}$/.test(phoneValue)
 
@@ -60,11 +69,15 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
             return
         }
 
-        setChecking(true)
         setReachability(null)
 
         const controller = new AbortController()
-        const timer = setTimeout(async () => {
+        let retryTimer: ReturnType<typeof setTimeout> | null = null
+        let attempts = 0
+
+        const runCheck = async () => {
+            attempts += 1
+            setChecking(true)
             try {
                 const res = await fetch('/api/channels/check-reachability', {
                     method: 'POST',
@@ -74,21 +87,35 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                 })
                 const data = await res.json()
                 if (!controller.signal.aborted) {
-                    // Only show warning when explicitly unreachable
-                    setReachability(data.reachable === false ? data : null)
+                    const normalized: ReachabilityState = {
+                        ...data,
+                        status: data.status || (data.reachable === false ? 'unreachable' : data.reachable === true ? 'confirmed' : 'checking'),
+                    }
+                    setReachability(normalized)
+                    if ((normalized.status === 'checking' || normalized.reachable === null) && normalized.retryable !== false && attempts < 5) {
+                        retryTimer = setTimeout(runCheck, 2_000)
+                    } else {
+                        setChecking(false)
+                    }
                 }
             } catch (err: any) {
-                // Aborted or network error — don't show warning
                 if (err.name !== 'AbortError') {
                     console.error('[NewChat] Reachability check error:', err.message)
+                    if (!controller.signal.aborted && attempts < 5) {
+                        setReachability({ status: 'checking', reachable: null, retryable: true, error: 'Проверяем канал...' })
+                        retryTimer = setTimeout(runCheck, 2_000)
+                    }
                 }
             } finally {
-                if (!controller.signal.aborted) setChecking(false)
+                if (!controller.signal.aborted && attempts >= 5) setChecking(false)
             }
-        }, 600) // debounce 600ms
+        }
+
+        const timer = setTimeout(runCheck, 600) // debounce 600ms
 
         return () => {
             clearTimeout(timer)
+            if (retryTimer) clearTimeout(retryTimer)
             controller.abort()
             setChecking(false)
         }
@@ -386,34 +413,23 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                 )}
             </div>
 
-            {/* Channel selection. Availability comes from the focused
-                contact: hovered row > single result > none. Channels with
-                an identity get a green dot, channels without get a red
-                ⊘. The buttons stay clickable (operator may want to start
-                fresh in a new channel). */}
+            {/* Channel selection shows CRM channel presence only, not provider account reachability. */}
             {(() => {
                 const focusedContact =
                     results.find(c => c.id === hoveredContactId) ||
                     (results.length === 1 ? results[0] : null)
-                const focusedChannels = new Set<string>(focusedContact?.channels || [])
+                const knownChannels = new Set<string>(focusedContact?.channels || [])
                 return (
                     <div className="px-3.5 pb-2.5">
                         <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
                             <span>Канал</span>
                             {focusedContact && (
-                                <span className="flex items-center gap-[2px] text-[9px] font-medium normal-case">
-                                    <span className="flex items-center gap-1 text-emerald-600">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />активен
-                                    </span>
-                                    <span className="flex items-center gap-1 text-red-500">
-                                        ⊘ нет
-                                    </span>
-                                </span>
+                                <span className="text-[9px] font-medium normal-case text-gray-400">наличие канала в CRM</span>
                             )}
                         </div>
                         <div className="flex gap-1.5">
                             {CHANNELS.map(ch => {
-                                const hasIdentity = !focusedContact || focusedChannels.has(ch.dbChannel)
+                                const isKnown = !!focusedContact && knownChannels.has(ch.dbChannel)
                                 return (
                                     <button
                                         key={ch.id}
@@ -437,7 +453,13 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                                             // so explicitly re-focus the input.
                                             inputRef.current?.focus()
                                         }}
-                                        title={hasIdentity ? `${ch.label}: канал активен у контакта` : `${ch.label}: контакт НЕ найден — будет создан новый, доставка не гарантирована`}
+                                        title={
+                                            !focusedContact
+                                                ? ch.label
+                                                : isKnown
+                                                    ? `${ch.label}: канал есть в CRM. Это не проверка аккаунта у провайдера`
+                                                    : `${ch.label}: канала пока нет в CRM — будет создан новый, доставка не гарантирована`
+                                        }
                                         className={`flex-1 h-[34px] text-[11px] font-bold rounded-lg transition-all relative flex items-center justify-center gap-1 ${
                                             selectedChannel === ch.id
                                                 ? `${ch.activeBg} ring-1 ring-inset`
@@ -446,9 +468,9 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                                     >
                                         <span>{ch.label}</span>
                                         {focusedContact && (
-                                            hasIdentity
-                                                ? <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="активен" />
-                                                : <span className="text-red-500 text-[12px] leading-none" title="нет">⊘</span>
+                                            isKnown
+                                                ? <span className="rounded bg-gray-100 px-1 text-[8px] font-semibold text-gray-500" title="Канал есть в CRM">CRM</span>
+                                                : <span className="rounded bg-amber-50 px-1 text-[8px] font-semibold text-amber-700" title="Канала пока нет в CRM">новый</span>
                                         )}
                                     </button>
                                 )
@@ -458,12 +480,35 @@ export default function NewChatPopover({ onClose, onSelectChat, initialQuery }: 
                 )
             })()}
 
-            {/* Reachability warning */}
-            {reachability && !reachability.reachable && (
+            {/* Reachability status */}
+            {reachability?.status === 'confirmed' && (
+                <div className="px-3.5 pb-1.5">
+                    <div className="flex items-start gap-1.5 bg-emerald-50 text-emerald-700 rounded-lg px-2.5 py-1.5">
+                        <span className="text-[11px] leading-tight">есть: аккаунт найден</span>
+                    </div>
+                </div>
+            )}
+            {reachability?.status === 'checking' && reachability.retryable !== false && (
+                <div className="px-3.5 pb-1.5">
+                    <div className="flex items-start gap-1.5 bg-blue-50 text-blue-700 rounded-lg px-2.5 py-1.5">
+                        <Loader2 size={12} className="shrink-0 mt-0.5 animate-spin" />
+                        <span className="text-[11px] leading-tight">проверяем: проверка аккаунта еще идет</span>
+                    </div>
+                </div>
+            )}
+            {reachability?.status === 'checking' && reachability.retryable === false && (
                 <div className="px-3.5 pb-1.5">
                     <div className="flex items-start gap-1.5 bg-amber-50 text-amber-700 rounded-lg px-2.5 py-1.5">
                         <AlertTriangle size={12} className="shrink-0 mt-0.5" />
-                        <span className="text-[11px] leading-tight">{reachability.error}</span>
+                        <span className="text-[11px] leading-tight">нет связи: CRM сейчас не может проверить канал. Это не значит, что аккаунта нет</span>
+                    </div>
+                </div>
+            )}
+            {reachability?.status === 'unreachable' && (
+                <div className="px-3.5 pb-1.5">
+                    <div className="flex items-start gap-1.5 bg-amber-50 text-amber-700 rounded-lg px-2.5 py-1.5">
+                        <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+                        <span className="text-[11px] leading-tight">нет: {reachability.error || 'канал проверен, аккаунт не найден'}</span>
                     </div>
                 </div>
             )}

@@ -1,0 +1,1 @@
+{"schema":"yoko.crm.module-manifest-amendments.v1","version":1,"milestone":"CRM-ARCH-007-AI-KNOWLEDGE-SOURCE","amendments":[{"context":"ai_knowledge","add_commands":["AttachManualKnowledgeSourceCommand.v1","DisableKnowledgeSourcesCommand.v1"],"reason":"Expose the complete two-site knowledge-source persistence lifecycle through AI Knowledge."}]}

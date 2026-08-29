@@ -1,0 +1,214 @@
+{
+  "allowed_dependencies": [
+    {
+      "context": "calling",
+      "surface": "calling.public"
+    },
+    {
+      "context": "ai_knowledge",
+      "surface": "ai_knowledge.public"
+    },
+    {
+      "context": "telegram_channel",
+      "surface": "telegram_channel.public"
+    },
+    {
+      "context": "max_channel",
+      "surface": "max_channel.public"
+    },
+    {
+      "context": "whatsapp_channel",
+      "surface": "whatsapp_channel.public"
+    },
+    {
+      "context": "avito_acquisition",
+      "surface": "avito_acquisition.public"
+    },
+    {
+      "context": "identity_access",
+      "surface": "identity_access.public"
+    }
+  ],
+  "commands": [
+    "UpdateConfigurationCommand.v1",
+    "ValidateConfigurationCommand.v1"
+  ],
+  "compatibility_strategy": "Keep current settings routes and secret stores; replace foreign model writes with owner-specific configuration commands.",
+  "context": {
+    "id": "configuration",
+    "name": "Configuration"
+  },
+  "credential_relationships": {
+    "database_models": [
+      "AiAgentConfig",
+      "MaxConnection",
+      "TelegramConnection",
+      "WhatsAppConnection"
+    ],
+    "environment_names": [
+      "ADMIN_PASS",
+      "ADMIN_USER",
+      "BOT_ADMIN_URL",
+      "FS_ESL_HOST",
+      "HTTPS_PROXY",
+      "MAX_SCRAPER_URL",
+      "MEGAFON_FROM_DOMAIN",
+      "MEGAFON_FROM_USER",
+      "MEGAFON_PROXY",
+      "MEGAFON_REALM",
+      "MEGAFON_SIP_PASSWORD",
+      "MEGAFON_SIP_USERNAME",
+      "NEXTAUTH_URL",
+      "NEXT_PUBLIC_MAX_SCRAPER_URL",
+      "NODE_ENV",
+      "OPENAI_API_KEY",
+      "REDIS_URL",
+      "S3_ENDPOINT",
+      "TELEPHONY_CONF_HOST_PATH"
+    ],
+    "policy": "Names and access locations only. Values stay inside the owning adapter and never cross a public contract."
+  },
+  "events": [
+    "ConfigurationChanged.v1",
+    "ConfigurationValidationFailed.v1"
+  ],
+  "evidence": {
+    "dependency_edges": 10,
+    "source_snapshot_sha256": "2713db175062bb673dcca2d97e80c2ae204a2f257438036c6db2506587dfad7d",
+    "write_sites_requiring_migration": 38
+  },
+  "forbidden_dependencies": [
+    "credentialValuesInContracts",
+    "credential_value_export",
+    "directForeignPrismaWrites",
+    "foreign_configuration_write",
+    "providerImplementationImportsOutsideOwningContext",
+    "unversionedCrossContextPayloads"
+  ],
+  "foreign_write_migration_plans": [
+    "migration_04d2e3ce1fdbef50",
+    "migration_30dc23eb89df8b76",
+    "migration_32c0e2377e609527",
+    "migration_56494330426e3744",
+    "migration_5b68d1e7487106e9",
+    "migration_680fe1d8da7e82ff",
+    "migration_7b0251f9f4b375a3",
+    "migration_9295b8793940d1b7",
+    "migration_9896cb76f4eeb68a",
+    "migration_b3ef43569ca981b9",
+    "migration_cf5479ae3da99ee5",
+    "migration_e067061cee092028",
+    "migration_eafe85fb377d05e3"
+  ],
+  "internal_surface": [
+    "gravity-mvp/src/app/settings/ai",
+    "gravity-mvp/src/app/settings/api",
+    "gravity-mvp/src/app/settings/avito-access",
+    "gravity-mvp/src/app/settings/dictionaries",
+    "gravity-mvp/src/app/settings/integrations/_components",
+    "gravity-mvp/src/app/settings/integrations/access",
+    "gravity-mvp/src/app/settings/integrations/ai-call-help",
+    "gravity-mvp/src/app/settings/integrations/ai-call-keys",
+    "gravity-mvp/src/app/settings/integrations/ai-call-scenarios",
+    "gravity-mvp/src/app/settings/integrations/ai-knowledge-help",
+    "gravity-mvp/src/app/settings/integrations/avito",
+    "gravity-mvp/src/app/settings/integrations/bot",
+    "gravity-mvp/src/app/settings/integrations/max",
+    "gravity-mvp/src/app/settings/integrations/telegram",
+    "gravity-mvp/src/app/settings/integrations/telephony",
+    "gravity-mvp/src/app/settings/integrations/telephony-ai",
+    "gravity-mvp/src/app/settings/page.tsx",
+    "gravity-mvp/src/app/settings/scenarios",
+    "gravity-mvp/src/app/settings/scoring",
+    "gravity-mvp/src/app/settings/triggers",
+    "gravity-mvp/src/lib/config-validator.ts"
+  ],
+  "owned_data": [
+    {
+      "current_writer_modules": [
+        "settings"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:config_change_log",
+      "mapped_table": null,
+      "model": "config_change_log",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    }
+  ],
+  "owned_paths": [
+    "gravity-mvp/src/app/settings/ai",
+    "gravity-mvp/src/app/settings/api",
+    "gravity-mvp/src/app/settings/avito-access",
+    "gravity-mvp/src/app/settings/dictionaries",
+    "gravity-mvp/src/app/settings/integrations/_components",
+    "gravity-mvp/src/app/settings/integrations/access",
+    "gravity-mvp/src/app/settings/integrations/ai-call-help",
+    "gravity-mvp/src/app/settings/integrations/ai-call-keys",
+    "gravity-mvp/src/app/settings/integrations/ai-call-scenarios",
+    "gravity-mvp/src/app/settings/integrations/ai-knowledge-help",
+    "gravity-mvp/src/app/settings/integrations/avito",
+    "gravity-mvp/src/app/settings/integrations/bot",
+    "gravity-mvp/src/app/settings/integrations/max",
+    "gravity-mvp/src/app/settings/integrations/telegram",
+    "gravity-mvp/src/app/settings/integrations/telephony",
+    "gravity-mvp/src/app/settings/integrations/telephony-ai",
+    "gravity-mvp/src/app/settings/page.tsx",
+    "gravity-mvp/src/app/settings/scenarios",
+    "gravity-mvp/src/app/settings/scoring",
+    "gravity-mvp/src/app/settings/triggers",
+    "gravity-mvp/src/lib/config-validator.ts",
+    "gravity-mvp/src/modules/configuration"
+  ],
+  "owner": {
+    "accountability": "Configuration bounded-context owner",
+    "context": "configuration"
+  },
+  "protected": true,
+  "provider_relationships": [
+    {
+      "adapter_modules": [
+        "settings"
+      ],
+      "name": "provider_configuration",
+      "role": "metadata and connection setup"
+    }
+  ],
+  "public_surface": [
+    "ConfigurationView.v1",
+    "OperationalConfigurationHealth.v1",
+    "OperationsMonitoringPolicy.v1",
+    "ScenarioConfiguration.v1"
+  ],
+  "responsibility": "Operational settings, provider configuration metadata and scenario configuration workflows.",
+  "schema": "yoko.crm.module-manifest.v1",
+  "technical_modules": [
+    "settings"
+  ],
+  "verification": {
+    "architecture_checks": [
+      "node tools/architecture/validate-context-manifests.mjs",
+      "node tools/architecture/enforce-architecture.mjs",
+      "node tools/architecture/test-architecture-enforcement.mjs"
+    ],
+    "blast_radius": {
+      "consumer_contexts": [
+        "operations_observability",
+        "platform_shell"
+      ],
+      "owner_context": "configuration",
+      "provider_scope": "NOT_APPLICABLE",
+      "provider_siblings": []
+    },
+    "build_checks": [
+      "node tools/architecture/check-typescript-baseline.mjs"
+    ],
+    "contract_tests": [
+      "node tools/architecture/validate-contract-registry.mjs",
+      "node tools/architecture/check-contract-boundaries.mjs"
+    ],
+    "module_tests": [
+      "node tools/architecture/check-configuration-operational-health-boundary.mjs",
+      "node tools/architecture/check-configuration-operations-monitoring-policy-boundary.mjs"
+    ]
+  },
+  "version": 1
+}

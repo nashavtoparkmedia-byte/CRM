@@ -1,0 +1,20 @@
+{
+  "schema": "yoko.crm.lifecycle-classification-batch.v1",
+  "generated_at": "2026-08-10T23:20:35.832Z",
+  "authority": "Lifecycle-only batch: 29 root developer patchers/real_sync classified DEAD_HISTORICAL by no-reference evidence. No owner_context or ownership manifest changed; writes remain visible.",
+  "inputs": {
+    "previous_baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693",
+    "registry": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json"
+  },
+  "results": {
+    "authoritative_scan": "1693/1693 surfaces, 279344ms, zero failures/timeouts",
+    "dead_historical_classified": 29,
+    "test_surfaces_classified": 32,
+    "production_operational_unreviewed": 382,
+    "ambiguous": 275,
+    "foreign_writes": 0,
+    "material_unresolved": 264
+  },
+  "classification_effect": "Lifecycle evidence changed operational inventory only; ownership ambiguity remains fail-closed and unchanged.",
+  "next_action": "Continue active operational ownership/capability closure; no manifest ownership shortcut."
+}

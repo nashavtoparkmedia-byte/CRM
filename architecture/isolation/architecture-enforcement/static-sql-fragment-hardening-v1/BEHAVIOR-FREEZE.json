@@ -1,0 +1,67 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1",
+  "milestone": "CRM-ARCH-007R-STATIC-SQL-FRAGMENT-HARDENING",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "1b949555b92c1202e01b1e55aa10089e7a7e73e7",
+  "source_commit": "024680591c188a34ae79594d92d47854648c73c8",
+  "captured_at": "2026-08-10T09:21:37Z",
+  "verified_at": "2026-08-10T09:21:37Z",
+  "source_hashes_after": {
+    "gravity-mvp/src/app/tasks/actions.ts": "42c89e0978f2fdc6bf55c0c1669abec5bdacafda4da75ef5b5dd55fdba397e29",
+    "gravity-mvp/src/lib/ContactService.ts": "0b8ab3ece31614547dc7f4f53fea67bc76156f9bc1a85a8e5d9f745b9c64eb07",
+    "gravity-mvp/src/lib/ConversationWorkflowService.ts": "a74499ccd9aea7a932de65b1f42a505135b305a7bf61213a1b40a9aa4f266baa",
+    "gravity-mvp/src/lib/ai/knowledge/Extractor.ts": "3f7bd56408f916a51a6a9472775459992982cbdd215367cafe06b9004492b50b",
+    "gravity-mvp/src/lib/ai/knowledge/auditLog.ts": "1ebd521e7c9182902e9905eea63be04869cf328e999dbd9d34a288bc444363dd",
+    "gravity-mvp/src/lib/ai/knowledge/legacyMigration.ts": "3871ca5a8a2abaa4571e098195e2f128dab770c9084e8aa23e8c7c0d63388d80",
+    "gravity-mvp/src/lib/messageEvents.ts": "0d7f42bdd6ef6c8b7b472657f3e3a8e75fb678dfe9db2f2b3151742641f5ac4b",
+    "gravity-mvp/src/lib/tasks/scenario-fields.ts": "21262e35c589920da80cf24b164adebd5afdfdafd5be641b3e731d6c0bf4f5b2",
+    "gravity-mvp/src/lib/tasks/usage.ts": "ccbcc3df1bfa2ab8f812dce8f6a0fabc6eea910fa1eb7b5fd28852b905f23e8b",
+    "gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-knowledge-item-review-adapter.ts": "b50ef3b871e721682a17152955eccc3f595865225f4f579fbe8b54ff10038938",
+    "gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-knowledge-source-adapter.ts": "5c37028b703209d26c03bc0eb3a381adbc9a0cd443b461e9fa26d3e29402123f",
+    "gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-queue-knowledge-extraction-adapter.ts": "9187d8f7d48381a87738ace2b572961f5e29164d186b79824e00d23839720422",
+    "gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-record-ai-decision-adapter.ts": "8be15e14ae13a603829612863cd3d70c5bb91dc3ba225c127991c79e0b54f56f",
+    "gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-record-knowledge-usage-adapter.ts": "1944e248af96520832a83aa77eed461b9236a2dfe7d0ef757b96410009dd29a4",
+    "gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-review-ai-decision-adapter.ts": "a4db2e011f449e287521c5fe88aab709df2960ec9a2380b9f809d17b21fe8634",
+    "gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-update-retrieval-policy-adapter.ts": "fb4dd5f378be7f2df7cd9fff6f0e1db4993f44a19d67ca059c4367296be3e137",
+    "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-history-import-job-adapter.ts": "a049dffc2caae3a700dfe8e1180403ebf3c726a5d63d67870021f4f9523a946a",
+    "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-message-event-log-adapter.ts": "5a3489827c65d77d8a05048951f6ecc573d934defdcb7722685d74dcf090014e",
+    "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-message-retention-adapter.ts": "9fce7e6639899b8e5d5641fcfe2f9b888f4dea992988f6dc1f3e6448a8b4cc8b"
+  },
+  "unchanged_protected_surfaces": {
+    "gravity-mvp/prisma/schema.prisma": {
+      "before_sha256": "eab5ccdf1ed6d59f30ed547670f61aafe825c6eda88a8ab41d69862abab25374",
+      "after_sha256": "eab5ccdf1ed6d59f30ed547670f61aafe825c6eda88a8ab41d69862abab25374"
+    },
+    "architecture/contexts/v1/manifests": {
+      "before_git_tree": "e25464ea5f56006c13ab2734ef3f62980708f0c5",
+      "after_git_tree": "e25464ea5f56006c13ab2734ef3f62980708f0c5"
+    },
+    "module_manifest_amendments_changed": 0,
+    "dependency_amendments_changed": 0
+  },
+  "behavior": [
+    "nineteen ordinary owner-adapter operations retain their exact fixed SQL, positional bind order, zero-row results and visible database failures",
+    "all 2047 non-empty retrieval-policy masks use one fixed atomic CASE statement with exact presence/value tuples",
+    "all 1023 non-empty history-job patch masks use one fixed atomic CASE statement with explicit null fidelity and true-at-zero success",
+    "exactly 21 owner-adapter persistence sites are analyzer-visible static owner-table writes and expose no tagged, transaction, query or model-delegate capability",
+    "exactly 27 reviewed dynamic-fragment findings are replaced by 35 direct fixed unsafe-literal calls with complete positional binds",
+    "JSONB, array, enum and database timestamp casts retain their exact reviewed order and representation",
+    "conversation grouping uses a closed contact, driver or chat selector while preserving reads, transitions, fixed group branches and ordering",
+    "each write retains its reviewed propagate-or-tolerate error policy without database execution"
+  ],
+  "bounded_drift": [
+    "fixed CASE updates can self-assign omitted columns while preserving reviewed values and zero-row behavior",
+    "fixed unsafe literals can change exact database query text and stack frames relative to fragment assembly",
+    "the closed conversation selector intentionally removes generic SQL-fragment capability"
+  ],
+  "out_of_scope": [
+    "database execution, triggers, permissions, locks, constraints and concurrency",
+    "provider transport, server-action execution, deployed runtime and production behavior",
+    "schema, module-manifest, dependency-graph, deployed-service state or deployment mutation",
+    "real credential or secret-bearing execution paths"
+  ],
+  "application_runtime_source_changed": true,
+  "deployed_runtime_changed": false,
+  "database_behavior_executed": false,
+  "production_executed": false
+}

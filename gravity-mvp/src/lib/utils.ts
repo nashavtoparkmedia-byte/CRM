@@ -1,6 +1,2 @@
-import { type ClassValue, clsx } from "clsx"
-import { twMerge } from "tailwind-merge"
-
-export function cn(...inputs: ClassValue[]) {
-    return twMerge(clsx(inputs))
-}
+// Compatibility path for legacy callers. New code imports shared UI infrastructure.
+export { cn } from '@/infrastructure/ui/class-names'

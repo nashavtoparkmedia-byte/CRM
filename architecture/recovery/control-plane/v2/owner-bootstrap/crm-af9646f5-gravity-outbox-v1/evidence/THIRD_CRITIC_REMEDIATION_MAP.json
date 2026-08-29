@@ -1,0 +1,18 @@
+{
+  "schema": "yoko.crm.owner-bootstrap-remediation-map.v1",
+  "rejected_artifact_sha256": "84fe81d6eac9c4cd0cdb8c7fe710fb27aac862c4ab904c0530ef9f1f4d635cc5",
+  "rejected_artifact_status": "REJECTED_SUPERSEDED_NEVER_EXECUTE",
+  "current_source_status": "REMEDIATION_PRESENT_EXACT_SHA_CRITIC_PASS",
+  "findings": [
+    {
+      "id": "THIRD-CRITIC-001",
+      "remediation": "DATABASE_PRODUCTION_INTENT recovery now collision-safely cleans both the fixed label-bound production migration runner and the fixed label-bound production resolve runner before its first fresh database status read. Only after both runners are proven absent may the recovery path observe, repair or retry the exact migration.",
+      "evidence": [
+        "src/crm-activation-profile.py::_database_migrate",
+        "src/crm-activation-profile.py::_cleanup_runner",
+        "tests/test_package_and_runtime.py::test_fixed_runner_collision_is_not_killed_or_deleted",
+        "tests/test_package_and_runtime.py::test_database_recovery_quiesces_both_production_runners_before_first_status_read"
+      ]
+    }
+  ]
+}

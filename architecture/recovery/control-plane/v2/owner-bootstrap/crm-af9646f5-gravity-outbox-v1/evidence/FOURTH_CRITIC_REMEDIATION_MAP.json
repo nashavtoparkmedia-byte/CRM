@@ -1,0 +1,32 @@
+{
+  "schema": "yoko.crm.owner-bootstrap-remediation-map.v1",
+  "rejected_artifact_sha256": "96971513710a7f9be9c48da82ed61d0c712679dfb4e086f3afc3c78624131540",
+  "rejected_artifact_status": "REJECTED_SUPERSEDED_NEVER_EXECUTE",
+  "current_source_status": "TWO_REMEDIATIONS_PRESENT_EXACT_SHA_CRITIC_PASS",
+  "findings": [
+    {
+      "id": "FOURTH-CRITIC-001",
+      "remediation": "Docker inspect absence is now an exact return-code/stdout/stderr identity, while daemon, permission, malformed and other failures raise. Both production migration and resolve containers are created with fixed image/network/entrypoint/command/env and identity-sealed before DATABASE_PRODUCTION_INTENT is durably written. Recovery verifies and quiesces those exact objects, never creates a runner, observes them stopped again, and only then reads the database. Retirement also verifies sealed identity.",
+      "evidence": [
+        "src/crm-activation-profile.py::_docker_inspect_absent",
+        "src/crm-activation-profile.py::_prepare_production_runners",
+        "src/crm-activation-profile.py::_quiesce_production_runners",
+        "src/crm-activation-profile.py::_start_prepared_production_runner",
+        "tests/test_package_and_runtime.py::test_fixed_runner_absence_is_exact_and_all_other_inspect_failures_fail_closed",
+        "tests/test_package_and_runtime.py::test_production_runners_are_created_and_sealed_before_durable_intent",
+        "tests/test_package_and_runtime.py::test_quiesce_reuses_identity_sealed_containers_without_create_window",
+        "tests/test_package_and_runtime.py::test_database_recovery_quiesces_both_production_runners_before_first_status_read"
+      ]
+    },
+    {
+      "id": "FOURTH-CRITIC-002",
+      "remediation": "DATABASE_PRODUCTION_INTENT recovery now calls the secure-file boundary for the fixed backup path and proves exact mode 0400, owner, single regular link, bounded exact recorded bytes and a freshly computed exact recorded SHA256 before database status, repair or migration retry. Its success evidence says REHASHED_AND_VERIFIED.",
+      "evidence": [
+        "src/crm-activation-profile.py::_verify_recovery_backup",
+        "src/crm-activation-profile.py::_database_migrate",
+        "tests/test_package_and_runtime.py::test_database_recovery_rehashes_secure_backup_before_any_retry",
+        "tests/test_package_and_runtime.py::test_database_recovery_quiesces_both_production_runners_before_first_status_read"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1",
+  "milestone": "CRM-ARCH-007R-CALLING-AI-AGENT-CONFIG",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "62b7456391403bf5544fa69cd5533e543a56e6d0",
+  "source_commit": "f61d39832252994b96f4f5aba525c125561c19f2",
+  "captured_at": "2026-08-10T09:08:34Z",
+  "verified_at": "2026-08-10T09:08:34Z",
+  "legacy_sources": [
+    {
+      "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+      "before": "5d272e019e821b6dee8acce257544abaa40efbb08330d5dbf793f0598c7c9d5d",
+      "after": "9a399aab6348ad4ea3a212f58c772f00e3a60c6a286d566ef8e39008078d6f74",
+      "state": "configuration_orchestration_only_for_ai_agent_config_writes"
+    },
+    {
+      "file": "gravity-mvp/src/contracts/calling/v1/index.ts",
+      "before": "aa0acdf3ec3af751e1d083b5a743182b781dc06541218b1711317eab5c392169",
+      "after": "2c87f71c21fdbc59861a8a9927621b0861e9acca448d80bf01f8222906e8e18c"
+    },
+    {
+      "file": "gravity-mvp/src/modules/calling/public/v1/index.ts",
+      "before": "6212af9f91cde33b1c3e0cda03faedffde44e309bb86cfdee912c5fba1a3ec97",
+      "after": "7c4cf4433d06ae2c8d72fa0f9c568a723b5b5989a560b1d51817e3ba144344e2"
+    },
+    {
+      "file": "tools/architecture/check-contract-boundaries.mjs",
+      "before": "279dd61899bc5edf6e6d1b29e1b231b3482b645a41a6251fddc9735f04cd821c",
+      "after": "2f690e89d40e2444cc71bed417289955dffb97f5b02e03de572ddfc7559bb486"
+    }
+  ],
+  "unchanged_protected_surfaces": [
+    {
+      "file": "gravity-mvp/src/app/settings/ai/AiControlCenterClient.tsx",
+      "before": "84c310bf76ac7538a10a5c3daedeae54a7a5576123835a094c88b6ae56734e94",
+      "after": "84c310bf76ac7538a10a5c3daedeae54a7a5576123835a094c88b6ae56734e94"
+    },
+    {
+      "file": "gravity-mvp/prisma/schema.prisma",
+      "before": "eab5ccdf1ed6d59f30ed547670f61aafe825c6eda88a8ab41d69862abab25374",
+      "after": "eab5ccdf1ed6d59f30ed547670f61aafe825c6eda88a8ab41d69862abab25374"
+    },
+    {
+      "file": "gravity-mvp/src/contracts/calling/v1/ai-agent-profile-commands.ts",
+      "before": "6bdfc1d20438c7d73a29e0f781d313063a692fd3bd84e20c17431c4fc62d0025",
+      "after": "6bdfc1d20438c7d73a29e0f781d313063a692fd3bd84e20c17431c4fc62d0025"
+    },
+    {
+      "file": "gravity-mvp/src/modules/calling/public/v1/ai-agent-profile-handler.ts",
+      "before": "b03de23876bde5f16f6871ded7ddac6444ce37a22266de04e2ee5b2ebd1207a3",
+      "after": "b03de23876bde5f16f6871ded7ddac6444ce37a22266de04e2ee5b2ebd1207a3"
+    },
+    {
+      "file": "gravity-mvp/src/modules/calling/public/v1/legacy-prisma-ai-agent-profile-adapter.ts",
+      "before": "a9cae37d04c8ccf63fb6048bdf7850c70899042d51fa441ad1a9245b57597a52",
+      "after": "a9cae37d04c8ccf63fb6048bdf7850c70899042d51fa441ad1a9245b57597a52"
+    }
+  ],
+  "source_hashes_after": {
+    "gravity-mvp/src/contracts/calling/v1/ai-agent-config-commands.ts": "7442cbe1519c1636b66c39249b52c0299a6183062c21bfb98558391f191e66ec",
+    "gravity-mvp/src/modules/calling/public/v1/ai-agent-config-handler.ts": "7906b7bc863022fd07b7d7b307810b52bc4d49efbe3171e68621d24d63912645",
+    "gravity-mvp/src/modules/calling/public/v1/ai-agent-config-handler.test.ts": "46f57e8bed0d91f6d8f851e98f3a51614e5ca105c32b5ca47c9830eae4b3bf54",
+    "gravity-mvp/src/modules/calling/public/v1/legacy-prisma-ai-agent-config-adapter.ts": "09113bfcb337d061d9234e39158d47e90d5b319b1ef4aecb7e7a24c123b553f2",
+    "tools/architecture/check-calling-ai-agent-config-boundary.mjs": "656310cbf4e432441fe35d7f22c8c0d642d0898c34dca666850917e7e9cce869",
+    "tools/architecture/test-calling-ai-agent-config-adapter.mjs": "0f5b819f50fb993f317162bffe3df05f604ac0bbe6799930677afcd7d2d9905c"
+  },
+  "behavior": [
+    "saveAiConfig retains authorization before Object.keys, empty-patch null return, success-only revalidation and caller-visible wrapping for non-credential failures",
+    "generic save retains the separate nontransactional singleton existence read, insert race visibility and update zero-row success",
+    "generic insert uses one fixed full statement with source-schema defaults, explicit presence/value binds, database NOW updatedAt and NULL for the intentionally dropped activeChannels default",
+    "generic update uses one fixed atomic CASE statement over all 23 fields, database NOW updatedAt and zero-row success",
+    "testAiConnection still performs the first generic success save; testSavedConnection still performs its second success-only best-effort marker without changing updatedAt and silently ignores marker failure",
+    "active profile selection retains truthy-only profile lookup, exact missing-profile error, nontransactional read/upsert race and exact Prisma create/update payload",
+    "extraction tier retains caller authorization, exact three-value validation, database NOW updatedAt, zero-row success and success-only revalidation",
+    "provider calls, saved credential reads, provider error results and all UI orchestration remain in Configuration",
+    "Calling owns all five persistence sites through four closed versioned commands and one narrow semantic port; no generic SQL, predicate, table, column or transaction capability crosses the boundary",
+    "credential capture returns a frozen empty reference backed by an adapter-private WeakMap; first retrieval deletes it and forged references fail before persistence"
+  ],
+  "bounded_drift": [
+    "the generic patch is now fail-closed to 23 reviewed fields and rejects legacy arbitrary id, createdAt, updatedAt, unknown and direct providerCredential names",
+    "the fixed full UPDATE self-assigns omitted columns; this accepted source-only implementation can affect column-level trigger or permission semantics compared with a subset UPDATE",
+    "the save action result excludes credential material and credential-bearing persistence errors are deliberately redacted",
+    "additional parser, handler and adapter frames can change stack traces without changing the retained caller orchestration",
+    "opaque credential references are one-shot and cannot be reused after the adapter retrieves their value"
+  ],
+  "out_of_scope": [
+    "database execution, physical rollback, triggers, permissions, locking, constraints and concurrency",
+    "deployed application runtime, provider transport, provider tests, server actions and UI execution",
+    "schema changes, deployment, production mutation and real secret-bearing paths",
+    "calling profile lifecycle redesign, provider credential storage redesign and later CRM-ARCH roadmap slices"
+  ]
+}

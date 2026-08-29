@@ -1,0 +1,19 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1",
+  "milestone": "CRM-ARCH-007-AI-DECISION-LOG",
+  "base_commit": "4139039f5909dfba7fa24f2f18863eef9394617c",
+  "captured_at": "2026-08-09T18:08:30Z",
+  "consumer": "gravity-mvp/src/lib/pipeline/PipelineWorker.ts",
+  "consumer_before_sha256": "45ea9956ce1809f5fd5d449e178941ef294babdde1f499cd6654ffbb73d98481",
+  "behavior": [
+    "one AiDecisionLog insert is attempted after AI steps and before usage-log attempts",
+    "caller-generated adl identifier, message/chat/channel and classification values remain exact",
+    "response model is selected only for auto_reply; otherwise classification model is selected",
+    "knowledge entry ids and nullable shadow summary retain their exact JSON serialization",
+    "reply, escalation, error and retrieval metadata retain exact nullable mappings",
+    "createdAt remains database NOW()",
+    "decision-log failure remains nonblocking and logs the existing exact error prefix",
+    "the generated log id remains available to subsequent usage-log attempts even if decision persistence fails"
+  ],
+  "out_of_scope": ["retrieval and decision policy", "usage-log persistence already accepted at 4139039f", "AI providers and credentials", "schema, database, runtime and production activation"]
+}

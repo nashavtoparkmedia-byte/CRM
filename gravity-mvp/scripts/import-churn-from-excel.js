@@ -2,6 +2,8 @@
 // В раздел задач CRM (scenario = 'churn')
 
 const { PrismaClient } = require('@prisma/client')
+const { deleteChurnDataV1, createImportedChurnTaskV1, createImportedTaskEventsV1 } = require('../src/modules/work-management/public/v1/legacy-prisma-seeded-task-cleanup-adapter')
+const { createImportedDriverV1 } = require('../src/modules/fleet-operations/public/v1/legacy-prisma-driver-history-maintenance-adapter')
 const XLSX = require('xlsx')
 const path = require('path')
 
@@ -101,13 +103,8 @@ async function main() {
 
     // ─── Шаг 1: Удаляем текущие задачи оттока ───
     console.log('\n🗑️  Удаляю текущие задачи оттока...')
-    const deletedEvents = await prisma.taskEvent.deleteMany({
-        where: { task: { scenario: 'churn' } }
-    })
+    const { events: deletedEvents, tasks: deletedTasks } = await deleteChurnDataV1()
     console.log(`   Удалено событий: ${deletedEvents.count}`)
-    const deletedTasks = await prisma.task.deleteMany({
-        where: { scenario: 'churn' }
-    })
     console.log(`   Удалено задач: ${deletedTasks.count}`)
 
     // ─── Шаг 2: Подготовка водителей ───
@@ -137,13 +134,10 @@ async function main() {
         let driver = driverByName.get(fullName.toLowerCase().trim())
         if (!driver) {
             // Создаём водителя
-            driver = await prisma.driver.create({
-                data: {
+            driver = await createImportedDriverV1({
                     fullName: fullName,
                     phone: '',
                     yandexDriverId: `import_${vuNumber || Date.now()}_${i}`,
-                },
-                select: { id: true, fullName: true, phone: true }
             })
             driverByName.set(fullName.toLowerCase().trim(), driver)
             created++
@@ -234,8 +228,7 @@ async function main() {
         const slaDeadline = slaHours ? new Date(now.getTime() + slaHours * 3600000) : null
 
         // Создаём задачу
-        const task = await prisma.task.create({
-            data: {
+        const task = await createImportedChurnTaskV1({
                 driverId: driver.id,
                 source: 'manual',
                 type: 'inactive_followup',
@@ -254,7 +247,6 @@ async function main() {
                 createdBy: 'import_excel',
                 metadata,
                 createdAt: churnDate,
-            }
         })
 
         // ─── Создаём события истории ───
@@ -337,7 +329,7 @@ async function main() {
 
         // Создаём все события
         if (events.length > 0) {
-            await prisma.taskEvent.createMany({ data: events })
+            await createImportedTaskEventsV1(events)
         }
 
         tasks++

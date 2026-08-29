@@ -1,0 +1,29 @@
+{
+  "schema": "CRM-ARCH-000R-EVIDENCE-MANIFEST-1",
+  "created_at": "2026-08-08T13:05:26Z",
+  "host": "jvxthcorvm",
+  "executor": "codexbot",
+  "observation_started_at": "2026-08-08T12:29:23.745165602Z",
+  "observation_ended_at": "2026-08-08T12:59:12.762814381Z",
+  "evidence_root": "/opt/codex-work/crm-arch-000-evidence/crm-arch-000r/20260808T122923Z",
+  "verdict": "BLOCKED_PRIVILEGE",
+  "final_report": "reports/CRM-ARCH-000R-FINAL.md",
+  "final_report_sha256": "391fdd8ebc32757fb55168cb41d18226d2ff3143aa18265bb3cc4bdbc3e73496",
+  "checksum_file": "SHA256SUMS",
+  "checksum_file_sha256": "09366be1d2b0a7b85e39336745c2b311ef60836e97adc172548fae3df550a355",
+  "checksummed_entry_count": 35,
+  "checksum_exclusions": [
+    "SHA256SUMS",
+    "MANIFEST.json"
+  ],
+  "checksum_policy": "Non-circular: every regular file present before manifest creation is checksummed except the checksum file and this manifest.",
+  "installed_package_version": "1.0.2-1",
+  "installed_broker_sha256": "0a8f18bad0467056c3b7460827618b5d8df8ac8678da57040988478dba34ab18",
+  "successor_package_path": "/opt/codex-work/crm-arch-000-capability-v3/dist/yoko-crm-arch-evidence_1.2.0-1_all.deb",
+  "successor_package_sha256": "af6512b446a662734f292fda3f3f861500dd9610657bfd7f9cbfcca4551a9e47",
+  "successor_broker_sha256": "00bbd2a7fdc93a653db2f2891426d43185a33dd236b631feca83b2e2ef226306",
+  "successor_installed": false,
+  "secret_scan": "PASS",
+  "production_mutation": false,
+  "crm_arch_001_started": false
+}

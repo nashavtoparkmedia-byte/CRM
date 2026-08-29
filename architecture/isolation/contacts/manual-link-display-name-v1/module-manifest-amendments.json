@@ -1,0 +1,14 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "CRM-ARCH-007-CONTACTS-MANUAL-LINK-NAME",
+  "amendments": [
+    {
+      "context": "contacts",
+      "add_commands": [
+        "SetContactDisplayNameCommand.v1"
+      ],
+      "reason": "Expose explicit manual-link display-name persistence through the Contacts owner boundary."
+    }
+  ]
+}

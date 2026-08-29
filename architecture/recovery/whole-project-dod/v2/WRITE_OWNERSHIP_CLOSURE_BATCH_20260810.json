@@ -1,0 +1,42 @@
+{
+  "schema": "yoko.crm.write-ownership-closure-batch.v1",
+  "generated_at": "2026-08-10T22:33:43.239Z",
+  "authority": "Targeted provider/analyzer remediation plus one bounded authoritative whole-repository rescan; current ledger materialization remains NOT_READY while ambiguity is unresolved.",
+  "inputs": {
+    "frozen_baseline": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json",
+    "frozen_baseline_sha256": "73259b98675789afb00258c1f1fac33c8799202f962b9944001a9bf05cfdf003",
+    "targeted_triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_AFTER_FOREIGN_CLOSURE.json",
+    "authoritative_rescan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_20260810T2228Z.json"
+  },
+  "metrics": {
+    "frozen_confirmed_writes_discovered": 1578,
+    "frozen_confirmed_foreign": 47,
+    "closed_foreign_in_this_batch": 47,
+    "closed_foreign_total_pending_authoritative_rescan": 0,
+    "confirmed_writes_reclassified_from_flat_payload_ambiguity": 45,
+    "confirmed_non_writes_reclassified_from_static_read_sql": 14,
+    "removed_provider_write_sites_from_targeted_source_batch": 60,
+    "ambiguous_records_remaining_after_batch": 580,
+    "material_unresolved_remaining": 569,
+    "confirmed_write_owner_unresolved": 271,
+    "dynamic_delegate_unresolved": 34,
+    "dynamic_sql_unresolved": 238,
+    "query_raw_side_effect_unresolved": 26,
+    "confirmed_non_writes": 4,
+    "operational_surfaces_unclassified": 0,
+    "temporary_exceptions": "CURRENT_RECOMPUTE_PENDING",
+    "intentional_exceptions": "CURRENT_RECOMPUTE_PENDING"
+  },
+  "properties": {
+    "flat_payload_resolution": "Model/method stays confirmed; payload_dynamic evidence retained; nested relation writes remain fail-closed.",
+    "provider_boundary": "MAX, Telegram, WhatsApp unified conversation/message writes now route through messaging public handlers; contact-phone maintenance uses contacts public capabilities; configuration scenario settings use configuration owner capability.",
+    "negative_property": "Exact public contracts reject unsupported channels/fields; analyzer fixtures cover flat dynamic payload and scalar SQL template values.",
+    "validation": [
+      "80/80 tools/architecture/v2/test-write-analyzer.mjs",
+      "targeted source analyzer on provider and maintenance files",
+      "TypeScript compile produced inherited diagnostics only; no diagnostics in new ownership contract paths",
+      "bounded authoritative rescan: 1650/1650 surfaces, 329211ms, zero failures/timeouts; current foreign_writes=0"
+    ]
+  },
+  "verdict": "NOT_READY_REQUIRES_AMBIGUITY_AND_SECURITY_CREDENTIAL_CLOSURE"
+}

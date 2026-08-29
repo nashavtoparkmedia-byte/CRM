@@ -29,6 +29,8 @@ import {
 } from '@/lib/tasks/excel-contract'
 import { getTasks } from './actions'
 import type { TaskFilters, TaskSort, TaskDTO } from '@/lib/tasks/types'
+import { RESOLVE_IMPORTED_DRIVER_COMMAND_V1 } from '@/contracts/fleet-operations/v1'
+import { resolveImportedDriverV1 } from '@/modules/fleet-operations/public/v1'
 
 // Stale Prisma Client DLL (locked by parallel dev) doesn't know
 // about the `scenarioData` column on Task. Schema + DB do. We read
@@ -760,46 +762,6 @@ async function createChurnTaskFromRow(
 }
 
 async function resolveDriverForImport(row: TokenRow): Promise<string | null> {
-    const license = (row.licenseNumber ?? '').trim()
-    const name = (row.driverName ?? '').trim()
-
-    // Match by license — authoritative when present. If a longer
-    // (or different) name comes from Excel, propagate it back so the
-    // export round-trip is lossless on column B.
-    if (license) {
-        const hit = await prisma.driver.findFirst({
-            where: { licenseNumber: license },
-            select: { id: true, fullName: true },
-        })
-        if (hit) {
-            if (name && name !== hit.fullName) {
-                await prisma.driver.update({
-                    where: { id: hit.id },
-                    data: { fullName: name },
-                })
-            }
-            return hit.id
-        }
-    }
-    if (name) {
-        const hit = await prisma.driver.findFirst({
-            where: { fullName: name },
-            select: { id: true },
-        })
-        if (hit) return hit.id
-    }
-
-    // Not found — create a synthetic driver so the test of the Excel
-    // contract can proceed without hand-seeding driver tables.
-    const syntheticYandexId = `excel-import:${license || name || 'unknown'}:${Date.now()}:${Math.random().toString(36).slice(2, 6)}`
-    const created = await prisma.driver.create({
-        data: {
-            yandexDriverId: syntheticYandexId,
-            fullName: name || `Без имени (${license || 'no-license'})`,
-            licenseNumber: license || null,
-            segment: 'unknown',
-        },
-        select: { id: true },
-    })
-    return created.id
+    const resolved = await resolveImportedDriverV1({ contract: RESOLVE_IMPORTED_DRIVER_COMMAND_V1, licenseNumber: row.licenseNumber, driverName: row.driverName })
+    return resolved.driverId
 }

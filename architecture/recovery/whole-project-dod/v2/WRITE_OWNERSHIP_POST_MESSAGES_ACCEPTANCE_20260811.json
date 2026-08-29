@@ -1,0 +1,53 @@
+{
+  "schema": "yoko.crm.write-ownership-acceptance.v1",
+  "status": "INTERNALLY_ACCEPTED_WHOLE_PROJECT_NOT_READY",
+  "reason_for_fresh_scan": "The protected Messages reconciliation and architecture-control lifecycle batch materially changed the tracked executable denominator and write surfaces.",
+  "source_identity": {
+    "git_commit": "63e0714822a1da42a0588c67ea217736b0968d8a",
+    "git_tree": "5f5c7ba4bcdb33a92ff86002a7ba205006607186",
+    "tracked_worktree_clean": true
+  },
+  "evidence": {
+    "scan": "architecture/recovery/whole-project-dod/v2/AUTHORITATIVE_WRITE_SCAN_POST_MESSAGES_20260811T0450Z.json",
+    "scan_sha256": "1ed65f5f744ab1da38fb6faad1948466e536b6d084cf577a14fc619391e34278",
+    "current_baseline": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_BASELINE.json",
+    "current_baseline_sha256": "1ed65f5f744ab1da38fb6faad1948466e536b6d084cf577a14fc619391e34278",
+    "triage": "architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_FINAL_CLOSURE.json",
+    "triage_sha256": "5fc875510bae732bf0bcaa3bb8d05710ffb3e9186ff8830e6a79b8973b041892",
+    "progress": "architecture/recovery/whole-project-dod/v2/CURRENT_WHOLE_REPOSITORY_WRITE_PROGRESS.jsonl",
+    "progress_sha256": "c2b05665c23a9f3fc144d4423a3a481a4c01c7606f6cef3a6562c0e306f14c8c"
+  },
+  "execution": {
+    "tracked_executable_surfaces": 2016,
+    "files_completed": 2016,
+    "elapsed_ms": 498385.619377,
+    "worker_failures": 0,
+    "worker_timeouts": 0
+  },
+  "metrics": {
+    "analyzer_write_candidates": 1418,
+    "confirmed_writes_discovered": 1388,
+    "confirmed_foreign": 0,
+    "closed_foreign_cumulative": 53,
+    "raw_ambiguous_records": 45,
+    "resolved_non_writes": 30,
+    "owner_valid_writes_from_triage": 10,
+    "controlled_migration_writes_from_triage": 5,
+    "material_ambiguous_remaining": 0,
+    "active_operational_surfaces_unclassified": 0,
+    "temporary_write_exceptions": 0,
+    "intentional_write_exceptions": 0
+  },
+  "metric_note": "Confirmed writes are the 1,418 analyzer candidates minus the 30 source-proven non-writes. Raw ambiguity is reported separately and is fully reconciled; it is not represented as PASS by subtraction alone.",
+  "negative_properties": {
+    "unrelated_write_in_approved_writer_rejected": true,
+    "new_ambiguous_signature_rejected": true,
+    "unclassified_operational_surface_rejected": true
+  },
+  "validation": {
+    "triage_reconciliation": "PASS (45/45; 0 material unresolved)",
+    "authoritative_write_gate": "PASS (6 negative properties)",
+    "independent_source_critic": "PASS",
+    "authoritative_source_ci_without_rescan": "PASS (33/33; 112/112 active boundaries; Gravity 34/34; tg-bot 15/15)"
+  }
+}

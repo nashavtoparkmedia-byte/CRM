@@ -1,0 +1,28 @@
+{
+  "schema": "yoko.crm.mutation-ledger.v1",
+  "milestone": "CRM-ARCH-007-WORK-MANAGEMENT-INBOX",
+  "source_worktree": "/opt/codex-work/crm-arch-007-work-management-inbox",
+  "source_mutations": [
+    {
+      "class": "versioned_contract",
+      "scope": "Work Management CompleteTask command and result v1"
+    },
+    {
+      "class": "owner_boundary",
+      "scope": "neutral handler and legacy ManagerTask compatibility adapter"
+    },
+    {
+      "class": "consumer_migration",
+      "scope": "Messaging inbox resolveTask single planned write site"
+    },
+    {
+      "class": "enforcement",
+      "scope": "one exact exception fingerprint retired; CI and controls extended"
+    }
+  ],
+  "production_mutations": [],
+  "database_mutations": [],
+  "service_mutations": [],
+  "deployment_mutations": [],
+  "secret_values_read_or_emitted": false
+}

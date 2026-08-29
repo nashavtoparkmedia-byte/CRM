@@ -1,0 +1,72 @@
+{
+  "schema": "yoko.crm.module-manifest.v1",
+  "version": 1,
+  "context": { "id": "__MODULE_ID__", "name": "__MODULE_NAME__" },
+  "owner": {
+    "context": "__MODULE_ID__",
+    "accountability": "__MODULE_NAME__ bounded-context owner (candidate; integration approval required)"
+  },
+  "responsibility": "Candidate owner for __MODULE_NAME__ operations, data and public contracts; no live ownership is asserted until the integration record is accepted.",
+  "technical_modules": ["candidate:__MODULE_ID__"],
+  "owned_paths": [
+    "gravity-mvp/src/contracts/__MODULE_SLUG__",
+    "gravity-mvp/src/modules/__MODULE_SLUG__"
+  ],
+  "owned_data": [
+    {
+      "id": "proposed:__MODULE_ID__:__MODULE_NAME__Record",
+      "model": "__MODULE_NAME__Record",
+      "schema": "proposed Prisma model; not yet in the live ownership inventory",
+      "mapped_table": null,
+      "current_writer_modules": ["candidate:__MODULE_ID__"]
+    }
+  ],
+  "public_surface": ["__MODULE_NAME__.v1"],
+  "internal_surface": ["gravity-mvp/src/modules/__MODULE_SLUG__/internal"],
+  "allowed_dependencies": [],
+  "forbidden_dependencies": [
+    "credentialValuesInContracts",
+    "directForeignPrismaWrites",
+    "providerImplementationImportsOutsideOwningContext",
+    "unversionedCrossContextPayloads"
+  ],
+  "provider_relationships": [
+    {
+      "provider": "NONE",
+      "policy": "No provider transport is authorized for this candidate. Add an approved owner-local relationship before importing a provider client.",
+      "allowed_imports": []
+    }
+  ],
+  "credential_relationships": {
+    "database_models": [],
+    "environment_names": [],
+    "policy": "Names and access locations only. Values stay inside the owning adapter and never cross a public contract. This candidate currently declares no credential access."
+  },
+  "commands": ["Execute__MODULE_NAME__OperationCommand.v1"],
+  "events": ["__MODULE_NAME__OperationCompleted.v1"],
+  "foreign_write_migration_plans": [],
+  "protected": true,
+  "compatibility_strategy": "Introduce only the versioned __MODULE_NAME__.v1 public facade; add compatibility adapters during approved integration and retain them until callers migrate.",
+  "evidence": {
+    "candidate_only": true,
+    "integration_status": "CANDIDATE_NOT_IN_CONTEXT_INDEX",
+    "required_decisions": ["context decision", "technical-module inventory assignment", "data-ownership assignment"],
+    "required_artifacts": ["context-index entry and hashes", "dependency transition/final dependency artifacts", "foreign-write migration plan when applicable"]
+  },
+  "verification": {
+    "module_tests": ["node tools/architecture/generated/__MODULE_SLUG__-module-test.mjs"],
+    "contract_tests": ["node tools/architecture/generated/__MODULE_SLUG__-contract-test.mjs"],
+    "architecture_checks": [
+      "node tools/architecture/generated/__MODULE_SLUG__-architecture-check.mjs",
+      "node tools/architecture/validate-context-manifests.mjs",
+      "node tools/architecture/enforce-architecture.mjs"
+    ],
+    "build_checks": ["node tools/architecture/generated/__MODULE_SLUG__-build-check.mjs", "node tools/architecture/check-typescript-baseline.mjs"],
+    "blast_radius": {
+      "owner_context": "__MODULE_ID__",
+      "consumer_contexts": [],
+      "provider_scope": "NOT_APPLICABLE",
+      "provider_siblings": []
+    }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yoko.local/schema/architecture/authoritative-baseline.v1.json",
+  "title": "YOKO CRM Authoritative Baseline v1",
+  "type": "object",
+  "required": [
+    "schema",
+    "milestone",
+    "generated_at",
+    "architecture_worktree",
+    "evidence_inputs",
+    "repositories",
+    "dirty_states",
+    "lifecycle_separation",
+    "components",
+    "invariants"
+  ],
+  "properties": {
+    "schema": {"const": "yoko.crm.authoritative-baseline.v1"},
+    "milestone": {"const": "CRM-ARCH-001"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "architecture_worktree": {"type": "object"},
+    "evidence_inputs": {"type": "array", "minItems": 1},
+    "repositories": {"type": "array", "minItems": 1},
+    "dirty_states": {"type": "array"},
+    "lifecycle_separation": {"type": "object"},
+    "components": {
+      "type": "array",
+      "minItems": 14,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "component",
+          "module_roots",
+          "source_authority",
+          "runtime",
+          "source_relationship",
+          "authority_status",
+          "protected",
+          "lifecycle",
+          "evidence"
+        ]
+      }
+    },
+    "invariants": {"type": "object"}
+  },
+  "additionalProperties": false
+}

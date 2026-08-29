@@ -1,6 +1,8 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
+import { CREATE_CHANNEL_MESSAGE_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1 } from '@/contracts/messaging/v1'
+import { createChannelMessageV1, patchChannelConversationV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
 
 // Configuration for the external Telegram Bot Microservice
 const BOT_API_URL = process.env.BOT_API_URL || 'http://localhost:4000/api/bot'
@@ -59,34 +61,13 @@ export async function sendTelegramBotMessage(telegramId: string, text: string, d
             let unifiedChat = await (prisma.chat as any).findUnique({ where: { externalChatId } })
             
             if (!unifiedChat) {
-                unifiedChat = await (prisma.chat as any).create({
-                    data: {
-                        id: `chat_tg_${telegramId}`,
-                        externalChatId,
-                        channel: 'telegram',
-                        name: `TG ${telegramId}`,
-                        driverId: driverId || null,
-                        lastMessageAt: new Date()
-                    }
-                })
+                unifiedChat = (await upsertChannelConversationV1({ contract: UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, externalChatId, channel: 'telegram', name: `TG ${telegramId}`, chatType: 'private', metadata: {} })).conversation as any
+                await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: new Date(), ...(driverId ? { driverId } : {}) } })
             } else {
-                await (prisma.chat as any).update({
-                    where: { id: unifiedChat.id },
-                    data: { lastMessageAt: new Date() }
-                })
+                await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: new Date() } })
             }
 
-            await (prisma.message as any).create({
-                data: {
-                    chatId: unifiedChat.id,
-                    direction: 'outbound',
-                    content: text,
-                    channel: 'telegram',
-                    type: 'text',
-                    sentAt: new Date(),
-                    status: 'delivered'
-                }
-            })
+            await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: unifiedChat.id, direction: 'outbound', content: text, channel: 'telegram', type: 'text', sentAt: new Date(), status: 'delivered', externalId: `telegram:bot:${telegramId}:${Date.now()}` })
         } catch (syncErr: any) {
             console.error('[TG-BOT-SYNC] Failed to sync outbound message to unified table:', syncErr.message)
         }

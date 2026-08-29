@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import { getUsers } from '@/lib/users/user-service'
+import { listUserIdentitiesV1 as getUsers } from '@/modules/identity-access/public/v1/user-directory'
 import CallDetailClient, { type CallDetail } from '@/app/calls/[id]/CallDetailClient'
 
 export const dynamic = 'force-dynamic'

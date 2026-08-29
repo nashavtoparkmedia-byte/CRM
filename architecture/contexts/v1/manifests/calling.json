@@ -1,0 +1,340 @@
+{
+  "allowed_dependencies": [
+    {
+      "context": "identity_access",
+      "surface": "identity_access.public"
+    },
+    {
+      "context": "contacts",
+      "surface": "contacts.public"
+    },
+    {
+      "context": "work_management",
+      "surface": "work_management.public"
+    }
+  ],
+  "commands": [
+    "StartCallCommand.v1",
+    "FinalizeCallCommand.v1",
+    "TranscribeCallCommand.v1",
+    "AnalyzeCallCommand.v1",
+    "SetAiInternStateCommand.v1"
+  ],
+  "compatibility_strategy": "Keep current FreeSWITCH, Audio Bridge and queues operational; introduce contracts around call completion before changing runtime wiring.",
+  "context": {
+    "id": "calling",
+    "name": "Calling and Telephony"
+  },
+  "credential_relationships": {
+    "database_models": [],
+    "environment_names": [
+      "AI_CALL_DEV_SIMULATE_ENABLED",
+      "AI_CALL_DIAL_STRING_TEMPLATE",
+      "AI_CALL_ENC_KEY",
+      "AI_CALL_LIVE_MODE",
+      "AI_CALL_LLM_MODEL",
+      "AI_CALL_MOCK_MODE",
+      "AI_CALL_PARK_EXT",
+      "AI_CALL_STT_PROVIDER",
+      "AI_CALL_TTS_PROVIDER",
+      "ANALYZE_CONCURRENCY",
+      "AUDIO_BRIDGE_PORT",
+      "AUTO_FORK_EXTENSIONS",
+      "BRIDGE_ALLOWED_IPS",
+      "BRIDGE_AUDIO_DIR",
+      "BRIDGE_AUDIO_DIR_FS",
+      "BRIDGE_FORK_MIX",
+      "BRIDGE_KEEP_TTS",
+      "BRIDGE_KEYS_CACHE_TTL_MS",
+      "BRIDGE_LAN_IP",
+      "BRIDGE_SHARED_TOKEN",
+      "CRM_BASE_URL",
+      "DATABASE_URL",
+      "DIAG_OUT_DIR",
+      "ESL_DEBUG",
+      "ESL_PASSWORD",
+      "FFMPEG_BIN",
+      "FS_ESL_HOST",
+      "FS_ESL_PASSWORD",
+      "FS_ESL_PORT",
+      "HTTPS_PROXY",
+      "HTTP_PROXY",
+      "MANAGER_101_PASSWORD",
+      "MANAGER_102_PASSWORD",
+      "MANAGER_103_PASSWORD",
+      "MAX_SILENT_STRIKES",
+      "MEGAFON_NUMBER",
+      "NEXT_PUBLIC_SIP_DEBUG",
+      "NO_PROXY",
+      "OPENAI_ANALYSIS_MODEL",
+      "OPENAI_API_KEY",
+      "OPENAI_HTTPS_PROXY",
+      "OPENAI_MODEL",
+      "OPENAI_TIMEOUT_MS",
+      "OPENAI_TTS_MODEL",
+      "OPENAI_TTS_TIMEOUT_MS",
+      "OPENAI_TTS_VOICE",
+      "OPENAI_TTS_VOICE_CONTROL",
+      "OPENAI_WHISPER_MODEL",
+      "PLAYBACK_BUF_LEN",
+      "POST_SPEAK_GRACE_MS",
+      "RECORDINGS_HOST_PATH",
+      "RECORDING_ENCODE_TIMEOUT_MS",
+      "RECORDING_ENQUEUE_TIMEOUT_MS",
+      "RECORDING_UPLOAD_TIMEOUT_MS",
+      "REDIS_URL",
+      "REFERENCE_8K_WAV",
+      "REFERENCE_WAV",
+      "RTP_TIMER",
+      "S3_ACCESS_KEY",
+      "S3_BUCKET",
+      "S3_ENDPOINT",
+      "S3_REGION",
+      "S3_SECRET_KEY",
+      "SILENCE_TIMEOUT_MS",
+      "SIP_DOMAIN",
+      "SIP_WS_URL",
+      "TEST_WS_PORT",
+      "TRANSCRIBE_CONCURRENCY",
+      "TURN_CREDENTIAL",
+      "TURN_URL",
+      "TURN_USERNAME",
+      "USER_PAUSE_MS",
+      "WHISPER_CHUNK_MS",
+      "WHISPER_LANG",
+      "WHISPER_LANGUAGE",
+      "WHISPER_MODEL",
+      "YANDEX_API_KEY",
+      "YANDEX_FOLDER_ID",
+      "YANDEX_STT_ENDPOINT",
+      "YANDEX_STT_LANG",
+      "YANDEX_STT_MODEL",
+      "YANDEX_STT_TIMEOUT_MS",
+      "YANDEX_TTS_EMOTION",
+      "YANDEX_TTS_LANG",
+      "YANDEX_TTS_PROBE_DIR",
+      "YANDEX_TTS_TIMEOUT_MS",
+      "YANDEX_TTS_VOICE"
+    ],
+    "policy": "Names and access locations only. Values stay inside the owning adapter and never cross a public contract."
+  },
+  "events": [
+    "CallStarted.v1",
+    "CallCompleted.v1",
+    "CallTranscribed.v1",
+    "CallAnalyzed.v1"
+  ],
+  "evidence": {
+    "dependency_edges": 10,
+    "source_snapshot_sha256": "2713db175062bb673dcca2d97e80c2ae204a2f257438036c6db2506587dfad7d",
+    "write_sites_requiring_migration": 11
+  },
+  "forbidden_dependencies": [
+    "credentialValuesInContracts",
+    "directForeignPrismaWrites",
+    "foreign_task_storage",
+    "providerImplementationImportsOutsideOwningContext",
+    "provider_secret_payload",
+    "unversionedCrossContextPayloads"
+  ],
+  "foreign_write_migration_plans": [
+    "migration_04d2e3ce1fdbef50",
+    "migration_2ba3110591093c08",
+    "migration_7b0251f9f4b375a3",
+    "migration_cc4d8c99d5a71ef5",
+    "migration_e380f7963fd3d784",
+    "migration_e3f1d4c8021a234a"
+  ],
+  "internal_surface": [
+    "gravity-mvp/src/lib/calls",
+    "gravity-mvp/src/lib/freeswitch",
+    "gravity-mvp/src/lib/ai-call",
+    "tools/audio-bridge-day1",
+    "telephony"
+  ],
+  "owned_data": [
+    {
+      "current_writer_modules": [
+        "settings"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiAgentConfig",
+      "mapped_table": null,
+      "model": "AiAgentConfig",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "settings"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiAgentProfile",
+      "mapped_table": null,
+      "model": "AiAgentProfile",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [],
+      "id": "gravity-mvp/prisma/schema.prisma:AiCallEvent",
+      "mapped_table": null,
+      "model": "AiCallEvent",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [],
+      "id": "gravity-mvp/prisma/schema.prisma:AiCallMessage",
+      "mapped_table": null,
+      "model": "AiCallMessage",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "ai_calls"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiCallProject",
+      "mapped_table": null,
+      "model": "AiCallProject",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "ai_calls"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:AiCallScenario",
+      "mapped_table": null,
+      "model": "AiCallScenario",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [],
+      "id": "gravity-mvp/prisma/schema.prisma:AiProviderSetting",
+      "mapped_table": null,
+      "model": "AiProviderSetting",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "ai_calls",
+        "calls"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:Call",
+      "mapped_table": null,
+      "model": "Call",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [],
+      "id": "gravity-mvp/prisma/schema.prisma:TelephonyAiConfig",
+      "mapped_table": null,
+      "model": "TelephonyAiConfig",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    }
+  ],
+  "owned_paths": [
+    "gravity-mvp/src/contracts/calling",
+    "gravity-mvp/src/lib/ai-call",
+    "gravity-mvp/src/lib/calls",
+    "gravity-mvp/src/lib/freeswitch",
+    "gravity-mvp/src/modules/calling",
+    "telephony",
+    "tools/audio-bridge-day1"
+  ],
+  "owner": {
+    "accountability": "Calling and Telephony bounded-context owner",
+    "context": "calling"
+  },
+  "protected": true,
+  "provider_relationships": [
+    {
+      "adapter_modules": [
+        "calls",
+        "audio_bridge",
+        "telephony_config"
+      ],
+      "name": "freeswitch",
+      "role": "telephony switch"
+    },
+    {
+      "adapter_modules": [
+        "calls",
+        "ai_calls",
+        "audio_bridge"
+      ],
+      "name": "openai",
+      "role": "transcription/analysis provider"
+    },
+    {
+      "adapter_modules": [
+        "ai_calls"
+      ],
+      "name": "anthropic",
+      "role": "call analysis provider"
+    },
+    {
+      "adapter_modules": [
+        "calls",
+        "audio_bridge"
+      ],
+      "name": "aws_s3",
+      "role": "recording storage"
+    }
+  ],
+  "public_surface": [
+    "AiInternControl.v1",
+    "AiCallProviderSettings.v1",
+    "AiCallProviderStatus.v1",
+    "AiCallScenarioManagement.v1",
+    "CallView.v1",
+    "CallControlPort.v1",
+    "CallAnalysisView.v1",
+    "CallStatusPolicy.v1",
+    "CompletedCallTimelineProjectionPort.v1",
+    "CallingRuntime.v1",
+    "RecordingRecovery.v1",
+    "SipClientContext.v1",
+    "CallingClientUi.v1",
+    "CallAlertAudio.v1",
+    "TelephonyProviderHealth.v1",
+    "CallingOpenAiChatCompletion.v1"
+  ],
+  "responsibility": "Call lifecycle, AI agent configuration, FreeSWITCH/SIP integration, audio bridge, transcription and call analysis.",
+  "schema": "yoko.crm.module-manifest.v1",
+  "technical_modules": [
+    "calls",
+    "ai_calls",
+    "audio_bridge",
+    "telephony_config"
+  ],
+  "verification": {
+    "architecture_checks": [
+      "node tools/architecture/validate-context-manifests.mjs",
+      "node tools/architecture/enforce-architecture.mjs",
+      "node tools/architecture/test-architecture-enforcement.mjs"
+    ],
+    "blast_radius": {
+      "consumer_contexts": [
+        "ai_knowledge",
+        "analytics_reporting",
+        "configuration",
+        "edge_delivery",
+        "messaging",
+        "operations_observability",
+        "platform_shell"
+      ],
+      "owner_context": "calling",
+      "provider_scope": "NOT_APPLICABLE",
+      "provider_siblings": []
+    },
+    "build_checks": [
+      "node tools/architecture/check-typescript-baseline.mjs"
+    ],
+    "contract_tests": [
+      "node tools/architecture/validate-contract-registry.mjs",
+      "node tools/architecture/check-contract-boundaries.mjs"
+    ],
+    "module_tests": [
+      "node tools/architecture/check-calling-provider-runtime-boundary.mjs",
+      "node tools/architecture/check-calling-ai-intern-control-boundary.mjs",
+      "node tools/architecture/check-calling-messaging-timeline-boundary.mjs"
+    ]
+  },
+  "version": 1
+}

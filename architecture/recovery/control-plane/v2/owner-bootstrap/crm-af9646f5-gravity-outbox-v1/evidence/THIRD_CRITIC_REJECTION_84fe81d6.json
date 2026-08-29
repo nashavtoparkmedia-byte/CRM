@@ -1,0 +1,16 @@
+{
+  "schema": "yoko.crm.owner-bootstrap-critic.v1",
+  "artifact_sha256": "84fe81d6eac9c4cd0cdb8c7fe710fb27aac862c4ab904c0530ef9f1f4d635cc5",
+  "status": "REJECTED_SUPERSEDED_NEVER_EXECUTE",
+  "verdict": "REJECT",
+  "repository_mutation_by_critic": false,
+  "production_mutation_by_critic": false,
+  "findings": [
+    {
+      "id": "THIRD-CRITIC-001",
+      "finding": "DATABASE_PRODUCTION_INTENT recovery could inspect or repair the migration ledger and outbox schema while a surviving exact named production migration or resolve runner was still mutating the same database after its original client was interrupted.",
+      "required_remediation": "At the start of DATABASE_PRODUCTION_INTENT recovery, collision-safely stop and remove both exact label-bound production migration and production resolve runners before the first fresh ledger or catalog observation, then reconcile and retry only through the existing fixed runners."
+    }
+  ],
+  "owner_command_authorized": false
+}

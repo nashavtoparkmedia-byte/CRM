@@ -1,6 +1,6 @@
 import { getDailySummary } from './actions'
-import { PageContainer } from '@/components/ui/PageContainer'
-import { PageHeader } from '@/components/layout/PageHeader'
+import { PageContainer } from '@/infrastructure/ui/PageContainer'
+import { PageHeader } from '@/infrastructure/ui/PageHeader'
 import MyDayContent from './MyDayContent'
 
 export const dynamic = 'force-dynamic'

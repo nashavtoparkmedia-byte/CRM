@@ -113,7 +113,7 @@ function classifyError(err) {
  *   know about timeouts — it only retries.
  *
  *   `opsLog` is dependency-injected (signature `(level, event, ctx) => void`).
- *   Caller passes `@/lib/opsLog`. Tests pass a capturing mock. The
+ *   Caller passes `@/infrastructure/operations/operational-log`. Tests pass a capturing mock. The
  *   helper file deliberately doesn't import opsLog at module scope
  *   so it stays a pure CommonJS module that `node --test` can
  *   require without a TS loader.

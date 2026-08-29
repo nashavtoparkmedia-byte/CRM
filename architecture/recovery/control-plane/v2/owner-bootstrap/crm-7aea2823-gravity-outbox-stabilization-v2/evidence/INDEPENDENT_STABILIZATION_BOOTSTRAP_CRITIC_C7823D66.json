@@ -1,0 +1,35 @@
+{
+  "artifact_sha256": "c7823d66ebabc57df7da4bb54c40ee8d78a05964cb7ac7f63bcf04941f7fc048",
+  "artifact_type": "DETERMINISTIC_UNCOMPRESSED_GNU_TAR",
+  "critic_scope": "READ_ONLY_OFFLINE_INDEPENDENT_REVIEW",
+  "debian_package_sha256": "0c259741b4b58992acb830806e42db79ec87730f1b568a21e2879483d739be83",
+  "findings": [],
+  "non_blocking_residuals": [
+    "Health predicates are sequential observations rather than an atomic snapshot; two consecutive complete passes materially mitigate this.",
+    "A bounded health command already in flight may finish after the 90-second deadline, so rollback can begin later than 90 seconds, but a late success cannot be accepted.",
+    "The review was offline; the installer revalidates the exact production state immediately before installation."
+  ],
+  "production_accessed_or_mutated": false,
+  "repository_mutated_by_critic": false,
+  "schema": "yoko.crm.independent-stabilization-bootstrap-critic.v1",
+  "validation": {
+    "automatic_rollback_on_failure": "PASS",
+    "bootstrap_production_mutation": false,
+    "capability_widening": false,
+    "crash_recovery_and_terminal_receipts": "PASS",
+    "database_migration_reexecution_on_retry": false,
+    "debian_deterministic_rebuild": "PASS",
+    "exact_runtime_2_0_0_8_rolled_back_entry_state": "PASS",
+    "health_deadline_late_success_rejection": "PASS",
+    "health_two_consecutive_strict_successes": "PASS",
+    "offline_tests": "77/77 PASS",
+    "package_inventory_modes_and_ownership": "PASS",
+    "python_compile": "PASS",
+    "same_corrected_source_and_target": "PASS",
+    "shellcheck": "PASS",
+    "sudoers_validation": "PASS",
+    "tar_deterministic_rebuild": "PASS",
+    "unchanged_core_policy_sudoers_migration_and_source": "PASS"
+  },
+  "verdict": "PASS"
+}

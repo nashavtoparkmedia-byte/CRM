@@ -14,9 +14,9 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { useState, useMemo } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/infrastructure/ui/dialog'
 import { Settings2, GripVertical, RotateCcw, Pencil, Check, X } from 'lucide-react'
-import { useListViewStore } from '@/store/list-view-store'
+import { useListViewStore } from '@/modules/work-management/public/v1/client-state/list-view-store'
 import { resolveLayout } from '@/lib/tasks/list-columns'
 import { recordUsage } from '@/lib/tasks/usage'
 import type { ListViewDef, ResolvedBlock, ResolvedColumn } from '@/lib/tasks/list-schema'

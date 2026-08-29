@@ -1,0 +1,22 @@
+{
+  "schema": "yoko.crm.owner-bootstrap-critic.v1",
+  "artifact_sha256": "96971513710a7f9be9c48da82ed61d0c712679dfb4e086f3afc3c78624131540",
+  "package_sha256": "c61f0c56b1a06e8224a11b4d3f3bf6b1665315ed6f5c40d1c6e69d9e82de521f",
+  "status": "REJECTED_SUPERSEDED_NEVER_EXECUTE",
+  "verdict": "REJECT",
+  "repository_mutation_by_critic": false,
+  "production_mutation_by_critic": false,
+  "findings": [
+    {
+      "id": "FOURTH-CRITIC-001",
+      "finding": "Runner cleanup treated every nonzero Docker inspect as object absence, including daemon-unavailable and permission failures, so recovery could reach its first database read without proven quiescence. Inspect-then-create also left an orphan-client creation window.",
+      "required_remediation": "Accept absence only from an exact bounded Docker not-found result and fail closed on every other inspect failure. Create and identity-seal both fixed production runners before durable production intent; recovery may only quiesce and restart those already sealed containers."
+    },
+    {
+      "id": "FOURTH-CRITIC-002",
+      "finding": "Interrupted database recovery trusted the stored backup hash and flags without proving the root-owned backup still existed with the recorded mode, size and current hash before repair or retry.",
+      "required_remediation": "Before the first recovery database read or mutation, re-open the exact backup through the secure-file boundary and prove ownership, mode, link count, bounded exact byte count and a freshly computed exact SHA256."
+    }
+  ],
+  "owner_command_authorized": false
+}

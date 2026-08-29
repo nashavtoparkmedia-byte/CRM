@@ -70,6 +70,20 @@ export async function findIdentityByPhoneAndChannel(
 }
 
 /**
+ * Check whether an identity already has delivery-confirmed reachability.
+ * Used by the live pre-check to avoid replacing stronger delivery evidence
+ * with a single provider-side negative result.
+ */
+export async function isReachabilityConfirmed(identityId: string): Promise<boolean> {
+  const identity = await prisma.contactIdentity.findUnique({
+    where: { id: identityId },
+    select: { reachabilityStatus: true },
+  })
+
+  return identity?.reachabilityStatus === 'confirmed'
+}
+
+/**
  * Update reachability for a Chat's linked ContactIdentity.
  * Used by MessageService after delivery outcome.
  */

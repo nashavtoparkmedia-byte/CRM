@@ -4,8 +4,8 @@ import { useState } from "react"
 import { Plus, Trash2, ToggleLeft, ToggleRight, Zap } from "lucide-react"
 import type { TriggerItem } from "./actions"
 import { createTrigger, deleteTrigger, toggleTrigger } from "./actions"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
+import { Button } from "@/infrastructure/ui/button"
+import { Input } from "@/infrastructure/ui/input"
 
 const CONDITION_LABELS: Record<string, string> = {
     days_without_trips: "Дней без поездок",

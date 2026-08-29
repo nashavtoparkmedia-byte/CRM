@@ -1,0 +1,106 @@
+{
+  "schema": "yoko.crm.activation-profile.v1",
+  "profile_id": "crm-af9646f5-gravity-outbox-v1",
+  "host": "jvxthcorvm",
+  "runtime_abi": "2.0.0",
+  "package_version": "2.0.0-9",
+  "accepted_source": {
+    "commit": "7aea2823efe50e13a156540993d424594025e403",
+    "tree": "dbb380be0775d41b246248a9fe8fbf99bcb38d22",
+    "archive_sha256": "be616b7d528bc111717d237bcd745a8b106302897e702be4b8af1b8643cba26d",
+    "archive_entries": 3904,
+    "archive_regular_files": 3266,
+    "archive_directories": 638,
+    "archive_prefix": "yoko-crm-7aea2823efe50e13a156540993d424594025e403/",
+    "archive_uncompressed_bytes": 108431360,
+    "build_context": "gravity-mvp",
+    "dockerfile_sha256": "ad41a09fe50a4955a4b05888c59942e7093a9cc1a1989f82c28efa1f5c3b9a7c",
+    "package_lock_sha256": "43f78c98d0780e0bcba4cba369a69f2027a30553bc247fecba1b0c1f1c6fe432",
+    "prisma_schema_sha256": "cdedb7f65ef4077152a89acd9040ba6748c41eb89eceda5aff8d27ed7dfa8082"
+  },
+  "production": {
+    "source_manifest_sha256": "ecfb0a8b6dc24121fb5c9efb58af28eb1f1626711ef1a6d977b0db29d05bdda3",
+    "compose_path": "/opt/crm/deploy/docker-compose.production.yml",
+    "compose_sha256": "84a9f46904a65a69afcf19d2e56162e026b29718da52c43160abfc5449f84cc1",
+    "environment_path": "/opt/crm/.env.production",
+    "compose_project": "crm",
+    "compose_service": "gravity-mvp",
+    "compose_config_hash": "4c1adad9993cb54c5723a202df6a3d3786709e0a01e42fff24d2230a83a411da",
+    "gravity_container": "crm-gravity-mvp",
+    "gravity_container_id": "53557ce80d417026ad819a701f74a0ef3c91972bdc3d49016f4b85063361ff19",
+    "gravity_image_id": "sha256:b36751e5a6d2b52e7a7676ee5babcd70f496111e9715e5056f6338d04b028f68",
+    "postgres_container": "crm-postgres",
+    "postgres_container_id": "57a09acd5b407d72934ea4cb398874fec60d25a815265b018ba9dd4ab5dbddda",
+    "postgres_image_id": "sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229",
+    "network": "crm_internal"
+  },
+  "migration": {
+    "name": "20260809140000_add_domain_outbox",
+    "sha256": "433b0d503f054ed6a8161a059e2650d5e401829dabe8c9d992a1d1763eef0016",
+    "policy": "EXPAND_ONLY_KEEP_ON_APPLICATION_ROLLBACK",
+    "accepted_production_ledger": {
+      "active_migration_count": 61,
+      "normalized_observation_sha256": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201",
+      "target_state_at_capture": "ABSENT",
+      "database_identity_sha256": "ed88dfeaad2a3dc2e759590d295992cd06531d4403d896ded00b21ea667be1c9"
+    },
+    "accepted_checksum_overrides": {
+      "20260805073000_add_bot_user_registry": "ef2df9ac72e1cec7d9ce00cc81e5e13eaf35161d0cfd20c379e82cec24cf4b0c",
+      "20260805093000_prune_unverified_bot_registry_backfill": "0b1bfbb272692e281bc4037c4fc8e8246e64656603fc64b53a9179d2e6731871",
+      "20260805110000_restore_linked_bot_registry": "b84f066aca9a197050247d5958771c213c6d9d142bd242ba1f8769974a9bcaa4"
+    },
+    "production_only_applied": {
+      "20260717000000_add_driver_telegram_submitted_phone": "03013fdf531f45c3b012c13fa15581be29f6399019f5b1dd308c4f8c407ae7e5",
+      "20260806181500_repair_max_sergey_mirror_timeline": "f20b04408f621d95d31796f590391ac5f421cf12c09627082263b3c865aec265"
+    }
+  },
+  "recovery": {
+    "predecessor_package_version": "2.0.0-8",
+    "prior_source_commit": "7aea2823efe50e13a156540993d424594025e403",
+    "prior_source_archive_sha256": "be616b7d528bc111717d237bcd745a8b106302897e702be4b8af1b8643cba26d",
+    "prior_target_tag": "yoko/crm-gravity-mvp:7aea2823efe50e13a156540993d424594025e403-profile-v1",
+    "prior_target_image_id": "sha256:baf442f880ebca808897a0131a662c603a9119f652cbbc3e47937286dec49179",
+    "prior_compose_config_hash": "4c1adad9993cb54c5723a202df6a3d3786709e0a01e42fff24d2230a83a411da",
+    "recovered_gravity_container_id": "53557ce80d417026ad819a701f74a0ef3c91972bdc3d49016f4b85063361ff19",
+    "recovered_compose_config_hash": "4c1adad9993cb54c5723a202df6a3d3786709e0a01e42fff24d2230a83a411da",
+    "database_identity_sha256": "ed88dfeaad2a3dc2e759590d295992cd06531d4403d896ded00b21ea667be1c9",
+    "migration_ledger_sha256": "a50f1a8988f79c85059354d6b2d45e9e8ed07284fc27c78d98face6680f25dfc",
+    "backup_sha256": "31bc226112ba63909f6bb2d22dd2d873b342684aad8b82fe6a25bf5d99ee5d41",
+    "backup_bytes": 194477048,
+    "preview_outbox_catalog_sha256": "ef0bce36bca8283b491a966ff3886644a8887f4bded3deebbec7ce559ac2defe"
+  },
+  "limits": {
+    "minimum_free_bytes": 8589934592,
+    "preflight_working_bytes": 3221225472,
+    "database_working_multiplier": 3,
+    "database_working_overhead_bytes": 1073741824,
+    "maximum_database_bytes": 8589934592,
+    "maximum_backup_bytes": 8589934592,
+    "maximum_command_output_bytes": 4194304,
+    "build_timeout_seconds": 3600,
+    "database_timeout_seconds": 1800,
+    "activation_timeout_seconds": 240
+  },
+  "enabled_zero_argument_profiles": [
+    "database-status",
+    "release-preflight",
+    "database-migrate",
+    "release-activate",
+    "rollback"
+  ],
+  "disabled_profiles": {
+    "config-activate": "No configuration transaction is required or authorized by this activation profile."
+  },
+  "negative_properties": {
+    "arbitrary_command_execution": false,
+    "arbitrary_paths": false,
+    "arbitrary_sql": false,
+    "arbitrary_artifact_selection": false,
+    "arbitrary_service_selection": false,
+    "arbitrary_environment_override": false,
+    "docker_socket_delegation": false,
+    "package_install_capability": false,
+    "destructive_database_rollback": false,
+    "outbox_feature_toggle": false
+  }
+}

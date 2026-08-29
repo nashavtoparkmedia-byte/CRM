@@ -1,18 +1,18 @@
 import { ArrowLeft, User, CreditCard, Car, AlertTriangle, Clock, Phone as PhoneIcon } from 'lucide-react'
 import Link from 'next/link'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Button } from '@/infrastructure/ui/button'
+import { Badge } from '@/infrastructure/ui/badge'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/infrastructure/ui/tabs'
 import TelegramLinkClient from './TelegramLinkClient'
 import { DriverTimeline } from './DriverTimeline'
-import CallButton from '@/components/sip/CallButton'
-import CallsList from '@/components/sip/CallsList'
-import AiMockCallButton from '@/components/sip/AiMockCallButton'
+import CallButton from '@/modules/fleet-operations/internal/client-ui/DriverCallButton'
+import CallsList from '@/modules/fleet-operations/internal/client-ui/DriverCallsList'
+import AiMockCallButton from '@/modules/fleet-operations/internal/client-ui/DriverAiMockCallButton'
 import { prisma } from '@/lib/prisma'
-import { getDriverById, getCarById } from '@/app/actions'
+import { getDriverById, getCarById } from '@/modules/fleet-operations/public/v1/yandex-fleet-operations'
 import { getDriverTimeline } from './timeline-actions'
-import { getMaxConnections } from '@/app/max-actions'
-import { getTelegramConnections } from '@/app/tg-actions'
+import { listMaxDriverDeliveryConnectionsV1 } from '@/infrastructure/fleet/driver-max-messaging'
+import { listOperationalTelegramConnectionsV1 } from '@/infrastructure/telegram/operational-capabilities'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,8 +30,8 @@ export default async function DriverDetailsPage({ params }: { params: { id: stri
         getDriverById(id),
         prisma.driverTelegram.findFirst({ where: { driverId: id } }),
         getDriverTimeline(id),
-        getTelegramConnections(),
-        getMaxConnections(),
+        listOperationalTelegramConnectionsV1(),
+        listMaxDriverDeliveryConnectionsV1(),
         // PR #64: accept either yandexDriverId OR Prisma cuid in URL.
         // Also select `phone` so the page can fall back to the local
         // value when Yandex API returns nothing (sync stale, network

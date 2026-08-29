@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import fs from 'fs'
 import path from 'path'
+import { moveChatMessagesV1, deleteChatV1 } from '../src/modules/messaging/public/v1/legacy-prisma-chat-backfill-adapter.js'
 
 // Load .env
 const envPath = path.join(process.cwd(), '.env')
@@ -107,11 +108,8 @@ async function mergeTelegramChats() {
         console.log(`[CLEANUP-TG] Merging into primary: ${primary.id} (${primary.name})`)
 
         for (const dup of duplicates) {
-            const moveRes = await (prisma.message as any).updateMany({
-                where: { chatId: dup.id },
-                data: { chatId: primary.id }
-            })
-            await (prisma.chat as any).delete({ where: { id: dup.id } })
+            const moveRes = await moveChatMessagesV1(dup.id, primary.id)
+            await deleteChatV1(dup.id)
             console.log(`[CLEANUP-TG]   Merged ${dup.id} (${dup.name}), moved ${moveRes.count} msgs.`)
         }
     }

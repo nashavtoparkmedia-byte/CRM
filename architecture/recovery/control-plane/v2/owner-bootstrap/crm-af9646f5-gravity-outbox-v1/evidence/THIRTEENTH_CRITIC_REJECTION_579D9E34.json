@@ -1,0 +1,17 @@
+{
+  "schema": "yoko.crm.owner-bootstrap-critic.v1",
+  "artifact_sha256": "579d9e346e41edfd25ac81a40b271a4bfa129fc9c9f7c9b652581f7e58645201",
+  "package_sha256": "52d9e7b7e232e61718aca897fc639036ddb0198c2370a3b496e1afb8e79e2c2f",
+  "status": "REJECTED_SUPERSEDED_NEVER_EXECUTE",
+  "verdict": "REJECT",
+  "repository_mutation_by_critic": false,
+  "production_mutation_by_critic": false,
+  "findings": [
+    {
+      "id": "THIRTEENTH-CRITIC-001",
+      "finding": "Normal migration success removed the sealed production runners while durable state still remained DATABASE_PRODUCTION_INTENT. A crash after either removal made strict recovery quiescence fail with PRODUCTION_RUNNER_MISSING, so the applied database post-state could not be reconciled.",
+      "required_remediation": "Persist and audit an exact runner-retirement intent before the first removal, make retirement idempotent for exact absence while retaining identity checks for surviving objects, and recover to the sealed terminal post-state only after the database post-state is revalidated."
+    }
+  ],
+  "owner_command_authorized": false
+}

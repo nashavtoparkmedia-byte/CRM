@@ -1,0 +1,100 @@
+{
+  "schema": "yoko.crm.behavior-freeze.v1",
+  "milestone": "CRM-ARCH-007R-AI-KNOWLEDGE-GOVERNANCE",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "49901fcc2dd528a83c326d4180b4bc13e5129b44",
+  "source_commit": "2dfa7ebe0683a21cb53ff8f5caf59f2562b60de0",
+  "captured_at": "2026-08-10T08:36:24Z",
+  "verified_at": "2026-08-10T08:36:24Z",
+  "legacy_sources": [
+    {
+      "file": "gravity-mvp/src/app/settings/ai/actions.ts",
+      "before": "51e47309eea48aefe1f9061b1d2da7cc90539424f07e3bb7b82d54a909782d3a",
+      "after": "5d272e019e821b6dee8acce257544abaa40efbb08330d5dbf793f0598c7c9d5d",
+      "state": "configuration_orchestration_only_for_ai_knowledge_governance_writes"
+    },
+    {
+      "file": "gravity-mvp/src/contracts/ai-knowledge/v1/index.ts",
+      "before": "a67d0d99a53ae5c3d41ceecfc2330415e7be0d35093cdd4ec3fa6cf1bac3f191",
+      "after": "7f2c3250a16d4abe2ced5e423707dc8f28ecebe9cd27fe0beafa76d70547ddaa"
+    },
+    {
+      "file": "gravity-mvp/src/modules/ai-knowledge/public/v1/index.ts",
+      "before": "c138916ef3a974f362d46a4c2dddf2ec0bd093354a64101cd051f894b9aa6622",
+      "after": "d92c44f4096322e5dac1c9058ee8d92cdb72d34b599090921669ceb696052b8e"
+    }
+  ],
+  "unchanged_protected_surfaces": [
+    {
+      "file": "gravity-mvp/src/app/settings/ai/AiControlCenterClient.tsx",
+      "before": "84c310bf76ac7538a10a5c3daedeae54a7a5576123835a094c88b6ae56734e94",
+      "after": "84c310bf76ac7538a10a5c3daedeae54a7a5576123835a094c88b6ae56734e94"
+    },
+    {
+      "file": "gravity-mvp/src/app/messages/proposed-reply-actions.ts",
+      "before": "7a1acd91faf8140364321c8b0480fae7deec686abab3570646861ced9720ae59",
+      "after": "7a1acd91faf8140364321c8b0480fae7deec686abab3570646861ced9720ae59"
+    },
+    {
+      "file": "gravity-mvp/src/contracts/ai-knowledge/v1/knowledge-item-review-commands.ts",
+      "before": "9d3b40f4f5d625330fd3ecb7aadfa64314c193a9e0c03b814e8df5845a1d581b",
+      "after": "9d3b40f4f5d625330fd3ecb7aadfa64314c193a9e0c03b814e8df5845a1d581b"
+    },
+    {
+      "file": "gravity-mvp/src/modules/ai-knowledge/public/v1/knowledge-item-review-handler.ts",
+      "before": "d0fbb7c68365664d9744c5ec5c848461657b458cf613b15118d782546ea08bc6",
+      "after": "d0fbb7c68365664d9744c5ec5c848461657b458cf613b15118d782546ea08bc6"
+    },
+    {
+      "file": "gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-knowledge-item-review-adapter.ts",
+      "before": "9e2a948d58df057a500f5bdf085fbd15bc090cc1ee153a238ad755b29a6c7d06",
+      "after": "9e2a948d58df057a500f5bdf085fbd15bc090cc1ee153a238ad755b29a6c7d06"
+    }
+  ],
+  "source_hashes_after": {
+    "gravity-mvp/src/contracts/ai-knowledge/v1/knowledge-governance-commands.ts": "1d79cc993cf0444d40d22eff264e8bf11406555c4dc79d1b39a612e005efc89a",
+    "gravity-mvp/src/modules/ai-knowledge/public/v1/knowledge-governance-handler.ts": "cb73529fcc70ee3c1dc01cee091e1ed01ce133d6c038d331a2a81f4d6f0b549f",
+    "gravity-mvp/src/modules/ai-knowledge/public/v1/knowledge-governance-handler.test.ts": "ee32db8d9e08e6ce4fdc4909e74bd0838c456bcd9ef16c081edad123311f19fb",
+    "gravity-mvp/src/modules/ai-knowledge/public/v1/legacy-prisma-knowledge-governance-adapter.ts": "002161cde463d01b10a5e8ca993ea121b78917fd2526eb34050028c8c310cbbd",
+    "tools/architecture/check-ai-knowledge-governance-boundary.mjs": "5e24e1edcc780e868008d6aa5fe3f949614c5ab50a080772febded1e1ec3a9f1",
+    "tools/architecture/test-ai-knowledge-governance.mjs": "e313705e84cd455171be0b8cc01b36df7a1a5642be59032d3926229b922fe633",
+    "tools/architecture/test-ai-knowledge-governance-adapter.mjs": "79a589a0f071d7fac3f0e5e4e604deedda43885918ce96d93a8bb1a363ab6570"
+  },
+  "behavior": [
+    "Configuration retains caller-owned admin authorization, required reads, item-not-found and validation guards before every owner command",
+    "Configuration retains caller-owned before and after snapshots, audit actor and metadata, reloads, counters, return shapes and settings revalidation after successful owner persistence",
+    "edit accepts only title, canonicalStatement, tags and safetyLevel; unsupported-only runtime input remains a no-op while mixed input retains legacy audit changed-field metadata",
+    "edit title and canonicalStatement retain trim-based non-empty validation while tags and safety level retain exact runtime validation and empty defined patches do not write",
+    "archive, restore, verify, unverify, supersede and conflict workflows retain their prior guard, read, mutation, audit and revalidation order",
+    "verification keeps the legacy truthy non-boolean branch and actor handling; truthy whitespace identifiers remain accepted exactly where the caller used truthiness rather than trim validation",
+    "non-exact conflict actions retain the legacy clear-group fallback, and winner and loser mutations remain sequential with per-step audit",
+    "manual creation keeps caller-generated ids, exact validation and the sequence item owner write, existing source attachment, reload, audit and revalidation",
+    "source disable keeps its prior source query and disable result, strict isVerified-true or manual retention gate, marker behavior, truthy audit reason, counters and final audit",
+    "core reset keeps mode and typed-confirm guards, target and telemetry reads, per-item archive then audit ordering, final reset audit and revalidation",
+    "AI Knowledge owns all migrated item persistence through 13 closed versioned commands and named handlers; no generic update, SQL, model selector or transaction capability crosses the public boundary",
+    "the owner adapter contains 27 analyzer-visible static AiKnowledgeItem statements: 15 fixed non-empty edit masks and 12 fixed non-edit mutations, each with fixed SQL and bind order",
+    "trainer verification remains a separate pre-existing VerifyKnowledgeItemCommand.v1 lifecycle and does not call the governance verification command"
+  ],
+  "bounded_drift": [
+    "the 13 Configuration persistence sites move behind AI Knowledge public v1 handlers and one compatibility adapter",
+    "owner command results carry internal contract envelopes that do not change existing action return shapes",
+    "fixed raw SQL replaces caller raw SQL while retaining SQL mappings, database NOW timestamps and zero-row success behavior",
+    "additional parser, handler and adapter frames can change stack traces without changing caller-visible error propagation"
+  ],
+  "partial_success_boundary": {
+    "transaction_added": false,
+    "transaction_capability_exposed": false,
+    "deliberate_legacy_partial_success": [
+      "conflict member mutations and audits remain sequential, so an earlier member can persist before a later failure",
+      "manual item creation remains durable before source attachment, so source failure can leave the item without its source or audit",
+      "source-disable item handling remains sequential after source disable and can stop after earlier successful item work",
+      "core reset remains per-item archive then audit and can stop after earlier successful item work before the final event"
+    ]
+  },
+  "out_of_scope": [
+    "database execution, physical rollback, locking, constraints and concurrency",
+    "deployed application runtime, service activation, provider transport, webhook delivery and provider tests",
+    "schema changes, deployment, production mutation and secret-bearing paths",
+    "trainer lifecycle redesign, UI redesign and later CRM-ARCH roadmap slices"
+  ]
+}

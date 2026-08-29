@@ -1,0 +1,321 @@
+{
+  "allowed_dependencies": [
+    {
+      "context": "messaging",
+      "surface": "messaging.public"
+    },
+    {
+      "context": "contacts",
+      "surface": "contacts.public"
+    },
+    {
+      "context": "fleet_operations",
+      "surface": "fleet_operations.public"
+    },
+    {
+      "context": "identity_access",
+      "surface": "identity_access.public"
+    }
+  ],
+  "commands": [
+    "SendTelegramMessageCommand.v1",
+    "LinkTelegramDriverCommand.v1",
+    "PublishTelegramSurveyCommand.v1",
+    "RecordBotUserProfileCommand.v1"
+  ],
+  "compatibility_strategy": "Preserve current bot/webhook/frontend behavior and database shape; add channel adapters before removing direct Chat/Contact writes.",
+  "context": {
+    "id": "telegram_channel",
+    "name": "Telegram Channel"
+  },
+  "credential_relationships": {
+    "database_models": [],
+    "environment_names": [
+      "ADMIN_ID",
+      "ADMIN_IDS",
+      "ADMIN_PASS",
+      "ADMIN_SESSION_SECRET",
+      "ADMIN_USER",
+      "API_PORT",
+      "BOT_ACTIONS_URL",
+      "BOT_API_URL",
+      "BOT_CRM_SECRET",
+      "BOT_HEARTBEAT_INTERVAL_MS",
+      "BOT_TOKEN",
+      "CRM_INTEGRATION_ENABLED",
+      "CRM_WEBHOOK_URL",
+      "DATABASE_URL",
+      "DEBUG",
+      "GOOGLE_SERVICE_ACCOUNT_KEY",
+      "GOOGLE_SHEETS_ID",
+      "GOOGLE_SHEETS_NAME",
+      "HTTPS_PROXY",
+      "HTTP_PROXY",
+      "TELEGRAM_WEBHOOK_SECRET",
+      "TELEGRAM_SOCKS_PROXY",
+      "TG_BOT_API_URL",
+      "TG_PROXY_HOST",
+      "TG_PROXY_PORT"
+    ],
+    "policy": "Names and access locations only. Values stay inside the owning adapter and never cross a public contract."
+  },
+  "events": [
+    "TelegramMessageObserved.v1",
+    "TelegramDriverLinked.v1"
+  ],
+  "evidence": {
+    "dependency_edges": 6,
+    "source_snapshot_sha256": "2713db175062bb673dcca2d97e80c2ae204a2f257438036c6db2506587dfad7d",
+    "write_sites_requiring_migration": 5
+  },
+  "forbidden_dependencies": [
+    "credentialValuesInContracts",
+    "directForeignPrismaWrites",
+    "foreign_contact_storage",
+    "foreign_message_storage",
+    "providerImplementationImportsOutsideOwningContext",
+    "unversionedCrossContextPayloads"
+  ],
+  "foreign_write_migration_plans": [
+    "migration_152c887cb9c50943",
+    "migration_26a0af43f7c4670a",
+    "migration_2fa76a81f50975bf",
+    "migration_3b4198ada8c5ffad",
+    "migration_df330f5e98d139d5",
+    "migration_ec3ef196a15c342e"
+  ],
+  "internal_surface": [
+    "gravity-mvp/src/app/tg-actions.ts",
+    "tg-bot/src",
+    "tg-bot/tg-bot-frontend"
+  ],
+  "owned_data": [
+    {
+      "current_writer_modules": [],
+      "id": "gravity-mvp/prisma/schema.prisma:AnalyticsEvent",
+      "mapped_table": "analytics_events",
+      "model": "AnalyticsEvent",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [],
+      "id": "gravity-mvp/prisma/schema.prisma:Answer",
+      "mapped_table": "answers",
+      "model": "Answer",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [],
+      "id": "gravity-mvp/prisma/schema.prisma:Bot",
+      "mapped_table": "bots",
+      "model": "Bot",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "gravity_core",
+        "telegram_provider"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:BotChatMessage",
+      "mapped_table": null,
+      "model": "BotChatMessage",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "telegram_provider"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:BotUserRegistry",
+      "mapped_table": null,
+      "model": "BotUserRegistry",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [],
+      "id": "gravity-mvp/prisma/schema.prisma:Broadcast",
+      "mapped_table": "broadcasts",
+      "model": "Broadcast",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [],
+      "id": "gravity-mvp/prisma/schema.prisma:BroadcastStat",
+      "mapped_table": "broadcast_stats",
+      "model": "BroadcastStat",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "drivers",
+        "gravity_core",
+        "telegram_provider"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:DriverTelegram",
+      "mapped_table": null,
+      "model": "DriverTelegram",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [],
+      "id": "gravity-mvp/prisma/schema.prisma:Question",
+      "mapped_table": "questions",
+      "model": "Question",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [],
+      "id": "gravity-mvp/prisma/schema.prisma:Survey",
+      "mapped_table": "surveys",
+      "model": "Survey",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [],
+      "id": "gravity-mvp/prisma/schema.prisma:TelegramConnection",
+      "mapped_table": null,
+      "model": "TelegramConnection",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [],
+      "id": "gravity-mvp/prisma/schema.prisma:User",
+      "mapped_table": "users",
+      "model": "User",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "telegram_bot"
+      ],
+      "id": "tg-bot/prisma/schema.prisma:AnalyticsEvent",
+      "mapped_table": "analytics_events",
+      "model": "AnalyticsEvent",
+      "schema": "tg-bot/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "telegram_bot"
+      ],
+      "id": "tg-bot/prisma/schema.prisma:Answer",
+      "mapped_table": "answers",
+      "model": "Answer",
+      "schema": "tg-bot/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "telegram_bot"
+      ],
+      "id": "tg-bot/prisma/schema.prisma:Bot",
+      "mapped_table": "bots",
+      "model": "Bot",
+      "schema": "tg-bot/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [],
+      "id": "tg-bot/prisma/schema.prisma:Broadcast",
+      "mapped_table": "broadcasts",
+      "model": "Broadcast",
+      "schema": "tg-bot/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [],
+      "id": "tg-bot/prisma/schema.prisma:BroadcastStat",
+      "mapped_table": "broadcast_stats",
+      "model": "BroadcastStat",
+      "schema": "tg-bot/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "telegram_bot"
+      ],
+      "id": "tg-bot/prisma/schema.prisma:Question",
+      "mapped_table": "questions",
+      "model": "Question",
+      "schema": "tg-bot/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "telegram_bot"
+      ],
+      "id": "tg-bot/prisma/schema.prisma:Survey",
+      "mapped_table": "surveys",
+      "model": "Survey",
+      "schema": "tg-bot/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "telegram_bot"
+      ],
+      "id": "tg-bot/prisma/schema.prisma:User",
+      "mapped_table": "users",
+      "model": "User",
+      "schema": "tg-bot/prisma/schema.prisma"
+    }
+  ],
+  "owned_paths": [
+    "gravity-mvp/src/app/tg-actions.ts",
+    "gravity-mvp/src/contracts/telegram-channel",
+    "gravity-mvp/src/modules/telegram-channel",
+    "tg-bot/src",
+    "tg-bot/tg-bot-frontend"
+  ],
+  "owner": {
+    "accountability": "Telegram Channel bounded-context owner",
+    "context": "telegram_channel"
+  },
+  "protected": true,
+  "provider_relationships": [
+    {
+      "adapter_modules": [
+        "telegram_provider",
+        "telegram_bot"
+      ],
+      "name": "telegram",
+      "role": "channel provider"
+    }
+  ],
+  "public_surface": [
+    "TelegramDeliveryPort.v1",
+    "TelegramReachability.v1",
+    "TelegramRuntimeOperations.v1",
+    "TelegramConnectionMetadataQuery.v1",
+    "BotSurveyApi.v1",
+    "BotUserProfileCommands.v1"
+  ],
+  "responsibility": "Telegram provider sessions, driver identities, bot survey product and its frontend.",
+  "schema": "yoko.crm.module-manifest.v1",
+  "technical_modules": [
+    "telegram_provider",
+    "telegram_bot",
+    "telegram_frontend"
+  ],
+  "verification": {
+    "architecture_checks": [
+      "node tools/architecture/validate-context-manifests.mjs",
+      "node tools/architecture/enforce-architecture.mjs",
+      "node tools/architecture/test-architecture-enforcement.mjs"
+    ],
+    "blast_radius": {
+      "consumer_contexts": [
+        "configuration",
+        "edge_delivery"
+      ],
+      "owner_context": "telegram_channel",
+      "provider_scope": "PROVIDER_SPECIFIC",
+      "provider_siblings": []
+    },
+    "build_checks": [
+      "node tools/architecture/check-typescript-baseline.mjs"
+    ],
+    "contract_tests": [
+      "node tools/architecture/validate-contract-registry.mjs",
+      "node tools/architecture/check-contract-boundaries.mjs"
+    ],
+    "module_tests": [
+      "node tools/architecture/check-telegram-runtime-provider-boundary.mjs",
+      "node tools/architecture/check-telegram-driver-link-boundary.mjs",
+      "node tools/architecture/check-messaging-telegram-binary-media-boundary.mjs"
+    ]
+  },
+  "version": 1
+}

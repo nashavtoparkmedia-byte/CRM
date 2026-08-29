@@ -62,21 +62,22 @@ export async function writeAuditEntry(input: AuditEntryInput): Promise<string | 
     const metaJson   = input.metadata ? JSON.stringify(input.metadata) : null
 
     try {
-        await prisma.$executeRaw`
-            INSERT INTO "AiKnowledgeAuditLog" (
+        await prisma.$executeRawUnsafe(
+            `INSERT INTO "AiKnowledgeAuditLog" (
                 id, "itemId", actor, action,
                 "beforeJson", "afterJson", metadata, "createdAt"
-            ) VALUES (
-                ${id},
-                ${input.itemId},
-                ${input.actor},
-                ${input.action}::"AiKnowledgeAuditAction",
-                ${beforeJson}::jsonb,
-                ${afterJson}::jsonb,
-                ${metaJson}::jsonb,
-                NOW()
-            )
-        `
+             ) VALUES (
+                $1, $2, $3, $4::"AiKnowledgeAuditAction",
+                $5::jsonb, $6::jsonb, $7::jsonb, NOW()
+             )`,
+            id,
+            input.itemId,
+            input.actor,
+            input.action,
+            beforeJson,
+            afterJson,
+            metaJson,
+        )
         return id
     } catch (e: any) {
         console.error('[auditLog] writeAuditEntry failed:', e?.message)

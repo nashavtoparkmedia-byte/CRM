@@ -1,0 +1,89 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1",
+  "milestone": "CRM-ARCH-007R-CONTACT-CONVERSATION-API",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "23ad1aac6569ec329c75b3f8ae3b892c20160123",
+  "source_commit": "8c9f995d91d41810a1420f79bd21caf71ff50a46",
+  "implementation_commits": [
+    "3c4685c5d682ca0f08916db7b8325653dd0bc9f1",
+    "8c9f995d91d41810a1420f79bd21caf71ff50a46"
+  ],
+  "context": "platform_shell",
+  "owner_contexts": ["contacts", "fleet_operations", "messaging"],
+  "plan": {
+    "id": "contact-conversation-api-v1",
+    "routes": [
+      "gravity-mvp/src/app/api/contacts/[id]/chats/route.ts",
+      "gravity-mvp/src/app/api/contacts/start-conversation/route.ts"
+    ],
+    "orchestrator": "gravity-mvp/src/modules/platform-shell/internal/contact-conversation-orchestrator.ts",
+    "role": "production_source_inactive"
+  },
+  "contracts": [
+    "contacts.ResolveChannelContactCommand.v1",
+    "contacts.PrepareContactConversationIdentityCommand.v1",
+    "contacts.GetPreferredActiveContactPhoneQuery.v1",
+    "fleet_operations.FindDriverByExactPhoneQuery.v1",
+    "messaging.FindAndBackfillContactConversationCommand.v1",
+    "messaging.OpenFallbackContactConversationCommand.v1"
+  ],
+  "ownership": {
+    "platform_shell": "route orchestration and HTTP projection",
+    "contacts": "contact resolution, identity preparation and preferred-phone lookup",
+    "fleet_operations": "exact legacy Driver lookup by phone",
+    "messaging": "conversation lookup, missing-only link backfill and fallback open/create",
+    "generic_persistence_capabilities": 0
+  },
+  "dependency": {
+    "added": [],
+    "effective_added_dependencies": 0,
+    "dependency_relationships": 106,
+    "dependency_cycles": 0,
+    "reverse_owner_to_platform_shell": false
+  },
+  "classification": {
+    "module": "gravity_core",
+    "override_scope": "exactly two route files",
+    "wider_route_family_matched": false
+  },
+  "enforcement": {
+    "baseline_registry_commit": "23ad1aac6569ec329c75b3f8ae3b892c20160123",
+    "baseline_findings": 1381,
+    "baseline_direct_foreign_prisma_write": 82,
+    "baseline_direct_provider_transport_access": 38,
+    "baseline_internal_module_import": 375,
+    "baseline_non_public_cross_context_import": 532,
+    "baseline_undeclared_dependency": 354,
+    "retired_fingerprints": [
+      "arch_4f5f55c9dab5b9b24106fabb",
+      "arch_68e929bf5b5b0f6098e70bcd",
+      "arch_792bf6884bdfd4b64fab00b8",
+      "arch_7e289e7c45020c8c4827f879",
+      "arch_a1990cc9aa572236795a09fe",
+      "arch_c8d4116d8fa1293246f8c267"
+    ],
+    "actual_findings": 1375,
+    "actual_exceptions": 1375,
+    "actual_direct_foreign_prisma_write": 78,
+    "actual_direct_provider_transport_access": 38,
+    "actual_internal_module_import": 375,
+    "actual_non_public_cross_context_import": 531,
+    "actual_undeclared_dependency": 353,
+    "actual_removed": 6,
+    "actual_added": 0,
+    "actual_changed_shared_entries": 0,
+    "finding_digest": "068403004ae5c412c14a01c27b54317dbaa6ea9bac13250d41163f92b241cd46",
+    "registry_sha256": "a7749bb3b274c1cb611b3056bbe287019828350370d4f9ef6890c1f5a0ef4fce",
+    "registry_deterministic": true
+  },
+  "verified_at": "2026-08-10T05:45:15Z",
+  "source_control_mutation": {
+    "module_rule": true,
+    "module_policy": true,
+    "strict_registry": true,
+    "source_only": true
+  },
+  "execution_performed": false,
+  "execution_scope": "no production or persistence execution; offline source analysis and isolated unit tests only",
+  "rollback": "23ad1aac6569ec329c75b3f8ae3b892c20160123"
+}

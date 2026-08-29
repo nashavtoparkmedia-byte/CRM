@@ -46,6 +46,7 @@
 'use strict'
 
 const path = require('path')
+const { updateStaleAiSessionV1 } = require('../src/modules/calling/public/v1/legacy-prisma-stale-ai-session-maintenance-adapter')
 
 // Eligible non-terminal states. `transferring` deliberately omitted —
 // see the header comment above.
@@ -62,7 +63,8 @@ const STALE_REASON_TAG = 'bridge_timeout_or_finalize_missing'
  * and `call.update` over an in-memory array.
  *
  * @param {Object}   deps
- * @param {Object}   deps.prisma  Object with `.call.findMany()` + `.call.update()`.
+ * @param {Object}   deps.prisma  Object with `.call.findMany()`.
+ * @param {Function} deps.updateStaleSession Optional injected writer for tests.
  * @param {Date}     deps.now     Reference timestamp. Tests inject a fixed Date;
  *                                CLI passes `new Date()`.
  * @param {number}   deps.ttlMin  Minutes a session may stay non-terminal
@@ -71,7 +73,7 @@ const STALE_REASON_TAG = 'bridge_timeout_or_finalize_missing'
  *
  * @returns {Promise<{scanned: number, updated: number, dryRun: boolean, stale: Array}>}
  */
-async function markStaleSessions({ prisma, now, ttlMin, dryRun }) {
+async function markStaleSessions({ prisma, now, ttlMin, dryRun, updateStaleSession = updateStaleAiSessionV1 }) {
     const cutoff = new Date(now.getTime() - ttlMin * 60_000)
 
     const stale = await prisma.call.findMany({
@@ -108,18 +110,14 @@ async function markStaleSessions({ prisma, now, ttlMin, dryRun }) {
                 ? call.metadata
                 : {}
 
-        await prisma.call.update({
-            where: { id: call.id },
-            data: {
-                aiSessionStatus: 'failed',
-                endedAt: now,
-                hangupCause: STALE_HANGUP_CAUSE,
-                metadata: {
-                    ...baseMeta,
-                    staleCleanupAt: now.toISOString(),
-                    staleCleanupPreviousStatus: call.aiSessionStatus,
-                    staleCleanupReason: STALE_REASON_TAG,
-                },
+        await updateStaleSession({
+            id: call.id,
+            endedAt: now,
+            metadata: {
+                ...baseMeta,
+                staleCleanupAt: now.toISOString(),
+                staleCleanupPreviousStatus: call.aiSessionStatus,
+                staleCleanupReason: STALE_REASON_TAG,
             },
         })
         updated++

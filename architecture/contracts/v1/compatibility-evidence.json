@@ -1,0 +1,33 @@
+{
+  "schema": "yoko.crm.contract-compatibility-evidence.v1",
+  "contract": "work_management.CreateTaskCommand.v1",
+  "legacy_behavior": "direct Prisma Task create in the Calling context",
+  "preserved_fields": [
+    "driverId",
+    "contactId",
+    "source",
+    "type",
+    "title",
+    "description",
+    "priority",
+    "status",
+    "createdBy",
+    "metadata.aiCallId",
+    "metadata.qualification"
+  ],
+  "preserved_result_fields": ["id", "title"],
+  "preserved_side_effects": {
+    "task_created": true,
+    "task_event_created": false,
+    "call_analysis_task_link_updated": true
+  },
+  "validation": {
+    "unknown_command_fields": "rejected",
+    "unknown_data_fields": "rejected",
+    "non_json_metadata": "rejected",
+    "unsupported_major_version": "rejected_as_UNSUPPORTED_CONTRACT_VERSION"
+  },
+  "coexistence": "A future v2 is added beside v1; v1 is not changed in place or silently dispatched as v2.",
+  "persistence_boundary": "Prisma exists only in the Work Management legacy adapter; contract and handler depend on no provider implementation.",
+  "parity_test": "legacy persistence mapping preserves the representative payload"
+}

@@ -1,0 +1,109 @@
+{
+  "schema": "yoko.crm.context-isolation-migration.v1",
+  "milestone": "CRM-ARCH-007R-CALLING-AI-AGENT-CONFIG",
+  "status": "PASS_CONTINUE_SOURCE_GATE",
+  "base_commit": "62b7456391403bf5544fa69cd5533e543a56e6d0",
+  "source_commit": "f61d39832252994b96f4f5aba525c125561c19f2",
+  "implementation_commits": [
+    "f61d39832252994b96f4f5aba525c125561c19f2"
+  ],
+  "context": "calling",
+  "caller_context": "configuration",
+  "owner_contexts": ["calling"],
+  "plan": {
+    "id": "migration_7b0251f9f4b375a3",
+    "consumer": "gravity-mvp/src/app/settings/ai/actions.ts",
+    "contract": "gravity-mvp/src/contracts/calling/v1/ai-agent-config-commands.ts",
+    "handler": "gravity-mvp/src/modules/calling/public/v1/ai-agent-config-handler.ts",
+    "adapter": "gravity-mvp/src/modules/calling/public/v1/legacy-prisma-ai-agent-config-adapter.ts",
+    "model": "AiAgentConfig",
+    "legacy_write_sites": 5,
+    "role": "production_source_unexecuted"
+  },
+  "contracts": [
+    "calling.SaveAiAgentConfigCommand.v1",
+    "calling.RecordSavedAiConnectionSuccessCommand.v1",
+    "calling.SetActiveAiProfileCommand.v1",
+    "calling.SaveExtractionQualityTierCommand.v1"
+  ],
+  "manifest": {
+    "calling_commands_added": 4,
+    "module_manifest_amendment_added": true,
+    "dependency_amendment_added": false,
+    "configuration_to_calling_public_preapproved": true
+  },
+  "ownership": {
+    "configuration": "authorization, provider and saved-credential reads, provider calls, validation, best-effort handling, action results and revalidation",
+    "calling": "exact AiAgentConfig persistence behind four versioned commands",
+    "generic_persistence_capabilities": 0,
+    "transaction_capabilities": 0
+  },
+  "contract": {
+    "ordered_patch_fields": 23,
+    "duplicates_allowed": false,
+    "unknown_fields_allowed": false,
+    "physical_column_names_exposed": 0,
+    "credential_value_fields": 0
+  },
+  "adapter": {
+    "analyzer_visible_writes": 5,
+    "static_raw_writes": 4,
+    "prisma_upserts": 1,
+    "dynamic_sql_writes": 0,
+    "tables": ["AiAgentConfig"],
+    "separate_existence_read": true,
+    "transaction_added": false,
+    "zero_affected_rows_are_success": true,
+    "database_errors_propagate": true,
+    "credential_store": "private one-shot WeakMap"
+  },
+  "dependency": {
+    "added": [],
+    "effective_added_dependencies": 0,
+    "dependency_relationships": 106,
+    "dependency_cycles": 0,
+    "reverse_owner_dependency_added": false
+  },
+  "enforcement": {
+    "baseline_registry_commit": "2dfa7ebe0683a21cb53ff8f5caf59f2562b60de0",
+    "baseline_findings": 1348,
+    "baseline_direct_foreign_prisma_write": 53,
+    "baseline_direct_provider_transport_access": 38,
+    "baseline_internal_module_import": 374,
+    "baseline_non_public_cross_context_import": 530,
+    "baseline_undeclared_dependency": 353,
+    "retired_fingerprints": [
+      "arch_72b270b1fc3c03ccc58b1c9f",
+      "arch_4b0b29ed845be05d5ef139df",
+      "arch_e5df8b423e9cc7981de3ab1a",
+      "arch_cb1d5db547da28c32be32d70",
+      "arch_d4c8bd3927c6aaaf4956a4cd"
+    ],
+    "actual_findings": 1343,
+    "actual_exceptions": 1343,
+    "actual_direct_foreign_prisma_write": 48,
+    "actual_direct_provider_transport_access": 38,
+    "actual_internal_module_import": 374,
+    "actual_non_public_cross_context_import": 530,
+    "actual_undeclared_dependency": 353,
+    "actual_removed": 5,
+    "actual_added": 0,
+    "actual_semantic_shared_changes": 0,
+    "location_metadata_rebased": 32,
+    "finding_digest": "3197e670d4b6d3a0a7a65a754577b5abc4c3399f459014a948e36fe10d1ef59b",
+    "registry_sha256": "b6cb9f2f9febf4bcce32482573498d677cf12ff65f3f7bf8f4ecd215b70f8581",
+    "registry_deterministic": true
+  },
+  "verified_at": "2026-08-10T09:08:34Z",
+  "source_control_mutation": {
+    "module_rule": false,
+    "module_policy": true,
+    "strict_registry": true,
+    "cumulative_checker_monotonicity_hardening": true,
+    "source_only": true
+  },
+  "execution_performed": false,
+  "execution_scope": "offline source analysis, unit tests and deterministic adapter failure probes only; no database, server action, deployed runtime, provider or production execution",
+  "provider_tests_executed": false,
+  "rollback": "62b7456391403bf5544fa69cd5533e543a56e6d0"
+}

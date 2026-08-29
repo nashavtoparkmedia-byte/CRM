@@ -17,6 +17,11 @@
  * Запуск: cd D:/Github/CRM/gravity-mvp && node scripts/rollback_knowledge_core.js
  */
 
+const HISTORICAL_ROLLBACK_PERMANENTLY_DISABLED = true
+if (HISTORICAL_ROLLBACK_PERMANENTLY_DISABLED) {
+    throw new Error('Historical pre-PR1 rollback is permanently disabled: the current application owns and requires Knowledge Core schema objects.')
+}
+
 const { PrismaClient } = require('@prisma/client')
 const prisma = new PrismaClient()
 

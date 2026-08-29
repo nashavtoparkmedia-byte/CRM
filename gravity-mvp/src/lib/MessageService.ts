@@ -1,13 +1,18 @@
 import { prisma } from '@/lib/prisma'
-import { sendMessage as sendWhatsAppMessage } from './whatsapp/WhatsAppService'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
-import { opsLog } from '@/lib/opsLog'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { ChatChannel, MessageStatus } from '@prisma/client'
+import { buildCanonicalContactSummary } from '@/modules/contacts/public/v1/contact-display-policy'
+import { getMaxChannelDeliveryV1, getTelegramChannelDeliveryV1, getWhatsAppChannelDeliveryV1 } from '@/modules/messaging/public/v1/channel-delivery-runtime'
 
 function serialize(obj: any): any {
     return JSON.parse(JSON.stringify(obj, (key, value) =>
         typeof value === 'bigint' ? value.toString() : value
     ));
+}
+
+function isRealMaxMessageId(value: unknown): value is string {
+    return typeof value === 'string' && /^d301[0-9a-f]+$/i.test(value)
 }
 
 
@@ -57,13 +62,27 @@ export class MessageService {
                             id: true,
                             displayName: true,
                             displayNameSource: true,
+                            masterSource: true,
+                            yandexDriverId: true,
+                            primaryPhoneId: true,
+                            phones: {
+                                where: { isActive: true },
+                                orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+                                select: { id: true, phone: true, isPrimary: true },
+                            },
                             // TG identity metadata (firstName/lastName/username) — used by
                             // ChatList to show "Имя (@username)" when operator filters by
                             // the Telegram tab, instead of always falling back to driver FIO.
                             identities: {
-                                where: { channel: 'telegram' },
-                                select: { metadata: true },
-                                take: 1,
+                                where: { isActive: true },
+                                orderBy: { createdAt: 'asc' },
+                                select: {
+                                    id: true,
+                                    channel: true,
+                                    externalId: true,
+                                    displayName: true,
+                                    metadata: true,
+                                },
                             },
                         },
                     },
@@ -97,6 +116,26 @@ export class MessageService {
                     chat.lastOutboundAt = extra.lastOutboundAt
                 }
             }
+
+            const yandexDriverIds = Array.from(new Set(
+                chats
+                    .map((chat: any) => chat.contact?.yandexDriverId)
+                    .filter(Boolean)
+            ))
+            const contactDrivers = yandexDriverIds.length > 0
+                ? await prisma.driver.findMany({
+                    where: { yandexDriverId: { in: yandexDriverIds as string[] } },
+                    select: {
+                        id: true,
+                        yandexDriverId: true,
+                        fullName: true,
+                        phone: true,
+                        segment: true,
+                        dismissedAt: true,
+                    },
+                })
+                : []
+            const driverByYandexId = new Map(contactDrivers.map((d: any) => [d.yandexDriverId, d]))
 
             // 2. Group chats by contactId (priority) or driverId (fallback)
             // This ensures chats created via Contact API (with contactId but no driverId)
@@ -240,6 +279,14 @@ export class MessageService {
 
                 mergedEntries.push({
                     ...primary,
+                    contact: primary.contact ? {
+                        ...primary.contact,
+                        canonicalSummary: buildCanonicalContactSummary({
+                            contact: primary.contact,
+                            driver: driverByYandexId.get(primary.contact.yandexDriverId) || primary.driver,
+                            currentChannel: primary.channel,
+                        }),
+                    } : primary.contact,
                     unreadCount: allUnread,
                     requiresResponse,
                     assignedToUserId,
@@ -276,6 +323,14 @@ export class MessageService {
                 }
                 mergedEntries.push({
                     ...chat,
+                    contact: chat.contact ? {
+                        ...chat.contact,
+                        canonicalSummary: buildCanonicalContactSummary({
+                            contact: chat.contact,
+                            driver: driverByYandexId.get(chat.contact.yandexDriverId) || chat.driver,
+                            currentChannel: chat.channel,
+                        }),
+                    } : chat.contact,
                     allChatIds: [chat.id],
                     channelMap: { [chat.channel]: chat.id },
                     channelUnread: { [chat.channel]: chat.unreadCount || 0 },
@@ -487,6 +542,29 @@ export class MessageService {
         const currentChatId = targetChatId
         const getRawId = (id: string) => id.includes(':') ? id.split(':').slice(1).join(':') : id
         const rawExternalChatId = getRawId(targetChat.externalChatId)
+        let providerQuotedMsgId = quotedMsgId
+        let providerQuotedText: string | undefined
+        let providerQuotedSentAt: string | undefined
+        let providerQuotedDirection: string | undefined
+        if (quotedMsgId && channel === 'max') {
+            const quotedMessage = await (prisma.message as any).findFirst({
+                where: {
+                    OR: [
+                        { id: quotedMsgId },
+                        { externalId: quotedMsgId },
+                    ],
+                },
+                select: { externalId: true, content: true, sentAt: true, direction: true },
+            })
+            if (quotedMessage) {
+                if (quotedMessage.externalId) providerQuotedMsgId = quotedMessage.externalId
+                providerQuotedText = quotedMessage.content || undefined
+                providerQuotedSentAt = quotedMessage.sentAt instanceof Date
+                    ? quotedMessage.sentAt.toISOString()
+                    : undefined
+                providerQuotedDirection = quotedMessage.direction || undefined
+            }
+        }
 
         console.log(`[MessageService] PROCEEDING TO ROUTE:`, {
             requestedChannel: channelOverride,
@@ -540,36 +618,70 @@ export class MessageService {
         let deliveryStatus: MessageStatus = 'sent'
         let errorMessage: string | null = null
         let deliveryExternalId: string | null = null
+        let maxDeliveryMetadata: any = null
 
         try {
             switch (channel) {
                 case 'whatsapp':
-                    const { sendWhatsAppMessage: deliverWA } = await import('@/app/settings/integrations/whatsapp/whatsapp-actions')
                     const connId = profileId || (targetChat.metadata as any)?.connectionId
                     console.log(`[MessageService] WA Send: connId=${connId}, target=${rawExternalChatId}`)
-                    if (connId) {
-                        await deliverWA(connId, rawExternalChatId, content, quotedMsgId)
-                    } else {
-                        const conn = await prisma.whatsAppConnection.findFirst({ where: { status: 'ready' } })
-                        console.log(`[MessageService] WA Fallback: found ready conn=${conn?.id}`)
-                        if (!conn) throw new Error('No ready WhatsApp connection available.')
-                        await deliverWA(conn.id, rawExternalChatId, content, quotedMsgId)
-                    }
+                    await getWhatsAppChannelDeliveryV1().sendText({
+                        connectionId: connId,
+                        chatId: rawExternalChatId,
+                        content,
+                        quotedMessageId: quotedMsgId,
+                    })
                     deliveryStatus = 'delivered'
                     break
                 
                 case 'max':
-                    const { sendMaxMessage: deliverMax } = await import('@/app/max-actions')
                     const isPersonal = profileId === 'scraper' || !profileId
+                    const maxMetadata = (targetChat.metadata || {}) as any
                     console.log(`[MessageService] MAX Send: isPersonal=${isPersonal}, profileId=${profileId}, target=${rawExternalChatId}`)
-                    const maxRes = await deliverMax(rawExternalChatId, content, {
-                        isPersonal,
-                        connectionId: isPersonal ? undefined : profileId,
-                        name: chat.driver?.fullName,
-                        quotedMsgId
+                    const maxRes = await getMaxChannelDeliveryV1().sendText({
+                        target: rawExternalChatId,
+                        content,
+                        options: {
+                            isPersonal,
+                            connectionId: isPersonal ? undefined : profileId,
+                            name: chat.driver?.fullName,
+                            quotedMsgId: providerQuotedMsgId,
+                            quotedText: providerQuotedText,
+                            quotedSentAt: providerQuotedSentAt,
+                            quotedDirection: providerQuotedDirection,
+                            uiChatId: maxMetadata.oldExternalChatId || maxMetadata.uiChatId,
+                            clientMessageId: clientMessageId || messageId,
+                        },
                     })
-                    deliveryStatus = 'delivered'
-                    if ((maxRes as any)?.externalId) deliveryExternalId = (maxRes as any).externalId
+                    const rawMaxExternalId = (maxRes as any)?.externalId
+                    const rawMaxMessageId = (maxRes as any)?.maxMessageId
+                    const maxExternalId = typeof rawMaxExternalId === 'string'
+                        ? rawMaxExternalId
+                        : (typeof rawMaxMessageId === 'string' ? rawMaxMessageId : null)
+                    const rawMaxDeliveryStatus = (maxRes as any)?.deliveryStatus || (maxRes as any)?.status
+                    const maxDeliveryStatus = typeof rawMaxDeliveryStatus === 'string' ? rawMaxDeliveryStatus : null
+                    const maxDeliveryConfirmed = Boolean((maxRes as any)?.deliveryConfirmed && isRealMaxMessageId(maxExternalId))
+                    if (maxExternalId) deliveryExternalId = maxExternalId
+                    deliveryStatus = maxDeliveryConfirmed ? 'delivered' : 'sent'
+                    maxDeliveryMetadata = {
+                        operation: 'send',
+                        status: maxDeliveryConfirmed ? 'delivered' : (maxDeliveryStatus === 'failed' ? 'failed' : 'send_requested'),
+                        deliveryConfirmed: maxDeliveryConfirmed,
+                        maxMessageId: isRealMaxMessageId(maxExternalId) ? maxExternalId : null,
+                        externalId: maxExternalId,
+                        protocolChatId: rawExternalChatId,
+                        webRouteId: maxMetadata.oldExternalChatId || maxMetadata.uiChatId || null,
+                    }
+                    console.log('[MAX_DELIVERY]', JSON.stringify({
+                        operation: 'send',
+                        status: maxDeliveryMetadata.status,
+                        crmMessageId: messageId,
+                        conversationId: currentChatId,
+                        protocolChatId: rawExternalChatId,
+                        webRouteId: maxDeliveryMetadata.webRouteId,
+                        maxMessageId: maxDeliveryMetadata.maxMessageId,
+                        externalId: maxExternalId,
+                    }))
                     // Phone was resolved to conversationId by scraper echo capture.
                     // Update externalChatId so future incoming messages route here.
                     // If a chat with that conversationId already exists (duplicate scenario),
@@ -616,17 +728,15 @@ export class MessageService {
                         }
 
                         if (activeProfileId) {
-                            const { sendTelegramMessage: deliverTG } = await import('@/app/tg-actions')
                             const target = rawExternalChatId || chat.driver?.phone?.replace(/\D/g, '')
                             if (!target) throw new Error('No target for TG')
                             
                             try {
-                                const res = await deliverTG(target, content, activeProfileId, {
-                                    // @ts-ignore - dynamic type mismatch
-                                    messageId: messageId,
-                                    chatId: targetChat.id,
-                                    driverId: chat.driver?.id,
-                                    quotedMsgId
+                                const res: any = await getTelegramChannelDeliveryV1().sendText({
+                                    target,
+                                    content,
+                                    connectionId: activeProfileId,
+                                    metadata: { messageId, chatId: targetChat.id, driverId: chat.driver?.id, quotedMsgId },
                                 })
                                 if (res.externalId) deliveryExternalId = res.externalId
                                 deliveryStatus = 'delivered'
@@ -669,6 +779,10 @@ export class MessageService {
         // 3. Update status + retry classification
         try {
             const metadata: any = {}
+            if (quotedMsgId) metadata.quotedMsgId = quotedMsgId
+            if (maxDeliveryMetadata) {
+                metadata.maxDelivery = maxDeliveryMetadata
+            }
             if (errorMessage) {
                 metadata.error = errorMessage
                 metadata.errorCode = getErrorCode(errorMessage)
@@ -709,18 +823,26 @@ export class MessageService {
 
         // 4. Update reachability status based on delivery outcome
         try {
-            const { updateReachabilityByChatId } = await import('@/lib/ReachabilityService')
+            const { contactReachabilityV1 } = await import('@/modules/contacts/public/v1/contact-reachability')
             if (deliveryStatus === 'failed') {
-                await updateReachabilityByChatId(currentChatId, 'unreachable')
-            } else if (deliveryStatus === 'delivered' || deliveryStatus === 'sent') {
-                await updateReachabilityByChatId(currentChatId, 'confirmed')
+                await contactReachabilityV1.updateReachabilityByChatId(currentChatId, 'unreachable')
+            } else if (deliveryStatus === 'delivered') {
+                await contactReachabilityV1.updateReachabilityByChatId(currentChatId, 'confirmed')
             }
         } catch (reachErr: any) {
             // Non-critical — don't break send flow
             console.error(`[MessageService] Reachability update failed: ${reachErr.message}`)
         }
 
-        return { success: deliveryStatus !== 'failed', chatId: currentChatId, id: messageId, error: errorMessage }
+        return {
+            success: deliveryStatus !== 'failed',
+            chatId: currentChatId,
+            id: messageId,
+            status: deliveryStatus,
+            externalId: deliveryExternalId,
+            deliveryConfirmed: maxDeliveryMetadata?.deliveryConfirmed,
+            error: errorMessage,
+        }
     }
 
     /**
@@ -763,6 +885,7 @@ export class MessageService {
         let deliveryStatus = 'failed'
         let errorMessage: string | null = null
         let deliveryExternalId: string | null = null
+        let retryMaxDeliveryMetadata: any = null
 
         try {
             const chat = message.chat
@@ -771,27 +894,91 @@ export class MessageService {
 
             switch (message.channel) {
                 case 'whatsapp': {
-                    const { sendWhatsAppMessage: deliverWA } = await import('@/app/settings/integrations/whatsapp/whatsapp-actions')
-                    const waConn = connId || (await prisma.whatsAppConnection.findFirst({ where: { status: 'ready' }, select: { id: true } }))?.id
-                    if (!waConn) throw new Error('No ready WhatsApp connection available.')
-                    await deliverWA(waConn, rawExternalId, message.content)
+                    await getWhatsAppChannelDeliveryV1().sendText({
+                        connectionId: connId,
+                        chatId: rawExternalId,
+                        content: message.content,
+                    })
                     deliveryStatus = 'delivered'
                     break
                 }
                 case 'max': {
-                    const { sendMaxMessage: deliverMax } = await import('@/app/max-actions')
-                    await deliverMax(rawExternalId, message.content, { isPersonal: true, name: chat.driver?.fullName })
-                    deliveryStatus = 'delivered'
+                    const maxMetadata = (chat.metadata || {}) as any
+                    let retryQuotedMsgId = meta.quotedMsgId
+                    let retryQuotedText: string | undefined
+                    let retryQuotedSentAt: string | undefined
+                    let retryQuotedDirection: string | undefined
+                    if (retryQuotedMsgId) {
+                        const quotedMessage = await (prisma.message as any).findFirst({
+                            where: {
+                                OR: [
+                                    { id: retryQuotedMsgId },
+                                    { externalId: retryQuotedMsgId },
+                                ],
+                            },
+                            select: { externalId: true, content: true, sentAt: true, direction: true },
+                        })
+                        if (quotedMessage) {
+                            if (quotedMessage.externalId) retryQuotedMsgId = quotedMessage.externalId
+                            retryQuotedText = quotedMessage.content || undefined
+                            retryQuotedSentAt = quotedMessage.sentAt instanceof Date
+                                ? quotedMessage.sentAt.toISOString()
+                                : undefined
+                            retryQuotedDirection = quotedMessage.direction || undefined
+                        }
+                    }
+                    const retryMaxRes = await getMaxChannelDeliveryV1().sendText({
+                        target: rawExternalId,
+                        content: message.content,
+                        options: {
+                            isPersonal: true,
+                            name: chat.driver?.fullName,
+                            quotedMsgId: retryQuotedMsgId,
+                            quotedText: retryQuotedText,
+                            quotedSentAt: retryQuotedSentAt,
+                            quotedDirection: retryQuotedDirection,
+                            uiChatId: maxMetadata.oldExternalChatId || maxMetadata.uiChatId,
+                            clientMessageId: message.clientMessageId || message.id,
+                        },
+                    })
+                    const rawMaxExternalId = (retryMaxRes as any)?.externalId
+                    const rawMaxMessageId = (retryMaxRes as any)?.maxMessageId
+                    const maxExternalId = typeof rawMaxExternalId === 'string'
+                        ? rawMaxExternalId
+                        : (typeof rawMaxMessageId === 'string' ? rawMaxMessageId : null)
+                    const rawMaxDeliveryStatus = (retryMaxRes as any)?.deliveryStatus || (retryMaxRes as any)?.status
+                    const maxDeliveryStatus = typeof rawMaxDeliveryStatus === 'string' ? rawMaxDeliveryStatus : null
+                    const maxDeliveryConfirmed = Boolean((retryMaxRes as any)?.deliveryConfirmed && isRealMaxMessageId(maxExternalId))
+                    if (maxExternalId) deliveryExternalId = maxExternalId
+                    deliveryStatus = maxDeliveryConfirmed ? 'delivered' : 'sent'
+                    retryMaxDeliveryMetadata = {
+                        operation: 'send',
+                        status: maxDeliveryConfirmed ? 'delivered' : (maxDeliveryStatus === 'failed' ? 'failed' : 'send_requested'),
+                        deliveryConfirmed: maxDeliveryConfirmed,
+                        maxMessageId: isRealMaxMessageId(maxExternalId) ? maxExternalId : null,
+                        externalId: maxExternalId,
+                        protocolChatId: rawExternalId,
+                        webRouteId: maxMetadata.oldExternalChatId || maxMetadata.uiChatId || null,
+                    }
+                    console.log('[MAX_DELIVERY]', JSON.stringify({
+                        operation: 'send',
+                        status: retryMaxDeliveryMetadata.status,
+                        crmMessageId: messageId,
+                        conversationId: message.chatId,
+                        protocolChatId: rawExternalId,
+                        webRouteId: retryMaxDeliveryMetadata.webRouteId,
+                        maxMessageId: retryMaxDeliveryMetadata.maxMessageId,
+                        externalId: maxExternalId,
+                    }))
                     break
                 }
                 case 'telegram': {
-                    const { sendTelegramMessage: deliverTG } = await import('@/app/tg-actions')
                     const target = rawExternalId || chat.driver?.phone?.replace(/\D/g, '')
                     if (!target) throw new Error('No target for TG')
                     const defaultConns: any[] = await prisma.$queryRaw`SELECT id FROM "TelegramConnection" WHERE "isActive" = true ORDER BY "isDefault" DESC LIMIT 1`
                     const profileId = defaultConns[0]?.id
                     if (!profileId) throw new Error('No active TG connection')
-                    const res = await deliverTG(target, message.content, profileId, {})
+                    const res: any = await getTelegramChannelDeliveryV1().sendText({ target, content: message.content, connectionId: profileId })
                     if (res.externalId) deliveryExternalId = res.externalId
                     deliveryStatus = 'delivered'
                     break
@@ -803,6 +990,9 @@ export class MessageService {
 
         // Update final status
         const retryMeta: any = { ...meta, retryAttempt: attempt, lastFailedAt: new Date().toISOString() }
+        if (retryMaxDeliveryMetadata) {
+            retryMeta.maxDelivery = retryMaxDeliveryMetadata
+        }
         if (deliveryStatus === 'failed') {
             retryMeta.error = errorMessage
             retryMeta.retryable = classifyError(errorMessage || '')

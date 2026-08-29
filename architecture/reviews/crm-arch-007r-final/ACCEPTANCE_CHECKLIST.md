@@ -1,0 +1,25 @@
+# CRM-ARCH-007R final acceptance checklist
+
+- [x] CRM-ARCH-000R delegated technical acceptance remains frozen and checksummed.
+- [x] CRM-ARCH-001 through CRM-ARCH-006 accepted foundations remain unchanged.
+- [x] The prior 67-write view is reconciled to 115 pre-retirement sites, 12 analyzer false ambiguities and 103 genuine decisions.
+- [x] All 22 cross-owner topology/transaction sites are retired through bounded public workflows.
+- [x] All 12 bounded repository-relocation sites are retired.
+- [x] All 21 security-sensitive AI settings sites are retired without exposing a credential value.
+- [x] All 48 unsafe/unproven SQL-fragment findings are retired without adding generic SQL or transaction capability.
+- [x] Final `direct_foreign_prisma_write` count is exactly zero.
+- [x] Strict registry is 1,295/1,295 with zero stale, uncovered or unexceptionable findings.
+- [x] Dependency graph is 16 contexts / 106 relationships / 0 cycles.
+- [x] Parser 29/29, contracts 143/143 and cumulative architecture scripts 137/137 pass.
+- [x] TypeScript retains the exact inherited 28-diagnostic signature.
+- [x] Messages behavior and authority remain protected; provider transports were not executed.
+- [x] AI Calls DEV remains separate and unpromoted.
+- [x] Calling credential input remains opaque, one-shot and absent from results, logs and evidence.
+- [x] Application source change is distinguished from unchanged deployed runtime and production state.
+- [x] No database, provider, server action, deployed service, deployment or production operation ran.
+- [x] Secret-safety static scan and individual source-gate controls pass.
+- [x] All 64 isolation bundle seals reproduce at their recorded Git closure identities.
+- [x] Independent integrated critic returned unconditional PASS after evidence corrections.
+- [ ] Architecture Lead accepts this source gate and sets priority for 1,295 remaining non-write exceptions.
+- [ ] Production/preview validation and deployment are separately authorized and completed where required.
+- [ ] Whole-project Owner acceptance is separately reached.

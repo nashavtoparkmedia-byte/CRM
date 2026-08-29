@@ -9,6 +9,8 @@
  * - no outbound messages → unknown (leave default)
  */
 
+/* eslint-disable @typescript-eslint/no-require-imports */
+const { updateContactIdentityReachabilityV1 } = require('../src/modules/contacts/public/v1/legacy-prisma-contact-identity-maintenance-adapter')
 const { PrismaClient } = require('@prisma/client')
 const prisma = new PrismaClient()
 
@@ -74,13 +76,7 @@ async function main() {
       continue
     }
 
-    await prisma.contactIdentity.update({
-      where: { id: identity.id },
-      data: {
-        reachabilityStatus: newStatus,
-        reachabilityCheckedAt: lastOutbound.sentAt,
-      },
-    })
+    await updateContactIdentityReachabilityV1(identity.id, newStatus, lastOutbound.sentAt)
   }
 
   console.log('\nBackfill complete:')

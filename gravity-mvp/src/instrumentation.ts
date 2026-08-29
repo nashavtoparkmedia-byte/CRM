@@ -13,13 +13,13 @@ export async function register() {
     // Это ДОЛЖНО быть первым — до любого dynamic import'а, который может
     // сделать сетевой запрос на старте.
     try {
-        const { initProxy } = await import('@/lib/ai-call/init-proxy')
+        const { initProxy } = await import('@/infrastructure/providers/process-proxy')
         initProxy()
     } catch (err: any) {
         console.error('[instrumentation] initProxy failed:', err?.message)
     }
 
-    const { opsLog } = await import('@/lib/opsLog')
+    const { operationalLogV1: opsLog } = await import('@/infrastructure/operations/operational-log')
     opsLog('info', 'server_starting', { operation: 'instrumentation' })
 
     // Warn about missing optional env vars (safe defaults exist)
@@ -31,12 +31,34 @@ export async function register() {
         opsLog('warn', 'env_vars_missing', { missing: envWarnings })
     }
 
+    // Channel contexts own their provider SDKs. Complete registration before
+    // scheduling any recovery or retry job that can invoke MessageService.
+    try {
+        const [whatsapp, telegram, max] = await Promise.all([
+            import('@/modules/whatsapp-channel/public/v1'),
+            import('@/modules/telegram-channel/public/v1'),
+            import('@/modules/max-channel/public/v1'),
+        ])
+        whatsapp.registerWhatsAppMessagingDeliveryCapabilityV1()
+        telegram.registerTelegramMessagingDeliveryCapabilityV1()
+        max.registerMaxMessagingDeliveryCapabilityV1()
+        opsLog('info', 'channel_delivery_capabilities_registered', { operation: 'instrumentation' })
+    } catch (err: any) {
+        opsLog('error', 'channel_delivery_capabilities_registration_failed', {
+            operation: 'instrumentation',
+            error: err.message,
+        })
+    }
+
     // Delay initialization to let DB connection pool warm up
     setTimeout(async () => {
         // ── Configuration validation ────────────────────────────────────
         try {
-            const { validateAllConfigs, validateCronSchedules } = await import('@/lib/config-validator')
-            const configResult = validateAllConfigs()
+            const {
+                validateOperationalConfigurationV1,
+                validateOperationalCronSchedulesV1,
+            } = await import('@/modules/configuration/public/v1/operational-configuration-health')
+            const configResult = validateOperationalConfigurationV1()
             if (!configResult.valid) {
                 opsLog('error', 'config_validation_failed', {
                     operation: 'startup',
@@ -46,7 +68,7 @@ export async function register() {
             } else {
                 opsLog('info', 'config_validation_passed', { operation: 'startup', count: configResult.checkedRules })
             }
-            const cronResult = validateCronSchedules()
+            const cronResult = validateOperationalCronSchedulesV1()
             if (!cronResult.valid) {
                 opsLog('error', 'cron_schedule_validation_failed', {
                     operation: 'startup',
@@ -69,8 +91,8 @@ export async function register() {
 
         // ── Telegram init ────────────────────────────────────────────────
         try {
-            const { initTelegramListeners } = await import('@/app/tg-actions')
-            await initTelegramListeners()
+            const { initializeOperationalTelegramRuntimeV1 } = await import('@/infrastructure/telegram/operational-capabilities')
+            await initializeOperationalTelegramRuntimeV1()
             opsLog('info', 'telegram_init_success', { operation: 'startup' })
         } catch (err: any) {
             opsLog('error', 'telegram_init_failed', { operation: 'startup', error: err.message })
@@ -81,8 +103,8 @@ export async function register() {
         // left behind by an unclean previous exit (taskkill, crash, sleep).
         // Without this, warmup fails with "browser is already running for userDataDir".
         try {
-            const { cleanupStaleWhatsAppSessions } = await import('@/lib/whatsapp/WhatsAppCleanup')
-            const result = await cleanupStaleWhatsAppSessions()
+            const { cleanupStaleWhatsAppRuntimeV1 } = await import('@/modules/whatsapp-channel/public/v1')
+            const result = await cleanupStaleWhatsAppRuntimeV1()
             opsLog('info', 'whatsapp_cleanup_done', {
                 operation: 'startup',
                 killedChromeCount: result.killedChromeCount,
@@ -96,7 +118,7 @@ export async function register() {
         // ── WhatsApp warmup ──────────────────────────────────────────────
         try {
             const { prisma } = await import('@/lib/prisma')
-            const { initializeClient } = await import('@/lib/whatsapp/WhatsAppService')
+            const { initializeWhatsAppRuntimeV1 } = await import('@/modules/whatsapp-channel/public/v1')
             // Include 'error'/'idle' so connections that crashed or expired in a
             // previous container run are retried on startup. If the session file
             // is still valid on disk → auto-reconnect; if not → QR shown in UI.
@@ -109,7 +131,7 @@ export async function register() {
             // and races on LocalAuth folder when multiple connections existed.
             for (const conn of readyConns) {
                 try {
-                    await initializeClient(conn.id)
+                    await initializeWhatsAppRuntimeV1(conn.id)
                     opsLog('info', 'whatsapp_warmup_success', { connectionId: conn.id })
                 } catch (err: any) {
                     opsLog('error', 'whatsapp_warmup_failed', { connectionId: conn.id, error: err.message })
@@ -121,8 +143,8 @@ export async function register() {
 
         // ── Initial stuck message recovery ───────────────────────────────
         try {
-            const { MessageService } = await import('@/lib/MessageService')
-            const recovered = await MessageService.recoverStuckMessages(5)
+            const { recoverStuckMessagingDeliveriesV1 } = await import('@/modules/messaging/public/v1')
+            const recovered = await recoverStuckMessagingDeliveriesV1()
             if (recovered > 0) {
                 opsLog('info', 'stuck_recovery_startup', { count: recovered })
             }
@@ -131,142 +153,143 @@ export async function register() {
         }
 
         // ── Periodic jobs ────────────────────────────────────────────────
-        const { OperationalJobs } = await import('@/lib/OperationalJobs')
+        const {
+            registerOperationalIntervalV1,
+            runOperationalJobV1,
+        } = await import('@/modules/operations-observability/public/v1/operational-job-registry')
 
         // Stuck recovery: every 5 minutes
         const recoveryInterval = setInterval(async () => {
-            const { MessageService } = await import('@/lib/MessageService')
-            await OperationalJobs.run('recovery', async () => {
-                const count = await MessageService.recoverStuckMessages(5)
+            const { recoverStuckMessagingDeliveriesV1 } = await import('@/modules/messaging/public/v1')
+            await runOperationalJobV1('recovery', async () => {
+                const count = await recoverStuckMessagingDeliveriesV1()
                 return { count, at: new Date().toISOString() }
             })
         }, 5 * 60 * 1000)
-        OperationalJobs.registerInterval(recoveryInterval)
+        registerOperationalIntervalV1(recoveryInterval)
 
         // Integrity checks: every 30 minutes
         const integrityInterval = setInterval(async () => {
-            const { IntegrityChecker } = await import('@/lib/IntegrityChecker')
-            await OperationalJobs.run('integrity', async () => {
-                return await IntegrityChecker.runAll()
+            const { runOperationalIntegrityCheckV1 } = await import('@/modules/operations-observability/public/v1/scheduled-maintenance-operations')
+            await runOperationalJobV1('integrity', async () => {
+                return await runOperationalIntegrityCheckV1()
             })
         }, 30 * 60 * 1000)
-        OperationalJobs.registerInterval(integrityInterval)
+        registerOperationalIntervalV1(integrityInterval)
 
         // Run integrity check once at startup (after 30s delay)
         setTimeout(async () => {
-            const { IntegrityChecker } = await import('@/lib/IntegrityChecker')
-            await OperationalJobs.run('integrity', async () => {
-                return await IntegrityChecker.runAll()
+            const { runOperationalIntegrityCheckV1 } = await import('@/modules/operations-observability/public/v1/scheduled-maintenance-operations')
+            await runOperationalJobV1('integrity', async () => {
+                return await runOperationalIntegrityCheckV1()
             })
         }, 30000)
 
         // Message retry: every 2 minutes
         const retryInterval = setInterval(async () => {
-            await OperationalJobs.run('message_retry', async () => {
-                const { prisma } = await import('@/lib/prisma')
-                const { MessageService } = await import('@/lib/MessageService')
-
-                // Bounded query: retryable, under max retries, under 24h age, ordered by oldest first
-                const candidates = await prisma.$queryRaw<Array<{ id: string }>>`
-                    SELECT id FROM "Message"
-                    WHERE status = 'failed'
-                      AND direction = 'outbound'
-                      AND (metadata->>'retryable')::text = 'true'
-                      AND COALESCE((metadata->>'retryAttempt')::int, 0) < COALESCE((metadata->>'maxRetries')::int, 3)
-                      AND "sentAt" > NOW() - INTERVAL '24 hours'
-                    ORDER BY "sentAt" ASC
-                    LIMIT 10
-                `
-
-                let retriedCount = 0
-                for (const { id } of candidates) {
-                    const result = await MessageService.retrySend(id)
-                    if (result.error !== 'Backoff not elapsed') {
-                        retriedCount++
-                    }
-                }
-                return { retriedCount, candidatesFound: candidates.length, at: new Date().toISOString() }
+            await runOperationalJobV1('message_retry', async () => {
+                const { retryEligibleMessagingDeliveriesV1 } = await import('@/modules/messaging/public/v1')
+                const result = await retryEligibleMessagingDeliveriesV1()
+                return { ...result, at: new Date().toISOString() }
             })
         }, 2 * 60 * 1000)
-        OperationalJobs.registerInterval(retryInterval)
+        registerOperationalIntervalV1(retryInterval)
 
         // WA watchdog: every 60 seconds
         const watchdogInterval = setInterval(async () => {
-            await OperationalJobs.run('wa_watchdog', async () => {
-                const { checkAllClientsHealth } = await import('@/lib/whatsapp/WhatsAppService')
-                const results = await checkAllClientsHealth()
+            await runOperationalJobV1('wa_watchdog', async () => {
+                const { checkWhatsAppRuntimeHealthV1 } = await import('@/modules/whatsapp-channel/public/v1')
+                const results = await checkWhatsAppRuntimeHealthV1()
                 return results
             })
         }, 60 * 1000)
-        OperationalJobs.registerInterval(watchdogInterval)
+        registerOperationalIntervalV1(watchdogInterval)
 
         // Avito temporary phone expiration: every hour mark expired temp
         // phones inactive. Avito rotates the disposable proxy numbers, so
         // a temp ContactPhone older than its expiresAt is no longer reachable
-        // and would only confuse ContactService.resolveByPhone if it stuck
+        // and would only confuse Contacts phone resolution if it stuck
         // around (Avito would reissue the same number to a different lead).
         const tempPhoneExpInterval = setInterval(async () => {
-            await OperationalJobs.run('temp_phone_expire', async () => {
+            await runOperationalJobV1('temp_phone_expire', async () => {
                 const { prisma } = await import('@/lib/prisma')
-                const res = await (prisma.contactPhone as any).updateMany({
+                const { deactivateContactPhoneV1 } = await import('@/modules/contacts/public/v1')
+                const { DEACTIVATE_CONTACT_PHONE_COMMAND_V1 } = await import('@/contracts/contacts/v1')
+                const expired = await prisma.contactPhone.findMany({
                     where: {
                         isTemporary: true,
                         isActive: true,
                         expiresAt: { lt: new Date() },
                     },
-                    data: { isActive: false, isPrimary: false },
+                    select: { id: true },
                 })
-                return { deactivated: res.count, at: new Date().toISOString() }
+                await Promise.all(expired.map((phone) => deactivateContactPhoneV1({ contract: DEACTIVATE_CONTACT_PHONE_COMMAND_V1, contactPhoneId: phone.id })))
+                return { deactivated: expired.length, at: new Date().toISOString() }
             })
         }, 60 * 60 * 1000)  // every hour
-        OperationalJobs.registerInterval(tempPhoneExpInterval)
+        registerOperationalIntervalV1(tempPhoneExpInterval)
 
         // Retention cleanup: every 24 hours
         const cleanupInterval = setInterval(async () => {
-            await OperationalJobs.run('retention_cleanup', async () => {
-                const { RetentionCleanup } = await import('@/lib/RetentionCleanup')
-                const dryRun = process.env.RETENTION_DRY_RUN === 'true'
-                return await RetentionCleanup.runAll(dryRun)
+            await runOperationalJobV1('retention_cleanup', async () => {
+                const { runScheduledRetentionCleanupV1 } = await import('@/modules/operations-observability/public/v1/scheduled-maintenance-operations')
+                return await runScheduledRetentionCleanupV1()
             })
         }, 24 * 60 * 60 * 1000)
-        OperationalJobs.registerInterval(cleanupInterval)
+        registerOperationalIntervalV1(cleanupInterval)
 
         // Daily stability check: every 24 hours (offset 1 hour after cleanup)
         const stabilityInterval = setInterval(async () => {
-            await OperationalJobs.run('stability_check', async () => {
-                const { runStabilityCheck } = await import('@/lib/stability-check')
-                return await runStabilityCheck('daily')
+            await runOperationalJobV1('stability_check', async () => {
+                const { runDailyOperationalStabilityCheckV1 } = await import('@/modules/operations-observability/public/v1/scheduled-maintenance-operations')
+                return await runDailyOperationalStabilityCheckV1()
             })
         }, 24 * 60 * 60 * 1000)
-        OperationalJobs.registerInterval(stabilityInterval)
+        registerOperationalIntervalV1(stabilityInterval)
 
         // Run initial stability check 60s after startup
         setTimeout(async () => {
-            await OperationalJobs.run('stability_check', async () => {
-                const { runStabilityCheck } = await import('@/lib/stability-check')
-                return await runStabilityCheck('daily')
+            await runOperationalJobV1('stability_check', async () => {
+                const { runDailyOperationalStabilityCheckV1 } = await import('@/modules/operations-observability/public/v1/scheduled-maintenance-operations')
+                return await runDailyOperationalStabilityCheckV1()
             })
         }, 60000)
 
         // ── Telephony: ESL listener to FreeSWITCH ─────────────────────────
         try {
-            const { startEslListener } = await import('@/lib/freeswitch/EslClient')
-            await startEslListener()
+            const { registerCompletedCallTimelineProjectorV1 } = await import('@/modules/calling/public/v1')
+            const { messagingCompletedCallTimelineProjectorV1 } = await import('@/modules/messaging/public/v1')
+            registerCompletedCallTimelineProjectorV1(messagingCompletedCallTimelineProjectorV1)
+            const { startCallingEslRuntimeV1 } = await import('@/modules/calling/public/v1')
+            await startCallingEslRuntimeV1()
             opsLog('info', 'esl_listener_started', { operation: 'startup' })
         } catch (err: any) {
             opsLog('error', 'esl_listener_start_failed', { operation: 'startup', error: err.message })
         }
 
         // ── Call processing pipeline (BullMQ): transcribe + analyze ──────
-        // Stage 4. Workers pick up jobs enqueued by recordingProcessor and
-        // by each other (transcribe → analyze). Safe to start before Redis
-        // is up; the workers will retry on connect.
+        // Stage 4. Workers pick up jobs published from RecordingReady.v1 and
+        // jobs enqueued by each other (transcribe → analyze). Safe to start
+        // before Redis is up; the workers will retry on connect.
         try {
-            const { startCallProcessingWorkers } = await import('@/lib/queue')
-            startCallProcessingWorkers()
+            const { startCallingProcessingRuntimeV1 } = await import('@/modules/calling/public/v1')
+            startCallingProcessingRuntimeV1()
             opsLog('info', 'call_workers_started', { operation: 'startup' })
         } catch (err: any) {
             opsLog('error', 'call_workers_start_failed', { operation: 'startup', error: err.message })
+        }
+
+        // ── Transactional outbox publisher ──────────────────────────────
+        // The expand migration is deployed before this compatible code.
+        // Atomic claims make concurrent Next.js processes safe; consumers use
+        // stable idempotency keys and poison events remain visible.
+        try {
+            const { startDomainOutboxPublisherV1 } = await import('@/modules/platform-shell/public/v1')
+            const outboxInterval = startDomainOutboxPublisherV1()
+            registerOperationalIntervalV1(outboxInterval)
+            opsLog('info', 'domain_outbox_publisher_started', { operation: 'startup' })
+        } catch (err: any) {
+            opsLog('error', 'domain_outbox_publisher_start_failed', { operation: 'startup', error: err.message })
         }
 
         // Yandex Fleet sync: target time 03:00 server time, daily.
@@ -282,16 +305,16 @@ export async function register() {
             if (now.getHours() !== YANDEX_SYNC_HOUR) return
             if (lastYandexSyncDay === today) return  // already ran today
 
-            await OperationalJobs.run('yandex_fleet_sync', async () => {
-                const { runYandexSync } = await import('@/lib/yandexSync')
-                const result = await runYandexSync({ bypassCooldown: true })
+            await runOperationalJobV1('yandex_fleet_sync', async () => {
+                const { runScheduledYandexSyncV1 } = await import('@/modules/fleet-operations/public/v1')
+                const result = await runScheduledYandexSyncV1()
                 if (result.ok) {
                     lastYandexSyncDay = today
                 }
                 return result
             })
         }, 60 * 60 * 1000)  // every hour
-        OperationalJobs.registerInterval(yandexSyncInterval)
+        registerOperationalIntervalV1(yandexSyncInterval)
 
         opsLog('info', 'periodic_jobs_registered', { jobs: ['recovery:5m', 'integrity:30m', 'message_retry:2m', 'wa_watchdog:60s', 'retention_cleanup:24h', 'stability_check:24h', 'yandex_fleet_sync:24h@03:00'] })
 
@@ -305,7 +328,7 @@ export async function register() {
         if (shutdownInProgress) return
         shutdownInProgress = true
 
-        const { opsLog: log } = await import('@/lib/opsLog')
+        const { operationalLogV1: log } = await import('@/infrastructure/operations/operational-log')
         log('info', 'shutdown_start', { signal })
 
         const forceExit = setTimeout(() => {
@@ -317,43 +340,34 @@ export async function register() {
 
         try {
             // 1. Stop intervals / background jobs
-            const { OperationalJobs: ops } = await import('@/lib/OperationalJobs')
-            ops.clearAllIntervals()
+            const { clearOperationalIntervalsV1 } = await import('@/modules/operations-observability/public/v1/operational-job-registry')
+            clearOperationalIntervalsV1()
             log('info', 'shutdown_intervals_cleared')
 
             // 2. Close WA clients
             try {
-                const { destroyAllClients } = await import('@/lib/whatsapp/WhatsAppService')
-                if (typeof destroyAllClients === 'function') {
-                    await destroyAllClients()
+                const { destroyWhatsAppRuntimeV1 } = await import('@/modules/whatsapp-channel/public/v1')
+                if (typeof destroyWhatsAppRuntimeV1 === 'function') {
+                    await destroyWhatsAppRuntimeV1()
                     log('info', 'shutdown_wa_clients_closed')
                 }
             } catch (e: any) {
                 log('error', 'shutdown_wa_error', { error: e.message })
             }
 
-            // 3. Stop TG health check + disconnect TG clients
+            // 3. Stop the TG health monitor. The legacy module has no client-wide disconnect capability.
             try {
-                const tgModule = await import('@/app/tg-actions') as any
-                if (typeof tgModule.stopTelegramHealthCheck === 'function') {
-                    tgModule.stopTelegramHealthCheck()
-                    log('info', 'shutdown_tg_health_stopped')
-                }
-                if (typeof tgModule.disconnectAllTelegram === 'function') {
-                    await tgModule.disconnectAllTelegram()
-                    log('info', 'shutdown_tg_clients_closed')
-                }
+                const { stopOperationalTelegramRuntimeV1 } = await import('@/infrastructure/telegram/operational-capabilities')
+                await stopOperationalTelegramRuntimeV1()
+                log('info', 'shutdown_tg_health_stopped')
             } catch (e: any) {
                 log('info', 'shutdown_tg_skip', { error: e.message })
             }
 
             // 3a. Stop BullMQ workers + close Redis
             try {
-                const queueModule = await import('@/lib/queue')
-                await queueModule.stopTranscribeWorker()
-                await queueModule.stopAnalyzeWorker()
-                await queueModule.closeQueues()
-                await queueModule.closeRedisConnection()
+                const { stopCallingProcessingRuntimeV1 } = await import('@/modules/calling/public/v1')
+                await stopCallingProcessingRuntimeV1()
                 log('info', 'shutdown_queues_closed')
             } catch (e: any) {
                 log('error', 'shutdown_queues_error', { error: e.message })
@@ -400,9 +414,9 @@ export async function register() {
         // Best-effort async WA cleanup — we fire-and-forget with a 5s cap then exit.
         const cleanup = (async () => {
             try {
-                const { destroyAllClients } = await import('@/lib/whatsapp/WhatsAppService')
+                const { destroyWhatsAppRuntimeV1 } = await import('@/modules/whatsapp-channel/public/v1')
                 await Promise.race([
-                    destroyAllClients(),
+                    destroyWhatsAppRuntimeV1(),
                     new Promise(resolve => setTimeout(resolve, 5000)),
                 ])
             } catch { /* ignore */ }
@@ -424,4 +438,5 @@ export async function register() {
             try { console.error('[UNHANDLED]', msg) } catch { /* ignore */ }
         }
     })
+
 }

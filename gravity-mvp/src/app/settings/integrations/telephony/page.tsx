@@ -1,4 +1,4 @@
-import { getCurrentUser } from '@/lib/users/user-service'
+import { getCurrentUserIdentityV1 as getCurrentUser } from '@/modules/identity-access/public/v1/user-directory'
 import TelephonyConnectionClient from './TelephonyConnectionClient'
 
 export const dynamic = 'force-dynamic'

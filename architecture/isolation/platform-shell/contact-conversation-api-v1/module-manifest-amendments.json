@@ -1,0 +1,33 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "CRM-ARCH-007R-CONTACT-CONVERSATION-API",
+  "amendments": [
+    {
+      "context": "contacts",
+      "add_commands": [
+        "ResolveChannelContactCommand.v1",
+        "PrepareContactConversationIdentityCommand.v1"
+      ],
+      "add_public_surface": [
+        "GetPreferredActiveContactPhoneQuery.v1"
+      ],
+      "reason": "Expose only the contact resolution, conversation identity preparation and preferred-phone lookup required by the two Platform Shell contact-conversation endpoints."
+    },
+    {
+      "context": "fleet_operations",
+      "add_public_surface": [
+        "FindDriverByExactPhoneQuery.v1"
+      ],
+      "reason": "Expose the exact legacy-driver lookup needed by Platform delivery orchestration without granting a generic Driver repository."
+    },
+    {
+      "context": "messaging",
+      "add_commands": [
+        "FindAndBackfillContactConversationCommand.v1",
+        "OpenFallbackContactConversationCommand.v1"
+      ],
+      "reason": "Expose the fixed contact-first and driver/external fallback conversation workflows through Messaging without generic selectors, mutation fields, SQL or transaction capability."
+    }
+  ]
+}

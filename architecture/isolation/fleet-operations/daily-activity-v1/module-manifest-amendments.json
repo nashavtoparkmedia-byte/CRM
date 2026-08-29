@@ -1,0 +1,14 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "CRM-ARCH-007-FLEET-DAILY-ACTIVITY",
+  "amendments": [
+    {
+      "context": "fleet_operations",
+      "add_commands": [
+        "RecordDriverDailyActivityCommand.v1"
+      ],
+      "reason": "Expose Fleet-owned DriverDaySummary activity persistence as a provider-neutral command."
+    }
+  ]
+}

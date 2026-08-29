@@ -18,10 +18,17 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { getAiAgentProviderConfigV1 } from '@/modules/calling/public/v1/ai-agent-provider-capability'
 import { cookies } from 'next/headers'
-import { generateShadowReplyForChat } from '@/lib/pipeline/shadowReply'
-import { writeAuditEntry } from '@/lib/ai/knowledge/auditLog'
-import { runCoach, type CoachResult, type CoachSuggestion } from '@/lib/ai/knowledge/coach'
+import { generateShadowReplyForChat } from '@/modules/messaging/internal/ai-reply-pipeline/shadowReply'
+import { appendKnowledgeGovernanceAuditV1 as writeAuditEntry } from '@/modules/ai-knowledge/public/v1/knowledge-governance-audit'
+import {
+    runKnowledgeCoachV1 as runCoach,
+    type KnowledgeCoachResultV1 as CoachResult,
+    type KnowledgeCoachSuggestionV1 as CoachSuggestion,
+} from '@/modules/ai-knowledge/public/v1/knowledge-coach'
+import { APPLY_KNOWLEDGE_ITEM_COACH_EDIT_COMMAND_V1, PATCH_PROPOSED_REPLY_COMMAND_V1, UPSERT_PROPOSED_REPLY_COMMAND_V1, VERIFY_KNOWLEDGE_ITEM_COMMAND_V1 } from '@/contracts/ai-knowledge/v1'
+import { applyKnowledgeItemCoachEditV1, patchProposedReplyV1, upsertProposedReplyV1, verifyKnowledgeItemV1 } from '@/modules/ai-knowledge/public/v1'
 
 const CACHE_TTL_MIN = 15
 
@@ -107,10 +114,7 @@ export async function getOrGenerateProposedReply(chatId: string): Promise<Propos
     }
 
     // 3. Check feature flag (default true, но админ может выключить)
-    const config = await prisma.aiAgentConfig.findUnique({
-        where: { id: 'singleton' },
-        select: { enabled: true, internEnabled: true, mode: true, apiKeyEncrypted: true },
-    })
+    const config = await getAiAgentProviderConfigV1()
     if (!config) {
         console.log(`[ai-intern] chatId=${chatId} skip: AiAgentConfig singleton missing`)
         return { skipped: true, reason: 'ai_disabled', message: 'AI не настроен.' }
@@ -148,56 +152,33 @@ export async function getOrGenerateProposedReply(chatId: string): Promise<Propos
 
     // 5. Upsert (race-safe — UNIQUE constraint на messageId)
     const expiresAt = new Date(Date.now() + CACHE_TTL_MIN * 60 * 1000)
-    const saved = await prisma.aiProposedReply.upsert({
-        where: { messageId: lastInbound.id },
-        create: {
-            messageId:    lastInbound.id,
-            chatId,
-            text:         result.text,
-            confidence:   result.confidence,
-            decisionMode: result.decisionMode,
-            reasoning:    result.reasoning,
-            sources:      result.sources as any,
-            expiresAt,
-        },
-        update: {
-            text:         result.text,
-            confidence:   result.confidence,
-            decisionMode: result.decisionMode,
-            reasoning:    result.reasoning,
-            sources:      result.sources as any,
-            expiresAt,
-            generatedAt:  new Date(),
-            dismissedAt:  null,  // re-generated означает снова видимый
-            takenAt:      null,  // и не «взят в работу»
-            sentMessageId: null,
-        },
+    const saved = await upsertProposedReplyV1({
+        contract: UPSERT_PROPOSED_REPLY_COMMAND_V1,
+        messageId: lastInbound.id,
+        chatId,
+        text: result.text,
+        confidence: result.confidence,
+        decisionMode: result.decisionMode,
+        reasoning: result.reasoning,
+        sources: result.sources,
+        expiresAt,
     })
-    return serialize(saved)
+    return serialize(saved.proposal)
 }
 
 /** Менеджер нажал «Взять в работу» — записываем timestamp. */
 export async function markProposedReplyTaken(id: string): Promise<void> {
-    await prisma.aiProposedReply.update({
-        where: { id },
-        data:  { takenAt: new Date() },
-    })
+    await patchProposedReplyV1({ contract: PATCH_PROPOSED_REPLY_COMMAND_V1, proposalId: id, patch: { takenAt: new Date() } })
 }
 
 /** После реальной отправки сообщения менеджером — link на Message.id. */
 export async function markProposedReplySent(id: string, sentMessageId: string): Promise<void> {
-    await prisma.aiProposedReply.update({
-        where: { id },
-        data:  { sentMessageId },
-    })
+    await patchProposedReplyV1({ contract: PATCH_PROPOSED_REPLY_COMMAND_V1, proposalId: id, patch: { sentMessageId } })
 }
 
 /** Менеджер нажал «Скрыть» — не показываем proposal пока не пришёт новое inbound. */
 export async function dismissProposedReply(id: string): Promise<void> {
-    await prisma.aiProposedReply.update({
-        where: { id },
-        data:  { dismissedAt: new Date() },
-    })
+    await patchProposedReplyV1({ contract: PATCH_PROPOSED_REPLY_COMMAND_V1, proposalId: id, patch: { dismissedAt: new Date() } })
 }
 
 /**
@@ -240,10 +221,7 @@ export async function confirmProposedReplyCorrect(proposalId: string): Promise<C
     const sources = proposal.sources as Array<{ id: string; title: string }> | null
     if (!sources || sources.length === 0) {
         // Нет используемых items — нечего verified. Mark anyway чтобы не пере-fetch.
-        await prisma.aiProposedReply.update({
-            where: { id: proposalId },
-            data: { confirmedCorrectAt: new Date() },
-        })
+        await patchProposedReplyV1({ contract: PATCH_PROPOSED_REPLY_COMMAND_V1, proposalId, patch: { confirmedCorrectAt: new Date() } })
         return { verifiedCount: 0, items: [] }
     }
 
@@ -275,16 +253,7 @@ export async function confirmProposedReplyCorrect(proposalId: string): Promise<C
             }
 
             // Update: isVerified=true, status='active' (промоция draft→active)
-            await prisma.$executeRaw`
-                UPDATE "AiKnowledgeItem"
-                SET "isVerified" = true,
-                    "verifiedBy" = ${actor},
-                    "verifiedAt" = NOW(),
-                    status = 'active'::"AiKnowledgeStatus",
-                    "isActive" = true,
-                    "updatedAt" = NOW()
-                WHERE id = ${src.id}
-            `
+            await verifyKnowledgeItemV1({ contract: VERIFY_KNOWLEDGE_ITEM_COMMAND_V1, itemId: src.id, verifiedBy: actor })
 
             // Audit log с metadata о источнике этого verify
             await writeAuditEntry({
@@ -314,10 +283,7 @@ export async function confirmProposedReplyCorrect(proposalId: string): Promise<C
     }
 
     // 4. Mark proposal as confirmed
-    await prisma.aiProposedReply.update({
-        where: { id: proposalId },
-        data: { confirmedCorrectAt: new Date() },
-    })
+    await patchProposedReplyV1({ contract: PATCH_PROPOSED_REPLY_COMMAND_V1, proposalId, patch: { confirmedCorrectAt: new Date() } })
 
     console.log(`[ai-intern] confirmed proposal ${proposalId}: verified ${verified.length} items`)
 
@@ -351,15 +317,12 @@ export async function coachFromCorrection(
     }
 
     // Получаем config и full canonicalStatement у sources
-    const configRows = await prisma.$queryRaw<Array<{
-        provider: string
-        apiKey:   string | null
-        model:    string
-    }>>`
-        SELECT provider, "apiKeyEncrypted" AS "apiKey", "responseModel" AS model
-        FROM "AiAgentConfig" WHERE id = 'singleton' LIMIT 1
-    `
-    const config = configRows[0]
+    const providerConfig = await getAiAgentProviderConfigV1()
+    const config = providerConfig && {
+        provider: providerConfig.provider,
+        apiKey: providerConfig.apiKeyEncrypted,
+        model: providerConfig.responseModel,
+    }
     if (!config?.apiKey) {
         return { suggestions: [], onlyStyleChange: false, note: 'AI provider not configured' }
     }
@@ -379,8 +342,8 @@ export async function coachFromCorrection(
 
     const result = await runCoach({
         provider:      config.provider,
-        model:         config.model,
-        apiKey:        config.apiKey,
+        model:         config.model ?? 'claude-sonnet-4-5',
+        apiKey:        config.apiKey!,
         originalDraft: proposal.text,
         correctedText,
         items:         itemRows,
@@ -442,17 +405,7 @@ export async function applyCoachSuggestions(
                 // Применяем всё равно, но в audit metadata пишем drift=true
             }
 
-            await prisma.$executeRaw`
-                UPDATE "AiKnowledgeItem"
-                SET "canonicalStatement" = ${s.newValue},
-                    "updatedAt" = NOW(),
-                    "isVerified" = true,
-                    "verifiedBy" = ${actor},
-                    "verifiedAt" = NOW(),
-                    status = 'active'::"AiKnowledgeStatus",
-                    "isActive" = true
-                WHERE id = ${s.itemId}
-            `
+            await applyKnowledgeItemCoachEditV1({ contract: APPLY_KNOWLEDGE_ITEM_COACH_EDIT_COMMAND_V1, itemId: s.itemId, canonicalStatement: s.newValue, verifiedBy: actor })
 
             await writeAuditEntry({
                 itemId: s.itemId,

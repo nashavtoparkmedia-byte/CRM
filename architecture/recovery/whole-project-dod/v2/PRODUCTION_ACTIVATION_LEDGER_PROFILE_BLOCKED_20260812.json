@@ -1,0 +1,74 @@
+{
+  "schema": "yoko.crm.production-activation-ledger-profile-blocked.v1",
+  "captured_at": "2026-08-12T17:26:25Z",
+  "project_status": "YOKO CRM MODULAR ARCHITECTURE TRANSFORMATION NOT READY",
+  "current_cluster": "PRODUCTION_ACTIVATION_BLOCKED_ON_LEDGER_RECONCILIATION_PROFILE_INSTALL",
+  "recovery_worktree": {
+    "path": "/opt/codex-work/crm-architecture-dod-recovery",
+    "branch": "codex/crm-architecture-dod-recovery",
+    "head_before_checkpoint": "0c6f93323ec8af932d78f83c088c71efbd0077c6",
+    "tree_before_checkpoint": "f8bfbc4717e5817303d6ff67bf77e4679d7b7046"
+  },
+  "installed_runtime": {
+    "package_version": "2.0.0-6",
+    "runtime_abi": "2.0.0",
+    "profile_id": "crm-af9646f5-gravity-outbox-v1",
+    "audit_state": "EMPTY",
+    "audit_record_count": 0,
+    "self_check": "PASS",
+    "finite_zero_argument_operations": [
+      "database-status",
+      "release-preflight",
+      "database-migrate",
+      "release-activate",
+      "rollback"
+    ]
+  },
+  "read_only_database_observation": {
+    "database_identity_sha256": "ed88dfeaad2a3dc2e759590d295992cd06531d4403d896ded00b21ea667be1c9",
+    "active_migration_count": 61,
+    "normalized_observation_sha256": "f8e57fd9fe0166ac964c928c29eb0e87820797508959dae0ba11fd75d5907201",
+    "target_outbox_state": "ABSENT",
+    "interrupted_target_migrations": 0,
+    "rolled_back_target_migrations": 0,
+    "v6_classification": "DRIFTED",
+    "secret_values_emitted": false
+  },
+  "root_cause": {
+    "classification": "SEALED_V6_PROFILE_BASELINE_OMISSION",
+    "v6_expected_pre_target_active_migrations": 48,
+    "live_pre_target_active_migrations": 61,
+    "omitted_historical_rows": 13,
+    "fail_closed_before_mutation": true,
+    "production_drift_proven": false
+  },
+  "accepted_successor": {
+    "package_version": "2.0.0-7",
+    "runtime_abi": "2.0.0",
+    "profile_id": "crm-af9646f5-gravity-outbox-v1",
+    "bootstrap_tar": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1-ledger-reconciliation/dist/yoko-crm-ledger-reconciliation-bootstrap-af9646f5-v2.tar",
+    "bootstrap_tar_sha256": "db571de22ad7fe9110bd339992c4caec58598b311c547b9543bd560db5dcc29d",
+    "debian_package_sha256": "ababe50bcb0d3597786b1c77118867b1d700a5629bb2719892ce5ae4927a4738",
+    "manifest": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1-ledger-reconciliation/manifest.json",
+    "independent_critic": "PASS",
+    "independent_critic_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-af9646f5-gravity-outbox-v1-ledger-reconciliation/evidence/INDEPENDENT_LEDGER_BOOTSTRAP_CRITIC_DB571DE2.json",
+    "offline_tests": "67/67 PASS",
+    "deterministic_double_build": "PASS",
+    "capability_widening": false,
+    "sudoers_widening": false,
+    "source_archive_changed": false,
+    "migration_artifact_changed": false,
+    "only_permitted_ledger_delta": "20260809140000_add_domain_outbox@433b0d503f054ed6a8161a059e2650d5e401829dabe8c9d992a1d1763eef0016"
+  },
+  "production_mutations": {
+    "bootstrap_installations_after_v6": 0,
+    "database_mutations": 0,
+    "deployments": 0,
+    "service_restarts_or_reloads": 0,
+    "rollbacks": 0
+  },
+  "stop_condition": "NEW_GENUINE_PRIVILEGED_PRIMITIVE_BEYOND_INSTALLED_FINITE_ABI_PACKAGE_INSTALL",
+  "owner_action_count": 1,
+  "exact_next_action": "Execute only manifest.json.owner_command for the exact accepted successor; after YOKO_ACTIVATION_BOOTSTRAP_OK recovery resumes autonomously with database preview, backup, migration, release activation, health, protected Messages, outbox, production evidence and critics.",
+  "normal_success_phrase_emitted": false
+}

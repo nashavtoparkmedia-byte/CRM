@@ -10,7 +10,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { opsLog } from '@/lib/opsLog'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 
 // ─── Config Registry ────────────────────────────────────────────────
 
@@ -77,83 +77,83 @@ function rangeInt(name: string, getValue: () => number, min: number, max: number
 export function registerAllConfigs(): void {
     // Lazy imports to avoid circular dependencies
     try {
-        const { COMPLETION_THRESHOLDS } = require('@/lib/tasks/completion-config')
+        const { COMPLETION_THRESHOLDS } = require('@/modules/work-management/public/v1/team-operational-policy')
         registerConfigRule(positiveInt('completion.minCompletionMinutes', () => COMPLETION_THRESHOLDS.minCompletionMinutes))
     } catch { /* module may not exist */ }
 
     try {
-        const { RESPONSE_THRESHOLDS } = require('@/lib/tasks/response-config')
+        const { RESPONSE_THRESHOLDS } = require('@/modules/work-management/public/v1/team-operational-policy')
         registerConfigRule(positiveInt('response.maxResponseMinutes', () => RESPONSE_THRESHOLDS.maxResponseMinutes))
     } catch { /* module may not exist */ }
 
     try {
-        const { RISK_THRESHOLDS } = require('@/lib/tasks/risk-config')
+        const { RISK_THRESHOLDS } = require('@/modules/work-management/public/v1/team-operational-policy')
         registerConfigRule(positiveInt('risk.highRiskAttempts', () => RISK_THRESHOLDS.highRiskAttempts))
         registerConfigRule(positiveInt('risk.slaWarningMinutes', () => RISK_THRESHOLDS.slaWarningMinutes))
     } catch { /* module may not exist */ }
 
     try {
-        const { WORKLOAD_THRESHOLDS } = require('@/lib/tasks/workload-config')
+        const { WORKLOAD_THRESHOLDS } = require('@/modules/work-management/public/v1/team-operational-policy')
         registerConfigRule(positiveInt('workload.maxActiveTasks', () => WORKLOAD_THRESHOLDS.maxActiveTasks))
         registerConfigRule(positiveInt('workload.maxOverdueTasks', () => WORKLOAD_THRESHOLDS.maxOverdueTasks))
     } catch { /* module may not exist */ }
 
     try {
-        const { PATTERN_THRESHOLDS } = require('@/lib/tasks/pattern-config')
+        const { PATTERN_THRESHOLDS } = require('@/modules/work-management/public/v1/team-operational-policy')
         registerConfigRule(positiveInt('pattern.warningThreshold', () => PATTERN_THRESHOLDS.warningThreshold))
         registerConfigRule(positiveInt('pattern.patternThreshold', () => PATTERN_THRESHOLDS.patternThreshold))
     } catch { /* module may not exist */ }
 
     try {
-        const { INTERVENTION_OUTCOME_CONFIG, EFFECTIVENESS_THRESHOLDS } = require('@/lib/tasks/intervention-outcome-config')
+        const { INTERVENTION_OUTCOME_CONFIG, EFFECTIVENESS_THRESHOLDS } = require('@/modules/work-management/public/v1/team-operational-policy')
         registerConfigRule(positiveInt('outcome.outcomeWindowHours', () => INTERVENTION_OUTCOME_CONFIG.outcomeWindowHours))
         registerConfigRule(rangeInt('effectiveness.good', () => EFFECTIVENESS_THRESHOLDS.good, 1, 100))
         registerConfigRule(rangeInt('effectiveness.moderate', () => EFFECTIVENESS_THRESHOLDS.moderate, 1, 100))
     } catch { /* module may not exist */ }
 
     try {
-        const { CAPACITY_CONFIG } = require('@/lib/tasks/capacity-config')
+        const { CAPACITY_CONFIG } = require('@/modules/work-management/public/v1/team-operational-policy')
         registerConfigRule(positiveInt('capacity.highPressureThreshold', () => CAPACITY_CONFIG.highPressureThreshold))
         registerConfigRule(nonNegativeNum('capacity.lowUtilizationThreshold', () => CAPACITY_CONFIG.lowUtilizationThreshold))
     } catch { /* module may not exist */ }
 
     try {
-        const { RELIABILITY_CONFIG } = require('@/lib/tasks/reliability-config')
+        const { RELIABILITY_CONFIG } = require('@/modules/work-management/public/v1/team-operational-policy')
         registerConfigRule(rangeInt('reliability.reliableThresholdPct', () => RELIABILITY_CONFIG.reliableThresholdPct, 1, 100))
         registerConfigRule(rangeInt('reliability.pressuredThresholdPct', () => RELIABILITY_CONFIG.pressuredThresholdPct, 1, 100))
     } catch { /* module may not exist */ }
 
     try {
-        const { INTERVENTION_AGING_CONFIG } = require('@/lib/tasks/intervention-aging-config')
+        const { INTERVENTION_AGING_CONFIG } = require('@/modules/work-management/public/v1/team-operational-policy')
         registerConfigRule(positiveInt('aging.pendingActionAgingHours', () => INTERVENTION_AGING_CONFIG.pendingActionAgingHours))
         registerConfigRule(positiveInt('aging.pendingOutcomeAgingHours', () => INTERVENTION_AGING_CONFIG.pendingOutcomeAgingHours))
     } catch { /* module may not exist */ }
 
     try {
-        const { VOLATILITY_CONFIG } = require('@/lib/tasks/volatility-config')
+        const { VOLATILITY_CONFIG } = require('@/modules/work-management/public/v1/team-operational-policy')
         registerConfigRule(positiveInt('volatility.minPointsPerManager', () => VOLATILITY_CONFIG.minPointsPerManager))
         registerConfigRule(nonNegativeNum('volatility.calmMaxCv', () => VOLATILITY_CONFIG.calmMaxCv))
         registerConfigRule(positiveInt('volatility.volatileMinCv', () => VOLATILITY_CONFIG.volatileMinCv))
     } catch { /* module may not exist */ }
 
     try {
-        const { FAILURE_DETECTION_CONFIG } = require('@/lib/failure-detection')
-        registerConfigRule(positiveInt('failureDetection.windowHours', () => FAILURE_DETECTION_CONFIG.windowHours))
-        registerConfigRule(positiveInt('failureDetection.criticalConsecutiveErrors', () => FAILURE_DETECTION_CONFIG.criticalConsecutiveErrors))
-        registerConfigRule(rangeInt('failureDetection.criticalErrorRatePct', () => FAILURE_DETECTION_CONFIG.criticalErrorRatePct, 1, 100))
+        const { FAILURE_DETECTION_CONFIG_V1 } = require('@/modules/configuration/public/v1/operations-monitoring-policy')
+        registerConfigRule(positiveInt('failureDetection.windowHours', () => FAILURE_DETECTION_CONFIG_V1.windowHours))
+        registerConfigRule(positiveInt('failureDetection.criticalConsecutiveErrors', () => FAILURE_DETECTION_CONFIG_V1.criticalConsecutiveErrors))
+        registerConfigRule(rangeInt('failureDetection.criticalErrorRatePct', () => FAILURE_DETECTION_CONFIG_V1.criticalErrorRatePct, 1, 100))
     } catch { /* module may not exist */ }
 
     try {
-        const { PERF_CONFIG } = require('@/lib/perf-monitor')
-        registerConfigRule(positiveInt('perf.defaultSlowThresholdMs', () => PERF_CONFIG.defaultSlowThresholdMs))
-        registerConfigRule(positiveInt('perf.cronSlowThresholdMs', () => PERF_CONFIG.cronSlowThresholdMs))
-        registerConfigRule(positiveInt('perf.apiSlowThresholdMs', () => PERF_CONFIG.apiSlowThresholdMs))
-        registerConfigRule(positiveInt('perf.querySlowThresholdMs', () => PERF_CONFIG.querySlowThresholdMs))
-        registerConfigRule(positiveInt('perf.retentionDays', () => PERF_CONFIG.retentionDays))
+        const { PERFORMANCE_MONITORING_CONFIG_V1 } = require('@/modules/configuration/public/v1/operations-monitoring-policy')
+        registerConfigRule(positiveInt('perf.defaultSlowThresholdMs', () => PERFORMANCE_MONITORING_CONFIG_V1.defaultSlowThresholdMs))
+        registerConfigRule(positiveInt('perf.cronSlowThresholdMs', () => PERFORMANCE_MONITORING_CONFIG_V1.cronSlowThresholdMs))
+        registerConfigRule(positiveInt('perf.apiSlowThresholdMs', () => PERFORMANCE_MONITORING_CONFIG_V1.apiSlowThresholdMs))
+        registerConfigRule(positiveInt('perf.querySlowThresholdMs', () => PERFORMANCE_MONITORING_CONFIG_V1.querySlowThresholdMs))
+        registerConfigRule(positiveInt('perf.retentionDays', () => PERFORMANCE_MONITORING_CONFIG_V1.retentionDays))
     } catch { /* module may not exist */ }
 
     try {
-        const cfg = require('@/lib/tasks/manager-health-config')
+        const cfg = require('@/modules/work-management/public/v1/team-operational-policy')
         registerConfigRule(positiveInt('health.warningThreshold', () => cfg.HEALTH_SCORE_CONFIG.warningThreshold))
         registerConfigRule(positiveInt('health.criticalThreshold', () => cfg.HEALTH_SCORE_CONFIG.criticalThreshold))
         registerConfigRule(positiveInt('stability.minDataPoints', () => cfg.STABILITY_CONFIG.minDataPoints))

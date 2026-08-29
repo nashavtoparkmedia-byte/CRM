@@ -24,7 +24,7 @@
  */
 
 import type OpenAI from 'openai'
-import { getOpenAI } from '@/lib/openaiClient'
+import { createCallingOpenAiChatCompletionV1 } from '@/modules/calling/public/v1/openai-chat-completion'
 import type { AiCallScenarioWithProject } from '@/lib/ai-call/scenarios'
 
 // ── Tool surface (must mirror bridge llm-client.js TOOLS exactly) ──────────────
@@ -178,7 +178,6 @@ export async function simulateAiCall(opts: SimulateOptions): Promise<SimulationR
     const model = opts.model ?? process.env.AI_CALL_LLM_MODEL ?? 'gpt-4o-mini'
     const maxTurns = opts.maxTurns ?? 20
 
-    const openai = await getOpenAI()
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
         { role: 'system', content: buildSystemMessage(scenario) },
         // Synthetic kick-off — same trick the bridge uses to make the model
@@ -200,7 +199,7 @@ export async function simulateAiCall(opts: SimulateOptions): Promise<SimulationR
         turn++
         llmCallsCount++
 
-        const completion = await openai.chat.completions.create({
+        const completion = await createCallingOpenAiChatCompletionV1({
             model,
             messages,
             tools: TOOLS,
