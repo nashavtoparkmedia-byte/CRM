@@ -31,6 +31,14 @@ class UserService {
         return await db.getAllUsers();
     }
 
+    async getUsersPendingCrmRegistration(limit = 200) {
+        return await db.getUsersPendingCrmRegistration(limit);
+    }
+
+    async markUserRegisteredInCrm(telegramId) {
+        return await db.markUserRegisteredInCrm(telegramId);
+    }
+
     // Get recent users
     async getRecentUsers(limit = 10) {
         return await db.getRecentUsers(limit);

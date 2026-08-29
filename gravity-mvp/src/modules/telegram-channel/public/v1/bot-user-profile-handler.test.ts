@@ -13,9 +13,19 @@ describe('Telegram bot user profile capability', () => {
             username: 'driver',
             firstName: 'Ivan',
             lastName: null,
+            phone: '+79990001122',
+            phoneVerified: true,
             observedAt,
         })).resolves.toMatchObject({ recorded: true })
-        expect(record).toHaveBeenCalledWith({ telegramId: 123n, username: 'driver', firstName: 'Ivan', lastName: null, observedAt })
+        expect(record).toHaveBeenCalledWith({
+            telegramId: 123n,
+            username: 'driver',
+            firstName: 'Ivan',
+            lastName: null,
+            phone: '+79990001122',
+            phoneVerified: true,
+            observedAt,
+        })
     })
 
     test('rejects unrelated writer fields before the owner port', async () => {
@@ -27,6 +37,8 @@ describe('Telegram bot user profile capability', () => {
             username: null,
             firstName: null,
             lastName: null,
+            phone: null,
+            phoneVerified: false,
             observedAt: new Date(),
             driverId: 'foreign',
         })).rejects.toThrow('unsupported field')

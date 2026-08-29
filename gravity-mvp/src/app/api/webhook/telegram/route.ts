@@ -66,6 +66,8 @@ export async function POST(req: NextRequest) {
             username: username || null,
             firstName: firstName || null,
             lastName: lastName || null,
+            phone: null,
+            phoneVerified: false,
             observedAt: new Date(),
         })
 
