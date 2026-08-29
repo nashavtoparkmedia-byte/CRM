@@ -56,6 +56,11 @@ const consumerModel = new Map([
     imports: ['getDrivers'],
     calls: { getDrivers: 0 },
   }],
+  ['gravity-mvp/src/modules/fleet-operations/application/fleet-operations.ts', {
+    imports: ['getApiConnections', 'testApiRequest'],
+    calls: { getApiConnections: 1, testApiRequest: 1 },
+    specifier: '../public/v1/yandex-fleet-operations',
+  }],
 ])
 const consumers = [...consumerModel.keys()]
 
@@ -158,7 +163,7 @@ function assertConsumerModel(overrides = new Map()) {
     const { ast, relevant } = observed.get(file)
     assert.equal(relevant.length, expected.imports.length, `${file}: exact governed import count`)
     assert(relevant.every((binding) => (
-      allowedConsumerSpecifiers.has(binding.specifier)
+      (expected.specifier ? binding.specifier === expected.specifier : allowedConsumerSpecifiers.has(binding.specifier))
       && !binding.typeOnly
       && binding.imported === binding.local
     )), `${file}: root/deep named import only`)
@@ -171,8 +176,12 @@ function assertConsumerModel(overrides = new Map()) {
       assertNoIndirectUse(ast, name)
     }
   }
-  assert.equal(allImported.length, 10, 'ten governed import bindings')
-  assert.deepEqual(allImported.sort(), [...shimValueExports].sort(), 'all ten governed symbols imported exactly once')
+  assert.equal(allImported.length, 12, 'twelve governed import bindings')
+  assert.deepEqual(
+    allImported.sort(),
+    [...shimValueExports, 'getApiConnections', 'testApiRequest'].sort(),
+    'all ten public symbols and two owner-internal composition bindings imported exactly',
+  )
 }
 const acceptsConsumerModel = (overrides) => {
   try {
@@ -213,6 +222,8 @@ const publicIndexAst = parse(publicIndexPath, publicIndex)
 exactReExport(publicIndexAst, localCapabilitySpecifier, shimValueExports, shimTypeExports)
 
 const firstCallSource = apiClient
+const applicationPath = 'gravity-mvp/src/modules/fleet-operations/application/fleet-operations.ts'
+const applicationSource = baseSources.get(applicationPath)
 const removedCall = firstCallSource.replace('await testApiRequest(conn.id)', 'await removedTestApiRequest(conn.id)')
 const consumerProbes = [
   new Map([[apiClientPath, `${removedCall}\n// await testApiRequest(conn.id)\n`]]),
@@ -221,6 +232,7 @@ const consumerProbes = [
   new Map([[apiClientPath, removedCall]]),
   new Map([[apiClientPath, `${firstCallSource}\nvoid testApiRequest('')\n`]]),
   new Map([[apiClientPath, `${firstCallSource}\nimport { getDrivers } from '${publicRootSpecifier}'\n`]]),
+  new Map([[applicationPath, applicationSource.replace('../public/v1/yandex-fleet-operations', publicRootSpecifier)]]),
 ]
 assert(consumerProbes.every((probe) => !acceptsConsumerModel(probe)), 'comment/dead-code/bypass/root-or-deep denominator probes must fail')
 
@@ -269,6 +281,7 @@ process.stdout.write(`${JSON.stringify({
   status: 'PASS',
   consumers: consumers.length,
   consumer_symbols: shimValueExports.length,
+  consumer_bindings: 12,
   shim_value_exports: shimValueExports.length,
   shim_type_exports: shimTypeExports.length,
   negative_probes: consumerProbes.length + shimProbes.length,
