@@ -7,16 +7,16 @@
     "role": "SOL_HIGH_INTERNAL_REVIEW",
     "external_acceptance": false,
     "independent_acceptance": false,
-    "decision": "Internal remediation materialization records the exact baseline-to-current ownership assignments and exact-inventory transitions enumerated below; the current denominator includes the separately qualified Runtime rollback and transition-identity regression tests under the existing architecture-recovery ownership rule, and the declared current-dependency manifest prevents test-source literals from becoming a second authority; this artifact is not external or independent acceptance."
+    "decision": "Internal remediation materialization records the exact baseline-to-current ownership assignments and exact-inventory transitions enumerated below. The reviewed current denominator also includes the accepted AI Calls Stage 1–5 runtime/proof files and the source-isolated mass-calling migration; those additions are claimed by the Calling context's exact owned paths, while the two existing governed-exclusion transitions and their assignments remain unchanged. The declared current-dependency manifest prevents test-source literals from becoming a second authority; this artifact is not external or independent acceptance."
   },
   "baseline": {
     "coverage_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_COVERAGE_BASELINE_2108.json",
     "coverage_sha256": "429a48c9d257408025bbc273a4d6f1413ed78196549ed889118422b6caba5730"
   },
   "current": {
-    "tracked_inventory_sha256": "524a994e091a5273d1929259567c3c1c5246f10f3c11128febb1f5bf2a69321d",
-    "tracked_executable_surfaces": 2200,
-    "coverage_sha256": "135bc8009bbbe93c48eef4798272b9a6f3e425d13adc4230af004a36635f21a4"
+    "tracked_inventory_sha256": "84d625042d01a42116a4ea7d6fc64ca1def75701e8ff304e5466e7c4f1a3e880",
+    "tracked_executable_surfaces": 2240,
+    "coverage_sha256": "9e8adc8de908dbb165ca373dff159c1ae088fcbb4b9e9ca2cf3e62f1b769f54d"
   },
   "exact_inventory_changes": [
     {
