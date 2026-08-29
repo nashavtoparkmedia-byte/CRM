@@ -17,6 +17,7 @@
     "CreateTaskCommand.v1",
     "AssignTaskCommand.v1",
     "CompleteTaskCommand.v1",
+    "CreateIdempotentTaskCommand.v1",
     "ReassignTasksCommand.v1",
     "RecordTaskUsageCommand.v1"
   ],

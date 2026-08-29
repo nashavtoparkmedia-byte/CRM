@@ -23,3 +23,10 @@ CRM-ARCH-004 instantiates the convention with
 are the real and mock AI-call follow-up paths. Both retain their existing task
 payload semantics while their direct foreign `Task` writes move behind Work
 Management's public entry point.
+
+Durable AI-call finalization uses the additive
+`work_management.CreateIdempotentTaskCommand.v1`. Work Management derives a
+deterministic Task identity from the caller-supplied idempotency key and returns
+either `created` or `replayed`; a different payload for the same key fails
+closed. The original `CreateTaskCommand.v1` remains unchanged for consumers
+that do not require owner-enforced replay.

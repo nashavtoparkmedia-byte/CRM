@@ -2,11 +2,13 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { AiCallFinalizationInputError } from '@/modules/calling/application/ai-call-finalization'
 
 const mocks = vi.hoisted(() => ({
     callFindUnique: vi.fn(),
     callUpdate: vi.fn(),
     createTaskV1: vi.fn(),
+    finalizeAiCall: vi.fn(),
     enqueueAnalyze: vi.fn(),
     getAllPlaintext: vi.fn(),
     getScenario: vi.fn(),
@@ -43,6 +45,9 @@ vi.mock('@/contracts/work-management/v1', () => ({
 }))
 vi.mock('@/modules/work-management/public/v1', () => ({
     createTaskV1: mocks.createTaskV1,
+}))
+vi.mock('@/modules/calling/application/ai-call-finalization-runtime', () => ({
+    finalizeAiCall: mocks.finalizeAiCall,
 }))
 vi.mock('@/lib/ai-call/provider-settings', () => ({
     getAllPlaintext: mocks.getAllPlaintext,
@@ -125,6 +130,14 @@ beforeEach(() => {
         errored: false,
         issues: [],
     })
+    mocks.finalizeAiCall.mockResolvedValue({
+        kind: 'success',
+        callId: 'call-1',
+        sessionStatus: 'ended',
+        createdTask: null,
+        duplicate: false,
+        followUpStatus: 'not_required',
+    })
 })
 
 afterEach(() => {
@@ -142,6 +155,7 @@ describe('AudioBridge callback route authentication', () => {
         expect(mocks.getScenario).not.toHaveBeenCalled()
         expect(mocks.getAllPlaintext).not.toHaveBeenCalled()
         expect(mocks.operationalLog).not.toHaveBeenCalled()
+        expect(mocks.finalizeAiCall).not.toHaveBeenCalled()
     })
 
     it('fails closed when the configured secret is missing', async () => {
@@ -237,17 +251,6 @@ describe('AudioBridge callback route authentication', () => {
     })
 
     it('accepts the exact token and preserves finalization semantics', async () => {
-        mocks.callFindUnique.mockResolvedValue({
-            id: 'call-1',
-            startedAt: new Date(Date.now() - 1000),
-            driverId: null,
-            contactId: null,
-            managerId: null,
-            aiScenarioId: null,
-            aiScenario: null,
-            transcript: null,
-        })
-
         const response = await machineCallbacks[3].invoke(VALID_TOKEN)
         expect(response.status).toBe(200)
         await expect(response.json()).resolves.toEqual({
@@ -255,10 +258,11 @@ describe('AudioBridge callback route authentication', () => {
             callId: 'call-1',
             sessionStatus: 'ended',
             createdTask: null,
+            duplicate: false,
+            followUpStatus: 'not_required',
         })
-        expect(mocks.callUpdate).toHaveBeenCalledTimes(1)
-        expect(mocks.persistEvents).toHaveBeenCalledTimes(1)
-        expect(mocks.enqueueAnalyze).not.toHaveBeenCalled()
+        expect(mocks.finalizeAiCall).toHaveBeenCalledWith('call-1', { reason: 'closed' })
+        expect(mocks.callUpdate).not.toHaveBeenCalled()
     })
 
     it('accepts the exact token and preserves the internal key response semantics', async () => {
@@ -274,6 +278,50 @@ describe('AudioBridge callback route authentication', () => {
         expect(response.status).toBe(200)
         expect(response.headers.get('cache-control')).toContain('no-store')
         await expect(response.json()).resolves.toEqual(providerData)
+    })
+})
+
+describe('AI-call finalize HTTP result mapping', () => {
+    it('maps malformed finalization payloads to a bounded 400 response', async () => {
+        mocks.finalizeAiCall.mockRejectedValueOnce(new AiCallFinalizationInputError('reason is invalid'))
+        const response = await machineCallbacks[3].invoke(VALID_TOKEN)
+        expect(response.status).toBe(400)
+        await expect(response.json()).resolves.toEqual({
+            error: 'invalid_payload',
+            message: 'reason is invalid',
+        })
+    })
+
+    it.each([
+        [{ kind: 'not_found' }, 404, { error: 'not_found' }],
+        [
+            { kind: 'conflict', reason: 'different_terminal_payload' },
+            409,
+            { error: 'finalization_conflict', reason: 'different_terminal_payload' },
+        ],
+        [
+            { kind: 'retryable', callId: 'call-1', followUpStatus: 'retry_wait', retryAfterMs: 500 },
+            503,
+            { error: 'follow_up_retryable', callId: 'call-1', followUpStatus: 'retry_wait', retryAfterMs: 500 },
+        ],
+        [
+            {
+                kind: 'terminal_failure',
+                callId: 'call-1',
+                failure: { code: 'INVALID_CONTRACT', message: 'invalid', retryable: false },
+            },
+            422,
+            {
+                error: 'follow_up_terminal_failure',
+                callId: 'call-1',
+                failure: { code: 'INVALID_CONTRACT', message: 'invalid', retryable: false },
+            },
+        ],
+    ] as const)('maps bounded application result %#', async (result, status, body) => {
+        mocks.finalizeAiCall.mockResolvedValueOnce(result)
+        const response = await machineCallbacks[3].invoke(VALID_TOKEN)
+        expect(response.status).toBe(status)
+        await expect(response.json()).resolves.toEqual(body)
     })
 })
 
