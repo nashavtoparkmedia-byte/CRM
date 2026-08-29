@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => {
     const tx = {
-        $queryRaw: vi.fn(),
+        $queryRawUnsafe: vi.fn(),
         call: { findUnique: vi.fn(), update: vi.fn() },
     }
     return {
@@ -29,7 +29,7 @@ const GREETING = {
 describe('Calling Prisma lifecycle adapter', () => {
     beforeEach(() => {
         vi.clearAllMocks()
-        mocks.tx.$queryRaw.mockResolvedValue([{ id: 'call-1' }])
+        mocks.tx.$queryRawUnsafe.mockResolvedValue([{ id: 'call-1' }])
         mocks.tx.call.update.mockResolvedValue({})
     })
 
@@ -50,7 +50,11 @@ describe('Calling Prisma lifecycle adapter', () => {
                 }),
             },
         })
-        expect(mocks.tx.$queryRaw.mock.invocationCallOrder[0])
+        expect(mocks.tx.$queryRawUnsafe).toHaveBeenCalledWith(
+            'SELECT "id" FROM "Call" WHERE "id" = $1 FOR UPDATE',
+            'call-1',
+        )
+        expect(mocks.tx.$queryRawUnsafe.mock.invocationCallOrder[0])
             .toBeLessThan(mocks.tx.call.update.mock.invocationCallOrder[0])
     })
 

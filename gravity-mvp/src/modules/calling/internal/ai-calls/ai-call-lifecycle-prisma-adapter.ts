@@ -56,7 +56,7 @@ function bootstrapJournal(
 export const aiCallLifecyclePrismaPort: AiCallLifecyclePersistencePort = {
     async apply(callId, event) {
         return (prisma as any).$transaction(async (tx: any) => {
-            await tx.$queryRaw`SELECT "id" FROM "Call" WHERE "id" = ${callId} FOR UPDATE`
+            await tx.$queryRawUnsafe('SELECT "id" FROM "Call" WHERE "id" = $1 FOR UPDATE', callId)
             const call = await tx.call.findUnique({
                 where: { id: callId },
                 select: { id: true, isAi: true, aiSessionStatus: true, metadata: true },

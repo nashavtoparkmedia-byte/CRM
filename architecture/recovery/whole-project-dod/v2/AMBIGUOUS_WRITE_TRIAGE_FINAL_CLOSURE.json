@@ -16,8 +16,8 @@
     "GENUINELY_DYNAMIC_UNRESOLVED"
   ],
   "summary": {
-    "RAW_BASELINE_AMBIGUOUS": 48,
-    "CONFIRMED_WRITE_OWNER_RESOLVED": 14,
+    "RAW_BASELINE_AMBIGUOUS": 47,
+    "CONFIRMED_WRITE_OWNER_RESOLVED": 13,
     "CONFIRMED_WRITE_OWNER_UNRESOLVED": 0,
     "DYNAMIC_DELEGATE_UNRESOLVED": 0,
     "DYNAMIC_SQL_UNRESOLVED": 0,
@@ -26,10 +26,10 @@
     "CONFIRMED_NON_WRITE": 34,
     "GENUINELY_DYNAMIC_UNRESOLVED": 0,
     "RESOLVED_NON_WRITE": 34,
-    "OWNER_VALID_WRITE": 10,
+    "OWNER_VALID_WRITE": 9,
     "CONTROLLED_MIGRATION_WRITE": 4,
     "MATERIAL_UNRESOLVED_WRITE_RISK": 0,
-    "RECONCILIATION_TOTAL": 48,
+    "RECONCILIATION_TOTAL": 47,
     "RECONCILIATION_EXACT": true
   },
   "records": [
@@ -2326,49 +2326,6 @@
       "semantic_state": "RESOLVED_NON_WRITE"
     },
     {
-      "record_id": "f2385246a9722e1692eaa96a81289d48e1bc42701ab7bbaf653642fac72b7e40",
-      "site_signature": "f2385246a9722e1692eaa96a81289d48e1bc42701ab7bbaf653642fac72b7e40",
-      "source_sha256": "7875a85d456ddd265d15dfbcae857893dfaba5c299af01448e513f87d839f444",
-      "file": "gravity-mvp/src/modules/calling/internal/recording-ready-prisma-adapter.ts",
-      "line": 16,
-      "column": 23,
-      "kind": "model",
-      "method": "createMany",
-      "fragment_source": null,
-      "database_command_intent": null,
-      "model": "domainOutboxEvent",
-      "candidate_models": [
-        "domainOutboxEvent"
-      ],
-      "tables": [],
-      "operations": [],
-      "read_tables": [],
-      "selected_columns": [],
-      "called_functions": [],
-      "sql_sha256": null,
-      "sql_provenance_sha256": null,
-      "source_context": "calling",
-      "source_technical_module": "calling.module",
-      "owner_contexts": [],
-      "receiver_origin": "transaction-callback:import:@/lib/prisma",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "APPLICATION_RUNTIME",
-        "production_capability": "POSSIBLE",
-        "registry_classified": false
-      },
-      "ambiguity_reasons": [],
-      "unresolved_targets": [
-        "domainOutboxEvent",
-        "domainOutboxEvent"
-      ],
-      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
-      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
-      "ownership_classification": "OWNER_VALID",
-      "final_ownership_classification": "OWNER_VALID",
-      "semantic_state": "OWNER_VALID_WRITE"
-    },
-    {
       "record_id": "b00356e49038391b1ecb1efbefd7c929b2e1e15f2cc6580a32df27a68f04c982",
       "site_signature": "b00356e49038391b1ecb1efbefd7c929b2e1e15f2cc6580a32df27a68f04c982",
       "source_sha256": "013c8d9494def2be0782244423b39994dfa92ea3e79df851a0e12115f05d0292",
@@ -2596,9 +2553,9 @@
     }
   ],
   "current_exact_review": {
-    "ambiguous_denominator": 48,
+    "ambiguous_denominator": 47,
     "review_key": "site_signature",
-    "sorted_site_signatures_sha256": "f7c2c08771bbb2542c4233dc2cc93f1f69eca5b3f5a251cf868cceddc2285198",
+    "sorted_site_signatures_sha256": "47023449cf41acde1b2258b5a221edf46d0b1d2fd4cc10502fa618de9dadaec6",
     "policy": "Every current ambiguous analyzer signature requires one independent disposition and every resolved non-write requires one exact proof; the historical raw baseline grants no authorization."
   },
   "non_write_proofs": [

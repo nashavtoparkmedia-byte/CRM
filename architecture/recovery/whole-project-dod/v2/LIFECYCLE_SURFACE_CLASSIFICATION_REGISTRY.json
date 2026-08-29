@@ -14,12 +14,12 @@
   "surfaces": [
     {
       "path": "architecture/isolation/calling/ai-call-mass-calling-v1/migration.sql",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
+      "lifecycle": "TEST",
+      "disposition": "TEST_SUPPORT",
+      "production_capability": "NONE",
       "functional_owner": "calling",
       "owner_context": "calling",
-      "rationale": "Calling-owned source-isolated migration used only by the disposable campaign proof. It is outside the sealed production migration inventory; lifecycle classification grants no production application, deployment, or cross-context write authority.",
+      "rationale": "Calling-owned schema fixture whose only executable consumer is the gated disposable Postgres campaign proof. It is outside the sealed production migration inventory; promotion requires a separately governed production migration and this classification grants no production application, deployment, or cross-context write authority.",
       "classification_artifact": "architecture/isolation/calling/ai-call-mass-calling-v1/persistence-manifest.json"
     },
     {
