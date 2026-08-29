@@ -1,0 +1,47 @@
+{
+  "schema": "yoko.crm.operational-surface-classification-batch.v1",
+  "authority": "Exact reviewed disposition of the two operational surfaces introduced by the permanent agent architecture contract change.",
+  "summary": {
+    "total": 2,
+    "classified": 2,
+    "unclassified": 0,
+    "active_operational": 2
+  },
+  "policy": "Lifecycle classification records the active governance owner and conservative reachability only; it grants no credential access, business-data ownership, production write capability, or scan exemption.",
+  "surfaces": [
+    {
+      "path": ".github/workflows/agent-architecture-contract.yml",
+      "source_sha256": "1ed7c4c1899b3b3391318bc1cc74c94a9d218990a07f2dfc307a2372991dff79",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "platform_engineering",
+      "data_written": [
+        "GitHub Actions check result and runner logs only; no business-domain or production data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "read-only GitHub Actions guard for the repository agent architecture contract",
+      "production_capability": "POSSIBLE",
+      "credential_capability": "NONE_IN_REVIEWED_SOURCE",
+      "evidence": "The exact source grants contents: read, checks out the revision, installs pinned Node.js, and invokes only the repository contract guard and its tests; it declares no database, provider, production, or secret input. POSSIBLE remains the conservative lifecycle classification for an active workflow and grants no capability."
+    },
+    {
+      "path": "tools/architecture/check-agent-architecture-contract.mjs",
+      "source_sha256": "d8a0fffcd75b5c6baaf88de754d21d07c69871fad86f59ce78cbfa0ccacab04a",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "architecture_recovery",
+      "data_written": [
+        "process stdout/stderr contract result only; no repository, business-domain, or production data"
+      ],
+      "affected_domains": [
+        "architecture_control_plane"
+      ],
+      "approved_architecture_path": "bounded read-only repository instruction and reference verifier under the governed tools/architecture control boundary",
+      "production_capability": "POSSIBLE",
+      "credential_capability": "NONE_IN_REVIEWED_SOURCE",
+      "evidence": "The exact source imports only filesystem/path URL utilities, reads six repository instruction files, validates fixed markers and local references, and emits a result; it has no database client, provider/network call, environment-secret read, or write primitive. POSSIBLE remains the conservative lifecycle classification and grants no capability."
+    }
+  ]
+}

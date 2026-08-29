@@ -1,5 +1,14 @@
 # Project Rules: CRM Automation
 
+## Canonical architecture authority
+
+Root `AGENTS.md` and its referenced architecture development contract are the
+canonical repository-wide authority for CRM architecture, domain/data
+ownership, cross-domain contracts, scope, secrets, and privilege boundaries.
+Read and obey them first. These Cursor-specific automation and workflow rules
+may add conveniences, but they must not weaken or redefine canonical CRM
+architecture boundaries.
+
 ## General AI Instructions
 You are an agent working on the CRM project. To ensure a smooth development experience, follow these rules:
 

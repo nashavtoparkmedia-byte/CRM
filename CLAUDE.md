@@ -1,5 +1,14 @@
 # CRM Project — Claude Code Instructions
 
+## Canonical architecture authority
+
+Root `AGENTS.md` and its referenced architecture development contract are the
+canonical repository-wide authority for CRM architecture, domain/data
+ownership, cross-domain contracts, scope, secrets, and privilege boundaries.
+Read and obey them before these Claude-specific instructions. This file may add
+tooling, local workflow, and UI guidance, but it must not weaken or redefine
+the canonical architecture rules.
+
 ## Project Overview
 Internal CRM for managing drivers and analytics (NashAvtoParkMedia).
 
@@ -8,7 +17,11 @@ Internal CRM for managing drivers and analytics (NashAvtoParkMedia).
 
 ---
 
-## Architecture — 4 модуля + 2 сервиса
+## Local development process map — 4 modules + 2 services
+
+This is a tool-specific launch map, not the CRM domain architecture. Domain
+ownership and dependency boundaries come from root `AGENTS.md` and the
+accepted architecture manifests it references.
 
 | Модуль | Папка | Запуск |
 |--------|-------|--------|
