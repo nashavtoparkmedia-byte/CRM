@@ -13,8 +13,9 @@
  * via Next on every PCM frame; invalidateKeysCache() refreshes immediately
  * (useful right after CHANNEL_PARK).
  *
- * All endpoints are unauthenticated for MVP. When CRM grows real auth we'll
- * gate them by a shared secret (BRIDGE_SHARED_TOKEN — already wired here).
+ * Every request carries BRIDGE_SHARED_TOKEN when configured. CRM authenticates
+ * the header and fails closed, so bridge and CRM deployments must configure the
+ * same well-formed secret before these callbacks can succeed.
  */
 
 const { retryFinalizeRequest, fetchOnce } = require('./retry-helpers')

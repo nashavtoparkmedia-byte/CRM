@@ -18,20 +18,23 @@
 //   - Terminal states (`ended` / `failed`) cannot be overwritten —
 //     we don't roll finalized calls back into mid-lifecycle.
 //
-// Public route by convention (mirrors other bridge ↔ CRM endpoints
-// in `tools/audio-bridge-day1/crm-client.js`: finalize / transcript-item
-// / by-fs-uuid). The bridge does NOT carry a `crm_user_id` cookie;
-// gating this route by user-auth would defeat its purpose. Future
-// security work would gate by `BRIDGE_SHARED_TOKEN` instead.
+// Machine-only route. The bridge does NOT carry a `crm_user_id` cookie;
+// it authenticates with `BRIDGE_SHARED_TOKEN` before any request parsing,
+// logging, or database access occurs.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { isAllowedState, isIdempotentNoOp } from '@/lib/ai-call/state-helpers'
+import { isBridgeMachineRequestAuthenticated } from '@/modules/calling/internal/ai-calls/bridge-machine-auth'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+    if (!isBridgeMachineRequestAuthenticated(req.headers)) {
+        return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+    }
+
     const { id } = await ctx.params
     if (!id) {
         return NextResponse.json({ error: 'id_required' }, { status: 400 })

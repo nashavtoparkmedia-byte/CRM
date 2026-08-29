@@ -18,6 +18,7 @@ import { validateLeadData } from '@/lib/ai-call/scenario-schema'
 import { _createPersistEvents } from '@/lib/ai-call/event-emitter'
 import { CREATE_TASK_COMMAND_V1 } from '@/contracts/work-management/v1'
 import { createTaskV1 } from '@/modules/work-management/public/v1'
+import { isBridgeMachineRequestAuthenticated } from '@/modules/calling/internal/ai-calls/bridge-machine-auth'
 
 // Bind once at module init. Same DI pattern as other AI-call helpers.
 const persistEvents = _createPersistEvents(prisma as any)
@@ -93,6 +94,10 @@ export const dynamic = 'force-dynamic'
  *     result.manager_task.should_create is true.
  */
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+    if (!isBridgeMachineRequestAuthenticated(req.headers)) {
+        return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+    }
+
     const { id } = await ctx.params
     if (!id) return NextResponse.json({ error: 'id_required' }, { status: 400 })
 

@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getScenario } from '@/lib/ai-call/scenarios'
+import { isBridgeMachineRequestAuthenticated } from '@/modules/calling/internal/ai-calls/bridge-machine-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,7 +17,11 @@ export const dynamic = 'force-dynamic'
  * Returns 404 if no Call row matches the UUID (the bridge treats 404 as
  * "ad-hoc test call, no dialog") so 404 here is NOT a server error.
  */
-export async function GET(_req: NextRequest, ctx: { params: Promise<{ fsUuid: string }> }) {
+export async function GET(req: NextRequest, ctx: { params: Promise<{ fsUuid: string }> }) {
+    if (!isBridgeMachineRequestAuthenticated(req.headers)) {
+        return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+    }
+
     const { fsUuid } = await ctx.params
     if (!fsUuid) return NextResponse.json({ error: 'fsUuid_required' }, { status: 400 })
 

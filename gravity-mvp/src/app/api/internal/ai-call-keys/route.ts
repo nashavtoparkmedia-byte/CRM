@@ -1,7 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- this endpoint is the
-   one place plaintext secrets cross a process boundary; pragmatic cast OK */
 import { NextRequest, NextResponse } from 'next/server'
 import { getAllPlaintext } from '@/lib/ai-call/provider-settings'
+import { isBridgeMachineRequestAuthenticated } from '@/modules/calling/internal/ai-calls/bridge-machine-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,30 +17,16 @@ export const dynamic = 'force-dynamic'
  *     mockMode: boolean
  *   }
  *
- * Access control (defence-in-depth, ALL must pass):
- *
- *   1. Block browser-origin requests. Modern browsers always send the
- *      `Sec-Fetch-Site` header on fetch/XHR/<script>/<a> navigation;
- *      bridge (Node fetch) does not. Presence ⇒ reject. This stops the
- *      most likely attack vector — a logged-in CRM user typing the URL
- *      into the address bar.
- *
- *   2. Then EITHER:
- *      - BRIDGE_SHARED_TOKEN env is set AND request has matching
- *        X-Bridge-Token header (strongest channel — recommended for
- *        any non-localhost deployment), OR
- *      - request appears to come from loopback (remote IP 127.0.0.1 / ::1).
- *        Hostnames are NOT trusted — Host header is attacker-controllable.
- *
- *   3. Method: GET only (no body, no CSRF surface).
+ * Access requires a well-formed `BRIDGE_SHARED_TOKEN` configuration and an
+ * exact `X-Bridge-Token` match. Missing or invalid configuration fails closed;
+ * denials expose no diagnostic or secret material.
  *
  * The bridge caches the response in-memory for 60 seconds, so this
  * endpoint is hit at most ~once per minute per session.
  */
 export async function GET(req: NextRequest) {
-    const denial = denyReason(req)
-    if (denial) {
-        return NextResponse.json({ error: 'forbidden', reason: denial }, { status: 403 })
+    if (!isBridgeMachineRequestAuthenticated(req.headers)) {
+        return NextResponse.json({ error: 'forbidden' }, { status: 403 })
     }
     const data = await getAllPlaintext()
     // Explicit no-cache headers — secrets should never sit in any
@@ -54,46 +39,4 @@ export async function GET(req: NextRequest) {
             Pragma: 'no-cache',
         },
     })
-}
-
-function denyReason(req: NextRequest): string | null {
-    // Layer 1 — strongest signal: shared token. If a token is configured AND
-    // matches, we accept regardless of any other header. Tokens are 32-byte
-    // hex secrets known only to bridge + CRM, so a match is full auth. We
-    // check this FIRST because spec-compliant Node fetches (undici 7+) add
-    // `sec-fetch-*` headers themselves, which would otherwise trip the
-    // browser-origin guard below.
-    const expectedToken = process.env.BRIDGE_SHARED_TOKEN
-    if (expectedToken) {
-        const got = req.headers.get('x-bridge-token')
-        if (got === expectedToken) return null
-        return 'bad_token'
-    }
-
-    // Layer 2 — no token configured: fall back to browser-origin sniff. Any
-    // request that came from a <fetch>/XHR/navigation/script/<img> carries a
-    // `Sec-Fetch-Site` header from the user agent. That stops the most
-    // likely attack vector — a logged-in CRM user opening the URL in the
-    // address bar — even without a token.
-    if (req.headers.get('sec-fetch-site') || req.headers.get('sec-fetch-mode')) {
-        return 'browser_origin'
-    }
-
-    // Layer 3 — also without a token: require true loopback. We DELIBERATELY
-    // don't trust the Host header (attacker-controllable) or
-    // X-Forwarded-For (proxy-injected). Look at the actual TCP peer.
-    // NOTE: in Next.js 16 NextRequest.socket is undefined in dev mode, so
-    // this fallback is best-effort only — running the bridge without a
-    // configured BRIDGE_SHARED_TOKEN is NOT recommended.
-    const remoteIp =
-        (req as any).ip ||  // Next.js edge runtime
-        // Node runtime — Next exposes the underlying request on a non-
-        // public field; we duck-type defensively.
-        ((req as any).socket?.remoteAddress as string | undefined) ||
-        ''
-    const loopback = ['127.0.0.1', '::1', '::ffff:127.0.0.1']
-    const extraAllowed = (process.env.BRIDGE_ALLOWED_IPS ?? '')
-        .split(',').map(s => s.trim()).filter(Boolean)
-    if (loopback.includes(remoteIp) || extraAllowed.includes(remoteIp)) return null
-    return 'not_loopback'
 }

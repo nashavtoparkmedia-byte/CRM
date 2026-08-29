@@ -2,6 +2,7 @@
    for AI-call models may not be regenerated on every dev box. */
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { isBridgeMachineRequestAuthenticated } from '@/modules/calling/internal/ai-calls/bridge-machine-auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,6 +20,10 @@ export const dynamic = 'force-dynamic'
  * No-op on missing/empty text; never 5xx — failures don't break the call.
  */
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+    if (!isBridgeMachineRequestAuthenticated(req.headers)) {
+        return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+    }
+
     const { id } = await ctx.params
     if (!id) return NextResponse.json({ error: 'id_required' }, { status: 400 })
 
