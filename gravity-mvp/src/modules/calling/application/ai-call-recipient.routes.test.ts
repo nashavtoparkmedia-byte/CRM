@@ -7,7 +7,6 @@ const mocks = vi.hoisted(() => ({
     callCreate: vi.fn(),
     callUpdate: vi.fn(),
     createTaskV1: vi.fn(),
-    driverFindUnique: vi.fn(),
     getCurrentUser: vi.fn(),
     getMockPayload: vi.fn(),
     getScenario: vi.fn(),
@@ -17,6 +16,7 @@ const mocks = vi.hoisted(() => ({
     originateAiCall: vi.fn(),
     pickRandomVariant: vi.fn(),
     resolveContactRecipient: vi.fn(),
+    resolveDriverRecipient: vi.fn(),
     scenarioFindUnique: vi.fn(),
 }))
 
@@ -24,7 +24,6 @@ vi.mock('@/lib/prisma', () => ({
     prisma: {
         aiCallScenario: { findUnique: mocks.scenarioFindUnique },
         call: { create: mocks.callCreate, update: mocks.callUpdate },
-        driver: { findUnique: mocks.driverFindUnique },
     },
 }))
 vi.mock('@/modules/identity-access/public/v1/user-directory', () => ({
@@ -52,6 +51,7 @@ vi.mock('@/contracts/work-management/v1', () => ({
 vi.mock('@/modules/work-management/public/v1', () => ({ createTaskV1: mocks.createTaskV1 }))
 vi.mock('@/modules/calling/application/ai-call-recipient', () => ({
     resolveAiCallContactRecipient: mocks.resolveContactRecipient,
+    resolveAiCallDriverRecipient: mocks.resolveDriverRecipient,
 }))
 
 import { POST as startCall } from '@/app/api/ai-calls/start/route'
@@ -77,12 +77,16 @@ beforeEach(() => {
         contactId: 'contact-1',
         phone: '+79990000000',
     })
+    mocks.resolveDriverRecipient.mockResolvedValue({
+        status: 'resolved',
+        driverId: 'driver-1',
+        phone: '+78880000000',
+    })
     mocks.getScenario.mockResolvedValue(scenario)
     mocks.listScenarios.mockResolvedValue([scenario])
     mocks.callCreate.mockResolvedValue({ id: 'call-1', metadata: null })
     mocks.callUpdate.mockResolvedValue({})
     mocks.originateAiCall.mockResolvedValue('+OK accepted')
-    mocks.driverFindUnique.mockResolvedValue({ phone: '+78880000000' })
     mocks.getMockPayload.mockReturnValue({
         durationSec: 30,
         transcript: '[AI] Test',
@@ -102,7 +106,7 @@ afterEach(() => {
     vi.unstubAllEnvs()
 })
 
-describe('AI-call Contact route integration', () => {
+describe('AI-call single-recipient route integration', () => {
     it('starts a live Contact call with the Contacts-selected phone and preserves success semantics', async () => {
         const response = await startCall(request('/api/ai-calls/start', {
             contactId: 'contact-1',
@@ -134,7 +138,7 @@ describe('AI-call Contact route integration', () => {
             }),
         })
         expect(mocks.originateAiCall).toHaveBeenCalledTimes(1)
-        expect(mocks.driverFindUnique).not.toHaveBeenCalled()
+        expect(mocks.resolveDriverRecipient).not.toHaveBeenCalled()
     })
 
     it('keeps the mock Contact surface on the same Contacts boundary', async () => {
@@ -206,15 +210,16 @@ describe('AI-call Contact route integration', () => {
         expect(mocks.callCreate).not.toHaveBeenCalled()
     })
 
-    it('leaves the existing Driver lookup branch unchanged and outside Contact resolution', async () => {
-        const response = await createMockCall(request('/api/ai-calls/mock', {
-            driverId: 'driver-1',
-            variant: 'qualified',
-        }))
+    it.each([
+        ['live', (req: NextRequest) => startCall(req), '/api/ai-calls/start'],
+        ['mock', (req: NextRequest) => createMockCall(req), '/api/ai-calls/mock'],
+    ])('resolves a %s Driver through the Calling Fleet facade', async (_name, invoke, path) => {
+        const response = await invoke(request(path, { driverId: 'driver-1', variant: 'qualified' }))
         expect(response.status).toBe(200)
-        expect(mocks.driverFindUnique).toHaveBeenCalledWith({
-            where: { id: 'driver-1' },
-            select: { phone: true },
+        expect(mocks.resolveDriverRecipient).toHaveBeenCalledWith({
+            driverId: 'driver-1',
+            contactId: null,
+            phoneNumber: null,
         })
         expect(mocks.resolveContactRecipient).not.toHaveBeenCalled()
         expect(mocks.callCreate).toHaveBeenCalledWith({
@@ -225,22 +230,53 @@ describe('AI-call Contact route integration', () => {
             }),
         })
     })
+
+    it.each([
+        ['live missing Driver', (req: NextRequest) => startCall(req), '/api/ai-calls/start', 'driver_not_found'],
+        ['mock missing Driver', (req: NextRequest) => createMockCall(req), '/api/ai-calls/mock', 'driver_not_found'],
+        ['live Driver without phone', (req: NextRequest) => startCall(req), '/api/ai-calls/start', 'driver_has_no_callable_phone'],
+        ['mock Driver without phone', (req: NextRequest) => createMockCall(req), '/api/ai-calls/mock', 'driver_has_no_callable_phone'],
+    ])('maps %s to the existing bounded product error', async (_name, invoke, path, reason) => {
+        mocks.resolveDriverRecipient.mockResolvedValue({ status: 'unreachable', reason })
+        const response = await invoke(request(path, { driverId: 'driver-1' }))
+        expect(response.status).toBe(400)
+        await expect(response.json()).resolves.toEqual({ error: 'no_phone_number_for_lead' })
+        expect(mocks.callCreate).not.toHaveBeenCalled()
+        expect(mocks.originateAiCall).not.toHaveBeenCalled()
+    })
+
+    it('rejects Driver plus raw-phone ambiguity before storage or telephony', async () => {
+        mocks.resolveDriverRecipient.mockResolvedValue({
+            status: 'invalid_input',
+            reason: 'ambiguous_driver_recipient',
+        })
+        const response = await startCall(request('/api/ai-calls/start', {
+            driverId: 'driver-1',
+            phoneNumber: '+79990000000',
+        }))
+        expect(response.status).toBe(400)
+        await expect(response.json()).resolves.toEqual({ error: 'ambiguous_driver_recipient' })
+        expect(mocks.resolveDriverRecipient).toHaveBeenCalledTimes(1)
+        expect(mocks.callCreate).not.toHaveBeenCalled()
+        expect(mocks.originateAiCall).not.toHaveBeenCalled()
+    })
 })
 
 function readSource(path: string): string {
     return readFileSync(join(process.cwd(), path), 'utf8')
 }
 
-describe('AI-call Contact source boundary', () => {
+describe('AI-call recipient source boundary', () => {
     const routePaths = [
         'src/app/api/ai-calls/start/route.ts',
         'src/app/api/ai-calls/mock/route.ts',
     ]
 
-    it('removes direct Contact persistence and private-service access from both entry routes', () => {
+    it('removes direct Contact and Driver persistence/private access from both entry routes', () => {
         for (const path of routePaths) {
             const source = readSource(path)
             expect(source, path).not.toMatch(/prisma\.(?:contact|contactPhone)/)
+            expect(source, path).not.toMatch(/prisma\.driver/)
             expect(source, path).not.toMatch(/ContactService|@\/lib\/contacts/)
             expect(source, path).not.toMatch(/@\/modules\/contacts\/(?:application|internal)/)
             expect(source, path).toContain('@/modules/calling/application/ai-call-recipient')
@@ -255,14 +291,24 @@ describe('AI-call Contact source boundary', () => {
         expect(source).not.toMatch(/@\/modules\/contacts\/(?:application|internal)/)
     })
 
-    it('keeps human Identity first and the pre-existing Driver branch present', () => {
+    it('uses only the Fleet public surface and exact versioned callable-phone query', () => {
+        const source = readSource('src/modules/calling/application/ai-call-recipient.ts')
+        expect(source).toContain("from '@/modules/fleet-operations/public/v1'")
+        expect(source).toContain('GET_DRIVER_CALLABLE_PHONE_QUERY_V1')
+        expect(source).not.toMatch(/@\/modules\/fleet-operations\/(?:application|internal)/)
+        expect(source).not.toMatch(/prisma\.driver/)
+    })
+
+    it('keeps human Identity first and resolves Driver only after authorization', () => {
         for (const path of routePaths) {
             const source = readSource(path)
             expect(source.indexOf('await getCurrentUser()')).toBeLessThan(source.indexOf('await req.json()'))
             expect(source.indexOf('await getCurrentUser()')).toBeLessThan(
                 source.indexOf('resolveAiCallContactRecipient('),
             )
-            expect(source).toContain('prisma.driver.findUnique')
+            expect(source.indexOf('await getCurrentUser()')).toBeLessThan(
+                source.indexOf('resolveAiCallDriverRecipient('),
+            )
         }
     })
 })

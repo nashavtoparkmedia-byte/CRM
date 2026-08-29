@@ -7,7 +7,10 @@ import { getCurrentUserIdentityV1 as getCurrentUser } from '@/modules/identity-a
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { originateAiCall } from '@/lib/ai-call/esl-originate'
 import { getScenario, DEFAULT_PROJECT_ID, listScenarios } from '@/lib/ai-call/scenarios'
-import { resolveAiCallContactRecipient } from '@/modules/calling/application/ai-call-recipient'
+import {
+    resolveAiCallContactRecipient,
+    resolveAiCallDriverRecipient,
+} from '@/modules/calling/application/ai-call-recipient'
 
 export const dynamic = 'force-dynamic'
 
@@ -61,9 +64,9 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'driverId_or_contactId_or_phoneNumber_required' }, { status: 400 })
     }
 
-    // Resolve toNumber — Contact selection belongs to Contacts; the pre-existing
-    // Driver/raw-phone branch remains unchanged pending its own thaw stage.
-    let toNumber = phoneNumber ?? ''
+    // Contact and Driver values are resolved by their data owners. A raw phone
+    // is accepted only when neither owner-backed recipient was supplied.
+    let toNumber = ''
     if (contactId !== null) {
         const recipient = await resolveAiCallContactRecipient({ contactId, driverId, phoneNumber })
         if (recipient.status === 'invalid_input') {
@@ -73,9 +76,17 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'no_phone_number_for_lead' }, { status: 400 })
         }
         toNumber = recipient.phone
-    } else if (!toNumber && driverId) {
-        const d = await prisma.driver.findUnique({ where: { id: driverId }, select: { phone: true } })
-        toNumber = d?.phone ?? ''
+    } else if (driverId !== null) {
+        const recipient = await resolveAiCallDriverRecipient({ driverId, contactId, phoneNumber })
+        if (recipient.status === 'invalid_input') {
+            return NextResponse.json({ error: recipient.reason }, { status: 400 })
+        }
+        if (recipient.status === 'unreachable') {
+            return NextResponse.json({ error: 'no_phone_number_for_lead' }, { status: 400 })
+        }
+        toNumber = recipient.phone
+    } else {
+        toNumber = phoneNumber ?? ''
     }
     if (!toNumber) {
         return NextResponse.json({ error: 'no_phone_number_for_lead' }, { status: 400 })

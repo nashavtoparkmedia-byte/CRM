@@ -18,7 +18,7 @@
     {
       "context": "calling",
       "path": "architecture/contexts/v1/manifests/calling.json",
-      "sha256": "e8339cd7bcaeb2eb8536ea2b0166f659ba21a593638ee31e764404bb985c7b14"
+      "sha256": "78a21b95630bcc8b919bc5ee4e1ced4bee18cb193e9dbc5ca021009c2a70f96e"
     },
     {
       "context": "configuration",
@@ -38,7 +38,7 @@
     {
       "context": "fleet_operations",
       "path": "architecture/contexts/v1/manifests/fleet_operations.json",
-      "sha256": "9dea3e90f2b10661de7c77347b4f301fc6d3b9dfb2ec4b263936923ef91b6dae"
+      "sha256": "7ee4a0cbdbe751ac340dac2607bb65a8542f6593add39ac54f84cc9af2399611"
     },
     {
       "context": "identity_access",
@@ -88,7 +88,7 @@
     },
     "contract_registry": {
       "path": "architecture/contracts/v1/registry.json",
-      "sha256": "048538080b314d99d280878b2ce5dfb3f8b5827a5a2cb314f0fcc1d78ff2009e"
+      "sha256": "bf395eedabd9b652df9c85b4215117e068ab5fd76af1c0bf03470e30bdc135ad"
     },
     "contract_registry_negative_tests": {
       "path": "tools/architecture/test-contract-registry.mjs",
@@ -167,11 +167,11 @@
     },
     "final_dependency_current": {
       "path": "architecture/contexts/v1/final-dependency-current.json",
-      "sha256": "72bf9b2b3154b5987a911730bd29ff01b263363e927dde5590def826565b9f10"
+      "sha256": "8868fdaa7c4f9a659cac3b87bb0811fad8726efa411ca650efd048b9f68dbedb"
     },
     "final_dependency_source": {
       "path": "architecture/contexts/v1/final-dependency-source.json",
-      "sha256": "0fb682338f54546d386e0a86e3bb7aad756d60a62d63c691074682cf4142a164"
+      "sha256": "1b78ab27c026ab2991875d2eb4f9ce5322d628b8d03903b34c8a7187ae3e96d4"
     },
     "foreign_write_migration_plan": {
       "path": "architecture/contexts/v1/foreign-write-migration-plan.json",

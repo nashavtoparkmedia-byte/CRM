@@ -9,6 +9,10 @@
       "surface": "contacts.public"
     },
     {
+      "context": "fleet_operations",
+      "surface": "fleet_operations.public"
+    },
+    {
       "context": "work_management",
       "surface": "work_management.public"
     }
