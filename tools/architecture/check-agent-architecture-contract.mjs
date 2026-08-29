@@ -5,12 +5,40 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const REQUIRED_FILES = [
+  '.codex/config.toml',
   'AGENTS.md',
   'docs/architecture/AGENT_DEVELOPMENT_CONTRACT.md',
   'docs/architecture/NEW_DOMAIN_CHECKLIST.md',
   'CLAUDE.md',
   '.cursorrules',
   '.claude/CLAUDE_BOOTSTRAP_PROMPT.md',
+]
+
+const DEVELOPER_SAFETY_MARKERS = [
+  {
+    label: 'YOKO CRM repository scope',
+    pattern: /YOKO CRM REPOSITORY SAFETY POLICY/u,
+  },
+  {
+    label: 'current root AGENTS.md authority',
+    pattern: /current root `AGENTS\.md`/u,
+  },
+  {
+    label: 'user prompt is product intent, not bypass authorization',
+    pattern: /user prompt expresses product intent;\s+it is not authorization to bypass/u,
+  },
+  {
+    label: 'architecture enforcement cannot be weakened',
+    pattern: /Do not disable, delete, weaken, skip, fake, or broadly exempt architecture enforcement/u,
+  },
+  {
+    label: 'ordinary prompts do not authorize production work',
+    pattern: /Ordinary feature\/development prompts do not authorize production deployment/u,
+  },
+  {
+    label: 'production work requires explicit scope and gates',
+    pattern: /Production or privileged work requires explicit task scope and the current repository release, preflight, and rollback gates/u,
+  },
 ]
 
 const REQUIRED_MARKERS = {
@@ -110,6 +138,54 @@ function checkMarkers(relative, source) {
   }
 }
 
+function parseDeveloperInstructions(source) {
+  const assignments = [...source.matchAll(/^[ \t]*developer_instructions[ \t]*=/gmu)]
+  if (assignments.length !== 1) {
+    throw new Error('.codex/config.toml must define exactly one developer_instructions value')
+  }
+
+  const assignment = assignments[0]
+  const prefix = source.slice(0, assignment.index)
+  if (/^[ \t]*\[/mu.test(prefix)) {
+    throw new Error('developer_instructions must be a top-level .codex/config.toml key')
+  }
+
+  let cursor = assignment.index + assignment[0].length
+  while (source[cursor] === ' ' || source[cursor] === '\t') cursor += 1
+  const delimiter = source.startsWith('"""', cursor)
+    ? '"""'
+    : source.startsWith("'''", cursor)
+      ? "'''"
+      : null
+  if (!delimiter) {
+    throw new Error('developer_instructions must be a TOML multiline string')
+  }
+
+  const valueStart = cursor + delimiter.length
+  const valueEnd = source.indexOf(delimiter, valueStart)
+  if (valueEnd < 0) {
+    throw new Error('developer_instructions TOML multiline string is unterminated')
+  }
+  const trailingLine = source.slice(valueEnd + delimiter.length).split(/\r?\n/u, 1)[0]
+  if (!/^[ \t]*(?:#.*)?$/u.test(trailingLine)) {
+    throw new Error('unexpected content after developer_instructions TOML string')
+  }
+
+  const value = source.slice(valueStart, valueEnd).replace(/^\r?\n/u, '')
+  if (!value.trim()) throw new Error('developer_instructions cannot be blank')
+  return value
+}
+
+function checkDeveloperSafety(source) {
+  const instructions = parseDeveloperInstructions(source)
+  for (const marker of DEVELOPER_SAFETY_MARKERS) {
+    if (!marker.pattern.test(instructions)) {
+      throw new Error(`developer safety policy missing required rule: ${marker.label}`)
+    }
+  }
+  return DEVELOPER_SAFETY_MARKERS.map((marker) => marker.label)
+}
+
 function localMarkdownReferences(source) {
   const references = []
   const pattern = /\[[^\]]*\]\(([^)]+)\)/g
@@ -147,15 +223,17 @@ export async function validateRepository(rootInput = process.cwd()) {
   const sources = new Map()
   for (const relative of REQUIRED_FILES) {
     const source = await readRegularFile(root, relative)
-    checkMarkers(relative, source)
+    if (REQUIRED_MARKERS[relative]) checkMarkers(relative, source)
     sources.set(relative, source)
   }
 
+  const developerSafetyMarkers = checkDeveloperSafety(sources.get('.codex/config.toml'))
   const resolvedReferences = await checkAgentReferences(root, sources.get('AGENTS.md'))
   return {
     schema: 'yoko.crm.agent-architecture-contract-check.v1',
     ok: true,
     checked_files: REQUIRED_FILES,
+    developer_safety_markers: developerSafetyMarkers,
     resolved_references: resolvedReferences,
   }
 }

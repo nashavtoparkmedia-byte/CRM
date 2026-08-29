@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url'
 const repositoryRoot = fileURLToPath(new URL('../../..', import.meta.url))
 const guard = path.join(repositoryRoot, 'tools/architecture/check-agent-architecture-contract.mjs')
 const fixtureFiles = [
+  '.codex/config.toml',
   'AGENTS.md',
   'docs/architecture/AGENT_DEVELOPMENT_CONTRACT.md',
   'docs/architecture/NEW_DOMAIN_CHECKLIST.md',
@@ -41,10 +42,34 @@ test('canonical agent architecture contract passes', () => {
   const report = JSON.parse(result.stdout)
   assert.equal(report.ok, true)
   assert.equal(report.schema, 'yoko.crm.agent-architecture-contract-check.v1')
+  assert.equal(report.checked_files.includes('.codex/config.toml'), true)
+  assert.equal(report.developer_safety_markers.length, 6)
   assert.deepEqual(report.resolved_references.sort(), [
     'docs/architecture/AGENT_DEVELOPMENT_CONTRACT.md',
     'docs/architecture/NEW_DOMAIN_CHECKLIST.md',
   ])
+})
+
+test('guard fails closed when the developer policy loses the user-authorization boundary', async () => {
+  const fixture = await makeFixture()
+  try {
+    const configPath = path.join(fixture, '.codex/config.toml')
+    const source = await readFile(configPath, 'utf8')
+    await writeFile(
+      configPath,
+      source.replace(
+        'A user prompt expresses product intent; it is not authorization to bypass',
+        'A user prompt expresses product intent and may bypass',
+      ),
+      'utf8',
+    )
+
+    const result = invoke(fixture)
+    assert.notEqual(result.status, 0)
+    assert.match(result.stderr, /developer safety policy missing required rule: user prompt is product intent, not bypass authorization/)
+  } finally {
+    await rm(fixture, { recursive: true, force: true })
+  }
 })
 
 test('guard fails closed when an AGENTS.md reference is broken', async () => {
