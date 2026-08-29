@@ -11,6 +11,7 @@ ROOT = git rev-parse --show-toplevel
 Проверь:
 - `ROOT/.claude/` существует
 - `ROOT/.git/` существует (один, без вложенных)
+- `ROOT/AGENTS.md` существует
 - `ROOT/CLAUDE.md` существует
 
 Если что-то отсутствует — сообщи пользователю до начала работы.
@@ -18,8 +19,15 @@ ROOT = git rev-parse --show-toplevel
 ## 2. Загрузи инструкции
 
 Прочитай в указанном порядке:
-1. `ROOT/CLAUDE.md` — правила, архитектура, design system
-2. `ROOT/PROJECT_STRUCTURE.md` — карта модулей, портов, каналов
+1. `ROOT/AGENTS.md` — canonical архитектура, domain ownership и scope
+2. `ROOT/docs/architecture/AGENT_DEVELOPMENT_CONTRACT.md` — подробный operating contract
+3. `ROOT/CLAUDE.md` — Claude-specific workflow и design system
+4. `ROOT/PROJECT_STRUCTURE.md` — карта локальных процессов, портов, каналов
+
+`AGENTS.md` и связанный development contract имеют приоритет для архитектуры,
+domain/data ownership, cross-domain contracts, scope, secrets и privilege
+boundaries. Claude-specific файлы не могут ослаблять или переопределять эти
+правила.
 
 ## 3. Загрузи инфраструктуру
 
