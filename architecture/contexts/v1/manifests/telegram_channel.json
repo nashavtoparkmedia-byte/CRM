@@ -85,6 +85,8 @@
     "migration_ec3ef196a15c342e"
   ],
   "internal_surface": [
+    "gravity-mvp/src/app/api/bot-users/pending-link-requests.test.ts",
+    "gravity-mvp/src/app/api/bot-users/pending-link-requests.ts",
     "gravity-mvp/src/app/tg-actions.ts",
     "tg-bot/src",
     "tg-bot/tg-bot-frontend"
@@ -253,6 +255,8 @@
     }
   ],
   "owned_paths": [
+    "gravity-mvp/src/app/api/bot-users/pending-link-requests.test.ts",
+    "gravity-mvp/src/app/api/bot-users/pending-link-requests.ts",
     "gravity-mvp/src/app/tg-actions.ts",
     "gravity-mvp/src/contracts/telegram-channel",
     "gravity-mvp/src/modules/telegram-channel",
