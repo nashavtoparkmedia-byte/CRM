@@ -5,6 +5,7 @@ const db = require('./database');
 const logger = require('./utils/logger');
 const { ensureBotMappingV1 } = require('./public-bot-maintenance');
 const sheetsService = require('./services/sheets');
+const userService = require('./services/userService');
 
 // Import handlers
 const startHandler = require('./handlers/start');
@@ -231,6 +232,8 @@ bot.on('contact', async (ctx, next) => {
         const userService = require('./services/userService');
         const state = await userService.getUserState(userId);
 
+        await userService.updateUser(userId, { phone, phone_verified: 1 });
+
         // If user is in an active wizard scene — pass contact there
         const activeScene = ctx.session?.__scenes?.current;
         if (activeScene === 'car_management_scene' || activeScene === 'limit_management_scene') {
@@ -245,7 +248,6 @@ bot.on('contact', async (ctx, next) => {
         logger.info(`Received phone ${phone} from user ${userId} (Standard Flow)`);
 
         // Standard flow (Survey)
-        await userService.updateUser(userId, { phone });
         const sheetsService = require('./services/sheets');
         await sheetsService.upsertUserRow(userId, username, {
             'Phone': phone,
@@ -393,12 +395,14 @@ async function relaunchPolling(reason) {
 // Start sequence
 Promise.all([
     sheetsService.initializeSheet().then(() => logger.info('Google Sheets initialization completed')),
-    initializeBotInDb().then(() => logger.info('Database bot mapping verified'))
+    initializeBotInDb().then(() => logger.info('Database bot mapping verified')),
+    userService.syncPendingCrmUsers()
 ]).then(() => {
     // bot.launch() returns a Promise that never resolves in polling mode —
     // we intentionally don't .then() it. We just need it kicked off.
     bot.launch().catch((err) => logger.error(`Bot launch error: ${err?.message || err}`));
     logger.info('Bot launching, heartbeat armed every ' + (HEARTBEAT_INTERVAL_MS / 1000) + 's');
+    userService.startPeriodicCrmSync();
 
     setInterval(async () => {
         const idleSec = Math.floor((Date.now() - lastActivityAt) / 1000);

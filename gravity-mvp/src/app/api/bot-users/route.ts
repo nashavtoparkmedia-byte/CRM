@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { DELETE_DRIVER_TELEGRAM_LINK_COMMAND_V1, DISMISS_BOT_LINK_REQUEST_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
-import { deleteDriverTelegramLinkV1, dismissBotLinkRequestV1 } from '@/modules/telegram-channel/public/v1'
+import { buildPendingBotLinkRequests, deleteDriverTelegramLinkV1, dismissBotLinkRequestV1 } from '@/modules/telegram-channel/public/v1'
 
 // GET /api/bot-users — linked drivers + pending link requests
 export async function GET() {
-  const [dtRows, requests] = await Promise.all([
+  const [dtRows, legacyRequests, registryRows] = await Promise.all([
     prisma.driverTelegram.findMany({
       orderBy: { createdAt: 'desc' },
     }),
@@ -17,12 +17,16 @@ export async function GET() {
       },
       orderBy: { createdAt: 'desc' },
     }),
+    prisma.botUserRegistry.findMany({
+      orderBy: { lastSeenAt: 'desc' },
+    }),
   ])
 
   const driverIds = dtRows.map(r => r.driverId)
   const allTelegramIds = [
     ...dtRows.map(r => `telegram:${r.telegramId}`),
-    ...requests.map(r => `telegram:${r.telegramId}`),
+    ...legacyRequests.map(r => `telegram:${r.telegramId}`),
+    ...registryRows.map(r => `telegram:${r.telegramId}`),
   ]
 
   const [drivers, parks, chats] = await Promise.all([
@@ -48,6 +52,7 @@ export async function GET() {
 
   const driverMap = Object.fromEntries(drivers.map(d => [d.id, d]))
   const parkMap = Object.fromEntries(parks.map(p => [p.parkId, p.name || p.parkId]))
+  const registryMap = Object.fromEntries(registryRows.map(row => [row.telegramId.toString(), row]))
   // chatMap keyed by raw telegramId string (without prefix)
   const chatMap = Object.fromEntries(
     chats.map(c => [c.externalChatId.replace('telegram:', ''), c.id])
@@ -56,10 +61,13 @@ export async function GET() {
   const linked = dtRows.map(row => {
     const driver = driverMap[row.driverId]
     const tgId = row.telegramId.toString()
+    const registry = registryMap[tgId]
     return {
       id: row.id,
       telegramId: tgId,
-      username: row.username,
+      username: row.username || registry?.username || null,
+      firstName: registry?.firstName || null,
+      lastName: registry?.lastName || null,
       driverId: row.driverId,
       driverName: driver?.fullName ?? null,
       driverPhone: driver?.phone ?? null,
@@ -70,22 +78,10 @@ export async function GET() {
     }
   })
 
-  // Parse "[Запрос привязки] Телефон: +79..., @username" text
-  const parsedRequests = requests.map(r => {
-    const telegramId = r.telegramId.toString()
-    const phoneMatch = r.text.match(/Телефон:\s*([+\d]+)/)
-    const usernameMatch = r.text.match(/@(\S+)/)
-    return {
-      id: r.id,
-      telegramId,
-      phone: phoneMatch?.[1] ?? null,
-      username: usernameMatch?.[1] ?? null,
-      chatId: chatMap[telegramId] ?? null,
-      createdAt: r.createdAt.toISOString(),
-    }
-  })
+  const linkedTelegramIds = new Set(dtRows.map(row => row.telegramId.toString()))
+  const requests = buildPendingBotLinkRequests({ registryRows, legacyRequests, linkedTelegramIds, chatMap })
 
-  return NextResponse.json({ linked, requests: parsedRequests })
+  return NextResponse.json({ linked, requests })
 }
 
 // DELETE /api/bot-users?telegramId=... — unlink driver from bot

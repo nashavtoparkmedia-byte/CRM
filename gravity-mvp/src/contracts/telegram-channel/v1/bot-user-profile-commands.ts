@@ -7,6 +7,8 @@ export interface RecordBotUserProfileCommandV1 {
     username: string | null
     firstName: string | null
     lastName: string | null
+    phone: string | null
+    phoneVerified: boolean
     observedAt: Date
 }
 
@@ -18,13 +20,14 @@ export interface RecordBotUserProfileResultV1 {
 export function parseRecordBotUserProfileCommandV1(input: unknown): RecordBotUserProfileCommandV1 {
     if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('command must be an object')
     const value = input as Record<string, unknown>
-    const fields = ['contract', 'telegramId', 'username', 'firstName', 'lastName', 'observedAt']
+    const fields = ['contract', 'telegramId', 'username', 'firstName', 'lastName', 'phone', 'phoneVerified', 'observedAt']
     if (Object.keys(value).some(key => !fields.includes(key))) throw new Error('unsupported field')
     if (value.contract !== RECORD_BOT_USER_PROFILE_COMMAND_V1) throw new Error('unsupported contract')
     if (typeof value.telegramId !== 'bigint' || value.telegramId <= 0n) throw new Error('telegramId is invalid')
-    for (const key of ['username', 'firstName', 'lastName'] as const) {
+    for (const key of ['username', 'firstName', 'lastName', 'phone'] as const) {
         if (value[key] !== null && typeof value[key] !== 'string') throw new Error(`${key} is invalid`)
     }
+    if (typeof value.phoneVerified !== 'boolean') throw new Error('phoneVerified is invalid')
     if (!(value.observedAt instanceof Date) || Number.isNaN(value.observedAt.getTime())) throw new Error('observedAt is invalid')
     return value as unknown as RecordBotUserProfileCommandV1
 }
