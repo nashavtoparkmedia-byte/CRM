@@ -9,6 +9,7 @@ import { getMockPayload, pickRandomVariant, type MockVariant } from '@/lib/ai-ca
 import { isMockModeEnabled } from '@/lib/ai-call/provider-settings'
 import { CREATE_TASK_COMMAND_V1 } from '@/contracts/work-management/v1'
 import { createTaskV1 } from '@/modules/work-management/public/v1'
+import { resolveAiCallContactRecipient } from '@/modules/calling/application/ai-call-recipient'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,19 +61,21 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'driverId_or_contactId_or_phoneNumber_required' }, { status: 400 })
     }
 
-    // Resolve phone number for fromNumber/toNumber. We're the "from" side
-    // (the AI bot), the lead is the "to" side.
+    // Resolve phone number for fromNumber/toNumber. Contact selection belongs
+    // to Contacts; the pre-existing Driver/raw-phone branch stays unchanged.
     let toNumber = phoneNumber ?? ''
-    if (!toNumber && driverId) {
+    if (contactId !== null) {
+        const recipient = await resolveAiCallContactRecipient({ contactId, driverId, phoneNumber })
+        if (recipient.status === 'invalid_input') {
+            return NextResponse.json({ error: recipient.reason }, { status: 400 })
+        }
+        if (recipient.status === 'unreachable') {
+            return NextResponse.json({ error: 'no_phone_number_for_lead' }, { status: 400 })
+        }
+        toNumber = recipient.phone
+    } else if (!toNumber && driverId) {
         const d = await prisma.driver.findUnique({ where: { id: driverId }, select: { phone: true } })
         toNumber = d?.phone ?? ''
-    }
-    if (!toNumber && contactId) {
-        const c = await prisma.contact.findUnique({
-            where: { id: contactId },
-            select: { phones: { where: { isPrimary: true }, select: { phone: true }, take: 1 } },
-        })
-        toNumber = c?.phones[0]?.phone ?? ''
     }
     if (!toNumber) toNumber = '+70000000000'
 
