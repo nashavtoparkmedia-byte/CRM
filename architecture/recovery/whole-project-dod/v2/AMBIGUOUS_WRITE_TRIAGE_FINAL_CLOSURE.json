@@ -16,8 +16,8 @@
     "GENUINELY_DYNAMIC_UNRESOLVED"
   ],
   "summary": {
-    "RAW_BASELINE_AMBIGUOUS": 47,
-    "CONFIRMED_WRITE_OWNER_RESOLVED": 13,
+    "RAW_BASELINE_AMBIGUOUS": 41,
+    "CONFIRMED_WRITE_OWNER_RESOLVED": 7,
     "CONFIRMED_WRITE_OWNER_UNRESOLVED": 0,
     "DYNAMIC_DELEGATE_UNRESOLVED": 0,
     "DYNAMIC_SQL_UNRESOLVED": 0,
@@ -26,10 +26,10 @@
     "CONFIRMED_NON_WRITE": 34,
     "GENUINELY_DYNAMIC_UNRESOLVED": 0,
     "RESOLVED_NON_WRITE": 34,
-    "OWNER_VALID_WRITE": 9,
+    "OWNER_VALID_WRITE": 3,
     "CONTROLLED_MIGRATION_WRITE": 4,
     "MATERIAL_UNRESOLVED_WRITE_RISK": 0,
-    "RECONCILIATION_TOTAL": 47,
+    "RECONCILIATION_TOTAL": 41,
     "RECONCILIATION_EXACT": true
   },
   "records": [
@@ -1513,264 +1513,6 @@
       "semantic_state": "RESOLVED_NON_WRITE"
     },
     {
-      "record_id": "45645e0b760a5827a47289517fa298c1a3bcd215068e418d7c93e887b8ad17ac",
-      "site_signature": "45645e0b760a5827a47289517fa298c1a3bcd215068e418d7c93e887b8ad17ac",
-      "source_sha256": "6c7f1bf52613551e1035c68137dbfc44974d8a311cc642a147b856d283177ffa",
-      "file": "gravity-mvp/src/infrastructure/outbox/prisma-outbox-store.ts",
-      "line": 24,
-      "column": 40,
-      "kind": "model",
-      "method": "updateMany",
-      "fragment_source": null,
-      "database_command_intent": null,
-      "model": "domainOutboxEvent",
-      "candidate_models": [
-        "domainOutboxEvent"
-      ],
-      "tables": [],
-      "operations": [],
-      "read_tables": [],
-      "selected_columns": [],
-      "called_functions": [],
-      "sql_sha256": null,
-      "sql_provenance_sha256": null,
-      "source_context": "platform_shell",
-      "source_technical_module": "gravity_core",
-      "owner_contexts": [],
-      "receiver_origin": "import:@/lib/prisma",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "APPLICATION_RUNTIME",
-        "production_capability": "POSSIBLE",
-        "registry_classified": false
-      },
-      "ambiguity_reasons": [],
-      "unresolved_targets": [
-        "domainOutboxEvent",
-        "domainOutboxEvent"
-      ],
-      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
-      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
-      "ownership_classification": "OWNER_VALID",
-      "final_ownership_classification": "OWNER_VALID",
-      "semantic_state": "OWNER_VALID_WRITE"
-    },
-    {
-      "record_id": "81f28083be28056e5c9be0ca8018f6ec9121a53bee49136fe9fd7e710afdb913",
-      "site_signature": "81f28083be28056e5c9be0ca8018f6ec9121a53bee49136fe9fd7e710afdb913",
-      "source_sha256": "6c7f1bf52613551e1035c68137dbfc44974d8a311cc642a147b856d283177ffa",
-      "file": "gravity-mvp/src/infrastructure/outbox/prisma-outbox-store.ts",
-      "line": 36,
-      "column": 38,
-      "kind": "model",
-      "method": "updateMany",
-      "fragment_source": null,
-      "database_command_intent": null,
-      "model": "domainOutboxEvent",
-      "candidate_models": [
-        "domainOutboxEvent"
-      ],
-      "tables": [],
-      "operations": [],
-      "read_tables": [],
-      "selected_columns": [],
-      "called_functions": [],
-      "sql_sha256": null,
-      "sql_provenance_sha256": null,
-      "source_context": "platform_shell",
-      "source_technical_module": "gravity_core",
-      "owner_contexts": [],
-      "receiver_origin": "import:@/lib/prisma",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "APPLICATION_RUNTIME",
-        "production_capability": "POSSIBLE",
-        "registry_classified": false
-      },
-      "ambiguity_reasons": [],
-      "unresolved_targets": [
-        "domainOutboxEvent",
-        "domainOutboxEvent"
-      ],
-      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
-      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
-      "ownership_classification": "OWNER_VALID",
-      "final_ownership_classification": "OWNER_VALID",
-      "semantic_state": "OWNER_VALID_WRITE"
-    },
-    {
-      "record_id": "64934aa9a77c0de5bafd842a668fa1b1f10654ce0a3ffa06cfe7a7fd3b995046",
-      "site_signature": "64934aa9a77c0de5bafd842a668fa1b1f10654ce0a3ffa06cfe7a7fd3b995046",
-      "source_sha256": "6c7f1bf52613551e1035c68137dbfc44974d8a311cc642a147b856d283177ffa",
-      "file": "gravity-mvp/src/infrastructure/outbox/prisma-outbox-store.ts",
-      "line": 49,
-      "column": 33,
-      "kind": "model",
-      "method": "updateMany",
-      "fragment_source": null,
-      "database_command_intent": null,
-      "model": "domainOutboxEvent",
-      "candidate_models": [
-        "domainOutboxEvent"
-      ],
-      "tables": [],
-      "operations": [],
-      "read_tables": [],
-      "selected_columns": [],
-      "called_functions": [],
-      "sql_sha256": null,
-      "sql_provenance_sha256": null,
-      "source_context": "platform_shell",
-      "source_technical_module": "gravity_core",
-      "owner_contexts": [],
-      "receiver_origin": "import:@/lib/prisma",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "APPLICATION_RUNTIME",
-        "production_capability": "POSSIBLE",
-        "registry_classified": false
-      },
-      "ambiguity_reasons": [],
-      "unresolved_targets": [
-        "domainOutboxEvent",
-        "domainOutboxEvent"
-      ],
-      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
-      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
-      "ownership_classification": "OWNER_VALID",
-      "final_ownership_classification": "OWNER_VALID",
-      "semantic_state": "OWNER_VALID_WRITE"
-    },
-    {
-      "record_id": "8779aa7c9ab18d702c45db346d6e34b2262c14d2744796efbc77bd6bcf6927a2",
-      "site_signature": "8779aa7c9ab18d702c45db346d6e34b2262c14d2744796efbc77bd6bcf6927a2",
-      "source_sha256": "6c7f1bf52613551e1035c68137dbfc44974d8a311cc642a147b856d283177ffa",
-      "file": "gravity-mvp/src/infrastructure/outbox/prisma-outbox-store.ts",
-      "line": 81,
-      "column": 34,
-      "kind": "model",
-      "method": "updateMany",
-      "fragment_source": null,
-      "database_command_intent": null,
-      "model": "domainOutboxEvent",
-      "candidate_models": [
-        "domainOutboxEvent"
-      ],
-      "tables": [],
-      "operations": [],
-      "read_tables": [],
-      "selected_columns": [],
-      "called_functions": [],
-      "sql_sha256": null,
-      "sql_provenance_sha256": null,
-      "source_context": "platform_shell",
-      "source_technical_module": "gravity_core",
-      "owner_contexts": [],
-      "receiver_origin": "import:@/lib/prisma",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "APPLICATION_RUNTIME",
-        "production_capability": "POSSIBLE",
-        "registry_classified": false
-      },
-      "ambiguity_reasons": [],
-      "unresolved_targets": [
-        "domainOutboxEvent",
-        "domainOutboxEvent"
-      ],
-      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
-      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
-      "ownership_classification": "OWNER_VALID",
-      "final_ownership_classification": "OWNER_VALID",
-      "semantic_state": "OWNER_VALID_WRITE"
-    },
-    {
-      "record_id": "68e7b2590b446a521037a09ba257bd2dc3e9dc5160ae46e2838bc955f203ab4d",
-      "site_signature": "68e7b2590b446a521037a09ba257bd2dc3e9dc5160ae46e2838bc955f203ab4d",
-      "source_sha256": "6c7f1bf52613551e1035c68137dbfc44974d8a311cc642a147b856d283177ffa",
-      "file": "gravity-mvp/src/infrastructure/outbox/prisma-outbox-store.ts",
-      "line": 102,
-      "column": 15,
-      "kind": "model",
-      "method": "updateMany",
-      "fragment_source": null,
-      "database_command_intent": null,
-      "model": "domainOutboxEvent",
-      "candidate_models": [
-        "domainOutboxEvent"
-      ],
-      "tables": [],
-      "operations": [],
-      "read_tables": [],
-      "selected_columns": [],
-      "called_functions": [],
-      "sql_sha256": null,
-      "sql_provenance_sha256": null,
-      "source_context": "platform_shell",
-      "source_technical_module": "gravity_core",
-      "owner_contexts": [],
-      "receiver_origin": "import:@/lib/prisma",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "APPLICATION_RUNTIME",
-        "production_capability": "POSSIBLE",
-        "registry_classified": false
-      },
-      "ambiguity_reasons": [],
-      "unresolved_targets": [
-        "domainOutboxEvent",
-        "domainOutboxEvent"
-      ],
-      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
-      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
-      "ownership_classification": "OWNER_VALID",
-      "final_ownership_classification": "OWNER_VALID",
-      "semantic_state": "OWNER_VALID_WRITE"
-    },
-    {
-      "record_id": "48452c703f3878500e43002f7311f83f1a84a5d7a7c7fc02ac262672a49917b9",
-      "site_signature": "48452c703f3878500e43002f7311f83f1a84a5d7a7c7fc02ac262672a49917b9",
-      "source_sha256": "6c7f1bf52613551e1035c68137dbfc44974d8a311cc642a147b856d283177ffa",
-      "file": "gravity-mvp/src/infrastructure/outbox/prisma-outbox-store.ts",
-      "line": 114,
-      "column": 15,
-      "kind": "model",
-      "method": "updateMany",
-      "fragment_source": null,
-      "database_command_intent": null,
-      "model": "domainOutboxEvent",
-      "candidate_models": [
-        "domainOutboxEvent"
-      ],
-      "tables": [],
-      "operations": [],
-      "read_tables": [],
-      "selected_columns": [],
-      "called_functions": [],
-      "sql_sha256": null,
-      "sql_provenance_sha256": null,
-      "source_context": "platform_shell",
-      "source_technical_module": "gravity_core",
-      "owner_contexts": [],
-      "receiver_origin": "import:@/lib/prisma",
-      "surface": {
-        "disposition": null,
-        "lifecycle": "APPLICATION_RUNTIME",
-        "production_capability": "POSSIBLE",
-        "registry_classified": false
-      },
-      "ambiguity_reasons": [],
-      "unresolved_targets": [
-        "domainOutboxEvent",
-        "domainOutboxEvent"
-      ],
-      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
-      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
-      "ownership_classification": "OWNER_VALID",
-      "final_ownership_classification": "OWNER_VALID",
-      "semantic_state": "OWNER_VALID_WRITE"
-    },
-    {
       "record_id": "e1c81095a11532a1ba56e2629b9316a15d42ad5062aa52dfa190283adb26f5e1",
       "site_signature": "e1c81095a11532a1ba56e2629b9316a15d42ad5062aa52dfa190283adb26f5e1",
       "source_sha256": "f59aa128a3bdbdd79890c8af1fb6f704fe9d0a29b012939cd6bf8bc40f5b2b1f",
@@ -2553,9 +2295,9 @@
     }
   ],
   "current_exact_review": {
-    "ambiguous_denominator": 47,
+    "ambiguous_denominator": 41,
     "review_key": "site_signature",
-    "sorted_site_signatures_sha256": "47023449cf41acde1b2258b5a221edf46d0b1d2fd4cc10502fa618de9dadaec6",
+    "sorted_site_signatures_sha256": "e54fe78c32e77b4cae8611d964ba39f9e99076dae37f9bc44b63f868f28611b4",
     "policy": "Every current ambiguous analyzer signature requires one independent disposition and every resolved non-write requires one exact proof; the historical raw baseline grants no authorization."
   },
   "non_write_proofs": [
