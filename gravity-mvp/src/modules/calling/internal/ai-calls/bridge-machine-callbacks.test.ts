@@ -3,10 +3,13 @@ import { join } from 'node:path'
 import { NextRequest } from 'next/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AiCallFinalizationInputError } from '@/modules/calling/application/ai-call-finalization'
+import { AiCallTranscriptConflictError } from '@/modules/calling/application/ai-call-transcript'
 
 const mocks = vi.hoisted(() => ({
     callFindUnique: vi.fn(),
     callUpdate: vi.fn(),
+    changeAiCallLifecycle: vi.fn(),
+    appendAiCallTranscriptMessage: vi.fn(),
     createTaskV1: vi.fn(),
     finalizeAiCall: vi.fn(),
     enqueueAnalyze: vi.fn(),
@@ -48,6 +51,10 @@ vi.mock('@/modules/work-management/public/v1', () => ({
 }))
 vi.mock('@/modules/calling/application/ai-call-finalization-runtime', () => ({
     finalizeAiCall: mocks.finalizeAiCall,
+}))
+vi.mock('@/modules/calling/application/ai-call-callback-runtime', () => ({
+    changeAiCallLifecycle: mocks.changeAiCallLifecycle,
+    appendAiCallTranscriptMessage: mocks.appendAiCallTranscriptMessage,
 }))
 vi.mock('@/lib/ai-call/provider-settings', () => ({
     getAllPlaintext: mocks.getAllPlaintext,
@@ -101,6 +108,9 @@ const machineCallbacks = [
             request('/api/ai-calls/sessions/call-1/transcript-item', 'POST', {
                 role: 'user',
                 text: 'hello',
+                messageId: 'audio-bridge-transcript:v1:fs-1:1',
+                ordinal: 1,
+                final: true,
             }, token),
             callContext,
         ),
@@ -138,6 +148,26 @@ beforeEach(() => {
         duplicate: false,
         followUpStatus: 'not_required',
     })
+    mocks.changeAiCallLifecycle.mockResolvedValue({
+        kind: 'applied',
+        callId: 'call-1',
+        journal: { state: 'greeting', revision: 1 },
+        receipt: {
+            eventId: 'audio-bridge-lifecycle:v1:call-1:greeting_started',
+            previousState: 'starting',
+        },
+    })
+    mocks.appendAiCallTranscriptMessage.mockResolvedValue({
+        kind: 'applied',
+        callId: 'call-1',
+        journal: { revision: 1 },
+        receipt: {
+            messageId: 'audio-bridge-transcript:v1:fs-1:1',
+            ordinal: 1,
+            acceptedAfterTerminal: false,
+        },
+        legacyTranscript: '[Лид] hello\n',
+    })
 })
 
 afterEach(() => {
@@ -156,6 +186,8 @@ describe('AudioBridge callback route authentication', () => {
         expect(mocks.getAllPlaintext).not.toHaveBeenCalled()
         expect(mocks.operationalLog).not.toHaveBeenCalled()
         expect(mocks.finalizeAiCall).not.toHaveBeenCalled()
+        expect(mocks.changeAiCallLifecycle).not.toHaveBeenCalled()
+        expect(mocks.appendAiCallTranscriptMessage).not.toHaveBeenCalled()
     })
 
     it('fails closed when the configured secret is missing', async () => {
@@ -222,31 +254,43 @@ describe('AudioBridge callback route authentication', () => {
     })
 
     it('accepts the exact token and preserves state mutation semantics', async () => {
-        mocks.callFindUnique.mockResolvedValue({ id: 'call-1', aiSessionStatus: 'starting' })
-
         const response = await machineCallbacks[1].invoke(VALID_TOKEN)
         expect(response.status).toBe(200)
         await expect(response.json()).resolves.toEqual({
             ok: true,
             callId: 'call-1',
             state: 'greeting',
+            revision: 1,
             skipped: false,
         })
-        expect(mocks.callUpdate).toHaveBeenCalledWith({
-            where: { id: 'call-1' },
-            data: { aiSessionStatus: 'greeting' },
+        expect(mocks.changeAiCallLifecycle).toHaveBeenCalledWith('call-1', {
+            eventId: 'audio-bridge-lifecycle:v1:call-1:greeting_started',
+            source: 'audio_bridge',
+            sourceSequence: 1,
+            kind: 'greeting_started',
+            target: 'greeting',
         })
     })
 
     it('accepts the exact token and preserves transcript append semantics', async () => {
-        mocks.callFindUnique.mockResolvedValue({ transcript: '[AI] Welcome\n' })
-
         const response = await machineCallbacks[2].invoke(VALID_TOKEN)
         expect(response.status).toBe(200)
-        await expect(response.json()).resolves.toEqual({ ok: true })
-        expect(mocks.callUpdate).toHaveBeenCalledWith({
-            where: { id: 'call-1' },
-            data: { transcript: '[AI] Welcome\n[Лид] hello\n' },
+        await expect(response.json()).resolves.toEqual({
+            ok: true,
+            callId: 'call-1',
+            messageId: 'audio-bridge-transcript:v1:fs-1:1',
+            ordinal: 1,
+            revision: 1,
+            duplicate: false,
+            acceptedAfterTerminal: false,
+        })
+        expect(mocks.appendAiCallTranscriptMessage).toHaveBeenCalledWith('call-1', {
+            messageId: 'audio-bridge-transcript:v1:fs-1:1',
+            ordinal: 1,
+            role: 'user',
+            content: 'hello',
+            final: true,
+            source: 'audio_bridge',
         })
     })
 
@@ -323,6 +367,63 @@ describe('AI-call finalize HTTP result mapping', () => {
         expect(response.status).toBe(status)
         await expect(response.json()).resolves.toEqual(body)
     })
+
+    it('maps transcript reconciliation collision before terminal acceptance to bounded 409', async () => {
+        mocks.finalizeAiCall.mockRejectedValueOnce(
+            new AiCallTranscriptConflictError('identity_collision', 'changed'),
+        )
+        const response = await machineCallbacks[3].invoke(VALID_TOKEN)
+        expect(response.status).toBe(409)
+        await expect(response.json()).resolves.toEqual({
+            error: 'transcript_conflict', reason: 'identity_collision',
+        })
+    })
+})
+
+describe('AI-call lifecycle/transcript HTTP fencing', () => {
+    it('returns a bounded stale lifecycle rejection without a direct Call write', async () => {
+        mocks.changeAiCallLifecycle.mockResolvedValueOnce({
+            kind: 'stale',
+            callId: 'call-1',
+            journal: { state: 'active', revision: 1 },
+            receipt: { eventId: 'late-greeting' },
+        })
+        const response = await machineCallbacks[1].invoke(VALID_TOKEN)
+        expect(response.status).toBe(409)
+        await expect(response.json()).resolves.toEqual({
+            error: 'stale_lifecycle_event', callId: 'call-1', state: 'active', revision: 1,
+        })
+        expect(mocks.callUpdate).not.toHaveBeenCalled()
+    })
+
+    it('reports exact transcript replay without duplicating the compatibility projection', async () => {
+        mocks.appendAiCallTranscriptMessage.mockResolvedValueOnce({
+            kind: 'duplicate',
+            callId: 'call-1',
+            journal: { revision: 1 },
+            receipt: {
+                messageId: 'audio-bridge-transcript:v1:fs-1:1',
+                ordinal: 1,
+                acceptedAfterTerminal: false,
+            },
+            legacyTranscript: '[Лид] hello\n',
+        })
+        const response = await machineCallbacks[2].invoke(VALID_TOKEN)
+        expect(response.status).toBe(200)
+        await expect(response.json()).resolves.toMatchObject({ duplicate: true, revision: 1 })
+    })
+
+    it('rejects partial Bridge transcript input before application persistence', async () => {
+        const response = await appendTranscriptItem(request(
+            '/api/ai-calls/sessions/call-1/transcript-item',
+            'POST',
+            { role: 'user', text: 'partial', messageId: 'm1', ordinal: 1, final: false },
+            VALID_TOKEN,
+        ), callContext)
+        expect(response.status).toBe(400)
+        await expect(response.json()).resolves.toMatchObject({ error: 'invalid_transcript_item' })
+        expect(mocks.appendAiCallTranscriptMessage).not.toHaveBeenCalled()
+    })
 })
 
 function readSource(path: string): string {
@@ -338,8 +439,8 @@ function exportedHandler(source: string, method: 'GET' | 'POST'): string {
 describe('AudioBridge callback source boundary', () => {
     const guardedRoutes: Array<[string, 'GET' | 'POST', RegExp]> = [
         ['src/app/api/ai-calls/sessions/by-fs-uuid/[fsUuid]/route.ts', 'GET', /await ctx\.params/],
-        ['src/app/api/ai-calls/sessions/[id]/state/route.ts', 'POST', /await ctx\.params/],
-        ['src/app/api/ai-calls/sessions/[id]/transcript-item/route.ts', 'POST', /await ctx\.params/],
+        ['src/app/api/ai-calls/sessions/[id]/state/route.ts', 'POST', /await changeAiCallLifecycle/],
+        ['src/app/api/ai-calls/sessions/[id]/transcript-item/route.ts', 'POST', /await appendAiCallTranscriptMessage/],
         ['src/app/api/ai-calls/sessions/[id]/finalize/route.ts', 'POST', /await ctx\.params/],
         ['src/app/api/internal/ai-call-keys/route.ts', 'GET', /await getAllPlaintext/],
     ]

@@ -5,9 +5,19 @@ import {
     metadataWithAiCallFinalizationJournal,
     readAiCallFinalizationJournal,
     type AiCallFinalizationJournalV1,
-    type AiCallFinalizationPersistencePort,
+    type AiCallFinalizationRecoveryPersistencePort,
     type FollowUpClaim,
 } from '../../application/ai-call-finalization'
+import {
+    AI_CALL_LIFECYCLE_METADATA_KEY,
+    aiCallLifecycleId,
+    applyAiCallLifecycleEvent,
+    createAiCallLifecycleJournal,
+    finalizationLifecycleEvent,
+    lifecycleStateFromCurrent,
+    metadataWithAiCallLifecycleJournal,
+    readAiCallLifecycleJournal,
+} from '../../application/ai-call-lifecycle'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -17,9 +27,45 @@ function hasJournalKey(metadata: unknown): boolean {
     return isRecord(metadata) && Object.prototype.hasOwnProperty.call(metadata, AI_CALL_FINALIZATION_METADATA_KEY)
 }
 
-function requireJournal(metadata: unknown, fingerprint: string): AiCallFinalizationJournalV1 {
+function terminalMetadata(input: {
+    callId: string
+    fingerprint: string
+    target: 'ended' | 'failed' | 'transferring'
+    currentSessionStatus: unknown
+    metadata: unknown
+    finalizationJournal: AiCallFinalizationJournalV1
+}): Record<string, unknown> {
+    const existingLifecycle = readAiCallLifecycleJournal(input.metadata)
+    if (!existingLifecycle && isRecord(input.metadata)
+        && Object.prototype.hasOwnProperty.call(input.metadata, AI_CALL_LIFECYCLE_METADATA_KEY)) {
+        throw new Error('AI call lifecycle journal is corrupt')
+    }
+    if (existingLifecycle
+        && (existingLifecycle.lifecycleId !== aiCallLifecycleId(input.callId)
+            || existingLifecycle.state !== lifecycleStateFromCurrent(input.currentSessionStatus))) {
+        throw new Error('AI call lifecycle projection diverged from journal')
+    }
+    const lifecycle = existingLifecycle ?? createAiCallLifecycleJournal(
+        input.callId,
+        lifecycleStateFromCurrent(input.currentSessionStatus),
+    )
+    const lifecycleResult = applyAiCallLifecycleEvent(lifecycle, finalizationLifecycleEvent({
+        callId: input.callId,
+        fingerprint: input.fingerprint,
+        target: input.target,
+    }))
+    const withFinalization = metadataWithAiCallFinalizationJournal(input.metadata, input.finalizationJournal)
+    return metadataWithAiCallLifecycleJournal(withFinalization, lifecycleResult.journal)
+}
+
+function requireJournal(metadata: unknown, callId: string, fingerprint: string): AiCallFinalizationJournalV1 {
     const journal = readAiCallFinalizationJournal(metadata)
     if (!journal) throw new Error('AI call finalization journal is missing or corrupt')
+    if (journal.finalizationId !== `ai-call-finalization:v1:${callId}`
+        || (journal.followUp.state !== 'not_required'
+            && journal.followUp.idempotencyKey !== `ai-call-finalization-follow-up:v1:${callId}`)) {
+        throw new Error('AI call finalization journal belongs to another aggregate')
+    }
     if (journal.fingerprint !== fingerprint) throw new Error('AI call finalization fingerprint changed')
     return journal
 }
@@ -52,7 +98,7 @@ function clearLease(journal: AiCallFinalizationJournalV1): AiCallFinalizationJou
     }
 }
 
-export const aiCallFinalizationPrismaPort: AiCallFinalizationPersistencePort = {
+export const aiCallFinalizationPrismaPort: AiCallFinalizationRecoveryPersistencePort = {
     async findCall(callId) {
         return (prisma as any).call.findUnique({
             where: { id: callId },
@@ -93,6 +139,11 @@ export const aiCallFinalizationPrismaPort: AiCallFinalizationPersistencePort = {
 
             const existing = readAiCallFinalizationJournal(call.metadata)
             if (existing) {
+                if (existing.finalizationId !== `ai-call-finalization:v1:${input.callId}`
+                    || (existing.followUp.state !== 'not_required'
+                        && existing.followUp.idempotencyKey !== `ai-call-finalization-follow-up:v1:${input.callId}`)) {
+                    throw new Error('AI call finalization journal belongs to another aggregate')
+                }
                 return existing.fingerprint === input.fingerprint
                     ? { kind: 'duplicate' as const, journal: existing }
                     : { kind: 'conflict' as const }
@@ -114,7 +165,14 @@ export const aiCallFinalizationPrismaPort: AiCallFinalizationPersistencePort = {
                 where: { id: input.callId },
                 data: {
                     ...input.terminal,
-                    metadata: metadataWithAiCallFinalizationJournal(call.metadata, input.journal),
+                    metadata: terminalMetadata({
+                        callId: input.callId,
+                        fingerprint: input.fingerprint,
+                        target: input.terminal.aiSessionStatus,
+                        currentSessionStatus: call.aiSessionStatus,
+                        metadata: call.metadata,
+                        finalizationJournal: input.journal,
+                    }),
                 },
             })
             return { kind: 'accepted' as const, journal: input.journal }
@@ -123,7 +181,7 @@ export const aiCallFinalizationPrismaPort: AiCallFinalizationPersistencePort = {
 
     async claimFollowUp(input): Promise<FollowUpClaim> {
         return withLockedCall(input.callId, async (tx, call) => {
-            const journal = requireJournal(call.metadata, input.fingerprint)
+            const journal = requireJournal(call.metadata, input.callId, input.fingerprint)
             const followUp = journal.followUp
             if (['not_required', 'completed', 'terminal_failure'].includes(followUp.state)) {
                 return { kind: 'settled' as const, journal }
@@ -164,7 +222,7 @@ export const aiCallFinalizationPrismaPort: AiCallFinalizationPersistencePort = {
 
     async completeFollowUp(input) {
         return withLockedCall(input.callId, async (tx, call) => {
-            const journal = requireJournal(call.metadata, input.fingerprint)
+            const journal = requireJournal(call.metadata, input.callId, input.fingerprint)
             if (journal.followUp.state !== 'in_progress' || journal.followUp.leaseToken !== input.leaseToken) {
                 return journal
             }
@@ -194,7 +252,7 @@ export const aiCallFinalizationPrismaPort: AiCallFinalizationPersistencePort = {
 
     async failFollowUp(input) {
         return withLockedCall(input.callId, async (tx, call) => {
-            const journal = requireJournal(call.metadata, input.fingerprint)
+            const journal = requireJournal(call.metadata, input.callId, input.fingerprint)
             if (journal.followUp.state !== 'in_progress' || journal.followUp.leaseToken !== input.leaseToken) {
                 return journal
             }
@@ -224,5 +282,49 @@ export const aiCallFinalizationPrismaPort: AiCallFinalizationPersistencePort = {
             })
             return failed
         })
+    },
+
+    async findRecoverableFollowUps(input) {
+        const now = input.now.toISOString()
+        const rows = await (prisma as any).$queryRaw<Array<{ id: string; metadata: unknown }>>`
+            SELECT "id", "metadata"
+            FROM "Call"
+            WHERE "isAi" = TRUE
+              AND (
+                "metadata"->'aiCallFinalizationV1'->'followUp'->>'state' = 'pending'
+                OR (
+                  "metadata"->'aiCallFinalizationV1'->'followUp'->>'state' = 'in_progress'
+                  AND "metadata"->'aiCallFinalizationV1'->'followUp'->>'leaseUntil' <= ${now}
+                )
+                OR (
+                  "metadata"->'aiCallFinalizationV1'->'followUp'->>'state' = 'retry_wait'
+                  AND "metadata"->'aiCallFinalizationV1'->'followUp'->>'nextAttemptAt' <= ${now}
+                )
+              )
+            ORDER BY "updatedAt" ASC, "id" ASC
+            LIMIT ${input.limit}
+        `
+        return rows.flatMap((row: { id: string; metadata: unknown }) => {
+            const journal = readAiCallFinalizationJournal(row.metadata)
+            if (!journal
+                || journal.finalizationId !== `ai-call-finalization:v1:${row.id}`
+                || journal.followUp.idempotencyKey !== `ai-call-finalization-follow-up:v1:${row.id}`
+                || !['pending', 'in_progress', 'retry_wait'].includes(journal.followUp.state)) return []
+            return [{
+                callId: row.id,
+                fingerprint: journal.fingerprint,
+                followUpState: journal.followUp.state as 'pending' | 'in_progress' | 'retry_wait',
+            }]
+        })
+    },
+
+    async countTerminalFollowUpFailures() {
+        const rows = await (prisma as any).$queryRaw<Array<{ count: bigint | number }>>`
+            SELECT COUNT(*) AS "count"
+            FROM "Call"
+            WHERE "isAi" = TRUE
+              AND "metadata"->'aiCallFinalizationV1'->'followUp'->>'state' = 'terminal_failure'
+        `
+        return Number(rows[0]?.count ?? 0)
     },
 }

@@ -59,7 +59,7 @@ function makeSession({ callUuid, scenario, ...overrides } = {}) {
         scenario: scenario ?? { id: 'sc1', name: 'No-variant scenario' },
         broadcastWav: async () => 500,
         onFinalize: r => events.finalize.push(r),
-        onTranscriptItem: (role, text) => events.transcript.push({ role, text }),
+        onTranscriptItem: (role, text, receipt) => events.transcript.push({ role, text, receipt }),
         onState: state => events.state.push(state),
         onUserSpoke: () => {},
         ...overrides,
@@ -132,6 +132,30 @@ test('onTranscriptItem fires with assistant + variant text', async () => {
         const assistantItems = events.transcript.filter(t => t.role === 'assistant')
         assert.equal(assistantItems.length, 1)
         assert.equal(assistantItems[0].text, s.greetingVariant.text)
+        assert.deepEqual(assistantItems[0].receipt, {
+            messageId: `audio-bridge-transcript:v1:${s.callUuid}:1`,
+            ordinal: 1,
+            role: 'assistant',
+            content: s.greetingVariant.text,
+            final: true,
+        })
+        assert.deepEqual(s.transcriptItems, [assistantItems[0].receipt])
+    } finally { cleanup() }
+})
+
+test('terminal payload replays the same deterministic transcript receipts', async () => {
+    resetLlmState()
+    const scenario = { id: 'sc1', name: 'AB', greetingVariants: VARIANTS }
+    const { s, events, cleanup } = makeSession({ callUuid: 'receipt-call', scenario })
+    try {
+        await s.start()
+        s.stop()
+        assert.equal(events.finalize.length, 1)
+        assert.deepEqual(events.finalize[0].transcriptItems, s.transcriptItems)
+        assert.deepEqual(events.finalize[0].transcript,
+            s.transcriptItems.map(({ role, content }) => ({ role, content })))
+        assert.equal(events.finalize[0].transcriptItems[0].messageId,
+            'audio-bridge-transcript:v1:receipt-call:1')
     } finally { cleanup() }
 })
 

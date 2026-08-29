@@ -1,32 +1,12 @@
-// POST /api/ai-calls/sessions/[id]/state
-//
-// Bridge → CRM. The bridge informs CRM when an AI-call enters one of
-// the two CRM-canonical intermediate states it owns: `greeting` and
-// `active`. (Plus `transferring` as defence-in-depth — see the policy
-// docstring in `lib/ai-call/state-helpers.js`.)
-//
-// Out of allowlist:
-//   - `thinking` / `speaking` / `listening` / `idle` — these oscillate
-//     constantly during a turn and would turn `aiSessionStatus` into
-//     noise without operator meaning. They go to bridge stdout via
-//     opsLog and never touch the DB.
-//   - `starting` — owned by `/api/ai-calls/start/route.ts`.
-//   - `ended` / `failed` — owned by `.../finalize/route.ts`.
-//
-// Idempotency:
-//   - Same-state POSTs are no-op (bridge reconnect / retry).
-//   - Terminal states (`ended` / `failed`) cannot be overwritten —
-//     we don't roll finalized calls back into mid-lifecycle.
-//
-// Machine-only route. The bridge does NOT carry a `crm_user_id` cookie;
-// it authenticates with `BRIDGE_SHARED_TOKEN` before any request parsing,
-// logging, or database access occurs.
-
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
-import { isAllowedState, isIdempotentNoOp } from '@/lib/ai-call/state-helpers'
+import {
+    AiCallLifecycleConflictError,
+    AiCallLifecycleInputError,
+} from '@/modules/calling/application/ai-call-lifecycle'
+import { changeAiCallLifecycle } from '@/modules/calling/application/ai-call-callback-runtime'
 import { isBridgeMachineRequestAuthenticated } from '@/modules/calling/internal/ai-calls/bridge-machine-auth'
+import { normalizeBridgeLifecycleCallback } from '@/modules/calling/internal/ai-calls/bridge-callback-normalization'
 
 export const dynamic = 'force-dynamic'
 
@@ -36,69 +16,57 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     }
 
     const { id } = await ctx.params
-    if (!id) {
-        return NextResponse.json({ error: 'id_required' }, { status: 400 })
-    }
+    if (!id) return NextResponse.json({ error: 'id_required' }, { status: 400 })
 
-    let body: { state?: unknown }
+    let body: unknown
     try {
         body = await req.json()
     } catch {
         return NextResponse.json({ error: 'invalid_json' }, { status: 400 })
     }
 
-    const target = body?.state
-    if (!isAllowedState(target)) {
-        opsLog('warn', 'ai_call_state_rejected', {
-            callId: id,
-            reason: 'not_in_allowlist',
-            target: typeof target === 'string' ? target : typeof target,
-        })
-        return NextResponse.json({ error: 'invalid_state' }, { status: 400 })
-    }
+    try {
+        const event = normalizeBridgeLifecycleCallback(id, body)
+        const result = await changeAiCallLifecycle(id, event)
+        if (result.kind === 'not_found') {
+            return NextResponse.json({ error: 'not_found' }, { status: 404 })
+        }
+        if (result.kind === 'stale') {
+            opsLog('warn', 'ai_call_lifecycle_stale_rejected', {
+                callId: id,
+                eventId: result.receipt.eventId,
+                state: result.journal.state,
+                revision: result.journal.revision,
+            })
+            return NextResponse.json({
+                error: 'stale_lifecycle_event',
+                callId: id,
+                state: result.journal.state,
+                revision: result.journal.revision,
+            }, { status: 409 })
+        }
 
-    const call = await prisma.call.findUnique({
-        where: { id },
-        select: { id: true, aiSessionStatus: true },
-    })
-    if (!call) {
-        return NextResponse.json({ error: 'not_found' }, { status: 404 })
-    }
-
-    if (isIdempotentNoOp(call.aiSessionStatus, target as string)) {
-        // Idempotent path — don't write, don't even bump updatedAt.
-        // Return a small marker the bridge can log if it cares.
-        opsLog('info', 'ai_call_state_noop', {
+        opsLog('info', result.kind === 'duplicate' ? 'ai_call_lifecycle_replayed' : 'ai_call_lifecycle_changed', {
             callId: id,
-            current: call.aiSessionStatus,
-            target,
+            eventId: result.receipt.eventId,
+            from: result.receipt.previousState,
+            to: result.journal.state,
+            revision: result.journal.revision,
         })
         return NextResponse.json({
             ok: true,
             callId: id,
-            state: call.aiSessionStatus,
-            skipped: true,
+            state: result.journal.state,
+            revision: result.journal.revision,
+            skipped: result.kind === 'duplicate',
         })
+    } catch (error) {
+        if (error instanceof AiCallLifecycleInputError) {
+            return NextResponse.json({ error: 'invalid_state', message: error.message }, { status: 400 })
+        }
+        if (error instanceof AiCallLifecycleConflictError) {
+            return NextResponse.json({ error: 'lifecycle_conflict', reason: error.code }, { status: 409 })
+        }
+        throw error
     }
-
-    // Cast through `any` mirrors the pattern in finalize/route.ts: Prisma
-    // client types for AI-call models may not be regenerated on every
-    // dev box, and the field name is already validated.
-    await (prisma as any).call.update({
-        where: { id },
-        data: { aiSessionStatus: target },
-    })
-
-    opsLog('info', 'ai_call_state_changed', {
-        callId: id,
-        from: call.aiSessionStatus,
-        to: target,
-    })
-
-    return NextResponse.json({
-        ok: true,
-        callId: id,
-        state: target,
-        skipped: false,
-    })
 }

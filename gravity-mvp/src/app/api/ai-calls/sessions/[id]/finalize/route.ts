@@ -4,6 +4,7 @@ import {
     type FinalizeAiCallResult,
 } from '@/modules/calling/application/ai-call-finalization'
 import { finalizeAiCall } from '@/modules/calling/application/ai-call-finalization-runtime'
+import { AiCallTranscriptConflictError } from '@/modules/calling/application/ai-call-transcript'
 import { isBridgeMachineRequestAuthenticated } from '@/modules/calling/internal/ai-calls/bridge-machine-auth'
 
 export const dynamic = 'force-dynamic'
@@ -61,6 +62,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     } catch (error) {
         if (error instanceof AiCallFinalizationInputError) {
             return NextResponse.json({ error: 'invalid_payload', message: error.message }, { status: 400 })
+        }
+        if (error instanceof AiCallTranscriptConflictError) {
+            return NextResponse.json({ error: 'transcript_conflict', reason: error.code }, { status: 409 })
         }
         throw error
     }

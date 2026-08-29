@@ -267,6 +267,21 @@ export async function register() {
             opsLog('error', 'esl_listener_start_failed', { operation: 'startup', error: err.message })
         }
 
+        // Calling-owned finalization recovery: a bounded metadata query finds
+        // pending/due/stale-lease follow-ups after restart. This does not rely
+        // on the Audio Bridge replaying a terminal callback.
+        try {
+            const { startAiCallFinalizationRecoveryV1 } = await import('@/modules/calling/public/v1')
+            const finalizationRecoveryInterval = startAiCallFinalizationRecoveryV1()
+            registerOperationalIntervalV1(finalizationRecoveryInterval)
+            opsLog('info', 'ai_call_finalization_recovery_started', { operation: 'startup' })
+        } catch (err: any) {
+            opsLog('error', 'ai_call_finalization_recovery_start_failed', {
+                operation: 'startup',
+                error: err.message,
+            })
+        }
+
         // ── Call processing pipeline (BullMQ): transcribe + analyze ──────
         // Stage 4. Workers pick up jobs published from RecordingReady.v1 and
         // jobs enqueued by each other (transcribe → analyze). Safe to start
@@ -316,7 +331,7 @@ export async function register() {
         }, 60 * 60 * 1000)  // every hour
         registerOperationalIntervalV1(yandexSyncInterval)
 
-        opsLog('info', 'periodic_jobs_registered', { jobs: ['recovery:5m', 'integrity:30m', 'message_retry:2m', 'wa_watchdog:60s', 'retention_cleanup:24h', 'stability_check:24h', 'yandex_fleet_sync:24h@03:00'] })
+        opsLog('info', 'periodic_jobs_registered', { jobs: ['recovery:5m', 'ai_call_finalization_recovery:30s', 'integrity:30m', 'message_retry:2m', 'wa_watchdog:60s', 'retention_cleanup:24h', 'stability_check:24h', 'yandex_fleet_sync:24h@03:00'] })
 
     }, 5000) // 5 second delay after server start
 

@@ -9,7 +9,13 @@ import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operatio
 import { enqueueAnalyze } from '@/lib/queue/queues'
 import { _createPersistEvents } from '@/lib/ai-call/event-emitter'
 import { aiCallFinalizationPrismaPort } from '../internal/ai-calls/ai-call-finalization-prisma-adapter'
-import { createAiCallFinalizationOperation } from './ai-call-finalization'
+import {
+    createAiCallFinalizationOperation,
+    createAiCallFinalizationRecoveryOperation,
+    createAiCallFinalizationWithTranscriptReconciliation,
+    type IdempotentTaskCommandPort,
+} from './ai-call-finalization'
+import { appendAiCallTranscriptMessage } from './ai-call-callback-runtime'
 
 const persistEvents = _createPersistEvents()
 
@@ -21,20 +27,22 @@ function withTimeout<T>(promise: Promise<T>, ms: number, tag: string): Promise<T
     return Promise.race([promise, deadline]).finally(() => { if (timer) clearTimeout(timer) }) as Promise<T>
 }
 
-export const finalizeAiCall = createAiCallFinalizationOperation({
-    persistence: aiCallFinalizationPrismaPort,
-    tasks: {
-        async create(command) {
-            return createIdempotentTaskV1({
-                contract: CREATE_IDEMPOTENT_TASK_COMMAND_V1,
-                idempotencyKey: command.idempotencyKey,
-                data: command.data,
-            })
-        },
-        isPermanentError(error) {
-            return error instanceof ContractValidationError || error instanceof TaskIdempotencyConflictError
-        },
+const taskPort: IdempotentTaskCommandPort = {
+    async create(command) {
+        return createIdempotentTaskV1({
+            contract: CREATE_IDEMPOTENT_TASK_COMMAND_V1,
+            idempotencyKey: command.idempotencyKey,
+            data: command.data,
+        })
     },
+    isPermanentError(error: unknown) {
+        return error instanceof ContractValidationError || error instanceof TaskIdempotencyConflictError
+    },
+}
+
+const finalizeAiCallOperation = createAiCallFinalizationOperation({
+    persistence: aiCallFinalizationPrismaPort,
+    tasks: taskPort,
     sideEffects: {
         async onAccepted({ call, request, terminal, validationIssues }) {
             if (validationIssues.length > 0) {
@@ -116,3 +124,50 @@ export const finalizeAiCall = createAiCallFinalizationOperation({
         },
     },
 })
+
+const recoverAiCallFinalizationsOperation = createAiCallFinalizationRecoveryOperation({
+    persistence: aiCallFinalizationPrismaPort,
+    tasks: taskPort,
+})
+
+// The Bridge includes the same deterministic final transcript receipts in its
+// retryable terminal callback. Reconcile them before accepting terminal state
+// so a transcript callback/finalize race converges.
+export const finalizeAiCall = createAiCallFinalizationWithTranscriptReconciliation({
+    appendTranscript: appendAiCallTranscriptMessage,
+    finalize: finalizeAiCallOperation,
+})
+
+export const AI_CALL_FINALIZATION_RECOVERY_POLL_MS = 30_000
+
+export async function recoverAiCallFinalizationsOnce() {
+    return recoverAiCallFinalizationsOperation()
+}
+
+export function startAiCallFinalizationRecovery(): ReturnType<typeof setInterval> {
+    let running = false
+    let lastTerminalFailureCount: number | null = null
+    const tick = async () => {
+        if (running) return
+        running = true
+        try {
+            const result = await recoverAiCallFinalizationsOnce()
+            const terminalFailureCountChanged = lastTerminalFailureCount !== null
+                && lastTerminalFailureCount !== result.terminalFailuresVisible
+            if (result.discovered > 0 || result.errors > 0
+                || (result.terminalFailuresVisible > 0 && lastTerminalFailureCount === null)
+                || terminalFailureCountChanged) {
+                opsLog(result.errors > 0 ? 'error' : 'info', 'ai_call_finalization_recovery', { ...result })
+            }
+            lastTerminalFailureCount = result.terminalFailuresVisible
+        } catch (error) {
+            opsLog('error', 'ai_call_finalization_recovery_failed', {
+                error: error instanceof Error ? error.message : String(error),
+            })
+        } finally {
+            running = false
+        }
+    }
+    void tick()
+    return setInterval(() => { void tick() }, AI_CALL_FINALIZATION_RECOVERY_POLL_MS)
+}

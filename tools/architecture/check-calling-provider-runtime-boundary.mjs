@@ -58,6 +58,11 @@ const consumerPolicies = new Map([
       {
         kind: 'dynamic',
         specifier: publicBarrelSpecifier,
+        bindings: [['startAiCallFinalizationRecoveryV1', 'startAiCallFinalizationRecoveryV1', false]],
+      },
+      {
+        kind: 'dynamic',
+        specifier: publicBarrelSpecifier,
         bindings: [['startCallingProcessingRuntimeV1', 'startCallingProcessingRuntimeV1', false]],
       },
       {
@@ -68,6 +73,7 @@ const consumerPolicies = new Map([
     ],
     calls: {
       startCallingEslRuntimeV1: 1,
+      startAiCallFinalizationRecoveryV1: 1,
       startCallingProcessingRuntimeV1: 1,
       stopCallingProcessingRuntimeV1: 1,
     },
@@ -333,6 +339,9 @@ function assertApplicationBoundary(source) {
     ], [
       'stopCallingProcessingRuntime', 'stopCallingProcessingRuntime', false,
     ]]],
+    ['./ai-call-finalization-runtime', [[
+      'startAiCallFinalizationRecovery', 'startAiCallFinalizationRecovery', false,
+    ]]],
   ])
   const sites = importSites(applicationPath, source)
   for (const [specifier, bindings] of expectedImports) {
@@ -355,6 +364,7 @@ function assertApplicationBoundary(source) {
     ['readMegafonTelephonyHealthV1', 'readMegafonTelephonyHealth'],
     ['rescanMegafonTelephonyGatewayV1', 'rescanMegafonTelephonyGateway'],
     ['startCallingEslRuntimeV1', 'startCallingEslRuntime'],
+    ['startAiCallFinalizationRecoveryV1', 'startAiCallFinalizationRecovery'],
     ['startCallingProcessingRuntimeV1', 'startCallingProcessingRuntime'],
     ['stopCallingProcessingRuntimeV1', 'stopCallingProcessingRuntime'],
   ]) assertZeroArgumentConstWrapper(sourceFile, exported, target)
@@ -401,6 +411,7 @@ const application = read(applicationPath)
 assertApplicationBoundary(application)
 assertNamedExport(runtimeStartupPath, read(runtimeStartupPath), '../../application/calling-runtime-operations', [
   ['startCallingEslRuntimeV1', 'startCallingEslRuntimeV1', false],
+  ['startAiCallFinalizationRecoveryV1', 'startAiCallFinalizationRecoveryV1', false],
   ['startCallingProcessingRuntimeV1', 'startCallingProcessingRuntimeV1', false],
   ['stopCallingProcessingRuntimeV1', 'stopCallingProcessingRuntimeV1', false],
 ])

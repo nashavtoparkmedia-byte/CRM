@@ -13,6 +13,16 @@ import {
     resolveAiCallContactRecipient,
     resolveAiCallDriverRecipient,
 } from '@/modules/calling/application/ai-call-recipient'
+import {
+    createAiCallLifecycleJournal,
+    metadataWithAiCallLifecycleJournal,
+} from '@/modules/calling/application/ai-call-lifecycle'
+import {
+    createAiCallTranscriptJournal,
+    metadataWithAiCallTranscriptJournal,
+    reconcileAiCallTranscriptJournal,
+    renderLegacyAiCallTranscriptProjection,
+} from '@/modules/calling/application/ai-call-transcript'
 
 export const dynamic = 'force-dynamic'
 
@@ -101,13 +111,41 @@ export async function POST(req: NextRequest) {
     }
 
     const mock = getMockPayload(variant)
+    const callId = randomUUID()
     const startedAt = new Date(Date.now() - mock.durationSec * 1000)
     const answeredAt = new Date(startedAt.getTime() + 2000)
     const endedAt = new Date()
+    let transcriptJournal = createAiCallTranscriptJournal(callId)
+    const transcriptRows = mock.transcript.split('\n').map((line, index) => {
+        const role = line.startsWith('[Лид]') ? 'user' as const : 'assistant' as const
+        const content = line.replace(/^\[(?:Лид|AI)\]\s*/, '').trim()
+        const message = {
+            messageId: `calling-mock-transcript:v1:${callId}:${index + 1}`,
+            ordinal: index + 1,
+            role,
+            content,
+            final: true as const,
+            source: 'calling_mock' as const,
+        }
+        const reconciled = reconcileAiCallTranscriptJournal(callId, transcriptJournal, message, true)
+        transcriptJournal = reconciled.journal
+        return { id: reconciled.receipt.rowId, role, content }
+    })
+    const transcriptProjection = renderLegacyAiCallTranscriptProjection(transcriptJournal, transcriptRows)
+    const lifecycleJournal = createAiCallLifecycleJournal(callId, mock.aiSessionStatus, true)
+    const metadata = metadataWithAiCallLifecycleJournal(
+        metadataWithAiCallTranscriptJournal({
+            mock: true,
+            variant,
+            estimatedCostRub: mock.estimatedCostRub,
+        }, transcriptJournal),
+        lifecycleJournal,
+    )
 
     // Persist as a single Call row — same table as ordinary manager calls.
     const call = await prisma.call.create({
         data: {
+            id: callId,
             direction: 'outbound',
             status: 'completed',
             fromNumber: process.env.MEGAFON_NUMBER ?? '+79221853150',
@@ -121,7 +159,7 @@ export async function POST(req: NextRequest) {
             endedAt,
             durationSec: mock.durationSec,
             hangupCause: 'NORMAL_CLEARING',
-            transcript: mock.transcript,
+            transcript: transcriptProjection,
             aiSummary: mock.aiSummary,
             aiAnalysis: mock.qualificationResult as any,
             // AI-call specific fields (Prisma generated client; cast to any
@@ -129,11 +167,15 @@ export async function POST(req: NextRequest) {
             isAi: true,
             aiScenarioId: resolvedScenarioId,
             aiSessionStatus: mock.aiSessionStatus as any,
-            metadata: {
-                mock: true,
-                variant,
-                estimatedCostRub: mock.estimatedCostRub,
-            } as any,
+            aiMessages: {
+                create: transcriptRows.map((row, index) => ({
+                    id: row.id,
+                    role: row.role,
+                    content: row.content,
+                    startedAt: new Date(startedAt.getTime() + index),
+                })),
+            },
+            metadata: metadata as any,
         } as any,
     })
 

@@ -6,6 +6,10 @@ import {
     tagWithValidationIssues,
 } from '@/lib/ai-call/outcome-mapper'
 import { validateLeadData } from '@/lib/ai-call/scenario-schema'
+import {
+    normalizeAiCallTranscriptMessage,
+    type AiCallTranscriptMessageInput,
+} from './ai-call-transcript'
 
 export const AI_CALL_FINALIZATION_METADATA_KEY = 'aiCallFinalizationV1' as const
 // Short enough for the Bridge's bounded 500 ms / 1.5 s replay window to
@@ -36,6 +40,7 @@ export interface AiCallFinalizationInput {
     } | null
     leadData: Record<string, FinalizationJson> | null
     transcript: Array<{ role: 'user' | 'assistant'; content: string }>
+    transcriptItems: AiCallTranscriptMessageInput[]
     realUserUtterances: number
     events: unknown[]
 }
@@ -142,6 +147,20 @@ export interface AiCallFinalizationPersistencePort {
         maxFailures: number
         retryBackoffMs: readonly number[]
     }): Promise<AiCallFinalizationJournalV1>
+}
+
+export interface RecoverableAiCallFinalization {
+    callId: string
+    fingerprint: string
+    followUpState: 'pending' | 'in_progress' | 'retry_wait'
+}
+
+export interface AiCallFinalizationRecoveryPersistencePort extends AiCallFinalizationPersistencePort {
+    findRecoverableFollowUps(input: {
+        now: Date
+        limit: number
+    }): Promise<RecoverableAiCallFinalization[]>
+    countTerminalFollowUpFailures(): Promise<number>
 }
 
 export interface AiCallFinalizationSideEffects {
@@ -286,6 +305,19 @@ export function parseAiCallFinalizationInput(input: unknown): AiCallFinalization
         })
     }
 
+    let transcriptItems: AiCallTranscriptMessageInput[] = []
+    if (input.transcriptItems !== undefined) {
+        if (!Array.isArray(input.transcriptItems)) invalid('transcriptItems must be an array')
+        transcriptItems = input.transcriptItems.map((item, index) => {
+            if (!isRecord(item)) invalid(`transcriptItems[${index}] is invalid`)
+            try {
+                return normalizeAiCallTranscriptMessage({ ...item, source: 'audio_bridge' })
+            } catch {
+                invalid(`transcriptItems[${index}] is invalid`)
+            }
+        })
+    }
+
     const realUserUtterances = input.realUserUtterances === undefined
         ? transcript.filter((item) => item.role === 'user').length
         : input.realUserUtterances
@@ -303,6 +335,7 @@ export function parseAiCallFinalizationInput(input: unknown): AiCallFinalization
         result,
         leadData,
         transcript,
+        transcriptItems,
         realUserUtterances,
         events: input.events ?? [],
     }
@@ -517,6 +550,67 @@ function errorDetails(error: unknown): { code: string; message: string } {
     }
 }
 
+interface FollowUpExecutionDependencies {
+    persistence: AiCallFinalizationPersistencePort
+    tasks: IdempotentTaskCommandPort
+    clock: () => Date
+    leaseMs: number
+    maxFailures: number
+    retryBackoffMs: readonly number[]
+}
+
+async function executeAcceptedFollowUp(
+    callId: string,
+    fingerprint: string,
+    duplicate: boolean,
+    deps: FollowUpExecutionDependencies,
+): Promise<FinalizeAiCallResult> {
+    const claimNow = deps.clock()
+    const claim = await deps.persistence.claimFollowUp({
+        callId,
+        fingerprint,
+        now: claimNow,
+        leaseMs: deps.leaseMs,
+    })
+    let current = claim.journal
+    if (claim.kind !== 'claimed') {
+        return responseFromSettled(callId, current, duplicate, deps.clock().getTime())
+    }
+
+    const taskDataForAttempt = current.followUp.taskData
+    const idempotencyKey = current.followUp.idempotencyKey
+    if (!taskDataForAttempt || !idempotencyKey) {
+        throw new Error('accepted follow-up journal is missing its command data')
+    }
+
+    try {
+        const taskResult = await deps.tasks.create({ idempotencyKey, data: taskDataForAttempt })
+        current = await deps.persistence.completeFollowUp({
+            callId,
+            fingerprint,
+            leaseToken: claim.leaseToken,
+            task: taskResult.task,
+            now: deps.clock(),
+        })
+    } catch (error) {
+        const permanent = deps.tasks.isPermanentError(error)
+        const details = errorDetails(error)
+        current = await deps.persistence.failFollowUp({
+            callId,
+            fingerprint,
+            leaseToken: claim.leaseToken,
+            now: deps.clock(),
+            retryable: !permanent,
+            code: details.code,
+            message: details.message,
+            maxFailures: deps.maxFailures,
+            retryBackoffMs: deps.retryBackoffMs,
+        })
+    }
+
+    return responseFromSettled(callId, current, duplicate, deps.clock().getTime())
+}
+
 export function createAiCallFinalizationOperation(deps: {
     persistence: AiCallFinalizationPersistencePort
     tasks: IdempotentTaskCommandPort
@@ -584,42 +678,79 @@ export function createAiCallFinalizationOperation(deps: {
             return responseFromSettled(callId, current, duplicate, clock().getTime())
         }
 
-        const claimNow = clock()
-        const claim = await deps.persistence.claimFollowUp({ callId, fingerprint, now: claimNow, leaseMs })
-        current = claim.journal
-        if (claim.kind !== 'claimed') return responseFromSettled(callId, current, duplicate, clock().getTime())
+        return executeAcceptedFollowUp(callId, fingerprint, duplicate, {
+            persistence: deps.persistence,
+            tasks: deps.tasks,
+            clock,
+            leaseMs,
+            maxFailures,
+            retryBackoffMs,
+        })
+    }
+}
 
-        const taskDataForAttempt = current.followUp.taskData
-        const idempotencyKey = current.followUp.idempotencyKey
-        if (!taskDataForAttempt || !idempotencyKey) {
-            throw new Error('accepted follow-up journal is missing its command data')
+export interface AiCallFinalizationRecoveryResult {
+    discovered: number
+    completed: number
+    retryable: number
+    terminalFailuresVisible: number
+    errors: number
+}
+
+export function createAiCallFinalizationRecoveryOperation(deps: {
+    persistence: AiCallFinalizationRecoveryPersistencePort
+    tasks: IdempotentTaskCommandPort
+    clock?: () => Date
+    leaseMs?: number
+    maxFailures?: number
+    retryBackoffMs?: readonly number[]
+    batchSize?: number
+}) {
+    const clock = deps.clock ?? (() => new Date())
+    const leaseMs = deps.leaseMs ?? AI_CALL_FINALIZATION_LEASE_MS
+    const maxFailures = deps.maxFailures ?? AI_CALL_FINALIZATION_MAX_FAILURES
+    const retryBackoffMs = deps.retryBackoffMs ?? AI_CALL_FINALIZATION_RETRY_BACKOFF_MS
+    const batchSize = deps.batchSize ?? 25
+
+    return async function recoverAiCallFinalizations(): Promise<AiCallFinalizationRecoveryResult> {
+        const candidates = await deps.persistence.findRecoverableFollowUps({ now: clock(), limit: batchSize })
+        const result: AiCallFinalizationRecoveryResult = {
+            discovered: candidates.length,
+            completed: 0,
+            retryable: 0,
+            terminalFailuresVisible: 0,
+            errors: 0,
         }
-
-        try {
-            const taskResult = await deps.tasks.create({ idempotencyKey, data: taskDataForAttempt })
-            current = await deps.persistence.completeFollowUp({
-                callId,
-                fingerprint,
-                leaseToken: claim.leaseToken,
-                task: taskResult.task,
-                now: clock(),
-            })
-        } catch (error) {
-            const permanent = deps.tasks.isPermanentError(error)
-            const details = errorDetails(error)
-            current = await deps.persistence.failFollowUp({
-                callId,
-                fingerprint,
-                leaseToken: claim.leaseToken,
-                now: clock(),
-                retryable: !permanent,
-                code: details.code,
-                message: details.message,
-                maxFailures,
-                retryBackoffMs,
-            })
+        for (const candidate of candidates) {
+            try {
+                const recovered = await executeAcceptedFollowUp(candidate.callId, candidate.fingerprint, true, {
+                    persistence: deps.persistence,
+                    tasks: deps.tasks,
+                    clock,
+                    leaseMs,
+                    maxFailures,
+                    retryBackoffMs,
+                })
+                if (recovered.kind === 'success') result.completed += 1
+                else if (recovered.kind === 'retryable') result.retryable += 1
+            } catch {
+                result.errors += 1
+            }
         }
+        result.terminalFailuresVisible = await deps.persistence.countTerminalFollowUpFailures()
+        return result
+    }
+}
 
-        return responseFromSettled(callId, current, duplicate, clock().getTime())
+export function createAiCallFinalizationWithTranscriptReconciliation(deps: {
+    appendTranscript(callId: string, message: AiCallTranscriptMessageInput): Promise<unknown>
+    finalize(callId: string, rawInput: unknown): Promise<FinalizeAiCallResult>
+}) {
+    return async (callId: string, rawInput: unknown): Promise<FinalizeAiCallResult> => {
+        const request = parseAiCallFinalizationInput(rawInput)
+        for (const message of [...request.transcriptItems].sort((left, right) => left.ordinal - right.ordinal)) {
+            await deps.appendTranscript(callId, message)
+        }
+        return deps.finalize(callId, rawInput)
     }
 }

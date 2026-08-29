@@ -2,7 +2,7 @@
  * Thin HTTP client for talking back to the CRM from the bridge.
  *
  *   resolveCallByUuid(fsUuid)         GET /api/ai-calls/sessions/by-fs-uuid/<fsUuid>
- *   appendTranscript(callId, role, text)
+ *   appendTranscript(callId, role, text, receipt)
  *                                     POST /api/ai-calls/sessions/<callId>/transcript-item
  *   postState(callId, state)          POST /api/ai-calls/sessions/<callId>/state
  *   finalize(callId, payload)         POST /api/ai-calls/sessions/<callId>/finalize
@@ -74,22 +74,30 @@ async function resolveCallByUuid(fsUuid) {
     return res.json()
 }
 
-async function appendTranscript(callId, role, text) {
+async function appendTranscript(callId, role, text, receipt) {
     try {
-        await fetchOnce(
+        const res = await fetchOnce(
             `${CRM_BASE_URL}/api/ai-calls/sessions/${encodeURIComponent(callId)}/transcript-item`,
             directInit({
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...authHeaders() },
-                body: JSON.stringify({ role, text }),
+                body: JSON.stringify({
+                    role,
+                    text,
+                    messageId: receipt?.messageId,
+                    ordinal: receipt?.ordinal,
+                    final: receipt?.final,
+                }),
             }),
             BRIDGE_CRM_REQUEST_TIMEOUT_MS,
         )
+        if (!res.ok) {
+            const body = await res.text().catch(() => '')
+            throw new Error(`HTTP ${res.status} ${body.slice(0, 200)}`)
+        }
     } catch (err) {
-        // Soft failure by design — per-utterance transcript-item is
-        // best-effort. AbortError lands here too (treated identical
-        // to network error). No retry, no log spam: just one stderr
-        // line and the call carries on.
+        // The terminal callback carries the same deterministic receipts, so
+        // this live-path soft failure is reconciled before finalization.
         console.error(`[crm] transcript-item failed: ${err.message}`)
     }
 }
