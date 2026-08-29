@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import {
     AiCallFinalizationInputError,
     type FinalizeAiCallResult,
@@ -66,6 +67,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         if (error instanceof AiCallTranscriptConflictError) {
             return NextResponse.json({ error: 'transcript_conflict', reason: error.code }, { status: 409 })
         }
+        opsLog('error', 'ai_call_finalize_request_failed', {
+            callId: id,
+            errorCode: error instanceof Error ? error.name : 'UNKNOWN_ERROR',
+        })
         throw error
     }
 }
