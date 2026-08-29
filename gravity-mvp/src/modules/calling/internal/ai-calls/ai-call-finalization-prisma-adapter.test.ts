@@ -1,22 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiCallFinalizationJournalV1, AiCallTerminalUpdate } from '../../application/ai-call-finalization'
+import {
+    aiCallTranscriptSnapshotSha256,
+    createAiCallTranscriptJournal,
+    reconcileAiCallTranscriptJournal,
+} from '../../application/ai-call-transcript'
 
 const mocks = vi.hoisted(() => {
     const tx = {
         $queryRaw: vi.fn(),
         call: { findUnique: vi.fn(), update: vi.fn() },
+        domainOutboxEvent: { create: vi.fn() },
     }
     return {
         tx,
         callFindUnique: vi.fn(),
-        rootQueryRaw: vi.fn(),
         transaction: vi.fn(async (operation: (value: typeof tx) => unknown) => operation(tx)),
     }
 })
 vi.mock('@/lib/prisma', () => ({
     prisma: {
         call: { findUnique: mocks.callFindUnique },
-        $queryRaw: mocks.rootQueryRaw,
         $transaction: mocks.transaction,
     },
 }))
@@ -29,6 +33,8 @@ const JOURNAL: AiCallFinalizationJournalV1 = {
     fingerprint: 'a'.repeat(64),
     acceptedAt: '2026-08-29T10:00:00.000Z',
     sessionStatus: 'ended',
+    transcriptRevision: 0,
+    transcriptSnapshotSha256: aiCallTranscriptSnapshotSha256(createAiCallTranscriptJournal('call-1')),
     followUp: {
         state: 'pending',
         idempotencyKey: 'ai-call-finalization-follow-up:v1:call-1',
@@ -63,7 +69,7 @@ describe('Calling Prisma finalization journal adapter', () => {
         vi.clearAllMocks()
         mocks.tx.$queryRaw.mockResolvedValue([{ id: 'call-1' }])
         mocks.tx.call.update.mockResolvedValue({})
-        mocks.rootQueryRaw.mockResolvedValue([])
+        mocks.tx.domainOutboxEvent.create.mockResolvedValue({})
     })
 
     it('atomically locks and writes terminal Call fields with the journal', async () => {
@@ -93,6 +99,17 @@ describe('Calling Prisma finalization journal adapter', () => {
         })
         expect(mocks.tx.$queryRaw.mock.invocationCallOrder[0])
             .toBeLessThan(mocks.tx.call.update.mock.invocationCallOrder[0])
+        expect(mocks.tx.domainOutboxEvent.create).toHaveBeenCalledWith({
+            data: expect.objectContaining({
+                eventId: 'calling.AiCallFinalizationFollowUpRequested.v1:call-1',
+                eventType: 'calling.AiCallFinalizationFollowUpRequested.v1',
+                aggregateType: 'Call',
+                aggregateId: 'call-1',
+                maxAttempts: 5,
+            }),
+        })
+        expect(mocks.tx.call.update.mock.invocationCallOrder[0])
+            .toBeLessThan(mocks.tx.domainOutboxEvent.create.mock.invocationCallOrder[0])
     })
 
     it('replays the accepted journal without rewriting Call terminal state', async () => {
@@ -104,6 +121,20 @@ describe('Calling Prisma finalization journal adapter', () => {
             callId: 'call-1', fingerprint: JOURNAL.fingerprint, journal: JOURNAL, terminal: TERMINAL,
         })).resolves.toEqual({ kind: 'duplicate', journal: JOURNAL })
         expect(mocks.tx.call.update).not.toHaveBeenCalled()
+        expect(mocks.tx.domainOutboxEvent.create).not.toHaveBeenCalled()
+    })
+
+    it('fails the atomic acceptance if the deterministic recovery event identity is occupied', async () => {
+        mocks.tx.call.findUnique.mockResolvedValue({
+            id: 'call-1', status: 'connected', endedAt: null, aiSessionStatus: null, aiOutcome: null,
+            metadata: {},
+        })
+        mocks.tx.domainOutboxEvent.create.mockRejectedValueOnce(new Error('unique eventId violation'))
+        await expect(aiCallFinalizationPrismaPort.accept({
+            callId: 'call-1', fingerprint: JOURNAL.fingerprint, journal: JOURNAL, terminal: TERMINAL,
+        })).rejects.toThrow(/unique eventId violation/)
+        expect(mocks.tx.call.update).toHaveBeenCalledTimes(1)
+        expect(mocks.tx.domainOutboxEvent.create).toHaveBeenCalledTimes(1)
     })
 
     it('fails closed when a valid finalization journal is transplanted from another Call', async () => {
@@ -260,25 +291,24 @@ describe('Calling Prisma finalization journal adapter', () => {
         expect(mocks.tx.call.update).not.toHaveBeenCalled()
     })
 
-    it('discovers bounded pending/due journals directly from Calling persistence', async () => {
-        mocks.rootQueryRaw.mockResolvedValueOnce([
-            { id: 'call-1', metadata: { aiCallFinalizationV1: JOURNAL } },
-        ])
-        await expect(aiCallFinalizationPrismaPort.findRecoverableFollowUps({
-            now: new Date('2026-08-29T10:00:01.000Z'),
-            limit: 25,
-        })).resolves.toEqual([{
-            callId: 'call-1',
-            fingerprint: JOURNAL.fingerprint,
-            followUpState: 'pending',
-        }])
-        expect(mocks.rootQueryRaw).toHaveBeenCalledTimes(1)
-        expect(mocks.transaction).not.toHaveBeenCalled()
-    })
-
-    it('keeps terminal failures inspectable through a non-claiming count', async () => {
-        mocks.rootQueryRaw.mockResolvedValueOnce([{ count: 2n }])
-        await expect(aiCallFinalizationPrismaPort.countTerminalFollowUpFailures()).resolves.toBe(2)
+    it('rejects acceptance when the locked transcript revision changed after snapshot', async () => {
+        const transcript = reconcileAiCallTranscriptJournal(
+            'call-1',
+            createAiCallTranscriptJournal('call-1'),
+            {
+                messageId: 'm1', ordinal: 1, segmentRevision: 1, role: 'user',
+                content: 'late', final: true, source: 'audio_bridge',
+            },
+            false,
+        ).journal
+        mocks.tx.call.findUnique.mockResolvedValue({
+            id: 'call-1', status: 'connected', endedAt: null, aiSessionStatus: null, aiOutcome: null,
+            metadata: { aiCallTranscriptV1: transcript },
+        })
+        await expect(aiCallFinalizationPrismaPort.accept({
+            callId: 'call-1', fingerprint: JOURNAL.fingerprint, journal: JOURNAL, terminal: TERMINAL,
+        })).resolves.toEqual({ kind: 'transcript_changed' })
         expect(mocks.tx.call.update).not.toHaveBeenCalled()
+        expect(mocks.tx.domainOutboxEvent.create).not.toHaveBeenCalled()
     })
 })

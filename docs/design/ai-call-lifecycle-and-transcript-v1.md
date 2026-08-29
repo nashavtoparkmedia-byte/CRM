@@ -56,32 +56,39 @@ greeting is then deterministically stale.
 ## Canonical transcript
 
 `AiCallMessage` is the canonical content/role row. The bounded
-`Call.metadata.aiCallTranscriptV1` journal stores only the stable message
-identity, deterministic ordinal, row identity, fingerprint, source, finality
-and reconciliation revision needed to order and fence those rows.
+`Call.metadata.aiCallTranscriptV1` journal stores stable segment identity,
+deterministic ordinal, row identity, current segment revision, payload
+fingerprint, source, finality, aggregate revision and a bounded accepted-
+revision receipt set. The existing schema therefore supports corrections
+without adding another transcript table or migration.
 
-The current Bridge emits finalized STT/user and LLM/assistant items only. It
-does not expose partial hypotheses, so partial callbacks fail validation
-instead of inventing replacement semantics. Each live callback and the
-terminal reconciliation payload carry the same identity and ordinal. Exact
-retry is a no-op; identity/content or ordinal collisions fail closed;
-out-of-order delivery converges by ordinal. A row lock serializes concurrent
-final items.
+`segmentRevision` is monotonic per segment. Exact replay is a no-op; a known
+lower revision is stale; the same segment/revision with a different payload
+fails closed. A higher revision updates the one stable `AiCallMessage` row
+under the locked Call. Ordinal, role and source cannot change. Interim-to-final
+is legal; final-to-interim is not. Out-of-order segments converge by ordinal.
 
-A final message may arrive after terminalization because the live transcript
-request and terminal request can race. It is accepted only as a new immutable
-identity/ordinal, increments transcript revision, and is marked
-`acceptedAfterTerminal=true`; it never overwrites an accepted row or reopens
-terminal Call fields. The terminal callback reconciles its complete receipt
-set before finalization, which normally closes this race before the terminal
-write.
+Before terminal acceptance, Calling reconciles the terminal payload, reads the
+complete canonical snapshot under the Call lock, and fingerprints its ordered
+segment identities, revisions, payload fingerprints and finality. Finalization
+includes that snapshot in its own payload identity. The finalization adapter
+rechecks the transcript aggregate revision and snapshot SHA while holding the
+same Call lock used to commit terminal state. If a transcript update won the
+race, the bounded wrapper refreshes the snapshot and retries acceptance.
+
+After first terminal acceptance, an exact segment replay and an older known
+revision remain harmless, but a new segment or higher correction is rejected
+with `terminal_snapshot`. This freezes the transcript used by outcome and
+follow-up derivation instead of silently changing a finalized result.
 
 `Call.transcript` remains a compatibility projection rendered from sorted
-canonical rows. It is never parsed back into canonical truth, and replay does
-not append duplicate lines. Current UI, analysis and knowledge consumers can
-continue reading it. A later bounded stage can move those consumers to a
-Calling-owned structured transcript query and then remove the projection only
-after usage reaches zero.
+canonical rows. When a historical AI Call has no transcript journal, Calling
+lazily normalizes existing structured rows and parses labelled (`[Лид]` /
+`[AI]`) or plain legacy transcript text into canonical rows in the same
+transaction. Existing structured content wins, while legacy chunks not already
+represented are preserved as extra canonical segments. Replay does not append
+duplicate lines. New writes are canonical; there is no permanent dual-write
+source of truth and no unrelated bulk backfill.
 
 The Bridge's legacy terminal transcript array is derived from these same
 final-only receipts. Synthetic LLM prompts and tool-call history are not
@@ -89,22 +96,26 @@ canonical transcript content.
 
 Calling does not write Messaging `Chat` or `Message` persistence.
 
-## Stage 4 finalization recovery
+## Indexed durable finalization recovery
 
-The finalization-specific runtime runs once at application startup and every
-30 seconds. A bounded batch (25) query discovers `pending`, due `retry_wait`
-and expired-lease `in_progress` journals directly from
-`Call.metadata.aiCallFinalizationV1`. It atomically reclaims each Call and
-replays the deterministic Work Management command. `completed` and
-`not_required` are excluded. `terminal_failure` is counted for operator
-visibility and never claimed.
+When terminal state and a pending follow-up are first accepted, the same
+database transaction appends the deterministic
+`calling.AiCallFinalizationFollowUpRequested.v1` event. The already authorized
+`DomainOutboxEvent` projection provides a unique `eventId` and the composite
+`(status, availableAt, createdAt)` selection index. Its publisher claims at
+most 25 due rows with compare-and-set, recovers stale claims, applies bounded
+backoff and moves exhausted poison rows to visible `dead_letter` state.
 
-Recovery therefore does not require a fresh Bridge callback. Multiple CRM
-processes are safe because row locks, monotonic lease tokens and Work
-Management's idempotency key fence duplicate execution.
+The validated Calling consumer recovers only the Call/finalization fingerprint
+named by that event. The existing Call row lock and monotonic inner lease token
+fence concurrent follow-up workers; Work Management's deterministic
+idempotency key fences a lost command response. Retryable inner results are
+returned to the outbox retry lane. A permanent owner-command failure remains
+visible in `Call.metadata.aiCallFinalizationV1.followUp.terminal_failure` and
+the wake-up can settle without a retry storm.
 
-The bounded JSON query is correct without a new table or migration. It is an
-unindexed scan today. If AI-call volume makes the 30-second scan material, add
-a Calling-owned indexed recovery projection in a later expand-only migration;
-that is a performance optimization, not a correctness prerequisite for this
-stage.
+This path covers process death after terminal commit, after inner claim, and
+after Work Management acceptance without relying on another Bridge callback.
+There is no metadata JSON recovery query, full-Call scan or application-side
+filter. No schema migration is needed because the required indexed durable
+projection, uniqueness, retry and poison-state semantics already exist.

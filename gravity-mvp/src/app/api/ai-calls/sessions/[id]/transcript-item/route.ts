@@ -35,8 +35,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
             callId: id,
             messageId: result.receipt.messageId,
             ordinal: result.receipt.ordinal,
+            segmentRevision: result.receipt.segmentRevision,
             revision: result.journal.revision,
             duplicate: result.kind === 'duplicate',
+            stale: result.kind === 'stale',
             acceptedAfterTerminal: result.receipt.acceptedAfterTerminal,
         })
     } catch (error) {

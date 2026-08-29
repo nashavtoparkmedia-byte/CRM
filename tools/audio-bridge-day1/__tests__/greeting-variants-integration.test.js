@@ -135,6 +135,7 @@ test('onTranscriptItem fires with assistant + variant text', async () => {
         assert.deepEqual(assistantItems[0].receipt, {
             messageId: `audio-bridge-transcript:v1:${s.callUuid}:1`,
             ordinal: 1,
+            segmentRevision: 1,
             role: 'assistant',
             content: s.greetingVariant.text,
             final: true,

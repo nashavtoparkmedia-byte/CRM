@@ -19,7 +19,6 @@ import {
   startCallingProcessingRuntime,
   stopCallingProcessingRuntime,
 } from '../internal/calling-runtime'
-import { startAiCallFinalizationRecovery } from './ai-call-finalization-runtime'
 
 export const backfillCompletedCallTimelineV1 = (...args: Parameters<typeof backfillCompletedCallTimeline>) => backfillCompletedCallTimeline(...args)
 export const enqueueRecoveredCallTranscriptionV1 = (...args: Parameters<typeof enqueueRecoveredCallTranscription>) => enqueueRecoveredCallTranscription(...args)
@@ -34,4 +33,3 @@ export const rescanMegafonTelephonyGatewayV1 = () => rescanMegafonTelephonyGatew
 export const startCallingEslRuntimeV1 = () => startCallingEslRuntime()
 export const startCallingProcessingRuntimeV1 = () => startCallingProcessingRuntime()
 export const stopCallingProcessingRuntimeV1 = () => stopCallingProcessingRuntime()
-export const startAiCallFinalizationRecoveryV1 = () => startAiCallFinalizationRecovery()

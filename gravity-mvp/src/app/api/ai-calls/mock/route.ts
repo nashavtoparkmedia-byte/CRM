@@ -122,12 +122,13 @@ export async function POST(req: NextRequest) {
         const message = {
             messageId: `calling-mock-transcript:v1:${callId}:${index + 1}`,
             ordinal: index + 1,
+            segmentRevision: 1,
             role,
             content,
             final: true as const,
             source: 'calling_mock' as const,
         }
-        const reconciled = reconcileAiCallTranscriptJournal(callId, transcriptJournal, message, true)
+        const reconciled = reconcileAiCallTranscriptJournal(callId, transcriptJournal, message, false)
         transcriptJournal = reconciled.journal
         return { id: reconciled.receipt.rowId, role, content }
     })

@@ -7,9 +7,13 @@ import {
 } from '@/lib/ai-call/outcome-mapper'
 import { validateLeadData } from '@/lib/ai-call/scenario-schema'
 import {
+    aiCallTranscriptMessagesSnapshotSha256,
     normalizeAiCallTranscriptMessage,
+    type AiCallTranscriptSnapshotV1,
     type AiCallTranscriptMessageInput,
 } from './ai-call-transcript'
+
+const CANONICAL_TRANSCRIPT_SNAPSHOT = Symbol('canonical-ai-call-transcript-snapshot')
 
 export const AI_CALL_FINALIZATION_METADATA_KEY = 'aiCallFinalizationV1' as const
 // Short enough for the Bridge's bounded 500 ms / 1.5 s replay window to
@@ -41,6 +45,7 @@ export interface AiCallFinalizationInput {
     leadData: Record<string, FinalizationJson> | null
     transcript: Array<{ role: 'user' | 'assistant'; content: string }>
     transcriptItems: AiCallTranscriptMessageInput[]
+    transcriptRevision: number
     realUserUtterances: number
     events: unknown[]
 }
@@ -90,6 +95,8 @@ export interface AiCallFinalizationJournalV1 {
     fingerprint: string
     acceptedAt: string
     sessionStatus: AiCallTerminalUpdate['aiSessionStatus']
+    transcriptRevision: number | null
+    transcriptSnapshotSha256: string | null
     followUp: {
         state: FollowUpStateV1
         idempotencyKey: string | null
@@ -108,6 +115,7 @@ export type FinalizationAcceptance =
     | { kind: 'accepted'; journal: AiCallFinalizationJournalV1 }
     | { kind: 'duplicate'; journal: AiCallFinalizationJournalV1 }
     | { kind: 'conflict' }
+    | { kind: 'transcript_changed' }
     | { kind: 'legacy_terminal' }
     | { kind: 'not_found' }
 
@@ -149,20 +157,6 @@ export interface AiCallFinalizationPersistencePort {
     }): Promise<AiCallFinalizationJournalV1>
 }
 
-export interface RecoverableAiCallFinalization {
-    callId: string
-    fingerprint: string
-    followUpState: 'pending' | 'in_progress' | 'retry_wait'
-}
-
-export interface AiCallFinalizationRecoveryPersistencePort extends AiCallFinalizationPersistencePort {
-    findRecoverableFollowUps(input: {
-        now: Date
-        limit: number
-    }): Promise<RecoverableAiCallFinalization[]>
-    countTerminalFollowUpFailures(): Promise<number>
-}
-
 export interface AiCallFinalizationSideEffects {
     onAccepted(input: {
         call: AiCallFinalizationCall
@@ -190,7 +184,10 @@ export type FinalizeAiCallResult =
         followUpStatus: 'not_required' | 'completed'
     }
     | { kind: 'not_found' }
-    | { kind: 'conflict'; reason: 'different_terminal_payload' | 'legacy_terminal_without_journal' }
+    | {
+        kind: 'conflict'
+        reason: 'different_terminal_payload' | 'legacy_terminal_without_journal' | 'transcript_snapshot_changed'
+    }
     | {
         kind: 'retryable'
         callId: string
@@ -308,14 +305,25 @@ export function parseAiCallFinalizationInput(input: unknown): AiCallFinalization
     let transcriptItems: AiCallTranscriptMessageInput[] = []
     if (input.transcriptItems !== undefined) {
         if (!Array.isArray(input.transcriptItems)) invalid('transcriptItems must be an array')
+        const canonicalSnapshot = (input as Record<PropertyKey, unknown>)[CANONICAL_TRANSCRIPT_SNAPSHOT] === true
         transcriptItems = input.transcriptItems.map((item, index) => {
             if (!isRecord(item)) invalid(`transcriptItems[${index}] is invalid`)
             try {
-                return normalizeAiCallTranscriptMessage({ ...item, source: 'audio_bridge' })
+                return normalizeAiCallTranscriptMessage({
+                    ...item,
+                    source: canonicalSnapshot ? item.source : 'audio_bridge',
+                })
             } catch {
                 invalid(`transcriptItems[${index}] is invalid`)
             }
         })
+    }
+
+    const transcriptRevision = input.transcriptRevision === undefined
+        ? transcriptItems.length
+        : input.transcriptRevision
+    if (!Number.isSafeInteger(transcriptRevision) || (transcriptRevision as number) < 0) {
+        invalid('transcriptRevision must be a non-negative integer')
     }
 
     const realUserUtterances = input.realUserUtterances === undefined
@@ -336,6 +344,7 @@ export function parseAiCallFinalizationInput(input: unknown): AiCallFinalization
         leadData,
         transcript,
         transcriptItems,
+        transcriptRevision: transcriptRevision as number,
         realUserUtterances,
         events: input.events ?? [],
     }
@@ -353,6 +362,17 @@ export function aiCallFinalizationFingerprint(input: AiCallFinalizationInput): s
         result: input.result as unknown as FinalizationJson,
         leadData: input.leadData,
         realUserUtterances: input.realUserUtterances,
+        transcriptItems: [...input.transcriptItems]
+            .sort((left, right) => left.ordinal - right.ordinal || left.messageId.localeCompare(right.messageId))
+            .map((message) => ({
+                messageId: message.messageId,
+                ordinal: message.ordinal,
+                segmentRevision: message.segmentRevision,
+                role: message.role,
+                content: message.content,
+                final: message.final,
+                source: message.source,
+            })),
     }
     return createHash('sha256').update(canonicalJson(terminalPayload)).digest('hex')
 }
@@ -375,6 +395,11 @@ export function readAiCallFinalizationJournal(metadata: unknown): AiCallFinaliza
         || !/^[0-9a-f]{64}$/.test(String(value.fingerprint))
         || !isIsoTimestamp(value.acceptedAt)
         || !['ended', 'failed', 'transferring'].includes(String(value.sessionStatus))
+        || (value.transcriptRevision !== undefined && value.transcriptRevision !== null && (
+            !Number.isSafeInteger(value.transcriptRevision) || (value.transcriptRevision as number) < 0
+        ))
+        || (value.transcriptSnapshotSha256 !== undefined && value.transcriptSnapshotSha256 !== null
+            && !/^[0-9a-f]{64}$/.test(String(value.transcriptSnapshotSha256)))
         || !isRecord(value.followUp)
     ) return null
     const followUp = value.followUp
@@ -409,7 +434,13 @@ export function readAiCallFinalizationJournal(metadata: unknown): AiCallFinaliza
     if (state === 'completed' && !followUp.task) return null
     if (state === 'in_progress' && (!followUp.leaseToken || !followUp.leaseUntil)) return null
     if (state !== 'in_progress' && (followUp.leaseToken !== null || followUp.leaseUntil !== null)) return null
-    return value as unknown as AiCallFinalizationJournalV1
+    return {
+        ...(value as unknown as AiCallFinalizationJournalV1),
+        transcriptRevision: typeof value.transcriptRevision === 'number' ? value.transcriptRevision : null,
+        transcriptSnapshotSha256: typeof value.transcriptSnapshotSha256 === 'string'
+            ? value.transcriptSnapshotSha256
+            : null,
+    }
 }
 
 export function metadataWithAiCallFinalizationJournal(
@@ -627,6 +658,9 @@ export function createAiCallFinalizationOperation(deps: {
 
     return async function finalizeAiCall(callId: string, rawInput: unknown): Promise<FinalizeAiCallResult> {
         const request = parseAiCallFinalizationInput(rawInput)
+        if (request.transcriptItems.some((message) => !message.final)) {
+            throw new AiCallFinalizationInputError('terminal transcript snapshot contains an interim segment')
+        }
         const call = await deps.persistence.findCall(callId)
         if (!call) return { kind: 'not_found' }
 
@@ -640,6 +674,8 @@ export function createAiCallFinalizationOperation(deps: {
             fingerprint,
             acceptedAt: now.toISOString(),
             sessionStatus: terminal.aiSessionStatus,
+            transcriptRevision: request.transcriptRevision,
+            transcriptSnapshotSha256: aiCallTranscriptMessagesSnapshotSha256(request.transcriptItems),
             followUp: {
                 state: taskData ? 'pending' : 'not_required',
                 idempotencyKey: taskData ? aiCallFollowUpIdempotencyKey(callId) : null,
@@ -659,11 +695,14 @@ export function createAiCallFinalizationOperation(deps: {
         if (acceptance.kind === 'conflict') {
             return { kind: 'conflict', reason: 'different_terminal_payload' }
         }
+        if (acceptance.kind === 'transcript_changed') {
+            return { kind: 'conflict', reason: 'transcript_snapshot_changed' }
+        }
         if (acceptance.kind === 'legacy_terminal') {
             return { kind: 'conflict', reason: 'legacy_terminal_without_journal' }
         }
         const duplicate = acceptance.kind === 'duplicate'
-        let current = acceptance.journal
+        const current = acceptance.journal
 
         if (!duplicate && deps.sideEffects) {
             try {
@@ -689,68 +728,80 @@ export function createAiCallFinalizationOperation(deps: {
     }
 }
 
-export interface AiCallFinalizationRecoveryResult {
-    discovered: number
-    completed: number
-    retryable: number
-    terminalFailuresVisible: number
-    errors: number
-}
-
-export function createAiCallFinalizationRecoveryOperation(deps: {
-    persistence: AiCallFinalizationRecoveryPersistencePort
+export function createAiCallFinalizationRecoveryByIdentityOperation(deps: {
+    persistence: AiCallFinalizationPersistencePort
     tasks: IdempotentTaskCommandPort
     clock?: () => Date
     leaseMs?: number
     maxFailures?: number
     retryBackoffMs?: readonly number[]
-    batchSize?: number
 }) {
     const clock = deps.clock ?? (() => new Date())
     const leaseMs = deps.leaseMs ?? AI_CALL_FINALIZATION_LEASE_MS
     const maxFailures = deps.maxFailures ?? AI_CALL_FINALIZATION_MAX_FAILURES
     const retryBackoffMs = deps.retryBackoffMs ?? AI_CALL_FINALIZATION_RETRY_BACKOFF_MS
-    const batchSize = deps.batchSize ?? 25
-
-    return async function recoverAiCallFinalizations(): Promise<AiCallFinalizationRecoveryResult> {
-        const candidates = await deps.persistence.findRecoverableFollowUps({ now: clock(), limit: batchSize })
-        const result: AiCallFinalizationRecoveryResult = {
-            discovered: candidates.length,
-            completed: 0,
-            retryable: 0,
-            terminalFailuresVisible: 0,
-            errors: 0,
-        }
-        for (const candidate of candidates) {
-            try {
-                const recovered = await executeAcceptedFollowUp(candidate.callId, candidate.fingerprint, true, {
-                    persistence: deps.persistence,
-                    tasks: deps.tasks,
-                    clock,
-                    leaseMs,
-                    maxFailures,
-                    retryBackoffMs,
-                })
-                if (recovered.kind === 'success') result.completed += 1
-                else if (recovered.kind === 'retryable') result.retryable += 1
-            } catch {
-                result.errors += 1
-            }
-        }
-        result.terminalFailuresVisible = await deps.persistence.countTerminalFollowUpFailures()
-        return result
+    return async function recoverAiCallFinalizationByIdentity(
+        callId: string,
+        fingerprint: string,
+    ): Promise<FinalizeAiCallResult> {
+        return executeAcceptedFollowUp(callId, fingerprint, true, {
+            persistence: deps.persistence,
+            tasks: deps.tasks,
+            clock,
+            leaseMs,
+            maxFailures,
+            retryBackoffMs,
+        })
     }
 }
 
 export function createAiCallFinalizationWithTranscriptReconciliation(deps: {
     appendTranscript(callId: string, message: AiCallTranscriptMessageInput): Promise<unknown>
+    snapshotTranscript(callId: string): Promise<AiCallTranscriptSnapshotV1 | null>
     finalize(callId: string, rawInput: unknown): Promise<FinalizeAiCallResult>
 }) {
     return async (callId: string, rawInput: unknown): Promise<FinalizeAiCallResult> => {
         const request = parseAiCallFinalizationInput(rawInput)
-        for (const message of [...request.transcriptItems].sort((left, right) => left.ordinal - right.ordinal)) {
+        let snapshotBeforeAppend: AiCallTranscriptSnapshotV1 | null = null
+        let suppliedMessages = request.transcriptItems
+        if (suppliedMessages.length === 0) {
+            snapshotBeforeAppend = await deps.snapshotTranscript(callId)
+            if (!snapshotBeforeAppend) return { kind: 'not_found' }
+            suppliedMessages = snapshotBeforeAppend.messages.length > 0
+                ? []
+                : request.transcript.map((message, index) => normalizeAiCallTranscriptMessage({
+                    messageId: `legacy-call-transcript:v1:${index + 1}`,
+                    ordinal: index + 1,
+                    segmentRevision: 1,
+                    role: message.role,
+                    content: message.content,
+                    final: true,
+                    source: 'legacy_calling',
+                }))
+        }
+        for (const message of [...suppliedMessages].sort((left, right) => left.ordinal - right.ordinal)) {
             await deps.appendTranscript(callId, message)
         }
-        return deps.finalize(callId, rawInput)
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+            const snapshot = attempt === 0 && suppliedMessages.length === 0 && snapshotBeforeAppend
+                ? snapshotBeforeAppend
+                : await deps.snapshotTranscript(callId)
+            if (!snapshot) return { kind: 'not_found' }
+            if (snapshot.messages.some((message) => !message.final)) {
+                throw new AiCallFinalizationInputError('terminal transcript snapshot contains an interim segment')
+            }
+            const enriched = {
+                ...(rawInput as Record<string, unknown>),
+                transcriptItems: snapshot.messages,
+                transcriptRevision: snapshot.revision,
+                realUserUtterances: Object.prototype.hasOwnProperty.call(rawInput, 'realUserUtterances')
+                    ? request.realUserUtterances
+                    : snapshot.messages.filter((message) => message.role === 'user' && message.final).length,
+                [CANONICAL_TRANSCRIPT_SNAPSHOT]: true,
+            }
+            const result = await deps.finalize(callId, enriched)
+            if (result.kind !== 'conflict' || result.reason !== 'transcript_snapshot_changed') return result
+        }
+        return { kind: 'conflict', reason: 'transcript_snapshot_changed' }
     }
 }

@@ -41,6 +41,7 @@ export function normalizeBridgeTranscriptCallback(body: unknown): AiCallTranscri
     return normalizeAiCallTranscriptMessage({
         messageId: body.messageId,
         ordinal: body.ordinal,
+        segmentRevision: body.segmentRevision ?? 1,
         role: body.role,
         content: body.text,
         final: body.final,

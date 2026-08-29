@@ -10,7 +10,6 @@ const mocks = vi.hoisted(() => ({
   stopAnalyzeWorker: vi.fn(),
   stopTranscribeWorker: vi.fn(),
   startEslListener: vi.fn(),
-  startAiCallFinalizationRecovery: vi.fn(() => 1 as unknown as ReturnType<typeof setInterval>),
   syncCallToChat: vi.fn(),
 }))
 
@@ -28,9 +27,6 @@ vi.mock('@/lib/queue', () => ({
   stopTranscribeWorker: mocks.stopTranscribeWorker,
 }))
 vi.mock('@/lib/queue/queues', () => ({ enqueueTranscribe: mocks.enqueueTranscribe }))
-vi.mock('../../application/ai-call-finalization-runtime', () => ({
-  startAiCallFinalizationRecovery: mocks.startAiCallFinalizationRecovery,
-}))
 
 import {
   backfillCompletedCallTimelineV1,
@@ -39,7 +35,6 @@ import {
 } from './recording-recovery'
 import {
   startCallingEslRuntimeV1,
-  startAiCallFinalizationRecoveryV1,
   startCallingProcessingRuntimeV1,
   stopCallingProcessingRuntimeV1,
 } from './runtime-startup'
@@ -60,8 +55,6 @@ describe('Calling provider capabilities', () => {
     const recording = { callId: 'call-1', fsUuid: 'fs-1', recordingFile: '/recordings/fs-1.wav' }
 
     await startCallingEslRuntimeV1()
-    const finalizationRecoveryInterval = startAiCallFinalizationRecoveryV1()
-    clearInterval(finalizationRecoveryInterval)
     startCallingProcessingRuntimeV1()
     await stopCallingProcessingRuntimeV1()
     await backfillCompletedCallTimelineV1(call)
@@ -70,7 +63,6 @@ describe('Calling provider capabilities', () => {
 
     expect(mocks.startEslListener).toHaveBeenCalledOnce()
     expect(mocks.startCallProcessingWorkers).toHaveBeenCalledOnce()
-    expect(mocks.startAiCallFinalizationRecovery).toHaveBeenCalledOnce()
     expect(mocks.stopTranscribeWorker).toHaveBeenCalledOnce()
     expect(mocks.stopAnalyzeWorker).toHaveBeenCalledOnce()
     expect(mocks.closeQueues).toHaveBeenCalledOnce()

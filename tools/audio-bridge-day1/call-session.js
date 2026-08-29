@@ -342,6 +342,7 @@ class CallSession {
         const receipt = {
             messageId: `audio-bridge-transcript:v1:${this.callUuid}:${ordinal}`,
             ordinal,
+            segmentRevision: 1,
             role,
             content,
             final: true,

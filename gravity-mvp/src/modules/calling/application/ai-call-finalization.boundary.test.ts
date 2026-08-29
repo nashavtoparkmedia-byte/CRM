@@ -8,6 +8,7 @@ describe('AI-call finalization ownership and side-effect boundary', () => {
     const route = read('src/app/api/ai-calls/sessions/[id]/finalize/route.ts')
     const operation = read('src/modules/calling/application/ai-call-finalization.ts')
     const runtime = read('src/modules/calling/application/ai-call-finalization-runtime.ts')
+    const recoveryRuntime = read('src/modules/calling/application/ai-call-finalization-recovery-runtime.ts')
     const persistence = read('src/modules/calling/internal/ai-calls/ai-call-finalization-prisma-adapter.ts')
     const lifecycle = read('src/modules/calling/application/ai-call-lifecycle.ts')
     const lifecyclePersistence = read('src/modules/calling/internal/ai-calls/ai-call-lifecycle-prisma-adapter.ts')
@@ -15,6 +16,8 @@ describe('AI-call finalization ownership and side-effect boundary', () => {
     const transcriptPersistence = read('src/modules/calling/internal/ai-calls/ai-call-transcript-prisma-adapter.ts')
     const stateRoute = read('src/app/api/ai-calls/sessions/[id]/state/route.ts')
     const transcriptRoute = read('src/app/api/ai-calls/sessions/[id]/transcript-item/route.ts')
+    const outboxConsumer = read('src/modules/calling/public/v1/outbox-consumers.ts')
+    const schema = read('prisma/schema.prisma')
 
     it('keeps the HTTP route thin and authenticates before request/resource access', () => {
         const handler = route.slice(route.indexOf('export async function POST'))
@@ -56,12 +59,13 @@ describe('AI-call finalization ownership and side-effect boundary', () => {
         expect(sources).not.toMatch(/modules\/messaging|contracts\/messaging/)
     })
 
-    it('discovers unfinished finalization journals without a Bridge callback', () => {
-        expect(persistence).toContain("'pending'")
-        expect(persistence).toContain("'retry_wait'")
-        expect(persistence).toContain("'in_progress'")
-        expect(persistence).toContain("'terminal_failure'")
-        expect(runtime).toContain('startAiCallFinalizationRecovery')
-        expect(runtime).toContain('setInterval')
+    it('discovers unfinished finalization through indexed outbox state without scanning Call metadata', () => {
+        expect(persistence).toContain('tx.domainOutboxEvent.create')
+        expect(persistence).not.toContain('tx.domainOutboxEvent.createMany')
+        expect(persistence).not.toContain('findRecoverableFollowUps')
+        expect(recoveryRuntime).toContain('recoverAiCallFinalizationFollowUpByIdentity')
+        expect(`${runtime}\n${recoveryRuntime}`).not.toContain('setInterval')
+        expect(outboxConsumer).toContain('parseAiCallFinalizationFollowUpRequestedEventV1(payload)')
+        expect(schema).toContain('@@index([status, availableAt, createdAt])')
     })
 })

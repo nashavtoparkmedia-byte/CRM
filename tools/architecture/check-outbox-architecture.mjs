@@ -382,10 +382,12 @@ const migrationPath = 'gravity-mvp/prisma/migrations/20260809140000_add_domain_o
 const migration = read(migrationPath)
 const schema = read('gravity-mvp/prisma/schema.prisma')
 const eventContract = read('gravity-mvp/src/contracts/calling/v1/recording-ready-event.ts')
+const finalizationEventContract = read('gravity-mvp/src/contracts/calling/v1/ai-call-finalization-follow-up-requested-event.ts')
 const recordingOperation = read('gravity-mvp/src/modules/calling/public/v1/recording-ready-operation.ts')
 const recordingPublicIndex = read('gravity-mvp/src/modules/calling/public/v1/index.ts')
 const recordingComposition = read('gravity-mvp/src/modules/calling/application/recording-ready.ts')
 const atomicAdapter = read('gravity-mvp/src/modules/calling/internal/recording-ready-prisma-adapter.ts')
+const finalizationAdapter = read('gravity-mvp/src/modules/calling/internal/ai-calls/ai-call-finalization-prisma-adapter.ts')
 const recordingProcessor = read('gravity-mvp/src/lib/freeswitch/recordingProcessor.ts')
 const publisher = read('gravity-mvp/src/infrastructure/outbox/v1/outbox-publisher.ts')
 const store = read('gravity-mvp/src/infrastructure/outbox/prisma-outbox-store.ts')
@@ -394,6 +396,14 @@ const queues = read('gravity-mvp/src/lib/queue/queues.ts')
 const instrumentation = read('gravity-mvp/src/instrumentation.ts')
 const composition = read('gravity-mvp/src/modules/platform-shell/public/v1/outbox-runtime.ts')
 const manifestAmendments = JSON.parse(read('architecture/events/v1/module-manifest-amendments.json'))
+const finalizationManifestAmendments = JSON.parse(read(
+    'architecture/isolation/calling/ai-call-single-call-v1/module-manifest-amendments.json',
+))
+const finalizationRecoveryManifest = JSON.parse(read(
+    'architecture/isolation/calling/ai-call-single-call-v1/recovery-manifest.json',
+))
+const concurrentOutboxTest = read('gravity-mvp/src/infrastructure/outbox/prisma-outbox-store.test.ts')
+const architecturePolicy = JSON.parse(read('architecture/enforcement/v1/policy.json'))
 
 assertCheck(
     'migration is expand-only',
@@ -423,12 +433,41 @@ assertCheck(
     'event contract is unversioned or provider-bound',
 )
 assertCheck(
+    'AI-call finalization recovery event is versioned, deterministic and provider neutral',
+    finalizationEventContract.includes("calling.AiCallFinalizationFollowUpRequested.v1")
+        && finalizationEventContract.includes('finalizationFingerprint')
+        && finalizationEventContract.includes('eventId !==')
+        && !/@\/lib\/|@prisma|bullmq|redis|freeswitch/i.test(finalizationEventContract),
+    'AI-call finalization recovery event contract is incomplete or provider-bound',
+)
+assertCheck(
     'domain state and outbox append share one transaction',
     atomicAdapter.includes('$transaction')
         && atomicAdapter.includes('transaction.call.update')
         && atomicAdapter.includes('transaction.domainOutboxEvent.createMany')
         && atomicAdapter.includes('skipDuplicates: true'),
     'atomic transaction or idempotent append is missing',
+)
+assertCheck(
+    'AI-call terminal state and recovery wake-up share one transaction',
+    finalizationAdapter.includes('$transaction')
+        && finalizationAdapter.includes('tx.call.update')
+        && finalizationAdapter.includes('tx.domainOutboxEvent.create')
+        && !finalizationAdapter.includes('tx.domainOutboxEvent.createMany')
+        && finalizationAdapter.indexOf('tx.call.update') < finalizationAdapter.indexOf('tx.domainOutboxEvent.create'),
+    'AI-call finalization can commit without its durable recovery wake-up',
+)
+assertCheck(
+    'outbox selection has a supporting composite index',
+    schema.includes('@@index([status, availableAt, createdAt])'),
+    'outbox due-work selection index is missing',
+)
+assertCheck(
+    'AI-call recovery contains no metadata scan or standalone polling loop',
+    !/findRecoverableFollowUps|countTerminalFollowUpFailures|metadata"->|startAiCallFinalizationRecovery/.test(finalizationAdapter)
+        && !read('gravity-mvp/src/modules/calling/application/ai-call-finalization-runtime.ts')
+            .includes('AI_CALL_FINALIZATION_RECOVERY_POLL_MS'),
+    'unindexed Call metadata recovery scan or polling loop remains',
 )
 assertCheck(
     'recording operation exposes business input without write-capability injection',
@@ -560,7 +599,9 @@ assertCheck(
 assertCheck(
     'consumer validates the event before delivery',
     consumer.includes('parseRecordingReadyEventV1(payload)')
-        && consumer.includes('enqueueTranscribe(event.data.callId)'),
+        && consumer.includes('enqueueTranscribe(event.data.callId)')
+        && consumer.includes('parseAiCallFinalizationFollowUpRequestedEventV1(payload)')
+        && consumer.includes('recoverAiCallFinalizationFollowUpByIdentity('),
     'consumer skips contract validation or delivery adapter',
 )
 assertCheck(
@@ -587,8 +628,38 @@ assertCheck(
         item.context === 'calling' && item.add_events.includes('calling.RecordingReady.v1'))
         && manifestAmendments.amendments.some((item) =>
             item.context === 'platform_shell'
-            && item.add_owned_infrastructure_state.includes('gravity-mvp/prisma/schema.prisma:DomainOutboxEvent')),
+            && item.add_owned_infrastructure_state.includes('gravity-mvp/prisma/schema.prisma:DomainOutboxEvent'))
+        && finalizationManifestAmendments.amendments.some((item) =>
+            item.context === 'calling'
+            && item.add_events.includes('calling.AiCallFinalizationFollowUpRequested.v1')),
     'Calling event or Platform Shell infrastructure ownership is undeclared',
+)
+assertCheck(
+    'AI-call recovery manifest binds indexed bounded discovery and poison visibility',
+    finalizationRecoveryManifest.full_call_scan === false
+        && finalizationRecoveryManifest.application_side_call_filter === false
+        && finalizationRecoveryManifest.batch_limit === 25
+        && finalizationRecoveryManifest.poison_state === 'dead_letter'
+        && JSON.stringify(finalizationRecoveryManifest.query_index) === JSON.stringify(['status', 'availableAt', 'createdAt']),
+    'AI-call recovery authority permits an unbounded scan or lacks reliability bounds',
+)
+assertCheck(
+    'AI-call outbox append is a declared exact shared-infrastructure writer',
+    architecturePolicy.approved_infrastructure_writers.some((writer) => (
+        writer.model === 'DomainOutboxEvent'
+        && writer.file === 'gravity-mvp/src/modules/calling/internal/ai-calls/ai-call-finalization-prisma-adapter.ts'
+    ))
+        && architecturePolicy.manifest_amendments.includes(
+            'architecture/isolation/calling/ai-call-single-call-v1/module-manifest-amendments.json',
+        ),
+    'finalization adapter writes shared outbox state without exact architecture authorization',
+)
+assertCheck(
+    'multi-worker outbox claim has a concurrent deterministic test',
+    concurrentOutboxTest.includes('Promise.all([')
+        && concurrentOutboxTest.includes('allows only one of two concurrent workers')
+        && concurrentOutboxTest.includes("expect([...left, ...right]).toHaveLength(1)"),
+    'outbox claim safety is asserted only sequentially',
 )
 
 const result = {

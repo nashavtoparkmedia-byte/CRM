@@ -86,6 +86,7 @@ async function appendTranscript(callId, role, text, receipt) {
                     text,
                     messageId: receipt?.messageId,
                     ordinal: receipt?.ordinal,
+                    segmentRevision: receipt?.segmentRevision,
                     final: receipt?.final,
                 }),
             }),

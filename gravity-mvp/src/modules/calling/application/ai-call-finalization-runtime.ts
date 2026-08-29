@@ -9,9 +9,9 @@ import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operatio
 import { enqueueAnalyze } from '@/lib/queue/queues'
 import { _createPersistEvents } from '@/lib/ai-call/event-emitter'
 import { aiCallFinalizationPrismaPort } from '../internal/ai-calls/ai-call-finalization-prisma-adapter'
+import { aiCallTranscriptPrismaPort } from '../internal/ai-calls/ai-call-transcript-prisma-adapter'
 import {
     createAiCallFinalizationOperation,
-    createAiCallFinalizationRecoveryOperation,
     createAiCallFinalizationWithTranscriptReconciliation,
     type IdempotentTaskCommandPort,
 } from './ai-call-finalization'
@@ -125,49 +125,11 @@ const finalizeAiCallOperation = createAiCallFinalizationOperation({
     },
 })
 
-const recoverAiCallFinalizationsOperation = createAiCallFinalizationRecoveryOperation({
-    persistence: aiCallFinalizationPrismaPort,
-    tasks: taskPort,
-})
-
 // The Bridge includes the same deterministic final transcript receipts in its
 // retryable terminal callback. Reconcile them before accepting terminal state
 // so a transcript callback/finalize race converges.
 export const finalizeAiCall = createAiCallFinalizationWithTranscriptReconciliation({
     appendTranscript: appendAiCallTranscriptMessage,
+    snapshotTranscript: (callId) => aiCallTranscriptPrismaPort.snapshot(callId),
     finalize: finalizeAiCallOperation,
 })
-
-export const AI_CALL_FINALIZATION_RECOVERY_POLL_MS = 30_000
-
-export async function recoverAiCallFinalizationsOnce() {
-    return recoverAiCallFinalizationsOperation()
-}
-
-export function startAiCallFinalizationRecovery(): ReturnType<typeof setInterval> {
-    let running = false
-    let lastTerminalFailureCount: number | null = null
-    const tick = async () => {
-        if (running) return
-        running = true
-        try {
-            const result = await recoverAiCallFinalizationsOnce()
-            const terminalFailureCountChanged = lastTerminalFailureCount !== null
-                && lastTerminalFailureCount !== result.terminalFailuresVisible
-            if (result.discovered > 0 || result.errors > 0
-                || (result.terminalFailuresVisible > 0 && lastTerminalFailureCount === null)
-                || terminalFailureCountChanged) {
-                opsLog(result.errors > 0 ? 'error' : 'info', 'ai_call_finalization_recovery', { ...result })
-            }
-            lastTerminalFailureCount = result.terminalFailuresVisible
-        } catch (error) {
-            opsLog('error', 'ai_call_finalization_recovery_failed', {
-                error: error instanceof Error ? error.message : String(error),
-            })
-        } finally {
-            running = false
-        }
-    }
-    void tick()
-    return setInterval(() => { void tick() }, AI_CALL_FINALIZATION_RECOVERY_POLL_MS)
-}

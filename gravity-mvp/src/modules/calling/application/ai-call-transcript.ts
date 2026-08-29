@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 
 export const AI_CALL_TRANSCRIPT_METADATA_KEY = 'aiCallTranscriptV1' as const
 export const AI_CALL_TRANSCRIPT_MAX_MESSAGES = 512
+export const AI_CALL_TRANSCRIPT_MAX_ACCEPTED_REVISIONS = 2_048
 export const AI_CALL_TRANSCRIPT_MAX_CONTENT_CHARS = 10_000
 
 export type AiCallTranscriptSource = 'audio_bridge' | 'legacy_calling' | 'calling_mock'
@@ -9,9 +10,10 @@ export type AiCallTranscriptSource = 'audio_bridge' | 'legacy_calling' | 'callin
 export interface AiCallTranscriptMessageInput {
     messageId: string
     ordinal: number
+    segmentRevision: number
     role: 'user' | 'assistant'
     content: string
-    final: true
+    final: boolean
     source: AiCallTranscriptSource
 }
 
@@ -19,12 +21,21 @@ export interface AiCallTranscriptMessageReceiptV1 {
     messageId: string
     rowId: string
     ordinal: number
+    segmentRevision: number
     role: 'user' | 'assistant'
-    final: true
+    final: boolean
     source: AiCallTranscriptSource
     fingerprint: string
     acceptedAfterTerminal: boolean
+    /** Monotonic aggregate revision at which this segment revision was accepted. */
     revision: number
+}
+
+export interface AiCallTranscriptAcceptedRevisionV1 {
+    messageId: string
+    segmentRevision: number
+    fingerprint: string
+    journalRevision: number
 }
 
 export interface AiCallTranscriptJournalV1 {
@@ -33,11 +44,20 @@ export interface AiCallTranscriptJournalV1 {
     revision: number
     maxOrdinal: number
     messages: AiCallTranscriptMessageReceiptV1[]
+    acceptedRevisions: AiCallTranscriptAcceptedRevisionV1[]
+}
+
+export interface AiCallTranscriptSnapshotV1 {
+    callId: string
+    revision: number
+    sha256: string
+    messages: AiCallTranscriptMessageInput[]
 }
 
 export type ReconcileAiCallTranscriptJournalResult =
     | { kind: 'applied'; journal: AiCallTranscriptJournalV1; receipt: AiCallTranscriptMessageReceiptV1 }
     | { kind: 'duplicate'; journal: AiCallTranscriptJournalV1; receipt: AiCallTranscriptMessageReceiptV1 }
+    | { kind: 'stale'; journal: AiCallTranscriptJournalV1; receipt: AiCallTranscriptMessageReceiptV1 }
 
 export type AppendAiCallTranscriptResult =
     | ({ callId: string; legacyTranscript: string } & ReconcileAiCallTranscriptJournalResult)
@@ -54,7 +74,15 @@ export class AiCallTranscriptInputError extends Error {
 
 export class AiCallTranscriptConflictError extends Error {
     constructor(
-        readonly code: 'identity_collision' | 'ordinal_collision' | 'message_limit' | 'corrupt_journal',
+        readonly code:
+            | 'identity_collision'
+            | 'revision_collision'
+            | 'ordinal_collision'
+            | 'final_regression'
+            | 'terminal_snapshot'
+            | 'message_limit'
+            | 'revision_limit'
+            | 'corrupt_journal',
         message: string,
     ) {
         super(message)
@@ -64,6 +92,7 @@ export class AiCallTranscriptConflictError extends Error {
 
 export interface AiCallTranscriptPersistencePort {
     append(callId: string, message: AiCallTranscriptMessageInput): Promise<AppendAiCallTranscriptResult>
+    snapshot(callId: string): Promise<AiCallTranscriptSnapshotV1 | null>
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -81,6 +110,7 @@ function sha256(value: unknown): string {
     return createHash('sha256').update(canonicalJson(value)).digest('hex')
 }
 
+/** Payload identity is deliberately separate from the monotonic segment revision. */
 export function aiCallTranscriptMessageFingerprint(message: AiCallTranscriptMessageInput): string {
     return sha256({
         messageId: message.messageId,
@@ -107,6 +137,7 @@ export function createAiCallTranscriptJournal(callId: string): AiCallTranscriptJ
         revision: 0,
         maxOrdinal: 0,
         messages: [],
+        acceptedRevisions: [],
     }
 }
 
@@ -121,12 +152,14 @@ export function normalizeAiCallTranscriptMessage(input: unknown): AiCallTranscri
     if (!Number.isSafeInteger(input.ordinal) || (input.ordinal as number) < 1 || (input.ordinal as number) > 10_000) {
         throw new AiCallTranscriptInputError('ordinal is invalid')
     }
+    const segmentRevision = input.segmentRevision ?? 1
+    if (!Number.isSafeInteger(segmentRevision) || (segmentRevision as number) < 1 || (segmentRevision as number) > 10_000) {
+        throw new AiCallTranscriptInputError('segmentRevision is invalid')
+    }
     if (!['user', 'assistant'].includes(String(input.role))) {
         throw new AiCallTranscriptInputError('role must be user or assistant')
     }
-    if (input.final !== true) {
-        throw new AiCallTranscriptInputError('partial transcript messages are not supported by the current Bridge')
-    }
+    if (typeof input.final !== 'boolean') throw new AiCallTranscriptInputError('final must be a boolean')
     if (!['audio_bridge', 'legacy_calling', 'calling_mock'].includes(String(input.source))) {
         throw new AiCallTranscriptInputError('source is invalid')
     }
@@ -139,11 +172,16 @@ export function normalizeAiCallTranscriptMessage(input: unknown): AiCallTranscri
     return {
         messageId: input.messageId,
         ordinal: input.ordinal as number,
+        segmentRevision: segmentRevision as number,
         role: input.role as 'user' | 'assistant',
         content,
-        final: true,
+        final: input.final,
         source: input.source as AiCallTranscriptSource,
     }
+}
+
+function validFingerprint(value: unknown): value is string {
+    return typeof value === 'string' && /^[0-9a-f]{64}$/.test(value)
 }
 
 export function readAiCallTranscriptJournal(metadata: unknown): AiCallTranscriptJournalV1 | null {
@@ -160,40 +198,104 @@ export function readAiCallTranscriptJournal(metadata: unknown): AiCallTranscript
         || !Array.isArray(value.messages)
         || value.messages.length > AI_CALL_TRANSCRIPT_MAX_MESSAGES
     ) return null
+
     const identities = new Set<string>()
     const rowIds = new Set<string>()
     const ordinals = new Set<number>()
-    const revisions = new Set<number>()
-    for (const message of value.messages) {
+    const messages: AiCallTranscriptMessageReceiptV1[] = []
+    for (const raw of value.messages) {
+        if (!isRecord(raw)) return null
+        const segmentRevision = raw.segmentRevision ?? 1
         if (
-            !isRecord(message)
-            || typeof message.messageId !== 'string'
-            || typeof message.rowId !== 'string'
-            || !Number.isSafeInteger(message.ordinal)
-            || (message.ordinal as number) < 1
-            || !['user', 'assistant'].includes(String(message.role))
-            || message.final !== true
-            || !['audio_bridge', 'legacy_calling', 'calling_mock'].includes(String(message.source))
-            || !/^[0-9a-f]{64}$/.test(String(message.fingerprint))
-            || typeof message.acceptedAfterTerminal !== 'boolean'
-            || !Number.isSafeInteger(message.revision)
-            || (message.revision as number) < 1
-            || identities.has(message.messageId)
-            || ordinals.has(message.ordinal as number)
-            || revisions.has(message.revision as number)
-            || rowIds.has(message.rowId)
+            typeof raw.messageId !== 'string'
+            || typeof raw.rowId !== 'string'
+            || !Number.isSafeInteger(raw.ordinal)
+            || (raw.ordinal as number) < 1
+            || !Number.isSafeInteger(segmentRevision)
+            || (segmentRevision as number) < 1
+            || !['user', 'assistant'].includes(String(raw.role))
+            || typeof raw.final !== 'boolean'
+            || !['audio_bridge', 'legacy_calling', 'calling_mock'].includes(String(raw.source))
+            || !validFingerprint(raw.fingerprint)
+            || typeof raw.acceptedAfterTerminal !== 'boolean'
+            || !Number.isSafeInteger(raw.revision)
+            || (raw.revision as number) < 1
+            || identities.has(raw.messageId)
+            || ordinals.has(raw.ordinal as number)
+            || rowIds.has(raw.rowId)
         ) return null
-        identities.add(message.messageId)
-        rowIds.add(message.rowId)
-        ordinals.add(message.ordinal as number)
-        revisions.add(message.revision as number)
+        identities.add(raw.messageId)
+        rowIds.add(raw.rowId)
+        ordinals.add(raw.ordinal as number)
+        messages.push({
+            messageId: raw.messageId,
+            rowId: raw.rowId,
+            ordinal: raw.ordinal as number,
+            segmentRevision: segmentRevision as number,
+            role: raw.role as 'user' | 'assistant',
+            final: raw.final,
+            source: raw.source as AiCallTranscriptSource,
+            fingerprint: raw.fingerprint,
+            acceptedAfterTerminal: raw.acceptedAfterTerminal,
+            revision: raw.revision as number,
+        })
     }
-    if (value.revision !== value.messages.length) return null
-    if (value.maxOrdinal !== Math.max(0, ...ordinals)) return null
+
+    const rawAccepted = value.acceptedRevisions
+    const acceptedRevisions: AiCallTranscriptAcceptedRevisionV1[] = rawAccepted === undefined
+        ? messages.map((message) => ({
+            messageId: message.messageId,
+            segmentRevision: message.segmentRevision,
+            fingerprint: message.fingerprint,
+            journalRevision: message.revision,
+        }))
+        : Array.isArray(rawAccepted) ? rawAccepted.flatMap((raw) => {
+            if (!isRecord(raw)
+                || typeof raw.messageId !== 'string'
+                || !Number.isSafeInteger(raw.segmentRevision)
+                || (raw.segmentRevision as number) < 1
+                || !validFingerprint(raw.fingerprint)
+                || !Number.isSafeInteger(raw.journalRevision)
+                || (raw.journalRevision as number) < 1) return []
+            return [{
+                messageId: raw.messageId,
+                segmentRevision: raw.segmentRevision as number,
+                fingerprint: raw.fingerprint,
+                journalRevision: raw.journalRevision as number,
+            }]
+        }) : []
+    if (
+        (rawAccepted !== undefined && (!Array.isArray(rawAccepted) || acceptedRevisions.length !== rawAccepted.length))
+        || acceptedRevisions.length > AI_CALL_TRANSCRIPT_MAX_ACCEPTED_REVISIONS
+        || acceptedRevisions.length !== value.revision
+    ) return null
+    const acceptedIdentities = new Set<string>()
+    const journalRevisions = new Set<number>()
+    for (const accepted of acceptedRevisions) {
+        const identity = `${accepted.messageId}\0${accepted.segmentRevision}`
+        if (acceptedIdentities.has(identity) || journalRevisions.has(accepted.journalRevision)) return null
+        acceptedIdentities.add(identity)
+        journalRevisions.add(accepted.journalRevision)
+    }
     for (let revision = 1; revision <= value.revision; revision += 1) {
-        if (!revisions.has(revision)) return null
+        if (!journalRevisions.has(revision)) return null
     }
-    return value as unknown as AiCallTranscriptJournalV1
+    if (value.maxOrdinal !== Math.max(0, ...ordinals)) return null
+    if (messages.some((message) => !acceptedRevisions.some((accepted) => (
+        accepted.messageId === message.messageId
+        && accepted.segmentRevision === message.segmentRevision
+        && accepted.fingerprint === message.fingerprint
+        && accepted.journalRevision === message.revision
+    )))) return null
+
+    return {
+        version: 1,
+        transcriptId: value.transcriptId,
+        revision: value.revision as number,
+        maxOrdinal: value.maxOrdinal as number,
+        messages,
+        acceptedRevisions,
+    }
 }
 
 export function metadataWithAiCallTranscriptJournal(
@@ -204,20 +306,88 @@ export function metadataWithAiCallTranscriptJournal(
     return { ...record, [AI_CALL_TRANSCRIPT_METADATA_KEY]: journal }
 }
 
+function appendAcceptedRevision(
+    journal: AiCallTranscriptJournalV1,
+    message: AiCallTranscriptMessageInput,
+    fingerprint: string,
+    journalRevision: number,
+): AiCallTranscriptAcceptedRevisionV1[] {
+    if (journal.acceptedRevisions.length >= AI_CALL_TRANSCRIPT_MAX_ACCEPTED_REVISIONS) {
+        throw new AiCallTranscriptConflictError('revision_limit', 'transcript accepted-revision bound reached')
+    }
+    return [...journal.acceptedRevisions, {
+        messageId: message.messageId,
+        segmentRevision: message.segmentRevision,
+        fingerprint,
+        journalRevision,
+    }]
+}
+
 export function reconcileAiCallTranscriptJournal(
     callId: string,
     journal: AiCallTranscriptJournalV1,
     rawMessage: unknown,
-    acceptedAfterTerminal: boolean,
+    terminal: boolean,
 ): ReconcileAiCallTranscriptJournalResult {
     const message = normalizeAiCallTranscriptMessage(rawMessage)
     const fingerprint = aiCallTranscriptMessageFingerprint(message)
     const existing = journal.messages.find((item) => item.messageId === message.messageId)
-    if (existing) {
-        if (existing.fingerprint !== fingerprint) {
-            throw new AiCallTranscriptConflictError('identity_collision', 'transcript message identity was reused')
+    const accepted = journal.acceptedRevisions.find((item) => (
+        item.messageId === message.messageId && item.segmentRevision === message.segmentRevision
+    ))
+    if (accepted) {
+        if (accepted.fingerprint !== fingerprint) {
+            throw new AiCallTranscriptConflictError('revision_collision', 'transcript segment revision identity was reused')
         }
-        return { kind: 'duplicate', journal, receipt: existing }
+        if (!existing) throw new AiCallTranscriptConflictError('corrupt_journal', 'accepted segment has no current receipt')
+        return message.segmentRevision === existing.segmentRevision
+            ? { kind: 'duplicate', journal, receipt: existing }
+            : { kind: 'stale', journal, receipt: existing }
+    }
+
+    if (existing) {
+        if (message.segmentRevision < existing.segmentRevision) {
+            return { kind: 'stale', journal, receipt: existing }
+        }
+        if (message.segmentRevision === existing.segmentRevision) {
+            throw new AiCallTranscriptConflictError('revision_collision', 'transcript segment revision identity was reused')
+        }
+        if (
+            message.ordinal !== existing.ordinal
+            || message.role !== existing.role
+            || message.source !== existing.source
+        ) {
+            throw new AiCallTranscriptConflictError('identity_collision', 'transcript segment identity changed immutable fields')
+        }
+        if (existing.final && !message.final) {
+            throw new AiCallTranscriptConflictError('final_regression', 'a final transcript segment cannot regress to interim')
+        }
+        if (terminal) {
+            throw new AiCallTranscriptConflictError('terminal_snapshot', 'terminal transcript snapshot is fenced')
+        }
+        const revision = journal.revision + 1
+        const receipt: AiCallTranscriptMessageReceiptV1 = {
+            ...existing,
+            segmentRevision: message.segmentRevision,
+            final: message.final,
+            fingerprint,
+            acceptedAfterTerminal: false,
+            revision,
+        }
+        return {
+            kind: 'applied',
+            receipt,
+            journal: {
+                ...journal,
+                revision,
+                messages: journal.messages.map((item) => item.messageId === message.messageId ? receipt : item),
+                acceptedRevisions: appendAcceptedRevision(journal, message, fingerprint, revision),
+            },
+        }
+    }
+
+    if (terminal) {
+        throw new AiCallTranscriptConflictError('terminal_snapshot', 'terminal transcript snapshot is fenced')
     }
     if (journal.messages.some((item) => item.ordinal === message.ordinal)) {
         throw new AiCallTranscriptConflictError('ordinal_collision', 'transcript ordinal was reused')
@@ -230,11 +400,12 @@ export function reconcileAiCallTranscriptJournal(
         messageId: message.messageId,
         rowId: aiCallMessageRowId(callId, message.messageId),
         ordinal: message.ordinal,
+        segmentRevision: message.segmentRevision,
         role: message.role,
-        final: true,
+        final: message.final,
         source: message.source,
         fingerprint,
-        acceptedAfterTerminal,
+        acceptedAfterTerminal: false,
         revision,
     }
     return {
@@ -245,34 +416,103 @@ export function reconcileAiCallTranscriptJournal(
             revision,
             maxOrdinal: Math.max(journal.maxOrdinal, message.ordinal),
             messages: [...journal.messages, receipt],
+            acceptedRevisions: appendAcceptedRevision(journal, message, fingerprint, revision),
         },
     }
+}
+
+function orderedReceipts(journal: AiCallTranscriptJournalV1): AiCallTranscriptMessageReceiptV1[] {
+    return [...journal.messages]
+        .sort((left, right) => left.ordinal - right.ordinal || left.messageId.localeCompare(right.messageId))
+}
+
+export function aiCallTranscriptSnapshotSha256(journal: AiCallTranscriptJournalV1): string {
+    return sha256(orderedReceipts(journal).map((receipt) => ({
+        messageId: receipt.messageId,
+        ordinal: receipt.ordinal,
+        segmentRevision: receipt.segmentRevision,
+        role: receipt.role,
+        final: receipt.final,
+        source: receipt.source,
+        fingerprint: receipt.fingerprint,
+    })))
+}
+
+export function aiCallTranscriptMessagesSnapshotSha256(messages: AiCallTranscriptMessageInput[]): string {
+    return sha256([...messages]
+        .sort((left, right) => left.ordinal - right.ordinal || left.messageId.localeCompare(right.messageId))
+        .map((message) => ({
+            messageId: message.messageId,
+            ordinal: message.ordinal,
+            segmentRevision: message.segmentRevision,
+            role: message.role,
+            final: message.final,
+            source: message.source,
+            fingerprint: aiCallTranscriptMessageFingerprint(message),
+        })))
+}
+
+export function materializeAiCallTranscriptSnapshot(
+    callId: string,
+    journal: AiCallTranscriptJournalV1,
+    rows: Array<{ id: string; role: string; content: string }>,
+): AiCallTranscriptSnapshotV1 {
+    const byId = new Map(rows.map((row) => [row.id, row]))
+    const messages = orderedReceipts(journal).map((receipt): AiCallTranscriptMessageInput => {
+        const row = byId.get(receipt.rowId)
+        if (!row) throw new AiCallTranscriptConflictError('corrupt_journal', 'canonical transcript row is missing')
+        const message: AiCallTranscriptMessageInput = {
+            messageId: receipt.messageId,
+            ordinal: receipt.ordinal,
+            segmentRevision: receipt.segmentRevision,
+            role: receipt.role,
+            content: row.content,
+            final: receipt.final,
+            source: receipt.source,
+        }
+        if (row.role !== receipt.role || aiCallTranscriptMessageFingerprint(message) !== receipt.fingerprint) {
+            throw new AiCallTranscriptConflictError('corrupt_journal', 'canonical transcript row changed')
+        }
+        return message
+    })
+    return { callId, revision: journal.revision, sha256: aiCallTranscriptSnapshotSha256(journal), messages }
 }
 
 export function renderLegacyAiCallTranscriptProjection(
     journal: AiCallTranscriptJournalV1,
     rows: Array<{ id: string; role: string; content: string }>,
 ): string {
-    const byId = new Map(rows.map((row) => [row.id, row]))
-    return [...journal.messages]
-        .sort((left, right) => left.ordinal - right.ordinal || left.messageId.localeCompare(right.messageId))
-        .map((receipt) => {
-            const row = byId.get(receipt.rowId)
-            if (!row) throw new AiCallTranscriptConflictError('corrupt_journal', 'canonical transcript row is missing')
-            if (row.role !== receipt.role || aiCallTranscriptMessageFingerprint({
-                messageId: receipt.messageId,
-                ordinal: receipt.ordinal,
-                role: receipt.role,
-                content: row.content,
-                final: true,
-                source: receipt.source,
-            }) !== receipt.fingerprint) {
-                throw new AiCallTranscriptConflictError('corrupt_journal', 'canonical transcript row changed')
-            }
-            const label = row.role === 'user' ? '[Лид]' : '[AI]'
-            return `${label} ${row.content}\n`
-        })
+    return materializeAiCallTranscriptSnapshot(journal.transcriptId.slice('ai-call-transcript:v1:'.length), journal, rows)
+        .messages
+        .map((message) => `${message.role === 'user' ? '[Лид]' : '[AI]'} ${message.content}\n`)
         .join('')
+}
+
+export function parseLegacyAiCallTranscript(value: string): AiCallTranscriptMessageInput[] {
+    const chunks: Array<{ role: 'user' | 'assistant'; content: string[] }> = []
+    for (const rawLine of value.replaceAll('\r\n', '\n').split('\n')) {
+        const labelled = /^\[(Лид|AI)\]\s?(.*)$/u.exec(rawLine)
+        if (labelled) {
+            chunks.push({ role: labelled[1] === 'Лид' ? 'user' : 'assistant', content: [labelled[2]] })
+        } else if (chunks.length > 0) {
+            chunks[chunks.length - 1].content.push(rawLine)
+        } else if (rawLine.trim()) {
+            chunks.push({ role: 'user', content: [rawLine] })
+        }
+    }
+    return chunks.flatMap((chunk, index) => {
+        const content = chunk.content.join('\n').trim()
+        if (!content) return []
+        return [normalizeAiCallTranscriptMessage({
+            messageId: `legacy-call-transcript:v1:${index + 1}`,
+            ordinal: index + 1,
+            segmentRevision: 1,
+            role: chunk.role,
+            content,
+            final: true,
+            source: 'legacy_calling',
+        })]
+    })
 }
 
 export function createAiCallTranscriptOperation(deps: { persistence: AiCallTranscriptPersistencePort }) {

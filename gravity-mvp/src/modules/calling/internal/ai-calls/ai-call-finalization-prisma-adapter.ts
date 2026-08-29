@@ -1,11 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Prisma client can lag AI-call model generation */
 import { prisma } from '@/lib/prisma'
+import { makeAiCallFinalizationFollowUpRequestedEventV1 } from '@/contracts/calling/v1'
+import { OUTBOX_MAX_ATTEMPTS_V1 } from '@/infrastructure/outbox/v1'
 import {
     AI_CALL_FINALIZATION_METADATA_KEY,
     metadataWithAiCallFinalizationJournal,
     readAiCallFinalizationJournal,
     type AiCallFinalizationJournalV1,
-    type AiCallFinalizationRecoveryPersistencePort,
+    type AiCallFinalizationPersistencePort,
     type FollowUpClaim,
 } from '../../application/ai-call-finalization'
 import {
@@ -18,6 +20,11 @@ import {
     metadataWithAiCallLifecycleJournal,
     readAiCallLifecycleJournal,
 } from '../../application/ai-call-lifecycle'
+import {
+    aiCallTranscriptSnapshotSha256,
+    createAiCallTranscriptJournal,
+    readAiCallTranscriptJournal,
+} from '../../application/ai-call-transcript'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -98,7 +105,7 @@ function clearLease(journal: AiCallFinalizationJournalV1): AiCallFinalizationJou
     }
 }
 
-export const aiCallFinalizationPrismaPort: AiCallFinalizationRecoveryPersistencePort = {
+export const aiCallFinalizationPrismaPort: AiCallFinalizationPersistencePort = {
     async findCall(callId) {
         return (prisma as any).call.findUnique({
             where: { id: callId },
@@ -161,6 +168,15 @@ export const aiCallFinalizationPrismaPort: AiCallFinalizationRecoveryPersistence
                 return { kind: 'legacy_terminal' as const }
             }
 
+            const transcript = readAiCallTranscriptJournal(call.metadata)
+                ?? createAiCallTranscriptJournal(input.callId)
+            if (
+                input.journal.transcriptRevision !== transcript.revision
+                || input.journal.transcriptSnapshotSha256 !== aiCallTranscriptSnapshotSha256(transcript)
+            ) {
+                return { kind: 'transcript_changed' as const }
+            }
+
             await tx.call.update({
                 where: { id: input.callId },
                 data: {
@@ -175,6 +191,27 @@ export const aiCallFinalizationPrismaPort: AiCallFinalizationRecoveryPersistence
                     }),
                 },
             })
+            if (input.journal.followUp.state === 'pending') {
+                const event = makeAiCallFinalizationFollowUpRequestedEventV1({
+                    callId: input.callId,
+                    finalizationId: input.journal.finalizationId,
+                    finalizationFingerprint: input.fingerprint,
+                    occurredAt: input.journal.acceptedAt,
+                })
+                await tx.domainOutboxEvent.create({
+                    data: {
+                        eventId: event.eventId,
+                        eventType: event.eventType,
+                        eventVersion: event.eventVersion,
+                        aggregateType: event.aggregate.type,
+                        aggregateId: event.aggregate.id,
+                        payload: event,
+                        maxAttempts: OUTBOX_MAX_ATTEMPTS_V1,
+                        correlationId: event.correlationId,
+                        causationId: event.causationId,
+                    },
+                })
+            }
             return { kind: 'accepted' as const, journal: input.journal }
         })
     },
@@ -282,49 +319,5 @@ export const aiCallFinalizationPrismaPort: AiCallFinalizationRecoveryPersistence
             })
             return failed
         })
-    },
-
-    async findRecoverableFollowUps(input) {
-        const now = input.now.toISOString()
-        const rows = await (prisma as any).$queryRaw<Array<{ id: string; metadata: unknown }>>`
-            SELECT "id", "metadata"
-            FROM "Call"
-            WHERE "isAi" = TRUE
-              AND (
-                "metadata"->'aiCallFinalizationV1'->'followUp'->>'state' = 'pending'
-                OR (
-                  "metadata"->'aiCallFinalizationV1'->'followUp'->>'state' = 'in_progress'
-                  AND "metadata"->'aiCallFinalizationV1'->'followUp'->>'leaseUntil' <= ${now}
-                )
-                OR (
-                  "metadata"->'aiCallFinalizationV1'->'followUp'->>'state' = 'retry_wait'
-                  AND "metadata"->'aiCallFinalizationV1'->'followUp'->>'nextAttemptAt' <= ${now}
-                )
-              )
-            ORDER BY "updatedAt" ASC, "id" ASC
-            LIMIT ${input.limit}
-        `
-        return rows.flatMap((row: { id: string; metadata: unknown }) => {
-            const journal = readAiCallFinalizationJournal(row.metadata)
-            if (!journal
-                || journal.finalizationId !== `ai-call-finalization:v1:${row.id}`
-                || journal.followUp.idempotencyKey !== `ai-call-finalization-follow-up:v1:${row.id}`
-                || !['pending', 'in_progress', 'retry_wait'].includes(journal.followUp.state)) return []
-            return [{
-                callId: row.id,
-                fingerprint: journal.fingerprint,
-                followUpState: journal.followUp.state as 'pending' | 'in_progress' | 'retry_wait',
-            }]
-        })
-    },
-
-    async countTerminalFollowUpFailures() {
-        const rows = await (prisma as any).$queryRaw<Array<{ count: bigint | number }>>`
-            SELECT COUNT(*) AS "count"
-            FROM "Call"
-            WHERE "isAi" = TRUE
-              AND "metadata"->'aiCallFinalizationV1'->'followUp'->>'state' = 'terminal_failure'
-        `
-        return Number(rows[0]?.count ?? 0)
     },
 }

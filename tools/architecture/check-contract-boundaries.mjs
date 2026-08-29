@@ -63,6 +63,9 @@ for (const file of consumerFiles) {
 }
 
 const durableFinalizeConsumer = source('gravity-mvp/src/modules/calling/application/ai-call-finalization-runtime.ts')
+const durableFinalizeRecoveryConsumer = source(
+    'gravity-mvp/src/modules/calling/application/ai-call-finalization-recovery-runtime.ts',
+)
 assertCheck(
     'durable Calling finalization uses CreateIdempotentTaskCommand.v1',
     durableFinalizeConsumer.includes('CREATE_IDEMPOTENT_TASK_COMMAND_V1')
@@ -71,8 +74,15 @@ assertCheck(
 )
 assertCheck(
     'durable Calling finalization has no foreign Task persistence access',
-    !/(?:prisma|transaction|tx)\.task\.(?:create|update|updateMany|upsert|delete|deleteMany)\s*\(/.test(durableFinalizeConsumer),
+    !/(?:prisma|transaction|tx)\.task\.(?:create|update|updateMany|upsert|delete|deleteMany)\s*\(/
+        .test(`${durableFinalizeConsumer}\n${durableFinalizeRecoveryConsumer}`),
     'direct foreign Task persistence access remains',
+)
+assertCheck(
+    'durable Calling recovery reuses CreateIdempotentTaskCommand.v1',
+    durableFinalizeRecoveryConsumer.includes('CREATE_IDEMPOTENT_TASK_COMMAND_V1')
+        && durableFinalizeRecoveryConsumer.includes('createIdempotentTaskV1({'),
+    'recovery bypasses the versioned Work Management owner command',
 )
 const finalizeRoute = source('gravity-mvp/src/app/api/ai-calls/sessions/[id]/finalize/route.ts')
 assertCheck(

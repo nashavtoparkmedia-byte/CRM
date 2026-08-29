@@ -164,6 +164,7 @@ beforeEach(() => {
         receipt: {
             messageId: 'audio-bridge-transcript:v1:fs-1:1',
             ordinal: 1,
+            segmentRevision: 1,
             acceptedAfterTerminal: false,
         },
         legacyTranscript: '[Лид] hello\n',
@@ -280,13 +281,16 @@ describe('AudioBridge callback route authentication', () => {
             callId: 'call-1',
             messageId: 'audio-bridge-transcript:v1:fs-1:1',
             ordinal: 1,
+            segmentRevision: 1,
             revision: 1,
             duplicate: false,
+            stale: false,
             acceptedAfterTerminal: false,
         })
         expect(mocks.appendAiCallTranscriptMessage).toHaveBeenCalledWith('call-1', {
             messageId: 'audio-bridge-transcript:v1:fs-1:1',
             ordinal: 1,
+            segmentRevision: 1,
             role: 'user',
             content: 'hello',
             final: true,
@@ -404,6 +408,7 @@ describe('AI-call lifecycle/transcript HTTP fencing', () => {
             receipt: {
                 messageId: 'audio-bridge-transcript:v1:fs-1:1',
                 ordinal: 1,
+                segmentRevision: 1,
                 acceptedAfterTerminal: false,
             },
             legacyTranscript: '[Лид] hello\n',
@@ -413,16 +418,26 @@ describe('AI-call lifecycle/transcript HTTP fencing', () => {
         await expect(response.json()).resolves.toMatchObject({ duplicate: true, revision: 1 })
     })
 
-    it('rejects partial Bridge transcript input before application persistence', async () => {
+    it('accepts an interim Bridge segment for a later correction revision', async () => {
+        mocks.appendAiCallTranscriptMessage.mockResolvedValueOnce({
+            kind: 'applied',
+            callId: 'call-1',
+            journal: { revision: 1 },
+            receipt: { messageId: 'm1', ordinal: 1, segmentRevision: 1, acceptedAfterTerminal: false },
+            legacyTranscript: '[Лид] partial\n',
+        })
         const response = await appendTranscriptItem(request(
             '/api/ai-calls/sessions/call-1/transcript-item',
             'POST',
             { role: 'user', text: 'partial', messageId: 'm1', ordinal: 1, final: false },
             VALID_TOKEN,
         ), callContext)
-        expect(response.status).toBe(400)
-        await expect(response.json()).resolves.toMatchObject({ error: 'invalid_transcript_item' })
-        expect(mocks.appendAiCallTranscriptMessage).not.toHaveBeenCalled()
+        expect(response.status).toBe(200)
+        await expect(response.json()).resolves.toMatchObject({ ok: true, segmentRevision: 1, stale: false })
+        expect(mocks.appendAiCallTranscriptMessage).toHaveBeenCalledWith('call-1', {
+            messageId: 'm1', ordinal: 1, segmentRevision: 1, role: 'user',
+            content: 'partial', final: false, source: 'audio_bridge',
+        })
     })
 })
 

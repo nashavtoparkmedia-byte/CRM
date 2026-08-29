@@ -8,13 +8,14 @@ import {
     AI_CALL_FINALIZATION_METADATA_KEY,
     AI_CALL_FINALIZATION_RETRY_BACKOFF_MS,
     createAiCallFinalizationOperation,
-    createAiCallFinalizationRecoveryOperation,
+    createAiCallFinalizationRecoveryByIdentityOperation,
     createAiCallFinalizationWithTranscriptReconciliation,
     metadataWithAiCallFinalizationJournal,
+    parseAiCallFinalizationInput,
     readAiCallFinalizationJournal,
     type AiCallFinalizationCall,
     type AiCallFinalizationJournalV1,
-    type AiCallFinalizationRecoveryPersistencePort,
+    type AiCallFinalizationPersistencePort,
     type AiCallTerminalUpdate,
     type FinalizationAcceptance,
     type FollowUpClaim,
@@ -44,7 +45,7 @@ function deferred<T>() {
     return { promise, resolve, reject }
 }
 
-class MemoryFinalizationPort implements AiCallFinalizationRecoveryPersistencePort {
+class MemoryFinalizationPort implements AiCallFinalizationPersistencePort {
     call: AiCallFinalizationCall & { aiAnalysis?: unknown } = {
         id: 'call-1',
         status: 'connected',
@@ -205,30 +206,6 @@ class MemoryFinalizationPort implements AiCallFinalizationRecoveryPersistencePor
         return failed
     }
 
-    async findRecoverableFollowUps(input: { now: Date; limit: number }) {
-        const journal = readAiCallFinalizationJournal(this.call.metadata)
-        if (!journal || !['pending', 'in_progress', 'retry_wait'].includes(journal.followUp.state)) return []
-        if (
-            journal.followUp.state === 'in_progress'
-            && journal.followUp.leaseUntil
-            && new Date(journal.followUp.leaseUntil).getTime() > input.now.getTime()
-        ) return []
-        if (
-            journal.followUp.state === 'retry_wait'
-            && journal.followUp.nextAttemptAt
-            && new Date(journal.followUp.nextAttemptAt).getTime() > input.now.getTime()
-        ) return []
-        return [{
-            callId: this.call.id,
-            fingerprint: journal.fingerprint,
-            followUpState: journal.followUp.state as 'pending' | 'in_progress' | 'retry_wait',
-        }].slice(0, input.limit)
-    }
-
-    async countTerminalFollowUpFailures() {
-        return readAiCallFinalizationJournal(this.call.metadata)?.followUp.state === 'terminal_failure' ? 1 : 0
-    }
-
     journal(fingerprint?: string) {
         const journal = readAiCallFinalizationJournal(this.call.metadata)
         if (!journal) throw new Error('journal missing')
@@ -259,7 +236,7 @@ function harness(taskCreate?: (command: { idempotencyKey: string; data: unknown 
         maxFailures: AI_CALL_FINALIZATION_MAX_FAILURES,
         retryBackoffMs: AI_CALL_FINALIZATION_RETRY_BACKOFF_MS,
     })
-    const recovery = createAiCallFinalizationRecoveryOperation({
+    const recoveryByIdentity = createAiCallFinalizationRecoveryByIdentityOperation({
         persistence,
         tasks,
         clock: () => new Date(nowMs),
@@ -270,7 +247,7 @@ function harness(taskCreate?: (command: { idempotencyKey: string; data: unknown 
     return {
         persistence,
         operation,
-        recovery,
+        recovery: () => recoveryByIdentity('call-1', persistence.journal().fingerprint),
         create,
         sideEffect,
         advance(ms: number) { nowMs += ms },
@@ -342,6 +319,29 @@ describe('Calling durable single-call finalization', () => {
         })
         expect(h.persistence.terminal?.endedAt).toBe(acceptedAt)
         expect(h.create).toHaveBeenCalledTimes(1)
+    })
+
+    it('binds the ordered canonical transcript snapshot into first-wins finalization identity', async () => {
+        const h = harness()
+        const withTranscript = {
+            ...FOLLOW_UP_BODY,
+            transcriptItems: [{
+                messageId: 'm1', ordinal: 1, segmentRevision: 1, role: 'user',
+                content: 'Yes', final: true,
+            }],
+            transcriptRevision: 1,
+        }
+        await h.operation('call-1', withTranscript)
+        expect(h.persistence.journal()).toMatchObject({
+            transcriptRevision: 1,
+            transcriptSnapshotSha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+        })
+        await expect(h.operation('call-1', {
+            ...withTranscript,
+            transcriptItems: [{
+                ...withTranscript.transcriptItems[0], segmentRevision: 2, content: 'No',
+            }],
+        })).resolves.toEqual({ kind: 'conflict', reason: 'different_terminal_payload' })
     })
 
     it('recovers a crash after atomic Call/journal commit but before Task creation', async () => {
@@ -510,13 +510,13 @@ describe('Calling durable single-call finalization', () => {
 })
 
 describe('Calling finalization-specific crash recovery', () => {
-    it('discovers pending work after restart without another Bridge finalize callback', async () => {
+    it('recovers durable pending work by its outbox identity without another Bridge callback', async () => {
         const h = harness()
         h.persistence.crashOnClaimOnce = true
         await expect(h.operation('call-1', FOLLOW_UP_BODY)).rejects.toThrow('simulated_process_crash')
         expect(h.persistence.journal().followUp.state).toBe('pending')
 
-        await expect(h.recovery()).resolves.toMatchObject({ discovered: 1, completed: 1, errors: 0 })
+        await expect(h.recovery()).resolves.toMatchObject({ kind: 'success', followUpStatus: 'completed' })
         expect(h.persistence.journal().followUp.state).toBe('completed')
         expect(h.create).toHaveBeenCalledTimes(1)
     })
@@ -532,7 +532,7 @@ describe('Calling finalization-specific crash recovery', () => {
         const crashedWorker = h.operation('call-1', FOLLOW_UP_BODY)
         await vi.waitFor(() => expect(h.persistence.journal().followUp.state).toBe('in_progress'))
         h.advance(1_001)
-        await expect(h.recovery()).resolves.toMatchObject({ discovered: 1, completed: 1 })
+        await expect(h.recovery()).resolves.toMatchObject({ kind: 'success', followUpStatus: 'completed' })
         firstResult.resolve({ task: { id: 'stale-task', title: 'Stale' } })
         await crashedWorker
         expect(h.persistence.journal().followUp).toMatchObject({
@@ -540,28 +540,28 @@ describe('Calling finalization-specific crash recovery', () => {
         })
     })
 
-    it('discovers retry_wait only when its deterministic due time is reached', async () => {
+    it('retries retry_wait only when its deterministic due time is reached', async () => {
         let calls = 0
         const h = harness(async () => {
             if (++calls === 1) throw new Error('temporary')
             return { task: { id: 'task-1', title: 'Call back' } }
         })
         await h.operation('call-1', FOLLOW_UP_BODY)
-        await expect(h.recovery()).resolves.toMatchObject({ discovered: 0, completed: 0 })
+        await expect(h.recovery()).resolves.toMatchObject({ kind: 'retryable', followUpStatus: 'retry_wait' })
         h.advance(500)
-        await expect(h.recovery()).resolves.toMatchObject({ discovered: 1, completed: 1 })
+        await expect(h.recovery()).resolves.toMatchObject({ kind: 'success', followUpStatus: 'completed' })
         expect(h.create).toHaveBeenCalledTimes(2)
     })
 
-    it('does not replay completed or not-required journals', async () => {
+    it('does not replay completed or not-required journals when an event is redelivered', async () => {
         const completed = harness()
         await completed.operation('call-1', FOLLOW_UP_BODY)
-        await expect(completed.recovery()).resolves.toMatchObject({ discovered: 0 })
+        await expect(completed.recovery()).resolves.toMatchObject({ kind: 'success', followUpStatus: 'completed' })
         expect(completed.create).toHaveBeenCalledTimes(1)
 
         const notRequired = harness()
         await notRequired.operation('call-1', { reason: 'closed' })
-        await expect(notRequired.recovery()).resolves.toMatchObject({ discovered: 0 })
+        await expect(notRequired.recovery()).resolves.toMatchObject({ kind: 'success', followUpStatus: 'not_required' })
         expect(notRequired.create).not.toHaveBeenCalled()
     })
 
@@ -569,20 +569,51 @@ describe('Calling finalization-specific crash recovery', () => {
         const permanent = Object.assign(new Error('invalid'), { permanent: true, code: 'INVALID_CONTRACT' })
         const h = harness(async () => { throw permanent })
         await h.operation('call-1', FOLLOW_UP_BODY)
-        await expect(h.recovery()).resolves.toMatchObject({
-            discovered: 0, terminalFailuresVisible: 1,
-        })
+        await expect(h.recovery()).resolves.toMatchObject({ kind: 'terminal_failure' })
         expect(h.create).toHaveBeenCalledTimes(1)
+    })
+
+    it('fences two genuinely concurrent recovery workers to one owner command', async () => {
+        const task = deferred<{ task: { id: string; title: string } }>()
+        const h = harness(async () => task.promise)
+        h.persistence.crashOnClaimOnce = true
+        await expect(h.operation('call-1', FOLLOW_UP_BODY)).rejects.toThrow('simulated_process_crash')
+
+        const workers = Promise.all([h.recovery(), h.recovery()])
+        await vi.waitFor(() => expect(h.create).toHaveBeenCalledTimes(1))
+        task.resolve({ task: { id: 'task-1', title: 'Call back' } })
+        const results = await workers
+        expect(results).toEqual(expect.arrayContaining([
+            expect.objectContaining({ kind: 'success' }),
+            expect.objectContaining({ kind: 'retryable', followUpStatus: 'in_progress' }),
+        ]))
+        expect(h.create).toHaveBeenCalledTimes(1)
+        expect(h.persistence.journal().followUp.state).toBe('completed')
     })
 })
 
 describe('Calling finalization transcript reconciliation', () => {
+    it('does not let an external JSON marker spoof canonical transcript provenance', () => {
+        const parsed = parseAiCallFinalizationInput({
+            reason: 'closed',
+            canonicalTranscriptSnapshot: true,
+            transcriptItems: [{
+                messageId: 'm1', ordinal: 1, segmentRevision: 1, role: 'user',
+                content: 'hello', final: true, source: 'legacy_calling',
+            }],
+        })
+        expect(parsed.transcriptItems[0].source).toBe('audio_bridge')
+    })
+
     it('reconciles deterministic receipts in ordinal order before terminal acceptance', async () => {
         const order: string[] = []
-        const appendTranscript = vi.fn(async (_callId: string, item: AiCallTranscriptMessageInput) => {
+        const appendTranscript = vi.fn(async (callId: string, item: AiCallTranscriptMessageInput) => {
+            expect(callId).toBe('call-1')
             order.push(`transcript:${item.ordinal}`)
         })
-        const finalize = vi.fn(async () => {
+        const finalize = vi.fn(async (...args: [string, unknown]) => {
+            expect(args[0]).toBe('call-1')
+            expect(args[1]).toBeDefined()
             order.push('finalize')
             return {
                 kind: 'success' as const,
@@ -595,16 +626,88 @@ describe('Calling finalization transcript reconciliation', () => {
         })
         const operation = createAiCallFinalizationWithTranscriptReconciliation({
             appendTranscript,
+            snapshotTranscript: async () => ({
+                callId: 'call-1',
+                revision: 2,
+                sha256: 'a'.repeat(64),
+                messages: [
+                    { messageId: 'm1', ordinal: 1, segmentRevision: 1, role: 'user', content: 'first', final: true, source: 'audio_bridge' },
+                    { messageId: 'm2', ordinal: 2, segmentRevision: 1, role: 'assistant', content: 'second', final: true, source: 'audio_bridge' },
+                ],
+            }),
             finalize,
         })
         await operation('call-1', {
             reason: 'closed',
             transcriptItems: [
-                { messageId: 'm2', ordinal: 2, role: 'assistant', content: 'second', final: true },
-                { messageId: 'm1', ordinal: 1, role: 'user', content: 'first', final: true },
+                { messageId: 'm2', ordinal: 2, segmentRevision: 1, role: 'assistant', content: 'second', final: true },
+                { messageId: 'm1', ordinal: 1, segmentRevision: 1, role: 'user', content: 'first', final: true },
             ],
         })
         expect(order).toEqual(['transcript:1', 'transcript:2', 'finalize'])
         expect(finalize).toHaveBeenCalledTimes(1)
+        expect(finalize.mock.calls[0][1]).toMatchObject({
+            transcriptRevision: 2,
+            realUserUtterances: 1,
+        })
+    })
+
+    it('refreshes and retries when a concurrent transcript update wins before terminal lock', async () => {
+        const snapshots = [1, 2].map((revision) => ({
+            callId: 'call-1',
+            revision,
+            sha256: String(revision).repeat(64),
+            messages: [{
+                messageId: 'm1', ordinal: 1, segmentRevision: revision, role: 'user' as const,
+                content: revision === 1 ? 'draft' : 'final', final: true, source: 'audio_bridge' as const,
+            }],
+        }))
+        const snapshotTranscript = vi.fn()
+            .mockResolvedValueOnce(snapshots[0])
+            .mockResolvedValueOnce(snapshots[1])
+        const finalize = vi.fn()
+            .mockResolvedValueOnce({ kind: 'conflict', reason: 'transcript_snapshot_changed' })
+            .mockResolvedValueOnce({
+                kind: 'success', callId: 'call-1', sessionStatus: 'ended', createdTask: null,
+                duplicate: false, followUpStatus: 'not_required',
+            })
+        const operation = createAiCallFinalizationWithTranscriptReconciliation({
+            appendTranscript: vi.fn(),
+            snapshotTranscript,
+            finalize,
+        })
+        await expect(operation('call-1', { reason: 'closed' })).resolves.toMatchObject({ kind: 'success' })
+        expect(snapshotTranscript).toHaveBeenCalledTimes(2)
+        expect(finalize).toHaveBeenCalledTimes(2)
+        expect(finalize.mock.calls[1][1]).toMatchObject({ transcriptRevision: 2 })
+    })
+
+    it('uses an existing canonical transcript instead of duplicating legacy terminal text', async () => {
+        const appendTranscript = vi.fn()
+        const finalize = vi.fn().mockResolvedValue({
+            kind: 'success', callId: 'call-1', sessionStatus: 'ended', createdTask: null,
+            duplicate: false, followUpStatus: 'not_required',
+        })
+        const canonicalMessage = {
+            messageId: 'm1', ordinal: 1, segmentRevision: 2, role: 'user' as const,
+            content: 'canonical correction', final: true, source: 'audio_bridge' as const,
+        }
+        const operation = createAiCallFinalizationWithTranscriptReconciliation({
+            appendTranscript,
+            snapshotTranscript: vi.fn().mockResolvedValue({
+                callId: 'call-1', revision: 2, sha256: 'a'.repeat(64), messages: [canonicalMessage],
+            }),
+            finalize,
+        })
+
+        await expect(operation('call-1', {
+            reason: 'closed',
+            transcript: [{ role: 'user', content: 'legacy terminal copy' }],
+        })).resolves.toMatchObject({ kind: 'success' })
+        expect(appendTranscript).not.toHaveBeenCalled()
+        expect(finalize).toHaveBeenCalledWith('call-1', expect.objectContaining({
+            transcriptItems: [canonicalMessage],
+            transcriptRevision: 2,
+        }))
     })
 })

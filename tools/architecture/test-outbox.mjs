@@ -103,6 +103,12 @@ try {
         causationId: 'fs-1',
     }
     const event = contracts.makeRecordingReadyEventV1(eventInput)
+    const finalizationEvent = contracts.makeAiCallFinalizationFollowUpRequestedEventV1({
+        callId: 'call-1',
+        finalizationId: 'ai-call-finalization:v1:call-1',
+        finalizationFingerprint: 'a'.repeat(64),
+        occurredAt: fixedNow.toISOString(),
+    })
 
     await check('RecordingReady.v1 envelope is explicit and parseable', async () => {
         assert.equal(event.eventType, contracts.RECORDING_READY_EVENT_V1)
@@ -117,6 +123,31 @@ try {
     })
     await check('event version cannot silently change', async () => {
         assert.throws(() => contracts.parseRecordingReadyEventV1({ ...event, eventVersion: 2 }))
+    })
+    await check('finalization recovery event has deterministic aggregate identity', async () => {
+        assert.equal(
+            finalizationEvent.eventType,
+            contracts.AI_CALL_FINALIZATION_FOLLOW_UP_REQUESTED_EVENT_V1,
+        )
+        assert.equal(
+            contracts.makeAiCallFinalizationFollowUpRequestedEventV1({
+                callId: 'call-1',
+                finalizationId: 'ai-call-finalization:v1:call-1',
+                finalizationFingerprint: 'a'.repeat(64),
+                occurredAt: fixedNow.toISOString(),
+            }).eventId,
+            finalizationEvent.eventId,
+        )
+    })
+    await check('finalization recovery event rejects aggregate and fingerprint tampering', async () => {
+        assert.throws(() => contracts.parseAiCallFinalizationFollowUpRequestedEventV1({
+            ...finalizationEvent,
+            aggregate: { type: 'Call', id: 'call-other' },
+        }))
+        assert.throws(() => contracts.parseAiCallFinalizationFollowUpRequestedEventV1({
+            ...finalizationEvent,
+            data: { ...finalizationEvent.data, finalizationFingerprint: 'not-a-sha' },
+        }))
     })
 
     await check('domain update and outbox append commit atomically', async () => {
