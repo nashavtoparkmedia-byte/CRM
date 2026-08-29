@@ -21,14 +21,22 @@ interface PendingRequest {
     telegramId: string
     phone: string | null
     username: string | null
+    firstName: string | null
+    lastName: string | null
     chatId: string | null
     createdAt: string
 }
 
 interface DriverSearchResult {
     id: string
+    yandexDriverId: string | null
     fullName: string
     phone: string | null
+    parkId: string | null
+    parkName: string | null
+    workStatus: string | null
+    currentStatus: string | null
+    source: 'crm' | 'yandex'
 }
 
 function formatDate(iso: string) {
@@ -98,10 +106,13 @@ function RequestRow({ row, onDismiss, onLinked }: { row: PendingRequest; onDismi
     const [searching, setSearching] = useState(false)
     const [saving, setSaving] = useState(false)
     const [dismissing, setDismissing] = useState(false)
+    const [checkedParks, setCheckedParks] = useState(0)
+    const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
         if (query.length < 3) { setResults([]); return }
         setSearching(true)
+        setError(null)
         const timer = setTimeout(async () => {
             try {
                 const res = await fetch('/api/bot-link', {
@@ -110,7 +121,15 @@ function RequestRow({ row, onDismiss, onLinked }: { row: PendingRequest; onDismi
                     body: JSON.stringify({ action: 'search', query }),
                 })
                 const d = await res.json()
+                if (!res.ok) throw new Error(d.error || 'Ошибка поиска водителя')
                 setResults(d.drivers || [])
+                setCheckedParks(d.checkedParks || 0)
+                if ((d.errors || []).length > 0 && (d.drivers || []).length === 0) {
+                    setError('Не все парки Яндекса ответили. Попробуйте поиск ещё раз.')
+                }
+            } catch (searchError) {
+                setResults([])
+                setError(searchError instanceof Error ? searchError.message : 'Ошибка поиска водителя')
             } finally { setSearching(false) }
         }, 300)
         return () => { clearTimeout(timer); setSearching(false) }
@@ -118,14 +137,32 @@ function RequestRow({ row, onDismiss, onLinked }: { row: PendingRequest; onDismi
 
     const handleLink = async (driver: DriverSearchResult) => {
         setSaving(true)
-        await fetch('/api/bot-link', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ action: 'link', telegramId: row.telegramId, driverId: driver.id }),
-        })
-        await fetch(`/api/bot-users?requestId=${row.id}`, { method: 'DELETE' })
-        setSaving(false)
-        onLinked()
+        setError(null)
+        try {
+            const response = await fetch('/api/bot-link', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'link',
+                    telegramId: row.telegramId,
+                    username: row.username,
+                    driverId: driver.id,
+                    yandexDriverId: driver.yandexDriverId,
+                    driverName: driver.fullName,
+                    parkId: driver.parkId,
+                }),
+            })
+            const data = await response.json()
+            if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось привязать водителя')
+
+            const dismissResponse = await fetch(`/api/bot-users?requestId=${row.id}`, { method: 'DELETE' })
+            if (!dismissResponse.ok) throw new Error('Связь сохранена, но запрос не удалось убрать из очереди')
+            onLinked()
+        } catch (linkError) {
+            setError(linkError instanceof Error ? linkError.message : 'Не удалось привязать водителя')
+        } finally {
+            setSaving(false)
+        }
     }
 
     const handleDismiss = async () => {
@@ -134,13 +171,15 @@ function RequestRow({ row, onDismiss, onLinked }: { row: PendingRequest; onDismi
         onDismiss()
     }
 
+    const telegramName = [row.firstName, row.lastName].filter(Boolean).join(' ').trim()
+
     return (
         <div className="px-4 py-2.5 border-b border-[#E4ECFC] last:border-0 hover:bg-[#F1F5FD] transition-colors">
             <div className="flex items-center">
                 <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-[16px] shrink-0 mr-3">⚠️</div>
                 <div className="flex-1 min-w-0">
                     <div className="text-[13px] font-medium text-[#0F172A]">
-                        {row.username ? `@${row.username}` : `TG ID ${row.telegramId}`}
+                        {row.username ? `@${row.username}` : telegramName || `TG ID ${row.telegramId}`}
                         {row.phone && <span className="ml-2 font-normal text-[#64748B]">{row.phone}</span>}
                     </div>
                     <div className="text-[11px] text-[#64748B]">ID {row.telegramId} · {formatDate(row.createdAt)}</div>
@@ -192,15 +231,21 @@ function RequestRow({ row, onDismiss, onLinked }: { row: PendingRequest; onDismi
                             className="flex-1 h-[28px] rounded border border-[#E4ECFC] px-2 text-[12px] outline-none focus:border-[#2AABEE]"
                         />
                     </div>
+                    {error && !searching && <div className="text-[11px] text-red-600 mb-1">{error}</div>}
                     {searching ? (
                         <div className="text-[11px] text-[#64748B] flex items-center gap-1"><Loader2 size={10} className="animate-spin" /> Ищу...</div>
                     ) : results.length > 0 ? (
                         <div className="space-y-px">
                             {results.map(d => (
-                                <div key={d.id} className="flex items-center justify-between py-1 px-1 hover:bg-white rounded">
+                                <div key={`${d.parkId || 'crm'}:${d.yandexDriverId || d.id}`} className="flex items-center justify-between py-1 px-1 hover:bg-white rounded">
                                     <div>
                                         <div className="text-[12px] font-medium text-[#0F172A]">{d.fullName}</div>
-                                        {d.phone && <div className="text-[10px] text-[#64748B] font-mono">{d.phone}</div>}
+                                        <div className="text-[10px] text-[#64748B]">
+                                            {d.phone && <span className="font-mono">{d.phone}</span>}
+                                            {d.phone && d.parkName && <span> · </span>}
+                                            {d.parkName && <span>{d.parkName}</span>}
+                                            {d.workStatus === 'fired' && <span className="text-red-600"> · уволен</span>}
+                                        </div>
                                     </div>
                                     <button
                                         disabled={saving}
@@ -212,11 +257,13 @@ function RequestRow({ row, onDismiss, onLinked }: { row: PendingRequest; onDismi
                                 </div>
                             ))}
                         </div>
-                    ) : query.length >= 3 ? (
-                        <div className="text-[11px] text-[#64748B] italic">Водители не найдены</div>
-                    ) : (
+                    ) : !error && query.length >= 3 ? (
+                        <div className="text-[11px] text-[#64748B] italic">
+                            Водители не найдены{checkedParks > 0 ? ` в ${checkedParks} парках Яндекса` : ''}
+                        </div>
+                    ) : !error ? (
                         <div className="text-[11px] text-[#64748B]">Введите минимум 3 символа</div>
-                    )}
+                    ) : null}
                 </div>
             )}
         </div>

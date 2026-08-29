@@ -187,7 +187,10 @@ const carManagementScene = new Scenes.WizardScene(
                 const result = await callCRM('sync_user', {
                     telegramId: String(ctx.from.id),
                     username: ctx.from.username,
-                    phone
+                    firstName: ctx.from.first_name,
+                    lastName: ctx.from.last_name,
+                    phone,
+                    contactUserId: ctx.message.contact.user_id
                 });
 
                 if (result.status === 0 || result.status === 504) {
@@ -210,6 +213,8 @@ const carManagementScene = new Scenes.WizardScene(
                         `Менеджер привяжет профиль вручную — придёт уведомление.`,
                         { parse_mode: 'Markdown' }
                     );
+                } else if (result.data?.error === 'CONTACT_OWNER_MISMATCH') {
+                    await ctx.reply(result.data.message || 'Пожалуйста, отправьте свой контакт.');
                 } else {
                     await ctx.reply(
                         `❌ Ошибка при отправке. Попробуйте позже.`

@@ -31,7 +31,7 @@ export { createRunCommunicationEventRetentionHandlerV1 } from './communication-e
 export type { CommunicationEventRetentionPersistencePortV1 } from './communication-event-retention-handler'
 export type { ScheduledYandexSyncResultV1 } from './yandex-sync-runtime'
 export type { ScheduledScraperCheckDispatchResultV1 } from './scheduled-scraper-check-dispatch'
-export type { ParkPhoneProfileV1, ParkPhoneSearchResultV1 } from './park-phone-search'
+export type { ParkDriverSearchResultV1, ParkPhoneProfileV1, ParkPhoneSearchResultV1 } from './park-phone-search'
 export {
     addApiConnection,
     changeDriverLimit,
@@ -67,6 +67,7 @@ export {
     runDriverEventRetentionV1,
     runScheduledYandexSyncV1,
     searchYandexParksByPhonesV1,
+    searchYandexParksByDriverQueryV1,
     updateApiConnectionNameV1,
     updateDriverStateV1,
     updateScoringThresholdsV1,

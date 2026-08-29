@@ -19,6 +19,8 @@ export function createRecordBotUserProfileHandlerV1(port: BotUserProfilePersiste
             username: parsed.username,
             firstName: parsed.firstName,
             lastName: parsed.lastName,
+            phone: parsed.phone,
+            phoneVerified: parsed.phoneVerified,
             observedAt: parsed.observedAt,
         })
         return { contract: RECORD_BOT_USER_PROFILE_RESULT_V1, recorded: true }
