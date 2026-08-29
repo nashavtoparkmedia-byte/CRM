@@ -235,3 +235,16 @@ test('known bot-token diagnostics and runtime paths never log token values or pr
     assert.doesNotMatch(sources, /(?:botToken|token)\.(?:substring|substr|slice)\(/);
     assert.doesNotMatch(read('src/bot.js'), /logger\.(?:info|error)\([^\n]*\$\{socksUrl\}/);
 });
+
+test('driver registry sync preserves identity, fails closed and retries historical users', () => {
+    const service = read('src/services/userService.js');
+    const bot = read('src/bot.js');
+    assert.match(service, /telegramId: String\(user\.telegram_id \?\? user\.telegramId\)/);
+    assert.match(service, /phoneVerified: Boolean\(user\.phone_verified \?\? user\.phoneVerified\)/);
+    assert.match(service, /if \(!signature\) return resolve\(\{ ok: false/);
+    assert.match(service, /action: 'register_bot_user'/);
+    assert.match(service, /attemptAutoLink: false/);
+    assert.match(service, /\/api\/webhook\/telegram/);
+    assert.match(bot, /userService\.syncPendingCrmUsers\(\)/);
+    assert.match(bot, /userService\.startPeriodicCrmSync\(\)/);
+});

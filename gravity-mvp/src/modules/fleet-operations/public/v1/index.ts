@@ -64,6 +64,7 @@ export {
     runDriverEventRetentionV1,
     runScheduledYandexSyncV1,
     searchYandexParksByPhonesV1,
+    searchYandexParksByDriverQueryV1,
     updateApiConnectionNameV1,
     updateDriverStateV1,
     updateScoringThresholdsV1,

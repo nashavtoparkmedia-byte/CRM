@@ -15,7 +15,7 @@ class Database {
     }
 
     runCreateUsersTable() {
-        return new Promise((resolve, reject) => this.db.run(`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, telegram_id TEXT UNIQUE, username TEXT, first_name TEXT, last_name TEXT, full_name TEXT, phone TEXT, state TEXT DEFAULT 'IDLE', status TEXT DEFAULT 'Opened', vu_link TEXT, sts_link TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`, function (err) { if (err) reject(err); else resolve({ lastID: this.lastID, changes: this.changes }); }));
+        return new Promise((resolve, reject) => this.db.run(`CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, telegram_id TEXT UNIQUE, username TEXT, first_name TEXT, last_name TEXT, full_name TEXT, phone TEXT, phone_verified INTEGER DEFAULT 0, crm_registered_at DATETIME, state TEXT DEFAULT 'IDLE', status TEXT DEFAULT 'Opened', vu_link TEXT, sts_link TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)`, function (err) { if (err) reject(err); else resolve({ lastID: this.lastID, changes: this.changes }); }));
     }
 
     runCreateActionsTable() {
@@ -26,8 +26,10 @@ class Database {
     runAddColumnStatus() { return new Promise((resolve, reject) => this.db.run(`ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'Opened'`, function (err) { if (err) reject(err); else resolve({ changes: this.changes }); })); }
     runAddColumnVuLink() { return new Promise((resolve, reject) => this.db.run(`ALTER TABLE users ADD COLUMN vu_link TEXT`, function (err) { if (err) reject(err); else resolve({ changes: this.changes }); })); }
     runAddColumnStsLink() { return new Promise((resolve, reject) => this.db.run(`ALTER TABLE users ADD COLUMN sts_link TEXT`, function (err) { if (err) reject(err); else resolve({ changes: this.changes }); })); }
+    runAddColumnPhoneVerified() { return new Promise((resolve, reject) => this.db.run(`ALTER TABLE users ADD COLUMN phone_verified INTEGER DEFAULT 0`, function (err) { if (err) reject(err); else resolve({ changes: this.changes }); })); }
+    runAddColumnCrmRegisteredAt() { return new Promise((resolve, reject) => this.db.run(`ALTER TABLE users ADD COLUMN crm_registered_at DATETIME`, function (err) { if (err) reject(err); else resolve({ changes: this.changes }); })); }
 
-    runInsertUser(telegramId, username, firstName, lastName) { return new Promise((resolve, reject) => this.db.run(`INSERT OR IGNORE INTO users (telegram_id, username, first_name, last_name, created_at) VALUES (?, ?, ?, ?, datetime('now'))`, [telegramId, username, firstName, lastName], function (err) { if (err) reject(err); else resolve({ changes: this.changes }); })); }
+    runInsertUser(telegramId, username, firstName, lastName) { return new Promise((resolve, reject) => this.db.run(`INSERT INTO users (telegram_id, username, first_name, last_name, created_at) VALUES (?, ?, ?, ?, datetime('now')) ON CONFLICT(telegram_id) DO UPDATE SET username = excluded.username, first_name = excluded.first_name, last_name = excluded.last_name, crm_registered_at = NULL`, [telegramId, username, firstName, lastName], function (err) { if (err) reject(err); else resolve({ changes: this.changes }); })); }
     runInsertMinimalUser(telegramId, username) { return new Promise((resolve, reject) => this.db.run(`INSERT OR IGNORE INTO users (telegram_id, username, created_at) VALUES (?, ?, datetime('now'))`, [telegramId, username], function (err) { if (err) reject(err); else resolve({ changes: this.changes }); })); }
     runInsertAction(telegramId, actionType, payload) { return new Promise((resolve, reject) => this.db.run(`INSERT INTO actions (telegram_id, action_type, payload) VALUES (?, ?, ?)`, [telegramId, actionType, payload], function (err) { if (err) reject(err); else resolve({ changes: this.changes }); })); }
     runUpdateUserField(telegramId, field, value) {
@@ -38,6 +40,7 @@ class Database {
         if (field === 'last_name') return this.runUpdateLastName(telegramId, value);
         if (field === 'full_name') return this.runUpdateFullName(telegramId, value);
         if (field === 'phone') return this.runUpdatePhone(telegramId, value);
+        if (field === 'phone_verified') return this.runUpdatePhoneVerified(telegramId, value);
         if (field === 'vu_link') return this.runUpdateVuLink(telegramId, value);
         if (field === 'sts_link') return this.runUpdateStsLink(telegramId, value);
         throw new Error(`unsupported user field: ${field}`);
@@ -49,11 +52,14 @@ class Database {
     runUpdateLastName(id, value) { return new Promise((resolve, reject) => this.db.run(`UPDATE users SET last_name = ? WHERE telegram_id = ?`, [value, id], function (err) { if (err) reject(err); else resolve({ changes: this.changes }); })); }
     runUpdateFullName(id, value) { return new Promise((resolve, reject) => this.db.run(`UPDATE users SET full_name = ? WHERE telegram_id = ?`, [value, id], function (err) { if (err) reject(err); else resolve({ changes: this.changes }); })); }
     runUpdatePhone(id, value) { return new Promise((resolve, reject) => this.db.run(`UPDATE users SET phone = ? WHERE telegram_id = ?`, [value, id], function (err) { if (err) reject(err); else resolve({ changes: this.changes }); })); }
+    runUpdatePhoneVerified(id, value) { return new Promise((resolve, reject) => this.db.run(`UPDATE users SET phone_verified = ? WHERE telegram_id = ?`, [value, id], function (err) { if (err) reject(err); else resolve({ changes: this.changes }); })); }
     runUpdateVuLink(id, value) { return new Promise((resolve, reject) => this.db.run(`UPDATE users SET vu_link = ? WHERE telegram_id = ?`, [value, id], function (err) { if (err) reject(err); else resolve({ changes: this.changes }); })); }
     runUpdateStsLink(id, value) { return new Promise((resolve, reject) => this.db.run(`UPDATE users SET sts_link = ? WHERE telegram_id = ?`, [value, id], function (err) { if (err) reject(err); else resolve({ changes: this.changes }); })); }
 
     getUserRow(telegramId) { return new Promise((resolve, reject) => this.db.get(`SELECT * FROM users WHERE telegram_id = ?`, [telegramId], (err, row) => err ? reject(err) : resolve(row))); }
     allUserRows() { return new Promise((resolve, reject) => this.db.all(`SELECT * FROM users ORDER BY created_at DESC`, [], (err, rows) => err ? reject(err) : resolve(rows))); }
+    allUsersPendingCrmRegistration(limit) { return new Promise((resolve, reject) => this.db.all(`SELECT * FROM users WHERE crm_registered_at IS NULL ORDER BY created_at ASC LIMIT ?`, [limit], (err, rows) => err ? reject(err) : resolve(rows))); }
+    runMarkUserRegisteredInCrm(telegramId) { return new Promise((resolve, reject) => this.db.run(`UPDATE users SET crm_registered_at = datetime('now') WHERE telegram_id = ?`, [telegramId], function (err) { if (err) reject(err); else resolve({ changes: this.changes }); })); }
     allRecentUserRows(limit) { return new Promise((resolve, reject) => this.db.all(`SELECT * FROM users ORDER BY created_at DESC LIMIT ?`, [limit], (err, rows) => err ? reject(err) : resolve(rows))); }
     allRecentActionRows(limit) { return new Promise((resolve, reject) => this.db.all(`SELECT * FROM actions ORDER BY created_at DESC LIMIT ?`, [limit], (err, rows) => err ? reject(err) : resolve(rows))); }
     allActionRowsByType(actionType, limit) { return new Promise((resolve, reject) => this.db.all(`SELECT * FROM actions WHERE action_type = ? ORDER BY created_at DESC LIMIT ?`, [actionType, limit], (err, rows) => err ? reject(err) : resolve(rows))); }
@@ -75,7 +81,7 @@ class Database {
             await this.runCreateActionsTable();
 
             // Ensure columns exist (migrations)
-            const migrations = [this.runAddColumnState.bind(this), this.runAddColumnStatus.bind(this), this.runAddColumnVuLink.bind(this), this.runAddColumnStsLink.bind(this)];
+            const migrations = [this.runAddColumnState.bind(this), this.runAddColumnStatus.bind(this), this.runAddColumnVuLink.bind(this), this.runAddColumnStsLink.bind(this), this.runAddColumnPhoneVerified.bind(this), this.runAddColumnCrmRegisteredAt.bind(this)];
 
             for (const migrate of migrations) {
                 try {
@@ -127,6 +133,14 @@ class Database {
 
     async getAllUsers() {
         return await this.allUserRows();
+    }
+
+    async getUsersPendingCrmRegistration(limit = 200) {
+        return await this.allUsersPendingCrmRegistration(limit);
+    }
+
+    async markUserRegisteredInCrm(telegramId) {
+        return await this.runMarkUserRegisteredInCrm(telegramId.toString());
     }
 
     async getRecentUsers(limit = 10) {

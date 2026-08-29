@@ -8,8 +8,8 @@ export { createNotifyManualDriverTelegramLinkHandlerV1 } from './manual-driver-t
 export type { ManualDriverTelegramLinkNotificationPortV1 } from './manual-driver-telegram-link-notification-handler'
 export { TelegramHttpConnectSocketV1, getTelegramTransportOptionsV1 } from './http-connect-transport'
 export type { TelegramTransportOptionsV1 } from './http-connect-transport'
-export { createRecordBotUserProfileHandlerV1 } from './bot-user-profile-handler'
-export type { BotUserProfilePersistencePortV1 } from './bot-user-profile-handler'
+export { buildPendingBotLinkRequests, createRecordBotUserProfileHandlerV1 } from './bot-user-profile-handler'
+export type { BotUserProfilePersistencePortV1, PendingBotLinkRequest } from './bot-user-profile-handler'
 export { registerTelegramMessagingDeliveryCapabilityV1 } from './messaging-delivery-capability'
 export {
     deleteDriverTelegramLinkV1,

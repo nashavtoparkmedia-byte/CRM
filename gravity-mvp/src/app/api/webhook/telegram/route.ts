@@ -17,9 +17,64 @@ import { createChannelMessageV1, ensureConversationContactLinkV1, linkMatchedDri
 import { RECORD_BOT_USER_PROFILE_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
 import { recordBotUserProfileV1 } from '@/modules/telegram-channel/public/v1'
 
+type BotUserRegistrationInput = {
+    telegramId?: string | number
+    username?: string | null
+    firstName?: string | null
+    lastName?: string | null
+    phone?: string | null
+    phoneVerified?: boolean
+}
+
+function optionalProfileValue(value: unknown) {
+    return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+async function registerBotUser(req: NextRequest, payload: BotUserRegistrationInput) {
+    const secret = process.env.BOT_CRM_SECRET
+    if (!secret || req.headers.get('x-bot-signature') !== secret) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const telegramId = String(payload.telegramId || '').trim()
+    if (!/^\d+$/.test(telegramId) || telegramId === '0') {
+        return NextResponse.json({ error: 'Missing or invalid telegramId' }, { status: 400 })
+    }
+
+    const phone = optionalProfileValue(payload.phone)
+    const telegramIdBigInt = BigInt(telegramId)
+    await recordBotUserProfileV1({
+        contract: RECORD_BOT_USER_PROFILE_COMMAND_V1,
+        telegramId: telegramIdBigInt,
+        username: optionalProfileValue(payload.username),
+        firstName: optionalProfileValue(payload.firstName),
+        lastName: optionalProfileValue(payload.lastName),
+        phone,
+        phoneVerified: Boolean(phone && payload.phoneVerified === true),
+        observedAt: new Date(),
+    })
+
+    const mapping = await prisma.driverTelegram.findFirst({
+        where: { telegramId: telegramIdBigInt },
+        select: { driverId: true, username: true },
+    })
+    if (!mapping) {
+        return NextResponse.json({ success: true, linked: false, status: 'PENDING_MANAGER_LINK' })
+    }
+    return NextResponse.json({
+        success: true,
+        linked: true,
+        driverId: mapping.driverId,
+        driverName: mapping.username,
+    })
+}
+
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json()
+        if (body?.action === 'register_bot_user') {
+            return registerBotUser(req, (body.payload || {}) as BotUserRegistrationInput)
+        }
         console.log(`[WEBHOOK-TG] Received:`, JSON.stringify(body))
 
         // Structure expected from Bot's webhook payload
@@ -66,6 +121,8 @@ export async function POST(req: NextRequest) {
             username: username || null,
             firstName: firstName || null,
             lastName: lastName || null,
+            phone: null,
+            phoneVerified: false,
             observedAt: new Date(),
         })
 
