@@ -7,16 +7,16 @@
     "role": "SOL_HIGH_INTERNAL_REVIEW",
     "external_acceptance": false,
     "independent_acceptance": false,
-    "decision": "Internal remediation materialization records the exact baseline-to-current ownership assignments and exact-inventory transitions enumerated below. The reviewed current denominator includes the accepted AI Calls Stage 1–5 runtime/proof files and source-isolated mass-calling migration under Calling ownership, plus the reconciled current-main Telegram link restoration under the existing Telegram Channel and Fleet Operations paths; the two new bot-user request sources are explicitly assigned to Telegram Channel. The two existing governed-exclusion transitions and their assignments remain unchanged. The declared current-dependency manifest prevents test-source literals from becoming a second authority; this artifact is not external or independent acceptance."
+    "decision": "Internal remediation materialization records the exact baseline-to-current ownership assignments and exact-inventory transitions enumerated below. The reviewed current denominator includes the accepted AI Calls Stage 1–5 runtime/proof files and source-isolated mass-calling migration under Calling ownership, plus the latest reconciled current-main Telegram link restoration under existing Telegram Channel and Fleet Operations paths. The latest current-main rewrite consolidates pending-link and registry-sync behavior into its owner surfaces and retires seven superseded duplicate executable surfaces; the two existing governed-exclusion transitions and their assignments remain unchanged. The declared current-dependency manifest prevents test-source literals from becoming a second authority; this artifact is not external or independent acceptance."
   },
   "baseline": {
     "coverage_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_COVERAGE_BASELINE_2108.json",
     "coverage_sha256": "429a48c9d257408025bbc273a4d6f1413ed78196549ed889118422b6caba5730"
   },
   "current": {
-    "tracked_inventory_sha256": "f7e7a8c205a33243ffc1c1b5e7c1debebe3b844a0ba9e0915013d68afe28ea2a",
-    "tracked_executable_surfaces": 2247,
-    "coverage_sha256": "00bd4cb966ca10924a659140421254ce9968fdfaa808498582b0559c2752bab5"
+    "tracked_inventory_sha256": "50296b2ea8450acdb53d6d0cd0d9f3369e4cc44b760a3e7507336fd603a2ccd9",
+    "tracked_executable_surfaces": 2240,
+    "coverage_sha256": "9e8adc8de908dbb165ca373dff159c1ae088fcbb4b9e9ca2cf3e62f1b769f54d"
   },
   "exact_inventory_changes": [
     {
