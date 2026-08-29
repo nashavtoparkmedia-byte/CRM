@@ -98,7 +98,7 @@ CREATE TABLE "AiCallCampaignAttempt" (
   "launchId" VARCHAR(255) NOT NULL,
   "state" VARCHAR(32) NOT NULL DEFAULT 'claimed',
   "claimRevision" INTEGER NOT NULL DEFAULT 1,
-  "claimToken" CHAR(64),
+  "claimFence" CHAR(64),
   "claimedBy" VARCHAR(255),
   "claimUntil" TIMESTAMPTZ(3),
   "admissionLeaseId" TEXT,
@@ -132,6 +132,10 @@ CREATE INDEX "AiCallCampaignAttempt_state_claimUntil_createdAt_idx"
 CREATE INDEX "AiCallCampaignAttempt_campaign_state_createdAt_idx"
   ON "AiCallCampaignAttempt" ("campaignId", "state", "createdAt");
 
+ALTER TABLE "AiCallCampaignMember"
+  ADD CONSTRAINT "AiCallCampaignMember_activeAttempt_fkey" FOREIGN KEY ("activeAttemptId")
+  REFERENCES "AiCallCampaignAttempt" ("id") ON DELETE RESTRICT;
+
 CREATE TABLE "AiCallAdmissionControl" (
   "id" TEXT NOT NULL,
   "concurrentLimit" INTEGER NOT NULL,
@@ -152,7 +156,7 @@ CREATE TABLE "AiCallAdmissionLease" (
   "campaignId" TEXT NOT NULL,
   "memberId" TEXT NOT NULL,
   "workerId" VARCHAR(255) NOT NULL,
-  "leaseToken" CHAR(64) NOT NULL,
+  "leaseFence" CHAR(64) NOT NULL,
   "acquiredAt" TIMESTAMPTZ(3) NOT NULL,
   "leaseUntil" TIMESTAMPTZ(3) NOT NULL,
   "releasedAt" TIMESTAMPTZ(3),
@@ -175,4 +179,3 @@ CREATE INDEX "AiCallAdmissionLease_releasedAt_leaseUntil_idx"
 
 CREATE INDEX "AiCallAdmissionLease_campaign_releasedAt_leaseUntil_idx"
   ON "AiCallAdmissionLease" ("campaignId", "releasedAt", "leaseUntil");
-

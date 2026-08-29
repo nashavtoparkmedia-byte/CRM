@@ -29,6 +29,7 @@ function deferred<T = void>() {
 
 async function cleanup() {
     await database.$executeRawUnsafe('DELETE FROM "AiCallAdmissionLease"')
+    await database.$executeRawUnsafe('UPDATE "AiCallCampaignMember" SET "activeAttemptId"=NULL')
     await database.$executeRawUnsafe('DELETE FROM "AiCallCampaignAttempt"')
     await database.$executeRawUnsafe('DELETE FROM "AiCallCampaignMember"')
     await database.$executeRawUnsafe('DELETE FROM "AiCallCampaign"')
@@ -207,7 +208,9 @@ postgresProof.sequential('Calling mass-campaign isolated PostgreSQL runtime', ()
         })
         expect(JSON.stringify(plans.scheduler)).toContain('AiCallCampaign_state_scheduledAt_createdAt_idx')
         expect(JSON.stringify(plans.freshMember)).toContain('AiCallCampaignMember_campaign_state_nextEligibleAt_id_idx')
-        expect(JSON.stringify(plans.recovery)).toContain('AiCallCampaignAttempt_campaign_state_createdAt_idx')
+        expect(JSON.stringify(plans.recovery)).toMatch(
+            /AiCallCampaignAttempt_(?:campaign_state_createdAt_idx|member_attempt_key)/,
+        )
     })
 
     it('starts and claims once under genuine scheduler and member races, then fences pause/cancel', async () => {
@@ -231,7 +234,7 @@ postgresProof.sequential('Calling mass-campaign isolated PostgreSQL runtime', ()
         const claim = left ?? right
         await aiCallCampaignPrismaPort.deferClaim({
             attemptId: claim!.attemptId,
-            claimToken: claim!.claimToken,
+            claimFence: claim!.claimFence,
             retryAt: new Date(BASE.getTime() + 60_000),
             now: BASE,
         })
@@ -314,6 +317,73 @@ postgresProof.sequential('Calling mass-campaign isolated PostgreSQL runtime', ()
         ])
     })
 
+    it('rolls back provider settlement, member state and capacity release as one unit', async () => {
+        const campaignId = `${PREFIX}:settlement-rollback`
+        await prepareCampaign({ id: campaignId, targets: ['rollback'] })
+        await aiCallCampaignPrismaPort.configureGlobalAdmission({ concurrentLimit: 1, ratePerMinute: 60_000, now: BASE })
+        await aiCallCampaignPrismaPort.startDueCampaigns(BASE)
+        const claim = await aiCallCampaignPrismaPort.claimNextLaunch({
+            workerId: 'rollback-worker', now: BASE, leaseMs: 5_000,
+        })
+        expect(claim).not.toBeNull()
+        const admission = await aiCallCampaignPrismaPort.acquireAdmission({ claim: claim!, now: BASE, leaseMs: 5_000 })
+        expect(admission.kind).toBe('acquired')
+        if (admission.kind !== 'acquired') throw new Error('expected admission')
+
+        await database.$executeRawUnsafe(`
+            CREATE OR REPLACE FUNCTION pg_temp.fail_ai_call_campaign_member_settlement()
+            RETURNS trigger LANGUAGE plpgsql AS $$
+            BEGIN
+                IF NEW."state" = 'succeeded' THEN
+                    RAISE EXCEPTION 'INJECTED_CAMPAIGN_SETTLEMENT_FAILURE';
+                END IF;
+                RETURN NEW;
+            END
+            $$
+        `)
+        await database.$executeRawUnsafe(`
+            CREATE TRIGGER "AiCallCampaignMember_settlement_failure_test"
+            BEFORE UPDATE ON "AiCallCampaignMember"
+            FOR EACH ROW EXECUTE FUNCTION pg_temp.fail_ai_call_campaign_member_settlement()
+        `)
+        try {
+            await expect(aiCallCampaignPrismaPort.recordAttemptResult({
+                attemptId: claim!.attemptId,
+                resultEventId: `result:${claim!.launchId}`,
+                kind: 'success',
+                outcomeCode: 'qualified',
+                claimFence: claim!.claimFence,
+                leaseFence: admission.grant.leaseFence,
+                dialEffectRef: `effect:${claim!.launchId}`,
+                now: BASE,
+            })).rejects.toThrow('INJECTED_CAMPAIGN_SETTLEMENT_FAILURE')
+        } finally {
+            await database.$executeRawUnsafe('DROP TRIGGER IF EXISTS "AiCallCampaignMember_settlement_failure_test" ON "AiCallCampaignMember"')
+        }
+
+        const state = await database.$queryRawUnsafe<Array<{
+            attemptState: string
+            resultEventId: string | null
+            dialEffectRef: string | null
+            memberState: string
+            releasedAt: Date | null
+        }>>(`
+            SELECT a."state" AS "attemptState", a."resultEventId", a."dialEffectRef",
+                   m."state" AS "memberState", l."releasedAt"
+            FROM "AiCallCampaignAttempt" a
+            JOIN "AiCallCampaignMember" m ON m."id"=a."memberId"
+            JOIN "AiCallAdmissionLease" l ON l."attemptId"=a."id"
+            WHERE a."id"=$1
+        `, claim!.attemptId)
+        expect(state[0]).toMatchObject({
+            attemptState: 'claimed',
+            resultEventId: null,
+            dialEffectRef: null,
+            memberState: 'claimed',
+            releasedAt: null,
+        })
+    })
+
     it('converges a multi-member campaign across rate waits, retry, replay and worker restart', async () => {
         const campaignId = `${PREFIX}:controlled-e2e`
         await prepareCampaign({
@@ -361,6 +431,11 @@ postgresProof.sequential('Calling mass-campaign isolated PostgreSQL runtime', ()
         expect(view?.campaign.state).toBe('completed')
         expect(view?.progress).toMatchObject({ total: 4, succeeded: 3, failed: 1 })
         expect(view?.attempts).toHaveLength(5)
+        expect(view?.attempts.every((attempt) => (
+            ['succeeded', 'retryable_failure', 'permanent_failure'].includes(attempt.state)
+            && attempt.startedAt instanceof Date
+            && attempt.completedAt instanceof Date
+        ))).toBe(true)
         expect(view?.attempts.some((attempt) => attempt.claimRevision > 1)).toBe(true)
         expect(dial.effects.size).toBe(5)
         expect([...dial.invocations.values()].reduce((sum, count) => sum + count, 0)).toBe(6)

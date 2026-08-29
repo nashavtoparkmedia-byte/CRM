@@ -71,7 +71,7 @@ interface AttemptRow {
     launchId: string
     state: string
     claimRevision: number
-    claimToken: string | null
+    claimFence: string | null
     claimedBy: string | null
     claimUntil: Date | null
     admissionLeaseId: string | null
@@ -123,14 +123,14 @@ export interface AiCallCampaignLaunchClaim {
     scenarioRef: string
     attemptNumber: number
     claimRevision: number
-    claimToken: string
+    claimFence: string
     claimUntil: Date
     workerId: string
 }
 
 export interface AiCallAdmissionGrant {
     leaseId: string
-    leaseToken: string
+    leaseFence: string
     leaseUntil: Date
     replayed: boolean
 }
@@ -146,17 +146,11 @@ export type AiCallCampaignAttemptResultInput = {
     kind: 'success' | 'retryable_failure' | 'permanent_failure'
     outcomeCode?: string | null
     failureCode?: string | null
+    claimFence?: string
+    leaseFence?: string
+    dialEffectRef?: string
     now: Date
 }
-
-const CAMPAIGN_SELECT = `
-    SELECT "id", "identityKey", "payloadFingerprint", "name", "scenarioRef", "state",
-           "audienceSourceKind", "audienceSourceRef", "audienceSourceVersion", "audienceFingerprint",
-           "audienceFrozenAt", "scheduledAt", "startedAt", "completedAt", "cancelledAt",
-           "concurrentLimit", "ratePerMinute", "maxAttempts", "retryBaseMs", "retryMaxMs",
-           "nextAdmitAt", "failureCode", "createdAt", "updatedAt"
-    FROM "AiCallCampaign"
-`
 
 function sha256(value: string): string {
     return createHash('sha256').update(value).digest('hex')
@@ -169,7 +163,7 @@ function bounded(value: unknown, name: string, maximum = 255): string {
     return value
 }
 
-function claimToken(attemptId: string, revision: number, workerId: string, claimUntil: Date): string {
+function claimFence(attemptId: string, revision: number, workerId: string, claimUntil: Date): string {
     return sha256(`${attemptId}\0${revision}\0${workerId}\0${claimUntil.toISOString()}`)
 }
 
@@ -178,10 +172,15 @@ function leaseIdentity(attemptId: string): string {
 }
 
 async function campaignForUpdate(tx: RawSqlExecutor, campaignId: string): Promise<CampaignRow | null> {
-    const rows = await tx.$queryRawUnsafe<CampaignRow[]>(
-        `${CAMPAIGN_SELECT} WHERE "id" = $1 FOR UPDATE`,
-        campaignId,
-    )
+    const rows = await tx.$queryRawUnsafe<CampaignRow[]>(`
+        SELECT "id", "identityKey", "payloadFingerprint", "name", "scenarioRef", "state",
+               "audienceSourceKind", "audienceSourceRef", "audienceSourceVersion", "audienceFingerprint",
+               "audienceFrozenAt", "scheduledAt", "startedAt", "completedAt", "cancelledAt",
+               "concurrentLimit", "ratePerMinute", "maxAttempts", "retryBaseMs", "retryMaxMs",
+               "nextAdmitAt", "failureCode", "createdAt", "updatedAt"
+        FROM "AiCallCampaign"
+        WHERE "id" = $1 FOR UPDATE
+    `, campaignId)
     return rows[0] ?? null
 }
 
@@ -229,7 +228,12 @@ export const aiCallCampaignPrismaPort = {
             draft.retryMaxMs,
             now)
             const rows = await tx.$queryRawUnsafe<CampaignRow[]>(`
-                ${CAMPAIGN_SELECT}
+                SELECT "id", "identityKey", "payloadFingerprint", "name", "scenarioRef", "state",
+                       "audienceSourceKind", "audienceSourceRef", "audienceSourceVersion", "audienceFingerprint",
+                       "audienceFrozenAt", "scheduledAt", "startedAt", "completedAt", "cancelledAt",
+                       "concurrentLimit", "ratePerMinute", "maxAttempts", "retryBaseMs", "retryMaxMs",
+                       "nextAdmitAt", "failureCode", "createdAt", "updatedAt"
+                FROM "AiCallCampaign"
                 WHERE "id" = $1 OR "identityKey" = $2
                 ORDER BY CASE WHEN "id" = $1 THEN 0 ELSE 1 END
                 LIMIT 1
@@ -390,7 +394,7 @@ export const aiCallCampaignPrismaPort = {
             `, campaignId, now)
             await tx.$executeRawUnsafe(`
                 UPDATE "AiCallCampaignAttempt"
-                SET "state"='cancelled', "claimToken"=NULL, "claimedBy"=NULL, "claimUntil"=NULL,
+                SET "state"='cancelled', "claimFence"=NULL, "claimedBy"=NULL, "claimUntil"=NULL,
                     "completedAt"=$2, "updatedAt"=$2
                 WHERE "campaignId"=$1 AND "state" IN ('waiting','claimed')
             `, campaignId, now)
@@ -441,13 +445,13 @@ export const aiCallCampaignPrismaPort = {
             if (rows[0]) {
                 const candidate = rows[0]
                 const revision = candidate.claimRevision + 1
-                const token = claimToken(candidate.id, revision, workerId, claimUntil)
+                const fence = claimFence(candidate.id, revision, workerId, claimUntil)
                 await tx.$executeRawUnsafe(`
                     UPDATE "AiCallCampaignAttempt"
-                    SET "state"='claimed', "claimRevision"=$2, "claimToken"=$3,
+                    SET "state"='claimed', "claimRevision"=$2, "claimFence"=$3,
                         "claimedBy"=$4, "claimUntil"=$5, "updatedAt"=$6
                     WHERE "id"=$1
-                `, candidate.id, revision, token, workerId, claimUntil, input.now)
+                `, candidate.id, revision, fence, workerId, claimUntil, input.now)
                 await tx.$executeRawUnsafe(`
                     UPDATE "AiCallCampaignMember"
                     SET "state"='claimed', "nextEligibleAt"=NULL, "updatedAt"=$2
@@ -465,7 +469,7 @@ export const aiCallCampaignPrismaPort = {
                     scenarioRef: candidate.scenarioRef,
                     attemptNumber: candidate.attemptNumber,
                     claimRevision: revision,
-                    claimToken: token,
+                    claimFence: fence,
                     claimUntil,
                     workerId,
                 }
@@ -491,11 +495,11 @@ export const aiCallCampaignPrismaPort = {
             const attemptNumber = member.attemptCount + 1
             const attemptId = aiCallCampaignAttemptId(member.id, attemptNumber)
             const launchId = aiCallCampaignLaunchId(member.id, attemptNumber)
-            const token = claimToken(attemptId, 1, workerId, claimUntil)
+            const fence = claimFence(attemptId, 1, workerId, claimUntil)
             await tx.$executeRawUnsafe(`
                 INSERT INTO "AiCallCampaignAttempt" (
                     "id", "campaignId", "memberId", "attemptNumber", "launchId", "state",
-                    "claimRevision", "claimToken", "claimedBy", "claimUntil", "createdAt", "updatedAt"
+                    "claimRevision", "claimFence", "claimedBy", "claimUntil", "createdAt", "updatedAt"
                 ) VALUES ($1,$2,$3,$4,$5,'claimed',1,$6,$7,$8,$9,$9)
             `,
             attemptId,
@@ -503,7 +507,7 @@ export const aiCallCampaignPrismaPort = {
             member.id,
             attemptNumber,
             launchId,
-            token,
+            fence,
             workerId,
             claimUntil,
             input.now)
@@ -525,25 +529,25 @@ export const aiCallCampaignPrismaPort = {
                 scenarioRef: member.scenarioRef,
                 attemptNumber,
                 claimRevision: 1,
-                claimToken: token,
+                claimFence: fence,
                 claimUntil,
                 workerId,
             }
         })
     },
 
-    async deferClaim(input: { attemptId: string; claimToken: string; retryAt: Date; now: Date }) {
+    async deferClaim(input: { attemptId: string; claimFence: string; retryAt: Date; now: Date }) {
         return database.$transaction(async (tx) => {
             const rows = await tx.$queryRawUnsafe<AttemptRow[]>(`
                 SELECT * FROM "AiCallCampaignAttempt" WHERE "id"=$1 FOR UPDATE
             `, input.attemptId)
             const attempt = rows[0]
-            if (!attempt || attempt.state !== 'claimed' || attempt.claimToken !== input.claimToken) {
+            if (!attempt || attempt.state !== 'claimed' || attempt.claimFence !== input.claimFence) {
                 throw new AiCallCampaignConflictError('claim_fenced', 'campaign launch claim is stale')
             }
             await tx.$executeRawUnsafe(`
                 UPDATE "AiCallCampaignAttempt"
-                SET "state"='waiting', "claimToken"=NULL, "claimedBy"=NULL, "claimUntil"=NULL, "updatedAt"=$2
+                SET "state"='waiting', "claimFence"=NULL, "claimedBy"=NULL, "claimUntil"=NULL, "updatedAt"=$2
                 WHERE "id"=$1
             `, attempt.id, input.now)
             await tx.$executeRawUnsafe(`
@@ -593,7 +597,7 @@ export const aiCallCampaignPrismaPort = {
                 SELECT * FROM "AiCallCampaignAttempt" WHERE "id"=$1 FOR UPDATE
             `, input.claim.attemptId)
             const attempt = attempts[0]
-            if (!attempt || attempt.state !== 'claimed' || attempt.claimToken !== input.claim.claimToken) {
+            if (!attempt || attempt.state !== 'claimed' || attempt.claimFence !== input.claim.claimFence) {
                 throw new AiCallCampaignConflictError('claim_fenced', 'campaign launch claim is stale')
             }
 
@@ -605,10 +609,10 @@ export const aiCallCampaignPrismaPort = {
 
             const existing = await tx.$queryRawUnsafe<Array<{
                 id: string
-                leaseToken: string
+                leaseFence: string
                 leaseUntil: Date
             }>>(`
-                SELECT "id", "leaseToken", "leaseUntil"
+                SELECT "id", "leaseFence", "leaseUntil"
                 FROM "AiCallAdmissionLease"
                 WHERE "attemptId"=$1 AND "releasedAt" IS NULL
                 FOR UPDATE
@@ -618,7 +622,7 @@ export const aiCallCampaignPrismaPort = {
                     kind: 'acquired' as const,
                     grant: {
                         leaseId: existing[0].id,
-                        leaseToken: existing[0].leaseToken,
+                        leaseFence: existing[0].leaseFence,
                         leaseUntil: existing[0].leaseUntil,
                         replayed: true,
                     },
@@ -656,14 +660,14 @@ export const aiCallCampaignPrismaPort = {
             }
 
             const leaseId = leaseIdentity(attempt.id)
-            const leaseToken = sha256(`${leaseId}\0${input.claim.workerId}\0${input.now.toISOString()}\0${leaseUntil.toISOString()}`)
+            const leaseFence = sha256(`${leaseId}\0${input.claim.workerId}\0${input.now.toISOString()}\0${leaseUntil.toISOString()}`)
             await tx.$executeRawUnsafe(`
                 INSERT INTO "AiCallAdmissionLease" (
-                    "id", "attemptId", "campaignId", "memberId", "workerId", "leaseToken",
+                    "id", "attemptId", "campaignId", "memberId", "workerId", "leaseFence",
                     "acquiredAt", "leaseUntil", "releasedAt", "releaseReason", "createdAt", "updatedAt"
                 ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,NULL,NULL,$7,$7)
                 ON CONFLICT ("attemptId") DO UPDATE SET
-                    "workerId"=EXCLUDED."workerId", "leaseToken"=EXCLUDED."leaseToken",
+                    "workerId"=EXCLUDED."workerId", "leaseFence"=EXCLUDED."leaseFence",
                     "acquiredAt"=EXCLUDED."acquiredAt", "leaseUntil"=EXCLUDED."leaseUntil",
                     "releasedAt"=NULL, "releaseReason"=NULL, "updatedAt"=EXCLUDED."updatedAt"
             `,
@@ -672,7 +676,7 @@ export const aiCallCampaignPrismaPort = {
             campaign.id,
             attempt.memberId,
             input.claim.workerId,
-            leaseToken,
+            leaseFence,
             input.now,
             leaseUntil)
             await tx.$executeRawUnsafe(`
@@ -688,45 +692,8 @@ export const aiCallCampaignPrismaPort = {
             `, campaign.id, campaignNext, input.now)
             return {
                 kind: 'acquired' as const,
-                grant: { leaseId, leaseToken, leaseUntil, replayed: false },
+                grant: { leaseId, leaseFence, leaseUntil, replayed: false },
             }
-        })
-    },
-
-    async markLaunched(input: {
-        attemptId: string
-        claimToken: string
-        leaseToken: string
-        dialEffectRef: string
-        now: Date
-    }) {
-        const dialEffectRef = bounded(input.dialEffectRef, 'dialEffectRef')
-        return database.$transaction(async (tx) => {
-            const attempts = await tx.$queryRawUnsafe<AttemptRow[]>(`
-                SELECT * FROM "AiCallCampaignAttempt" WHERE "id"=$1 FOR UPDATE
-            `, input.attemptId)
-            const attempt = attempts[0]
-            if (!attempt) throw new AiCallCampaignConflictError('attempt_not_found', 'attempt not found')
-            if (attempt.state === 'running' && attempt.dialEffectRef === dialEffectRef) return { status: 'duplicate' as const }
-            if (attempt.state !== 'claimed' || attempt.claimToken !== input.claimToken) {
-                throw new AiCallCampaignConflictError('claim_fenced', 'campaign launch claim is stale')
-            }
-            const leases = await tx.$queryRawUnsafe<Array<{ id: string }>>(`
-                SELECT "id" FROM "AiCallAdmissionLease"
-                WHERE "attemptId"=$1 AND "leaseToken"=$2 AND "releasedAt" IS NULL AND "leaseUntil">$3
-                FOR UPDATE
-            `, attempt.id, input.leaseToken, input.now)
-            if (!leases[0]) throw new AiCallCampaignConflictError('admission_fenced', 'admission lease is stale')
-            await tx.$executeRawUnsafe(`
-                UPDATE "AiCallCampaignAttempt"
-                SET "state"='running', "dialEffectRef"=$2, "startedAt"=COALESCE("startedAt",$3), "updatedAt"=$3
-                WHERE "id"=$1
-            `, attempt.id, dialEffectRef, input.now)
-            await tx.$executeRawUnsafe(`
-                UPDATE "AiCallCampaignMember" SET "state"='running', "updatedAt"=$2
-                WHERE "id"=$1 AND "activeAttemptId"=$3
-            `, attempt.memberId, input.now, attempt.id)
-            return { status: 'running' as const }
         })
     },
 
@@ -752,11 +719,30 @@ export const aiCallCampaignPrismaPort = {
                 }
                 throw new AiCallCampaignConflictError('attempt_terminal_conflict', 'attempt already has another terminal result')
             }
-            if (attempt.state !== 'running') {
+            let dialEffectRef = attempt.dialEffectRef
+            if (attempt.state === 'claimed') {
+                if (attempt.claimFence !== input.claimFence) {
+                    throw new AiCallCampaignConflictError('claim_fenced', 'campaign launch claim is stale')
+                }
+                dialEffectRef = bounded(input.dialEffectRef, 'dialEffectRef')
+                const leaseFence = bounded(input.leaseFence, 'leaseFence')
+                const leases = await tx.$queryRawUnsafe<Array<{ id: string }>>(`
+                    SELECT "id" FROM "AiCallAdmissionLease"
+                    WHERE "attemptId"=$1 AND "leaseFence"=$2 AND "releasedAt" IS NULL AND "leaseUntil">$3
+                    FOR UPDATE
+                `, attempt.id, leaseFence, input.now)
+                if (!leases[0]) throw new AiCallCampaignConflictError('admission_fenced', 'admission lease is stale')
+            } else if (attempt.state !== 'running') {
                 throw new AiCallCampaignConflictError('attempt_not_running', 'attempt is not running')
             }
             const campaigns = await tx.$queryRawUnsafe<CampaignRow[]>(`
-                ${CAMPAIGN_SELECT} WHERE "id"=$1 FOR UPDATE
+                SELECT "id", "identityKey", "payloadFingerprint", "name", "scenarioRef", "state",
+                       "audienceSourceKind", "audienceSourceRef", "audienceSourceVersion", "audienceFingerprint",
+                       "audienceFrozenAt", "scheduledAt", "startedAt", "completedAt", "cancelledAt",
+                       "concurrentLimit", "ratePerMinute", "maxAttempts", "retryBaseMs", "retryMaxMs",
+                       "nextAdmitAt", "failureCode", "createdAt", "updatedAt"
+                FROM "AiCallCampaign"
+                WHERE "id"=$1 FOR UPDATE
             `, attempt.campaignId)
             const campaign = campaigns[0]
             if (!campaign) throw new AiCallCampaignConflictError('campaign_not_found', 'campaign not found')
@@ -766,9 +752,10 @@ export const aiCallCampaignPrismaPort = {
             await tx.$executeRawUnsafe(`
                 UPDATE "AiCallCampaignAttempt"
                 SET "state"=$2, "resultEventId"=$3, "resultFingerprint"=$4, "failureCode"=$5,
-                    "completedAt"=$6, "claimToken"=NULL, "claimedBy"=NULL, "claimUntil"=NULL, "updatedAt"=$6
+                    "dialEffectRef"=COALESCE("dialEffectRef",$7), "startedAt"=COALESCE("startedAt",$6),
+                    "completedAt"=$6, "claimFence"=NULL, "claimedBy"=NULL, "claimUntil"=NULL, "updatedAt"=$6
                 WHERE "id"=$1
-            `, attempt.id, attemptState, resultEventId, resultFingerprint, failureCode, input.now)
+            `, attempt.id, attemptState, resultEventId, resultFingerprint, failureCode, input.now, dialEffectRef)
             await tx.$executeRawUnsafe(`
                 UPDATE "AiCallAdmissionLease"
                 SET "releasedAt"=$2, "releaseReason"=$3, "updatedAt"=$2
@@ -819,7 +806,13 @@ export const aiCallCampaignPrismaPort = {
     async getCampaign(campaignIdInput: string) {
         const campaignId = bounded(campaignIdInput, 'campaignId')
         const campaigns = await database.$queryRawUnsafe<CampaignRow[]>(`
-            ${CAMPAIGN_SELECT} WHERE "id"=$1
+            SELECT "id", "identityKey", "payloadFingerprint", "name", "scenarioRef", "state",
+                   "audienceSourceKind", "audienceSourceRef", "audienceSourceVersion", "audienceFingerprint",
+                   "audienceFrozenAt", "scheduledAt", "startedAt", "completedAt", "cancelledAt",
+                   "concurrentLimit", "ratePerMinute", "maxAttempts", "retryBaseMs", "retryMaxMs",
+                   "nextAdmitAt", "failureCode", "createdAt", "updatedAt"
+            FROM "AiCallCampaign"
+            WHERE "id"=$1
         `, campaignId)
         const campaign = campaigns[0]
         if (!campaign) return null

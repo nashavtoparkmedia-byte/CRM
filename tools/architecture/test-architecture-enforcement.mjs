@@ -388,6 +388,40 @@ test('integration fixture detects every enforced mutation class', async () => {
     }
 })
 
+test('manifest amendments own source-isolated state for raw SQL as well as Prisma model writes', async () => {
+    const fixture = await makeFixture()
+    const amendmentPath = 'architecture/isolation/alpha/queue-v1/module-manifest-amendments.json'
+    try {
+        const policyPath = path.join(fixture.root, 'architecture/enforcement/v1/policy.json')
+        const policy = JSON.parse(await readFile(policyPath, 'utf8'))
+        policy.manifest_amendments = [amendmentPath]
+        await writeJson(fixture.root, 'architecture/enforcement/v1/policy.json', policy)
+        await writeJson(fixture.root, amendmentPath, {
+            schema: 'yoko.crm.module-manifest-amendments.v1',
+            version: 1,
+            milestone: 'fixture',
+            amendments: [{
+                context: 'alpha',
+                add_owned_infrastructure_state: [
+                    'architecture/isolation/alpha/queue-v1/migration.sql:AlphaQueue',
+                ],
+            }],
+        })
+        const adapter = 'gravity-mvp/src/modules/alpha/internal/queue-adapter.ts'
+        await writeFixtureFiles(fixture.root, {
+            [adapter]: 'await prisma.$executeRawUnsafe(`UPDATE "AlphaQueue" SET "state"=\'ready\'`)\n',
+        })
+
+        const findings = (await scanArchitecture(fixture.root)).findings
+        assert.equal(findings.some((finding) => (
+            finding.rule === 'direct_foreign_prisma_write'
+            && finding.file === adapter
+        )), false)
+    } finally {
+        await rm(fixture.root, { recursive: true, force: true })
+    }
+})
+
 test('public facades cannot import internal modules, including their own context', async () => {
     const fixture = await makeFixture()
     try {

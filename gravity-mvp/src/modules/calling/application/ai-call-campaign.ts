@@ -114,12 +114,14 @@ function positiveInteger(value: unknown, name: string, maximum = 1_000_000): num
     return value as number
 }
 
-function isJson(value: unknown): value is AiCallCampaignJson {
+function isJson(value: unknown, depth = 0): value is AiCallCampaignJson {
+    if (depth > 8) return false
     if (value === null || ['string', 'boolean'].includes(typeof value)) return true
     if (typeof value === 'number') return Number.isFinite(value)
-    if (Array.isArray(value)) return value.every(isJson)
+    if (Array.isArray(value)) return value.length <= 100 && value.every((item) => isJson(item, depth + 1))
     return typeof value === 'object' && value !== null
-        && Object.values(value as Record<string, unknown>).every(isJson)
+        && Object.keys(value as Record<string, unknown>).length <= 100
+        && Object.values(value as Record<string, unknown>).every((item) => isJson(item, depth + 1))
 }
 
 function canonicalJson(value: AiCallCampaignJson): string {
@@ -187,6 +189,9 @@ export function normalizeAiCallAudienceSnapshot(
         if (!isJson(member.provenance) || Array.isArray(member.provenance) || member.provenance === null) {
             invalid(`members[${index}].provenance must be a JSON object`)
         }
+        if (new TextEncoder().encode(canonicalJson(member.provenance)).length > 4_096) {
+            invalid(`members[${index}].provenance exceeds 4096 bytes`)
+        }
         const excludedReason = member.excludedReason == null
             ? null
             : exact(member.excludedReason, `members[${index}].excludedReason`, 128)
@@ -230,7 +235,7 @@ export function normalizeAiCallAudienceSnapshot(
     return Object.freeze({
         ...snapshotPayload,
         fingerprint: aiCallCampaignSha256(snapshotPayload),
-        members: Object.freeze(members.map(Object.freeze)),
+        members: Object.freeze(members.map((member) => Object.freeze(member))),
     })
 }
 

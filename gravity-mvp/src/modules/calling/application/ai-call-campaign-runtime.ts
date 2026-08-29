@@ -69,7 +69,7 @@ export function createAiCallCampaignWorkerRuntime(input: {
                 : new Date(clock().getTime() + 250)
             await aiCallCampaignPrismaPort.deferClaim({
                 attemptId: claim.attemptId,
-                claimToken: claim.claimToken,
+                claimFence: claim.claimFence,
                 retryAt,
                 now: clock(),
             })
@@ -95,19 +95,15 @@ export function createAiCallCampaignWorkerRuntime(input: {
             scenarioRef: claim.scenarioRef,
             attemptNumber: claim.attemptNumber,
         })
-        await aiCallCampaignPrismaPort.markLaunched({
-            attemptId: claim.attemptId,
-            claimToken: claim.claimToken,
-            leaseToken: admission.grant.leaseToken,
-            dialEffectRef: dialResult.effectRef,
-            now: clock(),
-        })
         const terminal = await aiCallCampaignPrismaPort.recordAttemptResult({
             attemptId: claim.attemptId,
             resultEventId: dialResult.terminal.eventId,
             kind: dialResult.terminal.kind,
             outcomeCode: dialResult.terminal.outcomeCode,
             failureCode: dialResult.terminal.failureCode,
+            claimFence: claim.claimFence,
+            leaseFence: admission.grant.leaseFence,
+            dialEffectRef: dialResult.effectRef,
             now: clock(),
         })
         if (terminal.status !== 'applied') {

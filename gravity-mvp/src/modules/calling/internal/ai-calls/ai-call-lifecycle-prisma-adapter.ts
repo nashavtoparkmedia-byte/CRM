@@ -53,25 +53,6 @@ function bootstrapJournal(
         : journal
 }
 
-function callProjection(event: AiCallLifecycleEventInput): Record<string, unknown> {
-    if (event.kind === 'call_cancelled') {
-        return { aiSessionStatus: 'failed', status: 'cancelled' }
-    }
-    if (event.kind === 'call_timed_out') {
-        return { aiSessionStatus: 'failed', status: 'no_answer' }
-    }
-    if (event.kind === 'provider_failed') {
-        return { aiSessionStatus: 'failed', status: 'failed' }
-    }
-    if (event.kind === 'call_ended') {
-        return { aiSessionStatus: 'ended', status: 'completed' }
-    }
-    if (event.target === 'active') {
-        return { aiSessionStatus: 'active', status: 'active' }
-    }
-    return { aiSessionStatus: event.target }
-}
-
 export const aiCallLifecyclePrismaPort: AiCallLifecyclePersistencePort = {
     async apply(callId, event) {
         return (prisma as any).$transaction(async (tx: any) => {
@@ -85,13 +66,40 @@ export const aiCallLifecyclePrismaPort: AiCallLifecyclePersistencePort = {
             const journal = bootstrapJournal(callId, call.aiSessionStatus, call.metadata, event)
             const result = applyAiCallLifecycleEvent(journal, event)
             if (result.kind !== 'duplicate') {
-                await tx.call.update({
-                    where: { id: callId },
-                    data: {
-                        ...(result.kind === 'applied' ? callProjection(event) : {}),
-                        metadata: metadataWithAiCallLifecycleJournal(call.metadata, result.journal),
-                    },
-                })
+                const metadata = metadataWithAiCallLifecycleJournal(call.metadata, result.journal)
+                if (result.kind !== 'applied') {
+                    await tx.call.update({ where: { id: callId }, data: { metadata } })
+                } else if (event.kind === 'call_cancelled') {
+                    await tx.call.update({
+                        where: { id: callId },
+                        data: { aiSessionStatus: 'failed', status: 'cancelled', metadata },
+                    })
+                } else if (event.kind === 'call_timed_out') {
+                    await tx.call.update({
+                        where: { id: callId },
+                        data: { aiSessionStatus: 'failed', status: 'no_answer', metadata },
+                    })
+                } else if (event.kind === 'provider_failed') {
+                    await tx.call.update({
+                        where: { id: callId },
+                        data: { aiSessionStatus: 'failed', status: 'failed', metadata },
+                    })
+                } else if (event.kind === 'call_ended') {
+                    await tx.call.update({
+                        where: { id: callId },
+                        data: { aiSessionStatus: 'ended', status: 'completed', metadata },
+                    })
+                } else if (event.target === 'active') {
+                    await tx.call.update({
+                        where: { id: callId },
+                        data: { aiSessionStatus: 'active', status: 'active', metadata },
+                    })
+                } else {
+                    await tx.call.update({
+                        where: { id: callId },
+                        data: { aiSessionStatus: event.target, metadata },
+                    })
+                }
             }
             return { ...result, callId }
         })

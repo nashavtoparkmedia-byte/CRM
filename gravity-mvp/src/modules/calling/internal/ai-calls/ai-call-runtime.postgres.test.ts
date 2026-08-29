@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { NextRequest } from 'next/server'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { prisma } from '@/lib/prisma'
+import type { AiCallSessionStatus } from '@/lib/ai-call/types'
 import {
     AI_CALL_FINALIZATION_FOLLOW_UP_REQUESTED_EVENT_V1,
     parseAiCallFinalizationFollowUpRequestedEventV1,
@@ -25,7 +26,9 @@ import { POST as finalizeCall } from '@/app/api/ai-calls/sessions/[id]/finalize/
 const postgresProof = process.env.YOKO_AI_CALL_POSTGRES_PROOF === '1' ? describe : describe.skip
 const PREFIX = 'ai-call-runtime-proof-v1'
 const BRIDGE_TOKEN = 'R'.repeat(32)
-const BASE = new Date('2026-08-29T15:00:00.000Z')
+// Keep the test clock ahead of database CURRENT_TIMESTAMP so freshly inserted
+// outbox rows are deterministically due even when this proof runs much later.
+const BASE = new Date(Date.now() + 5_000)
 
 function fingerprint(value: string): string {
     return createHash('sha256').update(value).digest('hex')
@@ -78,7 +81,7 @@ const actualTaskPort: IdempotentTaskCommandPort = {
     },
 }
 
-async function createCall(suffix: string, input: { transcript?: string | null; session?: string } = {}) {
+async function createCall(suffix: string, input: { transcript?: string | null; session?: AiCallSessionStatus } = {}) {
     const id = `${PREFIX}:call:${suffix}`
     return prisma.call.create({
         data: {
@@ -166,7 +169,7 @@ postgresProof.sequential('AI Calls Stage 5 isolated PostgreSQL runtime contract'
             CREATE OR REPLACE FUNCTION "ai_call_runtime_atomicity_failure"()
             RETURNS trigger LANGUAGE plpgsql AS $$
             BEGIN
-                IF NEW."aggregateId" = '${call.id}' THEN
+                IF NEW."aggregateId" = 'ai-call-runtime-proof-v1:call:atomicity' THEN
                     RAISE EXCEPTION 'AI_CALL_RUNTIME_ATOMICITY_FAILURE';
                 END IF;
                 RETURN NEW;
@@ -198,21 +201,34 @@ postgresProof.sequential('AI Calls Stage 5 isolated PostgreSQL runtime contract'
     })
 
     it('discovers unfinished work through the bounded indexed outbox query', async () => {
-        const rows = Array.from({ length: 1_500 }, (_, index) => ({
-            id: `${PREFIX}:noise-row:${index}`,
-            eventId: `${PREFIX}:noise-event:${index}`,
-            eventType: AI_CALL_FINALIZATION_FOLLOW_UP_REQUESTED_EVENT_V1,
-            eventVersion: 1,
-            aggregateType: 'Call',
-            aggregateId: `${PREFIX}:noise-call:${index}`,
-            payload: {},
-            status: 'published' as const,
-            attempts: 1,
-            maxAttempts: 5,
-            availableAt: new Date(BASE.getTime() + index),
-            publishedAt: BASE,
-        }))
-        await prisma.domainOutboxEvent.createMany({ data: rows })
+        await prisma.$executeRawUnsafe(`
+            INSERT INTO "domain_outbox_events" (
+                "id", "eventId", "eventType", "eventVersion", "aggregateType", "aggregateId",
+                "payload", "status", "attempts", "maxAttempts", "availableAt", "publishedAt",
+                "createdAt", "updatedAt"
+            )
+            SELECT
+                $1 || sequence::text,
+                $2 || sequence::text,
+                $3,
+                1,
+                'Call',
+                $4 || sequence::text,
+                '{}'::jsonb,
+                'published'::"DomainOutboxStatus",
+                1,
+                5,
+                $5::timestamptz + sequence * INTERVAL '1 millisecond',
+                $5::timestamptz,
+                $5::timestamptz,
+                $5::timestamptz
+            FROM generate_series(0, 1499) AS sequence
+        `,
+        `${PREFIX}:noise-row:`,
+        `${PREFIX}:noise-event:`,
+        AI_CALL_FINALIZATION_FOLLOW_UP_REQUESTED_EVENT_V1,
+        `${PREFIX}:noise-call:`,
+        BASE)
         const plan = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(`
             EXPLAIN (FORMAT JSON)
             SELECT "id", "eventId", "eventType", "eventVersion", "payload", "attempts", "maxAttempts"

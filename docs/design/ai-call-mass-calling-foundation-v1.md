@@ -42,9 +42,12 @@ terminal progress.
    removes expired leases, checks global/campaign capacity, and advances the
    independent global/campaign rate gates atomically with the lease.
 7. A provider-neutral dial adapter receives the deterministic `launchId`.
-8. The attempt result releases capacity and moves the member to success,
+8. For the controlled synchronous adapter, recording provider acceptance and
+   its terminal result is one database transaction; there is no committed
+   `running`-without-result crash gap.
+9. The attempt result releases capacity and moves the member to success,
    bounded retry, permanent failure, or cancellation.
-9. Campaign progress is derived from durable member state and the campaign
+10. Campaign progress is derived from durable member state and the campaign
    becomes completed/cancelled only after all members are terminal.
 
 ## Recovery and fencing

@@ -67,6 +67,25 @@ describe('Calling mass-campaign domain', () => {
         })).toThrow(AiCallCampaignInputError)
     })
 
+    it('bounds snapshot provenance size and nesting', () => {
+        expect(() => normalizeAiCallAudienceSnapshot(draft.campaignId, {
+            sourceKind: 'fixture', sourceRef: 'x', sourceVersion: 'v1',
+            members: [{
+                targetType: 'external', targetRef: 'e1', phoneE164: '+70000000001',
+                provenance: { oversized: 'x'.repeat(4_096) },
+            }],
+        })).toThrow(AiCallCampaignInputError)
+        let nested: Record<string, unknown> = { value: true }
+        for (let depth = 0; depth < 10; depth += 1) nested = { nested }
+        expect(() => normalizeAiCallAudienceSnapshot(draft.campaignId, {
+            sourceKind: 'fixture', sourceRef: 'x', sourceVersion: 'v1',
+            members: [{
+                targetType: 'external', targetRef: 'e1', phoneE164: '+70000000001',
+                provenance: nested as never,
+            }],
+        })).toThrow(AiCallCampaignInputError)
+    })
+
     it('derives stable attempt and provider launch identities', () => {
         expect(aiCallCampaignAttemptId('member-1', 2)).toBe(aiCallCampaignAttemptId('member-1', 2))
         expect(aiCallCampaignLaunchId('member-1', 2)).toBe(aiCallCampaignLaunchId('member-1', 2))

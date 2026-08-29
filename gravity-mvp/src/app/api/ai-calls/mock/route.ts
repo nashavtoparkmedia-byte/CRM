@@ -143,41 +143,49 @@ export async function POST(req: NextRequest) {
         lifecycleJournal,
     )
 
-    // Persist as a single Call row — same table as ordinary manager calls.
-    const call = await prisma.call.create({
-        data: {
-            id: callId,
-            direction: 'outbound',
-            status: 'completed',
-            fromNumber: process.env.MEGAFON_NUMBER ?? '+79221853150',
-            toNumber,
-            driverId,
-            contactId,
-            managerId: user.id,
-            fsUuid: `mock-${randomUUID()}`,
-            startedAt,
-            answeredAt,
-            endedAt,
-            durationSec: mock.durationSec,
-            hangupCause: 'NORMAL_CLEARING',
-            transcript: transcriptProjection,
-            aiSummary: mock.aiSummary,
-            aiAnalysis: mock.qualificationResult as any,
-            // AI-call specific fields (Prisma generated client; cast to any
-            // in case the local node_modules generator is one regen behind)
-            isAi: true,
-            aiScenarioId: resolvedScenarioId,
-            aiSessionStatus: mock.aiSessionStatus as any,
-            aiMessages: {
-                create: transcriptRows.map((row, index) => ({
+    // Persist the Call and its canonical transcript rows atomically. Keeping
+    // the message write explicit also makes its public-boundary data flow
+    // independently auditable.
+    const call = await (prisma as any).$transaction(async (tx: any) => {
+        const created = await tx.call.create({
+            data: {
+                id: callId,
+                direction: 'outbound',
+                status: 'completed',
+                fromNumber: process.env.MEGAFON_NUMBER ?? '+79221853150',
+                toNumber,
+                driverId,
+                contactId,
+                managerId: user.id,
+                fsUuid: `mock-${randomUUID()}`,
+                startedAt,
+                answeredAt,
+                endedAt,
+                durationSec: mock.durationSec,
+                hangupCause: 'NORMAL_CLEARING',
+                transcript: transcriptProjection,
+                aiSummary: mock.aiSummary,
+                aiAnalysis: mock.qualificationResult as any,
+                // AI-call specific fields (Prisma generated client; cast to any
+                // in case the local node_modules generator is one regen behind)
+                isAi: true,
+                aiScenarioId: resolvedScenarioId,
+                aiSessionStatus: mock.aiSessionStatus as any,
+                metadata: metadata as any,
+            } as any,
+        })
+        for (const [index, row] of transcriptRows.entries()) {
+            await tx.aiCallMessage.create({
+                data: {
                     id: row.id,
+                    callId,
                     role: row.role,
                     content: row.content,
                     startedAt: new Date(startedAt.getTime() + index),
-                })),
-            },
-            metadata: metadata as any,
-        } as any,
+                },
+            })
+        }
+        return created
     })
 
     // Create a Task for the manager when the mock variant flagged it.

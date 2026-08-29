@@ -180,7 +180,18 @@ export const aiCallFinalizationPrismaPort: AiCallFinalizationPersistencePort = {
             await tx.call.update({
                 where: { id: input.callId },
                 data: {
-                    ...input.terminal,
+                    status: input.terminal.status,
+                    endedAt: input.terminal.endedAt,
+                    durationSec: input.terminal.durationSec,
+                    hangupCause: input.terminal.hangupCause,
+                    aiSessionStatus: input.terminal.aiSessionStatus,
+                    aiAnalysis: input.terminal.aiAnalysis,
+                    aiSummary: input.terminal.aiSummary,
+                    aiTransferReason: input.terminal.aiTransferReason,
+                    aiOutcome: input.terminal.aiOutcome,
+                    aiOutcomeReason: input.terminal.aiOutcomeReason,
+                    qualificationScore: input.terminal.qualificationScore,
+                    leadDataStructured: input.terminal.leadDataStructured,
                     metadata: terminalMetadata({
                         callId: input.callId,
                         fingerprint: input.fingerprint,

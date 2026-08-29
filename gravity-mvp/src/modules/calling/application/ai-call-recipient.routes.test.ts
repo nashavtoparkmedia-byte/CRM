@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
     callCreate: vi.fn(),
     callUpdate: vi.fn(),
+    aiCallMessageCreate: vi.fn(),
     createTaskV1: vi.fn(),
     getCurrentUser: vi.fn(),
     getMockPayload: vi.fn(),
@@ -18,11 +19,14 @@ const mocks = vi.hoisted(() => ({
     resolveContactRecipient: vi.fn(),
     resolveDriverRecipient: vi.fn(),
     scenarioFindUnique: vi.fn(),
+    transaction: vi.fn(),
 }))
 
 vi.mock('@/lib/prisma', () => ({
     prisma: {
+        $transaction: mocks.transaction,
         aiCallScenario: { findUnique: mocks.scenarioFindUnique },
+        aiCallMessage: { create: mocks.aiCallMessageCreate },
         call: { create: mocks.callCreate, update: mocks.callUpdate },
     },
 }))
@@ -86,6 +90,11 @@ beforeEach(() => {
     mocks.listScenarios.mockResolvedValue([scenario])
     mocks.callCreate.mockResolvedValue({ id: 'call-1', metadata: null })
     mocks.callUpdate.mockResolvedValue({})
+    mocks.aiCallMessageCreate.mockResolvedValue({ id: 'message-1' })
+    mocks.transaction.mockImplementation(async (operation) => operation({
+        aiCallMessage: { create: mocks.aiCallMessageCreate },
+        call: { create: mocks.callCreate },
+    }))
     mocks.originateAiCall.mockResolvedValue('+OK accepted')
     mocks.getMockPayload.mockReturnValue({
         durationSec: 30,

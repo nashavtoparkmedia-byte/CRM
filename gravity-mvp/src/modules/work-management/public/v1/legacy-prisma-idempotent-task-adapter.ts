@@ -42,11 +42,21 @@ export const legacyPrismaIdempotentTaskPortV1: IdempotentTaskPersistencePortV1 =
             payloadFingerprint: request.payloadFingerprint,
         }
         const consumerMetadata = request.data.metadata ?? {}
+        const legacy = mapCreateTaskDataToLegacyRecordV1(request.data)
 
         try {
             const task = await prisma.task.create({
                 data: {
-                    ...mapCreateTaskDataToLegacyRecordV1(request.data),
+                    driverId: legacy.driverId,
+                    contactId: legacy.contactId,
+                    source: legacy.source,
+                    type: legacy.type,
+                    title: legacy.title,
+                    description: legacy.description,
+                    priority: legacy.priority,
+                    status: legacy.status,
+                    assigneeId: legacy.assigneeId,
+                    createdBy: legacy.createdBy,
                     id: request.taskId,
                     dedupeKey: request.idempotencyKey,
                     metadata: {
