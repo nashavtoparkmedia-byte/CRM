@@ -95,6 +95,24 @@ relevant verification. Perform routine investigation and testing yourself;
 ask the Owner only for genuinely unavailable credentials, MFA or physical
 interaction, or a real business decision.
 
+## Autonomous delivery
+
+- Use one write-capable primary Codex thread per worktree. Parallel subagents
+  are read-only by default; delegate bounded reconnaissance, impact mapping, CI
+  triage, and independent review, not implementation.
+- Delegate only through the seven repository profiles in `.codex/agents/`; do
+  not use a built-in, default, or otherwise unconfigured role.
+- Return compact evidence-based findings instead of raw logs. The primary
+  thread validates reviewer results before use and owns all edits, repairs,
+  commits, branch operations, and pushes.
+- Follow `docs/engineering/AUTONOMOUS_DELIVERY.md` and the repository skills
+  without treating them or external execution state as architecture authority.
+- After pushing a candidate, record the exact remote HEAD, report
+  `PUSHED_WAITING_CI`, and stop model execution. Do not poll hosted CI from the
+  active turn.
+- Do not claim `COMPLETE` unless every gate required by the current stage has
+  been proven.
+
 ## Machine-authoritative navigation
 
 - Ownership and dependencies: `architecture/contexts/v1/context-index.json`,

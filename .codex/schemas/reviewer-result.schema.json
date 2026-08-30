@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yoko.invalid/codex/reviewer-result.schema.json",
+  "title": "YOKO read-only reviewer result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "role",
+    "scope",
+    "verdict",
+    "summary",
+    "findings",
+    "checks_performed",
+    "uncertainties",
+    "raw_evidence_references",
+    "changed_files"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "yoko.codex.reviewer-result.v1"
+    },
+    "role": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,63}$"
+    },
+    "scope": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "verdict": {
+      "type": "string",
+      "enum": ["PASS", "PASS_WITH_FINDINGS", "FAIL", "BLOCKED"]
+    },
+    "summary": { "type": "string", "minLength": 1, "maxLength": 1000 },
+    "findings": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "severity",
+          "category",
+          "file",
+          "symbol",
+          "evidence",
+          "required_action"
+        ],
+        "properties": {
+          "severity": {
+            "type": "string",
+            "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "architecture",
+              "correctness",
+              "security",
+              "reliability",
+              "testing",
+              "integration",
+              "governance",
+              "ci",
+              "performance",
+              "documentation"
+            ]
+          },
+          "file": { "type": ["string", "null"], "maxLength": 300 },
+          "symbol": { "type": ["string", "null"], "maxLength": 200 },
+          "evidence": { "type": "string", "minLength": 1, "maxLength": 1000 },
+          "required_action": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        }
+      }
+    },
+    "checks_performed": {
+      "type": "array",
+      "maxItems": 30,
+      "items": { "type": "string", "minLength": 1, "maxLength": 300 }
+    },
+    "uncertainties": {
+      "type": "array",
+      "maxItems": 10,
+      "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+    },
+    "raw_evidence_references": {
+      "type": "array",
+      "maxItems": 30,
+      "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+    },
+    "changed_files": {
+      "type": "array",
+      "maxItems": 0,
+      "items": { "type": "string" }
+    }
+  }
+}

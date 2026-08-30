@@ -7,16 +7,16 @@
     "role": "SOL_HIGH_INTERNAL_REVIEW",
     "external_acceptance": false,
     "independent_acceptance": false,
-    "decision": "Internal remediation materialization records the exact baseline-to-current ownership assignments and exact-inventory transitions enumerated below. The reviewed current denominator includes the accepted AI Calls Stage 1–5 runtime/proof files and source-isolated mass-calling migration under Calling ownership, plus the latest reconciled current-main Telegram link restoration under existing Telegram Channel and Fleet Operations paths. The latest current-main rewrite consolidates pending-link and registry-sync behavior into its owner surfaces and retires seven superseded duplicate executable surfaces; the two existing governed-exclusion transitions and their assignments remain unchanged. The declared current-dependency manifest prevents test-source literals from becoming a second authority; this artifact is not external or independent acceptance."
+    "decision": "Internal remediation materialization records the exact baseline-to-current ownership assignments and exact-inventory transitions enumerated below. The reviewed current denominator includes the accepted AI Calls Stage 1–5 runtime/proof files and source-isolated mass-calling migration under Calling ownership, the reconciled current-main Telegram link restoration under existing Telegram Channel and Fleet Operations paths, and the two exact native Codex Stage 0 skill metadata files under repository_operations ownership. The Codex metadata transition is bounded to instruction-only YAML with explicit invocation and no production, credential, provider, telephony, or write capability. The declared current-dependency manifest prevents test-source literals from becoming a second authority; this artifact is not external or independent acceptance."
   },
   "baseline": {
     "coverage_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_COVERAGE_BASELINE_2108.json",
-    "coverage_sha256": "429a48c9d257408025bbc273a4d6f1413ed78196549ed889118422b6caba5730"
+    "coverage_sha256": "bd7df022d08734ec500336907c4c1dadc6c6ac3c7f3df23c1df0d307a4cdfb29"
   },
   "current": {
-    "tracked_inventory_sha256": "50296b2ea8450acdb53d6d0cd0d9f3369e4cc44b760a3e7507336fd603a2ccd9",
-    "tracked_executable_surfaces": 2240,
-    "coverage_sha256": "9e8adc8de908dbb165ca373dff159c1ae088fcbb4b9e9ca2cf3e62f1b769f54d"
+    "tracked_inventory_sha256": "a2209d47e17c14ecf21af2117a37714d641f9f883b5413c30fe66dfc84c33515",
+    "tracked_executable_surfaces": 2242,
+    "coverage_sha256": "1366a34fdd0b0f3594c06d5bdfc1b93cba298c03ac483836c6a1aff00745f4f8"
   },
   "exact_inventory_changes": [
     {
@@ -54,6 +54,21 @@
       }
     },
     {
+      "exclusion": "codex_skill_metadata",
+      "inventory_kind": "exact_path_inventory",
+      "review_decision": "APPROVED_EXACT_INVENTORY_TRANSITION",
+      "review_rationale": "Internal executor review classifies the two exact native Codex skill discovery metadata files as active repository tooling owned by repository_operations; the reviewed bytes are instruction-only, explicitly invoked, and confer no production, credential, provider, telephony, or write capability.",
+      "previous_inventory": {
+        "path_count": 0,
+        "path_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+      },
+      "previous_paths": [],
+      "current_inventory": {
+        "path_count": 2,
+        "path_sha256": "df57ed64506ddf7a616c2b469f6ecb385a20ee2ecda462003e990905239369d2"
+      }
+    },
+    {
       "exclusion": "production_migration_provenance_snapshot",
       "inventory_kind": "exact_path_inventory",
       "review_decision": "APPROVED_EXACT_INVENTORY_TRANSITION",
@@ -70,6 +85,26 @@
     }
   ],
   "assignments": [
+    {
+      "path": ".agents/skills/yoko-ci-triage/agents/openai.yaml",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "functional_owner": "repository_operations",
+      "exclusion": "codex_skill_metadata",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "aed2391eef765308ad9d16c8a5ce1f4fc7c42f4ad9173a8f0ab7295592dcbfdd",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact native Codex skill metadata path, instruction-only lifecycle, repository_operations owner, governed exclusion and byte hash as one indivisible assignment with no credential or production capability."
+    },
+    {
+      "path": ".agents/skills/yoko-stage/agents/openai.yaml",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "functional_owner": "repository_operations",
+      "exclusion": "codex_skill_metadata",
+      "inventory_kind": "exact_path_inventory",
+      "source_sha256": "8e5a28f2492348c128475ab1efd55a0228b3a228b2286c54e549826338b2665c",
+      "review_decision": "APPROVED_CURRENT_ASSIGNMENT",
+      "review_rationale": "Internal executor review confirms this exact native Codex skill metadata path, instruction-only lifecycle, repository_operations owner, governed exclusion and byte hash as one indivisible assignment with no credential or production capability."
+    },
     {
       "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-7aea2823-gravity-outbox-recovery-v1/packaging/finalize-evidence.py",
       "lifecycle": "APPLICATION_RUNTIME",
