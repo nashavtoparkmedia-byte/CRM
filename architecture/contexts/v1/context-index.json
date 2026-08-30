@@ -18,7 +18,7 @@
     {
       "context": "calling",
       "path": "architecture/contexts/v1/manifests/calling.json",
-      "sha256": "e8339cd7bcaeb2eb8536ea2b0166f659ba21a593638ee31e764404bb985c7b14"
+      "sha256": "fde23c87847df23dd73a31999fefcb3295075efb918747252d90bdafa66b3366"
     },
     {
       "context": "configuration",
@@ -38,7 +38,7 @@
     {
       "context": "fleet_operations",
       "path": "architecture/contexts/v1/manifests/fleet_operations.json",
-      "sha256": "9dea3e90f2b10661de7c77347b4f301fc6d3b9dfb2ec4b263936923ef91b6dae"
+      "sha256": "7ee4a0cbdbe751ac340dac2607bb65a8542f6593add39ac54f84cc9af2399611"
     },
     {
       "context": "identity_access",
@@ -68,7 +68,7 @@
     {
       "context": "telegram_channel",
       "path": "architecture/contexts/v1/manifests/telegram_channel.json",
-      "sha256": "95656843814821e33924557bf21e9f880b5539b43f440cca83cba67f4de5e6f3"
+      "sha256": "a11c389b90e4f58da9f5e211a3c3efb438f9371c89bf0069d6d102deeafc256a"
     },
     {
       "context": "whatsapp_channel",
@@ -78,7 +78,7 @@
     {
       "context": "work_management",
       "path": "architecture/contexts/v1/manifests/work_management.json",
-      "sha256": "df50b596e2c5850f84fbc20e2079519367048f5549b7704d97b0df971d513277"
+      "sha256": "8f0016f73579bb5b8260b0870f5a9a0b190bc94a2ce7c1dce2f0f95ee0ccc2ad"
     }
   ],
   "controls": {
@@ -88,7 +88,7 @@
     },
     "contract_registry": {
       "path": "architecture/contracts/v1/registry.json",
-      "sha256": "048538080b314d99d280878b2ce5dfb3f8b5827a5a2cb314f0fcc1d78ff2009e"
+      "sha256": "98fb6cc9fe9d51d0b91746356ab1c8548328a6eb9cdd008a672370743c232cd3"
     },
     "contract_registry_negative_tests": {
       "path": "tools/architecture/test-contract-registry.mjs",
@@ -124,7 +124,7 @@
     },
     "lifecycle_surface_registry": {
       "path": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
-      "sha256": "94551adb58aef4d0f5ff915dc94dd486e7b6fe221419f755fec46d1c32ad4e15"
+      "sha256": "a0ea63509675ec62fcdbf2d5c159ba13e6130a1f5f28c3ef434adfea72563165"
     },
     "module_inventory": {
       "path": "architecture/evidence/v1/module-inventory.json",
@@ -159,7 +159,7 @@
     },
     "executable_path_ownership_coverage": {
       "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
-      "sha256": "c31209d547dd0fd1bf59df79137d97ccd66d53d5be41d3830b2d3f7999984370"
+      "sha256": "a73549175e0e58556770090e3b8454399fd556cf0d3e7bd50c24e7060c73119a"
     },
     "executable_path_ownership_current_dependencies": {
       "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json",
@@ -167,11 +167,11 @@
     },
     "final_dependency_current": {
       "path": "architecture/contexts/v1/final-dependency-current.json",
-      "sha256": "b3bb45eb17d3faaa275ed17ef75a3021862dd77df5f3f165e24b9d4ba1c0fc40"
+      "sha256": "b8e437a9ade4519313ca060a728db2c4bb89eafdab4a522507d2c5b0cc81b0c0"
     },
     "final_dependency_source": {
       "path": "architecture/contexts/v1/final-dependency-source.json",
-      "sha256": "9742ec7f91e97d2ebb89a2a2f819a29f347abfda47e3d8d4e06447072e2259eb"
+      "sha256": "99c2af402f98fd24ebf65d240130709cbbd7c61b110d8600e971fbe0b71b8914"
     },
     "foreign_write_migration_plan": {
       "path": "architecture/contexts/v1/foreign-write-migration-plan.json",

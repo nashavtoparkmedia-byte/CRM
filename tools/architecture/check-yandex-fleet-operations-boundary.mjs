@@ -15,9 +15,11 @@ const publicRootSpecifier = '@/modules/fleet-operations/public/v1'
 const capabilitySpecifier = `${publicRootSpecifier}/yandex-fleet-operations`
 const allowedConsumerSpecifiers = new Set([publicRootSpecifier, capabilitySpecifier])
 const localCapabilitySpecifier = './yandex-fleet-operations'
+const credentialCapabilitySpecifier = './yandex-connection-capability'
 const shimPath = 'gravity-mvp/src/app/actions.ts'
 const publicIndexPath = 'gravity-mvp/src/modules/fleet-operations/public/v1/index.ts'
 const capabilityPath = 'gravity-mvp/src/modules/fleet-operations/public/v1/yandex-fleet-operations.ts'
+const providerCompositionPath = 'gravity-mvp/src/modules/fleet-operations/public/v1/park-phone-search.ts'
 const shimValueExports = [
   'addApiConnection',
   'changeDriverLimit',
@@ -158,7 +160,7 @@ function assertConsumerModel(overrides = new Map()) {
     const { ast, relevant } = observed.get(file)
     assert.equal(relevant.length, expected.imports.length, `${file}: exact governed import count`)
     assert(relevant.every((binding) => (
-      allowedConsumerSpecifiers.has(binding.specifier)
+      (expected.specifier ? binding.specifier === expected.specifier : allowedConsumerSpecifiers.has(binding.specifier))
       && !binding.typeOnly
       && binding.imported === binding.local
     )), `${file}: root/deep named import only`)
@@ -172,7 +174,11 @@ function assertConsumerModel(overrides = new Map()) {
     }
   }
   assert.equal(allImported.length, 10, 'ten governed import bindings')
-  assert.deepEqual(allImported.sort(), [...shimValueExports].sort(), 'all ten governed symbols imported exactly once')
+  assert.deepEqual(
+    allImported.sort(),
+    [...shimValueExports].sort(),
+    'all ten public symbols imported exactly',
+  )
 }
 const acceptsConsumerModel = (overrides) => {
   try {
@@ -248,16 +254,51 @@ assert(importBindings(capabilityAst).some((binding) => binding.imported === 'req
 assert(importBindings(capabilityAst).some((binding) => binding.imported === 'getYandexConnectionCredentialsV1'))
 assert.doesNotMatch(capability, /prisma\.apiConnection\.(?:create|update|delete)|prisma\.apiLog\.(?:create|deleteMany)/)
 
+const assertProviderComposition = (source) => {
+  const ast = parse(providerCompositionPath, source)
+  const credentialBindings = importBindings(ast).filter((binding) => binding.imported === 'listYandexConnectionCredentialsV1')
+  assert.deepEqual(credentialBindings, [{
+    specifier: credentialCapabilitySpecifier,
+    imported: 'listYandexConnectionCredentialsV1',
+    local: 'listYandexConnectionCredentialsV1',
+    typeOnly: false,
+  }], 'exact owner-internal credential capability import')
+  assert.equal(callsTo(ast, 'listYandexConnectionCredentialsV1').length, 2, 'two credential capability calls')
+  assertNoIndirectUse(ast, 'listYandexConnectionCredentialsV1')
+  assert.match(source, /'X-Client-ID': connection\.clid/)
+  assert.match(source, /'X-Api-Key': connection\.apiKey/)
+  assert.doesNotMatch(source, /\b(?:getApiConnections|testApiRequest)\b/)
+}
+
+const providerComposition = read(providerCompositionPath)
+assertProviderComposition(providerComposition)
+assert.doesNotMatch(publicIndex, /listYandexConnectionCredentialsV1/)
+const providerCompositionProbes = [
+  providerComposition.replace(credentialCapabilitySpecifier, publicRootSpecifier),
+  providerComposition.replace('await listYandexConnectionCredentialsV1()', '[]'),
+  `${providerComposition}\nvoid listYandexConnectionCredentialsV1()\n`,
+  providerComposition.replace("'X-Api-Key': connection.apiKey", "'X-Api-Key': connection.clid"),
+]
+assert(providerCompositionProbes.every((source) => {
+  try {
+    assertProviderComposition(source)
+    return false
+  } catch {
+    return true
+  }
+}), 'credential import/call/header denominator probes must fail')
+
 const manifest = JSON.parse(read('architecture/contexts/v1/manifests/fleet_operations.json'))
 assert(manifest.public_surface.includes('YandexFleetOperations.v1'))
 assert(manifest.public_surface.includes('ApiConnectionClientUi.v1'))
 const scan = await scanArchitecture(root)
-const boundaryFiles = [...consumers, shimPath]
+const boundaryFiles = [...consumers, shimPath, providerCompositionPath]
 assert.deepEqual(scan.findings.filter((finding) => (
   boundaryFiles.includes(finding.file)
   && (finding.details?.target === shimPath
     || finding.details?.target?.endsWith('/modules/fleet-operations/public/v1/index.ts')
-    || finding.details?.target?.endsWith('/modules/fleet-operations/public/v1/yandex-fleet-operations.ts'))
+    || finding.details?.target?.endsWith('/modules/fleet-operations/public/v1/yandex-fleet-operations.ts')
+    || finding.details?.target?.endsWith('/modules/fleet-operations/public/v1/yandex-connection-capability.ts'))
 )), [])
 const registry = JSON.parse(read('architecture/enforcement/v1/exceptions.json'))
 const live = new Set(scan.findings.map((finding) => finding.fingerprint))
@@ -269,9 +310,12 @@ process.stdout.write(`${JSON.stringify({
   status: 'PASS',
   consumers: consumers.length,
   consumer_symbols: shimValueExports.length,
+  consumer_bindings: 10,
+  provider_credential_bindings: 1,
+  provider_credential_calls: 2,
   shim_value_exports: shimValueExports.length,
   shim_type_exports: shimTypeExports.length,
-  negative_probes: consumerProbes.length + shimProbes.length,
+  negative_probes: consumerProbes.length + shimProbes.length + providerCompositionProbes.length,
   current_findings: scan.findings.length,
   registry_entries: registry.exceptions.length,
 }, null, 2)}\n`)

@@ -9,6 +9,20 @@ import { getMockPayload, pickRandomVariant, type MockVariant } from '@/lib/ai-ca
 import { isMockModeEnabled } from '@/lib/ai-call/provider-settings'
 import { CREATE_TASK_COMMAND_V1 } from '@/contracts/work-management/v1'
 import { createTaskV1 } from '@/modules/work-management/public/v1'
+import {
+    resolveAiCallContactRecipient,
+    resolveAiCallDriverRecipient,
+} from '@/modules/calling/application/ai-call-recipient'
+import {
+    createAiCallLifecycleJournal,
+    metadataWithAiCallLifecycleJournal,
+} from '@/modules/calling/application/ai-call-lifecycle'
+import {
+    createAiCallTranscriptJournal,
+    metadataWithAiCallTranscriptJournal,
+    reconcileAiCallTranscriptJournal,
+    renderLegacyAiCallTranscriptProjection,
+} from '@/modules/calling/application/ai-call-transcript'
 
 export const dynamic = 'force-dynamic'
 
@@ -60,19 +74,29 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'driverId_or_contactId_or_phoneNumber_required' }, { status: 400 })
     }
 
-    // Resolve phone number for fromNumber/toNumber. We're the "from" side
-    // (the AI bot), the lead is the "to" side.
-    let toNumber = phoneNumber ?? ''
-    if (!toNumber && driverId) {
-        const d = await prisma.driver.findUnique({ where: { id: driverId }, select: { phone: true } })
-        toNumber = d?.phone ?? ''
-    }
-    if (!toNumber && contactId) {
-        const c = await prisma.contact.findUnique({
-            where: { id: contactId },
-            select: { phones: { where: { isPrimary: true }, select: { phone: true }, take: 1 } },
-        })
-        toNumber = c?.phones[0]?.phone ?? ''
+    // Contact and Driver values are resolved by their data owners. A raw phone
+    // is accepted only when neither owner-backed recipient was supplied.
+    let toNumber = ''
+    if (contactId !== null) {
+        const recipient = await resolveAiCallContactRecipient({ contactId, driverId, phoneNumber })
+        if (recipient.status === 'invalid_input') {
+            return NextResponse.json({ error: recipient.reason }, { status: 400 })
+        }
+        if (recipient.status === 'unreachable') {
+            return NextResponse.json({ error: 'no_phone_number_for_lead' }, { status: 400 })
+        }
+        toNumber = recipient.phone
+    } else if (driverId !== null) {
+        const recipient = await resolveAiCallDriverRecipient({ driverId, contactId, phoneNumber })
+        if (recipient.status === 'invalid_input') {
+            return NextResponse.json({ error: recipient.reason }, { status: 400 })
+        }
+        if (recipient.status === 'unreachable') {
+            return NextResponse.json({ error: 'no_phone_number_for_lead' }, { status: 400 })
+        }
+        toNumber = recipient.phone
+    } else {
+        toNumber = phoneNumber ?? ''
     }
     if (!toNumber) toNumber = '+70000000000'
 
@@ -87,40 +111,81 @@ export async function POST(req: NextRequest) {
     }
 
     const mock = getMockPayload(variant)
+    const callId = randomUUID()
     const startedAt = new Date(Date.now() - mock.durationSec * 1000)
     const answeredAt = new Date(startedAt.getTime() + 2000)
     const endedAt = new Date()
+    let transcriptJournal = createAiCallTranscriptJournal(callId)
+    const transcriptRows = mock.transcript.split('\n').map((line, index) => {
+        const role = line.startsWith('[Лид]') ? 'user' as const : 'assistant' as const
+        const content = line.replace(/^\[(?:Лид|AI)\]\s*/, '').trim()
+        const message = {
+            messageId: `calling-mock-transcript:v1:${callId}:${index + 1}`,
+            ordinal: index + 1,
+            segmentRevision: 1,
+            role,
+            content,
+            final: true as const,
+            source: 'calling_mock' as const,
+        }
+        const reconciled = reconcileAiCallTranscriptJournal(callId, transcriptJournal, message, false)
+        transcriptJournal = reconciled.journal
+        return { id: reconciled.receipt.rowId, role, content }
+    })
+    const transcriptProjection = renderLegacyAiCallTranscriptProjection(transcriptJournal, transcriptRows)
+    const lifecycleJournal = createAiCallLifecycleJournal(callId, mock.aiSessionStatus, true)
+    const metadata = metadataWithAiCallLifecycleJournal(
+        metadataWithAiCallTranscriptJournal({
+            mock: true,
+            variant,
+            estimatedCostRub: mock.estimatedCostRub,
+        }, transcriptJournal),
+        lifecycleJournal,
+    )
 
-    // Persist as a single Call row — same table as ordinary manager calls.
-    const call = await prisma.call.create({
-        data: {
-            direction: 'outbound',
-            status: 'completed',
-            fromNumber: process.env.MEGAFON_NUMBER ?? '+79221853150',
-            toNumber,
-            driverId,
-            contactId,
-            managerId: user.id,
-            fsUuid: `mock-${randomUUID()}`,
-            startedAt,
-            answeredAt,
-            endedAt,
-            durationSec: mock.durationSec,
-            hangupCause: 'NORMAL_CLEARING',
-            transcript: mock.transcript,
-            aiSummary: mock.aiSummary,
-            aiAnalysis: mock.qualificationResult as any,
-            // AI-call specific fields (Prisma generated client; cast to any
-            // in case the local node_modules generator is one regen behind)
-            isAi: true,
-            aiScenarioId: resolvedScenarioId,
-            aiSessionStatus: mock.aiSessionStatus as any,
-            metadata: {
-                mock: true,
-                variant,
-                estimatedCostRub: mock.estimatedCostRub,
+    // Persist the Call and its canonical transcript rows atomically. Keeping
+    // the message write explicit also makes its public-boundary data flow
+    // independently auditable.
+    const call = await (prisma as any).$transaction(async (tx: any) => {
+        const created = await tx.call.create({
+            data: {
+                id: callId,
+                direction: 'outbound',
+                status: 'completed',
+                fromNumber: process.env.MEGAFON_NUMBER ?? '+79221853150',
+                toNumber,
+                driverId,
+                contactId,
+                managerId: user.id,
+                fsUuid: `mock-${randomUUID()}`,
+                startedAt,
+                answeredAt,
+                endedAt,
+                durationSec: mock.durationSec,
+                hangupCause: 'NORMAL_CLEARING',
+                transcript: transcriptProjection,
+                aiSummary: mock.aiSummary,
+                aiAnalysis: mock.qualificationResult as any,
+                // AI-call specific fields (Prisma generated client; cast to any
+                // in case the local node_modules generator is one regen behind)
+                isAi: true,
+                aiScenarioId: resolvedScenarioId,
+                aiSessionStatus: mock.aiSessionStatus as any,
+                metadata: metadata as any,
             } as any,
-        } as any,
+        })
+        for (const [index, row] of transcriptRows.entries()) {
+            await tx.aiCallMessage.create({
+                data: {
+                    id: row.id,
+                    callId,
+                    role: row.role,
+                    content: row.content,
+                    startedAt: new Date(startedAt.getTime() + index),
+                },
+            })
+        }
+        return created
     })
 
     // Create a Task for the manager when the mock variant flagged it.

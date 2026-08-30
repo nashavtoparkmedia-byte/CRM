@@ -298,6 +298,7 @@
     "blast_radius": {
       "consumer_contexts": [
         "analytics_reporting",
+        "calling",
         "max_channel",
         "messaging",
         "operations_observability",

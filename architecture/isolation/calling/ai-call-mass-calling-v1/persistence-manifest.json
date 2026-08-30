@@ -1,0 +1,33 @@
+{
+  "schema": "yoko.crm.ai-call-mass-calling-persistence.v1",
+  "version": 1,
+  "context": "calling",
+  "status": "source_isolated_only",
+  "migration": "architecture/isolation/calling/ai-call-mass-calling-v1/migration.sql",
+  "production_migration_applied": false,
+  "production_runtime_wired": false,
+  "tables": [
+    "AiCallCampaign",
+    "AiCallCampaignMember",
+    "AiCallCampaignAttempt",
+    "AiCallAdmissionControl",
+    "AiCallAdmissionLease"
+  ],
+  "selection_indexes": [
+    "AiCallCampaign_state_scheduledAt_createdAt_idx",
+    "AiCallCampaignMember_campaign_state_nextEligibleAt_id_idx",
+    "AiCallCampaignMember_state_nextEligibleAt_id_idx",
+    "AiCallCampaignAttempt_state_claimUntil_createdAt_idx",
+    "AiCallAdmissionLease_releasedAt_leaseUntil_idx",
+    "AiCallAdmissionLease_campaign_releasedAt_leaseUntil_idx"
+  ],
+  "deterministic_uniqueness": [
+    "AiCallCampaign.identityKey",
+    "AiCallCampaignMember(campaignId,memberKey)",
+    "AiCallCampaignMember(campaignId,targetType,targetRef)",
+    "AiCallCampaignAttempt.launchId",
+    "AiCallCampaignAttempt(memberId,attemptNumber)",
+    "AiCallAdmissionLease.attemptId"
+  ],
+  "rollback_reasoning": "The migration is expand-only and not wired into production. In an isolated disposable database, rollback is dropping the five new tables in reverse dependency order. A future production migration must use the repository migration-authority process and must not claim this isolated proof as production application evidence."
+}

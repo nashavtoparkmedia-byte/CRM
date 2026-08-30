@@ -16,6 +16,18 @@ export type {
 } from './create-task-command'
 
 export {
+    CREATE_IDEMPOTENT_TASK_COMMAND_V1,
+    CREATE_IDEMPOTENT_TASK_RESULT_V1,
+    parseCreateIdempotentTaskCommandV1,
+    TaskIdempotencyConflictError,
+} from './create-idempotent-task-command'
+
+export type {
+    CreateIdempotentTaskCommandV1,
+    CreateIdempotentTaskResultV1,
+} from './create-idempotent-task-command'
+
+export {
     ASSIGN_TASK_COMMAND_V1,
     ASSIGN_TASK_RESULT_V1,
     AssignTaskContractValidationError,

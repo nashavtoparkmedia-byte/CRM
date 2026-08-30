@@ -1,7 +1,9 @@
 import { createCreateTaskHandlerV1 } from '../public/v1/create-task-handler'
+import { createCreateIdempotentTaskHandlerV1 } from '../public/v1/create-idempotent-task-handler'
 import { createAssignTaskHandlerV1 } from '../public/v1/assign-task-handler'
 import { createCompleteTaskHandlerV1 } from '../public/v1/complete-task-handler'
 import { legacyPrismaTaskPortV1 } from '../public/v1/legacy-prisma-adapter'
+import { legacyPrismaIdempotentTaskPortV1 } from '../public/v1/legacy-prisma-idempotent-task-adapter'
 import { legacyPrismaTaskAssignmentPortV1 } from '../public/v1/legacy-prisma-assignment-adapter'
 import { legacyPrismaTaskCompletionPortV1 } from '../public/v1/legacy-prisma-completion-adapter'
 import { createDetachContactTasksHandlerV1 } from '../public/v1/contact-retention-handler'
@@ -17,6 +19,7 @@ import { queryCrmUserV1 } from '@/modules/identity-access/public/v1'
 import { createReassignTasksHandlerV1 } from '../public/v1/reassign-tasks-handler'
 
 const createTask = createCreateTaskHandlerV1(legacyPrismaTaskPortV1)
+const createIdempotentTask = createCreateIdempotentTaskHandlerV1(legacyPrismaIdempotentTaskPortV1)
 const assignTask = createAssignTaskHandlerV1(legacyPrismaTaskAssignmentPortV1)
 const completeTask = createCompleteTaskHandlerV1(legacyPrismaTaskCompletionPortV1)
 const detachContactTasks = createDetachContactTasksHandlerV1(legacyPrismaContactTaskRetentionPortV1)
@@ -32,6 +35,7 @@ const reassignTasks = createReassignTasksHandlerV1({
 })
 
 export const createTaskV1 = (...args: Parameters<typeof createTask>) => createTask(...args)
+export const createIdempotentTaskV1 = (...args: Parameters<typeof createIdempotentTask>) => createIdempotentTask(...args)
 export const assignTaskV1 = (...args: Parameters<typeof assignTask>) => assignTask(...args)
 export const completeTaskV1 = (...args: Parameters<typeof completeTask>) => completeTask(...args)
 export const detachContactTasksV1 = (...args: Parameters<typeof detachContactTasks>) => detachContactTasks(...args)

@@ -187,10 +187,30 @@ function decodeSource(bytes) {
   return { text: bytes.toString('utf8'), encoding: 'utf8', ambiguous: false }
 }
 
-export function compileArchitecture(moduleRules, manifests, ownershipRules, scopedOwnership = { rules: [] }) {
+export function compileArchitecture(
+  moduleRules,
+  manifests,
+  ownershipRules,
+  scopedOwnership = { rules: [] },
+  options = {},
+) {
+  const effectiveManifests = manifests.map((manifest) => structuredClone(manifest))
+  const manifestsByContext = new Map(effectiveManifests.map((manifest) => [manifest.context.id, manifest]))
+  for (const bundle of options.manifestAmendments ?? []) {
+    for (const amendment of bundle.amendments ?? []) {
+      const manifest = manifestsByContext.get(amendment.context)
+      if (!manifest) continue
+      manifest.owned_infrastructure_state = [
+        ...new Set([
+          ...(manifest.owned_infrastructure_state ?? []),
+          ...(amendment.add_owned_infrastructure_state ?? []),
+        ]),
+      ]
+    }
+  }
   const modules = moduleRules.modules.map((item) => ({ ...item, regex: new RegExp(item.match) }))
   const technicalToContext = new Map()
-  for (const manifest of manifests) {
+  for (const manifest of effectiveManifests) {
     for (const module of manifest.technical_modules ?? []) technicalToContext.set(module, manifest.context.id)
   }
   const modelOwners = new Map()
@@ -201,7 +221,7 @@ export function compileArchitecture(moduleRules, manifests, ownershipRules, scop
       technical_owner: technicalOwner,
     })
   }
-  for (const manifest of manifests) {
+  for (const manifest of effectiveManifests) {
     for (const owned of manifest.owned_data ?? []) {
       // Context manifests are the reviewed ownership decision. Historical
       // technical ownership candidates seed the map above, but they must not
@@ -213,12 +233,30 @@ export function compileArchitecture(moduleRules, manifests, ownershipRules, scop
       })
       if (owned.mapped_table) modelOwners.set(owned.mapped_table.toLowerCase(), modelOwners.get(owned.model.toLowerCase()))
     }
+    for (const id of manifest.owned_infrastructure_state ?? []) {
+      const model = id.split(':').at(-1)
+      modelOwners.set(model.toLowerCase(), {
+        model,
+        context: manifest.context.id,
+        technical_owner: null,
+      })
+    }
   }
   const scopedModelOwners = new Map()
   for (const rule of scopedOwnership.rules ?? []) {
     scopedModelOwners.set(`${rule.source}\0${rule.table.toLowerCase()}`, { model: rule.table, context: rule.owner_context, technical_owner: null, scoped_rule_id: rule.id, allowed_operations: new Set(rule.allowed_operations ?? []) })
   }
-  return { contextIds: new Set(manifests.map((manifest) => manifest.context.id)), modelOwners, scopedModelOwners, modules, technicalToContext }
+  const approvedInfrastructureWriters = new Set((options.approvedInfrastructureWriters ?? []).map((entry) => (
+    `${entry.file}\0${entry.model.toLowerCase()}`
+  )))
+  return {
+    contextIds: new Set(effectiveManifests.map((manifest) => manifest.context.id)),
+    modelOwners,
+    scopedModelOwners,
+    approvedInfrastructureWriters,
+    modules,
+    technicalToContext,
+  }
 }
 
 function sourceIdentity(surface, architecture) {
@@ -261,7 +299,11 @@ export function classifySite(site, surface, source, architecture) {
   const targets = site.kind === 'model' || site.kind === 'ambiguous_model' || site.kind === 'drizzle'
     ? [site.model, ...(site.candidate_models ?? [])].filter(Boolean)
     : (site.tables ?? [])
-  const identities = targets.map((target) => targetIdentity(target, architecture, surface.path))
+  const identities = targets.map((target) => (
+    source.context && architecture.approvedInfrastructureWriters?.has(`${surface.path}\0${target.toLowerCase()}`)
+      ? { model: target, context: source.context, technical_owner: null, approved_infrastructure_writer: true }
+      : targetIdentity(target, architecture, surface.path)
+  ))
   const unresolvedTargets = targets.filter((target, index) => !identities[index])
   const ownerContexts = [...new Set(identities.filter(Boolean).map((item) => item.context))].sort()
   const siteOperations = new Set((site.operations ?? []).map((item) => item.operation).filter(Boolean))
@@ -1173,9 +1215,16 @@ export async function analyzeRepository(repositoryRoot, options = {}) {
   const moduleRules = await loadJson(repositoryRoot, 'architecture/evidence/v1/module-rules.json')
   const ownershipRules = await loadJson(repositoryRoot, 'architecture/evidence/v1/ownership-rules.json')
   const contextIndex = await loadJson(repositoryRoot, 'architecture/contexts/v1/context-index.json')
+  const architecturePolicy = await loadJson(repositoryRoot, 'architecture/enforcement/v1/policy.json')
   const manifests = await Promise.all(contextIndex.contexts.map((entry) => loadJson(repositoryRoot, entry.path)))
+  const manifestAmendments = await Promise.all((architecturePolicy.manifest_amendments ?? []).map((entry) => (
+    loadJson(repositoryRoot, entry)
+  )))
   const scopedOwnership = await loadOptionalJson(repositoryRoot, 'architecture/contexts/v1/scoped-data-ownership.json', { rules: [] })
-  const architecture = compileArchitecture(moduleRules, manifests, ownershipRules, scopedOwnership)
+  const architecture = compileArchitecture(moduleRules, manifests, ownershipRules, scopedOwnership, {
+    manifestAmendments,
+    approvedInfrastructureWriters: architecturePolicy.approved_infrastructure_writers ?? [],
+  })
   architecture.tableSymbols = new Map()
   architecture.prismaModels = new Set()
   architecture.prismaRelationFields = new Set()

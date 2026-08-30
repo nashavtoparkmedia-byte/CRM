@@ -39,4 +39,60 @@ assert.equal(
   'OWNER',
   'reviewed manifest ownership must override a historical technical candidate',
 )
+
+const callingArchitecture = compileArchitecture(
+  { modules: [] },
+  [{
+    context: { id: 'calling' },
+    owned_data: [],
+    owned_paths: ['gravity-mvp/src/modules/calling'],
+    technical_modules: ['ai_calls'],
+  }],
+  { rules: {} },
+  { rules: [] },
+  {
+    manifestAmendments: [{
+      amendments: [{
+        context: 'calling',
+        add_owned_infrastructure_state: [
+          'architecture/isolation/calling/ai-call-mass-calling-v1/migration.sql:AiCallCampaign',
+        ],
+      }],
+    }],
+    approvedInfrastructureWriters: [{
+      model: 'DomainOutboxEvent',
+      file: 'gravity-mvp/src/modules/calling/internal/ai-calls/finalize.ts',
+    }],
+  },
+)
+assert.equal(
+  classifySite(
+    site('AiCallCampaign', 'UPDATE'),
+    { path: 'gravity-mvp/src/modules/calling/internal/ai-calls/campaign.ts', lifecycle: 'APPLICATION_RUNTIME', disposition: null },
+    { context: 'calling' },
+    callingArchitecture,
+  ).classification,
+  'OWNER',
+  'manifest-amended infrastructure state must be visible to the authoritative write analyzer',
+)
+assert.equal(
+  classifySite(
+    { kind: 'model', model: 'domainOutboxEvent', candidate_models: [], ambiguous: false },
+    { path: 'gravity-mvp/src/modules/calling/internal/ai-calls/finalize.ts', lifecycle: 'APPLICATION_RUNTIME', disposition: null },
+    { context: 'calling' },
+    callingArchitecture,
+  ).classification,
+  'OWNER',
+  'an exact approved infrastructure writer must retain its source context ownership',
+)
+assert.equal(
+  classifySite(
+    { kind: 'model', model: 'domainOutboxEvent', candidate_models: [], ambiguous: false },
+    { path: 'gravity-mvp/src/modules/calling/internal/ai-calls/unreviewed.ts', lifecycle: 'APPLICATION_RUNTIME', disposition: null },
+    { context: 'calling' },
+    callingArchitecture,
+  ).classification,
+  'AMBIGUOUS',
+  'approved infrastructure writer ownership must remain exact-path bounded',
+)
 process.stdout.write('scoped data ownership: PASS\n')

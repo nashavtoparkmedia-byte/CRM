@@ -6,7 +6,7 @@ const document = JSON.parse(await readFile(path, 'utf8'))
 const records = document.records ?? []
 const ids = records.map(record => record.record_id)
 if (records.length !== new Set(ids).size) throw new Error('triage reconciliation has duplicate record IDs')
-if (records.length !== 48) throw new Error('fresh source-freeze ambiguity denominator drift')
+if (records.length !== 41) throw new Error('fresh source-freeze ambiguity denominator drift')
 if (document.summary.RAW_BASELINE_AMBIGUOUS !== records.length) throw new Error('raw ambiguous count drift')
 const states = new Set(['RESOLVED_NON_WRITE', 'OWNER_VALID_WRITE', 'CONTROLLED_MIGRATION_WRITE', 'MATERIAL_UNRESOLVED_WRITE_RISK'])
 if (records.some(record => !states.has(record.semantic_state))) throw new Error('record missing semantic state')
@@ -16,7 +16,7 @@ if (document.summary.RECONCILIATION_TOTAL !== records.length || document.summary
 if (document.summary.RESOLVED_NON_WRITE !== counts.RESOLVED_NON_WRITE) throw new Error('resolved non-write count drift')
 if (document.summary.MATERIAL_UNRESOLVED_WRITE_RISK !== counts.MATERIAL_UNRESOLVED_WRITE_RISK) throw new Error('material ambiguity count drift')
 if (counts.RESOLVED_NON_WRITE < 27) throw new Error('static SELECT reclassification regression')
-if (counts.RESOLVED_NON_WRITE !== 34 || counts.OWNER_VALID_WRITE !== 10 || counts.CONTROLLED_MIGRATION_WRITE !== 4 || counts.MATERIAL_UNRESOLVED_WRITE_RISK !== 0) {
+if (counts.RESOLVED_NON_WRITE !== 34 || counts.OWNER_VALID_WRITE !== 3 || counts.CONTROLLED_MIGRATION_WRITE !== 4 || counts.MATERIAL_UNRESOLVED_WRITE_RISK !== 0) {
   throw new Error('fresh source-freeze ambiguity disposition count drift')
 }
 for (const id of [

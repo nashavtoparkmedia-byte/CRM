@@ -1,5 +1,14 @@
 export { createCreateTaskHandlerV1 } from './create-task-handler'
 export type { CreateTaskPersistencePortV1 } from './create-task-handler'
+export {
+    createCreateIdempotentTaskHandlerV1,
+    deterministicTaskIdV1,
+    taskPayloadFingerprintV1,
+} from './create-idempotent-task-handler'
+export type {
+    IdempotentTaskCreateRequestV1,
+    IdempotentTaskPersistencePortV1,
+} from './create-idempotent-task-handler'
 export { mapCreateTaskDataToLegacyRecordV1 } from './legacy-task-record'
 export { createAssignTaskHandlerV1 } from './assign-task-handler'
 export type { AssignTaskPersistencePortV1 } from './assign-task-handler'
@@ -15,6 +24,7 @@ export {
     assignTaskV1,
     completeTaskV1,
     createTaskV1,
+    createIdempotentTaskV1,
     detachContactTasksV1,
     getMergedScenarioFieldsV1,
     resetScenarioFieldSettingV1,

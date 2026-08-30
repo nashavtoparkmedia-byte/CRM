@@ -9,6 +9,10 @@
       "surface": "contacts.public"
     },
     {
+      "context": "fleet_operations",
+      "surface": "fleet_operations.public"
+    },
+    {
       "context": "work_management",
       "surface": "work_management.public"
     }
@@ -146,6 +150,7 @@
     "migration_e3f1d4c8021a234a"
   ],
   "internal_surface": [
+    "architecture/isolation/calling/ai-call-mass-calling-v1",
     "gravity-mvp/src/lib/calls",
     "gravity-mvp/src/lib/freeswitch",
     "gravity-mvp/src/lib/ai-call",
@@ -229,6 +234,7 @@
     }
   ],
   "owned_paths": [
+    "architecture/isolation/calling/ai-call-mass-calling-v1",
     "gravity-mvp/src/contracts/calling",
     "gravity-mvp/src/lib/ai-call",
     "gravity-mvp/src/lib/calls",

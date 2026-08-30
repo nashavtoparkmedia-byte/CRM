@@ -2,7 +2,7 @@
  * Thin HTTP client for talking back to the CRM from the bridge.
  *
  *   resolveCallByUuid(fsUuid)         GET /api/ai-calls/sessions/by-fs-uuid/<fsUuid>
- *   appendTranscript(callId, role, text)
+ *   appendTranscript(callId, role, text, receipt)
  *                                     POST /api/ai-calls/sessions/<callId>/transcript-item
  *   postState(callId, state)          POST /api/ai-calls/sessions/<callId>/state
  *   finalize(callId, payload)         POST /api/ai-calls/sessions/<callId>/finalize
@@ -13,8 +13,9 @@
  * via Next on every PCM frame; invalidateKeysCache() refreshes immediately
  * (useful right after CHANNEL_PARK).
  *
- * All endpoints are unauthenticated for MVP. When CRM grows real auth we'll
- * gate them by a shared secret (BRIDGE_SHARED_TOKEN — already wired here).
+ * Every request carries BRIDGE_SHARED_TOKEN when configured. CRM authenticates
+ * the header and fails closed, so bridge and CRM deployments must configure the
+ * same well-formed secret before these callbacks can succeed.
  */
 
 const { retryFinalizeRequest, fetchOnce } = require('./retry-helpers')
@@ -73,22 +74,31 @@ async function resolveCallByUuid(fsUuid) {
     return res.json()
 }
 
-async function appendTranscript(callId, role, text) {
+async function appendTranscript(callId, role, text, receipt) {
     try {
-        await fetchOnce(
+        const res = await fetchOnce(
             `${CRM_BASE_URL}/api/ai-calls/sessions/${encodeURIComponent(callId)}/transcript-item`,
             directInit({
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...authHeaders() },
-                body: JSON.stringify({ role, text }),
+                body: JSON.stringify({
+                    role,
+                    text,
+                    messageId: receipt?.messageId,
+                    ordinal: receipt?.ordinal,
+                    segmentRevision: receipt?.segmentRevision,
+                    final: receipt?.final,
+                }),
             }),
             BRIDGE_CRM_REQUEST_TIMEOUT_MS,
         )
+        if (!res.ok) {
+            const body = await res.text().catch(() => '')
+            throw new Error(`HTTP ${res.status} ${body.slice(0, 200)}`)
+        }
     } catch (err) {
-        // Soft failure by design — per-utterance transcript-item is
-        // best-effort. AbortError lands here too (treated identical
-        // to network error). No retry, no log spam: just one stderr
-        // line and the call carries on.
+        // The terminal callback carries the same deterministic receipts, so
+        // this live-path soft failure is reconciled before finalization.
         console.error(`[crm] transcript-item failed: ${err.message}`)
     }
 }

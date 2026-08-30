@@ -385,8 +385,8 @@ async function ensureSessionForCall(callUuid) {
                 console.error(`[crm] finalize ${resolved.callId} failed: ${err.message}`)
             })
         },
-        onTranscriptItem: (role, text) => {
-            crm.appendTranscript(resolved.callId, role, text).catch(() => {})
+        onTranscriptItem: (role, text, receipt) => {
+            crm.appendTranscript(resolved.callId, role, text, receipt).catch(() => {})
         },
         onState: s => {
             // Always emit a structured JSON-line for every transition

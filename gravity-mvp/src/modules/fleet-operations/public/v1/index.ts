@@ -18,6 +18,8 @@ export { createRunApiLogRetentionHandlerV1, createRunDriverEventRetentionHandler
 export type { FleetEventRetentionPersistencePortV1 } from './event-retention-handler'
 export { createFindDriverByExactPhoneHandlerV1 } from './find-driver-by-exact-phone-handler'
 export type { FindDriverByExactPhonePersistencePortV1 } from './find-driver-by-exact-phone-handler'
+export { createGetDriverCallablePhoneHandlerV1 } from './get-driver-callable-phone-handler'
+export type { GetDriverCallablePhonePersistencePortV1 } from './get-driver-callable-phone-handler'
 export { createReconcileDriverProfileHandlerV1 } from './reconcile-driver-profile-handler'
 export type { ReconcileDriverProfilePersistencePortV1 } from './reconcile-driver-profile-handler'
 export { createGetDriverCommunicationTimelineHandlerV1, createRecordDriverCommunicationEventHandlerV1 } from './driver-communication-event-handler'
@@ -55,6 +57,7 @@ export {
     deleteApiLogsV1,
     dispatchScheduledScraperChecksV1,
     findDriverByExactPhoneV1,
+    getDriverCallablePhoneV1,
     getParkLinkedDriverPhoneV1,
     mirrorDriverActionResultV1,
     normalizeParkPhoneDigitsV1,

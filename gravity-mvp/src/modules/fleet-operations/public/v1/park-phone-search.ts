@@ -256,7 +256,10 @@ export async function upsertParkMatchedDriverV1(input: {
 }): Promise<{ id: string; fullName: string }> {
     return prisma.driver.upsert({
         where: { yandexDriverId: input.yandexDriverId },
-        update: { fullName: input.fullName, ...(input.phone ? { phone: input.phone } : {}) },
+        update: {
+            fullName: input.fullName,
+            phone: input.phone || undefined,
+        },
         create: { yandexDriverId: input.yandexDriverId, fullName: input.fullName, phone: input.phone },
         select: { id: true, fullName: true },
     })

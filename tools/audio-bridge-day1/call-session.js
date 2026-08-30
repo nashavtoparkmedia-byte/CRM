@@ -55,7 +55,8 @@ class CallSession {
      * @param {Object} opts.scenario             AiCallScenario row from CRM
      * @param {Function} opts.broadcastWav       async (wav: Buffer) => void
      * @param {Function} [opts.onFinalize]       called once with the full result
-     * @param {Function} [opts.onTranscriptItem] (role, text) for live CRM mirror
+     * @param {Function} [opts.onTranscriptItem] (role, text, receipt) for the
+     *                                           canonical CRM transcript
      * @param {Function} [opts.onState]          (state) for diagnostics
      * @param {Function} [opts.onUserSpoke]      called on the FIRST STT final
      *                                           that the session accepts. Used
@@ -78,6 +79,11 @@ class CallSession {
         this.state = 'idle'
         // OpenAI message history — system + alternating user/assistant turns.
         this.messages = []
+        // Canonical transcript receipts are final-only. Their identity and
+        // ordinal are stable across the live callback and the terminal
+        // reconciliation payload; wall-clock time is never logical identity.
+        this.transcriptItems = []
+        this.transcriptOrdinal = 0
         // Snapshot of accumulated lead data from save_lead_data tool calls.
         this.leadData = {}
         // What the model decided in end_call. Filled on graceful close.
@@ -331,6 +337,20 @@ class CallSession {
         }
     }
 
+    _emitTranscriptItem(role, content) {
+        const ordinal = ++this.transcriptOrdinal
+        const receipt = {
+            messageId: `audio-bridge-transcript:v1:${this.callUuid}:${ordinal}`,
+            ordinal,
+            segmentRevision: 1,
+            role,
+            content,
+            final: true,
+        }
+        this.transcriptItems.push(receipt)
+        this.onTranscriptItem(role, content, receipt)
+    }
+
     async start() {
         // PR #57 — cache scenario-specific tool overrides once. When
         // outcomeSchema is absent this is just a reference to the
@@ -385,7 +405,7 @@ class CallSession {
                     `${this.greetingVariant.text.slice(0, 60)}`,
                 )
                 this.messages.push({ role: 'assistant', content: this.greetingVariant.text })
-                this.onTranscriptItem('assistant', this.greetingVariant.text)
+                this._emitTranscriptItem('assistant', this.greetingVariant.text)
                 try {
                     await this._speak(this.greetingVariant.text)
                 } catch (err) {
@@ -506,7 +526,7 @@ class CallSession {
         this.consecutiveGarbageCount = 0
 
         this.pendingUserText = (this.pendingUserText + ' ' + trimmed).trim()
-        this.onTranscriptItem('user', trimmed)
+        this._emitTranscriptItem('user', trimmed)
         // Lifecycle hook: «real dialog has started». Bridge uses this
         // to mark CRM `Call.aiSessionStatus='active'` via the /state
         // endpoint. Fires once per session in practice (server.js
@@ -584,7 +604,7 @@ class CallSession {
         if (result.kind === 'text') {
             // Append to history, then speak it.
             this.messages.push({ role: 'assistant', content: result.content })
-            this.onTranscriptItem('assistant', result.content)
+            this._emitTranscriptItem('assistant', result.content)
             await this._speak(result.content)
             this._setState('listening')
             return
@@ -718,7 +738,11 @@ class CallSession {
                 reason,
                 result: this.finalResult,
                 leadData: this.leadData,
-                transcript: this.messages.filter(m => m.role === 'user' || m.role === 'assistant'),
+                // Compatibility analysis input is derived from the same
+                // final-only canonical receipts. Do not leak synthetic LLM
+                // prompts or assistant tool-call rows with null content.
+                transcript: this.transcriptItems.map(({ role, content }) => ({ role, content })),
+                transcriptItems: this.transcriptItems,
                 // PR #57 — real STT-derived user turn count (excludes
                 // bridge-synthesized silence wake-ups). CRM's
                 // outcome-mapper uses this to distinguish drop categories.

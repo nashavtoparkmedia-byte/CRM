@@ -18,6 +18,8 @@ import { createRunApiLogRetentionHandlerV1, createRunDriverEventRetentionHandler
 import { legacyPrismaFleetEventRetentionPortV1 } from '../public/v1/legacy-prisma-event-retention-adapter'
 import { createFindDriverByExactPhoneHandlerV1 } from '../public/v1/find-driver-by-exact-phone-handler'
 import { legacyPrismaFindDriverByExactPhonePortV1 } from '../public/v1/legacy-prisma-find-driver-by-exact-phone-adapter'
+import { createGetDriverCallablePhoneHandlerV1 } from '../public/v1/get-driver-callable-phone-handler'
+import { legacyPrismaGetDriverCallablePhonePortV1 } from '../public/v1/legacy-prisma-get-driver-callable-phone-adapter'
 import { createReconcileDriverProfileHandlerV1 } from '../public/v1/reconcile-driver-profile-handler'
 import { legacyPrismaReconcileDriverProfilePortV1 } from '../public/v1/legacy-prisma-reconcile-driver-profile-adapter'
 import { createRecordManagerDriverCommunicationHandlerV1 } from '../public/v1/record-manager-driver-communication-handler'
@@ -48,6 +50,7 @@ const mirrorDriverActionResult = createMirrorDriverActionResultHandlerV1(legacyP
 const runDriverEventRetention = createRunDriverEventRetentionHandlerV1(legacyPrismaFleetEventRetentionPortV1)
 const runApiLogRetention = createRunApiLogRetentionHandlerV1(legacyPrismaFleetEventRetentionPortV1)
 const findDriverByExactPhone = createFindDriverByExactPhoneHandlerV1(legacyPrismaFindDriverByExactPhonePortV1)
+const getDriverCallablePhone = createGetDriverCallablePhoneHandlerV1(legacyPrismaGetDriverCallablePhonePortV1)
 const reconcileDriverProfile = createReconcileDriverProfileHandlerV1(legacyPrismaReconcileDriverProfilePortV1)
 const recordManagerDriverCommunication = createRecordManagerDriverCommunicationHandlerV1(legacyPrismaRecordManagerDriverCommunicationPortV1)
 const runCommunicationEventRetention = createRunCommunicationEventRetentionHandlerV1(legacyPrismaCommunicationEventRetentionPortV1)
@@ -67,6 +70,7 @@ export const mirrorDriverActionResultV1 = (...args: Parameters<typeof mirrorDriv
 export const runDriverEventRetentionV1 = (...args: Parameters<typeof runDriverEventRetention>) => runDriverEventRetention(...args)
 export const runApiLogRetentionV1 = (...args: Parameters<typeof runApiLogRetention>) => runApiLogRetention(...args)
 export const findDriverByExactPhoneV1 = (...args: Parameters<typeof findDriverByExactPhone>) => findDriverByExactPhone(...args)
+export const getDriverCallablePhoneV1 = (...args: Parameters<typeof getDriverCallablePhone>) => getDriverCallablePhone(...args)
 export const reconcileDriverProfileV1 = (...args: Parameters<typeof reconcileDriverProfile>) => reconcileDriverProfile(...args)
 export const recordManagerDriverCommunicationV1 = (...args: Parameters<typeof recordManagerDriverCommunication>) => recordManagerDriverCommunication(...args)
 export const runCommunicationEventRetentionV1 = (...args: Parameters<typeof runCommunicationEventRetention>) => runCommunicationEventRetention(...args)

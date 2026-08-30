@@ -46,7 +46,6 @@ for (const file of contractFiles) {
 
 const consumerFiles = [
     'gravity-mvp/src/app/api/ai-calls/mock/route.ts',
-    'gravity-mvp/src/app/api/ai-calls/sessions/[id]/finalize/route.ts',
 ]
 
 for (const file of consumerFiles) {
@@ -62,6 +61,36 @@ for (const file of consumerFiles) {
         'direct foreign Prisma Task create remains',
     )
 }
+
+const durableFinalizeConsumer = source('gravity-mvp/src/modules/calling/application/ai-call-finalization-runtime.ts')
+const durableFinalizeRecoveryConsumer = source(
+    'gravity-mvp/src/modules/calling/application/ai-call-finalization-recovery-runtime.ts',
+)
+assertCheck(
+    'durable Calling finalization uses CreateIdempotentTaskCommand.v1',
+    durableFinalizeConsumer.includes('CREATE_IDEMPOTENT_TASK_COMMAND_V1')
+        && durableFinalizeConsumer.includes('createIdempotentTaskV1({'),
+    'versioned idempotent Task command invocation is absent',
+)
+assertCheck(
+    'durable Calling finalization has no foreign Task persistence access',
+    !/(?:prisma|transaction|tx)\.task\.(?:create|update|updateMany|upsert|delete|deleteMany)\s*\(/
+        .test(`${durableFinalizeConsumer}\n${durableFinalizeRecoveryConsumer}`),
+    'direct foreign Task persistence access remains',
+)
+assertCheck(
+    'durable Calling recovery reuses CreateIdempotentTaskCommand.v1',
+    durableFinalizeRecoveryConsumer.includes('CREATE_IDEMPOTENT_TASK_COMMAND_V1')
+        && durableFinalizeRecoveryConsumer.includes('createIdempotentTaskV1({'),
+    'recovery bypasses the versioned Work Management owner command',
+)
+const finalizeRoute = source('gravity-mvp/src/app/api/ai-calls/sessions/[id]/finalize/route.ts')
+assertCheck(
+    'finalize route delegates to the Calling application operation',
+    finalizeRoute.includes('finalizeAiCall(id, body)')
+        && !/\bprisma\b|createTaskV1\s*\(|createIdempotentTaskV1\s*\(/.test(finalizeRoute),
+    'finalize route retains persistence or cross-domain orchestration',
+)
 
 const reassignmentConsumer = source('gravity-mvp/src/app/api/tasks/reassign/route.ts')
 assertCheck(
@@ -228,6 +257,22 @@ assertCheck(
     'legacy Prisma dependency is isolated in owner compatibility adapter',
     adapter.includes("@/lib/prisma") && adapter.includes('prisma.task.create'),
     'owner compatibility adapter does not contain the legacy persistence boundary',
+)
+
+const idempotentHandler = source('gravity-mvp/src/modules/work-management/public/v1/create-idempotent-task-handler.ts')
+assertCheck(
+    'idempotent owner handler depends on a persistence port',
+    idempotentHandler.includes('IdempotentTaskPersistencePortV1')
+        && !idempotentHandler.includes("@/lib/prisma"),
+    'idempotent handler is coupled to legacy persistence',
+)
+const idempotentAdapter = source('gravity-mvp/src/modules/work-management/public/v1/legacy-prisma-idempotent-task-adapter.ts')
+assertCheck(
+    'idempotent Task persistence remains isolated in the Work Management owner adapter',
+    idempotentAdapter.includes("from '@/lib/prisma'")
+        && idempotentAdapter.includes('prisma.task.create')
+        && idempotentAdapter.includes('prisma.task.findUnique'),
+    'idempotent Task storage boundary is missing or outside its owner',
 )
 
 const srcRoot = path.join(root, 'gravity-mvp/src')

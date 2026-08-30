@@ -1,0 +1,13 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "YOKO-AI-CALLS-STAGE-5",
+  "amendments": [
+    {
+      "context": "calling",
+      "add_public_surface": ["AiCallFinalizationFollowUpRequestedEvent.v1"],
+      "add_events": ["calling.AiCallFinalizationFollowUpRequested.v1"],
+      "reason": "A terminal Call and its pending follow-up recovery wake-up commit atomically; the existing bounded transactional-outbox publisher redelivers it to the Calling owner without another Bridge callback."
+    }
+  ]
+}

@@ -1208,6 +1208,7 @@ function contextState(policy, moduleRules, manifests, amendments) {
         for (const id of manifest.owned_infrastructure_state ?? []) {
             const model = id.split(':').at(-1)
             modelOwners.set(model.toLowerCase(), { model, context: manifest.context.id })
+            tableOwners.set(model.toLowerCase(), manifest.context.id)
         }
     }
 

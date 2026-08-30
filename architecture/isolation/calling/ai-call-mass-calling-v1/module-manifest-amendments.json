@@ -1,0 +1,18 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "YOKO-AI-CALLS-MASS-CALLING-FOUNDATION",
+  "amendments": [
+    {
+      "context": "calling",
+      "add_owned_infrastructure_state": [
+        "architecture/isolation/calling/ai-call-mass-calling-v1/migration.sql:AiCallCampaign",
+        "architecture/isolation/calling/ai-call-mass-calling-v1/migration.sql:AiCallCampaignMember",
+        "architecture/isolation/calling/ai-call-mass-calling-v1/migration.sql:AiCallCampaignAttempt",
+        "architecture/isolation/calling/ai-call-mass-calling-v1/migration.sql:AiCallAdmissionControl",
+        "architecture/isolation/calling/ai-call-mass-calling-v1/migration.sql:AiCallAdmissionLease"
+      ],
+      "reason": "Calling owns the source-only isolated campaign, member, attempt, concurrency and rate-control state. It remains outside the sealed production Prisma/migration inventory until a separately governed production migration stage."
+    }
+  ]
+}

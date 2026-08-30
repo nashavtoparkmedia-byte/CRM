@@ -411,6 +411,17 @@ function scenarioCompositionStructureIsExact(publicIndex, application) {
   }
 }
 
+function scenarioContractIndexStructureIsExact(contractIndex) {
+  const scenarioBindings = exportBindings(paths.contractIndex, contractIndex)
+    .filter(binding => binding.specifier === './scenario-field-settings')
+  return JSON.stringify(scenarioBindings) === JSON.stringify([{
+    specifier: './scenario-field-settings',
+    imported: '*',
+    local: '*',
+    typeOnly: false,
+  }])
+}
+
 function rejectsCompositionProbe(publicIndex, application) {
   return !scenarioCompositionStructureIsExact(publicIndex, application)
 }
@@ -562,7 +573,7 @@ function sourceOnlyEvidenceIsExact(verificationRecord, migrationRecord, behavior
     )
 }
 
-function behaviorHashContinuityIsExact(behaviorRecord, frozenSources, publicIndex, application) {
+function behaviorHashContinuityIsExact(behaviorRecord, frozenSources, contractIndex, publicIndex, application) {
   const frozen = Object.fromEntries(frozenSources)
   const recordedHistoricalSources = Object.entries(behaviorRecord.source_hashes_after ?? {})
     .filter(([file]) => !file.startsWith('architecture/contexts/v1/'))
@@ -573,8 +584,9 @@ function behaviorHashContinuityIsExact(behaviorRecord, frozenSources, publicInde
       JSON.stringify(recordedHistoricalSources.sort(([left], [right]) => left.localeCompare(right))) &&
     typeof frozen[paths.publicIndex] === 'string' &&
     /^[a-f0-9]{64}$/.test(frozen[paths.publicIndex]) &&
-    frozenSources.filter(([file]) => file !== paths.publicIndex)
+    frozenSources.filter(([file]) => ![paths.contractIndex, paths.publicIndex].includes(file))
       .every(([file, expected]) => sha(file) === expected) &&
+    scenarioContractIndexStructureIsExact(contractIndex) &&
     scenarioCompositionStructureIsExact(publicIndex, application)
 }
 
@@ -757,7 +769,7 @@ check(
 
 check(
   'public indexes expose the exact typed Work surface through reviewed application composition',
-  source.contractIndex.includes("export * from './scenario-field-settings'")
+  scenarioContractIndexStructureIsExact(source.contractIndex)
     && scenarioCompositionStructureIsExact(source.publicIndex, source.application)
     && rejectsCompositionProbe(
       source.publicIndex.replace(applicationSpecifier, './scenario-field-settings-handler'),
@@ -968,6 +980,7 @@ check(
   behaviorHashContinuityIsExact(
     behavior,
     frozenBehaviorSources,
+    source.contractIndex,
     source.publicIndex,
     source.application,
   ) &&
@@ -977,12 +990,14 @@ check(
         file,
         file === paths.adapter ? '0'.repeat(64) : expected,
       ]),
+      source.contractIndex,
       source.publicIndex,
       source.application,
     ) &&
     !behaviorHashContinuityIsExact(
       behavior,
       frozenBehaviorSources,
+      source.contractIndex,
       `${source.publicIndex}\nexport const scenarioFieldHashDriftProbe = true\n`,
       source.application,
     ),

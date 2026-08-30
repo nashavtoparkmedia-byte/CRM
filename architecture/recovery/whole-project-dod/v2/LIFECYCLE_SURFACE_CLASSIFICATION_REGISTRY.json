@@ -4,14 +4,24 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 680,
+    "total_entries": 682,
     "test": 34,
     "dead_historical": 92,
     "migration_only": 79,
-    "active_operational": 471,
+    "active_operational": 473,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
   "surfaces": [
+    {
+      "path": "architecture/isolation/calling/ai-call-mass-calling-v1/migration.sql",
+      "lifecycle": "TEST",
+      "disposition": "TEST_SUPPORT",
+      "production_capability": "NONE",
+      "functional_owner": "calling",
+      "owner_context": "calling",
+      "rationale": "Calling-owned schema fixture whose only executable consumer is the gated disposable Postgres campaign proof. It is outside the sealed production migration inventory; promotion requires a separately governed production migration and this classification grants no production application, deployment, or cross-context write authority.",
+      "classification_artifact": "architecture/isolation/calling/ai-call-mass-calling-v1/persistence-manifest.json"
+    },
     {
       "path": ".github/workflows/architecture-enforcement.yml",
       "lifecycle": "OPERATIONAL_SCRIPT",
@@ -3627,6 +3637,16 @@
       "rationale": "Active operational surface classified in exact-set batch; functional owner gravity_application_operations; approved path: gravity-mvp owned admin/maintenance capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
       "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
       "functional_owner": "gravity_application_operations"
+    },
+    {
+      "path": "gravity-mvp/src/modules/calling/internal/ai-calls/ai-call-campaign-prisma-adapter.ts",
+      "lifecycle": "APPLICATION_RUNTIME",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "functional_owner": "calling",
+      "owner_context": "calling",
+      "rationale": "Calling-owned source-isolated campaign persistence adapter. It is not wired into the production runtime or production migration inventory; lifecycle classification acknowledges executable source and grants no production activation or cross-context write authority.",
+      "classification_artifact": "architecture/isolation/calling/ai-call-mass-calling-v1/persistence-manifest.json"
     },
     {
       "path": "gravity-mvp/src/modules/calling/public/v1/legacy-prisma-ai-call-event-maintenance-adapter.js",

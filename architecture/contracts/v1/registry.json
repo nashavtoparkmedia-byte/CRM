@@ -261,6 +261,7 @@
       ],
       "consumer_contexts": [
         "analytics_reporting",
+        "calling",
         "max_channel",
         "messaging",
         "operations_observability",
@@ -545,6 +546,7 @@
       "commands": [
         "AssignTaskCommand.v1",
         "CompleteTaskCommand.v1",
+        "CreateIdempotentTaskCommand.v1",
         "CreateTaskCommand.v1",
         "ReassignTasksCommand.v1",
         "RecordTaskUsageCommand.v1"
@@ -577,8 +579,7 @@
   "contracts": [
     {
       "consumer_sites": [
-        "gravity-mvp/src/app/api/ai-calls/mock/route.ts",
-        "gravity-mvp/src/app/api/ai-calls/sessions/[id]/finalize/route.ts"
+        "gravity-mvp/src/app/api/ai-calls/mock/route.ts"
       ],
       "id": "work_management.CreateTaskCommand.v1",
       "kind": "command",
@@ -592,6 +593,29 @@
       "runtime_validator": "parseCreateTaskCommandV1",
       "source": "gravity-mvp/src/contracts/work-management/v1/create-task-command.ts",
       "status": "representative_flow_migrated"
+    },
+    {
+      "consumer_sites": [
+        "gravity-mvp/src/modules/calling/application/ai-call-finalization-runtime.ts"
+      ],
+      "id": "work_management.CreateIdempotentTaskCommand.v1",
+      "kind": "command",
+      "legacy_adapter": "gravity-mvp/src/modules/work-management/public/v1/legacy-prisma-idempotent-task-adapter.ts",
+      "owner_context": "work_management",
+      "producer_contexts": [
+        "calling"
+      ],
+      "public_entry_point": "gravity-mvp/src/modules/work-management/public/v1/index.ts",
+      "runtime_validator": "parseCreateIdempotentTaskCommandV1",
+      "source": "gravity-mvp/src/contracts/work-management/v1/create-idempotent-task-command.ts",
+      "status": "active"
+    },
+    {
+      "id": "work_management.CreateIdempotentTaskResult.v1",
+      "kind": "result",
+      "owner_context": "work_management",
+      "source": "gravity-mvp/src/contracts/work-management/v1/create-idempotent-task-command.ts",
+      "status": "active"
     },
     {
       "id": "work_management.CreateTaskResult.v1",
@@ -685,6 +709,13 @@
       "target_context": "contacts",
       "target_surface": "contacts.public",
       "target_surface_id": "contacts.public.v1"
+    },
+    {
+      "id": "calling>fleet_operations.public.v1",
+      "source_context": "calling",
+      "target_context": "fleet_operations",
+      "target_surface": "fleet_operations.public",
+      "target_surface_id": "fleet_operations.public.v1"
     },
     {
       "id": "calling>identity_access.public.v1",
