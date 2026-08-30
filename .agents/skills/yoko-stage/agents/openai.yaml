@@ -1,0 +1,6 @@
+interface:
+  display_name: "YOKO Stage Delivery"
+  short_description: "Deliver YOKO stages through the CI boundary"
+  default_prompt: "Use $yoko-stage to deliver this YOKO stage through a pushed candidate, then stop at PUSHED_WAITING_CI."
+policy:
+  allow_implicit_invocation: false

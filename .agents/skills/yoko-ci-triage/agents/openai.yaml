@@ -1,0 +1,6 @@
+interface:
+  display_name: "YOKO CI Triage"
+  short_description: "Repair YOKO CI failures without weakening gates"
+  default_prompt: "Use $yoko-ci-triage to diagnose the failed checks for the exact expected HEAD. Repair and push source defects, then stop at PUSHED_WAITING_CI; stop at the defined external retry gate for infrastructure failures."
+policy:
+  allow_implicit_invocation: false
