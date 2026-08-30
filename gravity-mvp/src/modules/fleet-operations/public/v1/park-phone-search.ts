@@ -19,6 +19,16 @@ export type ParkPhoneSearchResultV1 = {
     errors: Array<{ parkId: string; parkName: string; message: string }>
 }
 
+export type ParkDriverSearchResultV1 = {
+    checkedParks: number
+    results: Array<{
+        parkId: string
+        parkName: string
+        profiles: ParkPhoneProfileV1[]
+    }>
+    errors: Array<{ parkId: string; parkName: string; message: string }>
+}
+
 export function normalizeParkPhoneDigitsV1(value: unknown): string {
     const digits = String(value || '').replace(/\D/g, '')
     if (digits.length === 11 && digits.startsWith('8')) return `7${digits.slice(1)}`
@@ -32,7 +42,7 @@ function samePhone(left: unknown, right: unknown): boolean {
     return Boolean(a && b && (a === b || (a.length >= 10 && b.length >= 10 && a.slice(-10) === b.slice(-10))))
 }
 
-function profileFromYandex(value: unknown): ParkPhoneProfileV1 | null {
+export function parkDriverProfileFromYandexV1(value: unknown): ParkPhoneProfileV1 | null {
     const envelope = value as {
         driver_profile?: {
             id?: unknown
@@ -59,9 +69,21 @@ function profileFromYandex(value: unknown): ParkPhoneProfileV1 | null {
     }
 }
 
-async function searchPhoneInPark(
+export function parkDriverMatchesQueryV1(profile: ParkPhoneProfileV1, query: string): boolean {
+    const normalizedQuery = query.toLocaleLowerCase('ru-RU').trim()
+    if (!normalizedQuery) return false
+    const digits = normalizeParkPhoneDigitsV1(normalizedQuery)
+    if (digits.length >= 3 && profile.phones.some(phone => normalizeParkPhoneDigitsV1(phone).includes(digits))) {
+        return true
+    }
+    const name = profile.fullName.toLocaleLowerCase('ru-RU').replace(/\s+/g, ' ').trim()
+    const tokens = normalizedQuery.split(/\s+/).filter(Boolean)
+    return tokens.length > 0 && tokens.every(token => name.includes(token))
+}
+
+async function searchDriverQueryInPark(
     connection: { parkId: string; clid: string; apiKey: string },
-    phone: string,
+    query: string,
 ): Promise<ParkPhoneProfileV1[]> {
     let lastError: unknown
     for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -79,7 +101,7 @@ async function searchPhoneInPark(
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    query: { park: { id: connection.parkId }, text: phone },
+                    query: { park: { id: connection.parkId }, text: query },
                     fields: {
                         driver_profile: ['id', 'first_name', 'last_name', 'middle_name', 'phones', 'work_status'],
                         current_status: ['status'],
@@ -102,9 +124,8 @@ async function searchPhoneInPark(
             const body = await response.json()
             const rawProfiles: unknown[] = Array.isArray(body?.driver_profiles) ? body.driver_profiles : []
             return rawProfiles
-                .map(profileFromYandex)
+                .map(parkDriverProfileFromYandexV1)
                 .filter((profile: ParkPhoneProfileV1 | null): profile is ParkPhoneProfileV1 => Boolean(profile))
-                .filter(profile => profile.phones.some(candidate => samePhone(candidate, phone)))
         } catch (error) {
             lastError = error
             if (attempt < 2) {
@@ -116,6 +137,14 @@ async function searchPhoneInPark(
         }
     }
     throw lastError instanceof Error ? lastError : new Error('Yandex Fleet request failed')
+}
+
+async function searchPhoneInPark(
+    connection: { parkId: string; clid: string; apiKey: string },
+    phone: string,
+): Promise<ParkPhoneProfileV1[]> {
+    const profiles = await searchDriverQueryInPark(connection, phone)
+    return profiles.filter(profile => profile.phones.some(candidate => samePhone(candidate, phone)))
 }
 
 /** Fleet-owned provider capability; credential-bearing rows never cross the owner boundary. */
@@ -160,6 +189,47 @@ export async function searchYandexParksByPhonesV1(phones: string[]): Promise<Par
                 ...profile,
                 matchedPhones: phones.filter(phone => profile.phones.some(candidate => samePhone(candidate, phone))),
             })),
+        })),
+        errors: checks.filter(check => check.error).map(check => ({
+            parkId: check.parkId,
+            parkName: check.parkName,
+            message: check.error!,
+        })),
+    }
+}
+
+/** Fleet-owned multi-park driver search; credential-bearing rows remain inside the owner. */
+export async function searchYandexParksByDriverQueryV1(query: string): Promise<ParkDriverSearchResultV1> {
+    const normalizedQuery = query.trim()
+    if (normalizedQuery.length < 3) return { checkedParks: 0, results: [], errors: [] }
+
+    const connections = await listYandexConnectionCredentialsV1()
+    const checks = await Promise.all(connections.map(async connection => {
+        try {
+            const profiles = (await searchDriverQueryInPark(connection, normalizedQuery))
+                .filter(profile => parkDriverMatchesQueryV1(profile, normalizedQuery))
+            return {
+                parkId: connection.parkId,
+                parkName: connection.name || connection.parkId,
+                profiles,
+                error: null as string | null,
+            }
+        } catch (error) {
+            return {
+                parkId: connection.parkId,
+                parkName: connection.name || connection.parkId,
+                profiles: [] as ParkPhoneProfileV1[],
+                error: error instanceof Error ? error.message : 'Парк не ответил',
+            }
+        }
+    }))
+
+    return {
+        checkedParks: connections.length,
+        results: checks.filter(check => check.profiles.length > 0).map(check => ({
+            parkId: check.parkId,
+            parkName: check.parkName,
+            profiles: check.profiles,
         })),
         errors: checks.filter(check => check.error).map(check => ({
             parkId: check.parkId,

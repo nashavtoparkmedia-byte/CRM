@@ -2,10 +2,10 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'vitest'
 import {
+    normalizeParkPhoneDigitsV1,
     parkDriverMatchesQueryV1,
     parkDriverProfileFromYandexV1,
-} from '../../application/fleet-operations'
-import { normalizeParkPhoneDigitsV1 } from './park-phone-search'
+} from './park-phone-search'
 
 const gravityRoot = resolve(__dirname, '../../../../../')
 const source = (path: string) => readFileSync(resolve(gravityRoot, path), 'utf8')
@@ -58,10 +58,10 @@ describe('Fleet multi-park driver name search', () => {
 
 describe('manual Telegram link multi-park wiring', () => {
     test('searches every configured Yandex park through the fleet owner capability', () => {
-        const capability = source('src/modules/fleet-operations/application/fleet-operations.ts')
+        const capability = source('src/modules/fleet-operations/public/v1/park-phone-search.ts')
         const route = source('src/app/api/bot-link/route.ts')
-        expect(capability).toContain('getApiConnections()')
-        expect(capability).toContain('testApiRequest(connection.id')
+        expect(capability).toContain('listYandexConnectionCredentialsV1()')
+        expect(capability).toContain('searchDriverQueryInPark(connection, normalizedQuery)')
         expect(capability).toContain('Promise.all(connections.map')
         expect(route).toContain('searchYandexParksByDriverQueryV1(query)')
         expect(route).toContain('checkedParks: yandex.checkedParks')
