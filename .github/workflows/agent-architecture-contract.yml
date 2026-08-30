@@ -3,6 +3,7 @@ name: Agent architecture contract
 on:
   pull_request:
     paths:
+      - .codex/config.toml
       - AGENTS.md
       - CLAUDE.md
       - .cursorrules
@@ -15,6 +16,7 @@ on:
     branches:
       - main
     paths:
+      - .codex/config.toml
       - AGENTS.md
       - CLAUDE.md
       - .cursorrules
