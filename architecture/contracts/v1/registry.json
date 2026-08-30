@@ -92,6 +92,7 @@
     },
     {
       "capabilities": [
+        "AiCallCampaignManagement.v1",
         "AiCallProviderSettings.v1",
         "AiCallProviderStatus.v1",
         "AiCallScenarioManagement.v1",
@@ -111,6 +112,8 @@
       ],
       "commands": [
         "AnalyzeCallCommand.v1",
+        "ControlAiCallCampaignCommand.v1",
+        "CreateAiCallCampaignCommand.v1",
         "FinalizeCallCommand.v1",
         "SetAiInternStateCommand.v1",
         "StartCallCommand.v1",

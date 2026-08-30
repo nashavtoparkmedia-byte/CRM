@@ -241,7 +241,7 @@ postgresProof.sequential('AI Calls Stage 5 isolated PostgreSQL runtime contract'
         `)
         const indexes = await prisma.$queryRawUnsafe<Array<{ indexname: string }>>(`
             SELECT indexname FROM pg_indexes
-            WHERE schemaname = 'public' AND tablename = 'domain_outbox_events'
+            WHERE schemaname = current_schema() AND tablename = 'domain_outbox_events'
         `)
         expect(indexes.map((row) => row.indexname)).toContain(
             'domain_outbox_events_status_availableAt_createdAt_idx',

@@ -17,3 +17,4 @@ export type {
 export * from './ai-agent-profile-commands'
 export * from './ai-agent-config-commands'
 export * from './ai-intern-control'
+export * from './ai-call-campaign-management'

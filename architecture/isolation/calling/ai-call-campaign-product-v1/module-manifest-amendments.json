@@ -1,0 +1,19 @@
+{
+  "schema": "yoko.crm.module-manifest-amendments.v1",
+  "version": 1,
+  "milestone": "YOKO-AI-CALLS-PRODUCTION-PRODUCT-SURFACE",
+  "amendments": [
+    {
+      "context": "calling",
+      "add_owned_infrastructure_state": [
+        "gravity-mvp/prisma/schema.prisma:AiCallCampaign",
+        "gravity-mvp/prisma/schema.prisma:AiCallCampaignMember",
+        "gravity-mvp/prisma/schema.prisma:AiCallCampaignAttempt",
+        "gravity-mvp/prisma/schema.prisma:AiCallAdmissionControl",
+        "gravity-mvp/prisma/schema.prisma:AiCallAdmissionLease",
+        "gravity-mvp/prisma/schema.prisma:AiCallCampaignAuditEvent"
+      ],
+      "reason": "Calling owns campaign lifecycle, attempts, admission, audit and their Call linkage. These models are pending source state and are intentionally not asserted as deployed production inventory."
+    }
+  ]
+}

@@ -36,6 +36,8 @@ export type AiCallCampaignJson = JsonPrimitive | AiCallCampaignJson[] | { [key: 
 export interface AiCallCampaignDraftInput {
     campaignId: string
     identityKey: string
+    /** Optional complete-command fingerprint supplied by a product application service. */
+    commandFingerprint?: string
     name: string
     scenarioRef: string
     concurrentLimit: number
@@ -151,9 +153,15 @@ export function normalizeAiCallCampaignDraft(input: AiCallCampaignDraftInput): A
         retryMaxMs: positiveInteger(input?.retryMaxMs, 'retryMaxMs', 604_800_000),
     }
     if (normalized.retryMaxMs < normalized.retryBaseMs) invalid('retryMaxMs must be at least retryBaseMs')
+    const commandFingerprint = input.commandFingerprint
+    if (commandFingerprint !== undefined && !/^[0-9a-f]{64}$/.test(commandFingerprint)) {
+        invalid('commandFingerprint must be a lowercase SHA-256 digest')
+    }
     return {
         ...normalized,
-        payloadFingerprint: aiCallCampaignSha256(normalized as unknown as AiCallCampaignJson),
+        ...(commandFingerprint === undefined ? {} : { commandFingerprint }),
+        payloadFingerprint: commandFingerprint
+            ?? aiCallCampaignSha256(normalized as unknown as AiCallCampaignJson),
     }
 }
 

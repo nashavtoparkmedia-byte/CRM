@@ -72,6 +72,7 @@
     "architecture/isolation/calling/ai-agent-profiles-v1/module-manifest-amendments.json",
     "architecture/isolation/calling/ai-call-single-call-v1/module-manifest-amendments.json",
     "architecture/isolation/calling/ai-call-mass-calling-v1/module-manifest-amendments.json",
+    "architecture/isolation/calling/ai-call-campaign-product-v1/module-manifest-amendments.json",
     "architecture/isolation/telegram-channel/bot-chat-message-v1/module-manifest-amendments.json",
     "architecture/isolation/fleet-operations/api-connections-v1/module-manifest-amendments.json",
     "architecture/isolation/messaging/configuration-import-jobs-v1/module-manifest-amendments.json",

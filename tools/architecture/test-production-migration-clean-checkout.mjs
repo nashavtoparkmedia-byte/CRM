@@ -30,6 +30,7 @@ try {
     'gravity-mvp/prisma/schema.prisma',
     'architecture/migrations/v1/production-migration-authority.json',
     'architecture/migrations/v1/predecessor-runtime-migration-inventory.json',
+    'architecture/migrations/v1/pending-source-migrations.json',
   ]) {
     await mkdir(path.dirname(path.join(fixture, relative)), { recursive: true })
     await cp(path.join(root, relative), path.join(fixture, relative))
