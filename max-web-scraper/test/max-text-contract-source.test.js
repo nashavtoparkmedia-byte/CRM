@@ -83,13 +83,14 @@ test('MAX history and catch-up payloads carry explicit source markers', () => {
   )
 })
 
-test('MAX outbound text delivery is confirmed only by a real d301 provider message id', () => {
+test('MAX outbound text delivery accepts the adapter delivered status when UI send has no provider id', () => {
   const scraper = read('max-web-scraper/index.js')
   const messageService = read('gravity-mvp/src/lib/MessageService.ts')
 
   assert.match(scraper, /deliveryConfirmed: sendResult\.deliveryConfirmed/)
   assert.match(scraper, /deliveryStatus: sendResult\.deliveryStatus/)
-  assert.match(scraper, /externalId: null, deliveryConfirmed: false, deliveryStatus: 'send_requested'/)
+  assert.match(scraper, /deliveryConfirmed: true,\s+deliveryStatus: 'delivered',\s+source: 'ui_resolve_send'/)
+  assert.doesNotMatch(scraper, /externalId: null, deliveryConfirmed: false, deliveryStatus: 'send_requested'/)
   assert.match(scraper, /ackId && isRealMaxMessageId\(ackId\)/)
 
   assert.match(messageService, /\(\(maxRes as any\)\?\.deliveryConfirmed && isRealMaxMessageId\(maxExternalId\)\) \|\| maxDeliveryStatus === 'delivered'/)

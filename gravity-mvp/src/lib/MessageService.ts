@@ -660,12 +660,12 @@ export class MessageService {
                         : (typeof rawMaxMessageId === 'string' ? rawMaxMessageId : null)
                     const rawMaxDeliveryStatus = (maxRes as any)?.deliveryStatus || (maxRes as any)?.status
                     const maxDeliveryStatus = typeof rawMaxDeliveryStatus === 'string' ? rawMaxDeliveryStatus : null
-                    const maxDeliveryConfirmed = Boolean((maxRes as any)?.deliveryConfirmed && isRealMaxMessageId(maxExternalId))
+                    const maxDeliveryConfirmed = Boolean(((maxRes as any)?.deliveryConfirmed && isRealMaxMessageId(maxExternalId)) || maxDeliveryStatus === 'delivered')
                     if (maxExternalId) deliveryExternalId = maxExternalId
                     deliveryStatus = maxDeliveryConfirmed ? 'delivered' : 'sent'
                     maxDeliveryMetadata = {
                         operation: 'send',
-                        status: maxDeliveryConfirmed ? 'delivered' : (maxDeliveryStatus === 'failed' ? 'failed' : 'send_requested'),
+                        status: maxDeliveryConfirmed ? 'delivered' : (maxDeliveryStatus || 'send_requested'),
                         deliveryConfirmed: maxDeliveryConfirmed,
                         maxMessageId: isRealMaxMessageId(maxExternalId) ? maxExternalId : null,
                         externalId: maxExternalId,
@@ -948,12 +948,12 @@ export class MessageService {
                         : (typeof rawMaxMessageId === 'string' ? rawMaxMessageId : null)
                     const rawMaxDeliveryStatus = (retryMaxRes as any)?.deliveryStatus || (retryMaxRes as any)?.status
                     const maxDeliveryStatus = typeof rawMaxDeliveryStatus === 'string' ? rawMaxDeliveryStatus : null
-                    const maxDeliveryConfirmed = Boolean((retryMaxRes as any)?.deliveryConfirmed && isRealMaxMessageId(maxExternalId))
+                    const maxDeliveryConfirmed = Boolean(((retryMaxRes as any)?.deliveryConfirmed && isRealMaxMessageId(maxExternalId)) || maxDeliveryStatus === 'delivered')
                     if (maxExternalId) deliveryExternalId = maxExternalId
                     deliveryStatus = maxDeliveryConfirmed ? 'delivered' : 'sent'
                     retryMaxDeliveryMetadata = {
                         operation: 'send',
-                        status: maxDeliveryConfirmed ? 'delivered' : (maxDeliveryStatus === 'failed' ? 'failed' : 'send_requested'),
+                        status: maxDeliveryConfirmed ? 'delivered' : (maxDeliveryStatus || 'send_requested'),
                         deliveryConfirmed: maxDeliveryConfirmed,
                         maxMessageId: isRealMaxMessageId(maxExternalId) ? maxExternalId : null,
                         externalId: maxExternalId,

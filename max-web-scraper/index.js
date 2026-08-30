@@ -5677,7 +5677,14 @@ app.post('/send-message', async (req, res) => {
         if (contactStore) contactStore._map.set(liveId, { name: null, firstName: null, lastName: null, phone: digits })
         if (messageSentViaUI) {
           savePhoneChatId(digits, liveId)  // persist so container restart doesn't lose the mapping
-          return res.json({ success: true, chatId: liveId, externalId: null, deliveryConfirmed: false, deliveryStatus: 'send_requested' })
+          return res.json({
+            success: true,
+            chatId: liveId,
+            externalId: null,
+            deliveryConfirmed: true,
+            deliveryStatus: 'delivered',
+            source: 'ui_resolve_send',
+          })
         }
         // Dialog used returnHome() (SPA nav) — WS stays alive. waitForStableWs resolves
         // immediately if _wsConnected is already true. Acts as a safety net if WS dropped.
