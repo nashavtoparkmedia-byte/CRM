@@ -4,11 +4,11 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 682,
-    "test": 34,
+    "total_entries": 690,
+    "test": 35,
     "dead_historical": 92,
     "migration_only": 79,
-    "active_operational": 473,
+    "active_operational": 479,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
   "surfaces": [
@@ -6280,6 +6280,24 @@
       "rationale": "Active bounded read-only repository contract verifier; the reviewed source has no database client, provider/network call, environment-secret read, or write primitive. Lifecycle classification does not grant credential access, business-data ownership, or direct writes.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/AGENT_ARCHITECTURE_CONTRACT_OPERATIONAL_SURFACE_REVIEW_20260829.json",
       "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": ".agents/skills/yoko-ci-triage/agents/openai.yaml",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "NONE",
+      "rationale": "Active native Codex skill discovery metadata; exact source review proves explicit invocation, no executable command, no credential or production input, and no database, provider, telephony, or write capability. Lifecycle classification grants no additional authority.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/NATIVE_CODEX_AUTONOMY_STAGE0_OPERATIONAL_SURFACE_REVIEW_20260830.json",
+      "functional_owner": "repository_operations"
+    },
+    {
+      "path": ".agents/skills/yoko-stage/agents/openai.yaml",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "NONE",
+      "rationale": "Active native Codex skill discovery metadata; exact source review proves explicit invocation, no executable command, no credential or production input, and no database, provider, telephony, or write capability. Lifecycle classification grants no additional authority.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/NATIVE_CODEX_AUTONOMY_STAGE0_OPERATIONAL_SURFACE_REVIEW_20260830.json",
+      "functional_owner": "repository_operations"
     }
   ]
 }

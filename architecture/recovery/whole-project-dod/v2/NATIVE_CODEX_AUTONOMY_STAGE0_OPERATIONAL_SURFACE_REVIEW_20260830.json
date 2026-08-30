@@ -1,0 +1,39 @@
+{
+  "schema": "yoko.crm.operational-surface-classification-batch.v1",
+  "authority": "Exact reviewed disposition of the two native Codex skill metadata surfaces introduced by Native Codex Autonomy Stage 0.",
+  "summary": {
+    "total": 2,
+    "classified": 2,
+    "unclassified": 0,
+    "active_operational": 2
+  },
+  "policy": "Lifecycle classification records repository-tooling ownership and exact reviewed reachability only; it grants no credential access, business-data ownership, production write capability, provider access, telephony capability, or scan exemption.",
+  "surfaces": [
+    {
+      "path": ".agents/skills/yoko-ci-triage/agents/openai.yaml",
+      "source_sha256": "aed2391eef765308ad9d16c8a5ce1f4fc7c42f4ad9173a8f0ab7295592dcbfdd",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "repository_operations",
+      "data_written": [],
+      "affected_domains": [],
+      "approved_architecture_path": "repository-scoped native Codex skill discovery metadata for the explicitly invoked yoko-ci-triage workflow",
+      "production_capability": "NONE",
+      "credential_capability": "NONE_IN_REVIEWED_SOURCE",
+      "evidence": "The exact six-line YAML contains display metadata, a bounded default prompt, and allow_implicit_invocation: false. The prompt requests repository-scoped diagnosis, repair, validation, and a normal Git push when an Operator explicitly invokes the skill, but the YAML itself grants no executor, credential, filesystem permission, workflow trigger, production access, database or provider client, or external-action capability. The tracked-surface scanner nevertheless conservatively enrolls every .yaml file as an operational surface."
+    },
+    {
+      "path": ".agents/skills/yoko-stage/agents/openai.yaml",
+      "source_sha256": "8e5a28f2492348c128475ab1efd55a0228b3a228b2286c54e549826338b2665c",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "repository_operations",
+      "data_written": [],
+      "affected_domains": [],
+      "approved_architecture_path": "repository-scoped native Codex skill discovery metadata for the explicitly invoked yoko-stage workflow",
+      "production_capability": "NONE",
+      "credential_capability": "NONE_IN_REVIEWED_SOURCE",
+      "evidence": "The exact six-line YAML contains display metadata, a bounded default prompt, and allow_implicit_invocation: false. The prompt requests repository-scoped implementation, validation, and a normal Git push when an Operator explicitly invokes the skill, but the YAML itself grants no executor, credential, filesystem permission, workflow trigger, production access, database or provider client, or external-action capability. The tracked-surface scanner nevertheless conservatively enrolls every .yaml file as an operational surface."
+    }
+  ]
+}
