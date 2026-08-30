@@ -71,11 +71,13 @@ interface AttemptRow {
     launchId: string
     state: string
     claimRevision: number
+    dialExecutionCount: number
     claimFence: string | null
     claimedBy: string | null
     claimUntil: Date | null
     admissionLeaseId: string | null
     dialEffectRef: string | null
+    callId: string | null
     resultEventId: string | null
     resultFingerprint: string | null
     failureCode: string | null
@@ -149,7 +151,16 @@ export type AiCallCampaignAttemptResultInput = {
     claimFence?: string
     leaseFence?: string
     dialEffectRef?: string
+    callId?: string
     now: Date
+}
+
+export interface AiCallCampaignAuditInput {
+    eventId: string
+    actorId: string
+    action: 'created' | 'audience_frozen' | 'scheduled' | 'paused' | 'resumed' | 'cancel_requested'
+    commandFingerprint?: string
+    details?: Record<string, AiCallCampaignJson>
 }
 
 function sha256(value: string): string {
@@ -169,6 +180,71 @@ function claimFence(attemptId: string, revision: number, workerId: string, claim
 
 function leaseIdentity(attemptId: string): string {
     return `aicl_${sha256(attemptId)}`
+}
+
+async function appendAudit(
+    tx: RawSqlExecutor,
+    campaignId: string,
+    audit: AiCallCampaignAuditInput | {
+        eventId: string
+        actorId: string
+        action: 'started' | 'cancelled' | 'completed' | 'failed'
+        details?: Record<string, AiCallCampaignJson>
+    },
+    now: Date,
+): Promise<void> {
+    await tx.$executeRawUnsafe(`
+        INSERT INTO "AiCallCampaignAuditEvent" (
+            "id", "campaignId", "actorId", "action", "details", "createdAt"
+        ) VALUES ($1,$2,$3,$4,$5::jsonb,$6)
+        ON CONFLICT ("id") DO NOTHING
+    `,
+    bounded(audit.eventId, 'audit.eventId'),
+    campaignId,
+    bounded(audit.actorId, 'audit.actorId'),
+    audit.action,
+    JSON.stringify(audit.details ?? {}),
+    now)
+}
+
+async function reserveControlAudit(
+    tx: RawSqlExecutor,
+    campaignId: string,
+    audit: AiCallCampaignAuditInput,
+    now: Date,
+): Promise<'reserved' | 'duplicate'> {
+    const fingerprint = bounded(audit.commandFingerprint, 'audit.commandFingerprint', 64)
+    if (!/^[0-9a-f]{64}$/.test(fingerprint)) {
+        throw new AiCallCampaignConflictError('invalid_runtime_input', 'audit.commandFingerprint is invalid')
+    }
+    const existing = await tx.$queryRawUnsafe<Array<{
+        actorId: string
+        action: string
+        details: unknown
+    }>>(`
+        SELECT "actorId", "action", "details"
+        FROM "AiCallCampaignAuditEvent" WHERE "id"=$1 FOR UPDATE
+    `, bounded(audit.eventId, 'audit.eventId'))
+    if (existing[0]) {
+        const details = existing[0].details && typeof existing[0].details === 'object'
+            && !Array.isArray(existing[0].details)
+            ? existing[0].details as Record<string, unknown>
+            : {}
+        if (existing[0].actorId === audit.actorId
+            && existing[0].action === audit.action
+            && details.commandFingerprint === fingerprint) {
+            return 'duplicate'
+        }
+        throw new AiCallCampaignConflictError(
+            'campaign_command_identity_collision',
+            'campaign command identity is already bound to a different payload',
+        )
+    }
+    await appendAudit(tx, campaignId, {
+        ...audit,
+        details: { ...(audit.details ?? {}), commandFingerprint: fingerprint },
+    }, now)
+    return 'reserved'
 }
 
 async function campaignForUpdate(tx: RawSqlExecutor, campaignId: string): Promise<CampaignRow | null> {
@@ -193,7 +269,7 @@ async function updateCampaignTerminalState(tx: RawSqlExecutor, campaign: Campaig
     `, campaign.id)
     if ((counts[0]?.remaining ?? 0) !== 0) return campaign.state
     const terminal = campaign.state === 'cancelling' ? 'cancelled' : 'completed'
-    await tx.$executeRawUnsafe(`
+    const updated = await tx.$executeRawUnsafe(`
         UPDATE "AiCallCampaign"
         SET "state" = $2,
             "completedAt" = CASE WHEN $2 = 'completed' THEN $3 ELSE "completedAt" END,
@@ -201,11 +277,19 @@ async function updateCampaignTerminalState(tx: RawSqlExecutor, campaign: Campaig
             "updatedAt" = $3
         WHERE "id" = $1 AND "state" IN ('running', 'paused', 'cancelling')
     `, campaign.id, terminal, now)
+    if (updated === 1) {
+        await appendAudit(tx, campaign.id, {
+            eventId: `aicau_${sha256(`${campaign.id}\0${terminal}`)}`,
+            actorId: 'system:ai-call-campaign-runtime',
+            action: terminal,
+            details: { source: 'terminal_settlement' },
+        }, now)
+    }
     return terminal
 }
 
 export const aiCallCampaignPrismaPort = {
-    async createDraft(input: AiCallCampaignDraftInput, now = new Date()) {
+    async createDraft(input: AiCallCampaignDraftInput, now = new Date(), audit?: AiCallCampaignAuditInput) {
         const draft = normalizeAiCallCampaignDraft(input)
         return database.$transaction(async (tx) => {
             const inserted = await tx.$executeRawUnsafe(`
@@ -246,11 +330,12 @@ export const aiCallCampaignPrismaPort = {
                     'campaign identity is already bound to a different payload',
                 )
             }
+            if (inserted === 1 && audit) await appendAudit(tx, stored.id, audit, now)
             return { status: inserted === 1 ? 'created' as const : 'duplicate' as const, campaign: stored }
         })
     },
 
-    async freezeAudience(campaignIdInput: string, input: AiCallAudienceSnapshotInput, now = new Date()) {
+    async freezeAudience(campaignIdInput: string, input: AiCallAudienceSnapshotInput, now = new Date(), audit?: AiCallCampaignAuditInput) {
         const campaignId = bounded(campaignIdInput, 'campaignId')
         const snapshot = normalizeAiCallAudienceSnapshot(campaignId, input)
         return database.$transaction(async (tx) => {
@@ -300,11 +385,12 @@ export const aiCallCampaignPrismaPort = {
             snapshot.sourceVersion,
             snapshot.fingerprint,
             now)
+            if (audit) await appendAudit(tx, campaignId, audit, now)
             return { status: 'frozen' as const, snapshot }
         })
     },
 
-    async schedule(campaignIdInput: string, scheduledAt: Date, now = new Date()) {
+    async schedule(campaignIdInput: string, scheduledAt: Date, now = new Date(), audit?: AiCallCampaignAuditInput) {
         const campaignId = bounded(campaignIdInput, 'campaignId')
         if (!(scheduledAt instanceof Date) || !Number.isFinite(scheduledAt.getTime())) {
             throw new AiCallCampaignConflictError('invalid_schedule', 'scheduledAt is invalid')
@@ -322,6 +408,7 @@ export const aiCallCampaignPrismaPort = {
                 WHERE "id" = $1
                 RETURNING *
             `, campaignId, scheduledAt, now)
+            if (audit) await appendAudit(tx, campaignId, audit, now)
             return { status: 'scheduled' as const, campaign: rows[0] }
         })
     },
@@ -346,6 +433,12 @@ export const aiCallCampaignPrismaPort = {
                 `, candidate.id, now)
                 if (count === 1) {
                     started.push(candidate.id)
+                    await appendAudit(tx, candidate.id, {
+                        eventId: `aicau_${sha256(`${candidate.id}\0started`)}`,
+                        actorId: 'system:ai-call-campaign-runtime',
+                        action: 'started',
+                        details: { source: 'due_scheduler' },
+                    }, now)
                     const campaign = await campaignForUpdate(tx, candidate.id)
                     if (campaign) await updateCampaignTerminalState(tx, campaign, now)
                 }
@@ -354,11 +447,14 @@ export const aiCallCampaignPrismaPort = {
         })
     },
 
-    async pause(campaignIdInput: string, now = new Date()) {
+    async pause(campaignIdInput: string, now = new Date(), audit?: AiCallCampaignAuditInput) {
         const campaignId = bounded(campaignIdInput, 'campaignId')
         return database.$transaction(async (tx) => {
             const campaign = await campaignForUpdate(tx, campaignId)
             if (!campaign) throw new AiCallCampaignConflictError('campaign_not_found', 'campaign not found')
+            if (audit && await reserveControlAudit(tx, campaignId, audit, now) === 'duplicate') {
+                return { status: 'duplicate' as const }
+            }
             if (campaign.state === 'paused') return { status: 'duplicate' as const }
             if (campaign.state !== 'running') throw new AiCallCampaignConflictError('campaign_not_running', 'campaign is not running')
             await tx.$executeRawUnsafe(`UPDATE "AiCallCampaign" SET "state"='paused', "updatedAt"=$2 WHERE "id"=$1`, campaignId, now)
@@ -366,11 +462,14 @@ export const aiCallCampaignPrismaPort = {
         })
     },
 
-    async resume(campaignIdInput: string, now = new Date()) {
+    async resume(campaignIdInput: string, now = new Date(), audit?: AiCallCampaignAuditInput) {
         const campaignId = bounded(campaignIdInput, 'campaignId')
         return database.$transaction(async (tx) => {
             const campaign = await campaignForUpdate(tx, campaignId)
             if (!campaign) throw new AiCallCampaignConflictError('campaign_not_found', 'campaign not found')
+            if (audit && await reserveControlAudit(tx, campaignId, audit, now) === 'duplicate') {
+                return { status: 'duplicate' as const }
+            }
             if (campaign.state === 'running') return { status: 'duplicate' as const }
             if (campaign.state !== 'paused') throw new AiCallCampaignConflictError('campaign_not_paused', 'campaign is not paused')
             await tx.$executeRawUnsafe(`UPDATE "AiCallCampaign" SET "state"='running', "updatedAt"=$2 WHERE "id"=$1`, campaignId, now)
@@ -378,11 +477,14 @@ export const aiCallCampaignPrismaPort = {
         })
     },
 
-    async cancel(campaignIdInput: string, now = new Date()) {
+    async cancel(campaignIdInput: string, now = new Date(), audit?: AiCallCampaignAuditInput) {
         const campaignId = bounded(campaignIdInput, 'campaignId')
         return database.$transaction(async (tx) => {
             const campaign = await campaignForUpdate(tx, campaignId)
             if (!campaign) throw new AiCallCampaignConflictError('campaign_not_found', 'campaign not found')
+            if (audit && await reserveControlAudit(tx, campaignId, audit, now) === 'duplicate') {
+                return { status: 'duplicate' as const }
+            }
             if (campaign.state === 'cancelled') return { status: 'duplicate' as const }
             if (['completed', 'failed'].includes(campaign.state)) {
                 throw new AiCallCampaignConflictError('campaign_terminal', 'campaign is terminal')
@@ -391,12 +493,22 @@ export const aiCallCampaignPrismaPort = {
                 UPDATE "AiCallCampaignMember"
                 SET "state"='cancelled', "activeAttemptId"=NULL, "nextEligibleAt"=NULL, "updatedAt"=$2
                 WHERE "campaignId"=$1 AND "state" IN ('pending','waiting','claimed','retry_wait')
+                  AND NOT EXISTS (
+                    SELECT 1 FROM "AiCallAdmissionLease" lease
+                    WHERE lease."attemptId"="AiCallCampaignMember"."activeAttemptId"
+                      AND lease."releasedAt" IS NULL
+                  )
             `, campaignId, now)
             await tx.$executeRawUnsafe(`
                 UPDATE "AiCallCampaignAttempt"
                 SET "state"='cancelled', "claimFence"=NULL, "claimedBy"=NULL, "claimUntil"=NULL,
                     "completedAt"=$2, "updatedAt"=$2
                 WHERE "campaignId"=$1 AND "state" IN ('waiting','claimed')
+                  AND NOT EXISTS (
+                    SELECT 1 FROM "AiCallAdmissionLease" lease
+                    WHERE lease."attemptId"="AiCallCampaignAttempt"."id"
+                      AND lease."releasedAt" IS NULL
+                  )
             `, campaignId, now)
             await tx.$executeRawUnsafe(`
                 UPDATE "AiCallAdmissionLease"
@@ -408,7 +520,16 @@ export const aiCallCampaignPrismaPort = {
             `, campaignId, now)
             const active = await tx.$queryRawUnsafe<Array<{ count: number }>>(`
                 SELECT COUNT(*)::int AS "count" FROM "AiCallCampaignMember"
-                WHERE "campaignId"=$1 AND "state"='running'
+                WHERE "campaignId"=$1 AND (
+                  "state"='running'
+                  OR (
+                    "state"='claimed' AND EXISTS (
+                      SELECT 1 FROM "AiCallAdmissionLease" lease
+                      WHERE lease."attemptId"="AiCallCampaignMember"."activeAttemptId"
+                        AND lease."releasedAt" IS NULL
+                    )
+                  )
+                )
             `, campaignId)
             const state = (active[0]?.count ?? 0) > 0 ? 'cancelling' : 'cancelled'
             await tx.$executeRawUnsafe(`
@@ -416,6 +537,14 @@ export const aiCallCampaignPrismaPort = {
                 SET "state"=$2, "cancelledAt"=CASE WHEN $2='cancelled' THEN $3 ELSE NULL END, "updatedAt"=$3
                 WHERE "id"=$1
             `, campaignId, state, now)
+            if (state === 'cancelled') {
+                await appendAudit(tx, campaignId, {
+                    eventId: `aicau_${sha256(`${campaignId}\0cancelled`)}`,
+                    actorId: 'system:ai-call-campaign-runtime',
+                    action: 'cancelled',
+                    details: { source: 'command_settlement' },
+                }, now)
+            }
             return { status: state as 'cancelling' | 'cancelled' }
         })
     },
@@ -432,10 +561,20 @@ export const aiCallCampaignPrismaPort = {
                 FROM "AiCallCampaignAttempt" a
                 JOIN "AiCallCampaignMember" m ON m."id"=a."memberId"
                 JOIN "AiCallCampaign" c ON c."id"=a."campaignId"
-                WHERE c."state"='running'
-                  AND (
-                    (a."state"='waiting' AND m."state"='waiting' AND m."nextEligibleAt" <= $1)
-                    OR (a."state"='claimed' AND m."state"='claimed' AND a."claimUntil" <= $1)
+                WHERE (
+                    c."state"='running'
+                    AND a."state"='waiting' AND m."state"='waiting' AND m."nextEligibleAt" <= $1
+                  ) OR (
+                    c."state" IN ('running','cancelling')
+                    AND (
+                      (a."state"='claimed' AND m."state"='claimed' AND a."claimUntil" <= $1)
+                      OR (a."state"='running' AND m."state"='running' AND a."claimUntil" <= $1)
+                    )
+                    AND NOT EXISTS (
+                      SELECT 1 FROM "AiCallAdmissionLease" lease
+                      WHERE lease."attemptId"=a."id" AND lease."releasedAt" IS NULL
+                        AND lease."leaseUntil">$1
+                    )
                   )
                 ORDER BY COALESCE(m."nextEligibleAt", a."claimUntil") ASC, a."createdAt" ASC, a."id" ASC
                 FOR UPDATE OF a, m SKIP LOCKED
@@ -538,12 +677,35 @@ export const aiCallCampaignPrismaPort = {
 
     async deferClaim(input: { attemptId: string; claimFence: string; retryAt: Date; now: Date }) {
         return database.$transaction(async (tx) => {
+            const identities = await tx.$queryRawUnsafe<Array<{ campaignId: string }>>(`
+                SELECT "campaignId" FROM "AiCallCampaignAttempt" WHERE "id"=$1
+            `, input.attemptId)
+            const identity = identities[0]
+            if (!identity) throw new AiCallCampaignConflictError('claim_fenced', 'campaign launch claim is stale')
+            const campaign = await campaignForUpdate(tx, identity.campaignId)
             const rows = await tx.$queryRawUnsafe<AttemptRow[]>(`
                 SELECT * FROM "AiCallCampaignAttempt" WHERE "id"=$1 FOR UPDATE
             `, input.attemptId)
             const attempt = rows[0]
             if (!attempt || attempt.state !== 'claimed' || attempt.claimFence !== input.claimFence) {
                 throw new AiCallCampaignConflictError('claim_fenced', 'campaign launch claim is stale')
+            }
+            if (campaign?.state === 'cancelling') {
+                // This is a replay of an effect that was already admitted before
+                // cancellation. Preserve it in the cancelling recovery lane; a
+                // generic waiting row is intentionally not selectable there.
+                await tx.$executeRawUnsafe(`
+                    UPDATE "AiCallCampaignAttempt"
+                    SET "state"='running', "claimFence"=NULL, "claimedBy"=NULL,
+                        "claimUntil"=$2, "updatedAt"=$3
+                    WHERE "id"=$1
+                `, attempt.id, input.retryAt, input.now)
+                await tx.$executeRawUnsafe(`
+                    UPDATE "AiCallCampaignMember"
+                    SET "state"='running', "nextEligibleAt"=$2, "updatedAt"=$3
+                    WHERE "id"=$1 AND "activeAttemptId"=$4
+                `, attempt.memberId, input.retryAt, input.now, attempt.id)
+                return { status: 'deferred_cancelling_recovery' as const }
             }
             await tx.$executeRawUnsafe(`
                 UPDATE "AiCallCampaignAttempt"
@@ -555,6 +717,7 @@ export const aiCallCampaignPrismaPort = {
                 SET "state"='waiting', "nextEligibleAt"=$2, "updatedAt"=$3
                 WHERE "id"=$1 AND "activeAttemptId"=$4
             `, attempt.memberId, input.retryAt, input.now, attempt.id)
+            return { status: 'deferred' as const }
         })
     },
 
@@ -592,7 +755,9 @@ export const aiCallCampaignPrismaPort = {
             const control = controls[0]
             if (!control) throw new AiCallCampaignConflictError('admission_not_configured', 'global admission is not configured')
             const campaign = await campaignForUpdate(tx, input.claim.campaignId)
-            if (!campaign || campaign.state !== 'running') return { kind: 'campaign_not_running' as const }
+            if (!campaign || !['running', 'cancelling'].includes(campaign.state)) {
+                return { kind: 'campaign_not_running' as const }
+            }
             const attempts = await tx.$queryRawUnsafe<AttemptRow[]>(`
                 SELECT * FROM "AiCallCampaignAttempt" WHERE "id"=$1 FOR UPDATE
             `, input.claim.attemptId)
@@ -697,15 +862,121 @@ export const aiCallCampaignPrismaPort = {
         })
     },
 
+    async markAttemptRunning(input: {
+        attemptId: string
+        claimFence: string
+        leaseFence: string
+        now: Date
+    }) {
+        return database.$transaction(async (tx) => {
+            const attempts = await tx.$queryRawUnsafe<AttemptRow[]>(`
+                SELECT * FROM "AiCallCampaignAttempt" WHERE "id"=$1 FOR UPDATE
+            `, input.attemptId)
+            const attempt = attempts[0]
+            if (!attempt || attempt.state !== 'claimed' || attempt.claimFence !== input.claimFence) {
+                throw new AiCallCampaignConflictError('claim_fenced', 'campaign launch claim is stale')
+            }
+            const leases = await tx.$queryRawUnsafe<Array<{ id: string }>>(`
+                SELECT "id" FROM "AiCallAdmissionLease"
+                WHERE "attemptId"=$1 AND "leaseFence"=$2 AND "releasedAt" IS NULL AND "leaseUntil">$3
+                FOR UPDATE
+            `, attempt.id, input.leaseFence, input.now)
+            if (!leases[0]) throw new AiCallCampaignConflictError('admission_fenced', 'admission lease is stale')
+            await tx.$executeRawUnsafe(`
+                UPDATE "AiCallCampaignAttempt"
+                SET "state"='running', "startedAt"=COALESCE("startedAt",$2), "updatedAt"=$2
+                WHERE "id"=$1
+            `, attempt.id, input.now)
+            const memberUpdated = await tx.$executeRawUnsafe(`
+                UPDATE "AiCallCampaignMember"
+                SET "state"='running', "updatedAt"=$2
+                WHERE "id"=$1 AND "activeAttemptId"=$3 AND "state"='claimed'
+            `, attempt.memberId, input.now, attempt.id)
+            if (memberUpdated !== 1) {
+                throw new AiCallCampaignConflictError('member_fenced', 'campaign member claim is stale')
+            }
+            return { status: 'running' as const }
+        })
+    },
+
+    async beginDialExecution(input: {
+        attemptId: string
+        claimFence: string
+        leaseFence: string
+        now: Date
+    }) {
+        return database.$transaction(async (tx) => {
+            const attempts = await tx.$queryRawUnsafe<AttemptRow[]>(`
+                SELECT * FROM "AiCallCampaignAttempt" WHERE "id"=$1 FOR UPDATE
+            `, input.attemptId)
+            const attempt = attempts[0]
+            if (!attempt || attempt.state !== 'running' || attempt.claimFence !== input.claimFence) {
+                throw new AiCallCampaignConflictError('claim_fenced', 'campaign dial execution is stale')
+            }
+            const leases = await tx.$queryRawUnsafe<Array<{ id: string }>>(`
+                SELECT "id" FROM "AiCallAdmissionLease"
+                WHERE "attemptId"=$1 AND "leaseFence"=$2 AND "releasedAt" IS NULL AND "leaseUntil">$3
+                FOR UPDATE
+            `, attempt.id, input.leaseFence, input.now)
+            if (!leases[0]) throw new AiCallCampaignConflictError('admission_fenced', 'admission lease is stale')
+            const updated = await tx.$queryRawUnsafe<Array<{ dialExecutionCount: number }>>(`
+                UPDATE "AiCallCampaignAttempt"
+                SET "dialExecutionCount"="dialExecutionCount"+1, "updatedAt"=$2
+                WHERE "id"=$1
+                RETURNING "dialExecutionCount"
+            `, attempt.id, input.now)
+            return { status: 'started' as const, dialExecutionCount: updated[0].dialExecutionCount }
+        })
+    },
+
+    async renewExecution(input: {
+        attemptId: string
+        claimFence: string
+        leaseFence: string
+        now: Date
+        claimLeaseMs: number
+        admissionLeaseMs: number
+    }) {
+        const claimUntil = new Date(input.now.getTime()
+            + Math.max(1, Math.min(300_000, Math.trunc(input.claimLeaseMs))))
+        const leaseUntil = new Date(input.now.getTime()
+            + Math.max(1, Math.min(300_000, Math.trunc(input.admissionLeaseMs))))
+        return database.$transaction(async (tx) => {
+            const attempts = await tx.$queryRawUnsafe<AttemptRow[]>(`
+                SELECT * FROM "AiCallCampaignAttempt" WHERE "id"=$1 FOR UPDATE
+            `, input.attemptId)
+            const attempt = attempts[0]
+            if (!attempt || attempt.state !== 'running' || attempt.claimFence !== input.claimFence) {
+                throw new AiCallCampaignConflictError('claim_fenced', 'campaign launch claim is stale')
+            }
+            const renewedLease = await tx.$executeRawUnsafe(`
+                UPDATE "AiCallAdmissionLease"
+                SET "leaseUntil"=GREATEST("leaseUntil",$3), "updatedAt"=$4
+                WHERE "attemptId"=$1 AND "leaseFence"=$2 AND "releasedAt" IS NULL
+            `, attempt.id, input.leaseFence, leaseUntil, input.now)
+            if (renewedLease !== 1) {
+                throw new AiCallCampaignConflictError('admission_fenced', 'admission lease is stale')
+            }
+            await tx.$executeRawUnsafe(`
+                UPDATE "AiCallCampaignAttempt"
+                SET "claimUntil"=GREATEST("claimUntil",$2), "updatedAt"=$3
+                WHERE "id"=$1
+            `, attempt.id, claimUntil, input.now)
+            return { status: 'renewed' as const, claimUntil, leaseUntil }
+        })
+    },
+
     async recordAttemptResult(input: AiCallCampaignAttemptResultInput) {
         const resultEventId = bounded(input.resultEventId, 'resultEventId')
         const outcomeCode = input.outcomeCode == null ? null : bounded(input.outcomeCode, 'outcomeCode', 128)
         const failureCode = input.failureCode == null ? null : bounded(input.failureCode, 'failureCode', 128)
+        const callId = input.callId == null ? null : bounded(input.callId, 'callId')
         const resultFingerprint = aiCallCampaignSha256({
             resultEventId,
             kind: input.kind,
             outcomeCode,
             failureCode,
+            callId,
         } as AiCallCampaignJson)
         return database.$transaction(async (tx) => {
             const attempts = await tx.$queryRawUnsafe<AttemptRow[]>(`
@@ -720,7 +991,7 @@ export const aiCallCampaignPrismaPort = {
                 throw new AiCallCampaignConflictError('attempt_terminal_conflict', 'attempt already has another terminal result')
             }
             let dialEffectRef = attempt.dialEffectRef
-            if (attempt.state === 'claimed') {
+            if (attempt.state === 'claimed' || attempt.state === 'running') {
                 if (attempt.claimFence !== input.claimFence) {
                     throw new AiCallCampaignConflictError('claim_fenced', 'campaign launch claim is stale')
                 }
@@ -728,11 +999,11 @@ export const aiCallCampaignPrismaPort = {
                 const leaseFence = bounded(input.leaseFence, 'leaseFence')
                 const leases = await tx.$queryRawUnsafe<Array<{ id: string }>>(`
                     SELECT "id" FROM "AiCallAdmissionLease"
-                    WHERE "attemptId"=$1 AND "leaseFence"=$2 AND "releasedAt" IS NULL AND "leaseUntil">$3
+                    WHERE "attemptId"=$1 AND "leaseFence"=$2 AND "releasedAt" IS NULL
                     FOR UPDATE
-                `, attempt.id, leaseFence, input.now)
+                `, attempt.id, leaseFence)
                 if (!leases[0]) throw new AiCallCampaignConflictError('admission_fenced', 'admission lease is stale')
-            } else if (attempt.state !== 'running') {
+            } else {
                 throw new AiCallCampaignConflictError('attempt_not_running', 'attempt is not running')
             }
             const campaigns = await tx.$queryRawUnsafe<CampaignRow[]>(`
@@ -753,9 +1024,10 @@ export const aiCallCampaignPrismaPort = {
                 UPDATE "AiCallCampaignAttempt"
                 SET "state"=$2, "resultEventId"=$3, "resultFingerprint"=$4, "failureCode"=$5,
                     "dialEffectRef"=COALESCE("dialEffectRef",$7), "startedAt"=COALESCE("startedAt",$6),
-                    "completedAt"=$6, "claimFence"=NULL, "claimedBy"=NULL, "claimUntil"=NULL, "updatedAt"=$6
+                    "callId"=COALESCE("callId",$8), "completedAt"=$6,
+                    "claimFence"=NULL, "claimedBy"=NULL, "claimUntil"=NULL, "updatedAt"=$6
                 WHERE "id"=$1
-            `, attempt.id, attemptState, resultEventId, resultFingerprint, failureCode, input.now, dialEffectRef)
+            `, attempt.id, attemptState, resultEventId, resultFingerprint, failureCode, input.now, dialEffectRef, callId)
             await tx.$executeRawUnsafe(`
                 UPDATE "AiCallAdmissionLease"
                 SET "releasedAt"=$2, "releaseReason"=$3, "updatedAt"=$2

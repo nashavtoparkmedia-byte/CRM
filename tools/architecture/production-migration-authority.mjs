@@ -19,6 +19,7 @@ import {
 } from './verify-production-migration-provenance.mjs'
 
 export const AUTHORITY_PATH = 'architecture/migrations/v1/production-migration-authority.json'
+export const PENDING_SOURCE_PATH = 'architecture/migrations/v1/pending-source-migrations.json'
 export const ARCHIVE_ROOT = 'architecture/migrations/v1/archive/pre-outbox'
 const SHA256 = /^[0-9a-f]{64}$/
 
@@ -196,8 +197,8 @@ async function verifySchemaDerivation(root, currentSchema) {
       fieldAnchor,
       '  activeParkId  String?\n  submittedPhone String?\n  submittedPhoneAt DateTime?\n  createdAt',
     )
-    const current = await readFile(path.join(root, currentSchema.path))
-    assert(digest(recovered) === currentSchema.sha256 && Buffer.from(recovered).equals(current), 'reproducible schema derivation differs from pinned current schema')
+    assert(digest(recovered) === currentSchema.sha256, 'reproducible schema derivation differs from pinned applied schema')
+    return Buffer.from(recovered)
   } finally {
     await rm(workspace, { recursive: true, force: true })
   }
@@ -228,6 +229,7 @@ async function migrationFiles(root, relative) {
 
 export async function validateProductionMigrationAuthority(root) {
   const authority = JSON.parse(await readFile(path.join(root, AUTHORITY_PATH), 'utf8'))
+  const pending = JSON.parse(await readFile(path.join(root, PENDING_SOURCE_PATH), 'utf8'))
   const predecessorInventory = JSON.parse(await readFile(path.join(root, PREDECESSOR_INVENTORY_PATH), 'utf8'))
   assert(authority.schema === 'yoko.crm.production-migration-authority.v1' && authority.version === 1, 'migration authority identity mismatch')
   assert(exactObject(authority.provenance_evidence, PROVENANCE_EVIDENCE_AUTHORITY), 'production migration provenance evidence authority mismatch')
@@ -312,9 +314,38 @@ export async function validateProductionMigrationAuthority(root) {
       },
     },
   }), 'current production schema authority mismatch')
-  const currentSchemaBytes = await readFile(path.join(root, authority.current_schema.path))
-  assert(digest(currentSchemaBytes) === authority.current_schema.sha256, 'current production schema checksum mismatch')
   await verifySchemaDerivation(root, authority.current_schema)
+  assert(pending.schema === 'yoko.crm.pending-source-migrations.v1'
+    && pending.version === 1
+    && pending.status === 'SOURCE_ONLY_NOT_APPLIED', 'pending source migration authority identity mismatch')
+  assert(exactObject(pending.base_authority, {
+    path: AUTHORITY_PATH,
+    current_target: authority.current_target.name,
+    current_schema_sha256: authority.current_schema.sha256,
+  }), 'pending source migration base authority mismatch')
+  assert(Array.isArray(pending.migrations) && pending.migrations.length > 0, 'pending source migration inventory is empty')
+  assert(pending.migrations.every((row) => /^[0-9][A-Za-z0-9_]*$/.test(row.name)
+    && row.path === `gravity-mvp/prisma/migrations/${row.name}/migration.sql`
+    && SHA256.test(row.sha256)
+    && Number.isInteger(row.size) && row.size > 0
+    && row.owner_context === 'calling'
+    && row.classification === 'EXPAND_ONLY'
+    && row.production_application === false), 'pending source migration record mismatch')
+  assert(new Set(pending.migrations.map((row) => row.name)).size === pending.migrations.length, 'duplicate pending source migration name')
+  assert(pending.migrations.every((row, index) => index === 0 || pending.migrations[index - 1].name.localeCompare(row.name) < 0), 'pending source migration inventory is not sorted')
+  assert(pending.migrations.every((row) => !authority.migrations.some((applied) => applied.name === row.name)), 'pending source migration is claimed as applied')
+  const sourceSchemaBytes = await readFile(path.join(root, pending.source_schema.path))
+  assert(pending.source_schema.path === authority.current_schema.path
+    && SHA256.test(pending.source_schema.sha256)
+    && pending.source_schema.size === sourceSchemaBytes.length
+    && digest(sourceSchemaBytes) === pending.source_schema.sha256
+    && pending.source_schema.expected_isolated_replay_parity === 'ZERO_PRISMA_DATAMODEL_DIFF_AFTER_PENDING_SOURCE', 'pending source schema checksum/size mismatch')
+  assert(exactObject(pending.proof, {
+    database_scope: 'ISOLATED_REAL_POSTGRESQL_ONLY',
+    migration_test: 'gravity-mvp/src/modules/calling/internal/ai-calls/ai-call-campaign-product.postgres.test.ts',
+    authority_replay: 'tools/architecture/replay-production-migration-authority.mjs --allow-isolated-replay',
+    production_database_touched: false,
+  }), 'pending source migration proof boundary mismatch')
   assert(authority.inventory_digest === canonicalInventoryDigest(authority.migrations), 'production migration inventory digest mismatch')
   const independentlyValidatedPredecessorRows = assertSanitizedPredecessorInventory(predecessorInventory)
   const predecessorNames = new Set(independentlyValidatedPredecessorRows
@@ -334,9 +365,10 @@ export async function validateProductionMigrationAuthority(root) {
   assert(predecessorEvidence.rows === 62, 'predecessor authority denominator mismatch')
 
   const expected = new Map(authority.migrations.map((row) => [row.name, row]))
+  const expectedPending = new Map(pending.migrations.map((row) => [row.name, row]))
   const active = await migrationFiles(root, 'gravity-mvp/prisma/migrations')
   const archive = await migrationFiles(root, ARCHIVE_ROOT)
-  assert(active.every((row) => expected.has(row.name)), 'active Prisma migration is not authorized')
+  assert(active.every((row) => expected.has(row.name) || expectedPending.has(row.name)), 'active Prisma migration is not authorized')
   assert(archive.every((row) => expected.has(row.name)), 'archived migration is not authorized')
   const activeByName = new Map(active.map((row) => [row.name, row]))
   const archiveByName = new Map(archive.map((row) => [row.name, row]))
@@ -362,11 +394,17 @@ export async function validateProductionMigrationAuthority(root) {
     const expectedRow = expected.get(row.name)
     assert(expectedRow?.noncanonical_source_variant, `unknown same-name active/archive duplicate: ${row.name}`)
   }
+  for (const row of pending.migrations) {
+    const observed = activeByName.get(row.name)
+    assert(observed, `pending source migration missing: ${row.name}`)
+    assert(observed.sha256 === row.sha256 && observed.size === row.size, `pending source migration checksum mismatch: ${row.name}`)
+    assert(!archiveByName.has(row.name), `pending source migration shadowed by archive: ${row.name}`)
+  }
   assert(authority.migrations.filter((row) => row.storage === 'archive').length === archive.length, 'archive inventory classification mismatch')
-  assert(authority.migrations.filter((row) => row.storage === 'active').length === active.filter((row) => !archiveByName.has(row.name)).length, 'active inventory classification mismatch')
+  assert(authority.migrations.filter((row) => row.storage === 'active').length + pending.migrations.length === active.filter((row) => !archiveByName.has(row.name)).length, 'active inventory classification mismatch')
   assert(authority.migrations.every((row) => row.storage === 'active' || row.storage === 'archive'), 'invalid migration storage classification')
   return {
-    active: active.filter((row) => !archiveByName.has(row.name)).length,
+    active: active.filter((row) => expected.has(row.name) && !archiveByName.has(row.name)).length,
     archive: archive.length,
     total: authority.migrations.length,
     inventoryDigest: authority.inventory_digest,
