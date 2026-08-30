@@ -145,7 +145,7 @@ export async function POST(req: NextRequest) {
         username,
         activeParkId: parkId,
       })
-      return NextResponse.json({ success: true, driverName: driver.fullName, parkName: park?.parkName || parkId })
+      return NextResponse.json({ success: true, driverName: profile.fullName, parkName: park?.parkName || parkId })
     }
 
     const driver = await prisma.driver.findUnique({

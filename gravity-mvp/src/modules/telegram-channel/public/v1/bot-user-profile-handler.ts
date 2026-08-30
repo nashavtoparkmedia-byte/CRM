@@ -7,7 +7,6 @@ import {
 
 export interface BotUserProfilePersistencePortV1 {
     record(input: Omit<RecordBotUserProfileCommandV1, 'contract'>): Promise<void>
-    findLinkStatus(telegramId: bigint): Promise<{ driverId: string; username: string | null } | null>
 }
 
 export function createRecordBotUserProfileHandlerV1(port: BotUserProfilePersistencePortV1) {
@@ -25,13 +24,6 @@ export function createRecordBotUserProfileHandlerV1(port: BotUserProfilePersiste
             observedAt: parsed.observedAt,
         })
         return { contract: RECORD_BOT_USER_PROFILE_RESULT_V1, recorded: true }
-    }
-}
-
-export function createGetBotUserLinkStatusHandlerV1(port: BotUserProfilePersistencePortV1) {
-    return async function getBotUserLinkStatusV1(telegramId: bigint) {
-        if (telegramId <= 0n) throw new Error('telegramId must be positive')
-        return port.findLinkStatus(telegramId)
     }
 }
 

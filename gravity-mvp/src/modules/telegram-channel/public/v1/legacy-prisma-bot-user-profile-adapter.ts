@@ -27,12 +27,4 @@ export const legacyPrismaBotUserProfilePortV1: BotUserProfilePersistencePortV1 =
             },
         })
     },
-    async findLinkStatus(telegramId) {
-        const mapping = await prisma.driverTelegram.findFirst({
-            where: { telegramId },
-            select: { driverId: true, username: true },
-        })
-        if (!mapping?.driverId) return null
-        return { driverId: mapping.driverId, username: mapping.username }
-    },
 }

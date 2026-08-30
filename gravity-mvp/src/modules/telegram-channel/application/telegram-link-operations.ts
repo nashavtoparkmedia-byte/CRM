@@ -17,7 +17,7 @@ import {
 import { legacyPrismaManualDriverTelegramLinkPortV1 } from '../public/v1/legacy-prisma-manual-driver-telegram-link-adapter'
 import { createNotifyManualDriverTelegramLinkHandlerV1 } from '../public/v1/manual-driver-telegram-link-notification-handler'
 import { legacyBotApiManualDriverTelegramLinkNotificationPortV1 } from '../public/v1/legacy-bot-api-manual-driver-telegram-link-notification-adapter'
-import { createGetBotUserLinkStatusHandlerV1, createRecordBotUserProfileHandlerV1 } from '../public/v1/bot-user-profile-handler'
+import { createRecordBotUserProfileHandlerV1 } from '../public/v1/bot-user-profile-handler'
 import { legacyPrismaBotUserProfilePortV1 } from '../public/v1/legacy-prisma-bot-user-profile-adapter'
 
 const dismissBotLinkRequest = createDismissBotLinkRequestHandlerV1(legacyPrismaBotChatMessagePortV1)
@@ -30,7 +30,6 @@ const saveManualDriverTelegramLink = createSaveManualDriverTelegramLinkHandlerV1
 const removeManualDriverTelegramLink = createRemoveManualDriverTelegramLinkHandlerV1(legacyPrismaManualDriverTelegramLinkPortV1)
 const notifyManualDriverTelegramLink = createNotifyManualDriverTelegramLinkHandlerV1(legacyBotApiManualDriverTelegramLinkNotificationPortV1)
 const recordBotUserProfile = createRecordBotUserProfileHandlerV1(legacyPrismaBotUserProfilePortV1)
-const getBotUserLinkStatus = createGetBotUserLinkStatusHandlerV1(legacyPrismaBotUserProfilePortV1)
 
 export const dismissBotLinkRequestV1 = (...args: Parameters<typeof dismissBotLinkRequest>) => dismissBotLinkRequest(...args)
 export const recordPendingBotLinkRequestV1 = (...args: Parameters<typeof recordPendingBotLinkRequest>) => recordPendingBotLinkRequest(...args)
@@ -42,4 +41,3 @@ export const saveManualDriverTelegramLinkV1 = (...args: Parameters<typeof saveMa
 export const removeManualDriverTelegramLinkV1 = (...args: Parameters<typeof removeManualDriverTelegramLink>) => removeManualDriverTelegramLink(...args)
 export const notifyManualDriverTelegramLinkV1 = (...args: Parameters<typeof notifyManualDriverTelegramLink>) => notifyManualDriverTelegramLink(...args)
 export const recordBotUserProfileV1 = (...args: Parameters<typeof recordBotUserProfile>) => recordBotUserProfile(...args)
-export const getBotUserLinkStatusV1 = (...args: Parameters<typeof getBotUserLinkStatus>) => getBotUserLinkStatus(...args)

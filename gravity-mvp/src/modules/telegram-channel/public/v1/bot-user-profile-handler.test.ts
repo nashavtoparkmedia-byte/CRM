@@ -13,7 +13,7 @@ describe('Telegram bot user profile capability', () => {
     test('maps the exact observed profile to one owner write', async () => {
         const observedAt = new Date('2026-08-11T00:00:00.000Z')
         const record = vi.fn(async () => undefined)
-        const handler = createRecordBotUserProfileHandlerV1({ record, findLinkStatus: vi.fn() })
+        const handler = createRecordBotUserProfileHandlerV1({ record })
         await expect(handler({
             contract: RECORD_BOT_USER_PROFILE_COMMAND_V1,
             telegramId: 123n,
@@ -37,7 +37,7 @@ describe('Telegram bot user profile capability', () => {
 
     test('rejects unrelated writer fields before the owner port', async () => {
         const record = vi.fn(async () => undefined)
-        const handler = createRecordBotUserProfileHandlerV1({ record, findLinkStatus: vi.fn() })
+        const handler = createRecordBotUserProfileHandlerV1({ record })
         await expect(handler({
             contract: RECORD_BOT_USER_PROFILE_COMMAND_V1,
             telegramId: 123n,
@@ -102,7 +102,7 @@ describe('driver bot pending-link registry wiring', () => {
         const webhook = gravitySource('src/app/api/webhook/telegram/route.ts')
         expect(webhook).toContain("body?.action === 'register_bot_user'")
         expect(webhook).toContain('recordBotUserProfileV1({')
-        expect(webhook).toContain('getBotUserLinkStatusV1(telegramIdBigInt)')
+        expect(webhook).toContain('prisma.driverTelegram.findFirst({')
         expect(webhook).toContain('status: \'PENDING_MANAGER_LINK\'')
     })
 

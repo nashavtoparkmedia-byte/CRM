@@ -15,7 +15,7 @@ import { resolveContactV2 } from '@/modules/contacts/public/v2'
 import { CREATE_CHANNEL_MESSAGE_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { createChannelMessageV1, ensureConversationContactLinkV1, linkMatchedDriverToConversationCapabilityV1, patchChannelConversationV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
 import { RECORD_BOT_USER_PROFILE_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
-import { getBotUserLinkStatusV1, recordBotUserProfileV1 } from '@/modules/telegram-channel/public/v1'
+import { recordBotUserProfileV1 } from '@/modules/telegram-channel/public/v1'
 
 type BotUserRegistrationInput = {
     telegramId?: string | number
@@ -54,7 +54,10 @@ async function registerBotUser(req: NextRequest, payload: BotUserRegistrationInp
         observedAt: new Date(),
     })
 
-    const mapping = await getBotUserLinkStatusV1(telegramIdBigInt)
+    const mapping = await prisma.driverTelegram.findFirst({
+        where: { telegramId: telegramIdBigInt },
+        select: { driverId: true, username: true },
+    })
     if (!mapping) {
         return NextResponse.json({ success: true, linked: false, status: 'PENDING_MANAGER_LINK' })
     }

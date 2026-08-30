@@ -84,9 +84,8 @@ describe('manual Telegram link multi-park wiring', () => {
         expect(dismiss).toBeGreaterThan(successGuard)
     })
 
-    test('keeps the Telegram registry profile after a successful link', () => {
+    test('does not delete the durable Telegram profile when dismissing a legacy request', () => {
         const adapter = source('src/modules/telegram-channel/public/v1/legacy-prisma-bot-chat-message-adapter.ts')
-        expect(adapter).toContain('tx.driverTelegram.findUnique({ where: { telegramId }')
-        expect(adapter).toContain('if (!linked) await tx.botUserRegistry.deleteMany')
+        expect(adapter).not.toContain('botUserRegistry')
     })
 })

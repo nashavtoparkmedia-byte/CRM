@@ -1,2 +1,83 @@
 #!/usr/bin/env node
-import fs from'node:fs';const read=f=>fs.readFileSync(f,'utf8'),compact=s=>s.replace(/\s+/g,''),checks=[],failures=[],check=(n,v,d)=>v?checks.push(n):failures.push({check:n,detail:d}),contract=read('gravity-mvp/src/contracts/telegram-channel/v1/bot-chat-message-commands.ts'),handler=read('gravity-mvp/src/modules/telegram-channel/public/v1/bot-chat-message-handler.ts'),adapter=read('gravity-mvp/src/modules/telegram-channel/public/v1/legacy-prisma-bot-chat-message-adapter.ts'),adapterCompact=compact(adapter),users=read('gravity-mvp/src/app/api/bot-users/route.ts'),webhook=read('gravity-mvp/src/app/api/webhooks/bot/route.ts'),amendment=JSON.parse(read('architecture/isolation/telegram-channel/bot-chat-message-v1/module-manifest-amendments.json'));const delStart=users.indexOf('export async function DELETE'),del=users.slice(delStart),requestStart=del.indexOf('if (requestId)'),requestBranch=del.slice(requestStart,del.indexOf("return NextResponse.json({ error:",requestStart)),fallbackStart=webhook.indexOf('// 2. Fallback:'),fallback=webhook.slice(fallbackStart,webhook.indexOf('// Inject a system message',fallbackStart));check('contract neutral',!/(prisma|next\/|@\/lib|@\/app)/i.test(contract),'contract leak');check('handler neutral',!/(prisma|next\/|@\/lib|@\/app)/i.test(handler),'handler leak');check('writes isolated',adapterCompact.includes('tx.botChatMessage.deleteMany')&&adapterCompact.includes('prisma.botChatMessage.create')&&!users.includes('prisma.botChatMessage.deleteMany')&&!webhook.includes('prisma.botChatMessage.create'),'foreign write remains');check('dismiss id mapping retained',adapterCompact.includes('prisma.$transaction(asynctx=>')&&adapterCompact.includes('tx.botChatMessage.deleteMany({where:{id:requestId}})'),'delete mapping drift');check('dismiss branch ordering retained',del.indexOf('if (telegramId)')<requestStart&&requestBranch.indexOf('dismissBotLinkRequestV1')<requestBranch.indexOf('NextResponse.json({ success: true })')&&requestStart<del.indexOf("telegramId or requestId required"),'delete response drift');check('record mapping retained',adapterCompact.includes('consttelegramId=BigInt(input.telegramId)')&&adapterCompact.includes("data:{telegramId,text:input.text,direction:'INCOMING',driverId:null}"),'record mapping drift');check('fallback text retained',fallback.includes("`[Запрос привязки] Телефон: ${phone}, @${username || 'нет'}`"),'fallback text drift');check('fallback order retained',fallback.indexOf('recordPendingBotLinkRequestV1')<fallback.indexOf('notifyManagerPendingLink')&&fallback.indexOf('notifyManagerPendingLink')<fallback.indexOf("NextResponse.json({ success: true, autoLinked: false"),'fallback order drift');check('string conversion precedes owner conversion',fallback.includes('telegramId: String(telegramId)')&&adapter.includes('BigInt(input.telegramId)'),'telegram id drift');check('commands amendment exact',JSON.stringify(amendment.amendments[0]?.add_commands)===JSON.stringify(['DismissBotLinkRequestCommand.v1','RecordPendingBotLinkRequestCommand.v1']),'commands amendment drift');check('dependency amendment exact',JSON.stringify(amendment.amendments[1]?.add_allowed_dependencies)===JSON.stringify([{context:'telegram_channel',surface:'telegram_channel.public'}]),'dependency amendment drift');check('dependency source exact',amendment.amendments[1]?.context==='platform_shell','dependency source drift');process.stdout.write(`${JSON.stringify({status:failures.length?'FAIL':'PASS',checks,failures},null,2)}\n`);if(failures.length)process.exitCode=1
+import fs from 'node:fs'
+
+const read = (file) => fs.readFileSync(file, 'utf8')
+const compact = (source) => source.replace(/\s+/g, '')
+const checks = []
+const failures = []
+const check = (name, value, detail) => value ? checks.push(name) : failures.push({ check: name, detail })
+
+const contract = read('gravity-mvp/src/contracts/telegram-channel/v1/bot-chat-message-commands.ts')
+const handler = read('gravity-mvp/src/modules/telegram-channel/public/v1/bot-chat-message-handler.ts')
+const adapter = read('gravity-mvp/src/modules/telegram-channel/public/v1/legacy-prisma-bot-chat-message-adapter.ts')
+const adapterCompact = compact(adapter)
+const users = read('gravity-mvp/src/app/api/bot-users/route.ts')
+const webhook = read('gravity-mvp/src/app/api/webhooks/bot/route.ts')
+const amendment = JSON.parse(read('architecture/isolation/telegram-channel/bot-chat-message-v1/module-manifest-amendments.json'))
+
+const delStart = users.indexOf('export async function DELETE')
+const del = users.slice(delStart)
+const requestStart = del.indexOf('if (requestId)')
+const requestBranch = del.slice(requestStart, del.indexOf("return NextResponse.json({ error:", requestStart))
+const fallbackStart = webhook.indexOf('// 2. Fallback:')
+const fallback = webhook.slice(fallbackStart, webhook.indexOf('// Inject a system message', fallbackStart))
+
+check('contract neutral', !/(prisma|next\/|@\/lib|@\/app)/i.test(contract), 'contract leak')
+check('handler neutral', !/(prisma|next\/|@\/lib|@\/app)/i.test(handler), 'handler leak')
+check(
+  'writes isolated',
+  adapterCompact.includes('prisma.botChatMessage.deleteMany')
+    && adapterCompact.includes('prisma.botChatMessage.create')
+    && (adapterCompact.match(/prisma\.botChatMessage\.(?:deleteMany|create)/g) || []).length === 2
+    && !users.includes('prisma.botChatMessage.deleteMany')
+    && !webhook.includes('prisma.botChatMessage.create'),
+  'foreign write remains',
+)
+check(
+  'dismiss id mapping retained',
+  adapterCompact.includes('asyncdismiss(requestId){awaitprisma.botChatMessage.deleteMany({where:{id:requestId}})}'),
+  'delete mapping drift',
+)
+check(
+  'dismiss branch ordering retained',
+  del.indexOf('if (telegramId)') < requestStart
+    && requestBranch.indexOf('dismissBotLinkRequestV1') < requestBranch.indexOf('NextResponse.json({ success: true })')
+    && requestStart < del.indexOf('telegramId or requestId required'),
+  'delete response drift',
+)
+check(
+  'record mapping retained',
+  adapterCompact.includes("asyncrecordPending(input){awaitprisma.botChatMessage.create({data:{telegramId:BigInt(input.telegramId),text:input.text,direction:'INCOMING',driverId:null}})}"),
+  'record mapping drift',
+)
+check('fallback text retained', fallback.includes("`[Запрос привязки] Телефон: ${phone}, @${username || 'нет'}`"), 'fallback text drift')
+check(
+  'fallback order retained',
+  fallback.indexOf('recordPendingBotLinkRequestV1') < fallback.indexOf('notifyManagerPendingLink')
+    && fallback.indexOf('notifyManagerPendingLink') < fallback.indexOf('NextResponse.json({ success: true, autoLinked: false'),
+  'fallback order drift',
+)
+check(
+  'string conversion precedes owner conversion',
+  fallback.includes('telegramId: String(telegramId)') && adapter.includes('BigInt(input.telegramId)'),
+  'telegram id drift',
+)
+check(
+  'commands amendment exact',
+  JSON.stringify(amendment.amendments[0]?.add_commands) === JSON.stringify([
+    'DismissBotLinkRequestCommand.v1',
+    'RecordPendingBotLinkRequestCommand.v1',
+  ]),
+  'commands amendment drift',
+)
+check(
+  'dependency amendment exact',
+  JSON.stringify(amendment.amendments[1]?.add_allowed_dependencies) === JSON.stringify([
+    { context: 'telegram_channel', surface: 'telegram_channel.public' },
+  ]),
+  'dependency amendment drift',
+)
+check('dependency source exact', amendment.amendments[1]?.context === 'platform_shell', 'dependency source drift')
+
+process.stdout.write(`${JSON.stringify({ status: failures.length ? 'FAIL' : 'PASS', checks, failures }, null, 2)}\n`)
+if (failures.length) process.exitCode = 1
