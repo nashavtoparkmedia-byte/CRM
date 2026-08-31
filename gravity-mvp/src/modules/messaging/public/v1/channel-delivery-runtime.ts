@@ -15,8 +15,14 @@ export interface TelegramChannelDeliveryV1 {
     sendReaction(input: { connectionId?: string, chatId: string, messageId: string, emoji: string, remove: boolean }): Promise<void>
 }
 
+export interface MaxTextDeliveryResultV1 {
+    outcome: 'delivered' | 'pending'
+    externalId: string | null
+    resolvedChatId: string | null
+}
+
 export interface MaxChannelDeliveryV1 {
-    sendText(input: { target: string, content: string, options?: { name?: string, connectionId?: string, isPersonal?: boolean, quotedMsgId?: string, quotedText?: string, quotedSentAt?: string, quotedDirection?: string, uiChatId?: string, clientMessageId?: string } }): Promise<unknown>
+    sendText(input: { target: string, content: string, options?: { name?: string, connectionId?: string, isPersonal?: boolean, quotedMsgId?: string, quotedText?: string, quotedSentAt?: string, quotedDirection?: string, uiChatId?: string, clientMessageId?: string } }): Promise<MaxTextDeliveryResultV1>
     sendMedia(input: { chatId: number, base64: string, filename: string, mimeType: string, caption: string, mediaType: string, uiChatId?: string, phone?: string }): Promise<{ externalId?: string }>
     sendReaction(input: { chatId: string, messageId: string, emoji: string, remove: boolean }): Promise<{
         reactionConfirmed: boolean

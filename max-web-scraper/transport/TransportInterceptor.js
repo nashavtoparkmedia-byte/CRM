@@ -392,6 +392,40 @@ const OP = {
   GET_UPLOAD_URL:        80,
 }
 
+function normalizeUiText(value) {
+  return String(value ?? '').replace(/\r\n/g, '\n')
+}
+
+function isUiTextSubmitConfirmed(beforeText, afterText, expectedText) {
+  const expected = normalizeUiText(expectedText)
+  if (!expected) return false
+  return normalizeUiText(beforeText) === expected && normalizeUiText(afterText).trim() === ''
+}
+
+function findCorrelatedUiTextSendEcho(frames, options = {}) {
+  const expectedText = normalizeUiText(options.expectedText)
+  const myUserId = String(options.myUserId || '')
+  const startIndex = Number.isInteger(options.startIndex) && options.startIndex >= 0
+    ? options.startIndex
+    : 0
+  if (!expectedText || !myUserId || !Array.isArray(frames)) return null
+
+  for (const frame of frames.slice(startIndex)) {
+    if (frame?.opcode !== OP.INCOMING_MSG) continue
+    const payload = Array.isArray(frame.payload)
+      ? frame.payload.find(item => item && typeof item === 'object' && !Array.isArray(item) && item.message)
+      : frame.payload
+    const message = payload?.message
+    if (!message || String(message.sender || message.from || '') !== myUserId) continue
+    if (normalizeUiText(message.text) !== expectedText) continue
+    const chatId = String(payload.chatId || '')
+    if (!/^\d{10,15}$/.test(chatId)) continue
+    return { chatId, source: 'own_text_echo' }
+  }
+
+  return null
+}
+
 class TransportInterceptor {
   constructor() {
     this._messageHandlers      = []
@@ -2127,4 +2161,9 @@ class TransportInterceptor {
   }
 }
 
-module.exports = { TransportInterceptor, OP }
+module.exports = {
+  TransportInterceptor,
+  OP,
+  findCorrelatedUiTextSendEcho,
+  isUiTextSubmitConfirmed,
+}

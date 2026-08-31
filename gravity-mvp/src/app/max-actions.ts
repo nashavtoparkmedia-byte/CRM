@@ -258,11 +258,14 @@ export async function sendMaxPersonalMessage(target: string, message: string, na
             : (typeof data.maxMessageId === 'string' ? data.maxMessageId : null)
 
         return {
-            success: true,
+            success: data.success,
+            error: data.error,
             externalId,
+            maxMessageId: typeof data.maxMessageId === 'string' ? data.maxMessageId : null,
             resolvedChatId: data.chatId ? String(data.chatId) : null,
-            deliveryConfirmed: Boolean(data.deliveryConfirmed),
-            deliveryStatus: data.deliveryStatus || data.status || null,
+            deliveryConfirmed: data.deliveryConfirmed,
+            deliveryStatus: data.deliveryStatus,
+            deliveryProof: data.deliveryProof,
         }
     } catch (error: any) {
         console.error("MAX Personal Send Error:", error)

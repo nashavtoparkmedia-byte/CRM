@@ -11,11 +11,6 @@ function serialize(obj: any): any {
     ));
 }
 
-function isRealMaxMessageId(value: unknown): value is string {
-    return typeof value === 'string' && /^d301[0-9a-f]+$/i.test(value)
-}
-
-
 export class MessageService {
     /**
      * Lists all conversations with their drivers and last messages.
@@ -653,21 +648,15 @@ export class MessageService {
                             clientMessageId: clientMessageId || messageId,
                         },
                     })
-                    const rawMaxExternalId = (maxRes as any)?.externalId
-                    const rawMaxMessageId = (maxRes as any)?.maxMessageId
-                    const maxExternalId = typeof rawMaxExternalId === 'string'
-                        ? rawMaxExternalId
-                        : (typeof rawMaxMessageId === 'string' ? rawMaxMessageId : null)
-                    const rawMaxDeliveryStatus = (maxRes as any)?.deliveryStatus || (maxRes as any)?.status
-                    const maxDeliveryStatus = typeof rawMaxDeliveryStatus === 'string' ? rawMaxDeliveryStatus : null
-                    const maxDeliveryConfirmed = Boolean(((maxRes as any)?.deliveryConfirmed && isRealMaxMessageId(maxExternalId)) || maxDeliveryStatus === 'delivered')
+                    const maxExternalId = maxRes.externalId
+                    const maxDeliveryConfirmed = maxRes.outcome === 'delivered'
                     if (maxExternalId) deliveryExternalId = maxExternalId
                     deliveryStatus = maxDeliveryConfirmed ? 'delivered' : 'sent'
                     maxDeliveryMetadata = {
                         operation: 'send',
-                        status: maxDeliveryConfirmed ? 'delivered' : (maxDeliveryStatus || 'send_requested'),
+                        status: maxDeliveryConfirmed ? 'delivered' : 'send_requested',
                         deliveryConfirmed: maxDeliveryConfirmed,
-                        maxMessageId: isRealMaxMessageId(maxExternalId) ? maxExternalId : null,
+                        maxMessageId: maxExternalId,
                         externalId: maxExternalId,
                         protocolChatId: rawExternalChatId,
                         webRouteId: maxMetadata.oldExternalChatId || maxMetadata.uiChatId || null,
@@ -686,7 +675,7 @@ export class MessageService {
                     // Update externalChatId so future incoming messages route here.
                     // If a chat with that conversationId already exists (duplicate scenario),
                     // merge by moving messages from old phone-based chat into it.
-                    const resolvedMaxId = (maxRes as any)?.resolvedChatId
+                    const resolvedMaxId = maxRes.resolvedChatId
                     if (resolvedMaxId && resolvedMaxId !== rawExternalChatId) {
                         try {
                             const conflictChat = await (prisma.chat as any).findFirst({
@@ -941,21 +930,15 @@ export class MessageService {
                             clientMessageId: message.clientMessageId || message.id,
                         },
                     })
-                    const rawMaxExternalId = (retryMaxRes as any)?.externalId
-                    const rawMaxMessageId = (retryMaxRes as any)?.maxMessageId
-                    const maxExternalId = typeof rawMaxExternalId === 'string'
-                        ? rawMaxExternalId
-                        : (typeof rawMaxMessageId === 'string' ? rawMaxMessageId : null)
-                    const rawMaxDeliveryStatus = (retryMaxRes as any)?.deliveryStatus || (retryMaxRes as any)?.status
-                    const maxDeliveryStatus = typeof rawMaxDeliveryStatus === 'string' ? rawMaxDeliveryStatus : null
-                    const maxDeliveryConfirmed = Boolean(((retryMaxRes as any)?.deliveryConfirmed && isRealMaxMessageId(maxExternalId)) || maxDeliveryStatus === 'delivered')
+                    const maxExternalId = retryMaxRes.externalId
+                    const maxDeliveryConfirmed = retryMaxRes.outcome === 'delivered'
                     if (maxExternalId) deliveryExternalId = maxExternalId
                     deliveryStatus = maxDeliveryConfirmed ? 'delivered' : 'sent'
                     retryMaxDeliveryMetadata = {
                         operation: 'send',
-                        status: maxDeliveryConfirmed ? 'delivered' : (maxDeliveryStatus || 'send_requested'),
+                        status: maxDeliveryConfirmed ? 'delivered' : 'send_requested',
                         deliveryConfirmed: maxDeliveryConfirmed,
-                        maxMessageId: isRealMaxMessageId(maxExternalId) ? maxExternalId : null,
+                        maxMessageId: maxExternalId,
                         externalId: maxExternalId,
                         protocolChatId: rawExternalId,
                         webRouteId: maxMetadata.oldExternalChatId || maxMetadata.uiChatId || null,

@@ -4,7 +4,11 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 
 const { MessageSync } = require('../sync/MessageSync')
-const { TransportInterceptor } = require('../transport/TransportInterceptor')
+const {
+  TransportInterceptor,
+  findCorrelatedUiTextSendEcho,
+  isUiTextSubmitConfirmed,
+} = require('../transport/TransportInterceptor')
 
 function isolatedSync() {
   const sync = new MessageSync()
@@ -12,6 +16,56 @@ function isolatedSync() {
   sync._save = () => {}
   return sync
 }
+
+test('phone UI send confirmation requires the exact submitted text to clear', () => {
+  assert.equal(isUiTextSubmitConfirmed('Bounded repair', '', 'Bounded repair'), true)
+  assert.equal(isUiTextSubmitConfirmed('', '', 'Bounded repair'), false)
+  assert.equal(isUiTextSubmitConfirmed('Other text', '', 'Bounded repair'), false)
+  assert.equal(isUiTextSubmitConfirmed('Bounded repair', 'Bounded repair', 'Bounded repair'), false)
+})
+
+test('phone UI send correlation ignores pre-send and unrelated frames', () => {
+  const frames = [
+    {
+      opcode: 128,
+      payload: { chatId: '902000000001', message: { sender: 'self-1', text: 'Bounded repair' } },
+    },
+    { opcode: 198, payload: { commonChats: [{ id: '902000000002' }] } },
+    { opcode: 72, payload: { chatId: '902000000003' } },
+    {
+      opcode: 128,
+      payload: { chatId: '902000000004', message: { sender: 'other-user', text: 'Bounded repair' } },
+    },
+  ]
+
+  assert.equal(findCorrelatedUiTextSendEcho(frames, {
+    startIndex: 1,
+    expectedText: 'Bounded repair',
+    myUserId: 'self-1',
+  }), null)
+})
+
+test('phone UI send correlation accepts the current post-action own-text echo', () => {
+  const frames = [
+    { opcode: 198, payload: { commonChats: [{ id: '902000000001' }] } },
+    {
+      opcode: 128,
+      payload: {
+        chatId: '902454841098',
+        message: { sender: 'self-1', text: 'Bounded repair' },
+      },
+    },
+  ]
+
+  assert.deepEqual(findCorrelatedUiTextSendEcho(frames, {
+    startIndex: 1,
+    expectedText: 'Bounded repair',
+    myUserId: 'self-1',
+  }), {
+    chatId: '902454841098',
+    source: 'own_text_echo',
+  })
+})
 
 test('dedups MAX text replay only by provider message id', () => {
   const sync = isolatedSync()

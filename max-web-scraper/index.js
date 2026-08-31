@@ -12,7 +12,12 @@ const crypto   = require('crypto')
 const { chromium } = require('playwright')
 
 const { SessionController }        = require('./session/SessionController')
-const { TransportInterceptor, OP } = require('./transport/TransportInterceptor')
+const {
+  TransportInterceptor,
+  OP,
+  findCorrelatedUiTextSendEcho,
+  isUiTextSubmitConfirmed,
+} = require('./transport/TransportInterceptor')
 const { MessageParser }            = require('./parser/MessageParser')
 const { MediaPipeline }            = require('./media/MediaPipeline')
 const { MessageSync }              = require('./sync/MessageSync')
@@ -176,13 +181,18 @@ function normalizeMediaSendResult(result) {
   }
 }
 
-function uiTextDeliveredResult(source = 'ui_text_no_provider_id') {
+function uiTextDeliveredResult(source = 'ui_text_no_provider_id', clientMessageId = null) {
   return {
     externalId: null,
     maxMessageId: null,
     deliveryConfirmed: true,
     deliveryStatus: 'delivered',
     source,
+    deliveryProof: {
+      kind: 'ui_send_action',
+      clientMessageId: clientMessageId ? String(clientMessageId) : null,
+      actionConfirmed: true,
+    },
   }
 }
 
@@ -224,12 +234,31 @@ function normalizeTextSendResult(result) {
       ? result.externalId
       : (typeof result.maxMessageId === 'string' ? result.maxMessageId : null)
     const maxMessageId = typeof result.maxMessageId === 'string' ? result.maxMessageId : externalId
-    const deliveryStatus = result.deliveryStatus || result.status || (result.deliveryConfirmed ? 'delivered' : 'send_requested')
+    const hasExplicitError = Object.prototype.hasOwnProperty.call(result, 'error')
+      && result.error !== null
+      && result.error !== undefined
+      && result.error !== ''
+    const explicitError = typeof result.error === 'string' && result.error.trim()
+      ? result.error.trim()
+      : null
+    const hasExplicitFailure = result.success === false || result.failed === true || result.failure === true
+    if (hasExplicitFailure || hasExplicitError) {
+      return {
+        ...result,
+        success: false,
+        error: explicitError || 'MAX text delivery failed',
+        externalId,
+        maxMessageId,
+        deliveryConfirmed: false,
+        deliveryStatus: 'failed',
+      }
+    }
+    const deliveryStatus = result.deliveryStatus || result.status || (result.deliveryConfirmed === true ? 'delivered' : 'send_requested')
     return {
       ...result,
       externalId,
       maxMessageId,
-      deliveryConfirmed: Boolean(result.deliveryConfirmed || deliveryStatus === 'delivered'),
+      deliveryConfirmed: result.deliveryConfirmed === true && deliveryStatus === 'delivered',
       deliveryStatus,
     }
   }
@@ -1006,7 +1035,7 @@ async function sendText(transport, chatId, text, replyToMessageId, uiChatId, cli
         return ackId
       }
       console.log(`[sendText] Direct UI sent chatId=${chatId} route=${directUiRouteId} without provider id`)
-      return uiTextDeliveredResult('direct_ui_no_provider_id')
+      return uiTextDeliveredResult('direct_ui_no_provider_id', clientMessageId)
     }
   }
 
@@ -1063,7 +1092,7 @@ async function sendText(transport, chatId, text, replyToMessageId, uiChatId, cli
           return ackId
         }
         console.log(`[sendText] UI fallback sent chatId=${chatId} without provider id`)
-        return uiTextDeliveredResult('ui_fallback_no_provider_id')
+        return uiTextDeliveredResult('ui_fallback_no_provider_id', clientMessageId)
       }
     }
     throw e
@@ -3659,8 +3688,10 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
             // Use keyboard.type() instead of fill() to trigger MAX's key-event listeners
             await page.keyboard.type(messageToSend, { delay: 20 })
             await page.waitForTimeout(400)
-            const composeText = await composeEl.textContent().catch(() => '')
-            console.log(`[ResolvePhone] Compose text after typing: "${(composeText || '').slice(0, 50)}"`)
+            const composeTextBeforeSubmit = await composeEl.textContent().catch(() => '')
+            console.log(`[ResolvePhone] Compose text after typing: "${(composeTextBeforeSubmit || '').slice(0, 50)}"`)
+            const sendFrameStartIndex = capturedFrames.length
+            const urlBeforeSend = page.url()
             // Try pressing Enter first (most messaging apps send on Enter)
             await page.keyboard.press('Enter')
             console.log(`[ResolvePhone] Pressed Enter to send`)
@@ -3677,151 +3708,51 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
                 console.log(`[ResolvePhone] Enter sent the message (compose area empty)`)
               }
             }
-            console.log(`[ResolvePhone] Waiting for WS response...`)
-              // Poll for WS op:71 (new msg push) or URL change → gives real 12-digit chatId
+            await page.waitForTimeout(300)
+            const composeTextAfterSubmit = await composeEl.textContent().catch(() => '')
+            const uiActionConfirmed = isUiTextSubmitConfirmed(
+              composeTextBeforeSubmit,
+              composeTextAfterSubmit,
+              messageToSend,
+            )
+            console.log(`[ResolvePhone] UI submit confirmation: ${uiActionConfirmed ? 'exact_text_cleared' : 'unconfirmed'}`)
+
+            let correlatedChatId = null
+            let confirmationSource = uiActionConfirmed ? 'exact_text_submit_compose_cleared' : null
+            if (uiActionConfirmed) {
+              console.log(`[ResolvePhone] Waiting for send-specific route/echo correlation...`)
               for (let i = 0; i < 50; i++) {
                 await page.waitForTimeout(200)
                 const urlNow = page.url()
                 const urlCid = urlNow.match(/web\.max\.ru\/(\d{12,15})(?:[/?#]|$)/)?.[1]
-                if (urlCid) {
-                  console.log(`[ResolvePhone] URL changed after UI send: ${urlCid}`)
-                  await returnHome(); cleanup()
-                  return { chatId: urlCid, messageSent: true }
+                if (urlCid && urlNow !== urlBeforeSend) {
+                  correlatedChatId = urlCid
+                  confirmationSource = 'exact_text_submit_route_changed'
+                  break
                 }
-                for (const f of capturedFrames) {
-                  if (f.opcode === 71 && f.payload?.chatId) {
-                    const cId = String(f.payload.chatId)
-                    if (/^\d{10,15}$/.test(cId)) {
-                      console.log(`[ResolvePhone] op:71 chatId after UI send: ${cId}`)
-                      await returnHome(); cleanup()
-                      return { chatId: cId, messageSent: true }
-                    }
-                  }
-                  if (f.opcode === 128) {
-                    const fp = Array.isArray(f.payload)
-                      ? f.payload.find(x => x && typeof x === 'object' && !Array.isArray(x) && x.message)
-                      : f.payload
-                    if (fp?.chatId && fp?.message?.sender) {
-                      if (String(fp.message.sender) === String(transport._myUserId)) {
-                        const cId = String(fp.chatId)
-                        if (/^\d{10,15}$/.test(cId)) {
-                          console.log(`[ResolvePhone] op:128 echo chatId after UI send: ${cId}`)
-                          await returnHome(); cleanup()
-                          return { chatId: cId, messageSent: true }
-                        }
-                      }
-                    }
-                  }
-                  if (f.opcode === 48 && f.payload) {
-                    const chats = Array.isArray(f.payload) ? f.payload : (f.payload.chats || [])
-                    for (const c of chats) {
-                      const cId = String(c.chatId || c.id || c.conversationId || '')
-                      if (cId && /^\d{10,15}$/.test(cId)) {
-                        console.log(`[ResolvePhone] op:48 chatId after UI send: ${cId}`)
-                        await returnHome(); cleanup()
-                        return { chatId: cId, messageSent: true }
-                      }
-                    }
-                  }
-                  // op:64 cmd:2 = server response to browser's message send
-                  // payload may be array [-14, 38, {chatId:...}] — extract first object
-                  if (f.opcode === 64 && f.payload) {
-                    const p = Array.isArray(f.payload)
-                      ? f.payload.find(x => x && typeof x === 'object' && !Array.isArray(x))
-                      : f.payload
-                    if (p) {
-                      const cId = String(p.chatId || p.conversationId || p.id || '')
-                      if (cId && /^\d{10,15}$/.test(cId)) {
-                        console.log(`[ResolvePhone] op:64 chatId after UI send: ${cId}`)
-                        await returnHome(); cleanup()
-                        return { chatId: cId, messageSent: true }
-                      }
-                    }
-                  }
-                  // op:65 cmd:0 = post-send notification, may also be array
-                  if (f.opcode === 65 && f.payload) {
-                    const p = Array.isArray(f.payload)
-                      ? f.payload.find(x => x && typeof x === 'object' && !Array.isArray(x))
-                      : f.payload
-                    if (p) {
-                      const cId = String(p.chatId || p.conversationId || p.id || '')
-                      if (cId && /^\d{10,15}$/.test(cId)) {
-                        console.log(`[ResolvePhone] op:65 chatId after UI send: ${cId}`)
-                        await returnHome(); cleanup()
-                        return { chatId: cId, messageSent: true }
-                      }
-                    }
-                  }
-                  // op:198 = common chats list with this user (arrives on profile open, contains chatId if convo exists)
-                  if (f.opcode === 198 && f.payload) {
-                    const commons = Array.isArray(f.payload.commonChats) ? f.payload.commonChats
-                      : Array.isArray(f.payload) ? f.payload : []
-                    for (const c of commons) {
-                      const cId = (c && typeof c === 'object')
-                        ? String(c.id || c.chatId || c.conversationId || '')
-                        : String(c || '')
-                      if (cId && /^\d{10,15}$/.test(cId)) {
-                        console.log(`[ResolvePhone] op:198 chatId after UI send: ${cId}`)
-                        await returnHome(); cleanup()
-                        return { chatId: cId, messageSent: true }
-                      }
-                    }
-                  }
-                  // op:72 = "conversation created/updated" push — arrives after first-ever message send
-                  if (f.opcode === 72 && f.payload) {
-                    const p = f.payload
-                    // Try direct fields first
-                    const directId = String(p.chatId || p.id || p.conversationId || p.chat_id || '')
-                    if (directId && /^\d{10,15}$/.test(directId)) {
-                      console.log(`[ResolvePhone] op:72 direct chatId: ${directId}`)
-                      await returnHome(); cleanup()
-                      return { chatId: directId, messageSent: true }
-                    }
-                    // Try chats/conversations array
-                    const arr = Array.isArray(p) ? p : (Array.isArray(p.chats) ? p.chats : (Array.isArray(p.conversations) ? p.conversations : []))
-                    for (const c of arr) {
-                      const cId = String((c && typeof c === 'object') ? (c.chatId || c.id || c.conversationId || '') : c || '')
-                      if (cId && /^\d{10,15}$/.test(cId)) {
-                        console.log(`[ResolvePhone] op:72 array chatId: ${cId}`)
-                        await returnHome(); cleanup()
-                        return { chatId: cId, messageSent: true }
-                      }
-                    }
-                    // Scan all numeric values in payload for a 10-15 digit ID
-                    const scan = (obj, depth = 0) => {
-                      if (depth > 4 || !obj || typeof obj !== 'object') return null
-                      for (const v of Object.values(obj)) {
-                        if (typeof v === 'number' || typeof v === 'string') {
-                          const s = String(v)
-                          if (/^\d{10,15}$/.test(s)) return s
-                        } else if (typeof v === 'object') {
-                          const found = scan(v, depth + 1)
-                          if (found) return found
-                        }
-                      }
-                      return null
-                    }
-                    const scanned = scan(p)
-                    if (scanned) {
-                      console.log(`[ResolvePhone] op:72 scanned chatId: ${scanned}`)
-                      await returnHome(); cleanup()
-                      return { chatId: scanned, messageSent: true }
-                    }
-                  }
+                const echo = findCorrelatedUiTextSendEcho(capturedFrames, {
+                  startIndex: sendFrameStartIndex,
+                  expectedText: messageToSend,
+                  myUserId: transport._myUserId,
+                })
+                if (echo) {
+                  correlatedChatId = echo.chatId
+                  confirmationSource = echo.source
+                  break
                 }
               }
-              // Log diagnostic payloads on timeout
-              const diagFrames = capturedFrames.filter(f => [48, 61, 64, 65, 71, 72, 128, 177, 180, 198].includes(f.opcode))
-              console.log(`[ResolvePhone] UI send timeout — diag frames:`,
-                diagFrames.map(f => `op:${f.opcode} cmd:${f.cmd} payload:${JSON.stringify(f.payload).slice(0, 300)}`).join(' | '))
-              if (messageToSend && diagFrames.some(f => f.opcode === 64)) {
-                const routeId = page.url().match(/web\.max\.ru\/(\d{6,15})(?:[/?#]|$)/)?.[1]
-                if (routeId) {
-                  console.log(`[ResolvePhone] UI send confirmed by op:64; using routeId ${routeId}`)
-                  await returnHome(); cleanup()
-                  return { chatId: routeId, messageSent: true, uiChatId: routeId }
-                }
-              }
+            }
+
+            const postSendFrames = capturedFrames.slice(sendFrameStartIndex)
+            console.log(`[ResolvePhone] Post-action frames:`,
+              postSendFrames.map(f => `op:${f.opcode} cmd:${f.cmd}`).join(' | '))
+            await returnHome(); cleanup()
+            return {
+              chatId: correlatedChatId,
+              uiSendAttempted: true,
+              deliveryConfirmed: uiActionConfirmed,
+              confirmationSource,
+            }
           } else {
             console.log(`[ResolvePhone] No compose input found on profile page`)
           }
@@ -3884,7 +3815,7 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
       if (directId && /^\d{10,15}$/.test(directId)) {
         console.log(`[ResolvePhone] 6c op:72 chatId: ${directId}`)
         await returnHome(); cleanup()
-        return messageToSend ? { chatId: directId, messageSent: true } : directId
+        return directId
       }
       const arr = Array.isArray(p) ? p : (Array.isArray(p.chats) ? p.chats : (Array.isArray(p.conversations) ? p.conversations : []))
       for (const c of arr) {
@@ -3892,7 +3823,7 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
         if (cId && /^\d{10,15}$/.test(cId)) {
           console.log(`[ResolvePhone] 6c op:72 array chatId: ${cId}`)
           await returnHome(); cleanup()
-          return messageToSend ? { chatId: cId, messageSent: true } : cId
+          return cId
         }
       }
       // Scan all numeric values in payload for a 10-15 digit ID
@@ -3913,7 +3844,7 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
       if (scanned72) {
         console.log(`[ResolvePhone] 6c op:72 scanned chatId: ${scanned72}`)
         await returnHome(); cleanup()
-        return messageToSend ? { chatId: scanned72, messageSent: true } : scanned72
+        return scanned72
       }
     }
 
@@ -4376,7 +4307,10 @@ async function resolvePhoneLive(digits, messageToSend = null) {
   //    Works even for private profiles since MAX server knows the phone→userId mapping.
   const dialogId = await resolveViaPhoneLookupDialog(digits, messageToSend)
   if (dialogId) {
-    savePhoneChatId(digits, dialogId)
+    const resolvedDialogChatId = typeof dialogId === 'string'
+      ? dialogId
+      : (dialogId.chatId ? String(dialogId.chatId) : null)
+    if (resolvedDialogChatId) savePhoneChatId(digits, resolvedDialogChatId)
     return dialogId
   }
 
@@ -5666,26 +5600,40 @@ app.post('/send-message', async (req, res) => {
       extendCrmOutboundTextGuard(crmOutboundDomGuard, chatId)
     } else {
       const liveResult = await resolvePhoneLive(digits, message)
-      // liveResult is either a string chatId or { chatId, messageSent: true } when UI-sent
-      const messageSentViaUI = liveResult && typeof liveResult === 'object' && liveResult.messageSent
-      const liveId = messageSentViaUI ? liveResult.chatId : (typeof liveResult === 'string' ? liveResult : null)
+      // A UI send attempt is terminal for this HTTP operation: never issue a
+      // second protocol send. Only the send-specific UI result may mark it delivered.
+      const uiSendAttempted = Boolean(liveResult && typeof liveResult === 'object' && liveResult.uiSendAttempted === true)
+      const uiDeliveryConfirmed = Boolean(uiSendAttempted && liveResult.deliveryConfirmed === true)
+      const liveId = typeof liveResult === 'string'
+        ? liveResult
+        : (liveResult?.chatId ? String(liveResult.chatId) : null)
+      if (uiSendAttempted) {
+        if (liveId) {
+          console.log(`[Send] UI-resolved: ${digits} → chatId ${liveId}`)
+          extendCrmOutboundTextGuard(crmOutboundDomGuard, liveId)
+          if (contactStore) contactStore._map.set(liveId, { name: null, firstName: null, lastName: null, phone: digits })
+          savePhoneChatId(digits, liveId)
+        }
+        return res.json({
+          success: true,
+          chatId: liveId,
+          externalId: null,
+          deliveryConfirmed: uiDeliveryConfirmed,
+          deliveryStatus: uiDeliveryConfirmed ? 'delivered' : 'send_requested',
+          source: uiDeliveryConfirmed ? 'ui_resolve_send' : 'ui_resolve_send_unconfirmed',
+          deliveryProof: uiDeliveryConfirmed ? {
+            kind: 'ui_send_action',
+            clientMessageId: clientMessageId ? String(clientMessageId) : null,
+            actionConfirmed: true,
+          } : undefined,
+        })
+      }
       if (liveId) {
-        console.log(`[Send] live-resolved: ${digits} → chatId ${liveId}${messageSentViaUI ? ' (sent via UI)' : ''}`)
+        console.log(`[Send] live-resolved: ${digits} → chatId ${liveId}`)
         chatId = liveId
         extendCrmOutboundTextGuard(crmOutboundDomGuard, liveId)
         // Cache for subsequent sends in this session
         if (contactStore) contactStore._map.set(liveId, { name: null, firstName: null, lastName: null, phone: digits })
-        if (messageSentViaUI) {
-          savePhoneChatId(digits, liveId)  // persist so container restart doesn't lose the mapping
-          return res.json({
-            success: true,
-            chatId: liveId,
-            externalId: null,
-            deliveryConfirmed: true,
-            deliveryStatus: 'delivered',
-            source: 'ui_resolve_send',
-          })
-        }
         // Dialog used returnHome() (SPA nav) — WS stays alive. waitForStableWs resolves
         // immediately if _wsConnected is already true. Acts as a safety net if WS dropped.
         if (!transport._wsConnected) {
@@ -5749,6 +5697,9 @@ app.post('/send-message', async (req, res) => {
 
     try {
       const sendResult = normalizeTextSendResult(await enqueueSend(() => sendText(transport, Number(chatId), message, quotedMsgId, uiChatId, clientMessageId)))
+      if (sendResult.success === false || sendResult.error) {
+        throw new Error(sendResult.error || 'MAX text delivery failed')
+      }
       const maxMsgId = sendResult.externalId || sendResult.maxMessageId || null
 
       if (maxMsgId) {
@@ -5773,7 +5724,7 @@ app.post('/send-message', async (req, res) => {
       }
       rememberKnownChatId(returnChatId)
       if (uiChatId) rememberKnownChatId(uiChatId)
-      res.json({ success: true, chatId: returnChatId, externalId: sendResult.externalId || null, deliveryConfirmed: sendResult.deliveryConfirmed, deliveryStatus: sendResult.deliveryStatus, source: sendResult.source })
+      res.json({ success: true, chatId: returnChatId, externalId: sendResult.externalId || null, deliveryConfirmed: sendResult.deliveryConfirmed, deliveryStatus: sendResult.deliveryStatus, source: sendResult.source, deliveryProof: sendResult.deliveryProof })
     } catch (e) {
       if (echoRawHandler) {
         const idx = transport._rawHandlers.indexOf(echoRawHandler)
@@ -5788,7 +5739,10 @@ app.post('/send-message', async (req, res) => {
 
   try {
     const sendResult = normalizeTextSendResult(await enqueueSend(() => sendText(transport, Number(chatId), message, quotedMsgId, uiChatId, clientMessageId)))
-    res.json({ success: true, chatId: String(chatId), externalId: sendResult.externalId || null, maxMessageId: sendResult.maxMessageId || null, deliveryConfirmed: sendResult.deliveryConfirmed, deliveryStatus: sendResult.deliveryStatus, source: sendResult.source })
+    if (sendResult.success === false || sendResult.error) {
+      throw new Error(sendResult.error || 'MAX text delivery failed')
+    }
+    res.json({ success: true, chatId: String(chatId), externalId: sendResult.externalId || null, maxMessageId: sendResult.maxMessageId || null, deliveryConfirmed: sendResult.deliveryConfirmed, deliveryStatus: sendResult.deliveryStatus, source: sendResult.source, deliveryProof: sendResult.deliveryProof })
   } catch (e) {
     const isMaxErr = e.maxError
     console.error(`[Send] sendText failed: ${e.message}`)
