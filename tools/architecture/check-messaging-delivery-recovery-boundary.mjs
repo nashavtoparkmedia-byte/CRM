@@ -31,7 +31,7 @@ const exactConsumerImports = [
 ]
 const rawDeliveryMethods = new Set(['recoverStuckMessages', 'retrySend'])
 
-assert.equal(sha256(read(implementationPath)), 'e401a0ef61ea0bebc7650e245221dee470c17e13da26dba6b43cebf92f28f7d2')
+assert.equal(sha256(read(implementationPath)), '60fd0e9ffbace3c48290b5970d22f618ee96845eab7c2f0721cab49974d1e74a')
 
 function hasModifier(node, kind) {
     return node.modifiers?.some((modifier) => modifier.kind === kind) ?? false
