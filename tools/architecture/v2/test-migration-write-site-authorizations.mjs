@@ -110,7 +110,7 @@ async function main() {
       output: outputPath,
     })
     assert.equal(result.canonical_reviewed_paths, 62)
-    assert.equal(result.noncanonical_reviewed_paths, 17)
+    assert.equal(result.noncanonical_reviewed_paths, 18)
     const materializedLifecycle = JSON.parse(await readFile(outputPath, 'utf8'))
     const lifecycleByPath = new Map(materializedLifecycle.surfaces.map((surface) => [surface.path, surface]))
     for (const migration of productionMigrationAuthority.migrations) {
@@ -159,7 +159,7 @@ async function main() {
     await rm(temporary, { recursive: true, force: true })
   }
 
-  process.stdout.write(`migration write-site exact authorization: PASS (${sites.length}/${sites.length}; 11 negative properties; 79 exact reviewed reachability paths)\n`)
+  process.stdout.write(`migration write-site exact authorization: PASS (${sites.length}/${sites.length}; 11 negative properties; 80 exact reviewed reachability paths)\n`)
 }
 
 main().catch(error => {
