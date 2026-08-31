@@ -1910,9 +1910,9 @@
     {
       "record_id": "6c84c5974dc29a3cd814144d007c6669c061d6217ca8837671847aaf97206891",
       "site_signature": "6c84c5974dc29a3cd814144d007c6669c061d6217ca8837671847aaf97206891",
-      "source_sha256": "e401a0ef61ea0bebc7650e245221dee470c17e13da26dba6b43cebf92f28f7d2",
+      "source_sha256": "60fd0e9ffbace3c48290b5970d22f618ee96845eab7c2f0721cab49974d1e74a",
       "file": "gravity-mvp/src/lib/MessageService.ts",
-      "line": 101,
+      "line": 96,
       "column": 65,
       "kind": "raw",
       "method": "$queryRaw",
@@ -1934,7 +1934,7 @@
       ],
       "called_functions": [],
       "sql_sha256": "c1e0c276a397686626aac8475ae4d795c72f1185d46ec33c50fd74a99bdd7df0",
-      "sql_provenance_sha256": "9939e2f744c6913ff4ee164c131497ecd9773046d801dbdaf979042276170870",
+      "sql_provenance_sha256": "272736d8ad1a959215eed5bd10f7b375035551d94aba0e943e488bb9b8d52636",
       "source_context": "messaging",
       "source_technical_module": "messages",
       "owner_contexts": [],
@@ -3553,11 +3553,11 @@
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
         "file": "gravity-mvp/src/lib/MessageService.ts",
-        "line": 101,
+        "line": 96,
         "column": 65,
         "method": "$queryRaw",
-        "source_sha256": "e401a0ef61ea0bebc7650e245221dee470c17e13da26dba6b43cebf92f28f7d2",
-        "sql_provenance_sha256": "9939e2f744c6913ff4ee164c131497ecd9773046d801dbdaf979042276170870"
+        "source_sha256": "60fd0e9ffbace3c48290b5970d22f618ee96845eab7c2f0721cab49974d1e74a",
+        "sql_provenance_sha256": "272736d8ad1a959215eed5bd10f7b375035551d94aba0e943e488bb9b8d52636"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -3575,12 +3575,12 @@
         "reviewed_read_only_functions": []
       },
       "evidence": [
-        "gravity-mvp/src/lib/MessageService.ts:101:65",
+        "gravity-mvp/src/lib/MessageService.ts:96:65",
         "analysis_site_signature:6c84c5974dc29a3cd814144d007c6669c061d6217ca8837671847aaf97206891",
         "sql_sha256:c1e0c276a397686626aac8475ae4d795c72f1185d46ec33c50fd74a99bdd7df0",
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
-        "source_sha256:e401a0ef61ea0bebc7650e245221dee470c17e13da26dba6b43cebf92f28f7d2",
-        "sql_provenance_sha256:9939e2f744c6913ff4ee164c131497ecd9773046d801dbdaf979042276170870"
+        "source_sha256:60fd0e9ffbace3c48290b5970d22f618ee96845eab7c2f0721cab49974d1e74a",
+        "sql_provenance_sha256:272736d8ad1a959215eed5bd10f7b375035551d94aba0e943e488bb9b8d52636"
       ]
     },
     {

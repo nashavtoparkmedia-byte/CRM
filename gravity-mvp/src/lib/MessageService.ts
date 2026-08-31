@@ -11,11 +11,6 @@ function serialize(obj: any): any {
     ));
 }
 
-function isRealMaxMessageId(value: unknown): value is string {
-    return typeof value === 'string' && /^d301[0-9a-f]+$/i.test(value)
-}
-
-
 export class MessageService {
     /**
      * Lists all conversations with their drivers and last messages.
@@ -395,7 +390,9 @@ export class MessageService {
      * Clean up outbound messages stuck in 'sent' status for longer than maxAgeMinutes.
      * These are messages where OUR OWN send attempt never got acknowledged by
      * the provider (server crash mid-delivery, WA/TG/MAX gateway timeout).
-     * Marks them 'failed' with a metadata.error explaining the reason.
+     * Marks them 'failed' with a metadata.error explaining the reason. MAX
+     * send_requested rows retain their delivery metadata and become retryable;
+     * retrySend then reuses the same Message row.
      *
      * externalId IS NULL guard: messages that already have an externalId came
      * back confirmed from the provider — they are not stuck. In particular,
@@ -409,28 +406,59 @@ export class MessageService {
      */
     static async recoverStuckMessages(maxAgeMinutes = 5): Promise<number> {
         const cutoff = new Date(Date.now() - maxAgeMinutes * 60_000)
-        const result = await (prisma.message as any).updateMany({
+        const stuckWhere = {
+            direction: 'outbound',
+            status: 'sent',
+            externalId: null, // skip anything that already has a provider id
+            sentAt: { lt: cutoff },
+            // Call-type messages are NOT outbound text we're trying to deliver —
+            // they're historical records of phone calls synced from FreeSWITCH.
+            // Recovery is for stuck text messages only; touching calls clobbers
+            // metadata.{callId,disposition,durationSec} which the chat timeline
+            // and call-card renderer rely on.
+            type: { not: 'call' },
+        }
+        const recoveryError = `Message stuck in 'sent' for >${maxAgeMinutes}min — marked failed by recovery`
+        const stuckMaxMessages = await (prisma.message as any).findMany({
+            where: { ...stuckWhere, channel: 'max' },
+            select: { id: true, metadata: true },
+        })
+        const nonMaxResult = await (prisma.message as any).updateMany({
             where: {
-                direction: 'outbound',
-                status: 'sent',
-                externalId: null, // NEW — skip anything that already has a provider id
-                sentAt: { lt: cutoff },
-                // Call-type messages are NOT outbound text we're trying to deliver —
-                // they're historical records of phone calls synced from FreeSWITCH.
-                // Recovery is for stuck text messages only; touching calls clobbers
-                // metadata.{callId,disposition,durationSec} which the chat timeline
-                // and call-card renderer rely on.
-                type: { not: 'call' },
+                ...stuckWhere,
+                OR: [{ channel: { not: 'max' } }, { channel: null }],
             },
             data: {
                 status: 'failed',
-                metadata: { error: `Message stuck in 'sent' for >${maxAgeMinutes}min — marked failed by recovery` },
+                metadata: { error: recoveryError },
             },
         })
-        if (result.count > 0) {
-            console.log(`[MessageService] RECOVERY: marked ${result.count} stuck messages as failed`)
+        const maxRecoveryResults = await Promise.all(stuckMaxMessages.map(async (message: any) => {
+            const metadata = message.metadata && typeof message.metadata === 'object' && !Array.isArray(message.metadata)
+                ? message.metadata
+                : {}
+            return (prisma.message as any).updateMany({
+                where: { ...stuckWhere, channel: 'max', id: message.id },
+                data: {
+                    status: 'failed',
+                    metadata: {
+                        ...metadata,
+                        error: recoveryError,
+                        errorCode: 'TIMEOUT',
+                        retryable: true,
+                    },
+                },
+            })
+        }))
+        const maxRecoveredCount = maxRecoveryResults.reduce(
+            (count: number, result: { count: number }) => count + result.count,
+            0,
+        )
+        const recoveredCount = nonMaxResult.count + maxRecoveredCount
+        if (recoveredCount > 0) {
+            console.log(`[MessageService] RECOVERY: marked ${recoveredCount} stuck messages as failed`)
         }
-        return result.count
+        return recoveredCount
     }
 
     /**
@@ -653,21 +681,15 @@ export class MessageService {
                             clientMessageId: clientMessageId || messageId,
                         },
                     })
-                    const rawMaxExternalId = (maxRes as any)?.externalId
-                    const rawMaxMessageId = (maxRes as any)?.maxMessageId
-                    const maxExternalId = typeof rawMaxExternalId === 'string'
-                        ? rawMaxExternalId
-                        : (typeof rawMaxMessageId === 'string' ? rawMaxMessageId : null)
-                    const rawMaxDeliveryStatus = (maxRes as any)?.deliveryStatus || (maxRes as any)?.status
-                    const maxDeliveryStatus = typeof rawMaxDeliveryStatus === 'string' ? rawMaxDeliveryStatus : null
-                    const maxDeliveryConfirmed = Boolean((maxRes as any)?.deliveryConfirmed && isRealMaxMessageId(maxExternalId))
+                    const maxExternalId = maxRes.externalId
+                    const maxDeliveryConfirmed = maxRes.outcome === 'delivered'
                     if (maxExternalId) deliveryExternalId = maxExternalId
                     deliveryStatus = maxDeliveryConfirmed ? 'delivered' : 'sent'
                     maxDeliveryMetadata = {
                         operation: 'send',
-                        status: maxDeliveryConfirmed ? 'delivered' : (maxDeliveryStatus === 'failed' ? 'failed' : 'send_requested'),
+                        status: maxDeliveryConfirmed ? 'delivered' : 'send_requested',
                         deliveryConfirmed: maxDeliveryConfirmed,
-                        maxMessageId: isRealMaxMessageId(maxExternalId) ? maxExternalId : null,
+                        maxMessageId: maxExternalId,
                         externalId: maxExternalId,
                         protocolChatId: rawExternalChatId,
                         webRouteId: maxMetadata.oldExternalChatId || maxMetadata.uiChatId || null,
@@ -686,7 +708,7 @@ export class MessageService {
                     // Update externalChatId so future incoming messages route here.
                     // If a chat with that conversationId already exists (duplicate scenario),
                     // merge by moving messages from old phone-based chat into it.
-                    const resolvedMaxId = (maxRes as any)?.resolvedChatId
+                    const resolvedMaxId = maxRes.resolvedChatId
                     if (resolvedMaxId && resolvedMaxId !== rawExternalChatId) {
                         try {
                             const conflictChat = await (prisma.chat as any).findFirst({
@@ -941,21 +963,15 @@ export class MessageService {
                             clientMessageId: message.clientMessageId || message.id,
                         },
                     })
-                    const rawMaxExternalId = (retryMaxRes as any)?.externalId
-                    const rawMaxMessageId = (retryMaxRes as any)?.maxMessageId
-                    const maxExternalId = typeof rawMaxExternalId === 'string'
-                        ? rawMaxExternalId
-                        : (typeof rawMaxMessageId === 'string' ? rawMaxMessageId : null)
-                    const rawMaxDeliveryStatus = (retryMaxRes as any)?.deliveryStatus || (retryMaxRes as any)?.status
-                    const maxDeliveryStatus = typeof rawMaxDeliveryStatus === 'string' ? rawMaxDeliveryStatus : null
-                    const maxDeliveryConfirmed = Boolean((retryMaxRes as any)?.deliveryConfirmed && isRealMaxMessageId(maxExternalId))
+                    const maxExternalId = retryMaxRes.externalId
+                    const maxDeliveryConfirmed = retryMaxRes.outcome === 'delivered'
                     if (maxExternalId) deliveryExternalId = maxExternalId
                     deliveryStatus = maxDeliveryConfirmed ? 'delivered' : 'sent'
                     retryMaxDeliveryMetadata = {
                         operation: 'send',
-                        status: maxDeliveryConfirmed ? 'delivered' : (maxDeliveryStatus === 'failed' ? 'failed' : 'send_requested'),
+                        status: maxDeliveryConfirmed ? 'delivered' : 'send_requested',
                         deliveryConfirmed: maxDeliveryConfirmed,
-                        maxMessageId: isRealMaxMessageId(maxExternalId) ? maxExternalId : null,
+                        maxMessageId: maxExternalId,
                         externalId: maxExternalId,
                         protocolChatId: rawExternalId,
                         webRouteId: maxMetadata.oldExternalChatId || maxMetadata.uiChatId || null,

@@ -392,6 +392,46 @@ const OP = {
   GET_UPLOAD_URL:        80,
 }
 
+function normalizeUiText(value) {
+  return String(value ?? '').replace(/\r\n/g, '\n')
+}
+
+function isUiTextSubmitObserved(beforeText, afterText, expectedText) {
+  const expected = normalizeUiText(expectedText)
+  if (!expected) return false
+  return normalizeUiText(beforeText) === expected && normalizeUiText(afterText).trim() === ''
+}
+
+/**
+ * A first send from a phone-resolved profile currently exposes only compose
+ * state and background/own-text frames. None of those signals carries the
+ * CRM operation identity or an independently known expected chat id, so they
+ * cannot prove that this operation delivered to this target.
+ *
+ * Keep the attempted action terminal for the current HTTP request, but leave
+ * delivery pending until MAX exposes an operation- and target-bound proof.
+ */
+function evaluatePhoneResolutionUiSend({
+  beforeText,
+  afterText,
+  expectedText,
+  postActionFrames,
+} = {}) {
+  const submitObserved = isUiTextSubmitObserved(beforeText, afterText, expectedText)
+  const observedFrameCount = Array.isArray(postActionFrames) ? postActionFrames.length : 0
+
+  return {
+    chatId: null,
+    uiSendAttempted: true,
+    deliveryConfirmed: false,
+    confirmationSource: submitObserved
+      ? 'send_requested_no_authoritative_proof'
+      : 'ui_action_unconfirmed',
+    submitObserved,
+    observedFrameCount,
+  }
+}
+
 class TransportInterceptor {
   constructor() {
     this._messageHandlers      = []
@@ -2127,4 +2167,9 @@ class TransportInterceptor {
   }
 }
 
-module.exports = { TransportInterceptor, OP }
+module.exports = {
+  TransportInterceptor,
+  OP,
+  evaluatePhoneResolutionUiSend,
+  isUiTextSubmitObserved,
+}

@@ -83,17 +83,55 @@ test('MAX history and catch-up payloads carry explicit source markers', () => {
   )
 })
 
-test('MAX outbound text delivery is confirmed only by a real d301 provider message id', () => {
+test('MAX outbound text delivery consumes only MAX-owned validated semantic outcomes', () => {
   const scraper = read('max-web-scraper/index.js')
   const messageService = read('gravity-mvp/src/lib/MessageService.ts')
+  const maxCapability = read('gravity-mvp/src/modules/max-channel/public/v1/messaging-delivery-capability.ts')
+  const deliveryRuntime = read('gravity-mvp/src/modules/messaging/public/v1/channel-delivery-runtime.ts')
 
   assert.match(scraper, /deliveryConfirmed: sendResult\.deliveryConfirmed/)
   assert.match(scraper, /deliveryStatus: sendResult\.deliveryStatus/)
-  assert.match(scraper, /externalId: null, deliveryConfirmed: false, deliveryStatus: 'send_requested'/)
+  assert.match(scraper, /deliveryProof: sendResult\.deliveryProof/)
+  assert.match(scraper, /kind: 'ui_send_action'/)
   assert.match(scraper, /ackId && isRealMaxMessageId\(ackId\)/)
 
-  assert.match(messageService, /\(\(maxRes as any\)\?\.deliveryConfirmed && isRealMaxMessageId\(maxExternalId\)\) \|\| maxDeliveryStatus === 'delivered'/)
+  assert.match(deliveryRuntime, /outcome: 'delivered' \| 'pending'/)
+  assert.match(maxCapability, /function validateMaxTextDeliveryResultV1/)
+  assert.match(maxCapability, /hasExplicitFailure \|\| hasExplicitError/)
+  assert.match(maxCapability, /proof\.clientMessageId === expectedClientMessageId/)
+  assert.match(messageService, /const maxDeliveryConfirmed = maxRes\.outcome === 'delivered'/)
+  assert.match(messageService, /const maxDeliveryConfirmed = retryMaxRes\.outcome === 'delivered'/)
+  assert.doesNotMatch(messageService, /\(maxRes as any\)\?\.deliveryStatus/)
   assert.match(messageService, /deliveryStatus = maxDeliveryConfirmed \? 'delivered' : 'sent'/)
+})
+
+test('MAX phone UI send correlation excludes pre-send and generic activity', () => {
+  const scraper = read('max-web-scraper/index.js')
+  const transport = read('max-web-scraper/transport/TransportInterceptor.js')
+
+  assertBeforeAfter(
+    scraper,
+    'const composeTextBeforeSubmit',
+    'const sendFrameStartIndex = capturedFrames.length',
+    "await page.keyboard.press('Enter')",
+    'phone UI collector cursor must be captured immediately before the send action',
+  )
+  assert.match(scraper, /evaluatePhoneResolutionUiSend\(\{/)
+  assert.match(scraper, /postActionFrames: postSendFrames/)
+  assert.match(transport, /deliveryConfirmed: false/)
+  assert.match(transport, /chatId: null/)
+  assert.doesNotMatch(scraper, /findCorrelatedUiTextSendEcho/)
+  assert.doesNotMatch(scraper, /exact_text_submit_route_changed/)
+  assert.doesNotMatch(scraper, /confirmationSource = echo\.source/)
+  assert.match(scraper, /source: uiDeliveryConfirmed \? 'ui_resolve_send' : 'ui_resolve_send_unconfirmed'/)
+  assert.doesNotMatch(scraper, /messageSent: true/)
+  assertBeforeAfter(
+    scraper,
+    'const liveResult = await resolvePhoneLive(digits, message)',
+    'if (uiSendAttempted)',
+    'const sendResult = normalizeTextSendResult',
+    'an attempted phone UI send must return before the protocol send path can duplicate it',
+  )
 })
 
 test('CRM outbound text keeps clientMessageId idempotency before creating a message', () => {
@@ -317,6 +355,8 @@ test('MAX known-chat text send endpoint normalizes object send results before HT
   const scraper = read('max-web-scraper/index.js')
 
   assert.match(scraper, /const sendResult = normalizeTextSendResult\(await enqueueSend\(\(\) => sendText\(transport, Number\(chatId\), message, quotedMsgId, uiChatId, clientMessageId\)\)\)/)
+  assert.match(scraper, /const hasExplicitFailure = result\.success === false \|\| result\.failed === true \|\| result\.failure === true/)
+  assert.match(scraper, /if \(hasExplicitFailure \|\| hasExplicitError\)/)
   assert.match(scraper, /externalId: sendResult\.externalId \|\| null/)
   assert.match(scraper, /maxMessageId: sendResult\.maxMessageId \|\| null/)
   assert.doesNotMatch(scraper, /externalId: maxMsgId \|\| null, deliveryConfirmed: isRealMaxMessageId\(maxMsgId\)/)
@@ -325,13 +365,13 @@ test('MAX known-chat text send endpoint normalizes object send results before HT
 test('CRM MAX delivery path never writes non-string send-result object as message externalId', () => {
   const messageService = read('gravity-mvp/src/lib/MessageService.ts')
   const maxActions = read('gravity-mvp/src/app/max-actions.ts')
+  const deliveryRuntime = read('gravity-mvp/src/modules/messaging/public/v1/channel-delivery-runtime.ts')
 
   assert.match(maxActions, /const externalId = typeof data\.externalId === 'string'/)
-  assert.match(messageService, /const rawMaxExternalId = \(maxRes as any\)\?\.externalId/)
-  assert.match(messageService, /const rawMaxMessageId = \(maxRes as any\)\?\.maxMessageId/)
-  assert.match(messageService, /const rawMaxExternalId = \(retryMaxRes as any\)\?\.externalId/)
-  assert.doesNotMatch(messageService, /const maxExternalId = \(maxRes as any\)\?\.externalId \|\| null/)
-  assert.doesNotMatch(messageService, /const maxExternalId = \(retryMaxRes as any\)\?\.externalId \|\| null/)
+  assert.match(deliveryRuntime, /externalId: string \| null/)
+  assert.match(messageService, /const maxExternalId = maxRes\.externalId/)
+  assert.match(messageService, /const maxExternalId = retryMaxRes\.externalId/)
+  assert.doesNotMatch(messageService, /rawMaxExternalId/)
 })
 
 

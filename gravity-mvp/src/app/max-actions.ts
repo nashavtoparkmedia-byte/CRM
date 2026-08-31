@@ -248,9 +248,21 @@ export async function sendMaxPersonalMessage(target: string, message: string, na
             body: JSON.stringify({ chatId: cleanTarget, message, quotedMsgId, uiChatId, clientMessageId })
         })
 
-        const data = await response.json().catch(() => ({}))
+        const rawData = await response.json().catch(() => ({}))
+        const data: Record<string, any> = rawData && typeof rawData === 'object' && !Array.isArray(rawData)
+            ? rawData
+            : {}
+        const explicitError = typeof data.error === 'string' && data.error.trim()
+            ? data.error.trim()
+            : null
+        const hasExplicitError = Object.prototype.hasOwnProperty.call(data, 'error')
+            && (typeof data.error === 'string' ? data.error.trim().length > 0 : data.error !== null && data.error !== undefined)
+        const hasExplicitFailure = data.success === false || data.failed === true || data.failure === true
         if (!response.ok) {
-            throw new Error(data.error || "Failed to send message via Scraper")
+            throw new Error(explicitError || "Failed to send message via Scraper")
+        }
+        if (hasExplicitFailure || hasExplicitError) {
+            throw new Error(explicitError || "MAX text delivery failed")
         }
 
         const externalId = typeof data.externalId === 'string'
@@ -258,11 +270,16 @@ export async function sendMaxPersonalMessage(target: string, message: string, na
             : (typeof data.maxMessageId === 'string' ? data.maxMessageId : null)
 
         return {
-            success: true,
+            success: data.success,
+            error: data.error,
+            failed: data.failed,
+            failure: data.failure,
             externalId,
+            maxMessageId: typeof data.maxMessageId === 'string' ? data.maxMessageId : null,
             resolvedChatId: data.chatId ? String(data.chatId) : null,
-            deliveryConfirmed: Boolean(data.deliveryConfirmed),
-            deliveryStatus: data.deliveryStatus || data.status || null,
+            deliveryConfirmed: data.deliveryConfirmed,
+            deliveryStatus: data.deliveryStatus,
+            deliveryProof: data.deliveryProof,
         }
     } catch (error: any) {
         console.error("MAX Personal Send Error:", error)

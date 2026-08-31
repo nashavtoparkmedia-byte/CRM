@@ -6,9 +6,11 @@ source = SRC.read_text(encoding='utf-8')
 
 
 def test_ui_text_success_without_provider_id_is_delivered():
-    assert "function uiTextDeliveredResult(source = 'ui_text_no_provider_id')" in source
-    assert "return uiTextDeliveredResult('ui_fallback_no_provider_id')" in source
-    assert "return uiTextDeliveredResult('direct_ui_no_provider_id')" in source
+    assert "function uiTextDeliveredResult(source = 'ui_text_no_provider_id', clientMessageId = null)" in source
+    assert "return uiTextDeliveredResult('ui_fallback_no_provider_id', clientMessageId)" in source
+    assert "return uiTextDeliveredResult('direct_ui_no_provider_id', clientMessageId)" in source
+    assert "deliveryProof: {" in source
+    assert "actionConfirmed: true" in source
 
 
 def test_ui_text_success_without_provider_id_does_not_return_null():
@@ -21,6 +23,7 @@ def test_send_message_endpoint_uses_normalized_text_result():
     assert "const maxMsgId = sendResult.externalId || sendResult.maxMessageId || null" in source
     assert "deliveryStatus: sendResult.deliveryStatus" in source
     assert "deliveryConfirmed: sendResult.deliveryConfirmed" in source
+    assert "deliveryProof: sendResult.deliveryProof" in source
 
 
 def test_send_requested_is_not_used_for_ui_fallback_success():
