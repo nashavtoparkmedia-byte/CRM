@@ -54,6 +54,15 @@ type ParkCheckResult = {
     }
 }
 
+type BotLinkDriverSearchResult = {
+    id: string
+    yandexDriverId: string | null
+    fullName: string
+    phone: string | null
+    parkId: string | null
+    parkName: string | null
+}
+
 const defaultCustomFields: CustomField[] = [
     { id: 'park', label: 'Парк', type: 'select', value: 'Яндекс', options: ['Яндекс', 'Uber', 'Сити Мобил', 'Максим'] },
     { id: 'role', label: 'Роль', type: 'select', value: 'Водитель', options: ['Водитель', 'Курьер', 'Партнёр', 'Стажёр'] },
@@ -194,7 +203,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     const [botLinkLoading, setBotLinkLoading] = useState(false)
     const [showBotLinkSearch, setShowBotLinkSearch] = useState(false)
     const [botLinkQuery, setBotLinkQuery] = useState('')
-    const [botLinkResults, setBotLinkResults] = useState<{ id: string; fullName: string; phone: string | null }[]>([])
+    const [botLinkResults, setBotLinkResults] = useState<BotLinkDriverSearchResult[]>([])
     const [botLinkSearching, setBotLinkSearching] = useState(false)
     const [botLinkSaving, setBotLinkSaving] = useState(false)
 
@@ -1032,7 +1041,10 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                     ) : botLinkResults.length > 0 ? (
                                         <div className="space-y-px">
                                             {botLinkResults.map(driver => (
-                                                <div key={driver.id} className="flex items-center justify-between py-1 px-1 hover:bg-gray-50 rounded">
+                                                <div
+                                                    key={`${driver.parkId || 'crm'}:${driver.yandexDriverId || driver.id}`}
+                                                    className="flex items-center justify-between py-1 px-1 hover:bg-gray-50 rounded"
+                                                >
                                                     <div className="min-w-0 mr-1">
                                                         <div className="text-[12px] font-medium text-[#111] truncate">{driver.fullName}</div>
                                                         {driver.phone && <div className="text-[10px] text-gray-400 font-mono">{driver.phone}</div>}
@@ -1045,7 +1057,14 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                                                 const res = await fetch('/api/bot-link', {
                                                                     method: 'POST',
                                                                     headers: { 'Content-Type': 'application/json' },
-                                                                    body: JSON.stringify({ action: 'link', telegramId: tgIdentity.externalId, driverId: driver.id }),
+                                                                    body: JSON.stringify({
+                                                                        action: 'link',
+                                                                        telegramId: tgIdentity.externalId,
+                                                                        driverId: driver.id,
+                                                                        yandexDriverId: driver.yandexDriverId,
+                                                                        driverName: driver.fullName,
+                                                                        parkId: driver.parkId,
+                                                                    }),
                                                                 })
                                                                 if (res.ok) {
                                                                     setBotLinkInfo({ linked: true, driverName: driver.fullName, driverId: driver.id })

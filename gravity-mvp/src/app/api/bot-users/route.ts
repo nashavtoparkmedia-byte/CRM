@@ -1,10 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { DELETE_DRIVER_TELEGRAM_LINK_COMMAND_V1, DISMISS_BOT_LINK_REQUEST_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
-import { buildPendingBotLinkRequests, deleteDriverTelegramLinkV1, dismissBotLinkRequestV1 } from '@/modules/telegram-channel/public/v1'
+import { hasIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
+import { PendingBotLinkRequestNotFoundError, buildPendingBotLinkRequests, deleteDriverTelegramLinkV1, dismissBotLinkRequestV1 } from '@/modules/telegram-channel/public/v1'
+
+const TELEGRAM_ID_PATTERN = /^[1-9]\d{0,19}$/
+const TELEGRAM_ID_MAX = 9_223_372_036_854_775_807n
+const REQUEST_ID_MAX_LENGTH = 200
+
+function firstForwardedValue(value: string | null): string | null {
+  return value?.split(',')[0]?.trim() || null
+}
+
+export function isSameOriginMutationRequest(req: NextRequest): boolean {
+  const origin = req.headers.get('origin')
+  const host = req.headers.get('host')?.trim() || null
+  const forwardedHost = firstForwardedValue(req.headers.get('x-forwarded-host'))
+  const forwardedProtocol = firstForwardedValue(req.headers.get('x-forwarded-proto'))?.toLowerCase()
+  const protocol = forwardedProtocol || req.nextUrl.protocol.slice(0, -1).toLowerCase()
+  if (!origin || !host) return false
+  if (forwardedHost && forwardedHost.toLowerCase() !== host.toLowerCase()) return false
+  if (protocol !== 'http' && protocol !== 'https') return false
+  try {
+    const parsedOrigin = new URL(origin)
+    return parsedOrigin.protocol === `${protocol}:`
+      && parsedOrigin.host.toLowerCase() === host.toLowerCase()
+  } catch {
+    return false
+  }
+}
+
+function isValidTelegramId(value: string): boolean {
+  return TELEGRAM_ID_PATTERN.test(value) && BigInt(value) <= TELEGRAM_ID_MAX
+}
 
 // GET /api/bot-users — linked drivers + pending link requests
 export async function GET() {
+  if (!(await hasIntegrationAdminAccess())) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const [dtRows, legacyRequests, registryRows] = await Promise.all([
     prisma.driverTelegram.findMany({
       orderBy: { createdAt: 'desc' },
@@ -84,21 +119,50 @@ export async function GET() {
   return NextResponse.json({ linked, requests })
 }
 
-// DELETE /api/bot-users?telegramId=... — unlink driver from bot
-// DELETE /api/bot-users?requestId=...  — dismiss pending link request
+// DELETE /api/bot-users
+// { action: 'unlink', telegramId: string } — unlink driver from bot
+// { action: 'dismiss', requestId: string } — dismiss pending link request
 export async function DELETE(req: NextRequest) {
-  const telegramId = req.nextUrl.searchParams.get('telegramId')
-  const requestId = req.nextUrl.searchParams.get('requestId')
+  if (!isSameOriginMutationRequest(req)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  if (!(await hasIntegrationAdminAccess())) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  if (req.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() !== 'application/json') {
+    return NextResponse.json({ error: 'Unsupported Media Type' }, { status: 415 })
+  }
 
-  if (telegramId) {
+  const parsedBody: unknown = await req.json().catch(() => null)
+  if (typeof parsedBody !== 'object' || parsedBody === null || Array.isArray(parsedBody)) {
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+  }
+  const body = parsedBody as Record<string, unknown>
+
+  if (body.action === 'unlink') {
+    const telegramId = typeof body.telegramId === 'string' ? body.telegramId : ''
+    if (!isValidTelegramId(telegramId)) {
+      return NextResponse.json({ error: 'valid telegramId required' }, { status: 400 })
+    }
     await deleteDriverTelegramLinkV1({ contract: DELETE_DRIVER_TELEGRAM_LINK_COMMAND_V1, telegramId: BigInt(telegramId) })
     return NextResponse.json({ success: true })
   }
 
-  if (requestId) {
-    await dismissBotLinkRequestV1({ contract: DISMISS_BOT_LINK_REQUEST_COMMAND_V1, requestId })
+  if (body.action === 'dismiss') {
+    const requestId = typeof body.requestId === 'string' ? body.requestId : ''
+    if (!requestId || requestId.length > REQUEST_ID_MAX_LENGTH) {
+      return NextResponse.json({ error: 'valid requestId required' }, { status: 400 })
+    }
+    try {
+      await dismissBotLinkRequestV1({ contract: DISMISS_BOT_LINK_REQUEST_COMMAND_V1, requestId })
+    } catch (error) {
+      if (error instanceof PendingBotLinkRequestNotFoundError) {
+        return NextResponse.json({ error: error.message }, { status: 404 })
+      }
+      throw error
+    }
     return NextResponse.json({ success: true })
   }
 
-  return NextResponse.json({ error: 'telegramId or requestId required' }, { status: 400 })
+  return NextResponse.json({ error: 'valid action required' }, { status: 400 })
 }

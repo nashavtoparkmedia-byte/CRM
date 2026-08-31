@@ -110,6 +110,7 @@ describe('integration credential authorization source boundary', () => {
             'src/app/settings/integrations/telegram/page.tsx',
             'src/app/settings/integrations/max/page.tsx',
             'src/app/settings/integrations/whatsapp/page.tsx',
+            'src/app/settings/integrations/bot/page.tsx',
             'src/app/logs/page.tsx',
             'src/app/settings/ai/page.tsx',
         ]) {

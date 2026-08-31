@@ -17,8 +17,10 @@ const amendment = JSON.parse(read('architecture/isolation/telegram-channel/bot-c
 
 const delStart = users.indexOf('export async function DELETE')
 const del = users.slice(delStart)
-const requestStart = del.indexOf('if (requestId)')
-const requestBranch = del.slice(requestStart, del.indexOf("return NextResponse.json({ error:", requestStart))
+const unlinkStart = del.indexOf("if (body.action === 'unlink')")
+const requestStart = del.indexOf("if (body.action === 'dismiss')")
+const requestEnd = del.indexOf("return NextResponse.json({ error: 'valid action required'", requestStart)
+const requestBranch = del.slice(requestStart, requestEnd)
 const fallbackStart = webhook.indexOf('// 2. Fallback:')
 const fallback = webhook.slice(fallbackStart, webhook.indexOf('// Inject a system message', fallbackStart))
 
@@ -35,14 +37,16 @@ check(
 )
 check(
   'dismiss id mapping retained',
-  adapterCompact.includes('asyncdismiss(requestId){awaitprisma.botChatMessage.deleteMany({where:{id:requestId}})}'),
+  adapterCompact.includes("asyncdismiss(requestId){constresult=awaitprisma.botChatMessage.deleteMany({where:{id:requestId,driverId:null,direction:'INCOMING',text:{startsWith:'[Запроспривязки]'}}});returnresult.count===1}"),
   'delete mapping drift',
 )
 check(
   'dismiss branch ordering retained',
-  del.indexOf('if (telegramId)') < requestStart
+  unlinkStart > -1
+    && unlinkStart < requestStart
     && requestBranch.indexOf('dismissBotLinkRequestV1') < requestBranch.indexOf('NextResponse.json({ success: true })')
-    && requestStart < del.indexOf('telegramId or requestId required'),
+    && requestBranch.indexOf('error instanceof PendingBotLinkRequestNotFoundError') < requestBranch.indexOf('NextResponse.json({ success: true })')
+    && requestStart < requestEnd,
   'delete response drift',
 )
 check(

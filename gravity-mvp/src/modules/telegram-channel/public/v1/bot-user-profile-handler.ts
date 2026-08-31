@@ -57,6 +57,12 @@ type LegacyRequestRow = {
     createdAt: Date
 }
 
+const TELEGRAM_USERNAME_PATTERN = /^[A-Za-z0-9_]{5,32}$/
+
+function normalizePendingTelegramUsername(value: string | null | undefined): string | null {
+    return value && TELEGRAM_USERNAME_PATTERN.test(value) ? value : null
+}
+
 export function buildPendingBotLinkRequests(input: {
     registryRows: RegistryRow[]
     legacyRequests: LegacyRequestRow[]
@@ -77,7 +83,8 @@ export function buildPendingBotLinkRequests(input: {
             id: legacy?.id || row.id,
             telegramId,
             phone: row.phone || phoneMatch?.[1] || null,
-            username: row.username || usernameMatch?.[1] || null,
+            username: normalizePendingTelegramUsername(row.username)
+                || normalizePendingTelegramUsername(usernameMatch?.[1]),
             firstName: row.firstName || null,
             lastName: row.lastName || null,
             chatId: input.chatMap[telegramId] ?? null,
@@ -96,7 +103,7 @@ export function buildPendingBotLinkRequests(input: {
             id: row.id,
             telegramId,
             phone: phoneMatch?.[1] ?? null,
-            username: usernameMatch?.[1] ?? null,
+            username: normalizePendingTelegramUsername(usernameMatch?.[1]),
             firstName: null,
             lastName: null,
             chatId: input.chatMap[telegramId] ?? null,

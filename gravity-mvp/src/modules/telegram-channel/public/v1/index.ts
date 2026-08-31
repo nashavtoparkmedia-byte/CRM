@@ -1,4 +1,4 @@
-export { createDismissBotLinkRequestHandlerV1, createRecordPendingBotLinkRequestHandlerV1 } from './bot-chat-message-handler'
+export { PendingBotLinkRequestNotFoundError, createDismissBotLinkRequestHandlerV1, createRecordPendingBotLinkRequestHandlerV1 } from './bot-chat-message-handler'
 export type { BotChatMessagePersistencePortV1 } from './bot-chat-message-handler'
 export { createDeleteDriverTelegramLinkHandlerV1, createPatchDriverTelegramLinkHandlerV1, createReplaceDriverTelegramLinkHandlerV1, createUpsertDriverTelegramLinkHandlerV1 } from './driver-telegram-handler'
 export type { DriverTelegramPersistencePortV1 } from './driver-telegram-handler'

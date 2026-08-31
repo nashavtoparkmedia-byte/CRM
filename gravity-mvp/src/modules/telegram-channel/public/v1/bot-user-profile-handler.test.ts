@@ -95,6 +95,25 @@ describe('pending Telegram driver links', () => {
             chatMap: {},
         })).toEqual([])
     })
+
+    test('treats the legacy no-username placeholder as a missing username', () => {
+        const requests = buildPendingBotLinkRequests({
+            registryRows: [],
+            legacyRequests: [{
+                id: 'legacy-without-username',
+                telegramId: 88000002n,
+                text: '[Запрос привязки] Телефон: +79990002233, @нет',
+                createdAt: new Date('2026-08-29T12:04:00.000Z'),
+            }],
+            linkedTelegramIds: new Set(),
+            chatMap: {},
+        })
+
+        expect(requests).toEqual([expect.objectContaining({
+            id: 'legacy-without-username',
+            username: null,
+        })])
+    })
 })
 
 describe('driver bot pending-link registry wiring', () => {

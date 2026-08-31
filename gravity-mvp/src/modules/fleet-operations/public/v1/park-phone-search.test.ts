@@ -59,13 +59,22 @@ describe('Fleet multi-park driver name search', () => {
 describe('manual Telegram link multi-park wiring', () => {
     test('searches every configured Yandex park through the fleet owner capability', () => {
         const capability = source('src/modules/fleet-operations/public/v1/park-phone-search.ts')
+        const application = source('src/modules/fleet-operations/application/fleet-operations.ts')
         const route = source('src/app/api/bot-link/route.ts')
+        const contactDrawer = source('src/app/messages/components/ContactProfileDrawer.tsx')
         expect(capability).toContain('listYandexConnectionCredentialsV1()')
         expect(capability).toContain('searchDriverQueryInPark(connection, normalizedQuery)')
         expect(capability).toContain('Promise.all(connections.map')
+        expect(application).toContain('normalizeDriverSearchQueryV1(query)')
+        expect(application).toContain('return searchYandexParksByDriverQuery(normalized.query)')
         expect(route).toContain('searchYandexParksByDriverQueryV1(query)')
         expect(route).toContain('checkedParks: yandex.checkedParks')
-        expect(route).toContain('if (matchingYandexPhones && (!localPhone || matchingYandexPhones.has(localPhone))) continue')
+        expect(route).toContain('searchLocalDriversV1(body.query)')
+        expect(contactDrawer).toContain('yandexDriverId: driver.yandexDriverId')
+        expect(contactDrawer).toContain('driverName: driver.fullName')
+        expect(contactDrawer).toContain('parkId: driver.parkId')
+        expect(contactDrawer).toContain("key={`${driver.parkId || 'crm'}:${driver.yandexDriverId || driver.id}`}")
+        expect(route).toContain('if (matchingYandexPhones && localPhone && matchingYandexPhones.has(localPhone)) continue')
     })
 
     test('revalidates and persists a selected Yandex profile before linking', () => {
@@ -79,7 +88,7 @@ describe('manual Telegram link multi-park wiring', () => {
     test('does not remove a pending request when linking fails', () => {
         const ui = source('src/app/settings/integrations/bot/BotPageClient.tsx')
         const successGuard = ui.indexOf('if (!response.ok || !data.success)')
-        const dismiss = ui.indexOf('const dismissResponse = await fetch', successGuard)
+        const dismiss = ui.indexOf("await deleteBotUserMutation({ action: 'dismiss'", successGuard)
         expect(successGuard).toBeGreaterThan(-1)
         expect(dismiss).toBeGreaterThan(successGuard)
     })

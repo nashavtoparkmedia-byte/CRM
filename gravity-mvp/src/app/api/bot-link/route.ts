@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { REPLACE_DRIVER_TELEGRAM_LINK_COMMAND_V1, UPSERT_DRIVER_TELEGRAM_LINK_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
-import { searchYandexParksByDriverQueryV1, upsertParkMatchedDriverV1 } from '@/modules/fleet-operations/public/v1'
+import { hasIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
+import {
+  canonicalDriverNameKeyV1,
+  normalizeDriverPhoneDigitsV1,
+  normalizeDriverSearchQueryV1,
+  searchLocalDriversV1,
+  searchYandexParksByDriverQueryV1,
+  upsertParkMatchedDriverV1,
+} from '@/modules/fleet-operations/public/v1'
 import { replaceDriverTelegramLinkV1, upsertDriverTelegramLinkV1 } from '@/modules/telegram-channel/public/v1'
 
 type DriverSearchRow = {
@@ -16,10 +24,53 @@ type DriverSearchRow = {
   source: 'crm' | 'yandex'
 }
 
+const DRIVER_ID_MAX_LENGTH = 200
+const TELEGRAM_ID_PATTERN = /^[1-9]\d{0,19}$/
+const TELEGRAM_ID_MAX = 9_223_372_036_854_775_807n
+const TELEGRAM_USERNAME_PATTERN = /^[A-Za-z0-9_]{5,32}$/
+
+function firstForwardedValue(value: string | null): string | null {
+  return value?.split(',')[0]?.trim() || null
+}
+
+export function isSameOriginMutationRequest(req: NextRequest): boolean {
+  const origin = req.headers.get('origin')
+  const host = req.headers.get('host')?.trim() || null
+  const forwardedHost = firstForwardedValue(req.headers.get('x-forwarded-host'))
+  const forwardedProtocol = firstForwardedValue(req.headers.get('x-forwarded-proto'))?.toLowerCase()
+  const protocol = forwardedProtocol || req.nextUrl.protocol.slice(0, -1).toLowerCase()
+  if (!origin || !host) return false
+  if (forwardedHost && forwardedHost.toLowerCase() !== host.toLowerCase()) return false
+  if (protocol !== 'http' && protocol !== 'https') return false
+  try {
+    const parsedOrigin = new URL(origin)
+    return parsedOrigin.protocol === `${protocol}:`
+      && parsedOrigin.host.toLowerCase() === host.toLowerCase()
+  } catch {
+    return false
+  }
+}
+
+function isBoundedIdentifier(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0 && value.trim().length <= DRIVER_ID_MAX_LENGTH
+}
+
+function normalizedTelegramId(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  return TELEGRAM_ID_PATTERN.test(normalized) && BigInt(normalized) <= TELEGRAM_ID_MAX
+    ? normalized
+    : null
+}
+
 // GET /api/bot-link?telegramId=316425068
 export async function GET(req: NextRequest) {
-  const telegramId = req.nextUrl.searchParams.get('telegramId')?.trim()
-  if (!telegramId) return NextResponse.json({ error: 'telegramId required' }, { status: 400 })
+  if (!(await hasIntegrationAdminAccess())) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const telegramId = normalizedTelegramId(req.nextUrl.searchParams.get('telegramId'))
+  if (!telegramId) return NextResponse.json({ error: 'valid telegramId required' }, { status: 400 })
 
   try {
     const link = await prisma.driverTelegram.findFirst({
@@ -48,23 +99,26 @@ export async function GET(req: NextRequest) {
 // { action: 'search', query: string } → { drivers }
 // { action: 'link', telegramId: string, driverId: string } → { success }
 export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => ({}))
+  if (!isSameOriginMutationRequest(req)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  if (!(await hasIntegrationAdminAccess())) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  if (req.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() !== 'application/json') {
+    return NextResponse.json({ error: 'Unsupported Media Type' }, { status: 415 })
+  }
+
+  const parsedBody: unknown = await req.json().catch(() => null)
+  if (typeof parsedBody !== 'object' || parsedBody === null || Array.isArray(parsedBody)) {
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+  }
+  const body = parsedBody as Record<string, unknown>
 
   if (body.action === 'search') {
-    const query: string = (body.query ?? '').trim()
-    if (query.length < 3) return NextResponse.json({ drivers: [] })
-
-    const digits = query.replace(/\D/g, '')
-    const localDrivers = await prisma.driver.findMany({
-      where: {
-        OR: [
-          ...(digits.length >= 3 ? [{ phone: { contains: digits } }] : []),
-          { fullName: { contains: query, mode: 'insensitive' as const } },
-        ],
-      },
-      select: { id: true, yandexDriverId: true, fullName: true, phone: true },
-      take: 10,
-    })
+    const localSearch = await searchLocalDriversV1(body.query)
+    if (localSearch.status === 'invalid') return NextResponse.json({ drivers: [] })
+    const { query, drivers: localDrivers } = localSearch
 
     const yandex = await searchYandexParksByDriverQueryV1(query)
     const localByYandexId = new Map(
@@ -72,32 +126,46 @@ export async function POST(req: NextRequest) {
     )
     const yandexProfileIds = new Set<string>()
     const yandexProfilesByName = new Map<string, Set<string>>()
-    const drivers: DriverSearchRow[] = yandex.results.flatMap(park => park.profiles.map(profile => {
-      yandexProfileIds.add(profile.id)
-      const normalizedName = profile.fullName.toLocaleLowerCase('ru-RU').replace(/\s+/g, ' ').trim()
-      const phones = yandexProfilesByName.get(normalizedName) || new Set<string>()
-      profile.phones.forEach(phone => phones.add(phone.replace(/\D/g, '')))
-      yandexProfilesByName.set(normalizedName, phones)
-      const local = localByYandexId.get(profile.id)
-      return {
-        id: local?.id || `yandex:${park.parkId}:${profile.id}`,
-        yandexDriverId: profile.id,
-        fullName: profile.fullName,
-        phone: profile.phones[0] || local?.phone || null,
-        parkId: park.parkId,
-        parkName: park.parkName,
-        workStatus: profile.workStatus,
-        currentStatus: profile.currentStatus,
-        source: 'yandex' as const,
+    const seenYandexProfileIds = new Set<string>()
+    const seenYandexNamePhoneKeys = new Set<string>()
+    const drivers: DriverSearchRow[] = []
+    for (const park of yandex.results) {
+      for (const profile of park.profiles) {
+        yandexProfileIds.add(profile.id)
+        const normalizedName = canonicalDriverNameKeyV1(profile.fullName)
+        const normalizedPhones = profile.phones.map(normalizeDriverPhoneDigitsV1).filter(Boolean)
+        const phones = yandexProfilesByName.get(normalizedName) || new Set<string>()
+        normalizedPhones.forEach(phone => phones.add(phone))
+        yandexProfilesByName.set(normalizedName, phones)
+
+        const namePhoneKeys = normalizedPhones.map(phone => `${normalizedName}\u0000${phone}`)
+        const isDuplicate = seenYandexProfileIds.has(profile.id)
+          || namePhoneKeys.some(key => seenYandexNamePhoneKeys.has(key))
+        if (isDuplicate) continue
+
+        seenYandexProfileIds.add(profile.id)
+        namePhoneKeys.forEach(key => seenYandexNamePhoneKeys.add(key))
+        const local = localByYandexId.get(profile.id)
+        drivers.push({
+          id: local?.id || `yandex:${park.parkId}:${profile.id}`,
+          yandexDriverId: profile.id,
+          fullName: profile.fullName,
+          phone: profile.phones[0] || local?.phone || null,
+          parkId: park.parkId,
+          parkName: park.parkName,
+          workStatus: profile.workStatus,
+          currentStatus: profile.currentStatus,
+          source: 'yandex' as const,
+        })
       }
-    }))
+    }
 
     for (const driver of localDrivers) {
       if (driver.yandexDriverId && yandexProfileIds.has(driver.yandexDriverId)) continue
-      const normalizedName = driver.fullName.toLocaleLowerCase('ru-RU').replace(/\s+/g, ' ').trim()
+      const normalizedName = canonicalDriverNameKeyV1(driver.fullName)
       const matchingYandexPhones = yandexProfilesByName.get(normalizedName)
-      const localPhone = driver.phone?.replace(/\D/g, '') || ''
-      if (matchingYandexPhones && (!localPhone || matchingYandexPhones.has(localPhone))) continue
+      const localPhone = normalizeDriverPhoneDigitsV1(driver.phone)
+      if (matchingYandexPhones && localPhone && matchingYandexPhones.has(localPhone)) continue
       drivers.push({
         id: driver.id,
         yandexDriverId: driver.yandexDriverId,
@@ -115,18 +183,31 @@ export async function POST(req: NextRequest) {
   }
 
   if (body.action === 'link') {
-    const { telegramId, driverId } = body
+    const telegramId = normalizedTelegramId(body.telegramId)
+    const driverId = isBoundedIdentifier(body.driverId) ? body.driverId.trim() : ''
     if (!telegramId || !driverId) {
-      return NextResponse.json({ error: 'telegramId and driverId required' }, { status: 400 })
+      return NextResponse.json({ error: 'valid telegramId and driverId required' }, { status: 400 })
     }
 
     const yandexDriverId = typeof body.yandexDriverId === 'string' ? body.yandexDriverId.trim() : ''
     const parkId = typeof body.parkId === 'string' ? body.parkId.trim() : ''
     const driverName = typeof body.driverName === 'string' ? body.driverName.trim() : ''
-    const username = typeof body.username === 'string' && body.username.trim() ? body.username.trim() : null
+    const usernameValue = typeof body.username === 'string' ? body.username.trim() : ''
+    const username = usernameValue || null
+    if (
+      yandexDriverId.length > DRIVER_ID_MAX_LENGTH
+      || parkId.length > DRIVER_ID_MAX_LENGTH
+      || (body.username !== undefined && body.username !== null && typeof body.username !== 'string')
+      || (username !== null && !TELEGRAM_USERNAME_PATTERN.test(username))
+      || ((!yandexDriverId || !parkId || !driverName) && driverId.startsWith('yandex:'))
+    ) return NextResponse.json({ error: 'Invalid driver identity' }, { status: 400 })
 
     if (yandexDriverId && parkId && driverName) {
-      const verified = await searchYandexParksByDriverQueryV1(driverName)
+      const validatedQuery = normalizeDriverSearchQueryV1(driverName)
+      if (validatedQuery.status === 'invalid') {
+        return NextResponse.json({ error: 'Invalid driver search query' }, { status: 400 })
+      }
+      const verified = await searchYandexParksByDriverQueryV1(validatedQuery.query)
       const park = verified.results.find(result => result.parkId === parkId)
       const profile = park?.profiles.find(candidate => candidate.id === yandexDriverId)
       if (!profile) {

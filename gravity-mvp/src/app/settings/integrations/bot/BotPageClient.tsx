@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { Loader2, X, Search, MessageCircle } from "lucide-react"
+import { deleteBotUserMutation } from "./bot-user-mutations"
 
 interface LinkedDriver {
     id: string
@@ -46,11 +47,19 @@ function formatDate(iso: string) {
 function DriverRow({ row, onUnlink }: { row: LinkedDriver; onUnlink: () => void }) {
     const [confirming, setConfirming] = useState(false)
     const [loading, setLoading] = useState(false)
+    const [error, setError] = useState<string | null>(null)
 
     const handleUnlink = async () => {
         setLoading(true)
-        await fetch(`/api/bot-users?telegramId=${row.telegramId}`, { method: 'DELETE' })
-        onUnlink()
+        setError(null)
+        try {
+            await deleteBotUserMutation({ action: 'unlink', telegramId: row.telegramId })
+            onUnlink()
+        } catch (unlinkError) {
+            setError(unlinkError instanceof Error ? unlinkError.message : 'Не удалось отвязать водителя')
+        } finally {
+            setLoading(false)
+        }
     }
 
     return (
@@ -64,6 +73,7 @@ function DriverRow({ row, onUnlink }: { row: LinkedDriver; onUnlink: () => void 
                     {row.username ? `@${row.username} · ` : ''}ID {row.telegramId}
                     {row.parkName ? ` · ${row.parkName}` : ''}
                 </div>
+                {error && <div className="text-[10px] text-red-600 truncate">{error}</div>}
             </div>
             <div className="text-[11px] text-[#64748B] mr-3 shrink-0">{formatDate(row.createdAt)}</div>
             {row.chatId && (
@@ -155,8 +165,11 @@ function RequestRow({ row, onDismiss, onLinked }: { row: PendingRequest; onDismi
             const data = await response.json()
             if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось привязать водителя')
 
-            const dismissResponse = await fetch(`/api/bot-users?requestId=${row.id}`, { method: 'DELETE' })
-            if (!dismissResponse.ok) throw new Error('Связь сохранена, но запрос не удалось убрать из очереди')
+            try {
+                await deleteBotUserMutation({ action: 'dismiss', requestId: row.id })
+            } catch {
+                throw new Error('Связь сохранена, но запрос не удалось убрать из очереди')
+            }
             onLinked()
         } catch (linkError) {
             setError(linkError instanceof Error ? linkError.message : 'Не удалось привязать водителя')
@@ -167,8 +180,15 @@ function RequestRow({ row, onDismiss, onLinked }: { row: PendingRequest; onDismi
 
     const handleDismiss = async () => {
         setDismissing(true)
-        await fetch(`/api/bot-users?requestId=${row.id}`, { method: 'DELETE' })
-        onDismiss()
+        setError(null)
+        try {
+            await deleteBotUserMutation({ action: 'dismiss', requestId: row.id })
+            onDismiss()
+        } catch (dismissError) {
+            setError(dismissError instanceof Error ? dismissError.message : 'Не удалось убрать запрос')
+        } finally {
+            setDismissing(false)
+        }
     }
 
     const telegramName = [row.firstName, row.lastName].filter(Boolean).join(' ').trim()
@@ -218,6 +238,8 @@ function RequestRow({ row, onDismiss, onLinked }: { row: PendingRequest; onDismi
                     )}
                 </div>
             </div>
+
+            {error && !showSearch && <div className="mt-1 ml-12 text-[11px] text-red-600">{error}</div>}
 
             {showSearch && (
                 <div className="mt-2 ml-12">
