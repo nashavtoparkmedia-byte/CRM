@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import type {
     AiCallCampaignAuditEventV1,
     AiCallCampaignCallV1,
@@ -11,6 +12,7 @@ import { readAiCallFinalizationJournal } from '../../application/ai-call-finaliz
 import { readAiCallCampaignRuntimeMode } from '../../application/ai-call-campaign-runtime-mode'
 
 interface RawSqlDatabase {
+    $queryRaw<T = unknown>(query: TemplateStringsArray | Prisma.Sql, ...values: unknown[]): Promise<T>
     $queryRawUnsafe<T = unknown>(query: string, ...values: unknown[]): Promise<T>
 }
 
@@ -99,7 +101,7 @@ interface AuditRow {
     createdAt: Date
 }
 
-const CAMPAIGN_SELECT = `
+const CAMPAIGN_SELECT = Prisma.sql`
     SELECT c."id", c."name", c."scenarioRef", c."state",
            c."audienceSourceKind", c."audienceSourceRef", c."audienceSourceVersion",
            c."audienceFrozenAt", c."scheduledAt", c."startedAt", c."completedAt", c."cancelledAt",
@@ -132,13 +134,13 @@ const CAMPAIGN_SELECT = `
         FROM "AiCallCampaignMember" m WHERE m."campaignId"=c."id"
     ) p ON TRUE
     LEFT JOIN LATERAL (
-        SELECT COUNT(call."id") FILTER (WHERE call."endedAt" IS NOT NULL) AS "completedCalls",
+        SELECT COUNT(phone_call."id") FILTER (WHERE phone_call."endedAt" IS NOT NULL) AS "completedCalls",
                COALESCE(SUM(
-                 GREATEST(0, EXTRACT(EPOCH FROM (call."endedAt"-call."answeredAt")))::int
-               ) FILTER (WHERE call."answeredAt" IS NOT NULL AND call."endedAt" IS NOT NULL),0)::int
+                 GREATEST(0, EXTRACT(EPOCH FROM (phone_call."endedAt"-phone_call."answeredAt")))::int
+               ) FILTER (WHERE phone_call."answeredAt" IS NOT NULL AND phone_call."endedAt" IS NOT NULL),0)::int
                  AS "connectedDurationSec"
         FROM "AiCallCampaignAttempt" a
-        LEFT JOIN "Call" call ON call."id"=a."callId"
+        LEFT JOIN "Call" phone_call ON phone_call."id"=a."callId"
         WHERE a."campaignId"=c."id"
     ) cost ON TRUE
 `
@@ -226,12 +228,15 @@ export const aiCallCampaignProductPrismaPort = {
         campaigns: AiCallCampaignSummaryV1[]
         nextCursor: string | null
     }> {
-        const rows = await database.$queryRawUnsafe<CampaignProjectionRow[]>(`${CAMPAIGN_SELECT}
-            WHERE ($1::text IS NULL OR c."state"=$1)
-              AND ($2::text IS NULL OR c."id" < $2)
+        const state: string | null = input.state ?? null
+        const cursor: string | null = input.cursor ?? null
+        const limit: number = input.limit + 1
+        const rows = await database.$queryRaw<CampaignProjectionRow[]>`${CAMPAIGN_SELECT}
+            WHERE (${state}::text IS NULL OR c."state"=${state})
+              AND (${cursor}::text IS NULL OR c."id" < ${cursor})
             ORDER BY c."id" DESC
-            LIMIT $3
-        `, input.state ?? null, input.cursor ?? null, input.limit + 1)
+            LIMIT ${limit}
+        `
         const hasMore = rows.length > input.limit
         const visible = hasMore ? rows.slice(0, input.limit) : rows
         return {
@@ -241,9 +246,9 @@ export const aiCallCampaignProductPrismaPort = {
     },
 
     async detail(input: { campaignId: string; memberCursor?: string; memberLimit: number }): Promise<AiCallCampaignDetailV1 | null> {
-        const campaigns = await database.$queryRawUnsafe<CampaignProjectionRow[]>(`${CAMPAIGN_SELECT}
-            WHERE c."id"=$1
-        `, input.campaignId)
+        const campaigns = await database.$queryRaw<CampaignProjectionRow[]>`${CAMPAIGN_SELECT}
+            WHERE c."id"=${input.campaignId}
+        `
         const campaign = campaigns[0]
         if (!campaign) return null
         const memberRows = await database.$queryRawUnsafe<MemberRow[]>(`
@@ -259,12 +264,12 @@ export const aiCallCampaignProductPrismaPort = {
         const attempts = memberIds.length === 0 ? [] : await database.$queryRawUnsafe<AttemptCallRow[]>(`
             SELECT a."id", a."memberId", a."attemptNumber", a."launchId", a."state", a."claimRevision",
                    a."dialEffectRef", a."failureCode", a."startedAt", a."completedAt", a."callId",
-                   call."status"::text AS "callStatus", call."aiSessionStatus"::text AS "aiSessionStatus",
-                   call."startedAt" AS "callStartedAt", call."answeredAt", call."endedAt", call."durationSec",
-                   call."transcript", call."aiSummary", call."aiOutcome"::text AS "aiOutcome",
-                   call."aiOutcomeReason", call."qualificationScore", call."metadata"
+                   phone_call."status"::text AS "callStatus", phone_call."aiSessionStatus"::text AS "aiSessionStatus",
+                   phone_call."startedAt" AS "callStartedAt", phone_call."answeredAt", phone_call."endedAt", phone_call."durationSec",
+                   phone_call."transcript", phone_call."aiSummary", phone_call."aiOutcome"::text AS "aiOutcome",
+                   phone_call."aiOutcomeReason", phone_call."qualificationScore", phone_call."metadata"
             FROM "AiCallCampaignAttempt" a
-            LEFT JOIN "Call" call ON call."id"=a."callId"
+            LEFT JOIN "Call" phone_call ON phone_call."id"=a."callId"
             WHERE a."memberId"=ANY($1::text[])
             ORDER BY a."memberId" ASC, a."attemptNumber" ASC
         `, memberIds)
