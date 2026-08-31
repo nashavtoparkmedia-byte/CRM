@@ -107,6 +107,7 @@ test('MAX outbound text delivery consumes only MAX-owned validated semantic outc
 
 test('MAX phone UI send correlation excludes pre-send and generic activity', () => {
   const scraper = read('max-web-scraper/index.js')
+  const transport = read('max-web-scraper/transport/TransportInterceptor.js')
 
   assertBeforeAfter(
     scraper,
@@ -115,10 +116,13 @@ test('MAX phone UI send correlation excludes pre-send and generic activity', () 
     "await page.keyboard.press('Enter')",
     'phone UI collector cursor must be captured immediately before the send action',
   )
-  assert.match(scraper, /isUiTextSubmitConfirmed\(/)
-  assert.match(scraper, /findCorrelatedUiTextSendEcho\(capturedFrames, \{/)
-  assert.match(scraper, /startIndex: sendFrameStartIndex/)
-  assert.match(scraper, /expectedText: messageToSend/)
+  assert.match(scraper, /evaluatePhoneResolutionUiSend\(\{/)
+  assert.match(scraper, /postActionFrames: postSendFrames/)
+  assert.match(transport, /deliveryConfirmed: false/)
+  assert.match(transport, /chatId: null/)
+  assert.doesNotMatch(scraper, /findCorrelatedUiTextSendEcho/)
+  assert.doesNotMatch(scraper, /exact_text_submit_route_changed/)
+  assert.doesNotMatch(scraper, /confirmationSource = echo\.source/)
   assert.match(scraper, /source: uiDeliveryConfirmed \? 'ui_resolve_send' : 'ui_resolve_send_unconfirmed'/)
   assert.doesNotMatch(scraper, /messageSent: true/)
   assertBeforeAfter(

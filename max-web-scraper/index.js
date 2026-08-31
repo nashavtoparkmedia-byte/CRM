@@ -15,8 +15,7 @@ const { SessionController }        = require('./session/SessionController')
 const {
   TransportInterceptor,
   OP,
-  findCorrelatedUiTextSendEcho,
-  isUiTextSubmitConfirmed,
+  evaluatePhoneResolutionUiSend,
 } = require('./transport/TransportInterceptor')
 const { MessageParser }            = require('./parser/MessageParser')
 const { MediaPipeline }            = require('./media/MediaPipeline')
@@ -3691,7 +3690,6 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
             const composeTextBeforeSubmit = await composeEl.textContent().catch(() => '')
             console.log(`[ResolvePhone] Compose text after typing: "${(composeTextBeforeSubmit || '').slice(0, 50)}"`)
             const sendFrameStartIndex = capturedFrames.length
-            const urlBeforeSend = page.url()
             // Try pressing Enter first (most messaging apps send on Enter)
             await page.keyboard.press('Enter')
             console.log(`[ResolvePhone] Pressed Enter to send`)
@@ -3710,49 +3708,18 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
             }
             await page.waitForTimeout(300)
             const composeTextAfterSubmit = await composeEl.textContent().catch(() => '')
-            const uiActionConfirmed = isUiTextSubmitConfirmed(
-              composeTextBeforeSubmit,
-              composeTextAfterSubmit,
-              messageToSend,
-            )
-            console.log(`[ResolvePhone] UI submit confirmation: ${uiActionConfirmed ? 'exact_text_cleared' : 'unconfirmed'}`)
-
-            let correlatedChatId = null
-            let confirmationSource = uiActionConfirmed ? 'exact_text_submit_compose_cleared' : null
-            if (uiActionConfirmed) {
-              console.log(`[ResolvePhone] Waiting for send-specific route/echo correlation...`)
-              for (let i = 0; i < 50; i++) {
-                await page.waitForTimeout(200)
-                const urlNow = page.url()
-                const urlCid = urlNow.match(/web\.max\.ru\/(\d{12,15})(?:[/?#]|$)/)?.[1]
-                if (urlCid && urlNow !== urlBeforeSend) {
-                  correlatedChatId = urlCid
-                  confirmationSource = 'exact_text_submit_route_changed'
-                  break
-                }
-                const echo = findCorrelatedUiTextSendEcho(capturedFrames, {
-                  startIndex: sendFrameStartIndex,
-                  expectedText: messageToSend,
-                  myUserId: transport._myUserId,
-                })
-                if (echo) {
-                  correlatedChatId = echo.chatId
-                  confirmationSource = echo.source
-                  break
-                }
-              }
-            }
-
             const postSendFrames = capturedFrames.slice(sendFrameStartIndex)
+            const phoneUiOutcome = evaluatePhoneResolutionUiSend({
+              beforeText: composeTextBeforeSubmit,
+              afterText: composeTextAfterSubmit,
+              expectedText: messageToSend,
+              postActionFrames: postSendFrames,
+            })
+            console.log(`[ResolvePhone] UI submit observation: ${phoneUiOutcome.submitObserved ? 'exact_text_cleared' : 'unconfirmed'}; delivery=send_requested`)
             console.log(`[ResolvePhone] Post-action frames:`,
               postSendFrames.map(f => `op:${f.opcode} cmd:${f.cmd}`).join(' | '))
             await returnHome(); cleanup()
-            return {
-              chatId: correlatedChatId,
-              uiSendAttempted: true,
-              deliveryConfirmed: uiActionConfirmed,
-              confirmationSource,
-            }
+            return phoneUiOutcome
           } else {
             console.log(`[ResolvePhone] No compose input found on profile page`)
           }

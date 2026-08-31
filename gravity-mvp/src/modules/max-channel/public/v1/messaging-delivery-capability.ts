@@ -30,9 +30,9 @@ function validateMaxTextDeliveryResultV1(
 
     const error = optionalString(raw.error)
     const hasExplicitError = Object.prototype.hasOwnProperty.call(raw, 'error')
-        && raw.error !== null
-        && raw.error !== undefined
-        && raw.error !== ''
+        && (typeof raw.error === 'string'
+            ? raw.error.trim().length > 0
+            : raw.error !== null && raw.error !== undefined)
     const hasExplicitFailure = raw.success === false || raw.failed === true || raw.failure === true
     if (hasExplicitFailure || hasExplicitError) {
         throw new Error(error || 'MAX delivery failed')

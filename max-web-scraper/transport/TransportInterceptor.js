@@ -396,34 +396,40 @@ function normalizeUiText(value) {
   return String(value ?? '').replace(/\r\n/g, '\n')
 }
 
-function isUiTextSubmitConfirmed(beforeText, afterText, expectedText) {
+function isUiTextSubmitObserved(beforeText, afterText, expectedText) {
   const expected = normalizeUiText(expectedText)
   if (!expected) return false
   return normalizeUiText(beforeText) === expected && normalizeUiText(afterText).trim() === ''
 }
 
-function findCorrelatedUiTextSendEcho(frames, options = {}) {
-  const expectedText = normalizeUiText(options.expectedText)
-  const myUserId = String(options.myUserId || '')
-  const startIndex = Number.isInteger(options.startIndex) && options.startIndex >= 0
-    ? options.startIndex
-    : 0
-  if (!expectedText || !myUserId || !Array.isArray(frames)) return null
+/**
+ * A first send from a phone-resolved profile currently exposes only compose
+ * state and background/own-text frames. None of those signals carries the
+ * CRM operation identity or an independently known expected chat id, so they
+ * cannot prove that this operation delivered to this target.
+ *
+ * Keep the attempted action terminal for the current HTTP request, but leave
+ * delivery pending until MAX exposes an operation- and target-bound proof.
+ */
+function evaluatePhoneResolutionUiSend({
+  beforeText,
+  afterText,
+  expectedText,
+  postActionFrames,
+} = {}) {
+  const submitObserved = isUiTextSubmitObserved(beforeText, afterText, expectedText)
+  const observedFrameCount = Array.isArray(postActionFrames) ? postActionFrames.length : 0
 
-  for (const frame of frames.slice(startIndex)) {
-    if (frame?.opcode !== OP.INCOMING_MSG) continue
-    const payload = Array.isArray(frame.payload)
-      ? frame.payload.find(item => item && typeof item === 'object' && !Array.isArray(item) && item.message)
-      : frame.payload
-    const message = payload?.message
-    if (!message || String(message.sender || message.from || '') !== myUserId) continue
-    if (normalizeUiText(message.text) !== expectedText) continue
-    const chatId = String(payload.chatId || '')
-    if (!/^\d{10,15}$/.test(chatId)) continue
-    return { chatId, source: 'own_text_echo' }
+  return {
+    chatId: null,
+    uiSendAttempted: true,
+    deliveryConfirmed: false,
+    confirmationSource: submitObserved
+      ? 'send_requested_no_authoritative_proof'
+      : 'ui_action_unconfirmed',
+    submitObserved,
+    observedFrameCount,
   }
-
-  return null
 }
 
 class TransportInterceptor {
@@ -2164,6 +2170,6 @@ class TransportInterceptor {
 module.exports = {
   TransportInterceptor,
   OP,
-  findCorrelatedUiTextSendEcho,
-  isUiTextSubmitConfirmed,
+  evaluatePhoneResolutionUiSend,
+  isUiTextSubmitObserved,
 }

@@ -20,6 +20,30 @@ vi.mock('@/modules/max-channel/public/v1/reaction-delivery', () => ({
 import { registerMaxMessagingDeliveryCapabilityV1 } from '../src/modules/max-channel/public/v1/messaging-delivery-capability'
 
 const providerId = 'd3010000000000000001'
+const pendingCases: Array<[Record<string, unknown>, string]> = [
+    [{ success: true, deliveryStatus: 'send_requested' }, 'send_requested'],
+    [{ success: true, deliveryStatus: 'max_echo_pending' }, 'intermediate'],
+    [{}, 'empty'],
+    [{ success: true, deliveryConfirmed: true }, 'partial'],
+    [{
+        success: true,
+        deliveryConfirmed: true,
+        deliveryStatus: 'delivered',
+        deliveryProof: {
+            kind: 'ui_send_action',
+            clientMessageId: 'different-operation',
+            actionConfirmed: true,
+        },
+    }, 'mismatched UI operation'],
+]
+
+const contradictoryFailureCases: Array<Record<string, unknown>> = [
+    { success: false, error: 'provider failed', deliveryConfirmed: true, deliveryStatus: 'delivered' },
+    { success: true, failed: true, deliveryConfirmed: true, deliveryStatus: 'delivered' },
+    { success: true, failure: true, deliveryConfirmed: true, deliveryStatus: 'delivered' },
+    { success: true, error: 'provider failed', deliveryConfirmed: true, deliveryStatus: 'delivered' },
+    { success: true, error: { code: 'provider.failed' }, deliveryConfirmed: true, deliveryStatus: 'delivered' },
+]
 
 describe('MAX-owned text delivery validation', () => {
     beforeEach(() => {
@@ -68,22 +92,7 @@ describe('MAX-owned text delivery validation', () => {
         })
     })
 
-    it.each([
-        [{ success: true, deliveryStatus: 'send_requested' }, 'send_requested'],
-        [{ success: true, deliveryStatus: 'max_echo_pending' }, 'intermediate'],
-        [{}, 'empty'],
-        [{ success: true, deliveryConfirmed: true }, 'partial'],
-        [{
-            success: true,
-            deliveryConfirmed: true,
-            deliveryStatus: 'delivered',
-            deliveryProof: {
-                kind: 'ui_send_action',
-                clientMessageId: 'different-operation',
-                actionConfirmed: true,
-            },
-        }, 'mismatched UI operation'],
-    ])('keeps %s result pending (%s)', async (raw) => {
+    it.each(pendingCases)('keeps %s result pending (%s)', async (raw) => {
         await expect(validate(raw)).resolves.toEqual({
             outcome: 'pending',
             externalId: null,
@@ -91,12 +100,7 @@ describe('MAX-owned text delivery validation', () => {
         })
     })
 
-    it.each([
-        { success: false, error: 'provider failed', deliveryConfirmed: true, deliveryStatus: 'delivered' },
-        { success: true, failed: true, deliveryConfirmed: true, deliveryStatus: 'delivered' },
-        { success: true, error: 'provider failed', deliveryConfirmed: true, deliveryStatus: 'delivered' },
-        { success: true, error: { code: 'provider.failed' }, deliveryConfirmed: true, deliveryStatus: 'delivered' },
-    ])('fails closed when failure contradicts delivered metadata', async (raw) => {
+    it.each(contradictoryFailureCases)('fails closed when failure contradicts delivered metadata', async (raw) => {
         await expect(validate(raw, 'cmid-error')).rejects.toThrow(/provider failed|MAX delivery failed/)
     })
 })

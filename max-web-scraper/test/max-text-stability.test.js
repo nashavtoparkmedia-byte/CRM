@@ -6,8 +6,8 @@ const assert = require('node:assert/strict')
 const { MessageSync } = require('../sync/MessageSync')
 const {
   TransportInterceptor,
-  findCorrelatedUiTextSendEcho,
-  isUiTextSubmitConfirmed,
+  evaluatePhoneResolutionUiSend,
+  isUiTextSubmitObserved,
 } = require('../transport/TransportInterceptor')
 
 function isolatedSync() {
@@ -17,54 +17,89 @@ function isolatedSync() {
   return sync
 }
 
-test('phone UI send confirmation requires the exact submitted text to clear', () => {
-  assert.equal(isUiTextSubmitConfirmed('Bounded repair', '', 'Bounded repair'), true)
-  assert.equal(isUiTextSubmitConfirmed('', '', 'Bounded repair'), false)
-  assert.equal(isUiTextSubmitConfirmed('Other text', '', 'Bounded repair'), false)
-  assert.equal(isUiTextSubmitConfirmed('Bounded repair', 'Bounded repair', 'Bounded repair'), false)
+test('phone UI compose observation recognizes only the exact submitted text clearing', () => {
+  assert.equal(isUiTextSubmitObserved('Bounded repair', '', 'Bounded repair'), true)
+  assert.equal(isUiTextSubmitObserved('', '', 'Bounded repair'), false)
+  assert.equal(isUiTextSubmitObserved('Other text', '', 'Bounded repair'), false)
+  assert.equal(isUiTextSubmitObserved('Bounded repair', 'Bounded repair', 'Bounded repair'), false)
 })
 
-test('phone UI send correlation ignores pre-send and unrelated frames', () => {
-  const frames = [
-    {
-      opcode: 128,
-      payload: { chatId: '902000000001', message: { sender: 'self-1', text: 'Bounded repair' } },
-    },
-    { opcode: 198, payload: { commonChats: [{ id: '902000000002' }] } },
-    { opcode: 72, payload: { chatId: '902000000003' } },
-    {
-      opcode: 128,
-      payload: { chatId: '902000000004', message: { sender: 'other-user', text: 'Bounded repair' } },
-    },
-  ]
-
-  assert.equal(findCorrelatedUiTextSendEcho(frames, {
-    startIndex: 1,
+test('phone UI compose clear without an operation-bound proof stays pending', () => {
+  assert.deepEqual(evaluatePhoneResolutionUiSend({
+    beforeText: 'Bounded repair',
+    afterText: '',
     expectedText: 'Bounded repair',
-    myUserId: 'self-1',
-  }), null)
+    postActionFrames: [],
+  }), {
+    chatId: null,
+    uiSendAttempted: true,
+    deliveryConfirmed: false,
+    confirmationSource: 'send_requested_no_authoritative_proof',
+    submitObserved: true,
+    observedFrameCount: 0,
+  })
 })
 
-test('phone UI send correlation accepts the current post-action own-text echo', () => {
-  const frames = [
-    { opcode: 198, payload: { commonChats: [{ id: '902000000001' }] } },
+test('phone UI delayed identical-text own echo stays pending', () => {
+  const delayedEcho = [
     {
       opcode: 128,
       payload: {
-        chatId: '902454841098',
+        chatId: '902000000888',
         message: { sender: 'self-1', text: 'Bounded repair' },
       },
     },
   ]
 
-  assert.deepEqual(findCorrelatedUiTextSendEcho(frames, {
-    startIndex: 1,
+  const result = evaluatePhoneResolutionUiSend({
+    beforeText: 'Bounded repair',
+    afterText: '',
     expectedText: 'Bounded repair',
-    myUserId: 'self-1',
-  }), {
-    chatId: '902454841098',
-    source: 'own_text_echo',
+    postActionFrames: delayedEcho,
   })
+
+  assert.equal(result.deliveryConfirmed, false)
+  assert.equal(result.chatId, null)
+})
+
+test('phone UI own echo from the wrong chat stays pending', () => {
+  const wrongChatEcho = [
+    {
+      opcode: 128,
+      payload: {
+        chatId: '902000000999',
+        message: { sender: 'self-1', text: 'Bounded repair' },
+      },
+    },
+  ]
+
+  const result = evaluatePhoneResolutionUiSend({
+    beforeText: 'Bounded repair',
+    afterText: '',
+    expectedText: 'Bounded repair',
+    postActionFrames: wrongChatEcho,
+  })
+
+  assert.equal(result.deliveryConfirmed, false)
+  assert.equal(result.chatId, null)
+})
+
+test('phone UI unrelated and background frames stay pending', () => {
+  const backgroundFrames = [
+    { opcode: 198, payload: { commonChats: [{ id: '902000000001' }] } },
+    { opcode: 72, payload: { chatId: '902000000003' } },
+  ]
+
+  const result = evaluatePhoneResolutionUiSend({
+    beforeText: 'Bounded repair',
+    afterText: '',
+    expectedText: 'Bounded repair',
+    postActionFrames: backgroundFrames,
+  })
+
+  assert.equal(result.deliveryConfirmed, false)
+  assert.equal(result.chatId, null)
+  assert.equal(result.observedFrameCount, 2)
 })
 
 test('dedups MAX text replay only by provider message id', () => {
