@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 from __future__ import annotations
 
+import base64
+import gzip
 import hashlib
 import io
 import importlib.machinery
@@ -27,6 +29,8 @@ POLICY_SHA = "8727373b0c6ec79c9abf82f1aaaa58abc2bae67e96aa96a602ac419f308db0e0"
 SUDOERS_SHA = "3022dcfc323706da81e760255dd1ab43f9b8662ee699aa8b58fbe6e714cc69d7"
 TG_PATCH_PATH = "tg-bot/src/public-bot-maintenance.js"
 MIGRATION_AUTHORITY_PATH = "architecture/migrations/v1/production-migration-authority.json"
+MIGRATION_TREE_PATH = "gravity-mvp/prisma/migrations"
+PRODUCTION_SCHEMA_PATH = "gravity-mvp/prisma/schema.prisma"
 PREDECESSOR_ATTESTATION_PATH = "architecture/migrations/v1/predecessor-runtime-migration-inventory.json"
 AUTHORITATIVE_WORKFLOW_PATH = ".github/workflows/architecture-enforcement.yml"
 AUTHORITATIVE_RUNNER_PATH = "tools/architecture/run-authoritative-ci.mjs"
@@ -63,6 +67,62 @@ def git_blob(repo: Path, revision: str | None, relative: str) -> bytes:
         ["/usr/bin/git", "-C", str(repo), "show", object_name],
         check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30,
     ).stdout
+
+
+def canonical_production_schema(repo: Path, authority: dict[str, object]) -> bytes:
+    schema = authority["current_schema"]
+    assert isinstance(schema, dict)
+    derivation = schema["derivation"]
+    assert isinstance(derivation, dict)
+
+    def capture(key: str) -> bytes:
+        descriptor = derivation[key]
+        assert isinstance(descriptor, dict)
+        relative = descriptor["path"]
+        assert isinstance(relative, str) and relative.startswith(
+            "architecture/migrations/v1/provenance/schema/",
+        )
+        encoded = (repo / relative).read_bytes()
+        if (
+            len(encoded) != descriptor["capture_size"]
+            or hashlib.sha256(encoded).hexdigest() != descriptor["capture_sha256"]
+            or descriptor["encoding"] != "base64(gzip-n)"
+        ):
+            raise RuntimeError(f"canonical schema {key} capture identity drift")
+        compressed = base64.b64decode(b"".join(encoded.split()), validate=True)
+        decoded = gzip.decompress(compressed)
+        if (
+            len(decoded) != descriptor["decoded_size"]
+            or hashlib.sha256(decoded).hexdigest() != descriptor["decoded_sha256"]
+        ):
+            raise RuntimeError(f"canonical schema {key} decoded identity drift")
+        return decoded
+
+    with tempfile.TemporaryDirectory(prefix="runtime-v10-schema-derivation-") as temporary:
+        root = Path(temporary)
+        ours = root / "starting.prisma"
+        ancestor = root / "base.prisma"
+        theirs = root / "production.prisma"
+        ours.write_bytes(capture("starting_schema_capture"))
+        ancestor.write_bytes(capture("merge_base_schema_capture"))
+        theirs.write_bytes(capture("production_schema_capture"))
+        merged = subprocess.run(
+            ["/usr/bin/git", "merge-file", "-p", str(ours), str(ancestor), str(theirs)],
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=60,
+        ).stdout
+    if hashlib.sha256(merged).hexdigest() != derivation["clean_merge_sha256"]:
+        raise RuntimeError("canonical schema clean-merge identity drift")
+    anchor = b"  activeParkId  String?\n  createdAt"
+    if merged.count(anchor) != 1:
+        raise RuntimeError("canonical schema recovery anchor drift")
+    recovered = merged.replace(
+        anchor,
+        b"  activeParkId  String?\n  submittedPhone String?\n"
+        b"  submittedPhoneAt DateTime?\n  createdAt",
+    )
+    if hashlib.sha256(recovered).hexdigest() != schema["sha256"]:
+        raise RuntimeError("canonical schema derivation differs from authority")
+    return recovered
 
 
 def deterministic_tar(files: dict[str, bytes]) -> bytes:
@@ -319,7 +379,10 @@ class StaticContractTests(unittest.TestCase):
         self.assertIn('run_identity["head_sha"] != commit', seal)
         self.assertIn('if check_identity != {', seal)
         self.assertIn('"head_sha": commit,', seal)
-        self.assertIn('PREDECESSOR_COMMIT, commit, "--", "gravity-mvp/prisma/migrations"', seal)
+        self.assertIn("def assert_migration_tree_unchanged", seal)
+        self.assertIn("assert_migration_tree_unchanged(repo, commit)", seal)
+        self.assertIn('MIGRATION_TREE_PATH = "gravity-mvp/prisma/migrations"', seal)
+        self.assertIn("assert_source_schema_matches_authority(repo, commit, authority)", seal)
         self.assertIn('"--predecessor-attestation"', seal)
         self.assertIn('gravity_attested != authority_predecessor', seal)
         self.assertIn('attestation_inventory_sha256 != attestation["inventory_sha256"]', seal)
@@ -929,6 +992,97 @@ class HostedCiAcceptanceTests(unittest.TestCase):
         finally:
             self.sealer.git_blob = original_git_blob
 
+    def test_source_only_migration_tree_identity_fails_closed_on_every_delta(self) -> None:
+        def commit(repo: Path, message: str) -> str:
+            subprocess.run(
+                ["/usr/bin/git", "-C", str(repo), "add", "--all"],
+                check=True, stdout=subprocess.DEVNULL, timeout=30,
+            )
+            subprocess.run(
+                ["/usr/bin/git", "-C", str(repo), "commit", "--quiet", "-m", message],
+                check=True, timeout=30,
+            )
+            return subprocess.check_output(
+                ["/usr/bin/git", "-C", str(repo), "rev-parse", "HEAD"],
+                text=True, timeout=30,
+            ).strip()
+
+        def fixture() -> tuple[tempfile.TemporaryDirectory[str], Path, Path, str]:
+            temporary = tempfile.TemporaryDirectory(prefix="runtime-v10-migration-identity-")
+            repo = Path(temporary.name)
+            subprocess.run(["/usr/bin/git", "-C", str(repo), "init", "--quiet"], check=True, timeout=30)
+            subprocess.run(["/usr/bin/git", "-C", str(repo), "config", "user.name", "Runtime v10 test fixture"], check=True)
+            subprocess.run(["/usr/bin/git", "-C", str(repo), "config", "user.email", "runtime-v10-fixture@example.invalid"], check=True)
+            migration = repo / MIGRATION_TREE_PATH / "20260809140000_base" / "migration.sql"
+            migration.parent.mkdir(parents=True)
+            migration.write_text("CREATE TABLE base_fixture (id text);\n", encoding="ascii")
+            predecessor = commit(repo, "fixture: predecessor migration tree")
+            return temporary, repo, migration, predecessor
+
+        original_predecessor = self.sealer.PREDECESSOR_COMMIT
+        try:
+            temporary, repo, _migration, predecessor = fixture()
+            with temporary:
+                (repo / "accepted-source.txt").write_text("source-only candidate\n", encoding="ascii")
+                candidate = commit(repo, "fixture: source-only candidate")
+                self.sealer.PREDECESSOR_COMMIT = predecessor
+                self.sealer.assert_migration_tree_unchanged(repo, candidate)
+
+            for delta in ("added", "modified", "deleted", "renamed", "mode-changed"):
+                with self.subTest(delta=delta):
+                    temporary, repo, migration, predecessor = fixture()
+                    with temporary:
+                        if delta == "added":
+                            added = repo / MIGRATION_TREE_PATH / "20260831120000_unreviewed" / "migration.sql"
+                            added.parent.mkdir(parents=True)
+                            added.write_text("DROP TABLE base_fixture;\n", encoding="ascii")
+                        elif delta == "modified":
+                            migration.write_text("DROP TABLE base_fixture;\n", encoding="ascii")
+                        elif delta == "deleted":
+                            migration.unlink()
+                        elif delta == "renamed":
+                            renamed = repo / MIGRATION_TREE_PATH / "20260809140001_renamed" / "migration.sql"
+                            renamed.parent.mkdir(parents=True)
+                            migration.rename(renamed)
+                        else:
+                            migration.chmod(0o755)
+                        candidate = commit(repo, f"fixture: {delta} migration tree")
+                        self.sealer.PREDECESSOR_COMMIT = predecessor
+                        with self.assertRaisesRegex(SystemExit, "migration tree differs"):
+                            self.sealer.assert_migration_tree_unchanged(repo, candidate)
+        finally:
+            self.sealer.PREDECESSOR_COMMIT = original_predecessor
+
+    def test_source_schema_must_match_exact_production_authority(self) -> None:
+        authority = json.loads((repository_root() / MIGRATION_AUTHORITY_PATH).read_text())
+        canonical = canonical_production_schema(repository_root(), authority)
+        self.assertEqual(
+            hashlib.sha256(canonical).hexdigest(),
+            authority["current_schema"]["sha256"],
+        )
+        original_git_blob = self.sealer.git_blob
+        try:
+            self.sealer.git_blob = lambda _repo, _commit, _path: canonical
+            self.assertEqual(
+                self.sealer.assert_source_schema_matches_authority(
+                    Path("/accepted/repository"), self.commit, authority,
+                ),
+                authority["current_schema"]["sha256"],
+            )
+            self.sealer.git_blob = lambda _repo, _commit, _path: canonical + b"\n"
+            with self.assertRaisesRegex(SystemExit, "source schema differs"):
+                self.sealer.assert_source_schema_matches_authority(
+                    Path("/accepted/repository"), self.commit, authority,
+                )
+            forged_authority = json.loads(json.dumps(authority))
+            forged_authority["current_schema"]["sha256"] = hashlib.sha256(canonical + b"\n").hexdigest()
+            with self.assertRaisesRegex(SystemExit, "schema authority invalid"):
+                self.sealer.assert_source_schema_matches_authority(
+                    Path("/accepted/repository"), self.commit, forged_authority,
+                )
+        finally:
+            self.sealer.git_blob = original_git_blob
+
     def validate(
         self,
         value: object,
@@ -1235,6 +1389,37 @@ class SealedFixtureTests(unittest.TestCase):
             authority_path.write_bytes(reviewed_authority)
             subprocess.run(["/usr/bin/git", "-C", str(cls.repo), "add", MIGRATION_AUTHORITY_PATH], check=True)
             subprocess.run(["/usr/bin/git", "-C", str(cls.repo), "commit", "--quiet", "-m", "fixture: exact migration authority"], check=True)
+        # This positive fixture models the exact Runtime v10 source-only
+        # acceptance boundary, not later pending application migrations/schema.
+        # Keep its disposable database source byte-identical to the separately
+        # sealed authorities while the real checkout stays untouched.
+        subprocess.run([
+            "/usr/bin/git", "-C", str(cls.repo), "restore",
+            "--source", "7aea2823efe50e13a156540993d424594025e403",
+            "--staged", "--worktree", "--", MIGRATION_TREE_PATH,
+        ], check=True, timeout=60)
+        fixture_authority = json.loads(reviewed_authority)
+        schema_authority = fixture_authority["current_schema"]
+        (cls.repo / PRODUCTION_SCHEMA_PATH).write_bytes(
+            canonical_production_schema(cls.source_repo, fixture_authority),
+        )
+        subprocess.run([
+            "/usr/bin/git", "-C", str(cls.repo), "add", "--", PRODUCTION_SCHEMA_PATH,
+        ], check=True, timeout=60)
+        if (
+            schema_authority["path"] != PRODUCTION_SCHEMA_PATH
+            or hashlib.sha256((cls.repo / PRODUCTION_SCHEMA_PATH).read_bytes()).hexdigest()
+            != schema_authority["sha256"]
+        ):
+            raise RuntimeError("fixture lacks the exact canonical production schema")
+        if subprocess.run([
+            "/usr/bin/git", "-C", str(cls.repo), "diff", "--cached", "--quiet",
+            "--", MIGRATION_TREE_PATH, PRODUCTION_SCHEMA_PATH,
+        ]).returncode != 0:
+            subprocess.run([
+                "/usr/bin/git", "-C", str(cls.repo), "commit", "--quiet", "-m",
+                "fixture: bind Runtime v10 database source authority",
+            ], check=True, timeout=60)
         # The production sealer executes the external staging builder only when
         # every tracked source byte is present in the exact accepted commit.
         # During pre-commit development, materialize those reviewed working
@@ -1302,6 +1487,10 @@ class SealedFixtureTests(unittest.TestCase):
         fixture_sealer = importlib.util.module_from_spec(spec)
         sys.modules[loader.name] = fixture_sealer
         loader.exec_module(fixture_sealer)
+        fixture_sealer.assert_migration_tree_unchanged(cls.repo, cls.commit)
+        fixture_sealer.assert_source_schema_matches_authority(
+            cls.repo, cls.commit, fixture_authority,
+        )
 
         layer_archive = deterministic_tar({"fixture.txt": b"hosted gravity image fixture\n"})
         layer_digest = hashlib.sha256(layer_archive).hexdigest()
