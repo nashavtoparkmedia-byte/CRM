@@ -7,16 +7,16 @@
     "role": "SOL_HIGH_INTERNAL_REVIEW",
     "external_acceptance": false,
     "independent_acceptance": false,
-    "decision": "Internal remediation materialization records the exact baseline-to-current ownership assignments and exact-inventory transitions enumerated below. The reviewed current denominator includes the accepted AI Calls Stage 1–5 runtime/proof files and source-isolated mass-calling migration under Calling ownership, the reconciled current-main Telegram link restoration under existing Telegram Channel and Fleet Operations paths, and the two exact native Codex Stage 0 skill metadata files under repository_operations ownership. The Codex metadata transition is bounded to instruction-only YAML with explicit invocation and no production, credential, provider, telephony, or write capability. The declared current-dependency manifest prevents test-source literals from becoming a second authority; this artifact is not external or independent acceptance."
+    "decision": "Internal remediation materialization records the exact baseline-to-current ownership assignments and exact-inventory transitions enumerated below. The reviewed current denominator includes the accepted AI Calls Stage 1–5 runtime/proof files, the production-shaped campaign API and CRM product surface, and source-isolated mass-calling migration under Calling ownership; the migration SQL remains governed by gravity application operations. It also includes the reconciled current-main Telegram link restoration under existing Telegram Channel and Fleet Operations paths and the two exact native Codex Stage 0 skill metadata files under repository_operations ownership. The Codex metadata transition is bounded to instruction-only YAML with explicit invocation and no production, credential, provider, telephony, or write capability. The declared current-dependency manifest prevents test-source literals from becoming a second authority; this artifact is not external or independent acceptance."
   },
   "baseline": {
     "coverage_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_COVERAGE_BASELINE_2108.json",
     "coverage_sha256": "bd7df022d08734ec500336907c4c1dadc6c6ac3c7f3df23c1df0d307a4cdfb29"
   },
   "current": {
-    "tracked_inventory_sha256": "a2209d47e17c14ecf21af2117a37714d641f9f883b5413c30fe66dfc84c33515",
-    "tracked_executable_surfaces": 2242,
-    "coverage_sha256": "1366a34fdd0b0f3594c06d5bdfc1b93cba298c03ac483836c6a1aff00745f4f8"
+    "tracked_inventory_sha256": "1cf8e958ad238313a6c2544f3350ccf6323f1524d8a7417b47f3a9ceafdd412b",
+    "tracked_executable_surfaces": 2261,
+    "coverage_sha256": "c68cf1c3dfd170685f033e644a58e99740e1d529a8a00512f9ad3372b075c2f6"
   },
   "exact_inventory_changes": [
     {

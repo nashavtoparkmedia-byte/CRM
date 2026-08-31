@@ -28,9 +28,11 @@ function deferred<T = void>() {
 }
 
 async function cleanup() {
+    await database.$executeRawUnsafe('DELETE FROM "AiCallCampaignAuditEvent"')
     await database.$executeRawUnsafe('DELETE FROM "AiCallAdmissionLease"')
     await database.$executeRawUnsafe('UPDATE "AiCallCampaignMember" SET "activeAttemptId"=NULL')
     await database.$executeRawUnsafe('DELETE FROM "AiCallCampaignAttempt"')
+    await database.$executeRawUnsafe('DELETE FROM "Call" WHERE "id" LIKE $1', `${PREFIX}:%`)
     await database.$executeRawUnsafe('DELETE FROM "AiCallCampaignMember"')
     await database.$executeRawUnsafe('DELETE FROM "AiCallCampaign"')
     await database.$executeRawUnsafe('DELETE FROM "AiCallAdmissionControl"')
@@ -108,7 +110,7 @@ postgresProof.sequential('Calling mass-campaign isolated PostgreSQL runtime', ()
     beforeAll(async () => {
         const tables = await database.$queryRawUnsafe<Array<{ table_name: string }>>(`
             SELECT table_name FROM information_schema.tables
-            WHERE table_schema='public' AND table_name LIKE 'AiCall%'
+            WHERE table_schema=current_schema() AND table_name LIKE 'AiCall%'
         `)
         const names = tables.map((row) => row.table_name)
         expect(names).toEqual(expect.arrayContaining([
@@ -162,7 +164,7 @@ postgresProof.sequential('Calling mass-campaign isolated PostgreSQL runtime', ()
 
         const indexes = await database.$queryRawUnsafe<Array<{ indexname: string }>>(`
             SELECT indexname FROM pg_indexes
-            WHERE schemaname='public' AND tablename IN (
+            WHERE schemaname=current_schema() AND tablename IN (
                 'AiCallCampaign','AiCallCampaignMember','AiCallCampaignAttempt','AiCallAdmissionLease'
             )
         `)
@@ -207,7 +209,9 @@ postgresProof.sequential('Calling mass-campaign isolated PostgreSQL runtime', ()
             return { scheduler, freshMember, recovery }
         })
         expect(JSON.stringify(plans.scheduler)).toContain('AiCallCampaign_state_scheduledAt_createdAt_idx')
-        expect(JSON.stringify(plans.freshMember)).toContain('AiCallCampaignMember_campaign_state_nextEligibleAt_id_idx')
+        expect(JSON.stringify(plans.freshMember)).toMatch(
+            /AiCallCampaignMember_(?:campaign_)?state_nextEligibleAt_id_idx/,
+        )
         expect(JSON.stringify(plans.recovery)).toMatch(
             /AiCallCampaignAttempt_(?:campaign_state_createdAt_idx|member_attempt_key)/,
         )
@@ -289,6 +293,235 @@ postgresProof.sequential('Calling mass-campaign isolated PostgreSQL runtime', ()
         const view = await aiCallCampaignPrismaPort.getCampaign(campaignId)
         expect(view?.progress.succeeded).toBe(2)
         expect(view?.campaign.state).toBe('completed')
+    })
+
+    it('keeps an admitted dial recoverable while cancellation waits for linked settlement', async () => {
+        const campaignId = `${PREFIX}:cancel-during-dial`
+        const callId = `${PREFIX}:cancel-during-dial:call`
+        await prepareCampaign({ id: campaignId, targets: ['cancel-active'] })
+        await aiCallCampaignPrismaPort.configureGlobalAdmission({
+            concurrentLimit: 1, ratePerMinute: 60_000, now: BASE,
+        })
+        const entered = deferred()
+        const release = deferred()
+        const holdingDial: AiCallCampaignDialPort = {
+            async dial(request) {
+                await prisma.call.create({
+                    data: {
+                        id: callId,
+                        direction: 'outbound',
+                        status: 'active',
+                        fromNumber: '+70000000000',
+                        toNumber: request.phoneE164,
+                        managerId: 'system:campaign-cancel-proof',
+                        fsUuid: `${PREFIX}:cancel-fs`,
+                        startedAt: BASE,
+                    },
+                })
+                entered.resolve()
+                await release.promise
+                return {
+                    callId,
+                    effectRef: `effect:${request.launchId}`,
+                    terminal: { eventId: `result:${request.launchId}`, kind: 'success' },
+                }
+            },
+        }
+        const worker = createAiCallCampaignWorkerRuntime({
+            dial: holdingDial,
+            workerId: 'cancel-active-worker',
+            clock: () => BASE,
+            claimLeaseMs: 5_000,
+            admissionLeaseMs: 5_000,
+        })
+        const active = worker()
+        await entered.promise
+        expect(await aiCallCampaignPrismaPort.cancel(campaignId, BASE)).toMatchObject({ status: 'cancelling' })
+        const cancelling = await aiCallCampaignPrismaPort.getCampaign(campaignId)
+        expect(cancelling?.campaign.state).toBe('cancelling')
+        expect(cancelling?.members[0].state).toBe('running')
+        expect(cancelling?.attempts[0].state).toBe('running')
+        release.resolve()
+        await expect(active).resolves.toMatchObject({
+            kind: 'completed', memberState: 'cancelled', campaignState: 'cancelled',
+        })
+        const settled = await aiCallCampaignPrismaPort.getCampaign(campaignId)
+        expect(settled?.campaign.state).toBe('cancelled')
+        expect(settled?.members[0].state).toBe('cancelled')
+        expect(settled?.attempts[0]).toMatchObject({ state: 'succeeded', callId })
+        await expect(database.$queryRawUnsafe<Array<{ count: number }>>(`
+            SELECT COUNT(*)::int AS "count" FROM "Call" WHERE "id"=$1
+        `, callId)).resolves.toEqual([{ count: 1 }])
+    })
+
+    it('keeps a crashed cancelling effect recoverable across an admission deferral', async () => {
+        const campaignId = `${PREFIX}:cancel-recovery-blocked`
+        const callId = `${PREFIX}:cancel-recovery-blocked:call`
+        await prepareCampaign({ id: campaignId, targets: ['cancel-recovery'], ratePerMinute: 60_000 })
+        await aiCallCampaignPrismaPort.configureGlobalAdmission({
+            concurrentLimit: 1, ratePerMinute: 60_000, now: BASE,
+        })
+        let nowMs = BASE.getTime()
+        let dialCount = 0
+        const replayingDial: AiCallCampaignDialPort = {
+            async dial(request) {
+                dialCount += 1
+                await prisma.call.upsert({
+                    where: { id: callId },
+                    create: {
+                        id: callId,
+                        direction: 'outbound',
+                        status: 'active',
+                        fromNumber: '+70000000000',
+                        toNumber: request.phoneE164,
+                        managerId: 'system:campaign-cancel-recovery-proof',
+                        fsUuid: `${PREFIX}:cancel-recovery-fs`,
+                        startedAt: BASE,
+                    },
+                    update: {},
+                })
+                if (dialCount === 1) throw new Error('CONTROLLED_EXIT_AFTER_DIAL_ACCEPTANCE')
+                return {
+                    callId,
+                    effectRef: `effect:${request.launchId}`,
+                    terminal: { eventId: `result:${request.launchId}`, kind: 'success' },
+                }
+            },
+        }
+        const worker = createAiCallCampaignWorkerRuntime({
+            dial: replayingDial,
+            workerId: 'cancel-recovery-worker',
+            clock: () => new Date(nowMs),
+            claimLeaseMs: 100,
+            admissionLeaseMs: 100,
+        })
+
+        await expect(worker()).rejects.toThrow('CONTROLLED_EXIT_AFTER_DIAL_ACCEPTANCE')
+        nowMs += 1
+        await expect(aiCallCampaignPrismaPort.cancel(campaignId, new Date(nowMs)))
+            .resolves.toMatchObject({ status: 'cancelling' })
+
+        const retryAt = new Date(BASE.getTime() + 500)
+        await database.$executeRawUnsafe(`
+            UPDATE "AiCallAdmissionControl" SET "nextAdmitAt"=$1 WHERE "id"='global'
+        `, retryAt)
+        nowMs = BASE.getTime() + 101
+        await expect(worker()).resolves.toMatchObject({
+            kind: 'blocked', reason: 'rate', retryAt,
+        })
+        const deferred = await aiCallCampaignPrismaPort.getCampaign(campaignId)
+        expect(deferred?.campaign.state).toBe('cancelling')
+        expect(deferred?.members[0]).toMatchObject({ state: 'running', nextEligibleAt: retryAt })
+        expect(deferred?.attempts[0]).toMatchObject({
+            state: 'running', claimRevision: 2, claimUntil: retryAt, dialExecutionCount: 1,
+        })
+
+        nowMs = retryAt.getTime()
+        await expect(worker()).resolves.toMatchObject({
+            kind: 'completed', memberState: 'cancelled', campaignState: 'cancelled',
+        })
+        expect(dialCount).toBe(2)
+        const settled = await aiCallCampaignPrismaPort.getCampaign(campaignId)
+        expect(settled?.campaign.state).toBe('cancelled')
+        expect(settled?.members[0].state).toBe('cancelled')
+        expect(settled?.attempts[0]).toMatchObject({
+            state: 'succeeded', callId, dialExecutionCount: 2,
+        })
+        await expect(database.$queryRawUnsafe<Array<{ count: number }>>(`
+            SELECT COUNT(*)::int AS "count" FROM "Call" WHERE "id"=$1
+        `, callId)).resolves.toEqual([{ count: 1 }])
+    })
+
+    it('heartbeats slow admitted work and prevents concurrent redial after initial expiry', async () => {
+        const campaignId = `${PREFIX}:slow-heartbeat`
+        await prepareCampaign({ id: campaignId, targets: ['slow'] })
+        const initial = new Date()
+        await aiCallCampaignPrismaPort.configureGlobalAdmission({
+            concurrentLimit: 1, ratePerMinute: 60_000, now: initial,
+        })
+        const entered = deferred()
+        const release = deferred()
+        let dialCount = 0
+        const holdingDial: AiCallCampaignDialPort = {
+            async dial(request) {
+                dialCount += 1
+                entered.resolve()
+                await release.promise
+                return {
+                    effectRef: `effect:${request.launchId}`,
+                    terminal: { eventId: `result:${request.launchId}`, kind: 'success' },
+                }
+            },
+        }
+        const workerA = createAiCallCampaignWorkerRuntime({
+            dial: holdingDial, workerId: 'slow-worker-a', claimLeaseMs: 90, admissionLeaseMs: 90,
+        })
+        const workerB = createAiCallCampaignWorkerRuntime({
+            dial: holdingDial, workerId: 'slow-worker-b', claimLeaseMs: 90, admissionLeaseMs: 90,
+        })
+        const active = workerA()
+        await entered.promise
+        await new Promise((resolve) => setTimeout(resolve, 220))
+        await expect(workerB()).resolves.toMatchObject({ kind: 'idle' })
+        expect(dialCount).toBe(1)
+        const lease = await database.$queryRawUnsafe<Array<{ leaseUntil: Date }>>(`
+            SELECT "leaseUntil" FROM "AiCallAdmissionLease"
+            WHERE "campaignId"=$1 AND "releasedAt" IS NULL
+        `, campaignId)
+        expect(lease[0].leaseUntil.getTime()).toBeGreaterThan(initial.getTime() + 90)
+        release.resolve()
+        await expect(active).resolves.toMatchObject({ kind: 'completed' })
+    })
+
+    it('counts admitted dial executions independently from admission deferrals', async () => {
+        const campaignId = `${PREFIX}:poison-adapter`
+        await prepareCampaign({ id: campaignId, targets: ['poison'], ratePerMinute: 60_000 })
+        await aiCallCampaignPrismaPort.configureGlobalAdmission({
+            concurrentLimit: 1, ratePerMinute: 60_000, now: BASE,
+        })
+        let nowMs = BASE.getTime()
+        let invocations = 0
+        const worker = createAiCallCampaignWorkerRuntime({
+            dial: {
+                async dial() {
+                    invocations += 1
+                    throw new Error('CONTROLLED_POISON_ADAPTER')
+                },
+            },
+            workerId: 'poison-worker',
+            clock: () => new Date(nowMs),
+            claimLeaseMs: 100,
+            admissionLeaseMs: 100,
+        })
+        await database.$executeRawUnsafe(`
+            UPDATE "AiCallAdmissionControl" SET "nextAdmitAt"=$1 WHERE "id"='global'
+        `, new Date(BASE.getTime() + 100))
+        await expect(worker()).resolves.toMatchObject({ kind: 'blocked', reason: 'rate' })
+        nowMs += 100
+        await database.$executeRawUnsafe(`
+            UPDATE "AiCallAdmissionControl" SET "nextAdmitAt"=$1 WHERE "id"='global'
+        `, new Date(BASE.getTime() + 200))
+        await expect(worker()).resolves.toMatchObject({ kind: 'blocked', reason: 'rate' })
+        expect(invocations).toBe(0)
+        nowMs += 100
+        await database.$executeRawUnsafe(`
+            UPDATE "AiCallAdmissionControl" SET "nextAdmitAt"=NULL WHERE "id"='global'
+        `)
+        await expect(worker()).rejects.toThrow('CONTROLLED_POISON_ADAPTER')
+        nowMs += 101
+        await expect(worker()).rejects.toThrow('CONTROLLED_POISON_ADAPTER')
+        nowMs += 101
+        await expect(worker()).resolves.toMatchObject({ kind: 'completed', memberState: 'failed' })
+        expect(invocations).toBe(3)
+        const view = await aiCallCampaignPrismaPort.getCampaign(campaignId)
+        expect(view?.campaign.state).toBe('completed')
+        expect(view?.members[0]).toMatchObject({
+            state: 'failed', failureCode: 'dial_adapter_repeated_failure',
+        })
+        expect(view?.attempts[0]).toMatchObject({
+            state: 'permanent_failure', claimRevision: 5, dialExecutionCount: 3,
+            failureCode: 'dial_adapter_repeated_failure',
+        })
     })
 
     it('serializes two workers racing for the final campaign-local slot', async () => {

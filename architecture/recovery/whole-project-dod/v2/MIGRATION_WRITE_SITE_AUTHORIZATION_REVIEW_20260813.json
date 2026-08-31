@@ -8,8 +8,8 @@
   },
   "noncanonical_review": {
     "path": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-    "source_sha256": "fa9b930e3b658f63267fcd6dadf6c3798b32b89b547dafecb094d31d069b9faf",
-    "reviewed_path_count": 17,
+    "source_sha256": "76e7a61d984a371f51a79d66219ff1693350b734eb412177a10564d9da546ce4",
+    "reviewed_path_count": 18,
     "policy": "Noncanonical sites are materialized only from exact committed source-specific decisions; absent sites fail materialization."
   },
   "authority": {
@@ -19,8 +19,8 @@
     "migration_count": 62
   },
   "denominator": {
-    "non_test_migration_only_sites": 813,
-    "sorted_site_signatures_sha256": "fab5049c452c25a9c3a97d401cd28b9b946fa18077e2953c60063f96729940e7"
+    "non_test_migration_only_sites": 828,
+    "sorted_site_signatures_sha256": "a6765c642859499a330c295a9daee49e9669a1a5e41a6c0ff56372fb5c5a857c"
   },
   "authorizations": [
     {
@@ -1504,6 +1504,45 @@
         "canonical_ordinal": 13,
         "artifact_sha256": "425e5536e973708c07efbd914b94e478364f49124e0e2ab4bad56eff9dd5db51",
         "repository_capture": "gravity-mvp/prisma/migrations/20260413000000_add_scenario_fields/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.calling.0deb7ef5030eed25",
+      "site_signature": "0deb7ef5030eed2508567b110dcc8a1d73489236ec9a986d03d0ac75b0e24132",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+        "source_sha256": "a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+        "line": 138,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "calling",
+      "target": {
+        "data_owner": "calling",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "AiCallCampaignAttempt",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+          "site_signature:0deb7ef5030eed2508567b110dcc8a1d73489236ec9a986d03d0ac75b0e24132",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql:138:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -3698,6 +3737,45 @@
         "canonical_ordinal": 24,
         "artifact_sha256": "3e36bb6a5cc3c51e0854c734c0675ed45e20475fa0c36fffd236075f937bd63e",
         "repository_capture": "gravity-mvp/prisma/migrations/20260515180000_add_ai_call_models/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.calling.1b7be862e8624b7d",
+      "site_signature": "1b7be862e8624b7dfd0be330735c18db66a6f28845880cd5be329d15a8f1efd4",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+        "source_sha256": "a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+        "line": 49,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "calling",
+      "target": {
+        "data_owner": "calling",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "AiCallCampaignMember",
+            "operation": "CREATE_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+          "site_signature:1b7be862e8624b7dfd0be330735c18db66a6f28845880cd5be329d15a8f1efd4",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql:49:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -6944,6 +7022,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.calling.39253a8bcf2d1d27",
+      "site_signature": "39253a8bcf2d1d27d0122bc260ed5251aab65fbdac21f79ed4a9128ab8b038b3",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+        "source_sha256": "a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+        "line": 87,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "calling",
+      "target": {
+        "data_owner": "calling",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "AiCallCampaignMember",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+          "site_signature:39253a8bcf2d1d27d0122bc260ed5251aab65fbdac21f79ed4a9128ab8b038b3",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql:87:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.39478112a167d59f",
       "site_signature": "39478112a167d59f700f770b4232dc368ffb66668462ebaec69053695693ffb5",
       "status": "APPROVED",
@@ -7299,6 +7416,45 @@
         "canonical_ordinal": 59,
         "artifact_sha256": "0d7690ccd5514597b0ea89bd7ab1a8ff0830752b7810933a894e27e48b63de72",
         "repository_capture": "gravity-mvp/prisma/migrations/20260805100000_add_bot_registry_profile_check/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.calling.3bfab9897a2b8bd2",
+      "site_signature": "3bfab9897a2b8bd23ff4c41e20c18d048c79608e23952a7f0c4d7c47e449b347",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+        "source_sha256": "a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+        "line": 159,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "calling",
+      "target": {
+        "data_owner": "calling",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "AiCallAdmissionLease",
+            "operation": "CREATE_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+          "site_signature:3bfab9897a2b8bd23ff4c41e20c18d048c79608e23952a7f0c4d7c47e449b347",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql:159:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -10499,6 +10655,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.calling.57b2961cc93a6a16",
+      "site_signature": "57b2961cc93a6a16c2877bf2fe7f4dcabdb617bd0c34d174c2628726ea390f57",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+        "source_sha256": "a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+        "line": 46,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "calling",
+      "target": {
+        "data_owner": "calling",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "AiCallCampaign",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+          "site_signature:57b2961cc93a6a16c2877bf2fe7f4dcabdb617bd0c34d174c2628726ea390f57",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql:46:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.57c983046ed3e568",
       "site_signature": "57c983046ed3e5687a5d7b6f057a877a58a3dce16d909b04e657a08af5613505",
       "status": "APPROVED",
@@ -11059,6 +11254,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.calling.5caae02aea191b84",
+      "site_signature": "5caae02aea191b84119e262e1bd35d1f0e9b8951f2a318f1166d27ba65a06ef8",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+        "source_sha256": "a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+        "line": 135,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "calling",
+      "target": {
+        "data_owner": "calling",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "AiCallCampaignAttempt",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+          "site_signature:5caae02aea191b84119e262e1bd35d1f0e9b8951f2a318f1166d27ba65a06ef8",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql:135:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.5d51868cf873ed43",
       "site_signature": "5d51868cf873ed43ed443efff458df5e9ce7bda763a613eaff8da4451a0bdc65",
       "status": "APPROVED",
@@ -11301,6 +11535,45 @@
         "canonical_ordinal": 48,
         "artifact_sha256": "843064e4cf5b537c24571c6357feaf3bd808916ddae1e2cbfd10f40ecb4b6730",
         "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260726190658_add_max_route_registry/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.calling.5efd636da25d6784",
+      "site_signature": "5efd636da25d67849c996d3e71a2118291697ff63de25c00ace2a330e3237be1",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+        "source_sha256": "a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+        "line": 6,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "calling",
+      "target": {
+        "data_owner": "calling",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "AiCallCampaign",
+            "operation": "CREATE_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+          "site_signature:5efd636da25d67849c996d3e71a2118291697ff63de25c00ace2a330e3237be1",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql:6:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -11969,6 +12242,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.calling.651228b7240b58a2",
+      "site_signature": "651228b7240b58a29ce90760b8bea64ca58ebed67c99acbad651b7d2d4f18d60",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+        "source_sha256": "a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+        "line": 141,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "calling",
+      "target": {
+        "data_owner": "calling",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "AiCallCampaignMember",
+            "operation": "ALTER_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+          "site_signature:651228b7240b58a29ce90760b8bea64ca58ebed67c99acbad651b7d2d4f18d60",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql:141:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.653dce7c95194a96",
       "site_signature": "653dce7c95194a9672304df77a40127498a6d289980880d86f182f7c18d5dc4b",
       "status": "APPROVED",
@@ -12351,6 +12663,45 @@
         "canonical_ordinal": 1,
         "artifact_sha256": "b4f1ff9935ecd0ce65f0f167051cbae1b949a0f30bc651754c77aa09a1c7dc4b",
         "repository_capture": "gravity-mvp/prisma/migrations/0_init/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.calling.671b1c51a28a0277",
+      "site_signature": "671b1c51a28a027730d91d2d43b00fa249b3570b741e17319cbd2c483fc97f24",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+        "source_sha256": "a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+        "line": 189,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "calling",
+      "target": {
+        "data_owner": "calling",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "AiCallCampaignAuditEvent",
+            "operation": "CREATE_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+          "site_signature:671b1c51a28a027730d91d2d43b00fa249b3570b741e17319cbd2c483fc97f24",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql:189:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -13622,6 +13973,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.calling.750c3546c4858c22",
+      "site_signature": "750c3546c4858c22c301e70bfac18edfa375318ccaa4d0c1b308c8a6d436f6f8",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+        "source_sha256": "a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+        "line": 183,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "calling",
+      "target": {
+        "data_owner": "calling",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "AiCallAdmissionLease",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+          "site_signature:750c3546c4858c22c301e70bfac18edfa375318ccaa4d0c1b308c8a6d436f6f8",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql:183:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.752a5d4e64ddd1ad",
       "site_signature": "752a5d4e64ddd1adc042cdc566a12eba022ae09c109a5815e5c7081cb3fab80c",
       "status": "APPROVED",
@@ -14545,6 +14935,45 @@
         "canonical_ordinal": 25,
         "artifact_sha256": "3d2dd6948fe22c60d47bd112e8de1f16f7c2c322757a21808c86d2487a844f58",
         "repository_capture": "gravity-mvp/prisma/migrations/20260517000000_add_ai_call_projects/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.calling.7baf2589e0252762",
+      "site_signature": "7baf2589e02527626076138bd87f0090fdf1c21b12fa60f8e26b90a87ae34b94",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+        "source_sha256": "a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+        "line": 206,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "calling",
+      "target": {
+        "data_owner": "calling",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "AiCallCampaignAuditEvent",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+          "site_signature:7baf2589e02527626076138bd87f0090fdf1c21b12fa60f8e26b90a87ae34b94",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql:206:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -18570,6 +18999,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.calling.9d178a6428ce29a4",
+      "site_signature": "9d178a6428ce29a451d661e8021b16c3d77657e53b02033a225f6ad61718206e",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+        "source_sha256": "a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+        "line": 93,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "calling",
+      "target": {
+        "data_owner": "calling",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "AiCallCampaignAttempt",
+            "operation": "CREATE_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+          "site_signature:9d178a6428ce29a451d661e8021b16c3d77657e53b02033a225f6ad61718206e",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql:93:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.9d4a2435f4ce7a45",
       "site_signature": "9d4a2435f4ce7a45d1bc93c855f9b199cd200e49df0b6c8f371fad812be6b161",
       "status": "APPROVED",
@@ -19590,6 +20058,45 @@
         "canonical_ordinal": 56,
         "artifact_sha256": "2a1f5bc06b3e14ccfc1e4006aae34545e907805e5775e5556a1c86e07aaccc67",
         "repository_capture": "architecture/migrations/v1/archive/pre-outbox/20260728214000_add_max_outbound_shadow_plan/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.calling.a4ea378eace98059",
+      "site_signature": "a4ea378eace980593d7214400c59ddb254f9a229d3f0c98808f760776b35c377",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+        "source_sha256": "a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+        "line": 90,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "calling",
+      "target": {
+        "data_owner": "calling",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "AiCallCampaignMember",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+          "site_signature:a4ea378eace980593d7214400c59ddb254f9a229d3f0c98808f760776b35c377",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql:90:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {
@@ -24992,6 +25499,45 @@
       }
     },
     {
+      "capability_id": "mmc.migration-site.v1.calling.dacd18d8abfd1de7",
+      "site_signature": "dacd18d8abfd1de7789114ed451c1f582b47e8fe6d23fe217a150494180b4e11",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+        "source_sha256": "a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+        "line": 145,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "calling",
+      "target": {
+        "data_owner": "calling",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "AiCallAdmissionControl",
+            "operation": "CREATE_TABLE"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+          "site_signature:dacd18d8abfd1de7789114ed451c1f582b47e8fe6d23fe217a150494180b4e11",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql:145:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
+      }
+    },
+    {
       "capability_id": "mmc.migration-site.v1.production_migration_authority.db2662723ae295d3",
       "site_signature": "db2662723ae295d370ae48ef422328cdd6cab52b3a404c3f566d7b8732a4c8da",
       "status": "APPROVED",
@@ -25304,6 +25850,45 @@
         "canonical_ordinal": 15,
         "artifact_sha256": "115a9261e5472b262178ada6981053e17c9955e34981c9b0f44835a668e6af81",
         "repository_capture": "gravity-mvp/prisma/migrations/20260422000000_baseline_telephony_safety_scenarios/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.calling.dd0f3142103340e1",
+      "site_signature": "dd0f3142103340e112b439f312852fa1154dbc24ef2b47ea338fbae87ed9d2c8",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+        "source_sha256": "a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+        "line": 186,
+        "column": 1,
+        "method": "sql-script"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONTROLLED_MIGRATION"
+      },
+      "functional_owner": "calling",
+      "target": {
+        "data_owner": "calling",
+        "writes": [
+          {
+            "kind": "TABLE",
+            "exact_name": "AiCallAdmissionLease",
+            "operation": "CREATE_INDEX"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority.",
+        "evidence": [
+          "source_sha256:a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+          "site_signature:dd0f3142103340e112b439f312852fa1154dbc24ef2b47ea338fbae87ed9d2c8",
+          "source_coordinate:gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql:186:1",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION"
+        ]
       }
     },
     {

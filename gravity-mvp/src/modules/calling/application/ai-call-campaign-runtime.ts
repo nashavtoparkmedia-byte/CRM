@@ -13,6 +13,8 @@ export interface AiCallCampaignDialRequest {
 
 export interface AiCallCampaignDialResult {
     effectRef: string
+    /** Calling-owned Call row created by production-shaped adapters. */
+    callId?: string
     terminal: {
         eventId: string
         kind: 'success' | 'retryable_failure' | 'permanent_failure'
@@ -82,19 +84,68 @@ export function createAiCallCampaignWorkerRuntime(input: {
             }
         }
 
+        await aiCallCampaignPrismaPort.markAttemptRunning({
+            attemptId: claim.attemptId,
+            claimFence: claim.claimFence,
+            leaseFence: admission.grant.leaseFence,
+            now: clock(),
+        })
+        const execution = await aiCallCampaignPrismaPort.beginDialExecution({
+            attemptId: claim.attemptId,
+            claimFence: claim.claimFence,
+            leaseFence: admission.grant.leaseFence,
+            now: clock(),
+        })
+
         // The adapter must bind the provider effect to launchId. If this process
         // exits after the provider accepts the request, the same attempt and
         // launchId are reclaimed after lease expiry and converge at the adapter.
-        const dialResult = await input.dial.dial({
-            launchId: claim.launchId,
-            campaignId: claim.campaignId,
-            memberId: claim.memberId,
-            targetType: claim.targetType,
-            targetRef: claim.targetRef,
-            phoneE164: claim.phoneE164,
-            scenarioRef: claim.scenarioRef,
-            attemptNumber: claim.attemptNumber,
-        })
+        let renewal: Promise<void> | null = null
+        let renewalFailure: unknown = null
+        const heartbeatMs = Math.max(25, Math.floor(Math.min(claimLeaseMs, admissionLeaseMs) / 3))
+        const heartbeat = setInterval(() => {
+            if (renewal) return
+            renewal = aiCallCampaignPrismaPort.renewExecution({
+                attemptId: claim.attemptId,
+                claimFence: claim.claimFence,
+                leaseFence: admission.grant.leaseFence,
+                now: clock(),
+                claimLeaseMs,
+                admissionLeaseMs,
+            }).then(() => undefined).catch((error: unknown) => {
+                renewalFailure = error
+            }).finally(() => { renewal = null })
+        }, heartbeatMs)
+        heartbeat.unref()
+        let dialResult: AiCallCampaignDialResult
+        try {
+            dialResult = await input.dial.dial({
+                launchId: claim.launchId,
+                campaignId: claim.campaignId,
+                memberId: claim.memberId,
+                targetType: claim.targetType,
+                targetRef: claim.targetRef,
+                phoneE164: claim.phoneE164,
+                scenarioRef: claim.scenarioRef,
+                attemptNumber: claim.attemptNumber,
+            })
+        } catch (error) {
+            clearInterval(heartbeat)
+            if (renewal) await renewal
+            if (renewalFailure) throw renewalFailure
+            if (execution.dialExecutionCount < 3) throw error
+            dialResult = {
+                effectRef: `adapter-error:${claim.launchId}`,
+                terminal: {
+                    eventId: `adapter-error-terminal:${claim.launchId}`,
+                    kind: 'permanent_failure',
+                    failureCode: 'dial_adapter_repeated_failure',
+                },
+            }
+        }
+        clearInterval(heartbeat)
+        if (renewal) await renewal
+        if (renewalFailure) throw renewalFailure
         const terminal = await aiCallCampaignPrismaPort.recordAttemptResult({
             attemptId: claim.attemptId,
             resultEventId: dialResult.terminal.eventId,
@@ -104,6 +155,7 @@ export function createAiCallCampaignWorkerRuntime(input: {
             claimFence: claim.claimFence,
             leaseFence: admission.grant.leaseFence,
             dialEffectRef: dialResult.effectRef,
+            callId: dialResult.callId,
             now: clock(),
         })
         if (terminal.status !== 'applied') {

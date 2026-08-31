@@ -34,7 +34,7 @@ test('bounded contexts cover modules, owned data, dependencies and foreign write
     migrationPlans: 79,
     ownedData: 97,
     technicalModules: 27,
-    ownedPaths: 90,
+    ownedPaths: 92,
   });
   assert.deepEqual(await verifyContextIndex(index, repositoryRoot.pathname), { verifiedControls: 17, verifiedEntrypoints: 45, verifiedManifests: 16, verifiedOutputs: 4 });
 });

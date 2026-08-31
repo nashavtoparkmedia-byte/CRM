@@ -18,6 +18,8 @@
     }
   ],
   "commands": [
+    "CreateAiCallCampaignCommand.v1",
+    "ControlAiCallCampaignCommand.v1",
     "StartCallCommand.v1",
     "FinalizeCallCommand.v1",
     "TranscribeCallCommand.v1",
@@ -32,6 +34,12 @@
   "credential_relationships": {
     "database_models": [],
     "environment_names": [
+      "AI_CALL_CAMPAIGN_ADMISSION_LEASE_MS",
+      "AI_CALL_CAMPAIGN_CLAIM_LEASE_MS",
+      "AI_CALL_CAMPAIGN_GLOBAL_CONCURRENCY",
+      "AI_CALL_CAMPAIGN_GLOBAL_RATE_PER_MINUTE",
+      "AI_CALL_CAMPAIGN_INTERVAL_MS",
+      "AI_CALL_CAMPAIGN_RUNTIME_MODE",
       "AI_CALL_DEV_SIMULATE_ENABLED",
       "AI_CALL_DIAL_STRING_TEMPLATE",
       "AI_CALL_ENC_KEY",
@@ -235,6 +243,8 @@
   ],
   "owned_paths": [
     "architecture/isolation/calling/ai-call-mass-calling-v1",
+    "gravity-mvp/src/app/api/ai-calls/campaigns",
+    "gravity-mvp/src/app/calls/campaigns",
     "gravity-mvp/src/contracts/calling",
     "gravity-mvp/src/lib/ai-call",
     "gravity-mvp/src/lib/calls",
@@ -284,6 +294,7 @@
     }
   ],
   "public_surface": [
+    "AiCallCampaignManagement.v1",
     "AiInternControl.v1",
     "AiCallProviderSettings.v1",
     "AiCallProviderStatus.v1",

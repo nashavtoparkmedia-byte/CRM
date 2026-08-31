@@ -5,7 +5,10 @@ import { createHash } from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { validateProductionMigrationAuthority } from './production-migration-authority.mjs'
+import {
+  PENDING_SOURCE_PATH,
+  validateProductionMigrationAuthority,
+} from './production-migration-authority.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 const prisma = path.join(root, 'gravity-mvp/node_modules/.bin/prisma')
@@ -53,6 +56,7 @@ function assertPrismaDatamodelParity(workspace, databaseUrl) {
 }
 
 function canonicalSource(rootDirectory, row) {
+  if (row.path) return path.join(rootDirectory, row.path)
   const base = row.storage === 'archive'
     ? 'architecture/migrations/v1/archive/pre-outbox'
     : 'gravity-mvp/prisma/migrations'
@@ -120,9 +124,11 @@ async function main() {
   if (predecessorRecovery) assertSchemaAbsent(databaseUrl, `${schema}_fresh`)
   const authority = await validateProductionMigrationAuthority(root)
   const inventory = JSON.parse(await readFile(path.join(root, 'architecture/migrations/v1/production-migration-authority.json'), 'utf8'))
+  const pending = JSON.parse(await readFile(path.join(root, PENDING_SOURCE_PATH), 'utf8'))
+  const completeSourceInventory = [...inventory.migrations, ...pending.migrations]
   const migrations = predecessorRecovery
     ? inventory.migrations.filter((row) => row.name !== inventory.current_target.name)
-    : inventory.migrations
+    : completeSourceInventory
   const workspace = await mkdtemp(path.join(os.tmpdir(), 'yoko-production-migration-replay-'))
   try {
     await mkdir(path.join(workspace, 'migrations'), { recursive: true })
@@ -148,9 +154,14 @@ async function main() {
       const destination = path.join(workspace, 'migrations', target.name, 'migration.sql')
       await mkdir(path.dirname(destination), { recursive: true })
       await copyFile(canonicalSource(root, target), destination)
+      for (const row of pending.migrations) {
+        const pendingDestination = path.join(workspace, 'migrations', row.name, 'migration.sql')
+        await mkdir(path.dirname(pendingDestination), { recursive: true })
+        await copyFile(canonicalSource(root, row), pendingDestination)
+      }
       runPrisma(workspace, databaseUrl, ['migrate', 'deploy', '--schema', 'schema.prisma'])
       const recoveredFinished = finishedMigrationCount(databaseUrl, schema)
-      assert(recoveredFinished === inventory.migrations.length, `predecessor recovery finished ${recoveredFinished}/${inventory.migrations.length} canonical migrations`)
+      assert(recoveredFinished === completeSourceInventory.length, `predecessor recovery finished ${recoveredFinished}/${completeSourceInventory.length} applied plus pending-source migrations`)
       const outbox = assertOutboxSane(databaseUrl, schema)
       const recoveredCatalogDigest = schemaCatalogDigest(databaseUrl, schema)
       assertPrismaDatamodelParity(workspace, databaseUrl)
@@ -162,14 +173,14 @@ async function main() {
         await mkdir(path.join(referenceWorkspace, 'migrations'), { recursive: true })
         await copyFile(path.join(root, 'gravity-mvp/prisma/schema.prisma'), path.join(referenceWorkspace, 'schema.prisma'))
         await copyFile(path.join(root, 'gravity-mvp/prisma/migrations/migration_lock.toml'), path.join(referenceWorkspace, 'migrations/migration_lock.toml'))
-        for (const row of inventory.migrations) {
+        for (const row of completeSourceInventory) {
           const referenceDestination = path.join(referenceWorkspace, 'migrations', row.name, 'migration.sql')
           await mkdir(path.dirname(referenceDestination), { recursive: true })
           await copyFile(canonicalSource(root, row), referenceDestination)
         }
         runPrisma(referenceWorkspace, referenceUrl.toString(), ['migrate', 'deploy', '--schema', 'schema.prisma'])
         runPrisma(referenceWorkspace, referenceUrl.toString(), ['migrate', 'status', '--schema', 'schema.prisma'])
-        assert(finishedMigrationCount(referenceUrl.toString(), `${schema}_fresh`) === inventory.migrations.length, 'fresh reference did not finish all canonical migrations')
+        assert(finishedMigrationCount(referenceUrl.toString(), `${schema}_fresh`) === completeSourceInventory.length, 'fresh reference did not finish all applied plus pending-source migrations')
         assertOutboxSane(referenceUrl.toString(), `${schema}_fresh`)
         const referenceCatalogDigest = schemaCatalogDigest(referenceUrl.toString(), `${schema}_fresh`)
         assertPrismaDatamodelParity(referenceWorkspace, referenceUrl.toString())
@@ -188,11 +199,12 @@ async function main() {
       fresh_finished_migrations: finished,
       recovery,
       exact_source_checksum_parity: true,
+      pending_source_migrations: pending.migrations.length,
       current_schema_prisma_parity: true,
       fresh_outbox: freshOutbox,
       ...authority,
     }, null, 2)}\n`)
-    process.stdout.write(`${JSON.stringify({ status: 'PASS', schema, predecessor_recovery: predecessorRecovery, rerun_safe: true, fresh_finished_migrations: finished, recovery, fresh_outbox: freshOutbox, exact_source_checksum_parity: true, current_schema_prisma_parity: true, ...authority })}\n`)
+    process.stdout.write(`${JSON.stringify({ status: 'PASS', schema, predecessor_recovery: predecessorRecovery, rerun_safe: true, fresh_finished_migrations: finished, recovery, fresh_outbox: freshOutbox, exact_source_checksum_parity: true, pending_source_migrations: pending.migrations.length, current_schema_prisma_parity: true, ...authority })}\n`)
   } finally {
     await rm(workspace, { recursive: true, force: true })
   }

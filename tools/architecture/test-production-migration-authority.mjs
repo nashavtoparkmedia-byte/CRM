@@ -14,6 +14,7 @@ import {
 
 const root = process.cwd()
 const authorityPath = 'architecture/migrations/v1/production-migration-authority.json'
+const pendingSourcePath = 'architecture/migrations/v1/pending-source-migrations.json'
 const authority = JSON.parse(await readFile(path.join(root, authorityPath), 'utf8'))
 
 async function makeFixtureTreeWritable(directory) {
@@ -63,6 +64,7 @@ try {
   await cp(path.join(root, 'gravity-mvp/prisma/schema.prisma'), path.join(fixture, 'gravity-mvp/prisma/schema.prisma'))
   await mkdir(path.join(fixture, 'architecture/migrations/v1'), { recursive: true })
   await cp(path.join(root, authorityPath), path.join(fixture, authorityPath), { recursive: true })
+  await cp(path.join(root, pendingSourcePath), path.join(fixture, pendingSourcePath))
   await cp(path.join(root, 'architecture/migrations/v1/provenance'), path.join(fixture, 'architecture/migrations/v1/provenance'), { recursive: true })
   await makeFixtureTreeWritable(path.join(fixture, 'architecture/migrations/v1/provenance'))
   await cp(
@@ -334,7 +336,7 @@ try {
   await writeFile(schemaCapture, schemaCaptureBytes)
 
   await writeFile(path.join(fixture, 'gravity-mvp/prisma/schema.prisma'), '// schema drift\n')
-  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /current production schema checksum mismatch/)
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /pending source schema checksum\/size mismatch/)
   await cp(path.join(root, 'gravity-mvp/prisma/schema.prisma'), path.join(fixture, 'gravity-mvp/prisma/schema.prisma'))
 
   // Rewriting an archived migration and every self-authored checksum is still

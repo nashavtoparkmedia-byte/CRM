@@ -247,6 +247,19 @@ export async function register() {
         }, 24 * 60 * 60 * 1000)
         registerOperationalIntervalV1(stabilityInterval)
 
+        // AI Call campaigns are fail-closed: disabled by default and only the
+        // local database simulator is supported by this source revision.
+        try {
+            const { startAiCallCampaignRuntimeV1 } = await import('@/modules/calling/public/v1')
+            const campaignInterval = startAiCallCampaignRuntimeV1(runOperationalJobV1)
+            if (campaignInterval) registerOperationalIntervalV1(campaignInterval)
+        } catch (err: any) {
+            opsLog('error', 'ai_call_campaign_runtime_start_failed', {
+                operation: 'startup',
+                error: err.message,
+            })
+        }
+
         // Run initial stability check 60s after startup
         setTimeout(async () => {
             await runOperationalJobV1('stability_check', async () => {

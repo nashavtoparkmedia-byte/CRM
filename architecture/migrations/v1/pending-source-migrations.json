@@ -1,0 +1,33 @@
+{
+  "schema": "yoko.crm.pending-source-migrations.v1",
+  "version": 1,
+  "status": "SOURCE_ONLY_NOT_APPLIED",
+  "base_authority": {
+    "path": "architecture/migrations/v1/production-migration-authority.json",
+    "current_target": "20260809140000_add_domain_outbox",
+    "current_schema_sha256": "287d39d324cd0a2b616eb7127cd520ea8ee5ce9d517620aafc5b07240cdf0b48"
+  },
+  "source_schema": {
+    "path": "gravity-mvp/prisma/schema.prisma",
+    "sha256": "531fc70162da4bd0378e843ecf151f8f517bffa84e558de390b2fa3a51a5fd02",
+    "size": 142577,
+    "expected_isolated_replay_parity": "ZERO_PRISMA_DATAMODEL_DIFF_AFTER_PENDING_SOURCE"
+  },
+  "migrations": [
+    {
+      "name": "20260831120000_add_ai_call_campaign_product",
+      "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+      "sha256": "a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
+      "size": 8913,
+      "owner_context": "calling",
+      "classification": "EXPAND_ONLY",
+      "production_application": false
+    }
+  ],
+  "proof": {
+    "database_scope": "ISOLATED_REAL_POSTGRESQL_ONLY",
+    "migration_test": "gravity-mvp/src/modules/calling/internal/ai-calls/ai-call-campaign-product.postgres.test.ts",
+    "authority_replay": "tools/architecture/replay-production-migration-authority.mjs --allow-isolated-replay",
+    "production_database_touched": false
+  }
+}

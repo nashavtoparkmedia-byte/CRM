@@ -1,0 +1,18 @@
+{
+  "schema": "yoko.crm.ai-call-campaign-product-boundary.v1",
+  "version": 1,
+  "owner_context": "calling",
+  "source_migration": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+  "migration_authority": "architecture/migrations/v1/pending-source-migrations.json",
+  "production_migration_applied": false,
+  "runtime_default": "disabled",
+  "supported_runtime_modes": [
+    "disabled",
+    "simulated"
+  ],
+  "unsupported_runtime_modes_fail_closed": true,
+  "audience_scope": "explicit_external_snapshot_only",
+  "dynamic_owner_segments": false,
+  "provider_billing_ingested": false,
+  "real_pstn_proof_permitted": false
+}
