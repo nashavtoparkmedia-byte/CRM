@@ -37,6 +37,8 @@ class StageAContractTests(unittest.TestCase):
             "tools/architecture/test-authoritative-ci-inventory.mjs",
             "tools/architecture/test-executable-path-ownership.mjs",
             "tools/architecture/test-hosted-coordinated-gravity-max-stage-a.mjs",
+            "tools/architecture/v2/test-original-dod-canonical-mapping.mjs",
+            "tools/architecture/v2/verify-final-rereview-closure.mjs",
             "architecture/contexts/v1/context-index.json",
             "architecture/contexts/v1/executable-path-ownership-coverage.json",
             "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json",
