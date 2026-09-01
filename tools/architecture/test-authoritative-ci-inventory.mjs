@@ -201,6 +201,7 @@ for (const required of [
   'production-migration-default-clean-checkout',
   'production-migration-runtime-semantics',
   'source-only-runtime-v10-contract',
+  'hosted-coordinated-gravity-max-stage-a',
   'production-migration-committed-runtime-inventory',
   'production-migration-canonical-replay',
   'production-migration-predecessor-recovery-replay',
@@ -243,16 +244,16 @@ for (const required of [
 ]) assert(ids.has(required), `missing authoritative CI control: ${required}`)
 
 assert.equal(ids.size, targetedControls.length + fullScanControls.length, 'duplicate CI control id')
-assert.equal(ids.size, 52, 'authoritative CI control catalog changed without an explicit inventory review')
+assert.equal(ids.size, 53, 'authoritative CI control catalog changed without an explicit inventory review')
 const normalizedCatalog = normalizedControlCatalog()
-assert.equal(normalizedCatalog.length, 52, 'normalized authoritative catalog must cover every control')
+assert.equal(normalizedCatalog.length, 53, 'normalized authoritative catalog must cover every control')
 assert.equal(
   catalogDigest(normalizedCatalog),
-  '24ad32ba5a97e617e34bd19a3bcb2109807bf946636737d02b12fd7607185483',
+  '57f6843147042cd851fe18ead45bda7c4b1e243d7f0a2c0e1d66ed2f2d410a8c',
   'authoritative CI command/order/argument/cwd catalog changed without an explicit full-catalog review',
 )
-assert.equal(semanticControlCatalogSha256(), '24ad32ba5a97e617e34bd19a3bcb2109807bf946636737d02b12fd7607185483')
-assert.equal(controlIdCatalogSha256(), '7268cb0b049390bee10aebf53277c1f771b04670ed5c59ae022db0e9ff317680')
+assert.equal(semanticControlCatalogSha256(), '57f6843147042cd851fe18ead45bda7c4b1e243d7f0a2c0e1d66ed2f2d410a8c')
+assert.equal(controlIdCatalogSha256(), 'f6271d9cba771e818913ad769be982420880dafe353e2ec9ff59682ebc281dc0')
 const passingExecutions = normalizedCatalog.map(({ id }) => ({ id, status: 'PASS' }))
 const proof = buildExecutionProof(passingExecutions, {
   commit: 'a'.repeat(40),
@@ -263,14 +264,14 @@ const proof = buildExecutionProof(passingExecutions, {
 })
 assert.equal(proof.outcome, 'PASS')
 assert.deepEqual(proof.runtime, { node: '20.20.2', blast_base: 'HEAD^', blast_base_commit: 'e'.repeat(40) })
-assert.equal(proof.controls.count, 52)
-assert.equal(proof.controls.catalog_sha256, '7268cb0b049390bee10aebf53277c1f771b04670ed5c59ae022db0e9ff317680')
-assert.equal(proof.controls.semantic_catalog_sha256, '24ad32ba5a97e617e34bd19a3bcb2109807bf946636737d02b12fd7607185483')
+assert.equal(proof.controls.count, 53)
+assert.equal(proof.controls.catalog_sha256, 'f6271d9cba771e818913ad769be982420880dafe353e2ec9ff59682ebc281dc0')
+assert.equal(proof.controls.semantic_catalog_sha256, '57f6843147042cd851fe18ead45bda7c4b1e243d7f0a2c0e1d66ed2f2d410a8c')
 for (const invalidExecutions of [
   passingExecutions.slice(1),
   [passingExecutions[1], passingExecutions[0], ...passingExecutions.slice(2)],
   passingExecutions.map((execution, index) => index === 20 ? { ...execution, status: 'FAIL' } : execution),
-]) assert.throws(() => buildExecutionProof(invalidExecutions, proof.source), /all 52 ordered PASS controls/u)
+]) assert.throws(() => buildExecutionProof(invalidExecutions, proof.source), /all 53 ordered PASS controls/u)
 const catalogMutations = [
   normalizedCatalog.slice(1),
   [normalizedCatalog[1], normalizedCatalog[0], ...normalizedCatalog.slice(2)],
@@ -281,7 +282,7 @@ const catalogMutations = [
 for (const mutation of catalogMutations) {
   assert.notEqual(
     catalogDigest(mutation),
-    '24ad32ba5a97e617e34bd19a3bcb2109807bf946636737d02b12fd7607185483',
+    '57f6843147042cd851fe18ead45bda7c4b1e243d7f0a2c0e1d66ed2f2d410a8c',
     'removed, reordered, replaced, argument-weakened, or cwd-mutated controls must invalidate the reviewed catalog',
   )
 }
@@ -509,4 +510,4 @@ assert.equal(
   'architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json',
 )
 
-process.stdout.write(`authoritative CI inventory: PASS (${ids.size} controls; semantic catalog sha256=24ad32ba5a97e617e34bd19a3bcb2109807bf946636737d02b12fd7607185483; fail-fast fresh credential and write scans enabled)\n`)
+process.stdout.write(`authoritative CI inventory: PASS (${ids.size} controls; semantic catalog sha256=57f6843147042cd851fe18ead45bda7c4b1e243d7f0a2c0e1d66ed2f2d410a8c; fail-fast fresh credential and write scans enabled)\n`)

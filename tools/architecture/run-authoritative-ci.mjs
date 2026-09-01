@@ -32,6 +32,7 @@ export const targetedControls = [
   ['production-migration-default-clean-checkout', 'node', ['tools/architecture/test-production-migration-clean-checkout.mjs']],
   ['production-migration-runtime-semantics', 'node', ['tools/architecture/test-production-migration-runtime.mjs']],
   ['source-only-runtime-v10-contract', 'node', ['tools/architecture/test-source-only-runtime-v10.mjs']],
+  ['hosted-coordinated-gravity-max-stage-a', 'node', ['tools/architecture/test-hosted-coordinated-gravity-max-stage-a.mjs']],
   ['production-migration-committed-runtime-inventory', 'node', ['tools/architecture/verify-production-migration-runtime.mjs', '--sanitized-inventory']],
   ['production-migration-canonical-replay', 'node', ['tools/architecture/replay-production-migration-authority.mjs', '--allow-isolated-replay']],
   ['production-migration-predecessor-recovery-replay', 'node', ['tools/architecture/replay-production-migration-authority.mjs', '--allow-isolated-replay', '--predecessor-recovery']],
@@ -167,8 +168,8 @@ export function buildExecutionProof(executions, identity) {
       execution?.id !== ids[index] || execution?.status !== 'PASS'
       || Object.keys(execution).length !== 2
     ))
-  ) throw new Error('authoritative CI execution proof requires all 52 ordered PASS controls')
-  if (ids.length !== 52 || new Set(ids).size !== 52) {
+  ) throw new Error('authoritative CI execution proof requires all 53 ordered PASS controls')
+  if (ids.length !== 53 || new Set(ids).size !== 53) {
     throw new Error('authoritative CI execution proof catalog is not exact')
   }
   return {

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "yoko.crm.coordinated-gravity-max-release.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "repository",
+    "application",
+    "builder",
+    "source_authority",
+    "components",
+    "common",
+    "artifact_members"
+  ],
+  "properties": {
+    "schema": { "const": "yoko.crm.coordinated-gravity-max-release.v1" },
+    "repository": { "const": "nashavtoparkmedia-byte/CRM" },
+    "application": { "type": "object" },
+    "builder": { "type": "object" },
+    "source_authority": { "type": "object" },
+    "components": { "type": "object" },
+    "common": { "type": "object" },
+    "artifact_members": {
+      "const": [
+        "gravity-image.docker.tar",
+        "gravity-image-attestation.json",
+        "max-scraper-image.docker.tar",
+        "max-scraper-image-attestation.json",
+        "coordinated-release-manifest.json",
+        "authoritative-ci-execution.json"
+      ]
+    }
+  }
+}
