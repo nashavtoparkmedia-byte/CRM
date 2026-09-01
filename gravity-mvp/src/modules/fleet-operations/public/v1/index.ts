@@ -42,10 +42,13 @@ export {
     parkDriverMatchesQueryV1,
     parkDriverProfileFromYandexV1,
     selectDriverActionYandexIdentityV1,
+    selectParkDriverProfilesByPhoneV1,
 } from './park-phone-search'
 export type {
     DriverActionIdentityInputV1,
     DriverActionYandexIdentityV1,
+    ParkDriverPhoneCandidateV1,
+    ParkDriverPhoneResolutionV1,
     ParkDriverSearchResultV1,
     ParkPhoneProfileV1,
     ParkPhoneSearchResultV1,
@@ -79,6 +82,7 @@ export {
     recordDriverActionV1,
     recordDriverDailyActivityV1,
     resolveDriverActionYandexIdentityV1,
+    resolveParkDriverProfilesByPhoneV1,
     recordManagerDriverCommunicationV1,
     reconcileDriverProfileV1,
     resolveImportedDriverV1,

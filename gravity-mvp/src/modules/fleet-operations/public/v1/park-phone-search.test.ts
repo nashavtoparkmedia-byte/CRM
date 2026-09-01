@@ -6,6 +6,8 @@ import {
     parkDriverMatchesQueryV1,
     parkDriverProfileFromYandexV1,
     selectDriverActionYandexIdentityV1,
+    selectParkDriverProfilesByPhoneV1,
+    type ParkDriverSearchResultV1,
 } from './park-phone-search'
 
 const gravityRoot = resolve(__dirname, '../../../../../')
@@ -199,5 +201,130 @@ describe('Telegram driver-action park resolution', () => {
         expect(route).toContain('resolveDriverActionYandexIdentityV1({')
         expect(route).toContain('patch: { activeParkId: effectiveParkId }')
         expect(route).toContain('parkId: effectiveParkId')
+    })
+})
+
+describe('Telegram onboarding park resolution', () => {
+    const search = (
+        parks: ParkDriverSearchResultV1['results'],
+        errors: ParkDriverSearchResultV1['errors'] = [],
+        checkedParks = parks.length + errors.length,
+    ): ParkDriverSearchResultV1 => ({ checkedParks, results: parks, errors })
+    const profile = (id: string, phone: string, workStatus = 'working') => ({
+        id,
+        fullName: 'Трубицын Юрий Олегович',
+        phones: [phone],
+        workStatus,
+        currentStatus: 'free',
+    })
+
+    test('resolves the only exact working phone profile', () => {
+        const result = selectParkDriverProfilesByPhoneV1('+7 966 700-66-66', search([{
+            parkId: 'yoko',
+            parkName: 'Yoko',
+            profiles: [profile('driver-yoko', '8 (966) 700-66-66')],
+        }]))
+
+        expect(result).toMatchObject({
+            status: 'resolved',
+            candidate: { parkId: 'yoko', yandexDriverId: 'driver-yoko' },
+        })
+    })
+
+    test('requires the driver to choose when the exact phone exists in two parks', () => {
+        const result = selectParkDriverProfilesByPhoneV1('+79667006666', search([
+            { parkId: 'park-1', parkName: 'Наш Автопарк', profiles: [profile('driver-1', '+79667006666')] },
+            { parkId: 'park-2', parkName: 'Yoko', profiles: [profile('driver-2', '+79667006666')] },
+        ]))
+
+        expect(result.status).toBe('select_park')
+        if (result.status === 'select_park') {
+            expect(result.candidates.map(candidate => candidate.parkId)).toEqual(['park-1', 'park-2'])
+        }
+    })
+
+    test('does not guess between duplicate working profiles inside one park', () => {
+        const result = selectParkDriverProfilesByPhoneV1('+79667006666', search([{
+            parkId: 'park-1',
+            parkName: 'Наш Автопарк',
+            profiles: [
+                profile('driver-1', '+79667006666'),
+                profile('driver-2', '8 966 700 66 66'),
+            ],
+        }]))
+
+        expect(result.status).toBe('ambiguous')
+    })
+
+    test('does not use a fired profile', () => {
+        const result = selectParkDriverProfilesByPhoneV1('+79667006666', search([{
+            parkId: 'old-park',
+            parkName: 'Старый парк',
+            profiles: [profile('driver-fired', '+79667006666', 'fired')],
+        }]))
+
+        expect(result).toEqual({ status: 'not_found' })
+    })
+
+    test('rejects a partial phone-number overlap', () => {
+        const result = selectParkDriverProfilesByPhoneV1('9947134', search([{
+            parkId: 'park-1',
+            parkName: 'Наш Автопарк',
+            profiles: [profile('driver-1', '+7 977 994-71-34')],
+        }]))
+
+        expect(result).toEqual({ status: 'not_found' })
+    })
+
+    test('fails closed when any park lookup is unavailable', () => {
+        const result = selectParkDriverProfilesByPhoneV1('+79667006666', search(
+            [{ parkId: 'park-1', parkName: 'Наш Автопарк', profiles: [profile('driver-1', '+79667006666')] }],
+            [{ parkId: 'park-2', parkName: 'Yoko', message: 'timeout' }],
+        ))
+
+        expect(result).toEqual({ status: 'unavailable' })
+    })
+
+    test('reports unavailable when no park can be checked', () => {
+        expect(selectParkDriverProfilesByPhoneV1('+79667006666', search([], [], 0)))
+            .toEqual({ status: 'unavailable' })
+    })
+})
+
+describe('Telegram onboarding and park-change wiring', () => {
+    test('does not auto-assign the first park and never saves a park after a failed check', () => {
+        const route = source('src/app/api/webhooks/bot/route.ts')
+        const syncUser = route.slice(route.indexOf('async function handleSyncUser'), route.indexOf('async function notifyManagerPendingLink'))
+        const setActivePark = route.slice(route.indexOf('async function handleSetActivePark'), route.indexOf('async function handleGetParkInfo'))
+
+        expect(syncUser).toContain('resolveParkDriverProfilesByPhoneV1({')
+        expect(syncUser).toContain("resolution.status === 'select_park'")
+        expect(syncUser).toContain('parkSelectionRequired: true')
+        expect(syncUser).toContain('upsertParkMatchedDriverV1({')
+        expect(syncUser).not.toContain('listYandexConnectionCredentialsV1')
+
+        expect(setActivePark).toContain("resolution.status === 'unavailable'")
+        expect(setActivePark).toContain("resolution.status !== 'resolved'")
+        expect(setActivePark).not.toContain("Don't block if Yandex check fails")
+        expect(setActivePark.indexOf("resolution.status !== 'resolved'")).toBeLessThan(
+            setActivePark.indexOf('patchDriverTelegramLinkV1({'),
+        )
+
+        const boundary = source('../tools/architecture/check-telegram-driver-link-boundary.mjs')
+        expect(boundary).toContain('auto-link exact park resolution retained')
+        expect(boundary).toContain("autoLink.includes('activeParkId: resolution.candidate.parkId')")
+        expect(boundary).not.toContain("webhook.includes('driverId, telegramId: BigInt(telegramId), username: username || null, activeParkId: connection.parkId')")
+    })
+
+    test('routes a multi-park onboarding match through the park selection scene', () => {
+        const carManagement = source('../tg-bot/src/handlers/carManagement.js')
+        const parkSelect = source('../tg-bot/src/handlers/parkSelect.js')
+
+        expect(carManagement).toContain('result.data.parkSelectionRequired')
+        expect(carManagement).toContain("ctx.scene.enter('parkSelect', {")
+        expect(parkSelect).toContain("action: 'sync_user'")
+        expect(parkSelect).toContain('parkId: selected.parkId')
+        expect(parkSelect).toContain("data?.error === 'PARK_CHECK_UNAVAILABLE'")
+        expect(parkSelect).toContain('Парк не изменён')
     })
 })

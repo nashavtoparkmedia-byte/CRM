@@ -195,10 +195,18 @@ const carManagementScene = new Scenes.WizardScene(
 
                 if (result.status === 0 || result.status === 504) {
                     await ctx.reply(
-                        `🔌 *CRM сейчас недоступна*\n\n` +
-                        `Ваш номер сохранён. Попробуйте позже — привязка произойдёт автоматически.`,
+                        `🔌 *Проверка сейчас недоступна*\n\n` +
+                        `Профиль и парк не были назначены. Нажмите кнопку с номером ещё раз немного позже.`,
                         { parse_mode: 'Markdown' }
                     );
+                    return;
+                } else if (result.ok && result.data.parkSelectionRequired) {
+                    return ctx.scene.enter('parkSelect', {
+                        onboarding: true,
+                        phone,
+                        username: ctx.from.username,
+                        parks: result.data.parks
+                    });
                 } else if (result.ok && result.data.autoLinked) {
                     await ctx.reply(
                         `✅ *Профиль найден и привязан!*\n\n` +
@@ -215,6 +223,13 @@ const carManagementScene = new Scenes.WizardScene(
                     );
                 } else if (result.data?.error === 'CONTACT_OWNER_MISMATCH') {
                     await ctx.reply(result.data.message || 'Пожалуйста, отправьте свой контакт.');
+                } else if (result.data?.error === 'PARK_LOOKUP_UNAVAILABLE') {
+                    await ctx.reply(
+                        `🔌 *Яндекс Флит временно не ответил*\n\n` +
+                        `Профиль и парк не были назначены. Нажмите кнопку с номером ещё раз немного позже.`,
+                        { parse_mode: 'Markdown' }
+                    );
+                    return;
                 } else {
                     await ctx.reply(
                         `❌ Ошибка при отправке. Попробуйте позже.`

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getYandexConnectionCredentialsV1, listYandexConnectionCredentialsV1, listYandexConnectionMetadataV1 } from '@/modules/fleet-operations/public/v1/yandex-connection-capability'
+import { getYandexConnectionCredentialsV1, listYandexConnectionMetadataV1 } from '@/modules/fleet-operations/public/v1/yandex-connection-capability'
 import { PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, RECORD_PENDING_BOT_LINK_REQUEST_COMMAND_V1, UPSERT_DRIVER_TELEGRAM_LINK_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
 import { patchDriverTelegramLinkV1, recordPendingBotLinkRequestV1, upsertDriverTelegramLinkV1 } from '@/modules/telegram-channel/public/v1'
 import {
@@ -11,7 +11,13 @@ import {
 } from '@/contracts/messaging/v1'
 import { sendMessageV1, updateConversationV1 } from '@/modules/messaging/public/v1'
 import { MIRROR_DRIVER_ACTION_RESULT_COMMAND_V1, RECORD_DRIVER_ACTION_COMMAND_V1 } from '@/contracts/fleet-operations/v1'
-import { mirrorDriverActionResultV1, recordDriverActionV1, resolveDriverActionYandexIdentityV1 } from '@/modules/fleet-operations/public/v1'
+import {
+    mirrorDriverActionResultV1,
+    recordDriverActionV1,
+    resolveDriverActionYandexIdentityV1,
+    resolveParkDriverProfilesByPhoneV1,
+    upsertParkMatchedDriverV1,
+} from '@/modules/fleet-operations/public/v1'
 
 const BOT_API_URL = process.env.BOT_API_URL || 'http://localhost:4000/api/bot'
 
@@ -253,7 +259,7 @@ async function findCarById(connection: any, carId: string) {
 
 // Handle "Отправить данные менеджеру" from bot — try auto-link by phone, fallback to manual
 async function handleSyncUser(payload: any) {
-    const { telegramId, username, phone } = payload
+    const { telegramId, username, phone, parkId } = payload
 
     if (!telegramId || !phone) {
         return NextResponse.json({ error: 'Missing telegramId or phone' }, { status: 400 })
@@ -261,79 +267,89 @@ async function handleSyncUser(payload: any) {
 
     console.log(`[Webhook] sync_user: TG ${telegramId}, Phone ${phone}`)
 
-    // 1. Try to auto-link by phone via Yandex API — search ALL parks
-    const connections = await listYandexConnectionCredentialsV1()
-    const normalizedPhone = phone.replace(/[\s+\-()]/g, '')
+    const parks = await listYandexConnectionMetadataV1()
+    const selectedPark = parkId ? parks.find(park => park.parkId === parkId) : null
+    if (parkId && !selectedPark) {
+        return NextResponse.json({ error: 'PARK_NOT_FOUND' }, { status: 404 })
+    }
 
-    for (const connection of connections) {
-        try {
-            const yandexRes = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list', {
-                method: 'POST',
-                headers: {
-                    'X-Client-ID': connection.clid,
-                    'X-Api-Key': connection.apiKey,
-                    'Accept-Language': 'ru',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    query: { park: { id: connection.parkId }, text: phone },
-                    fields: { driver_profile: ['id', 'first_name', 'last_name', 'phones', 'work_status'], car: [], account: [], current_status: ['status'] },
-                    limit: 10,
-                    offset: 0
-                })
-            })
+    const resolution = await resolveParkDriverProfilesByPhoneV1({
+        phone: String(phone),
+        preferredParkId: selectedPark?.parkId,
+    })
 
-            if (!yandexRes.ok) continue
-            const yandexData = await yandexRes.json()
-            const profiles = yandexData.driver_profiles || []
+    if (resolution.status === 'unavailable') {
+        return NextResponse.json({
+            error: 'PARK_LOOKUP_UNAVAILABLE',
+            message: 'Яндекс Флит временно не ответил. Парк не назначен.',
+        }, { status: 503 })
+    }
 
-            // All profiles matching by phone
-            const phoneMatches = profiles.filter((p: any) => {
-                const phones: string[] = p.driver_profile.phones || []
-                return phones.some((ph: string) => ph.replace(/[\s+\-()]/g, '').includes(normalizedPhone) || normalizedPhone.includes(ph.replace(/[\s+\-()]/g, '')))
-            })
-            // Prefer working status — handles "swap" scenario (two profiles same driver)
-            const matched = phoneMatches.find((p: any) => p.driver_profile.work_status !== 'fired') || phoneMatches[0]
+    if (!selectedPark && resolution.status === 'select_park') {
+        return NextResponse.json({
+            success: true,
+            autoLinked: false,
+            parkSelectionRequired: true,
+            parks: resolution.candidates.map(candidate => ({
+                parkId: candidate.parkId,
+                name: candidate.parkName,
+            })),
+        })
+    }
 
-            if (matched) {
-                const yandexId = matched.driver_profile.id
-                const driverName = `${matched.driver_profile.first_name || ''} ${matched.driver_profile.last_name || ''}`.trim()
+    if (selectedPark && resolution.status === 'not_found') {
+        return NextResponse.json({
+            error: 'NOT_IN_PARK',
+            parkName: selectedPark.name || selectedPark.parkId,
+        }, { status: 403 })
+    }
 
-                let driverId = yandexId
-                try {
-                    const crmDriver = await prisma.driver.findFirst({ where: { yandexDriverId: yandexId } })
-                    if (crmDriver) driverId = crmDriver.id
-                } catch { /* keep yandexId as fallback */ }
+    if (resolution.status === 'resolved') {
+        const matchedDriver = await upsertParkMatchedDriverV1({
+            yandexDriverId: resolution.candidate.yandexDriverId,
+            fullName: resolution.candidate.fullName,
+            phone: resolution.candidate.phone,
+        })
+        await upsertDriverTelegramLinkV1({
+            contract: UPSERT_DRIVER_TELEGRAM_LINK_COMMAND_V1,
+            driverId: matchedDriver.id,
+            telegramId: BigInt(telegramId),
+            username: username || null,
+            activeParkId: resolution.candidate.parkId,
+        })
 
-                await upsertDriverTelegramLinkV1({ contract: UPSERT_DRIVER_TELEGRAM_LINK_COMMAND_V1, driverId, telegramId: BigInt(telegramId), username: username || null, activeParkId: connection.parkId })
-
-                console.log(`[Webhook] Auto-linked TG ${telegramId} → driver ${driverId} (${driverName}) park=${connection.name || connection.parkId}`)
-                await notifyDriverLinked(telegramId.toString(), driverName)
-                return NextResponse.json({ success: true, autoLinked: true, driverName, parkName: connection.name || connection.parkId })
-            }
-        } catch (err: any) {
-            console.error(`[Webhook] Auto-link failed for park ${connection.parkId}:`, err.message)
-        }
+        console.log(`[Webhook] Auto-linked TG ${telegramId} → driver ${matchedDriver.id} (${matchedDriver.fullName}) park=${resolution.candidate.parkName}`)
+        await notifyDriverLinked(String(telegramId), matchedDriver.fullName)
+        return NextResponse.json({
+            success: true,
+            autoLinked: true,
+            driverName: matchedDriver.fullName,
+            parkName: resolution.candidate.parkName,
+        })
     }
 
     // 2. Fallback: save as an unlinked message for manual manager review
+    const pendingReason = resolution.status === 'ambiguous'
+        ? 'В выбранном парке найдено несколько профилей с этим телефоном.'
+        : 'Водитель не найден ни в одном доступном парке.'
     await recordPendingBotLinkRequestV1({
         contract: RECORD_PENDING_BOT_LINK_REQUEST_COMMAND_V1,
         telegramId: String(telegramId),
-        text: `[Запрос привязки] Телефон: ${phone}, @${username || 'нет'}`,
+        text: `[Запрос привязки] Телефон: ${phone}, @${username || 'нет'}. ${pendingReason}`,
     })
 
     // Notify manager: drop a system message into the driver's existing TG chat
-    await notifyManagerPendingLink({ telegramId, username, phone })
+    await notifyManagerPendingLink({ telegramId, username, phone, reason: pendingReason })
 
     return NextResponse.json({ success: true, autoLinked: false, message: 'Pending manual link by manager' })
 }
 
 // Inject a system message into the driver's TG chat so the manager sees the pending link request
-async function notifyManagerPendingLink({ telegramId, username, phone }: {
+async function notifyManagerPendingLink({ telegramId, username, phone, reason }: {
     telegramId: string
     username?: string
     phone?: string
+    reason?: string
 }) {
     try {
         const chat = await prisma.chat.findFirst({
@@ -350,7 +366,7 @@ async function notifyManagerPendingLink({ telegramId, username, phone }: {
             operation: APPEND_SYSTEM_NOTIFICATION_V1,
             chatId: chat.id,
             channel: 'telegram',
-            content: `⚠️ Запрос привязки TG Бота\n\nВодитель ${userLabel} не найден в Яндекс Флит.\nТелефон: ${phoneLabel}\nTG ID: ${telegramId}\n\nПривяжите вручную: карточка контакта → «Привязать к водителю».`,
+            content: `⚠️ Запрос привязки TG Бота\n\nВодитель ${userLabel}: ${reason || 'не найден в Яндекс Флит.'}\nТелефон: ${phoneLabel}\nTG ID: ${telegramId}\n\nПривяжите вручную: карточка контакта → «Привязать к водителю».`,
             externalId: `bot_link_req_${telegramId}_${Date.now()}`,
             sentAt: new Date().toISOString(),
         })
@@ -783,48 +799,43 @@ async function handleSetActivePark(payload: any) {
     const mapping = await prisma.driverTelegram.findFirst({ where: { telegramId: BigInt(telegramId) } })
     if (!mapping) return NextResponse.json({ error: 'NOT_LINKED' }, { status: 404 })
 
-    const park = await getYandexConnectionCredentialsV1(undefined, parkId)
+    const parks = await listYandexConnectionMetadataV1()
+    const park = parks.find(candidate => candidate.parkId === parkId)
     if (!park) return NextResponse.json({ error: 'PARK_NOT_FOUND' }, { status: 404 })
 
-    // Verify driver exists in this park via Yandex Fleet
-    try {
-        const driver = await prisma.driver.findUnique({
-            where: { id: mapping.driverId },
-            select: { phone: true, yandexDriverId: true }
+    let driver = await prisma.driver.findUnique({
+        where: { id: mapping.driverId },
+        select: { phone: true },
+    })
+    if (!driver) {
+        driver = await prisma.driver.findFirst({
+            where: { yandexDriverId: mapping.driverId },
+            select: { phone: true },
         })
-        const phone = driver?.phone
-        if (phone) {
-            const searchRes = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list', {
-                method: 'POST',
-                headers: {
-                    'X-Client-ID': park.clid,
-                    'X-Api-Key': park.apiKey,
-                    'Accept-Language': 'ru',
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    query: { park: { id: parkId }, text: phone },
-                    fields: { driver_profile: ['id', 'phones', 'work_status'], car: [], account: [], current_status: [] },
-                    limit: 5, offset: 0
-                })
-            })
-            if (searchRes.ok) {
-                const searchData = await searchRes.json()
-                const normalizedPhone = phone.replace(/[\s+\-()]/g, '')
-                const found = (searchData.driver_profiles || []).some((p: any) =>
-                    (p.driver_profile.phones || []).some((ph: string) =>
-                        ph.replace(/[\s+\-()]/g, '').includes(normalizedPhone)
-                    )
-                )
-                if (!found) {
-                    console.log(`[setActivePark] driver phone ${phone} not found in park ${parkId}`)
-                    return NextResponse.json({ error: 'NOT_IN_PARK', parkName: park.name || parkId }, { status: 403 })
-                }
-            }
-        }
-    } catch (err: any) {
-        console.error('[setActivePark] park validation error:', err.message)
-        // Don't block if Yandex check fails — allow the switch
+    }
+    if (!driver?.phone) {
+        return NextResponse.json({
+            error: 'DRIVER_PHONE_MISSING',
+            message: 'В профиле водителя отсутствует номер телефона. Парк не изменён.',
+        }, { status: 409 })
+    }
+
+    const resolution = await resolveParkDriverProfilesByPhoneV1({
+        phone: driver.phone,
+        preferredParkId: parkId,
+    })
+    if (resolution.status === 'unavailable') {
+        return NextResponse.json({
+            error: 'PARK_CHECK_UNAVAILABLE',
+            message: 'Яндекс Флит временно не ответил. Парк не изменён.',
+        }, { status: 503 })
+    }
+    if (resolution.status !== 'resolved') {
+        console.log(`[setActivePark] exact driver phone ${driver.phone} not uniquely found in park ${parkId}`)
+        return NextResponse.json({
+            error: resolution.status === 'ambiguous' ? 'PARK_PROFILE_AMBIGUOUS' : 'NOT_IN_PARK',
+            parkName: park.name || parkId,
+        }, { status: resolution.status === 'ambiguous' ? 409 : 403 })
     }
 
     await patchDriverTelegramLinkV1({ contract: PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1, mappingId: mapping.id, patch: { activeParkId: parkId, carLabel: null, carId: null } })

@@ -42,6 +42,23 @@ export type DriverActionIdentityInputV1 = {
     preferredParkId: string | null
 }
 
+export type ParkDriverPhoneCandidateV1 = {
+    parkId: string
+    parkName: string
+    yandexDriverId: string
+    fullName: string
+    phone: string
+    workStatus: string | null
+    currentStatus: string | null
+}
+
+export type ParkDriverPhoneResolutionV1 =
+    | { status: 'resolved'; candidate: ParkDriverPhoneCandidateV1 }
+    | { status: 'select_park'; candidates: ParkDriverPhoneCandidateV1[] }
+    | { status: 'ambiguous'; candidates: ParkDriverPhoneCandidateV1[] }
+    | { status: 'not_found' }
+    | { status: 'unavailable' }
+
 export function normalizeParkPhoneDigitsV1(value: unknown): string {
     const digits = String(value || '').replace(/\D/g, '')
     if (digits.length === 11 && digits.startsWith('8')) return `7${digits.slice(1)}`
@@ -53,6 +70,45 @@ function samePhone(left: unknown, right: unknown): boolean {
     const a = normalizeParkPhoneDigitsV1(left)
     const b = normalizeParkPhoneDigitsV1(right)
     return Boolean(a && b && (a === b || (a.length >= 10 && b.length >= 10 && a.slice(-10) === b.slice(-10))))
+}
+
+/**
+ * Resolve an exact phone match without guessing a park or a duplicate profile.
+ * Any provider error keeps the result fail-closed because an unavailable park
+ * may contain another profile with the same phone.
+ */
+export function selectParkDriverProfilesByPhoneV1(
+    phone: string,
+    search: ParkDriverSearchResultV1,
+): ParkDriverPhoneResolutionV1 {
+    if (search.checkedParks === 0 || search.errors.length > 0) return { status: 'unavailable' }
+
+    const candidatesByKey = new Map<string, ParkDriverPhoneCandidateV1>()
+    for (const park of search.results) {
+        for (const profile of park.profiles) {
+            if (profile.workStatus?.toLocaleLowerCase('ru-RU') === 'fired') continue
+            const matchedPhone = profile.phones.find(candidate => samePhone(candidate, phone))
+            if (!matchedPhone) continue
+            const candidate: ParkDriverPhoneCandidateV1 = {
+                parkId: park.parkId,
+                parkName: park.parkName,
+                yandexDriverId: profile.id,
+                fullName: profile.fullName,
+                phone: matchedPhone,
+                workStatus: profile.workStatus,
+                currentStatus: profile.currentStatus,
+            }
+            candidatesByKey.set(`${candidate.parkId}:${candidate.yandexDriverId}`, candidate)
+        }
+    }
+
+    const candidates = [...candidatesByKey.values()]
+    if (candidates.length === 0) return { status: 'not_found' }
+    if (candidates.length === 1) return { status: 'resolved', candidate: candidates[0] }
+
+    const parkIds = new Set(candidates.map(candidate => candidate.parkId))
+    if (parkIds.size === candidates.length) return { status: 'select_park', candidates }
+    return { status: 'ambiguous', candidates }
 }
 
 /**
@@ -334,6 +390,19 @@ export async function resolveDriverActionYandexIdentityV1(
         timeoutMs: 8_000,
     })
     return selectDriverActionYandexIdentityV1(input, search)
+}
+
+/** Fleet-owned exact phone resolver used by Telegram onboarding and park changes. */
+export async function resolveParkDriverProfilesByPhoneV1(input: {
+    phone: string
+    preferredParkId?: string | null
+}): Promise<ParkDriverPhoneResolutionV1> {
+    const search = await searchYandexParksByDriverQueryV1(input.phone, {
+        preferredParkId: input.preferredParkId,
+        attempts: 1,
+        timeoutMs: 8_000,
+    })
+    return selectParkDriverProfilesByPhoneV1(input.phone, search)
 }
 
 export async function getParkLinkedDriverPhoneV1(yandexDriverId: string | null): Promise<string | null> {
