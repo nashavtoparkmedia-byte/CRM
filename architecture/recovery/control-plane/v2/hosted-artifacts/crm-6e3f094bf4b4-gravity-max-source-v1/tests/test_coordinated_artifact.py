@@ -582,6 +582,19 @@ class CoordinatedArtifactTests(unittest.TestCase):
     def test_canonical_layer_root_marker_accepted(self) -> None:
         inspect_layer(synthetic_base_layers(maximum=True)[0])
 
+    def test_unsafe_layer_path_errors_are_exact_and_terminal_safe(self) -> None:
+        cases = {
+            "/absolute": '(absolute): "/absolute"',
+            "name\\with-control\n": '(backslash): "name\\\\with-control\\n"',
+            "./.": '(root alias): "./."',
+            "safe/../escape": '(parent traversal): "safe/../escape"',
+        }
+        for name, expected in cases.items():
+            with self.subTest(name=name):
+                with self.assertRaises(contract.ContractError) as caught:
+                    contract.safe_tar_name(name, "Docker layer")
+                self.assertIn(expected, str(caught.exception))
+
     def test_non_directory_layer_root_marker_rejected(self) -> None:
         layer = synthetic_base_layers(maximum=True, root_marker_type=tarfile.REGTYPE)[0]
         with self.assertRaisesRegex(contract.ContractError, "invalid root directory marker"):

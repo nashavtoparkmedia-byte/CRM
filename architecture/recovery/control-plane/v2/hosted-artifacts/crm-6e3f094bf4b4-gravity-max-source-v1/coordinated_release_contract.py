@@ -407,11 +407,19 @@ def validate_source_authority(evidence: Path) -> tuple[dict[str, Any], bytes]:
 
 
 def safe_tar_name(name: Any, label: str) -> str:
-    if type(name) is not str or not name or name.startswith("/") or "\\" in name:
-        fail(f"{label} contains an unsafe member path")
+    if type(name) is not str:
+        fail(f"{label} contains an unsafe member path (non-string)")
+    if not name:
+        fail(f"{label} contains an unsafe member path (empty)")
+    if name.startswith("/"):
+        fail(f"{label} contains an unsafe member path (absolute): {json.dumps(name, ensure_ascii=True)}")
+    if "\\" in name:
+        fail(f"{label} contains an unsafe member path (backslash): {json.dumps(name, ensure_ascii=True)}")
     parts = [part for part in name.split("/") if part not in ("", ".")]
-    if not parts or any(part == ".." for part in parts):
-        fail(f"{label} contains an unsafe member path")
+    if not parts:
+        fail(f"{label} contains an unsafe member path (root alias): {json.dumps(name, ensure_ascii=True)}")
+    if any(part == ".." for part in parts):
+        fail(f"{label} contains an unsafe member path (parent traversal): {json.dumps(name, ensure_ascii=True)}")
     return "/".join(parts)
 
 
