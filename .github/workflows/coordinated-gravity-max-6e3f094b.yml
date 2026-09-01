@@ -15,6 +15,9 @@ concurrency:
 
 jobs:
   coordinated-artifact:
+    outputs:
+      release_artifact_id: ${{ steps.coordinated_upload.outputs.artifact-id }}
+      release_artifact_digest: ${{ steps.coordinated_upload.outputs.artifact-digest }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     steps:
@@ -174,6 +177,7 @@ jobs:
           compression-level: 0
           retention-days: 30
           include-hidden-files: false
+          overwrite: true
 
       - name: Record hosted coordinated artifact identity
         env:
@@ -210,3 +214,217 @@ jobs:
               'artifact_bytes': value['size_in_bytes'],
           }, sort_keys=True))
           PY
+
+  authenticated-transport:
+    needs: coordinated-artifact
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact release builder for transport
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+          path: release-authority
+
+      - name: Assert exact transport builder authority
+        env:
+          EXPECTED_BUILDER_COMMIT: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REF" = refs/heads/codex/prepare-max-coordinated-release-20260901
+          test "$(git -C release-authority rev-parse 'HEAD^{commit}')" = "$EXPECTED_BUILDER_COMMIT"
+          printf 'RELEASE_BUILDER_COMMIT=%s\n' "$EXPECTED_BUILDER_COMMIT" >> "$GITHUB_ENV"
+
+      - name: Capture exact authenticated release artifact identity
+        env:
+          ARTIFACT_ID: ${{ needs.coordinated-artifact.outputs.release_artifact_id }}
+          ARTIFACT_DIGEST: ${{ needs.coordinated-artifact.outputs.release_artifact_digest }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          test -n "$ARTIFACT_ID"
+          printf '%s\n' "$ARTIFACT_DIGEST" | grep -Eq '^[0-9a-f]{64}$'
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            --header "Authorization: Bearer $GITHUB_TOKEN" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/nashavtoparkmedia-byte/CRM/actions/artifacts/$ARTIFACT_ID" \
+            --output coordinated-artifact-identity.json
+          python3 -I - "$ARTIFACT_ID" "$ARTIFACT_DIGEST" "$RELEASE_BUILDER_COMMIT" "$GITHUB_RUN_ID" <<'PY'
+          import json, pathlib, sys
+          artifact_id, digest, builder, run_id = sys.argv[1:]
+          value = json.loads(pathlib.Path('coordinated-artifact-identity.json').read_text(encoding='utf8'))
+          workflow_run = value.get('workflow_run')
+          if (
+              value.get('id') != int(artifact_id)
+              or value.get('name') != f'coordinated-gravity-max-6e3f094bf4b4-{builder}'
+              or value.get('digest') != f'sha256:{digest}'
+              or value.get('expired') is not False
+              or type(value.get('size_in_bytes')) is not int
+              or value['size_in_bytes'] <= 0
+              or type(workflow_run) is not dict
+              or workflow_run.get('id') != int(run_id)
+              or workflow_run.get('head_branch') != 'codex/prepare-max-coordinated-release-20260901'
+              or workflow_run.get('head_sha') != builder
+          ):
+              raise SystemExit('authenticated release artifact identity mismatch')
+          PY
+
+      - name: Prepare and verify bounded authenticated artifact transport
+        env:
+          ARTIFACT_ID: ${{ needs.coordinated-artifact.outputs.release_artifact_id }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          authority=release-authority/architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1
+          test -n "$ARTIFACT_ID"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            --header "Authorization: Bearer $GITHUB_TOKEN" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/nashavtoparkmedia-byte/CRM/actions/artifacts/$ARTIFACT_ID/zip" \
+            | python3 -I -B "$authority/build/chunk-hosted-artifact.py" \
+                --identity coordinated-artifact-identity.json \
+                --output-directory coordinated-transport \
+                --builder-commit "$RELEASE_BUILDER_COMMIT" \
+                --run-id "$GITHUB_RUN_ID"
+          python3 -I -B "$authority/verify-artifact-transport.py" \
+            --identity coordinated-artifact-identity.json \
+            --transport-directory coordinated-transport \
+            --builder-commit "$RELEASE_BUILDER_COMMIT" \
+            --run-id "$GITHUB_RUN_ID"
+
+      - name: Upload transport part 000
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coordinated-transport-6e3f094bf4b4-${{ github.sha }}-part-000
+          path: coordinated-transport/coordinated-artifact.zip.part-000
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+          overwrite: true
+
+      - name: Upload transport part 001
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coordinated-transport-6e3f094bf4b4-${{ github.sha }}-part-001
+          path: coordinated-transport/coordinated-artifact.zip.part-001
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+          overwrite: true
+
+      - name: Upload transport part 002
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coordinated-transport-6e3f094bf4b4-${{ github.sha }}-part-002
+          path: coordinated-transport/coordinated-artifact.zip.part-002
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+          overwrite: true
+
+      - name: Upload transport part 003
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coordinated-transport-6e3f094bf4b4-${{ github.sha }}-part-003
+          path: coordinated-transport/coordinated-artifact.zip.part-003
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+          overwrite: true
+
+      - name: Upload transport part 004
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coordinated-transport-6e3f094bf4b4-${{ github.sha }}-part-004
+          path: coordinated-transport/coordinated-artifact.zip.part-004
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+          overwrite: true
+
+      - name: Upload transport part 005
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coordinated-transport-6e3f094bf4b4-${{ github.sha }}-part-005
+          path: coordinated-transport/coordinated-artifact.zip.part-005
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+          overwrite: true
+
+      - name: Upload transport part 006
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coordinated-transport-6e3f094bf4b4-${{ github.sha }}-part-006
+          path: coordinated-transport/coordinated-artifact.zip.part-006
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+          overwrite: true
+
+      - name: Upload transport part 007
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coordinated-transport-6e3f094bf4b4-${{ github.sha }}-part-007
+          path: coordinated-transport/coordinated-artifact.zip.part-007
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+          overwrite: true
+
+      - name: Upload transport part 008
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coordinated-transport-6e3f094bf4b4-${{ github.sha }}-part-008
+          path: coordinated-transport/coordinated-artifact.zip.part-008
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+          overwrite: true
+
+      - name: Upload transport part 009
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coordinated-transport-6e3f094bf4b4-${{ github.sha }}-part-009
+          path: coordinated-transport/coordinated-artifact.zip.part-009
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+          overwrite: true
+
+      - name: Upload exact transport manifest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: coordinated-transport-6e3f094bf4b4-${{ github.sha }}-manifest
+          path: coordinated-transport/coordinated-artifact-transport-manifest.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+          overwrite: true
+
+      - name: Verify hosted transport artifact identities
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -Eeuo pipefail
+          authority=release-authority/architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1
+          for attempt in 1 2 3 4 5 6; do
+            if curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+              --header "Authorization: Bearer $GITHUB_TOKEN" \
+              --header 'X-GitHub-Api-Version: 2022-11-28' \
+              "https://api.github.com/repos/nashavtoparkmedia-byte/CRM/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" \
+              --output hosted-transport-artifacts.json \
+              && python3 -I -B "$authority/build/verify-hosted-transport-registry.py" \
+              --artifact-inventory hosted-transport-artifacts.json \
+              --source-identity coordinated-artifact-identity.json \
+              --builder-commit "$RELEASE_BUILDER_COMMIT" \
+              --run-id "$GITHUB_RUN_ID"; then
+              exit 0
+            fi
+            test "$attempt" -lt 6
+            sleep 5
+          done
+          exit 1

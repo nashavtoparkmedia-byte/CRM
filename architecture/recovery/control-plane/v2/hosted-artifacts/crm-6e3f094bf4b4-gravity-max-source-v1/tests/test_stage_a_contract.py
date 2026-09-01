@@ -61,7 +61,10 @@ class StageAContractTests(unittest.TestCase):
         self.assertEqual(workflow.count("docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f"), 1)
         self.assertIn("actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683", workflow)
         self.assertIn("actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093", workflow)
-        self.assertIn("actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02", workflow)
+        self.assertEqual(
+            workflow.count("uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02"),
+            12,
+        )
         self.assertIn("artifact-ids: '9786032152'", workflow)
         self.assertIn("run-id: '33461902086'", workflow)
 
@@ -100,6 +103,40 @@ class StageAContractTests(unittest.TestCase):
         self.assertEqual(workflow.count(f"--label yoko.activation.profile={PROFILE}"), 2)
         self.assertEqual(workflow.count(f"--label org.opencontainers.image.revision={APPLICATION_COMMIT}"), 2)
         self.assertIn("moby/buildkit:v0.25.2@sha256:72bda77240181301a0d5ee57d39fa58e4aabd7eff26f81bbf108088caf810f05", workflow)
+
+    def test_authenticated_transport_is_exact_and_connector_bounded(self) -> None:
+        workflow = (ROOT / ".github/workflows/coordinated-gravity-max-6e3f094b.yml").read_text()
+        self.assertIn("authenticated-transport:\n    needs: coordinated-artifact", workflow)
+        self.assertEqual(workflow.count("runs-on: ubuntu-24.04"), 2)
+        self.assertIn("actions/artifacts/$ARTIFACT_ID/zip", workflow)
+        self.assertIn('| python3 -I -B "$authority/build/chunk-hosted-artifact.py"', workflow)
+        self.assertIn('python3 -I -B "$authority/verify-artifact-transport.py"', workflow)
+        self.assertIn('python3 -I -B "$authority/build/verify-hosted-transport-registry.py"', workflow)
+        self.assertEqual(workflow.count("compression-level: 0"), 12)
+        self.assertEqual(workflow.count("retention-days: 1"), 11)
+        self.assertEqual(workflow.count("overwrite: true"), 12)
+        self.assertIn("for attempt in 1 2 3 4 5 6; do", workflow)
+        self.assertIn('test "$attempt" -lt 6', workflow)
+        for index in range(10):
+            suffix = f"part-{index:03d}"
+            self.assertIn(f"coordinated-transport-6e3f094bf4b4-${{{{ github.sha }}}}-{suffix}", workflow)
+            self.assertIn(f"coordinated-transport/coordinated-artifact.zip.{suffix}", workflow)
+        self.assertIn("coordinated-artifact-transport-manifest.json", workflow)
+        self.assertIn("actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100", workflow)
+        self.assertNotIn("secrets.", workflow)
+
+        transport_contract = (AUTHORITY / "hosted_artifact_transport.py").read_text()
+        for binding in (
+            'CHUNK_BYTES = 500 * 1024 * 1024',
+            'CHUNK_COUNT = 10',
+            'CONNECTOR_MAX_BYTES = 512 * 1024 * 1024',
+            'MINIMUM_FREE_RESERVE_BYTES = 4 * 1024 * 1024 * 1024',
+            'ensure_transport_capacity(output_directory.parent, source["bytes"])',
+            'combined.hexdigest() != source["digest"].removeprefix("sha256:")',
+            'artifact.get("expired") is not False',
+            'workflow_run.get("head_sha") != builder_commit',
+        ):
+            self.assertIn(binding, transport_contract)
 
     def test_max_release_dockerfile_uses_exact_materials_without_mutable_apt(self) -> None:
         dockerfile = (AUTHORITY / "build/max-scraper.Dockerfile").read_text()

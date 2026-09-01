@@ -41,7 +41,20 @@ The post-upload GitHub artifact ID, digest, and byte size are an external
 transport identity recorded by the workflow after upload; they cannot be
 embedded in the artifact without creating a circular digest. A later Stage B
 sealer must authenticate that external identity before invoking this content
-verifier. This Stage A capability does not implement that sealer.
+verifier. The authenticated client has a fixed 512 MiB download limit, so the
+hosted job also downloads that exact ZIP through its ephemeral read-only
+`GITHUB_TOKEN`, verifies its recorded byte size and SHA-256 digest, and emits
+ten fixed 500 MiB-or-smaller transport shards plus a canonical chunk manifest.
+The transport runs in a fresh dependent runner job, and a fail-closed capacity
+preflight requires the exact source byte count plus a fixed 4 GiB reserve
+before any shard is written. An independent verifier reconstructs the original
+ZIP digest before the shards are uploaded. Uploads use explicit replacement so
+a failed partial run can be rerun without retaining a mixed shard inventory;
+the final exact registry check has a bounded consistency retry. Each shard is a
+short-lived Actions artifact whose external identity and size are checked after
+upload. These shards are authenticated transport only: they are not another
+release artifact and grant no release or production authority. This Stage A
+capability does not implement the Stage B sealer.
 
 Stage A creates exactly these artifact members:
 

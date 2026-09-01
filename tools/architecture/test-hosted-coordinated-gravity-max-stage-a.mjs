@@ -8,6 +8,7 @@ const authority = 'architecture/recovery/control-plane/v2/hosted-artifacts/crm-6
 const commands = [
   [`${authority}/tests/test_stage_a_contract.py`],
   [`${authority}/tests/test_coordinated_artifact.py`],
+  [`${authority}/tests/test_hosted_artifact_transport.py`],
 ]
 
 for (const args of commands) {
