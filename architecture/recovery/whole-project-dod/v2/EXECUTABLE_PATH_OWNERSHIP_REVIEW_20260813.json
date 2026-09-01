@@ -7,16 +7,16 @@
     "role": "SOL_HIGH_INTERNAL_REVIEW",
     "external_acceptance": false,
     "independent_acceptance": false,
-    "decision": "Internal remediation materialization records the exact baseline-to-current ownership assignments and exact-inventory transitions enumerated below. The reviewed current denominator includes the accepted AI Calls Stage 1–5 runtime/proof files and source-isolated mass-calling migration under Calling ownership, the reconciled current-main Telegram link restoration under existing Telegram Channel and Fleet Operations paths, the two exact native Codex Stage 0 skill metadata files under repository_operations ownership, three bounded MAX outbound test surfaces under the existing gravity_root exclusion and gravity_application_operations owner, and nine intentional Telegram driver-link source/test surfaces introduced together at commit 50d786e6711d7ad5d53da00f361a32e7f470821c. The new Stage A set adds exactly nine tracked executable surfaces: one content-specific CI workflow under ci_workflow, seven release builder/verifier/test surfaces under architecture_recovery, and one authoritative control under architecture_controls; the seven operational surfaces have exact lifecycle classifications, the two tests retain TEST lifecycle, and none changes an exact-runtime or exact-path inventory. The declared current-dependency manifest prevents test-source literals from becoming a second authority; this artifact is not external or independent acceptance."
+    "decision": "Internal remediation materialization records the exact baseline-to-current ownership assignments and exact-inventory transitions enumerated below. The reviewed current denominator includes the accepted AI Calls Stage 1–5 runtime/proof files and source-isolated mass-calling migration under Calling ownership, the reconciled current-main Telegram link restoration under existing Telegram Channel and Fleet Operations paths, the two exact native Codex Stage 0 skill metadata files under repository_operations ownership, three bounded MAX outbound test surfaces under the existing gravity_root exclusion and gravity_application_operations owner, and nine intentional Telegram driver-link source/test surfaces introduced together at commit 50d786e6711d7ad5d53da00f361a32e7f470821c. The complete Stage A set adds exactly fourteen tracked executable surfaces: one content-specific CI workflow under ci_workflow, twelve release builder/verifier/test surfaces under architecture_recovery, and one authoritative control under architecture_controls; the eleven operational surfaces have exact lifecycle classifications, the three tests retain TEST lifecycle, and none changes an exact-runtime or exact-path inventory. The declared current-dependency manifest prevents test-source literals from becoming a second authority; this artifact is not external or independent acceptance."
   },
   "baseline": {
     "coverage_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_COVERAGE_BASELINE_2108.json",
     "coverage_sha256": "bd7df022d08734ec500336907c4c1dadc6c6ac3c7f3df23c1df0d307a4cdfb29"
   },
   "current": {
-    "tracked_inventory_sha256": "c485316f7b8b102bfc20dd0ea133c549a399af081783966421b421a04f100ace",
-    "tracked_executable_surfaces": 2263,
-    "coverage_sha256": "acbb394bd7d7fcb86ffd925b981acd965416c91b517637d18d0f6cd798f3cfd3"
+    "tracked_inventory_sha256": "617c2d14082774faf96b2d7f836c9dbff413f6d7c56930c039814ef2d1d1ac8a",
+    "tracked_executable_surfaces": 2268,
+    "coverage_sha256": "7134f42b1960245340e995d6c3ed63a2f7a13715fc7cd0df38df10ada3de5928"
   },
   "exact_inventory_changes": [
     {

@@ -4,11 +4,11 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 697,
+    "total_entries": 701,
     "test": 35,
     "dead_historical": 92,
     "migration_only": 79,
-    "active_operational": 486,
+    "active_operational": 490,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
   "surfaces": [
@@ -961,6 +961,15 @@
       "functional_owner": "platform_engineering"
     },
     {
+      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/build/chunk-hosted-artifact.py",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Finite Stage A authenticated-artifact chunker. It accepts only the exact hosted ZIP stream and fixed identity inputs, writes the bounded transport set, and grants no install, deployment, database, credential, or provider capability.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
       "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/build/emit-coordinated-release.py",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
@@ -988,11 +997,38 @@
       "functional_owner": "platform_engineering"
     },
     {
+      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/build/verify-hosted-transport-registry.py",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Read-only Stage A hosted transport identity verifier. It validates the exact GitHub artifact registry against the fixed builder and run identities and grants no install, deployment, database, credential, or provider capability.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
       "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/coordinated_release_contract.py",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
       "production_capability": "POSSIBLE",
       "rationale": "Pure fail-closed Stage A artifact contract used by the bounded emitter and verifier. It reads exact local files and GitHub identity evidence and grants no install, deployment, credential, database, or provider mutation capability.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/hosted_artifact_transport.py",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Pure fail-closed Stage A authenticated transport contract. It validates, chunks, and reconstructs only the fixed hosted release artifact and grants no install, deployment, database, credential, or provider capability.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/verify-artifact-transport.py",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Read-only Stage A transport reconstruction verifier. It validates exact chunks and source identity before reconstructing the fixed release ZIP and grants no install, deployment, database, credential, or provider capability.",
       "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
       "functional_owner": "platform_engineering"
     },
