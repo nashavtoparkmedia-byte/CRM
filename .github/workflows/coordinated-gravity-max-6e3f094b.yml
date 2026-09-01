@@ -55,6 +55,7 @@ jobs:
         with:
           artifact-ids: '9786032152'
           path: source-authority
+          merge-multiple: true
           github-token: ${{ github.token }}
           repository: nashavtoparkmedia-byte/CRM
           run-id: '33461902086'

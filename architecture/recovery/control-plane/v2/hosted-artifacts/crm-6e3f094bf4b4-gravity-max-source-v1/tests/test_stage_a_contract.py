@@ -79,6 +79,19 @@ class StageAContractTests(unittest.TestCase):
         self.assertIn("EXPECTED_BUILDER_COMMIT: ${{ github.sha }}", workflow)
         self.assertNotRegex(workflow, r"application[^\n]*\$\{\{")
 
+    def test_source_authority_artifact_is_flattened_to_verified_path(self) -> None:
+        workflow = (ROOT / ".github/workflows/coordinated-gravity-max-6e3f094b.yml").read_text()
+        download = workflow.split("- name: Download exact accepted source execution proof", 1)[1].split(
+            "- name: Capture exact public source authority identities", 1
+        )[0]
+        capture = workflow.split("- name: Capture exact public source authority identities", 1)[1].split(
+            "- name: Set up one exact Buildx and BuildKit authority", 1
+        )[0]
+        self.assertIn("artifact-ids: '9786032152'", download)
+        self.assertIn("path: source-authority", download)
+        self.assertIn("merge-multiple: true", download)
+        self.assertIn("test -f source-authority/authoritative-ci-execution.json", capture)
+
     def test_both_images_use_one_build_authority_and_coordinated_labels(self) -> None:
         workflow = (ROOT / ".github/workflows/coordinated-gravity-max-6e3f094b.yml").read_text()
         self.assertEqual(workflow.count("--platform linux/amd64"), 2)
