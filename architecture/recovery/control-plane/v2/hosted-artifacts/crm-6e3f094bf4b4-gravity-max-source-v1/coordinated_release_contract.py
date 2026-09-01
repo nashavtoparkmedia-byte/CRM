@@ -465,6 +465,16 @@ def inspect_docker_layer(
     try:
         with tarfile.open(fileobj=reader, mode="r|") as layer:
             for entry in layer:
+                if entry.name == ".":
+                    if (
+                        entry.type != tarfile.DIRTYPE
+                        or entry.size != 0
+                        or entry.linkname != ""
+                        or entry.name in seen
+                    ):
+                        fail("Docker layer contains an invalid root directory marker")
+                    seen.add(entry.name)
+                    continue
                 relative = safe_tar_name(entry.name, "Docker layer")
                 if relative in seen:
                     fail("Docker layer contains duplicate members")

@@ -70,18 +70,54 @@ def image_layer(
     return layer.getvalue()
 
 
-def synthetic_base_layers(*, maximum: bool) -> list[bytes]:
+def synthetic_base_layers(
+    *, maximum: bool, root_marker_type: bytes = tarfile.DIRTYPE,
+    duplicate_root_marker: bool = False,
+) -> list[bytes]:
     count = 4 if maximum else 5
     result: list[bytes] = []
     for index in range(count):
         layer = BytesIO()
         with tarfile.open(fileobj=layer, mode="w") as archive:
+            if index == 0:
+                root = tarfile.TarInfo(".")
+                root.type = root_marker_type
+                root.mode = 0o755
+                if root_marker_type == tarfile.REGTYPE:
+                    raw = b"invalid root marker\n"
+                    root.size = len(raw)
+                    archive.addfile(root, BytesIO(raw))
+                else:
+                    archive.addfile(root)
+                if duplicate_root_marker:
+                    duplicate = tarfile.TarInfo(".")
+                    duplicate.type = tarfile.DIRTYPE
+                    duplicate.mode = 0o755
+                    archive.addfile(duplicate)
             raw = f"synthetic base {maximum} {index}\n".encode()
             info = tarfile.TarInfo(f"synthetic-base/{index}.txt")
             info.size = len(raw)
             archive.addfile(info, BytesIO(raw))
         result.append(layer.getvalue())
     return result
+
+
+def inspect_layer(layer: bytes) -> None:
+    outer = BytesIO()
+    with tarfile.open(fileobj=outer, mode="w") as archive:
+        info = tarfile.TarInfo("layer.tar")
+        info.size = len(layer)
+        archive.addfile(info, BytesIO(layer))
+    outer.seek(0)
+    with tarfile.open(fileobj=outer, mode="r") as archive:
+        contract.inspect_docker_layer(
+            archive,
+            archive.getmember("layer.tar"),
+            f"sha256:{hashlib.sha256(layer).hexdigest()}",
+            set(),
+            {},
+            {},
+        )
 
 
 def docker_archive(
@@ -542,6 +578,19 @@ class CoordinatedArtifactTests(unittest.TestCase):
         identity = self.max_archive_identity(path)
         self.assertEqual(identity["image_id"], image_id)
         self.assertEqual(identity["containerd_image_id"], containerd_image_id)
+
+    def test_canonical_layer_root_marker_accepted(self) -> None:
+        inspect_layer(synthetic_base_layers(maximum=True)[0])
+
+    def test_non_directory_layer_root_marker_rejected(self) -> None:
+        layer = synthetic_base_layers(maximum=True, root_marker_type=tarfile.REGTYPE)[0]
+        with self.assertRaisesRegex(contract.ContractError, "invalid root directory marker"):
+            inspect_layer(layer)
+
+    def test_duplicate_layer_root_marker_rejected(self) -> None:
+        layer = synthetic_base_layers(maximum=True, duplicate_root_marker=True)[0]
+        with self.assertRaisesRegex(contract.ContractError, "invalid root directory marker"):
+            inspect_layer(layer)
 
     def test_oci_blob_layer_descriptor_drift_rejected(self) -> None:
         path = self.base / "oci-layer-descriptor-drift.tar"
