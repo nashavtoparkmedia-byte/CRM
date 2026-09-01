@@ -11,7 +11,7 @@ import {
 } from '@/contracts/messaging/v1'
 import { sendMessageV1, updateConversationV1 } from '@/modules/messaging/public/v1'
 import { MIRROR_DRIVER_ACTION_RESULT_COMMAND_V1, RECORD_DRIVER_ACTION_COMMAND_V1 } from '@/contracts/fleet-operations/v1'
-import { mirrorDriverActionResultV1, recordDriverActionV1 } from '@/modules/fleet-operations/public/v1'
+import { mirrorDriverActionResultV1, recordDriverActionV1, resolveDriverActionYandexIdentityV1 } from '@/modules/fleet-operations/public/v1'
 
 const BOT_API_URL = process.env.BOT_API_URL || 'http://localhost:4000/api/bot'
 
@@ -656,12 +656,12 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
     }
     let driver = await prisma.driver.findUnique({
         where: { id: mapping.driverId },
-        select: { id: true, fullName: true, yandexDriverId: true },
+        select: { id: true, fullName: true, phone: true, yandexDriverId: true },
     })
     if (!driver) {
         driver = await prisma.driver.findFirst({
             where: { yandexDriverId: mapping.driverId },
-            select: { id: true, fullName: true, yandexDriverId: true },
+            select: { id: true, fullName: true, phone: true, yandexDriverId: true },
         })
     }
     if (!driver?.yandexDriverId) {
@@ -682,40 +682,34 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
         })
     }
 
-    // 2a. Profile-swap guard: if linked profile is fired, find the working twin in same park
+    // 2a. Resolve old links that have no park and cross-park profile duplicates.
+    // The Fleet owner keeps provider credentials inside its own boundary.
+    const fallbackIdentity = {
+        parkId: mapping.activeParkId || DRIVER_ACTIONS_PARK_ID,
+    }
     let effectiveYandexId = driver.yandexDriverId!
+    let effectiveParkId = fallbackIdentity.parkId
     try {
-        const conn = mapping.activeParkId
-            ? await getYandexConnectionCredentialsV1(undefined, mapping.activeParkId)
-            : await getYandexConnectionCredentialsV1()
-        if (conn && driver.fullName) {
-            const checkRes = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list', {
-                method: 'POST',
-                headers: { 'X-Client-ID': conn.clid, 'X-Api-Key': conn.apiKey, 'Accept-Language': 'ru', 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    query: { park: { id: conn.parkId }, text: driver.fullName },
-                    fields: { driver_profile: ['id', 'first_name', 'last_name', 'work_status'], car: [], account: [], current_status: [] },
-                    limit: 10, offset: 0
+        const resolved = await resolveDriverActionYandexIdentityV1({
+            yandexDriverId: effectiveYandexId,
+            phone: driver.phone,
+            fullName: driver.fullName,
+            preferredParkId: mapping.activeParkId,
+        })
+        if (resolved) {
+            effectiveYandexId = resolved.yandexDriverId
+            effectiveParkId = resolved.parkId
+            console.log(`[handleDriverAction] resolved driver=${driver.id} yandex=${effectiveYandexId} park=${effectiveParkId} via=${resolved.resolution}`)
+            if (mapping.activeParkId !== effectiveParkId) {
+                await patchDriverTelegramLinkV1({
+                    contract: PATCH_DRIVER_TELEGRAM_LINK_COMMAND_V1,
+                    mappingId: mapping.id,
+                    patch: { activeParkId: effectiveParkId },
                 })
-            })
-            if (checkRes.ok) {
-                const checkData = await checkRes.json()
-                const profiles: any[] = checkData.driver_profiles || []
-                const linked = profiles.find((p: any) => p.driver_profile.id === effectiveYandexId)
-                if (linked?.driver_profile.work_status === 'fired') {
-                    const twin = profiles.find((p: any) =>
-                        p.driver_profile.id !== effectiveYandexId &&
-                        p.driver_profile.work_status !== 'fired'
-                    )
-                    if (twin) {
-                        console.log(`[handleDriverAction] profile swap detected: ${effectiveYandexId} fired → using twin ${twin.driver_profile.id}`)
-                        effectiveYandexId = twin.driver_profile.id
-                    }
-                }
             }
         }
     } catch (e: any) {
-        console.warn(`[handleDriverAction] swap-guard failed: ${e.message}`)
+        console.warn(`[handleDriverAction] identity resolution failed: ${e.message}`)
     }
 
     // 2b. Enqueue scraper task — Playwright on fleet.yandex.ru (price, map, full addresses)
@@ -727,7 +721,7 @@ async function handleDriverAction(payload: any, kind: DriverActionKind) {
             body: JSON.stringify({
                 kind,
                 driverYandexId: effectiveYandexId,
-                parkId: mapping.activeParkId || DRIVER_ACTIONS_PARK_ID,
+                parkId: effectiveParkId,
                 reason: reason || (kind === 'CANCEL_ORDER' ? 'Отменено водителем' : null),
             }),
         })

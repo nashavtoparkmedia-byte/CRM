@@ -5,6 +5,7 @@ import {
     normalizeParkPhoneDigitsV1,
     parkDriverMatchesQueryV1,
     parkDriverProfileFromYandexV1,
+    selectDriverActionYandexIdentityV1,
 } from './park-phone-search'
 
 const gravityRoot = resolve(__dirname, '../../../../../')
@@ -63,7 +64,7 @@ describe('manual Telegram link multi-park wiring', () => {
         const route = source('src/app/api/bot-link/route.ts')
         const contactDrawer = source('src/app/messages/components/ContactProfileDrawer.tsx')
         expect(capability).toContain('listYandexConnectionCredentialsV1()')
-        expect(capability).toContain('searchDriverQueryInPark(connection, normalizedQuery)')
+        expect(capability).toContain('searchDriverQueryInPark(connection, normalizedQuery, options)')
         expect(capability).toContain('Promise.all(connections.map')
         expect(application).toContain('normalizeDriverSearchQueryV1(query)')
         expect(application).toContain('return searchYandexParksByDriverQuery(normalized.query)')
@@ -96,5 +97,107 @@ describe('manual Telegram link multi-park wiring', () => {
     test('does not delete the durable Telegram profile when dismissing a legacy request', () => {
         const adapter = source('src/modules/telegram-channel/public/v1/legacy-prisma-bot-chat-message-adapter.ts')
         expect(adapter).not.toContain('botUserRegistry')
+    })
+})
+
+describe('Telegram driver-action park resolution', () => {
+    const profile = (id: string, phone: string, workStatus = 'working') => ({
+        id,
+        fullName: 'Трубицын Юрий Олегович',
+        phones: [phone],
+        workStatus,
+        currentStatus: 'offline',
+    })
+
+    test('recovers the park of a legacy link by its exact stored Yandex profile id', () => {
+        const result = selectDriverActionYandexIdentityV1({
+            yandexDriverId: 'driver-yoko',
+            phone: '+7 966 700-66-66',
+            fullName: 'Трубицын Юрий Олегович',
+            preferredParkId: null,
+        }, {
+            checkedParks: 2,
+            errors: [],
+            results: [
+                { parkId: 'default-park', parkName: 'Наш Автопарк', profiles: [] },
+                { parkId: 'yoko', parkName: 'Yoko', profiles: [profile('driver-yoko', '+79667006666')] },
+            ],
+        })
+
+        expect(result).toEqual({
+            parkId: 'yoko',
+            yandexDriverId: 'driver-yoko',
+            resolution: 'linked-profile',
+        })
+    })
+
+    test('uses the selected-park profile when the same phone has another Yandex id', () => {
+        const result = selectDriverActionYandexIdentityV1({
+            yandexDriverId: 'driver-old-park',
+            phone: '8 (966) 700-66-66',
+            fullName: 'Трубицын Юрий Олегович',
+            preferredParkId: 'selected-park',
+        }, {
+            checkedParks: 1,
+            errors: [],
+            results: [{
+                parkId: 'selected-park',
+                parkName: 'Yoko',
+                profiles: [profile('driver-selected-park', '+79667006666')],
+            }],
+        })
+
+        expect(result).toEqual({
+            parkId: 'selected-park',
+            yandexDriverId: 'driver-selected-park',
+            resolution: 'preferred-phone',
+        })
+    })
+
+    test('does not guess when the exact phone belongs to multiple working profiles', () => {
+        const result = selectDriverActionYandexIdentityV1({
+            yandexDriverId: 'missing-profile',
+            phone: '+79667006666',
+            fullName: 'Трубицын Юрий Олегович',
+            preferredParkId: null,
+        }, {
+            checkedParks: 2,
+            errors: [],
+            results: [
+                { parkId: 'park-1', parkName: 'Парк 1', profiles: [profile('driver-1', '+79667006666')] },
+                { parkId: 'park-2', parkName: 'Парк 2', profiles: [profile('driver-2', '+79667006666')] },
+            ],
+        })
+
+        expect(result).toBeNull()
+    })
+
+    test('ignores a fired linked profile and selects the unique working phone match', () => {
+        const result = selectDriverActionYandexIdentityV1({
+            yandexDriverId: 'driver-fired',
+            phone: '+79667006666',
+            fullName: 'Трубицын Юрий Олегович',
+            preferredParkId: null,
+        }, {
+            checkedParks: 2,
+            errors: [],
+            results: [
+                { parkId: 'old-park', parkName: 'Старый парк', profiles: [profile('driver-fired', '+79667006666', 'fired')] },
+                { parkId: 'new-park', parkName: 'Новый парк', profiles: [profile('driver-working', '+79667006666')] },
+            ],
+        })
+
+        expect(result).toEqual({
+            parkId: 'new-park',
+            yandexDriverId: 'driver-working',
+            resolution: 'unique-phone',
+        })
+    })
+
+    test('wires the resolved park into the scraper task and self-heals the Telegram link', () => {
+        const route = source('src/app/api/webhooks/bot/route.ts')
+        expect(route).toContain('resolveDriverActionYandexIdentityV1({')
+        expect(route).toContain('patch: { activeParkId: effectiveParkId }')
+        expect(route).toContain('parkId: effectiveParkId')
     })
 })

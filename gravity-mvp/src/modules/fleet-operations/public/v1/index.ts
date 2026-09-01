@@ -41,8 +41,15 @@ export type { ScheduledScraperCheckDispatchResultV1 } from './scheduled-scraper-
 export {
     parkDriverMatchesQueryV1,
     parkDriverProfileFromYandexV1,
+    selectDriverActionYandexIdentityV1,
 } from './park-phone-search'
-export type { ParkDriverSearchResultV1, ParkPhoneProfileV1, ParkPhoneSearchResultV1 } from './park-phone-search'
+export type {
+    DriverActionIdentityInputV1,
+    DriverActionYandexIdentityV1,
+    ParkDriverSearchResultV1,
+    ParkPhoneProfileV1,
+    ParkPhoneSearchResultV1,
+} from './park-phone-search'
 export {
     addApiConnection,
     changeDriverLimit,
@@ -71,6 +78,7 @@ export {
     recordApiLogV1,
     recordDriverActionV1,
     recordDriverDailyActivityV1,
+    resolveDriverActionYandexIdentityV1,
     recordManagerDriverCommunicationV1,
     reconcileDriverProfileV1,
     resolveImportedDriverV1,

@@ -33,6 +33,7 @@ import { dispatchScheduledScraperChecksV1 as dispatchScheduledScraperChecks } fr
 import {
     getParkLinkedDriverPhoneV1 as getParkLinkedDriverPhone,
     normalizeParkPhoneDigitsV1 as normalizeParkPhoneDigits,
+    resolveDriverActionYandexIdentityV1 as resolveDriverActionYandexIdentity,
     searchYandexParksByDriverQueryV1 as searchYandexParksByDriverQuery,
     searchYandexParksByPhonesV1 as searchYandexParksByPhones,
     type ParkDriverSearchResultV1,
@@ -89,5 +90,6 @@ export const runScheduledYandexSyncV1 = (...args: Parameters<typeof runScheduled
 export const dispatchScheduledScraperChecksV1 = (...args: Parameters<typeof dispatchScheduledScraperChecks>) => dispatchScheduledScraperChecks(...args)
 export const getParkLinkedDriverPhoneV1 = (...args: Parameters<typeof getParkLinkedDriverPhone>) => getParkLinkedDriverPhone(...args)
 export const normalizeParkPhoneDigitsV1 = (...args: Parameters<typeof normalizeParkPhoneDigits>) => normalizeParkPhoneDigits(...args)
+export const resolveDriverActionYandexIdentityV1 = (...args: Parameters<typeof resolveDriverActionYandexIdentity>) => resolveDriverActionYandexIdentity(...args)
 export const searchYandexParksByPhonesV1 = (...args: Parameters<typeof searchYandexParksByPhones>) => searchYandexParksByPhones(...args)
 export const upsertParkMatchedDriverV1 = (...args: Parameters<typeof upsertParkMatchedDriver>) => upsertParkMatchedDriver(...args)

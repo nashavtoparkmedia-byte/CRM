@@ -29,6 +29,19 @@ export type ParkDriverSearchResultV1 = {
     errors: Array<{ parkId: string; parkName: string; message: string }>
 }
 
+export type DriverActionYandexIdentityV1 = {
+    parkId: string
+    yandexDriverId: string
+    resolution: 'preferred-profile' | 'preferred-phone' | 'linked-profile' | 'unique-phone'
+}
+
+export type DriverActionIdentityInputV1 = {
+    yandexDriverId: string
+    phone: string | null
+    fullName: string | null
+    preferredParkId: string | null
+}
+
 export function normalizeParkPhoneDigitsV1(value: unknown): string {
     const digits = String(value || '').replace(/\D/g, '')
     if (digits.length === 11 && digits.startsWith('8')) return `7${digits.slice(1)}`
@@ -40,6 +53,67 @@ function samePhone(left: unknown, right: unknown): boolean {
     const a = normalizeParkPhoneDigitsV1(left)
     const b = normalizeParkPhoneDigitsV1(right)
     return Boolean(a && b && (a === b || (a.length >= 10 && b.length >= 10 && a.slice(-10) === b.slice(-10))))
+}
+
+/**
+ * Select the exact Yandex profile/park used by a driver action.
+ *
+ * Old Telegram links may not contain activeParkId. In that case the stored
+ * Yandex profile id is the strongest identity signal; an exact, unique phone
+ * match is the safe fallback. Ambiguous matches deliberately return null.
+ */
+export function selectDriverActionYandexIdentityV1(
+    input: DriverActionIdentityInputV1,
+    search: ParkDriverSearchResultV1,
+): DriverActionYandexIdentityV1 | null {
+    const candidates = search.results.flatMap(park => park.profiles.map(profile => ({
+        parkId: park.parkId,
+        profile,
+    })))
+    const working = candidates.filter(candidate => candidate.profile.workStatus !== 'fired')
+    const exactPhone = input.phone
+        ? working.filter(candidate => candidate.profile.phones.some(phone => samePhone(phone, input.phone)))
+        : []
+
+    if (input.preferredParkId) {
+        const preferred = working.filter(candidate => candidate.parkId === input.preferredParkId)
+        const preferredProfile = preferred.find(candidate => candidate.profile.id === input.yandexDriverId)
+        if (preferredProfile) {
+            return {
+                parkId: preferredProfile.parkId,
+                yandexDriverId: preferredProfile.profile.id,
+                resolution: 'preferred-profile',
+            }
+        }
+
+        const preferredPhones = exactPhone.filter(candidate => candidate.parkId === input.preferredParkId)
+        if (preferredPhones.length === 1) {
+            return {
+                parkId: preferredPhones[0].parkId,
+                yandexDriverId: preferredPhones[0].profile.id,
+                resolution: 'preferred-phone',
+            }
+        }
+        return null
+    }
+
+    const linkedProfiles = working.filter(candidate => candidate.profile.id === input.yandexDriverId)
+    if (linkedProfiles.length === 1) {
+        return {
+            parkId: linkedProfiles[0].parkId,
+            yandexDriverId: linkedProfiles[0].profile.id,
+            resolution: 'linked-profile',
+        }
+    }
+
+    if (exactPhone.length === 1) {
+        return {
+            parkId: exactPhone[0].parkId,
+            yandexDriverId: exactPhone[0].profile.id,
+            resolution: 'unique-phone',
+        }
+    }
+    return null
 }
 
 export function parkDriverProfileFromYandexV1(value: unknown): ParkPhoneProfileV1 | null {
@@ -84,11 +158,14 @@ export function parkDriverMatchesQueryV1(profile: ParkPhoneProfileV1, query: str
 async function searchDriverQueryInPark(
     connection: { parkId: string; clid: string; apiKey: string },
     query: string,
+    options: { attempts?: number; timeoutMs?: number } = {},
 ): Promise<ParkPhoneProfileV1[]> {
+    const attempts = Math.max(1, options.attempts ?? 3)
+    const timeoutMs = Math.max(1, options.timeoutMs ?? 15_000)
     let lastError: unknown
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
         const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 15_000)
+        const timeout = setTimeout(() => controller.abort(), timeoutMs)
         try {
             const response = await fetch('https://fleet-api.taxi.yandex.net/v1/parks/driver-profiles/list', {
                 method: 'POST',
@@ -114,7 +191,7 @@ async function searchDriverQueryInPark(
             })
             if (!response.ok) {
                 const error = new Error(`Yandex Fleet HTTP ${response.status}`)
-                if ([429, 500, 502, 503, 504].includes(response.status) && attempt < 2) {
+                if ([429, 500, 502, 503, 504].includes(response.status) && attempt < attempts - 1) {
                     lastError = error
                     await new Promise(resolve => setTimeout(resolve, 300 * (attempt + 1)))
                     continue
@@ -128,7 +205,7 @@ async function searchDriverQueryInPark(
                 .filter((profile: ParkPhoneProfileV1 | null): profile is ParkPhoneProfileV1 => Boolean(profile))
         } catch (error) {
             lastError = error
-            if (attempt < 2) {
+            if (attempt < attempts - 1) {
                 await new Promise(resolve => setTimeout(resolve, 300 * (attempt + 1)))
                 continue
             }
@@ -199,14 +276,20 @@ export async function searchYandexParksByPhonesV1(phones: string[]): Promise<Par
 }
 
 /** Fleet-owned multi-park driver search; credential-bearing rows remain inside the owner. */
-export async function searchYandexParksByDriverQueryV1(query: string): Promise<ParkDriverSearchResultV1> {
+export async function searchYandexParksByDriverQueryV1(
+    query: string,
+    options: { preferredParkId?: string | null; attempts?: number; timeoutMs?: number } = {},
+): Promise<ParkDriverSearchResultV1> {
     const normalizedQuery = query.trim()
     if (normalizedQuery.length < 3) return { checkedParks: 0, results: [], errors: [] }
 
-    const connections = await listYandexConnectionCredentialsV1()
+    const allConnections = await listYandexConnectionCredentialsV1()
+    const connections = options.preferredParkId
+        ? allConnections.filter(connection => connection.parkId === options.preferredParkId)
+        : allConnections
     const checks = await Promise.all(connections.map(async connection => {
         try {
-            const profiles = (await searchDriverQueryInPark(connection, normalizedQuery))
+            const profiles = (await searchDriverQueryInPark(connection, normalizedQuery, options))
                 .filter(profile => parkDriverMatchesQueryV1(profile, normalizedQuery))
             return {
                 parkId: connection.parkId,
@@ -237,6 +320,20 @@ export async function searchYandexParksByDriverQueryV1(query: string): Promise<P
             message: check.error!,
         })),
     }
+}
+
+/** Fleet-owned provider lookup for Telegram driver actions. */
+export async function resolveDriverActionYandexIdentityV1(
+    input: DriverActionIdentityInputV1,
+): Promise<DriverActionYandexIdentityV1 | null> {
+    const query = input.phone?.trim() || input.fullName?.trim() || ''
+    if (query.length < 3) return null
+    const search = await searchYandexParksByDriverQueryV1(query, {
+        preferredParkId: input.preferredParkId,
+        attempts: 1,
+        timeoutMs: 8_000,
+    })
+    return selectDriverActionYandexIdentityV1(input, search)
 }
 
 export async function getParkLinkedDriverPhoneV1(yandexDriverId: string | null): Promise<string | null> {
