@@ -406,14 +406,14 @@ def validate_source_authority(evidence: Path) -> tuple[dict[str, Any], bytes]:
     }, proof_bytes
 
 
-def safe_tar_name(name: Any, label: str) -> str:
+def normalized_tar_name(name: Any, label: str, *, reject_backslash: bool) -> str:
     if type(name) is not str:
         fail(f"{label} contains an unsafe member path (non-string)")
     if not name:
         fail(f"{label} contains an unsafe member path (empty)")
     if name.startswith("/"):
         fail(f"{label} contains an unsafe member path (absolute): {json.dumps(name, ensure_ascii=True)}")
-    if "\\" in name:
+    if reject_backslash and "\\" in name:
         fail(f"{label} contains an unsafe member path (backslash): {json.dumps(name, ensure_ascii=True)}")
     parts = [part for part in name.split("/") if part not in ("", ".")]
     if not parts:
@@ -421,6 +421,14 @@ def safe_tar_name(name: Any, label: str) -> str:
     if any(part == ".." for part in parts):
         fail(f"{label} contains an unsafe member path (parent traversal): {json.dumps(name, ensure_ascii=True)}")
     return "/".join(parts)
+
+
+def safe_tar_name(name: Any, label: str) -> str:
+    return normalized_tar_name(name, label, reject_backslash=True)
+
+
+def safe_linux_layer_name(name: Any) -> str:
+    return normalized_tar_name(name, "Docker layer", reject_backslash=False)
 
 
 def tar_member_bytes(archive: tarfile.TarFile, member: tarfile.TarInfo, maximum: int, label: str) -> bytes:
@@ -483,7 +491,7 @@ def inspect_docker_layer(
                         fail("Docker layer contains an invalid root directory marker")
                     seen.add(entry.name)
                     continue
-                relative = safe_tar_name(entry.name, "Docker layer")
+                relative = safe_linux_layer_name(entry.name)
                 if relative in seen:
                     fail("Docker layer contains duplicate members")
                 seen.add(relative)

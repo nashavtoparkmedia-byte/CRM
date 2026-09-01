@@ -582,7 +582,7 @@ class CoordinatedArtifactTests(unittest.TestCase):
     def test_canonical_layer_root_marker_accepted(self) -> None:
         inspect_layer(synthetic_base_layers(maximum=True)[0])
 
-    def test_unsafe_layer_path_errors_are_exact_and_terminal_safe(self) -> None:
+    def test_outer_archive_unsafe_path_errors_are_exact_and_terminal_safe(self) -> None:
         cases = {
             "/absolute": '(absolute): "/absolute"',
             "name\\with-control\n": '(backslash): "name\\\\with-control\\n"',
@@ -592,8 +592,23 @@ class CoordinatedArtifactTests(unittest.TestCase):
         for name, expected in cases.items():
             with self.subTest(name=name):
                 with self.assertRaises(contract.ContractError) as caught:
-                    contract.safe_tar_name(name, "Docker layer")
+                    contract.safe_tar_name(name, "Docker archive")
                 self.assertIn(expected, str(caught.exception))
+
+    def test_linux_layer_literal_backslash_filename_accepted(self) -> None:
+        layer = BytesIO()
+        with tarfile.open(fileobj=layer, mode="w") as archive:
+            entry = tarfile.TarInfo(r"usr/lib/systemd/system/system-systemd\x2dcryptsetup.slice")
+            archive.addfile(entry, BytesIO())
+        inspect_layer(layer.getvalue())
+
+    def test_linux_layer_traversal_remains_rejected(self) -> None:
+        layer = BytesIO()
+        with tarfile.open(fileobj=layer, mode="w") as archive:
+            entry = tarfile.TarInfo("safe/../escape")
+            archive.addfile(entry, BytesIO())
+        with self.assertRaisesRegex(contract.ContractError, "parent traversal"):
+            inspect_layer(layer.getvalue())
 
     def test_non_directory_layer_root_marker_rejected(self) -> None:
         layer = synthetic_base_layers(maximum=True, root_marker_type=tarfile.REGTYPE)[0]

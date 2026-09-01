@@ -29,10 +29,13 @@ binary extracted from the checksum-bound package, and proves the fixed runtime
 source/filesystem contract from the merged image layers. For modern Docker
 OCI-blob save archives it binds both the config image ID and the
 runtime-visible containerd manifest ID; legacy archives bind the same config ID
-in both fields. Layer inspection accepts only the canonical zero-byte `.`
-directory marker emitted by the pinned base image for a layer root; it rejects
-that marker as any other member type, rejects duplicates, and keeps traversal
-and outer-archive path validation fail-closed.
+in both fields. Layer inspection accepts POSIX filenames for the fixed
+`linux/amd64` image, including literal backslashes used by systemd unit
+filenames, while continuing to reject absolute paths, parent traversal, and
+normalized duplicates. It also accepts only the canonical zero-byte `.`
+directory marker emitted by the pinned base image for a layer root and rejects
+that marker as any other member type. Outer Docker archive path validation
+remains cross-platform and rejects backslashes fail-closed.
 
 The post-upload GitHub artifact ID, digest, and byte size are an external
 transport identity recorded by the workflow after upload; they cannot be
