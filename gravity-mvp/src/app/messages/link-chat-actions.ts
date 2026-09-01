@@ -1,9 +1,11 @@
 "use server"
 
+import type { Prisma } from "@prisma/client"
+
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { SET_CONTACT_DISPLAY_NAME_COMMAND_V1 } from "@/contracts/contacts/v1"
-import { resolveChannelContactOperationV1, setContactDisplayNameV1 } from "@/modules/contacts/public/v1"
+import { setContactDisplayNameV1 } from "@/modules/contacts/public/v1"
 import { ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1 } from "@/contracts/messaging/v1"
 import { ensureConversationContactLinkV1 } from "@/modules/messaging/public/v1"
 
@@ -30,7 +32,7 @@ export async function searchDriversForLinking(query: string): Promise<DriverSear
     if (q.length < 2) return []
 
     const digits = q.replace(/\D/g, '')
-    const orFilters: any[] = [
+    const orFilters: Prisma.DriverWhereInput[] = [
         { fullName: { contains: q, mode: 'insensitive' } },
     ]
     if (digits.length >= 4) {
@@ -50,15 +52,35 @@ export async function searchDriversForLinking(query: string): Promise<DriverSear
  * Привязать chat к указанному Driver. Обновляет:
  *   — chat.driverId, chat.name (driver.fullName)
  *   — Contact.displayName (если placeholder)
- *   — Создаёт ContactIdentity если нужно (через публичную Contacts capability)
+ *
+ * Provider identity is authoritative. This action may annotate an already
+ * linked identity, but it must never derive a Telegram/MAX/WhatsApp identity
+ * from the selected driver's mutable phone number.
  */
 export async function linkChatToDriverManually(chatId: string, driverId: string): Promise<{ success: true } | { error: string }> {
     try {
         const chat = await prisma.chat.findUnique({
             where: { id: chatId },
-            select: { id: true, channel: true, externalChatId: true, contactId: true, name: true },
+            select: {
+                id: true,
+                contactId: true,
+                contactIdentityId: true,
+                metadata: true,
+                contactIdentity: { select: { contactId: true, isActive: true } },
+            },
         })
         if (!chat) return { error: 'Чат не найден' }
+
+        if (
+            !chat.contactId
+            || !chat.contactIdentityId
+            || !chat.contactIdentity?.isActive
+            || chat.contactIdentity.contactId !== chat.contactId
+        ) {
+            return {
+                error: 'Стабильный идентификатор канала не сохранён. Свяжите идентификатор с контактом вручную.',
+            }
+        }
 
         const driver = await prisma.driver.findUnique({
             where: { id: driverId },
@@ -66,44 +88,49 @@ export async function linkChatToDriverManually(chatId: string, driverId: string)
         })
         if (!driver) return { error: 'Водитель не найден' }
 
-        // 1. Обновим Chat
-        await prisma.chat.update({
-            where: { id: chatId },
-            data: { driverId: driver.id, name: driver.fullName },
+        const contactResult = {
+            contact: { id: chat.contactId },
+            identity: { id: chat.contactIdentityId },
+        }
+        await ensureConversationContactLinkV1({
+            contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
+            chatId: chat.id,
+            contactId: contactResult.contact.id,
+            contactIdentityId: contactResult.identity.id,
         })
 
-        // 2. Если у Driver есть phone и channel поддерживает phone-identity —
-        //    создаём/обновляем Contact через ContactService.
-        const phoneDigits = (driver.phone ?? '').replace(/\D/g, '')
-        if (phoneDigits.length >= 10 && (chat.channel === 'whatsapp' || chat.channel === 'max' || chat.channel === 'phone')) {
-            try {
-                const contactResult = await resolveChannelContactOperationV1(
-                    chat.channel as any,
-                    phoneDigits,
-                    phoneDigits,
-                    driver.fullName,
-                )
-                await ensureConversationContactLinkV1({
-                    contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
-                    chatId: chat.id,
-                    contactId: contactResult.contact.id,
-                    contactIdentityId: contactResult.identity.id,
-                })
-            } catch (err: any) {
-                console.warn(`[linkChatToDriverManually] ContactService failed (non-blocking): ${err.message}`)
-            }
-        } else if (chat.contactId) {
-            await setContactDisplayNameV1({
-                contract: SET_CONTACT_DISPLAY_NAME_COMMAND_V1,
-                contactId: chat.contactId,
-                displayName: driver.fullName,
-            })
-        }
+        const metadata = chat.metadata && typeof chat.metadata === 'object' && !Array.isArray(chat.metadata)
+            ? chat.metadata as Record<string, unknown>
+            : {}
+
+        // The existing opaque identity remains attached to its current Contact.
+        await prisma.chat.update({
+            where: { id: chatId },
+            data: {
+                driverId: driver.id,
+                name: driver.fullName,
+                metadata: {
+                    ...metadata,
+                    contactResolution: {
+                        status: 'manual_driver_linked',
+                        candidateCount: 1,
+                        automaticLinkPerformed: false,
+                        contactIdentityId: chat.contactIdentityId,
+                    },
+                },
+            },
+        })
+
+        await setContactDisplayNameV1({
+            contract: SET_CONTACT_DISPLAY_NAME_COMMAND_V1,
+            contactId: chat.contactId,
+            displayName: driver.fullName,
+        })
 
         revalidatePath('/messages')
         return { success: true }
-    } catch (e: any) {
+    } catch (e: unknown) {
         console.error('[linkChatToDriverManually] error:', e)
-        return { error: e.message || 'Не удалось привязать' }
+        return { error: e instanceof Error ? e.message : 'Не удалось привязать' }
     }
 }

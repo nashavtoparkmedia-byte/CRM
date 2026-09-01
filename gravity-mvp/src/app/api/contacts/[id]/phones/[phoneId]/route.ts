@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { contactOwnershipBusyResultV1 } from '@/modules/contacts/public/v1'
+import { manageContactPhoneEvidenceV1 } from '@/modules/contacts/public/v1'
 
 /**
  * DELETE /api/contacts/:id/phones/:phoneId
@@ -22,72 +24,66 @@ import { prisma } from '@/lib/prisma'
  */
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string; phoneId: string }> },
 ) {
-  const { id: contactId, phoneId } = await params
+  try {
+    const { id: contactId, phoneId } = await params
 
-  const phone = await prisma.contactPhone.findFirst({
-    where: { id: phoneId, contactId, isActive: true },
-  })
-  if (!phone) {
-    return NextResponse.json({ error: 'Phone not found' }, { status: 404 })
-  }
-
-  await prisma.$transaction(async (tx) => {
-    await tx.contactPhone.update({
-      where: { id: phoneId },
-      data: { isActive: false, isPrimary: false },
+    const result = await manageContactPhoneEvidenceV1({
+      operation: 'set_state',
+      contactId,
+      phoneId,
+      actor: req.headers.get('x-crm-user-id') || 'operator:unknown',
+      basis: 'manual removal',
+      lifecycle: 'removed',
+      freshness: 'stale',
     })
-    // If we just removed the primary, clear it on the contact too.
-    const contact = await tx.contact.findUnique({
-      where: { id: contactId },
-      select: { primaryPhoneId: true },
-    })
-    if (contact?.primaryPhoneId === phoneId) {
-      await tx.contact.update({
-        where: { id: contactId },
-        data: { primaryPhoneId: null },
+    return NextResponse.json({ ok: true, auditId: result.auditId })
+  } catch (error: unknown) {
+    const busy = contactOwnershipBusyResultV1(error)
+    if (busy) {
+      return NextResponse.json(busy, {
+        status: 503,
+        headers: { 'Retry-After': '2', 'Cache-Control': 'no-store' },
       })
     }
-  })
-
-  return NextResponse.json({ ok: true })
+    throw error
+  }
 }
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; phoneId: string }> },
 ) {
-  const { id: contactId, phoneId } = await params
-  const body = await req.json().catch(() => ({}))
+  try {
+    const { id: contactId, phoneId } = await params
+    const body = await req.json().catch(() => ({}))
 
-  const phone = await prisma.contactPhone.findFirst({
-    where: { id: phoneId, contactId, isActive: true },
-  })
-  if (!phone) {
-    return NextResponse.json({ error: 'Phone not found' }, { status: 404 })
-  }
-
-  if (typeof body.isPrimary === 'boolean' && body.isPrimary) {
-    await prisma.$transaction(async (tx) => {
-      await tx.contactPhone.updateMany({
-        where: { contactId, isPrimary: true },
-        data: { isPrimary: false },
-      })
-      await tx.contactPhone.update({
-        where: { id: phoneId },
-        data: { isPrimary: true },
-      })
-      await tx.contact.update({
-        where: { id: contactId },
-        data: { primaryPhoneId: phoneId },
-      })
+    await manageContactPhoneEvidenceV1({
+      operation: 'set_state',
+      contactId,
+      phoneId,
+      actor: String(body.actor || req.headers.get('x-crm-user-id') || 'operator:unknown'),
+      basis: String(body.basis || 'manual phone update'),
+      ...(typeof body.lifecycle === 'string' ? { lifecycle: body.lifecycle } : {}),
+      ...(typeof body.freshness === 'string' ? { freshness: body.freshness } : {}),
+      ...(typeof body.resolutionState === 'string' ? { resolutionState: body.resolutionState } : {}),
+      makePrimary: body.isPrimary === true,
     })
-  }
 
-  const updated = await prisma.contactPhone.findUnique({
-    where: { id: phoneId },
-  })
-  return NextResponse.json(updated)
+    const updated = await prisma.contactPhone.findUnique({
+      where: { id: phoneId },
+    })
+    return NextResponse.json(updated)
+  } catch (error: unknown) {
+    const busy = contactOwnershipBusyResultV1(error)
+    if (busy) {
+      return NextResponse.json(busy, {
+        status: 503,
+        headers: { 'Retry-After': '2', 'Cache-Control': 'no-store' },
+      })
+    }
+    throw error
+  }
 }

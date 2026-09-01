@@ -24,6 +24,7 @@ const { InitialHistorySync }       = require('./sync/InitialHistorySync')
 const { NameSync }                 = require('./sync/NameSync')
 const { ContactStore }             = require('./contacts/ContactStore')
 const { cleanupStaleMaxSession }   = require('./lib/MaxCleanup')
+const { deriveMaxChatKind }        = require('./lib/ChatKind')
 const QRCode                       = require('qrcode')
 
 // ─── Конфиг ──────────────────────────────────────────────────────────────────
@@ -757,10 +758,20 @@ async function processSendQueue() {
 // ─── CRM webhook forward ─────────────────────────────────────────────────────
 
 async function forwardToWebhook(payload) {
+  const normalizedChatId = payload.chatId != null ? normalizeMaxChatId(payload.chatId) : payload.chatId
+  const providerChatModels = [...new Set([
+    payload.chatId,
+    payload.rawChatId,
+    normalizedChatId,
+  ].filter(value => value != null).map(String))]
+    .map(id => chatCache.get(id))
+    .filter(Boolean)
   const normalizedPayload = {
     ...payload,
-    chatId: payload.chatId != null ? normalizeMaxChatId(payload.chatId) : payload.chatId,
+    accountId: payload.accountId || process.env.MAX_ACCOUNT_ID || process.env.MAX_CONNECTION_ID || 'max-default',
+    chatId: normalizedChatId,
     rawChatId: payload.rawChatId || payload.chatId,
+    chatKind: deriveMaxChatKind(...providerChatModels),
   }
   trackImportedMessage(normalizedPayload.chatId, normalizedPayload.timestamp)
   const url  = new URL(CRM_WEBHOOK_URL)

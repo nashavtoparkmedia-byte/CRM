@@ -1,7 +1,6 @@
 import {
     GET_PREFERRED_ACTIVE_CONTACT_PHONE_QUERY_V1,
     PREPARE_CONTACT_CONVERSATION_IDENTITY_COMMAND_V1,
-    RESOLVE_CHANNEL_CONTACT_COMMAND_V1,
     type ContactConversationChannelV1,
     type GetPreferredActiveContactPhoneQueryV1,
     type GetPreferredActiveContactPhoneResultV1,
@@ -67,6 +66,10 @@ export interface ReadyContactConversationV1 {
     isNewConversation: boolean
 }
 
+export type StartContactConversationByPhoneResultV1 =
+    | ({ status: 'ready' } & ReadyContactConversationV1)
+    | { status: 'provider_identity_required' }
+
 export interface OpenContactConversationForContactInputV1 {
     contactId: string
     channel: PlatformContactConversationChannelV1
@@ -90,53 +93,12 @@ const defaultOwnerApisV1: ContactConversationOwnerApisV1 = {
 export function createContactConversationOrchestratorV1(owners: ContactConversationOwnerApisV1) {
     async function startContactConversationByPhoneV1(
         input: StartContactConversationByPhoneInputV1,
-    ): Promise<ReadyContactConversationV1> {
-        const externalId = input.normalizedPhone.replace('+', '')
-        const resolved = await owners.resolveChannelContactV1({
-            contract: RESOLVE_CHANNEL_CONTACT_COMMAND_V1,
-            channel: input.channel,
-            externalId,
-            phone: input.normalizedPhone,
-            displayName: null,
-        })
-
-        const linked = await owners.findAndBackfillContactConversationV1({
-            contract: FIND_AND_BACKFILL_CONTACT_CONVERSATION_COMMAND_V1,
-            contactId: resolved.contact.id,
-            contactIdentityId: resolved.identity.id,
-            channel: input.channel,
-            allowContactFallback: true,
-        })
-        if (linked.conversation) {
-            return {
-                contact: resolved.contact,
-                identity: resolved.identity,
-                conversation: linked.conversation,
-                isNewContact: resolved.isNew,
-                isNewConversation: false,
-            }
-        }
-
-        const driver = await owners.findDriverByExactPhoneV1({
-            contract: FIND_DRIVER_BY_EXACT_PHONE_QUERY_V1,
-            phone: input.normalizedPhone,
-        })
-        const opened = await owners.openFallbackContactConversationV1({
-            contract: OPEN_FALLBACK_CONTACT_CONVERSATION_COMMAND_V1,
-            legacyDriverId: driver.driverId,
-            channel: input.channel,
-            externalChatId: `${input.channel}:${externalId}`,
-            name: resolved.contact.displayName,
-            contactId: resolved.contact.id,
-            contactIdentityId: resolved.identity.id,
-        })
-        return {
-            contact: resolved.contact,
-            identity: resolved.identity,
-            conversation: opened.conversation,
-            isNewContact: resolved.isNew,
-            isNewConversation: opened.isNew,
-        }
+    ): Promise<StartContactConversationByPhoneResultV1> {
+        void input
+        // A phone number is evidence about a person, not an opaque provider
+        // identifier. Existing Contacts must be opened through their persisted
+        // channel identity; a phone-only request cannot create one safely.
+        return { status: 'provider_identity_required' }
     }
 
     async function openContactConversationForContactV1(

@@ -25,7 +25,7 @@ import type { LeadSource } from './types'
 import { ENSURE_LEAD_CONVERSATION_COMMAND_V1, RECEIVE_MESSAGE_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { ensureLeadConversationV1, receiveMessageV1 } from '@/modules/messaging/public/v1'
 import { MARK_TEMPORARY_CONTACT_PHONE_COMMAND_V1 } from '@/contracts/contacts/v1'
-import { addPhoneToContactV1, markTemporaryContactPhoneV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
+import { addPhoneToContactV1, isResolvedChannelContactResultV1, markTemporaryContactPhoneV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
 
 // LeadSource → ChatChannel. У нас сейчас полное совпадение (avito,
 // whatsapp, telegram, phone), но 'site' не имеет канала в чатах.
@@ -97,6 +97,9 @@ export async function ingestLead(input: IngestLeadInput): Promise<IngestLeadResu
     input.phone,
     input.candidateName,
   )
+  if (!isResolvedChannelContactResultV1(resolved) || !resolved.identity) {
+    throw new Error(`[LeadIntake] Contact resolution blocked: ${resolved.status}`)
+  }
 
   // Mark Avito-phones as temporary. From 28.05.2026 onwards Avito hides
   // the candidate's real number behind a disposable proxy that rotates —
@@ -206,7 +209,10 @@ export async function updateLeadPhone(
   if (!contactId) {
     const identity = await prisma.contactIdentity.findUnique({
       where: {
-        channel_externalId: { channel, externalId: input.sourceExternalId },
+        channel_externalId: {
+          channel,
+          externalId: input.sourceExternalId,
+        },
       },
       select: { contactId: true },
     })

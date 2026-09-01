@@ -9,7 +9,11 @@ import {
     ATTACH_CONTACT_IDENTITY_COMMAND_V1,
     REPLACE_IDENTITY_PROFILE_V1,
 } from '@/contracts/contacts/v1'
-import { attachContactIdentityV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
+import {
+    attachContactIdentityV1,
+    isResolvedChannelContactResultV1,
+    resolveChannelContactOperationV1,
+} from '@/modules/contacts/public/v1'
 import { PROMOTE_CHANNEL_DISPLAY_NAME_V2, RESOLVE_CONTACT_COMMAND_V2 } from '@/contracts/contacts/v2'
 import { resolveContactV2 } from '@/modules/contacts/public/v2'
 import { CREATE_CHANNEL_MESSAGE_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1 } from '@/contracts/messaging/v1'
@@ -78,7 +82,7 @@ export async function POST(req: NextRequest) {
         console.log(`[WEBHOOK-TG] Received:`, JSON.stringify(body))
 
         // Structure expected from Bot's webhook payload
-        const { telegramId, text, direction, username, timestamp,
+        const { telegramId, text, direction, username, timestamp, providerAccountId,
                 chatType, chatId: tgChatId, chatTitle,
                 firstName, lastName,
                 attachments } = body  // PR-Ц: media attachments from tg-bot
@@ -193,7 +197,11 @@ export async function POST(req: NextRequest) {
                     telegramId.toString(),
                     null,  // Bot webhook не передаёт номер телефона
                     tgDisplayName === `TG ${telegramId}` ? null : tgDisplayName,
+                    { chatKind: 'private', providerAccountId: String(providerAccountId || 'telegram-default') },
                 )
+                if (!isResolvedChannelContactResultV1(contactResult) || !contactResult.identity) {
+                    throw new Error(`CONTACT_RESOLUTION_BLOCKED:${contactResult.status}`)
+                }
                 // For existing contacts with auto-set name (source=channel), update to @username
                 // so the header immediately reflects the username instead of old first_name.
                 // Does NOT touch contacts edited manually (displayNameSource = 'manual' or 'yandex').

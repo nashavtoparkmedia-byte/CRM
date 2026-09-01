@@ -12,8 +12,11 @@
 
 import { prisma } from '@/lib/prisma'
 import { YandexFleetService } from '@/lib/YandexFleetService'
-import { syncActiveDrivers, syncArchivedDrivers } from '@/app/drivers/actions'
 import { getThresholds, recalculateAllSegments } from '@/lib/scoring'
+import {
+    RECONCILE_YANDEX_FLEET_COMMAND_V1,
+    reconcileYandexFleetV1,
+} from '@/modules/fleet-operations/public/v1'
 
 export const YANDEX_SYNC_SERVICE = 'yandex_fleet'
 const COOLDOWN_MS = 5 * 60 * 1000  // 5 minutes between manual triggers
@@ -162,23 +165,19 @@ export async function runYandexSync(
     try {
         const thresholds = await getThresholds()
 
-        // 1. Active drivers
-        const active = await syncActiveDrivers()
-        driversUpdated += active.count
+        // 1. One shared, park-qualified reconciler owns profile ingestion for
+        // nightly, manual, Contact refresh and confirmation follow-up modes.
+        const reconciliation = await reconcileYandexFleetV1({
+            contract: RECONCILE_YANDEX_FLEET_COMMAND_V1,
+            mode: 'nightly',
+        })
+        driversUpdated += reconciliation.profilesUpserted
 
-        // 2. Archived (dismissed) drivers — non-fatal if it fails
-        try {
-            const archived = await syncArchivedDrivers()
-            driversUpdated += archived.count
-        } catch (e) {
-            console.error('[runYandexSync] archived drivers sync failed (non-fatal):', e)
-        }
-
-        // 3. Trips for the analysis period
+        // 2. Trips for the analysis period
         const trips = await YandexFleetService.syncTrips(thresholds.analysis_period)
         ordersProcessed = trips.ordersProcessed
 
-        // 4. Recalculate segments
+        // 3. Recalculate segments
         const recalc = await recalculateAllSegments()
 
         await setStatus('success', { driversUpdated, ordersProcessed })

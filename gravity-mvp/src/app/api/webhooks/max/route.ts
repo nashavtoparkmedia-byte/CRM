@@ -5,18 +5,18 @@ import type { Chat, Message, MessageType } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { publishPersistedMessageV1 as emitMessageReceived } from '@/modules/messaging/public/v1/persisted-message-ingress'
 import { broadcastChatMessageV1 as broadcastChatMessage } from '@/modules/messaging/public/v1/message-stream'
-import { channelDriverMatchV1 as DriverMatchService } from '@/modules/fleet-operations/public/v1/channel-driver-match'
 import { channelConversationWorkflowV1 as ConversationWorkflowService } from '@/modules/messaging/public/v1/channel-conversation-workflow'
 import {
   startMaxContactResolutionShadowV1,
   type LegacyContactResolutionOutcome,
 } from '@/modules/contacts/public/v1'
 import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
-import { resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
+import { isResolvedChannelContactResultV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
+import { selectUniqueExactMaxSenderCandidate } from '@/modules/max-channel/internal/max-contact-ingress-policy'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { CREATE_EXTERNAL_CONVERSATION_COMMAND_V1, DELETE_MESSAGE_COMMAND_V1, DELETE_MESSAGE_MEDIA_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_EXTERNAL_CONVERSATION_COMMAND_V1, REPLACE_EXTERNAL_MESSAGE_COMMAND_V1, UPSERT_EXTERNAL_MESSAGE_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { ATTACH_MESSAGE_MEDIA_COMMAND_V2 } from '@/contracts/messaging/v2'
-import { createExternalConversationV1, deleteMessageMediaV1, deleteMessageV1, ensureConversationContactLinkV1, linkMatchedDriverToConversationCapabilityV1, patchExternalConversationV1, replaceExternalMessageV1, upsertExternalMessageV1 } from '@/modules/messaging/public/v1'
+import { createExternalConversationV1, deleteMessageMediaV1, deleteMessageV1, ensureConversationContactLinkV1, patchExternalConversationV1, replaceExternalMessageV1, upsertExternalMessageV1 } from '@/modules/messaging/public/v1'
 import { attachMessageMediaV2 } from '@/modules/messaging/public/v2'
 
 const MAX_RUNTIME_TRACE_PREFIX = '[MAX_RUNTIME_TRACE]'
@@ -85,6 +85,7 @@ type AttachmentLike = {
 }
 
 type MaxWebhookBody = {
+  accountId?: string | number | null
   externalId?: string | number | null
   chatId?: string | number | null
   rawChatId?: string | number | null
@@ -295,6 +296,7 @@ export async function POST(request: Request) {
     const normalizedSenderPhone = senderPhone || phone ? normalizePhoneE164(String(senderPhone || phone)) : null
     const effectiveSenderPhone = normalizedSenderPhone || null
     const maxChatKind = chatKind === 'private' || chatKind === 'group' ? chatKind : 'unknown'
+    const maxProviderAccountId = String(body.accountId || 'max-default')
     const shadowEventSource = source === 'history'
       ? 'history'
       : source === 'catchup'
@@ -312,7 +314,7 @@ export async function POST(request: Request) {
         channel: 'max',
         externalUserId: senderIdString,
         externalChatId,
-        providerAccountId: null,
+        providerAccountId: maxProviderAccountId,
         channelDisplayName: senderName || null,
         normalizedPhone: effectiveSenderPhone,
         phoneEvidence: effectiveSenderPhone
@@ -328,17 +330,23 @@ export async function POST(request: Request) {
     let chat = await prisma.chat.findUnique({
       where: { externalChatId },
     })
+    let senderCandidateCount = 0
 
-    if (!chat && !isOutgoing && senderIdString) {
-      const existingBySender = await prisma.chat.findFirst({
+    if (!isOutgoing && senderIdString) {
+      const senderCandidates = await prisma.chat.findMany({
         where: {
           channel: 'max',
-          metadata: { path: ['senderId'], equals: senderIdString },
+          AND: [
+            { metadata: { path: ['senderId'], equals: senderIdString } },
+            { metadata: { path: ['providerAccountId'], equals: maxProviderAccountId } },
+          ],
         },
-        orderBy: { lastMessageAt: 'desc' },
       })
+      const senderSelection = selectUniqueExactMaxSenderCandidate(senderCandidates)
+      senderCandidateCount = senderSelection.candidateCount
 
-      if (existingBySender) {
+      if (!chat && maxChatKind === 'private' && senderSelection.status === 'reuse') {
+        const existingBySender = senderSelection.candidate
         const existingMetadata = metadataRecord(existingBySender.metadata)
         chat = (await patchExternalConversationV1({
           contract: PATCH_EXTERNAL_CONVERSATION_COMMAND_V1,
@@ -353,41 +361,8 @@ export async function POST(request: Request) {
               rawExternalChatId,
               senderId: senderIdString,
               ...(effectiveSenderPhone ? { phone: effectiveSenderPhone } : {}),
-              connectionId: existingMetadata.connectionId || 'max_scraper',
-            },
-          },
-        })).conversation as Chat
-      }
-    }
-
-    if (!chat && !isOutgoing && effectiveSenderPhone) {
-      const last10 = effectiveSenderPhone.slice(-10)
-      const existingByPhone = await prisma.chat.findFirst({
-        where: {
-          channel: 'max',
-          OR: [
-            { metadata: { path: ['phone'], equals: effectiveSenderPhone } },
-            { driver: { phone: { contains: last10 } } },
-          ],
-        },
-        orderBy: { lastMessageAt: 'desc' },
-      })
-
-      if (existingByPhone) {
-        const existingMetadata = metadataRecord(existingByPhone.metadata)
-        chat = (await patchExternalConversationV1({
-          contract: PATCH_EXTERNAL_CONVERSATION_COMMAND_V1,
-          chatId: existingByPhone.id,
-          patch: {
-            externalChatId,
-            ...(isHistoryReplay ? {} : { lastMessageAt: sentAt }),
-            ...(senderName && existingByPhone.name?.startsWith('MAX:') ? { name: senderName } : {}),
-            metadata: {
-              ...existingMetadata,
-              previousExternalChatId: existingByPhone.externalChatId,
-              rawExternalChatId,
-              ...(senderIdString ? { senderId: senderIdString } : {}),
-              phone: effectiveSenderPhone,
+              chatKind: maxChatKind,
+              providerAccountId: maxProviderAccountId,
               connectionId: existingMetadata.connectionId || 'max_scraper',
             },
           },
@@ -407,12 +382,14 @@ export async function POST(request: Request) {
             ...(senderIdString       ? { senderId: senderIdString }       : {}),
             ...(effectiveSenderPhone ? { phone: effectiveSenderPhone } : {}),
             rawExternalChatId,
+            chatKind: maxChatKind,
+            providerAccountId: maxProviderAccountId,
             connectionId: 'max_scraper',
           },
       })).conversation as Chat
     } else {
       const existingMetadata = metadataRecord(chat.metadata)
-      await patchExternalConversationV1({
+      chat = (await patchExternalConversationV1({
         contract: PATCH_EXTERNAL_CONVERSATION_COMMAND_V1,
         chatId: chat.id,
         patch: {
@@ -426,11 +403,13 @@ export async function POST(request: Request) {
               ...(senderIdString       ? { senderId: senderIdString }       : {}),
               ...(effectiveSenderPhone ? { phone: effectiveSenderPhone } : {}),
               rawExternalChatId,
+              chatKind: maxChatKind,
+              providerAccountId: maxProviderAccountId,
               connectionId: existingMetadata.connectionId || 'max_scraper',
             }
           } : {}),
         },
-      })
+      })).conversation as Chat
     }
 
     // Map messageType to Prisma MessageType enum.
@@ -619,39 +598,86 @@ export async function POST(request: Request) {
 
     console.log(`[MAX Webhook] chatId=${chatId} direction=${isOutgoing ? 'out' : 'in'} text="${(text || '').slice(0, 50)}"`)
 
-    // Привязываем чат к водителю (по телефону/имени из MAX)
-    if (!isOutgoing && !chat.driverId && (effectiveSenderPhone || senderName)) {
-      DriverMatchService.linkChatToDriver(chat.id, { phone: effectiveSenderPhone || undefined, name: senderName }, linkMatchedDriverToConversationCapabilityV1).catch(e =>
-        console.error('[MAX Webhook] linkChatToDriver error:', e.message)
-      )
-    }
-
     // ── Contact Model dual write ──────────────────────────────
     let legacyContactResolution: LegacyContactResolutionOutcome = {
       status: 'no_contact',
       reason: 'outgoing_or_not_attempted',
     }
+    let contactResolutionMetadata: Record<string, unknown> = {
+      status: isOutgoing ? 'not_attempted' : 'unknown_kind_limited',
+      candidateCount: 0,
+      automaticLinkPerformed: false,
+    }
     if (!isOutgoing) {
       try {
-        // Стабильный externalId: senderId > chatId (chatId может быть phone или max_name:*)
-        const maxExternalId = senderIdString || externalChatId
-        const maxPhone = effectiveSenderPhone
-
-        const contactResult = await resolveChannelContactOperationV1(
-          'max',
-          maxExternalId,
-          maxPhone,
-          senderName || null,
-        )
-        await ensureConversationContactLinkV1({
-          contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
-          chatId: chat.id,
-          contactId: contactResult.contact.id,
-          contactIdentityId: contactResult.identity.id,
-        })
-        legacyContactResolution = contactResult.isNew
-          ? { status: 'contact_created', contactId: contactResult.contact.id }
-          : { status: 'contact_reused', contactId: contactResult.contact.id, source: 'unknown' }
+        if (maxChatKind === 'group') {
+          contactResolutionMetadata = {
+            status: 'group_skipped',
+            candidateCount: 0,
+            automaticLinkPerformed: false,
+          }
+          legacyContactResolution = { status: 'no_contact', reason: 'group_skipped' }
+        } else if (senderCandidateCount > 1) {
+          contactResolutionMetadata = {
+            status: 'ambiguous',
+            candidateCount: senderCandidateCount,
+            automaticLinkPerformed: false,
+            reason: 'multiple_exact_sender_chats',
+          }
+          legacyContactResolution = { status: 'no_contact', reason: 'ambiguous_sender_mapping' }
+        } else if (!senderIdString) {
+          contactResolutionMetadata = {
+            status: 'unknown_kind_limited',
+            candidateCount: 0,
+            automaticLinkPerformed: false,
+            reason: 'missing_exact_sender_identity',
+          }
+          legacyContactResolution = { status: 'no_contact', reason: 'missing_sender_identity' }
+        } else {
+          // MAX payload phones remain untrusted. The conversation id is never
+          // substituted for senderId and cannot become a person identity.
+          const contactResult = await resolveChannelContactOperationV1(
+            'max',
+            senderIdString,
+            effectiveSenderPhone,
+            senderName || null,
+            {
+              chatKind: maxChatKind,
+              providerAccountId: maxProviderAccountId,
+              phoneEvidence: effectiveSenderPhone
+                ? { source: 'unknown', trustedForAutomaticResolution: false }
+                : null,
+            },
+          )
+          if (isResolvedChannelContactResultV1(contactResult) && contactResult.identity) {
+            await ensureConversationContactLinkV1({
+              contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
+              chatId: chat.id,
+              contactId: contactResult.contact.id,
+              contactIdentityId: contactResult.identity.id,
+            })
+            contactResolutionMetadata = {
+              status: contactResult.status,
+              candidateCount: 1,
+              automaticLinkPerformed: true,
+            }
+            legacyContactResolution = contactResult.isNew
+              ? { status: 'contact_created', contactId: contactResult.contact.id }
+              : { status: 'contact_reused', contactId: contactResult.contact.id, source: 'identity' }
+          } else {
+            const candidateCount = contactResult.status === 'ambiguous'
+              ? contactResult.candidateCount
+              : contactResult.status === 'identity_phone_conflict'
+                ? new Set([contactResult.identityContactId, ...contactResult.phoneContactIds]).size
+                : 0
+            contactResolutionMetadata = {
+              status: contactResult.status,
+              candidateCount,
+              automaticLinkPerformed: false,
+            }
+            legacyContactResolution = { status: 'no_contact', reason: contactResult.status }
+          }
+        }
       } catch (contactErr: unknown) {
         const message = contactErr instanceof Error ? contactErr.message : String(contactErr)
         console.error(`[MAX Webhook] ContactService error (non-blocking): ${message}`)
@@ -659,8 +685,23 @@ export async function POST(request: Request) {
           status: 'legacy_error',
           errorCode: contactErr instanceof Error ? contactErr.name : 'unknown_legacy_error',
         }
+        contactResolutionMetadata = {
+          status: 'error',
+          candidateCount: 0,
+          automaticLinkPerformed: false,
+        }
       }
     }
+    await patchExternalConversationV1({
+      contract: PATCH_EXTERNAL_CONVERSATION_COMMAND_V1,
+      chatId: chat.id,
+      patch: {
+        metadata: {
+          ...metadataRecord(chat.metadata),
+          contactResolution: contactResolutionMetadata,
+        },
+      },
+    })
     await maxContactResolutionShadow.session?.complete(legacyContactResolution)
     // ──────────────────────────────────────────────────────────
 

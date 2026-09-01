@@ -114,6 +114,7 @@ class CrmIntegrationService {
                 if (!telegramId || !text) return resolve();
 
                 const payload = {
+                    providerAccountId: String(ctx.botInfo?.id || process.env.TELEGRAM_BOT_ACCOUNT_ID || 'telegram-default'),
                     telegramId: telegramId.toString(),
                     text: text,
                     direction: direction,

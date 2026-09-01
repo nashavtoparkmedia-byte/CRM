@@ -38,6 +38,8 @@ import {
     type ParkDriverSearchResultV1,
     upsertParkMatchedDriverV1 as upsertParkMatchedDriver,
 } from '../public/v1/park-phone-search'
+import { createReconcileYandexFleetHandlerV1 } from '../public/v1/yandex-fleet-reconciler'
+import { legacyPrismaYandexFleetReconcilerPortV1 } from '../public/v1/legacy-prisma-yandex-fleet-reconciler-adapter'
 
 const updateDriverState = createUpdateDriverStateHandlerV1(legacyPrismaUpdateDriverStatePortV1)
 const updateScoringThresholds = createUpdateScoringThresholdsHandlerV1(legacyPrismaUpdateScoringThresholdsPortV1)
@@ -59,6 +61,7 @@ const searchLocalDrivers = createSearchLocalDriversHandlerV1(legacyPrismaSearchL
 const reconcileDriverProfile = createReconcileDriverProfileHandlerV1(legacyPrismaReconcileDriverProfilePortV1)
 const recordManagerDriverCommunication = createRecordManagerDriverCommunicationHandlerV1(legacyPrismaRecordManagerDriverCommunicationPortV1)
 const runCommunicationEventRetention = createRunCommunicationEventRetentionHandlerV1(legacyPrismaCommunicationEventRetentionPortV1)
+const reconcileYandexFleet = createReconcileYandexFleetHandlerV1(legacyPrismaYandexFleetReconcilerPortV1)
 
 export const updateDriverStateV1 = (...args: Parameters<typeof updateDriverState>) => updateDriverState(...args)
 export const updateScoringThresholdsV1 = (...args: Parameters<typeof updateScoringThresholds>) => updateScoringThresholds(...args)
@@ -91,3 +94,4 @@ export const getParkLinkedDriverPhoneV1 = (...args: Parameters<typeof getParkLin
 export const normalizeParkPhoneDigitsV1 = (...args: Parameters<typeof normalizeParkPhoneDigits>) => normalizeParkPhoneDigits(...args)
 export const searchYandexParksByPhonesV1 = (...args: Parameters<typeof searchYandexParksByPhones>) => searchYandexParksByPhones(...args)
 export const upsertParkMatchedDriverV1 = (...args: Parameters<typeof upsertParkMatchedDriver>) => upsertParkMatchedDriver(...args)
+export const reconcileYandexFleetV1 = (...args: Parameters<typeof reconcileYandexFleet>) => reconcileYandexFleet(...args)

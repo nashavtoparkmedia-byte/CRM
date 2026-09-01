@@ -5,7 +5,7 @@ import path from 'path'
 import fs from 'fs'
 import { createHash } from 'node:crypto'
 import { channelDriverMatchV1 as DriverMatchService } from '@/modules/fleet-operations/public/v1/channel-driver-match'
-import { attachPhoneToIdentityV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
+import { attachPhoneToIdentityV1, attachProviderIdentityAliasV1, isResolvedChannelContactResultV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
 import { channelConversationWorkflowV1 as ConversationWorkflowService } from '@/modules/messaging/public/v1/channel-conversation-workflow'
 import { attachVisibleWaPhone, enrichWaChatNameFromSibling } from '@/lib/whatsapp/enrichChatName'
 import { publishPersistedMessageV1 as emitMessageReceived } from '@/modules/messaging/public/v1/persisted-message-ingress'
@@ -727,7 +727,13 @@ async function syncHistory(connectionId: string, client: Client) {
                         if (isLid) {
                             // Для @lid передаём identity externalId = весь LID-JID, phone=null.
                             // НЕ цифры из @lid (это linked-device id, не phone) — иначе фабрикуем phantom phone.
-                            const contactResult = await resolveChannelContactOperationV1('whatsapp', serialized, null, chatRaw.name)
+                            const contactResult = await resolveChannelContactOperationV1(
+                                'whatsapp', serialized, null, chatRaw.name,
+                                { chatKind: 'private', providerAccountId: connectionId },
+                            )
+                            if (!isResolvedChannelContactResultV1(contactResult) || !contactResult.identity) {
+                                throw new Error(`CONTACT_RESOLUTION_BLOCKED:${contactResult.status}`)
+                            }
                             await ensureConversationContactLinkV1({
                                 contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
                                 chatId: unifiedSyncChat.id,
@@ -741,7 +747,13 @@ async function syncHistory(connectionId: string, client: Client) {
                                 null,
                             ).catch(err => console.warn(`[WA-SERVICE] enrichChatName failed: ${err.message}`))
                         } else if (rawPhone && /^\d{10,15}$/.test(rawPhone)) {
-                            const contactResult = await resolveChannelContactOperationV1('whatsapp', rawPhone, rawPhone, chatRaw.name)
+                            const contactResult = await resolveChannelContactOperationV1(
+                                'whatsapp', rawPhone, rawPhone, chatRaw.name,
+                                { chatKind: 'private', providerAccountId: connectionId },
+                            )
+                            if (!isResolvedChannelContactResultV1(contactResult) || !contactResult.identity) {
+                                throw new Error(`CONTACT_RESOLUTION_BLOCKED:${contactResult.status}`)
+                            }
                             await ensureConversationContactLinkV1({
                                 contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
                                 chatId: unifiedSyncChat.id,
@@ -1217,56 +1229,21 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                 }
             })
 
-            // Unified Chat - Try to find existing chat with any variant of this phone
-            const searchSuffix = normalizedPhone.slice(-10)
-            let unifiedChat = await (prisma.chat as any).findFirst({
+            // Reuse only one exact persisted JID variant. Suffix/freshness and
+            // first-row selection are not identity proof.
+            const unifiedChatCandidates = await (prisma.chat as any).findMany({
                 where: {
                     channel: 'whatsapp',
                     OR: [
                         { externalChatId: normalizedExternalId },
                         { externalChatId: rawChatId },
                         { externalChatId: phoneDigits },
-                        { externalChatId: { endsWith: searchSuffix } }
                     ]
                 },
-                orderBy: { driverId: 'desc' } // Prefer chat linked to a driver
             })
-
-            // Fallback: WhatsApp can issue a LID alias separately from the
-            // user's actual phone JID. The sync path creates chats with the
-            // LID-format externalChatId (e.g. "61603068305553@lid"). When a
-            // later message arrives in phone-format (e.g. "73068305553@c.us")
-            // the search above won't match the @lid row — endsWith on the
-            // last-10 phone digits doesn't hit a LID, which is its own
-            // unrelated number. Without this fallback we'd create a parallel
-            // chat and the operator sees the new "Привет" message in a
-            // separate thread from the marketing campaign that started the
-            // conversation. AmoCRM shows them as one thread; so do we.
-            //
-            // The fallback: look up the Contact by phone, then reuse that
-            // contact's existing WA chat if any. Only adds 1-2 cheap lookups
-            // and only when the primary search misses (uncommon).
-            if (!unifiedChat && lidResolved) {
-                // Only attempt phone-based contact recovery when we actually
-                // have a real phone. For unresolved LIDs phoneDigits is the
-                // LID's tail and not a phone — looking it up would either
-                // miss or, worse, match an unrelated contact by coincidence.
-                const e164 = phoneDigits.length >= 10 ? '+7' + phoneDigits.slice(-10) : null
-                if (e164) {
-                    const phoneRow = await prisma.contactPhone.findFirst({
-                        where: { phone: e164, isActive: true },
-                        select: { contactId: true },
-                    })
-                    if (phoneRow?.contactId) {
-                        unifiedChat = await (prisma.chat as any).findFirst({
-                            where: { contactId: phoneRow.contactId, channel: 'whatsapp' },
-                            orderBy: { lastMessageAt: 'desc' },
-                        })
-                        if (unifiedChat) {
-                            console.log(`[WA-SERVICE] Recovered WA chat ${unifiedChat.id} (ext=${unifiedChat.externalChatId}) for ${e164} via contact ${phoneRow.contactId} — preventing LID/phone duplicate`)
-                        }
-                    }
-                }
+            let unifiedChat = unifiedChatCandidates.length === 1 ? unifiedChatCandidates[0] : null
+            if (unifiedChatCandidates.length > 1) {
+                console.warn(`[WA-SERVICE] Exact JID mapping ambiguous: candidates=${unifiedChatCandidates.length}; no automatic chat reuse`)
             }
 
             if (unifiedChat) {
@@ -1292,18 +1269,6 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                 await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: ts } })
             }
 
-            // Relink driver on every inbound if missing
-            if (!unifiedChat.driverId) {
-                let matched = await DriverMatchService.linkChatToDriver(unifiedChat.id, { phone: phoneDigits }, linkMatchedDriverToConversationCapabilityV1)
-                if (!matched && unifiedChat.name && unifiedChat.name.includes('+')) {
-                    matched = await DriverMatchService.linkChatToDriver(unifiedChat.id, { phone: unifiedChat.name }, linkMatchedDriverToConversationCapabilityV1)
-                }
-                if (matched) {
-                    unifiedChat = await (prisma.chat as any).findUnique({ where: { id: unifiedChat.id } })
-                }
-                console.log(`[WA-SERVICE] RELINK chat=${unifiedChat.id} driver=${unifiedChat.driverId || 'none'} linked=${matched}`)
-            }
-
             // ── Contact Model dual write ──────────────────────────────
             try {
                 // For unresolved LIDs:
@@ -1313,20 +1278,47 @@ async function doInitializeClient(connectionId: string): Promise<void> {
                 //     normalizePhoneE164 would happily produce '+7XXXXXXXXXX'
                 //     from any 10+ digit blob and we'd create fake ContactPhone
                 //     rows that map LIDs onto real people's numbers by accident)
-                const identityExternalId = lidResolved ? normalizedPhone : rawChatId
+                const identityExternalId = rawChatId
                 const phoneForResolve   = lidResolved ? phoneDigits     : null
                 const contactResult = await resolveChannelContactOperationV1(
                     'whatsapp',
                     identityExternalId,
                     phoneForResolve,
                     (msg as any).notifyName || unifiedChat.name || null,
+                    { chatKind: 'private', providerAccountId: connectionId },
                 )
+                if (!isResolvedChannelContactResultV1(contactResult) || !contactResult.identity) {
+                    throw new Error(`CONTACT_RESOLUTION_BLOCKED:${contactResult.status}`)
+                }
+                if (/@lid$/i.test(rawChatId)) {
+                    await attachProviderIdentityAliasV1({
+                        identityId: contactResult.identity.id,
+                        channel: 'whatsapp',
+                        providerAccountId: connectionId,
+                        aliasType: 'wa_lid',
+                        aliasValue: rawChatId,
+                        provenance: 'whatsapp-web.js',
+                        evidenceRoot: `wa:${connectionId}:${rawChatId}`,
+                    })
+                }
                 await ensureConversationContactLinkV1({
                     contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
                     chatId: unifiedChat.id,
                     contactId: contactResult.contact.id,
                     contactIdentityId: contactResult.identity.id,
                 })
+                // Driver matching is allowed only after Contacts accepted the
+                // unique canonical phone outcome, never as an ambiguity fallback.
+                if (lidResolved && !unifiedChat.driverId) {
+                    const matched = await DriverMatchService.linkChatToDriver(
+                        unifiedChat.id,
+                        { phone: phoneDigits },
+                        linkMatchedDriverToConversationCapabilityV1,
+                    )
+                    if (matched) {
+                        unifiedChat = await (prisma.chat as any).findUnique({ where: { id: unifiedChat.id } })
+                    }
+                }
                 // Backfill phone onto contact when LID resolved to a real number.
                 // resolveContact may have returned an existing contact (found via old
                 // @lid identity) that was created before phone resolution was available.
@@ -2246,7 +2238,13 @@ export async function importWhatsAppHistory(
                         const rawPhone = serialized.split('@')[0]
                         if (isLid) {
                             // Для @lid: externalId = весь LID-JID, phone=null. См. live-path выше.
-                            const contactResult = await resolveChannelContactOperationV1('whatsapp', serialized, null, chatRaw.name)
+                            const contactResult = await resolveChannelContactOperationV1(
+                                'whatsapp', serialized, null, chatRaw.name,
+                                { chatKind: 'private', providerAccountId: connId },
+                            )
+                            if (!isResolvedChannelContactResultV1(contactResult) || !contactResult.identity) {
+                                throw new Error(`CONTACT_RESOLUTION_BLOCKED:${contactResult.status}`)
+                            }
                             await ensureConversationContactLinkV1({
                                 contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
                                 chatId: unifiedChat.id,
@@ -2261,7 +2259,13 @@ export async function importWhatsAppHistory(
                             ).catch(err => console.warn(`[WA-SERVICE] importHistory enrichChatName failed: ${err.message}`))
                             totalContacts++
                         } else if (rawPhone && /^\d{10,15}$/.test(rawPhone)) {
-                            const contactResult = await resolveChannelContactOperationV1('whatsapp', rawPhone, rawPhone, chatRaw.name)
+                            const contactResult = await resolveChannelContactOperationV1(
+                                'whatsapp', rawPhone, rawPhone, chatRaw.name,
+                                { chatKind: 'private', providerAccountId: connId },
+                            )
+                            if (!isResolvedChannelContactResultV1(contactResult) || !contactResult.identity) {
+                                throw new Error(`CONTACT_RESOLUTION_BLOCKED:${contactResult.status}`)
+                            }
                             await ensureConversationContactLinkV1({
                                 contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
                                 chatId: unifiedChat.id,

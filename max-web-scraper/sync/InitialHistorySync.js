@@ -140,7 +140,10 @@ class InitialHistorySync {
         const chats = (result && result.chats) ? result.chats : []
         for (const c of chats) {
           const id = c.id ?? c.chatId
-          if (id && id !== 0) allChats.set(String(id), c)
+          if (id && id !== 0) {
+            allChats.set(String(id), c)
+            this._chatCache?.set(String(id), c)
+          }
         }
         console.log(`[InitialSync] payload=${JSON.stringify(payload)} → ${chats.length} чатов`)
       } catch (e) {

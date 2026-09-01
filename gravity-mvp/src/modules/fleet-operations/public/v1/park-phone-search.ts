@@ -1,5 +1,13 @@
 import { prisma } from '@/lib/prisma'
+import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
 import { listYandexConnectionCredentialsV1 } from './yandex-connection-capability'
+import {
+    RECONCILE_YANDEX_FLEET_COMMAND_V1,
+    type ReconciledDriverClusterV1,
+} from './yandex-fleet-reconciler'
+import { legacyPrismaYandexFleetReconcilerPortV1 } from './legacy-prisma-yandex-fleet-reconciler-adapter'
+
+const reconcileYandexFleetV1 = legacyPrismaYandexFleetReconcilerPortV1.reconcile
 
 export type ParkPhoneProfileV1 = {
     id: string
@@ -7,6 +15,12 @@ export type ParkPhoneProfileV1 = {
     phones: string[]
     workStatus: string | null
     currentStatus: string | null
+    legalRole?: string | null
+    city?: string | null
+    profileType?: string | null
+    vu?: string | null
+    freshness?: 'fresh' | 'stale' | 'unknown'
+    sourceState?: 'current' | 'stale' | 'failed' | 'unknown'
 }
 
 export type ParkPhoneSearchResultV1 = {
@@ -27,6 +41,7 @@ export type ParkDriverSearchResultV1 = {
         profiles: ParkPhoneProfileV1[]
     }>
     errors: Array<{ parkId: string; parkName: string; message: string }>
+    clusters?: ReconciledDriverClusterV1[]
 }
 
 export function normalizeParkPhoneDigitsV1(value: unknown): string {
@@ -149,52 +164,54 @@ async function searchPhoneInPark(
 
 /** Fleet-owned provider capability; credential-bearing rows never cross the owner boundary. */
 export async function searchYandexParksByPhonesV1(phones: string[]): Promise<ParkPhoneSearchResultV1> {
-    const connections = await listYandexConnectionCredentialsV1()
-    const checks: Array<{
-        parkId: string
-        parkName: string
-        profiles: ParkPhoneProfileV1[]
-        error: string | null
-    }> = []
-
-    for (const connection of connections) {
-        const profilesById = new Map<string, ParkPhoneProfileV1>()
-        let failedCount = 0
-        for (const phone of phones) {
-            try {
-                const profiles = await searchPhoneInPark(connection, phone)
-                for (const profile of profiles) profilesById.set(profile.id, profile)
-            } catch {
-                failedCount += 1
+    const normalizedPhones = [...new Set(phones.map(normalizePhoneE164).filter((phone): phone is string => Boolean(phone)))]
+    const reconciliations = []
+    for (const phone of normalizedPhones) {
+        reconciliations.push(await reconcileYandexFleetV1({
+            contract: RECONCILE_YANDEX_FLEET_COMMAND_V1,
+            mode: 'contact_refresh',
+            query: phone,
+        }))
+    }
+    const parkNames = new Map((await listYandexConnectionCredentialsV1())
+        .map(connection => [connection.parkId, connection.name || connection.parkId]))
+    const byPark = new Map<string, Map<string, ParkPhoneProfileV1 & { matchedPhones: string[] }>>()
+    for (const reconciliation of reconciliations) {
+        for (const cluster of reconciliation.clusters) {
+            for (const profile of cluster.profiles) {
+                const matchedPhones = normalizedPhones.filter(phone => profile.phones.some(candidate => samePhone(candidate, phone)))
+                if (matchedPhones.length === 0) continue
+                const park = byPark.get(profile.externalParkId) ?? new Map()
+                park.set(profile.externalDriverProfileId, {
+                    id: profile.externalDriverProfileId,
+                    fullName: profile.fullName,
+                    phones: profile.phones,
+                    workStatus: profile.status ?? null,
+                    currentStatus: profile.status ?? null,
+                    legalRole: profile.legalRole ?? null,
+                    city: profile.city ?? null,
+                    profileType: profile.profileType ?? null,
+                    vu: profile.rawVu ?? profile.normalizedVu,
+                    freshness: profile.sourceFreshness,
+                    sourceState: 'current',
+                    matchedPhones,
+                })
+                byPark.set(profile.externalParkId, park)
             }
         }
-        checks.push({
-            parkId: connection.parkId,
-            parkName: connection.name || connection.parkId,
-            profiles: [...profilesById.values()],
-            error: failedCount === phones.length
-                ? 'Парк не ответил'
-                : failedCount > 0
-                    ? 'Не все телефоны удалось проверить'
-                    : null,
-        })
     }
-
+    const errorMap = new Map<string, { parkId: string; parkName: string; message: string }>()
+    for (const reconciliation of reconciliations) {
+        for (const error of reconciliation.errors) errorMap.set(`${error.parkId}:${error.message}`, error)
+    }
     return {
-        checkedParks: connections.length,
-        results: checks.filter(check => check.profiles.length > 0).map(check => ({
-            parkId: check.parkId,
-            parkName: check.parkName,
-            profiles: check.profiles.map(profile => ({
-                ...profile,
-                matchedPhones: phones.filter(phone => profile.phones.some(candidate => samePhone(candidate, phone))),
-            })),
+        checkedParks: reconciliations[0]?.checkedParks ?? 0,
+        results: [...byPark.entries()].map(([parkId, profiles]) => ({
+            parkId,
+            parkName: parkNames.get(parkId) || parkId,
+            profiles: [...profiles.values()],
         })),
-        errors: checks.filter(check => check.error).map(check => ({
-            parkId: check.parkId,
-            parkName: check.parkName,
-            message: check.error!,
-        })),
+        errors: [...errorMap.values()],
     }
 }
 
@@ -202,40 +219,42 @@ export async function searchYandexParksByPhonesV1(phones: string[]): Promise<Par
 export async function searchYandexParksByDriverQueryV1(query: string): Promise<ParkDriverSearchResultV1> {
     const normalizedQuery = query.trim()
     if (normalizedQuery.length < 3) return { checkedParks: 0, results: [], errors: [] }
-
-    const connections = await listYandexConnectionCredentialsV1()
-    const checks = await Promise.all(connections.map(async connection => {
-        try {
-            const profiles = (await searchDriverQueryInPark(connection, normalizedQuery))
-                .filter(profile => parkDriverMatchesQueryV1(profile, normalizedQuery))
-            return {
-                parkId: connection.parkId,
-                parkName: connection.name || connection.parkId,
-                profiles,
-                error: null as string | null,
-            }
-        } catch (error) {
-            return {
-                parkId: connection.parkId,
-                parkName: connection.name || connection.parkId,
-                profiles: [] as ParkPhoneProfileV1[],
-                error: error instanceof Error ? error.message : 'Парк не ответил',
-            }
+    const reconciliation = await reconcileYandexFleetV1({
+        contract: RECONCILE_YANDEX_FLEET_COMMAND_V1,
+        mode: 'manual',
+        query: normalizedQuery,
+    })
+    const parkNames = new Map((await listYandexConnectionCredentialsV1())
+        .map(connection => [connection.parkId, connection.name || connection.parkId]))
+    const byPark = new Map<string, ParkPhoneProfileV1[]>()
+    for (const cluster of reconciliation.clusters) {
+        for (const profile of cluster.profiles) {
+            const profiles = byPark.get(profile.externalParkId) ?? []
+            profiles.push({
+                id: profile.externalDriverProfileId,
+                fullName: profile.fullName,
+                phones: profile.phones,
+                workStatus: profile.status ?? null,
+                currentStatus: profile.status ?? null,
+                legalRole: profile.legalRole ?? null,
+                city: profile.city ?? null,
+                profileType: profile.profileType ?? null,
+                vu: profile.rawVu ?? profile.normalizedVu,
+                freshness: profile.sourceFreshness,
+                sourceState: 'current',
+            })
+            byPark.set(profile.externalParkId, profiles)
         }
-    }))
-
+    }
     return {
-        checkedParks: connections.length,
-        results: checks.filter(check => check.profiles.length > 0).map(check => ({
-            parkId: check.parkId,
-            parkName: check.parkName,
-            profiles: check.profiles,
+        checkedParks: reconciliation.checkedParks,
+        results: [...byPark.entries()].map(([parkId, profiles]) => ({
+            parkId,
+            parkName: parkNames.get(parkId) || parkId,
+            profiles,
         })),
-        errors: checks.filter(check => check.error).map(check => ({
-            parkId: check.parkId,
-            parkName: check.parkName,
-            message: check.error!,
-        })),
+        errors: reconciliation.errors,
+        clusters: reconciliation.clusters,
     }
 }
 

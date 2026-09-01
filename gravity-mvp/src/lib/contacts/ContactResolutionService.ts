@@ -1,10 +1,14 @@
-import { ChatChannel } from '@prisma/client'
+import { ChatChannel, type Prisma } from '@prisma/client'
 
 import { prisma } from '@/lib/prisma'
 import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
+import {
+  identityEvidenceState,
+  phoneEvidenceState,
+  providerAccountMatches,
+} from '@/modules/contacts/public/v1/contact-evidence-state'
 
 import type {
-  ContactResolutionChannel,
   ContactResolutionInput,
   ContactResolutionRepository,
   ContactResolutionResult,
@@ -59,47 +63,93 @@ function validatedNormalizedPhone(value: string | null): string | null {
 
 /**
  * Adapter for the current Prisma schema. It intentionally exposes reads only.
- * providerAccountId cannot scope these queries yet: neither ContactIdentity
- * nor Chat currently persists it.
  */
-export const prismaContactResolutionRepository: ContactResolutionRepository = {
-  async findIdentity(channel, externalUserId) {
-    const identity = await prisma.contactIdentity.findUnique({
-      where: {
-        channel_externalId: {
-          channel: channel as ChatChannel,
-          externalId: externalUserId,
+type ContactResolutionPrismaClient = Pick<
+  Prisma.TransactionClient,
+  'contactIdentity' | 'contactPhone' | 'contactMerge'
+>
+
+export function createPrismaContactResolutionRepository(
+  client: ContactResolutionPrismaClient = prisma,
+): ContactResolutionRepository {
+  return {
+    async findIdentity(channel, providerAccountId, externalUserId) {
+      const identity = await client.contactIdentity.findUnique({
+        where: {
+          channel_externalId: {
+            channel: channel as ChatChannel,
+            externalId: externalUserId,
+          },
         },
-      },
-      select: {
-        contact: { select: { id: true, isArchived: true } },
-      },
-    })
+        select: {
+          contact: { select: { id: true, isArchived: true, customFields: true } },
+          metadata: true,
+        },
+      })
+      if (identity) {
+        return providerAccountMatches(identity.metadata, providerAccountId)
+          ? identity.contact
+          : null
+      }
+      const aliases = await client.contactIdentity.findMany({
+        where: {
+          channel: channel as ChatChannel,
+          isActive: true,
+          metadata: { path: ['providerAliasValues'], array_contains: [externalUserId] },
+        },
+        select: {
+          contact: { select: { id: true, isArchived: true, customFields: true } },
+          metadata: true,
+        },
+      })
+      const alias = aliases.find(candidate => (
+        identityEvidenceState(candidate.metadata).providerAccountId === providerAccountId
+      ))
+      return alias?.contact ?? null
+    },
 
-    return identity?.contact ?? null
-  },
+    async findActivePhoneClaims(normalizedPhone) {
+      const phones = await client.contactPhone.findMany({
+        where: {
+          phone: normalizedPhone,
+          isActive: true,
+          OR: [
+            { isTemporary: false },
+            { isTemporary: true, expiresAt: null },
+            { isTemporary: true, expiresAt: { gt: new Date() } },
+          ],
+        },
+        select: {
+          contact: { select: { id: true, isArchived: true, customFields: true } },
+          id: true,
+          phone: true,
+          isActive: true,
+          verifiedAt: true,
+        },
+      })
 
-  async findActivePhoneOwners(normalizedPhone) {
-    const phones = await prisma.contactPhone.findMany({
-      where: { phone: normalizedPhone, isActive: true },
-      select: {
-        contact: { select: { id: true, isArchived: true } },
-      },
-    })
+      return phones.map(phone => {
+        const evidence = phoneEvidenceState(phone.contact.customFields, phone.id, phone)
+        return {
+          contact: { id: phone.contact.id, isArchived: phone.contact.isArchived },
+          ...evidence,
+        }
+      })
+    },
 
-    return phones.map(phone => phone.contact)
-  },
-
-  async findMergesFromContact(contactId) {
-    return prisma.contactMerge.findMany({
-      where: { mergedId: contactId, action: 'merge' },
-      select: {
-        mergedId: true,
-        survivor: { select: { id: true, isArchived: true } },
-      },
-    })
-  },
+    async findMergesFromContact(contactId) {
+      return client.contactMerge.findMany({
+        where: { mergedId: contactId, action: 'merge' },
+        select: {
+          mergedId: true,
+          survivor: { select: { id: true, isArchived: true } },
+        },
+      })
+    },
+  }
 }
+
+export const prismaContactResolutionRepository = createPrismaContactResolutionRepository()
 
 /**
  * Read-only planner for later shadow-mode comparison. It does not create,
@@ -128,7 +178,11 @@ export class ContactResolutionService {
     if (suppliedPhone && !normalizedPhone) appendWarning(warnings, 'invalid_normalized_phone')
 
     const identity = externalUserId
-      ? await this.repository.findIdentity(input.channel, externalUserId)
+      ? await this.repository.findIdentity(
+          input.channel,
+          nonEmptyString(input.providerAccountId) ?? 'legacy',
+          externalUserId,
+        )
       : null
     const identityResolution = identity
       ? await this.resolveCanonicalContact(identity)
@@ -139,6 +193,14 @@ export class ContactResolutionService {
     const canonicalIdentity: CanonicalContactMatch | null = identityResolution?.kind === 'canonical'
       ? identityResolution
       : null
+
+    // An unknown provider chat kind may reuse an already-proven exact sender
+    // identity, but it must not use phone ownership or create a person.
+    if (input.chatKind === 'unknown') {
+      return canonicalIdentity
+        ? this.identitySuccess(canonicalIdentity, warnings)
+        : { status: 'unknown_kind_limited', warnings }
+    }
 
     if (!normalizedPhone) {
       if (suppliedPhone) return { status: 'invalid_input', warnings }
@@ -154,7 +216,26 @@ export class ContactResolutionService {
         : { status: 'untrusted_phone', warnings }
     }
 
-    const phoneOwners = await this.repository.findActivePhoneOwners(normalizedPhone)
+    const phoneClaims = await this.repository.findActivePhoneClaims(normalizedPhone)
+    const eligibleClaims = phoneClaims.filter(claim => {
+      if (claim.resolutionState === 'shared') appendWarning(warnings, 'phone_shared')
+      if (claim.resolutionState === 'disputed') appendWarning(warnings, 'phone_disputed')
+      if (claim.lifecycle !== 'current') appendWarning(warnings, 'phone_lifecycle_ineligible')
+      if (!['provider_bound', 'manually_verified'].includes(claim.trust)) {
+        appendWarning(warnings, 'phone_trust_ineligible')
+      }
+      if (claim.freshness !== 'fresh') appendWarning(warnings, 'phone_stale')
+      return claim.lifecycle === 'current'
+        && ['provider_bound', 'manually_verified'].includes(claim.trust)
+        && claim.freshness === 'fresh'
+        && claim.resolutionState === 'unique'
+    })
+    if (phoneClaims.length > 0 && eligibleClaims.length === 0) {
+      return canonicalIdentity
+        ? this.identitySuccess(canonicalIdentity, warnings)
+        : { status: 'ineligible_phone', warnings }
+    }
+    const phoneOwners = eligibleClaims.map(claim => claim.contact)
     const ownersById = new Map<string, ResolutionContact>()
     for (const owner of phoneOwners) ownersById.set(owner.id, owner)
 
@@ -219,15 +300,7 @@ export class ContactResolutionService {
   }
 
   private initialWarnings(input: ContactResolutionInput): ResolutionWarning[] {
-    // Message.externalId is global in the current schema. The planner does
-    // not receive a message id, but every plan is still subject to this
-    // unscoped provider limitation.
-    const warnings: ResolutionWarning[] = [
-      'provider_account_scope_not_persisted',
-      'global_message_key',
-    ]
-    if (nonEmptyString(input.providerAccountId)) appendWarning(warnings, 'provider_account_scope_not_persisted')
-    if (nonEmptyString(input.externalUserId)) appendWarning(warnings, 'global_identity_key')
+    const warnings: ResolutionWarning[] = ['global_message_key']
     if (nonEmptyString(input.externalChatId)) appendWarning(warnings, 'global_chat_key')
     if (nonEmptyString(input.normalizedPhone)) appendWarning(warnings, 'phone_verification_model_limited')
     return warnings

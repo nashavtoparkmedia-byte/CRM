@@ -2,13 +2,17 @@ import { readFileSync } from 'fs'
 import path from 'path'
 import { describe, expect, test, vi } from 'vitest'
 
-import { ContactResolutionService } from '../contacts/ContactResolutionService'
+import {
+  ContactResolutionService,
+  createPrismaContactResolutionRepository,
+} from '../contacts/ContactResolutionService'
 import type {
   ContactMergeEdge,
   ContactResolutionInput,
   ContactResolutionRepository,
   ContactResolutionResult,
   ResolutionContact,
+  ResolutionPhoneClaim,
 } from '../contacts/contact-resolution.types'
 
 const PHONE = '+79990000000'
@@ -28,18 +32,27 @@ function trustedPhone(source: NonNullable<ContactResolutionInput['phoneEvidence'
 function repository(options: {
   identities?: Record<string, ResolutionContact | null>
   phoneOwners?: ResolutionContact[]
+  phoneClaims?: ResolutionPhoneClaim[]
   merges?: Record<string, ContactMergeEdge[]>
 } = {}) {
   const repo: ContactResolutionRepository = {
-    findIdentity: vi.fn(async (channel, externalUserId) =>
-      options.identities?.[`${channel}:${externalUserId}`] ?? null,
+    findIdentity: vi.fn(async (channel, providerAccountId, externalUserId) =>
+      options.identities?.[`${channel}:${providerAccountId}:${externalUserId}`]
+        ?? options.identities?.[`${channel}:${externalUserId}`]
+        ?? null,
     ),
-    findActivePhoneOwners: vi.fn(async () => options.phoneOwners ?? []),
+    findActivePhoneClaims: vi.fn(async (): Promise<ResolutionPhoneClaim[]> => options.phoneClaims ?? (options.phoneOwners ?? []).map(owner => ({
+      contact: owner,
+      lifecycle: 'current',
+      trust: 'provider_bound',
+      freshness: 'fresh',
+      resolutionState: 'unique',
+    } as const))),
     findMergesFromContact: vi.fn(async contactId => options.merges?.[contactId] ?? []),
   }
   return repo as ContactResolutionRepository & {
     findIdentity: ReturnType<typeof vi.fn>
-    findActivePhoneOwners: ReturnType<typeof vi.fn>
+    findActivePhoneClaims: ReturnType<typeof vi.fn>
     findMergesFromContact: ReturnType<typeof vi.fn>
   }
 }
@@ -118,6 +131,36 @@ describe('ContactResolutionService read-only planner', () => {
       .resolves.toMatchObject({ status: 'phone_matched', contactId: 'phone-contact' })
   })
 
+  test.each([
+    ['claimed', { trust: 'claimed' as const }, 'phone_trust_ineligible'],
+    ['stale', { freshness: 'stale' as const }, 'phone_stale'],
+    ['shared', { resolutionState: 'shared' as const }, 'phone_shared'],
+    ['disputed', { resolutionState: 'disputed' as const }, 'phone_disputed'],
+    ['superseded', { lifecycle: 'superseded' as const }, 'phone_lifecycle_ineligible'],
+  ])('fails closed for %s stored phone evidence', async (_label, patch, warning) => {
+    const claim: ResolutionPhoneClaim = {
+      contact: contact('phone-contact'),
+      lifecycle: 'current',
+      trust: 'provider_bound',
+      freshness: 'fresh',
+      resolutionState: 'unique',
+      ...patch,
+    }
+    const { resolver } = service({ phoneClaims: [claim] })
+    const result = await resolver.resolve({
+      channel: 'max', normalizedPhone: PHONE, phoneEvidence: trustedPhone(),
+    })
+    expect(result).toMatchObject({ status: 'ineligible_phone' })
+    expect(result.warnings).toContain(warning)
+  })
+
+  test('an archived phone owner cannot authorize linking', async () => {
+    const { resolver } = service({ phoneOwners: [contact('archived-owner', true)] })
+    await expect(resolver.resolve({
+      channel: 'max', normalizedPhone: PHONE, phoneEvidence: trustedPhone(),
+    })).resolves.toMatchObject({ status: 'archived_without_merge', contactId: 'archived-owner' })
+  })
+
   test('returns ambiguous_phone for two different canonical phone owners', async () => {
     const { resolver } = service({ phoneOwners: [contact('B'), contact('A')] })
 
@@ -179,7 +222,7 @@ describe('ContactResolutionService read-only planner', () => {
     await expect(resolver.resolve({
       channel: 'max', normalizedPhone: PHONE, phoneEvidence: trustedPhone('message_text'),
     })).resolves.toMatchObject({ status: 'untrusted_phone' })
-    expect(repo.findActivePhoneOwners).not.toHaveBeenCalled()
+    expect(repo.findActivePhoneClaims).not.toHaveBeenCalled()
   })
 
   test('permits a trusted WhatsApp phone JID in phone resolution', async () => {
@@ -189,7 +232,7 @@ describe('ContactResolutionService read-only planner', () => {
       channel: 'whatsapp', externalUserId: '79990000000@c.us', normalizedPhone: PHONE,
       phoneEvidence: trustedPhone('whatsapp_phone_jid'),
     })).resolves.toMatchObject({ status: 'phone_matched', canonicalContactId: 'wa-contact' })
-    expect(repo.findActivePhoneOwners).toHaveBeenCalledWith(PHONE)
+    expect(repo.findActivePhoneClaims).toHaveBeenCalledWith(PHONE)
   })
 
   test('does not use an unresolved WhatsApp LID without trusted phone evidence', async () => {
@@ -199,7 +242,7 @@ describe('ContactResolutionService read-only planner', () => {
       channel: 'whatsapp', externalUserId: 'opaque-lid@lid', normalizedPhone: PHONE,
       phoneEvidence: { source: 'unknown', trustedForAutomaticResolution: false },
     })).resolves.toMatchObject({ status: 'untrusted_phone' })
-    expect(repo.findActivePhoneOwners).not.toHaveBeenCalled()
+    expect(repo.findActivePhoneClaims).not.toHaveBeenCalled()
   })
 
   test('does not use a Telegram username as an identity', async () => {
@@ -224,7 +267,7 @@ describe('ContactResolutionService read-only planner', () => {
       channel: 'telegram', chatKind: 'group', externalUserId: 'group-id', normalizedPhone: PHONE, phoneEvidence: trustedPhone(),
     })).resolves.toMatchObject({ status: 'skipped_group' })
     expect(repo.findIdentity).not.toHaveBeenCalled()
-    expect(repo.findActivePhoneOwners).not.toHaveBeenCalled()
+    expect(repo.findActivePhoneClaims).not.toHaveBeenCalled()
   })
 
   test('does not substitute MAX externalChatId for externalUserId', async () => {
@@ -235,20 +278,88 @@ describe('ContactResolutionService read-only planner', () => {
     expect(repo.findIdentity).not.toHaveBeenCalled()
   })
 
-  test('warns that provider account scope is not persisted', async () => {
-    const { resolver } = service()
+  test('scopes exact identity lookup by provider account', async () => {
+    const { repo, resolver } = service({
+      identities: { 'max:account-1:max-user-1': contact('scoped-contact') },
+    })
 
-    const result = await resolver.resolve({ channel: 'max', providerAccountId: 'account-1' })
+    const result = await resolver.resolve({
+      channel: 'max', providerAccountId: 'account-1', externalUserId: 'max-user-1',
+    })
 
-    expect(result.warnings).toContain('provider_account_scope_not_persisted')
+    expect(result).toMatchObject({ status: 'identity_found', canonicalContactId: 'scoped-contact' })
+    expect(repo.findIdentity).toHaveBeenCalledWith('max', 'account-1', 'max-user-1')
+    expect(result.warnings).not.toContain('provider_account_scope_not_persisted')
   })
 
-  test('warns about provider account scope when the provider account is unavailable', async () => {
-    const { resolver } = service()
+  test('the same provider user ID in two accounts resolves to two different Contacts', async () => {
+    const { resolver } = service({
+      identities: {
+        'max:account-1:shared-user': contact('contact-account-1'),
+        'max:account-2:shared-user': contact('contact-account-2'),
+      },
+    })
 
-    const result = await resolver.resolve({ channel: 'max', providerAccountId: null })
+    await expect(resolver.resolve({
+      channel: 'max', providerAccountId: 'account-1', externalUserId: 'shared-user',
+    })).resolves.toMatchObject({ status: 'identity_found', canonicalContactId: 'contact-account-1' })
+    await expect(resolver.resolve({
+      channel: 'max', providerAccountId: 'account-2', externalUserId: 'shared-user',
+    })).resolves.toMatchObject({ status: 'identity_found', canonicalContactId: 'contact-account-2' })
+  })
 
-    expect(result.warnings).toContain('provider_account_scope_not_persisted')
+  test('resolves a WhatsApp LID alias inside the same provider account', async () => {
+    const aliasContact = contact('whatsapp-contact')
+    const client = {
+      contactIdentity: {
+        findUnique: vi.fn(async () => null),
+        findMany: vi.fn(async () => [{
+          contact: aliasContact,
+          metadata: { providerAccountId: 'wa-account-1' },
+        }]),
+      },
+      contactPhone: { findMany: vi.fn(async () => []) },
+      contactMerge: { findMany: vi.fn(async () => []) },
+    }
+    const repo = createPrismaContactResolutionRepository(client as never)
+
+    await expect(repo.findIdentity('whatsapp', 'wa-account-1', 'opaque-user@lid'))
+      .resolves.toEqual(aliasContact)
+    expect(client.contactIdentity.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: {
+        channel: 'whatsapp',
+        isActive: true,
+        metadata: { path: ['providerAliasValues'], array_contains: ['opaque-user@lid'] },
+      },
+    }))
+  })
+
+  test('the Prisma adapter fails closed when an opaque key belongs to another provider account', async () => {
+    const client = {
+      contactIdentity: {
+        findUnique: vi.fn(async () => ({
+          contact: contact('account-a-contact'),
+          metadata: { providerAccountId: 'account-a' },
+        })),
+        findMany: vi.fn(async () => []),
+      },
+      contactPhone: { findMany: vi.fn(async () => []) },
+      contactMerge: { findMany: vi.fn(async () => []) },
+    }
+    const repo = createPrismaContactResolutionRepository(client as never)
+
+    await expect(repo.findIdentity('max', 'account-b', 'opaque-user')).resolves.toBeNull()
+  })
+
+  test('uses the explicit legacy account scope when provider account is unavailable', async () => {
+    const { repo, resolver } = service()
+
+    const result = await resolver.resolve({
+      channel: 'max', providerAccountId: null, externalUserId: 'max-user-1',
+    })
+
+    expect(repo.findIdentity).toHaveBeenCalledWith('max', 'legacy', 'max-user-1')
+    expect(result.warnings).not.toContain('provider_account_scope_not_persisted')
   })
 
   test('invalid or empty values do not trigger arbitrary lookups', async () => {
@@ -258,7 +369,7 @@ describe('ContactResolutionService read-only planner', () => {
       channel: 'max', externalUserId: '   ', normalizedPhone: 'not-a-phone', phoneEvidence: trustedPhone(),
     })).resolves.toMatchObject({ status: 'invalid_input' })
     expect(repo.findIdentity).not.toHaveBeenCalled()
-    expect(repo.findActivePhoneOwners).not.toHaveBeenCalled()
+    expect(repo.findActivePhoneClaims).not.toHaveBeenCalled()
   })
 
   test('database candidate order does not affect an ambiguous result', async () => {
@@ -274,7 +385,7 @@ describe('ContactResolutionService read-only planner', () => {
     const statuses: ContactResolutionResult['status'][] = [
       'identity_found', 'phone_matched', 'create_required', 'ambiguous_phone', 'identity_phone_conflict',
       'merged_contact', 'archived_without_merge', 'skipped_group', 'untrusted_phone', 'invalid_input',
-      'merge_cycle', 'merge_ambiguous', 'merge_depth_exceeded',
+      'ineligible_phone', 'unknown_kind_limited', 'merge_cycle', 'merge_ambiguous', 'merge_depth_exceeded',
     ]
     const { resolver } = service()
     const result: ContactResolutionResult = await resolver.resolve({ channel: 'max' })

@@ -1,7 +1,43 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
 import { buildCanonicalContactSummary } from '@/modules/contacts/public/v1/contact-display-policy'
+import { ContactService } from '@/lib/ContactService'
+import { resolveContactLineageV1 } from '@/modules/contacts/public/v1'
+import type { Prisma } from '@prisma/client'
+import {
+  contactAutomationState,
+  identityEvidenceState,
+  phoneEvidenceState,
+} from '@/modules/contacts/public/v1/contact-evidence-state'
+
+function driverFleetReadModel(customFields: unknown) {
+  const fields = customFields && typeof customFields === 'object' && !Array.isArray(customFields)
+    ? customFields as Record<string, unknown>
+    : {}
+  const source = fields.fleetSource && typeof fields.fleetSource === 'object' && !Array.isArray(fields.fleetSource)
+    ? fields.fleetSource as Record<string, unknown>
+    : {}
+  const metadata = source.sourceMetadata && typeof source.sourceMetadata === 'object' && !Array.isArray(source.sourceMetadata)
+    ? source.sourceMetadata as Record<string, unknown>
+    : {}
+  return {
+    legalRole: typeof source.legalRole === 'string' ? source.legalRole : null,
+    sourceStatus: typeof source.sourceStatus === 'string' ? source.sourceStatus : null,
+    sourceCity: typeof source.sourceCity === 'string' ? source.sourceCity : null,
+    sourceProfileType: typeof source.sourceProfileType === 'string' ? source.sourceProfileType : null,
+    sourcePhones: Array.isArray(source.sourcePhones) ? source.sourcePhones : [],
+    sourceDates: source.sourceDates && typeof source.sourceDates === 'object' ? source.sourceDates : {},
+    lastObservedAt: typeof source.lastObservedAt === 'string' ? source.lastObservedAt : null,
+    lastSynchronizedAt: typeof source.lastSynchronizedAt === 'string' ? source.lastSynchronizedAt : null,
+    sourceFreshness: typeof source.sourceFreshness === 'string' ? source.sourceFreshness : 'unknown',
+    sourceState: typeof source.sourceState === 'string' ? source.sourceState : 'unknown',
+    sourceMetadata: metadata,
+  }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
 
 /**
  * GET /api/contacts/:id
@@ -20,8 +56,7 @@ export async function GET(
       where: { id },
       include: {
         phones: {
-          where: { isActive: true },
-          orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+          orderBy: [{ isActive: 'desc' }, { createdAt: 'asc' }],
           select: {
             id: true,
             phone: true,
@@ -90,35 +125,92 @@ export async function GET(
             createdAt: true,
           },
         },
+        driverProfiles: {
+          orderBy: { createdAt: 'desc' },
+          include: {
+            park: { select: { id: true, parkName: true, externalParkId: true } },
+          },
+        },
+        mainDriver: true,
       },
     })
 
-    if (!contact || contact.isArchived) {
+    if (!contact) {
       return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
     }
+    if (contact.isArchived) {
+      const survivorId = contactAutomationState(contact.customFields).mergedIntoContactId
+        || contact.mergesAsMerged.find(merge => merge.action === 'merge')?.survivorId
+      if (survivorId) {
+        return NextResponse.redirect(new URL(`/api/contacts/${survivorId}`, req.url), 308)
+      }
+      return NextResponse.json({ error: 'Contact archived', redirectContactId: null }, { status: 410 })
+    }
+
+    const lineage = await resolveContactLineageV1(contact.id)
+    const redirectedProfiles = lineage && lineage.contactIds.length > 1
+      ? await prisma.driver.findMany({
+          where: { contactId: { in: lineage.contactIds.filter(contactId => contactId !== contact.id) } },
+          orderBy: { createdAt: 'desc' },
+          include: { park: { select: { id: true, parkName: true, externalParkId: true } } },
+        })
+      : []
+    const allDriverProfiles = [...new Map(
+      [...contact.driverProfiles, ...redirectedProfiles].map(profile => [profile.id, profile]),
+    ).values()]
 
     // Fetch Driver if linked
-    let driver = null
-    if (contact.yandexDriverId) {
-      driver = await prisma.driver.findUnique({
-        where: { yandexDriverId: contact.yandexDriverId },
-        select: {
-          id: true,
-          fullName: true,
-          phone: true,
-          segment: true,
-          score: true,
-          lastOrderAt: true,
-          hiredAt: true,
-          dismissedAt: true,
-        },
-      })
-    }
+    const driver = contact.mainDriver
+      || allDriverProfiles.find(profile => driverFleetReadModel(profile.customFields).sourceState === 'current')
+      || allDriverProfiles[0]
+      || null
 
     const mergeHistory = [
       ...contact.mergesAsSurvivor.map(m => ({ ...m, role: 'survivor' as const })),
       ...contact.mergesAsMerged.map(m => ({ ...m, role: 'merged' as const })),
     ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    const customFields = contact.customFields && typeof contact.customFields === 'object' && !Array.isArray(contact.customFields)
+      ? contact.customFields as Record<string, unknown>
+      : {}
+    const automationState = contactAutomationState(customFields)
+    const driverConfirmations = Array.isArray(customFields.driverConfirmations)
+      ? customFields.driverConfirmations
+      : []
+    const identityConflicts = Array.isArray(customFields.identityConflicts)
+      ? customFields.identityConflicts.filter(item => (
+          !item || typeof item !== 'object' || Array.isArray(item)
+            ? false
+            : (item as Record<string, unknown>).status === 'open'
+        ))
+      : []
+    const identities = contact.identities.map(identity => {
+      const metadata = identity.metadata && typeof identity.metadata === 'object' && !Array.isArray(identity.metadata)
+        ? identity.metadata as Record<string, unknown>
+        : {}
+      return {
+        ...identity,
+        ...identityEvidenceState(identity.metadata),
+        aliases: Array.isArray(metadata.providerAliases) ? metadata.providerAliases : [],
+        conflicts: identityConflicts.filter(item => (
+          item && typeof item === 'object' && !Array.isArray(item)
+          && (item as Record<string, unknown>).identityId === identity.id
+        )),
+      }
+    })
+    const driverProfiles = allDriverProfiles.map(profile => {
+      const evidence = driverFleetReadModel(profile.customFields)
+      return {
+        ...profile,
+        ...evidence,
+        licenseObservations: Array.isArray(evidence.sourceMetadata.licenseHistory)
+          ? evidence.sourceMetadata.licenseHistory
+          : [],
+      }
+    })
+    const phones = contact.phones.map(phone => ({
+      ...phone,
+      ...phoneEvidenceState(contact.customFields, phone.id, phone),
+    }))
 
     return NextResponse.json({
       id: contact.id,
@@ -129,23 +221,42 @@ export async function GET(
       primaryPhoneId: contact.primaryPhoneId,
       notes: contact.notes,
       tags: contact.tags,
-      customFields: contact.customFields,
+      customFields,
       isArchived: contact.isArchived,
       createdAt: contact.createdAt,
       updatedAt: contact.updatedAt,
-      phones: contact.phones,
-      identities: contact.identities,
+      phones,
+      identities,
       chats: contact.chats,
       driver,
+      driverProfiles,
+      driverConfirmations,
+      identityConflicts,
+      driverSummary: {
+        profileCount: allDriverProfiles.length,
+        parkCount: new Set(allDriverProfiles.map(profile => profile.externalParkId).filter(Boolean)).size,
+        staleCount: allDriverProfiles.filter(profile => (
+          driverFleetReadModel(profile.customFields).sourceFreshness !== 'fresh'
+        )).length,
+        failedCount: allDriverProfiles.filter(profile => (
+          driverFleetReadModel(profile.customFields).sourceState === 'failed'
+        )).length,
+      },
       canonicalSummary: buildCanonicalContactSummary({
-        contact,
+        contact: {
+          ...contact,
+          ...automationState,
+          phones,
+          identities,
+          driverConfirmations,
+        },
         driver,
         currentChannel: contact.chats[0]?.channel || null,
       }),
       mergeHistory,
     })
-  } catch (err: any) {
-    console.error('[contacts/:id] GET Error:', err.message)
+  } catch (err: unknown) {
+    console.error('[contacts/:id] GET Error:', errorMessage(err))
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
@@ -165,12 +276,11 @@ export async function PATCH(
 ) {
   try {
     const { id } = await params
-    const body = await req.json()
-
-    const contact = await prisma.contact.findUnique({ where: { id } })
-    if (!contact || contact.isArchived) {
-      return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
+    const input: unknown = await req.json()
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+      return NextResponse.json({ error: 'INVALID_BODY' }, { status: 400 })
     }
+    const body = input as Record<string, unknown>
 
     // Block immutable fields
     if ('masterSource' in body || 'yandexDriverId' in body) {
@@ -180,7 +290,7 @@ export async function PATCH(
       )
     }
 
-    const data: any = {}
+    const data: Prisma.ContactUncheckedUpdateInput = {}
 
     if ('displayName' in body && typeof body.displayName === 'string' && body.displayName.trim()) {
       data.displayName = body.displayName.trim()
@@ -188,23 +298,13 @@ export async function PATCH(
     }
 
     if ('primaryPhoneId' in body) {
-      if (body.primaryPhoneId) {
-        // Validate phone belongs to this contact
-        const phone = await prisma.contactPhone.findFirst({
-          where: { id: body.primaryPhoneId, contactId: id, isActive: true },
-        })
-        if (!phone) {
-          return NextResponse.json(
-            { error: 'INVALID_PHONE_ID', message: 'Phone does not belong to this contact' },
-            { status: 400 }
-          )
-        }
-      }
-      data.primaryPhoneId = body.primaryPhoneId || null
+      data.primaryPhoneId = typeof body.primaryPhoneId === 'string' && body.primaryPhoneId
+        ? body.primaryPhoneId
+        : null
     }
 
     if ('tags' in body && Array.isArray(body.tags)) {
-      data.tags = body.tags.filter((t: any) => typeof t === 'string')
+      data.tags = body.tags.filter((tag): tag is string => typeof tag === 'string')
     }
 
     if ('notes' in body) {
@@ -212,7 +312,7 @@ export async function PATCH(
     }
 
     if ('customFields' in body && typeof body.customFields === 'object') {
-      data.customFields = body.customFields
+      data.customFields = body.customFields as Prisma.InputJsonValue
     }
 
     if (Object.keys(data).length === 0) {
@@ -222,25 +322,53 @@ export async function PATCH(
       )
     }
 
-    const updated = await prisma.contact.update({
-      where: { id },
-      data,
-      select: {
-        id: true,
-        displayName: true,
-        displayNameSource: true,
-        masterSource: true,
-        primaryPhoneId: true,
-        tags: true,
-        notes: true,
-        customFields: true,
-        updatedAt: true,
-      },
-    })
+    let updated
+    if ('primaryPhoneId' in body) {
+      updated = await ContactService.patchContact(id, data)
+    } else {
+      const existing = await prisma.contact.findUnique({
+        where: { id },
+        select: { id: true, isArchived: true },
+      })
+      updated = !existing || existing.isArchived
+        ? null
+        : await prisma.contact.update({
+          where: { id },
+          data: {
+            displayName: data.displayName,
+            displayNameSource: data.displayNameSource,
+            tags: data.tags,
+            notes: data.notes,
+            customFields: data.customFields,
+          },
+        }).catch((error: { code?: string }) => {
+          if (error?.code === 'P2025') return null
+          throw error
+        })
+    }
+    if (updated === null) {
+      return NextResponse.json({ error: 'Contact not found' }, { status: 404 })
+    }
+    if (typeof updated === 'boolean') {
+      return NextResponse.json(
+        { error: 'INVALID_PHONE_ID', message: 'Phone does not belong to this contact' },
+        { status: 400 },
+      )
+    }
 
-    return NextResponse.json(updated)
-  } catch (err: any) {
-    console.error('[contacts/:id] PATCH Error:', err.message)
+    return NextResponse.json({
+      id: updated.id,
+      displayName: updated.displayName,
+      displayNameSource: updated.displayNameSource,
+      masterSource: updated.masterSource,
+      primaryPhoneId: updated.primaryPhoneId,
+      tags: updated.tags,
+      notes: updated.notes,
+      customFields: updated.customFields,
+      updatedAt: updated.updatedAt,
+    })
+  } catch (err: unknown) {
+    console.error('[contacts/:id] PATCH Error:', errorMessage(err))
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }

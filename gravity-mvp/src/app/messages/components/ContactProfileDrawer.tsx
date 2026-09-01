@@ -12,6 +12,9 @@ import DriverTasksWidget from "./DriverTasksWidget"
 import { WorkTaskCreateModalV1 as TaskCreateModal } from '@/modules/work-management/public/v1/task-view'
 import CallButton from "@/modules/calling/public/v1/client-ui/CallButton"
 import { getSegmentLabel } from '@/modules/contacts/public/v1/contact-display-policy'
+import ContactResolutionAmbiguityBanner from './ContactResolutionAmbiguityBanner'
+import LinkContactModal from './LinkContactModal'
+import DriverPersonSearchModal from './DriverPersonSearchModal'
 
 // Custom field types
 interface CustomField {
@@ -91,14 +94,18 @@ function formatPhone(phone: string): string {
     return phone
 }
 
-function OrphanIdentityRow({ identity, cfg, isWriting, onWrite, contact }: {
+function OrphanIdentityRow({ identity, cfg, isWriting, onWrite, onAttached, contact }: {
     identity: ContactIdentity
     cfg: { label: string; icon: string; color: string; dotColor: string } | undefined
     isWriting: boolean
     onWrite: () => void
+    onAttached: () => void
     contact: Contact | null
 }) {
     const [copiedId, setCopiedId] = useState(false)
+    const [selectedPhoneId, setSelectedPhoneId] = useState('')
+    const [attaching, setAttaching] = useState(false)
+    const [attachError, setAttachError] = useState<string | null>(null)
     // metadata may contain { username, firstName, lastName } saved by TG webhook
     const meta = (identity.metadata as Record<string, string | null> | null) ?? {}
     // Only use metadata (populated on each incoming TG message).
@@ -121,6 +128,29 @@ function OrphanIdentityRow({ identity, cfg, isWriting, onWrite, contact }: {
             setTimeout(() => setCopiedId(false), 2000)
         }).catch(() => {})
     }
+    const attachPhone = async () => {
+        if (!contact?.id || !selectedPhoneId || attaching) return
+        setAttaching(true)
+        setAttachError(null)
+        try {
+            const response = await fetch(`/api/contacts/${contact.id}/identities/${identity.id}/phone`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    phoneId: selectedPhoneId,
+                    basis: 'operator linked provider identity to Contact phone',
+                }),
+            })
+            const body = await response.json()
+            if (!response.ok) throw new Error(body.error || 'Номер не привязан')
+            onAttached()
+        } catch (error) {
+            setAttachError(error instanceof Error ? error.message : 'Номер не привязан')
+        } finally {
+            setAttaching(false)
+        }
+    }
+    const availablePhones = contact?.phones.filter(phone => phone.isActive !== false && phone.lifecycle !== 'removed') ?? []
     return (
         <div className="mb-2.5">
             <div className="flex items-center gap-1.5 mb-0.5">
@@ -153,6 +183,28 @@ function OrphanIdentityRow({ identity, cfg, isWriting, onWrite, contact }: {
                     {isWriting ? <Loader2 size={10} className="animate-spin" /> : <Send size={9} />}
                     Написать
                 </button>
+                {availablePhones.length > 0 && (
+                    <div className="mt-1 flex items-center gap-1">
+                        <select
+                            value={selectedPhoneId}
+                            onChange={event => setSelectedPhoneId(event.target.value)}
+                            className="h-6 max-w-[150px] rounded border border-gray-200 bg-white px-1 text-[9px]"
+                        >
+                            <option value="">Связать с номером…</option>
+                            {availablePhones.map(phone => (
+                                <option key={phone.id} value={phone.id}>{formatPhone(phone.phone)}</option>
+                            ))}
+                        </select>
+                        <button
+                            onClick={attachPhone}
+                            disabled={!selectedPhoneId || attaching}
+                            className="h-6 rounded bg-violet-50 px-2 text-[9px] font-semibold text-violet-700 disabled:opacity-40"
+                        >
+                            {attaching ? 'Сохраняем…' : 'Связать'}
+                        </button>
+                    </div>
+                )}
+                {attachError && <div className="mt-1 text-[9px] text-red-600">{attachError}</div>}
             </div>
         </div>
     )
@@ -162,7 +214,17 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     const { toggleProfileDrawer, updateQuery } = useChatNavigation()
     const { conversations } = useConversations()
     const chat = conversations.find(c => c.id === chatId || c.allChatIds?.includes(chatId))
-    const { contact, isLoading: contactLoading, refetch: refetchContact } = useContact(chat?.contactId)
+    const contactResolution = chat?.metadata?.contactResolution as {
+        status?: string
+        candidateCount?: number
+        automaticLinkPerformed?: boolean
+    } | undefined
+    const ambiguityCandidateCount = contactResolution?.status === 'ambiguous'
+        ? Math.max(2, Number(contactResolution.candidateCount) || 0)
+        : null
+    const { contact, isLoading: contactLoading, refetch: refetchContact } = useContact(
+        ambiguityCandidateCount === null ? chat?.contactId : undefined,
+    )
     const { channelStatus } = useChannelStatus(contact?.id)
 
     const [tags, setTags] = useState<string[]>([])
@@ -189,6 +251,9 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     const [parkCheckLoading, setParkCheckLoading] = useState(false)
     const [parkCheckResult, setParkCheckResult] = useState<ParkCheckResult | null>(null)
     const [parkCheckError, setParkCheckError] = useState<string | null>(null)
+    const [showManualLinkModal, setShowManualLinkModal] = useState(false)
+    const [showDriverPersonSearch, setShowDriverPersonSearch] = useState(false)
+    const [showAllDriverProfiles, setShowAllDriverProfiles] = useState(false)
 
     useEffect(() => {
         const saved = contact?.customFields?.parkCheckResult
@@ -471,17 +536,8 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     }
 
     // ── Group identities by phone ─────────────────────────────
-    const selectedIdentityId = contact?.chats.find(item => item.id === chatId)?.contactIdentityId || null
     const phonesWithIdentities = contact ? contact.phones.map(phone => {
-        const preferredByChannel = new Map<string, { identity: ContactIdentity; rank: number }>()
-        for (const identity of contact.identities.filter(item => item.phoneId === phone.id)) {
-            const rank = (identity.id === selectedIdentityId ? 100 : 0)
-                + (identityHasChat(identity) ? 10 : 0)
-                + (identity.reachabilityStatus === 'confirmed' ? 1 : 0)
-            const current = preferredByChannel.get(identity.channel)
-            if (!current || rank >= current.rank) preferredByChannel.set(identity.channel, { identity, rank })
-        }
-        return { phone, identities: [...preferredByChannel.values()].map(item => item.identity) }
+        return { phone, identities: contact.identities.filter(item => item.phoneId === phone.id) }
     }) : []
     const orphanIdentities = contact ? contact.identities.filter(i => !i.phoneId) : []
 
@@ -496,6 +552,12 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar">
+                {ambiguityCandidateCount !== null && (
+                    <ContactResolutionAmbiguityBanner
+                        candidateCount={ambiguityCandidateCount}
+                        onManualSearch={() => setShowManualLinkModal(true)}
+                    />
+                )}
                 {/* Contact Card */}
                 <div className="px-[4px] pt-[4px] pb-3 flex flex-col items-center text-center">
                     <div className="w-14 h-14 rounded-full bg-[#3390EC] text-white flex items-center justify-center text-[20px] font-bold mb-[2px]">
@@ -579,11 +641,6 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                         {contact && (contact.canonicalSummary?.channelCount ?? new Set(contact.identities.map(i => i.channel)).size) > 1 && (
                             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-600">
                                 {contact.canonicalSummary?.channelCount ?? new Set(contact.identities.map(i => i.channel)).size} канала
-                            </span>
-                        )}
-                        {contact && contact.mergeHistory && contact.mergeHistory.length > 0 && (
-                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-600">
-                                Объединён
                             </span>
                         )}
                     </div>
@@ -794,6 +851,14 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                                 ⏱ Врем.{tempDaysLeft !== null && tempDaysLeft <= 3 ? ` ${tempDaysLeft}д` : ''}
                                             </span>
                                         )}
+                                        <span className="text-[8px] text-gray-500 bg-gray-50 px-1 py-px rounded">
+                                            {phone.lifecycle || 'unknown'} · {phone.trust || phone.source} · {phone.freshness || 'unknown'}
+                                        </span>
+                                        {phone.resolutionState && phone.resolutionState !== 'unique' && (
+                                            <span className="text-[8px] text-amber-700 bg-amber-50 px-1 py-px rounded">
+                                                {phone.resolutionState}
+                                            </span>
+                                        )}
                                         <div className="ml-auto flex items-center gap-0.5">
                                             {!phone.isPrimary && !phone.isTemporary && (
                                                 <button
@@ -815,6 +880,13 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                         </div>
                                     </div>
                                     <div className="ml-[4px] space-y-0.5">
+                                        {(phone.verifiedBy || phone.verificationBasis) && (
+                                            <div className="pl-4 text-[9px] text-gray-500">
+                                                Подтверждено: {phone.verifiedBy || 'оператор'}
+                                                {phone.verifiedAt ? ` · ${new Date(phone.verifiedAt).toLocaleString('ru-RU')}` : ''}
+                                                {phone.verificationBasis ? ` · ${phone.verificationBasis}` : ''}
+                                            </div>
+                                        )}
                                         {/* Existing identities */}
                                         {identities.map(identity => {
                                             const cfg = CHANNEL_CONFIG[identity.channel]
@@ -949,6 +1021,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                     cfg={cfg}
                                     isWriting={isWriting}
                                     onWrite={() => handleWrite(identity.channel, identity.id)}
+                                    onAttached={refetchContact}
                                     contact={contact}
                                 />
                             )
@@ -1109,6 +1182,14 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                             {parkCheckLoading ? <Loader2 size={10} className="animate-spin" /> : <Search size={10} />}
                             {parkCheckLoading ? 'Проверяем...' : 'Проверить парки'}
                         </button>
+                        <button
+                            type="button"
+                            onClick={() => setShowDriverPersonSearch(true)}
+                            disabled={!contact}
+                            className="h-[24px] rounded-md border border-emerald-200 bg-emerald-50 px-2 text-[10px] font-semibold text-emerald-700 disabled:opacity-40"
+                        >
+                            Найти водителя в парках
+                        </button>
                     </div>
 
                     {parkCheckError && (
@@ -1193,6 +1274,13 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                     </span>
                                 </div>
                             )}
+                        </div>
+                    )}
+                    {contact?.driverSummary && contact.driverSummary.profileCount > 0 && (
+                        <div className="mb-2 rounded-lg bg-blue-50 p-2 text-[10px] text-blue-800">
+                            <div>{contact.driverSummary.profileCount} профилей · {contact.driverSummary.parkCount} парков</div>
+                            <div>{contact.driverSummary.staleCount} устаревших · {contact.driverSummary.failedCount} с ошибкой</div>
+                            <button onClick={() => setShowAllDriverProfiles(true)} className="mt-1 font-semibold underline">Все профили</button>
                         </div>
                     )}
 
@@ -1349,6 +1437,40 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                     chatContext={{ chatId: chat.id }}
                     onClose={() => setIsTaskModalOpen(false)}
                 />
+            )}
+
+            <LinkContactModal
+                chatId={chat.id}
+                isOpen={showManualLinkModal}
+                onClose={() => setShowManualLinkModal(false)}
+                onLinked={() => {
+                    refreshConversations()
+                    refetchContact()
+                }}
+            />
+
+            {contact && (
+                <DriverPersonSearchModal
+                    contactId={contact.id}
+                    isOpen={showDriverPersonSearch}
+                    onClose={() => setShowDriverPersonSearch(false)}
+                    onConfirmed={() => { refetchContact(); refreshConversations() }}
+                />
+            )}
+
+            {showAllDriverProfiles && contact?.driverProfiles && (
+                <div className="fixed inset-0 z-[105] flex items-center justify-center bg-black/40" onClick={() => setShowAllDriverProfiles(false)}>
+                    <div className="max-h-[75vh] w-[620px] overflow-y-auto rounded-xl bg-white p-4" onClick={event => event.stopPropagation()}>
+                        <div className="mb-3 flex items-center justify-between"><h3 className="font-semibold">Все профили водителя</h3><button onClick={() => setShowAllDriverProfiles(false)}><X size={18} /></button></div>
+                        {contact.driverProfiles.map(profile => (
+                            <div key={profile.id} className="mb-2 grid grid-cols-3 gap-2 rounded-lg border p-3 text-xs">
+                                <span>{profile.externalParkId || 'Парк —'}<br />{profile.legalRole || profile.sourceProfileType || 'Роль —'}</span>
+                                <span>{profile.fullName}<br />{profile.phone || 'Телефон —'}</span>
+                                <span>{profile.sourceStatus || 'Статус —'}<br />{profile.sourceFreshness || 'unknown'} / {profile.sourceState || 'unknown'}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             )}
 
             {/* Merge Dialog */}

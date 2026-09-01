@@ -14,7 +14,7 @@ import { ATTACH_BINARY_MESSAGE_MEDIA_COMMAND_V1, ATTACH_MESSAGE_MEDIA_COMMAND_V1
 import { projectTelegramConnectionMetadata } from '@/modules/telegram-channel/public/v1/telegram-connection-public-metadata'
 import { getTelegramTransportOptionsV1 } from '@/modules/telegram-channel/public/v1'
 import { requireIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
-import { cleanupDanglingContactIdentitiesV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
+import { cleanupDanglingContactIdentitiesV1, isResolvedChannelContactResultV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
 
 // Global map to keep track of active login clients for QR
 // Note: In a production serverless environment, this would need a different approach (like a separate service or Redis)
@@ -528,7 +528,11 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
                 senderId,
                 null,  // TG GramJS не передаёт номер телефона
                 message.sender?.firstName || message.sender?.username || null,
+                { chatKind: 'private', providerAccountId: connectionId },
             )
+            if (!isResolvedChannelContactResultV1(contactResult) || !contactResult.identity) {
+                throw new Error(`CONTACT_RESOLUTION_BLOCKED:${contactResult.status}`)
+            }
             await ensureConversationContactLinkV1({
                 contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
                 chatId: unifiedChat.id,
@@ -682,7 +686,11 @@ async function processOutboundMirrorMessage(message: any, connectionId: string, 
         try {
             const contactResult = await resolveChannelContactOperationV1(
                 'telegram', recipientId, null, recipientName,
+                { chatKind: 'private', providerAccountId: connectionId },
             )
+            if (!isResolvedChannelContactResultV1(contactResult) || !contactResult.identity) {
+                throw new Error(`CONTACT_RESOLUTION_BLOCKED:${contactResult.status}`)
+            }
             await ensureConversationContactLinkV1({
                 contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
                 chatId: chat.id,
@@ -1497,8 +1505,11 @@ export async function importTelegramHistory(
                 // Contact resolution
                 if (!unifiedChat.contactId) {
                     try {
-                        await resolveChannelContactOperationV1('telegram', peerId, null, chatName)
-                        totalContacts++
+                        const contactResult = await resolveChannelContactOperationV1(
+                            'telegram', peerId, null, chatName,
+                            { chatKind: 'private', providerAccountId: connection.id },
+                        )
+                        if (isResolvedChannelContactResultV1(contactResult)) totalContacts++
                     } catch {}
                 }
 

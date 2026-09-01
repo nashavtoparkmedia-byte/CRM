@@ -9,6 +9,14 @@ export interface ContactPhone {
     isTemporary?: boolean
     expiresAt?: string | null
     isActive?: boolean
+    lifecycle?: 'current' | 'superseded' | 'removed' | 'unknown'
+    trust?: 'provider_bound' | 'manually_verified' | 'source_asserted' | 'claimed' | 'unknown'
+    freshness?: 'fresh' | 'stale' | 'unknown'
+    resolutionState?: 'unique' | 'shared' | 'disputed' | 'unknown'
+    verifiedAt?: string | null
+    verifiedBy?: string | null
+    verificationBasis?: string | null
+    audits?: Array<{ id: string; actor: string; basis: string; action: string; createdAt: string }>
 }
 
 export interface ContactIdentity {
@@ -22,6 +30,12 @@ export interface ContactIdentity {
     reachabilityStatus: 'confirmed' | 'unreachable' | 'unknown'
     reachabilityCheckedAt: string | null
     metadata?: Record<string, string | null> | null
+    providerAccountId?: string
+    origin?: string
+    evidenceRoot?: string | null
+    conflictState?: 'clear' | 'conflicted'
+    aliases?: Array<{ id: string; aliasType: string; aliasValue: string }>
+    conflicts?: Array<{ id: string; conflictType: string; detectedAt: string }>
 }
 
 export interface ContactChat {
@@ -44,6 +58,15 @@ export interface ContactDriver {
     lastOrderAt: string | null
     hiredAt: string | null
     dismissedAt: string | null
+    externalParkId?: string | null
+    externalDriverProfileId?: string | null
+    legalRole?: string | null
+    sourceStatus?: string | null
+    sourceCity?: string | null
+    sourceProfileType?: string | null
+    sourceFreshness?: 'fresh' | 'stale' | 'unknown'
+    sourceState?: 'current' | 'stale' | 'failed' | 'unknown'
+    lastObservedAt?: string | null
 }
 
 export interface CanonicalContactSummary {
@@ -78,6 +101,10 @@ export interface Contact {
     identities: ContactIdentity[]
     chats: ContactChat[]
     driver: ContactDriver | null
+    driverProfiles?: ContactDriver[]
+    driverConfirmations?: Array<{ id: string; status: string; confirmedBy: string; confirmedAt: string; confirmationBasis: string }>
+    identityConflicts?: Array<{ id: string; conflictType: string; detectedAt: string }>
+    driverSummary?: { profileCount: number; parkCount: number; staleCount: number; failedCount: number }
     canonicalSummary?: CanonicalContactSummary
     mergeHistory: any[]
 }

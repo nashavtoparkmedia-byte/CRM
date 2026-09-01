@@ -93,7 +93,7 @@ function ownerApis(
 }
 
 describe('Platform contact-conversation orchestration', () => {
-    test('preserves start-by-phone owner order and fallback payload', async () => {
+    test('phone-only starts cannot fabricate a provider identity', async () => {
         const calls: string[] = []
         const owners = ownerApis(calls, { fallbackIsNew: true })
         const orchestrator = createContactConversationOrchestratorV1(owners)
@@ -103,20 +103,11 @@ describe('Platform contact-conversation orchestration', () => {
             channel: 'telegram',
         })
 
-        expect(calls).toEqual(['resolve-contact', 'find-contact-conversation', 'find-driver', 'open-fallback'])
-        expect(owners.openFallbackContactConversationV1).toHaveBeenCalledWith({
-            contract: 'messaging.OpenFallbackContactConversationCommand.v1',
-            legacyDriverId: 'driver-1',
-            channel: 'telegram',
-            externalChatId: 'telegram:79990000000',
-            name: 'Контакт',
-            contactId: 'contact-1',
-            contactIdentityId: 'identity-1',
-        })
-        expect(result).toMatchObject({ isNewContact: true, isNewConversation: true })
+        expect(calls).toEqual([])
+        expect(result).toEqual({ status: 'provider_identity_required' })
     })
 
-    test('a contact-linked conversation skips Fleet and fallback lookup', async () => {
+    test('phone-only starts do not reuse a contact-wide conversation without identity proof', async () => {
         const calls: string[] = []
         const owners = ownerApis(calls, { linked: conversation })
         const orchestrator = createContactConversationOrchestratorV1(owners)
@@ -126,8 +117,8 @@ describe('Platform contact-conversation orchestration', () => {
             channel: 'telegram',
         })
 
-        expect(calls).toEqual(['resolve-contact', 'find-contact-conversation'])
-        expect(result.isNewConversation).toBe(false)
+        expect(calls).toEqual([])
+        expect(result).toEqual({ status: 'provider_identity_required' })
     })
 
     test('contact-id fallback reads phone before conditionally querying Fleet', async () => {

@@ -4,6 +4,11 @@ import {
   type MergeContactsCommandV1,
   type MergeContactsResultV1,
 } from '../../../../contracts/contacts/v1'
+import { evaluateAutomaticContactMergeV1, evaluateContactSurvivorV1 } from './contact-automation-policy'
+import {
+  createRecoverAutomatedContactMergeHandlerV1,
+  type AutomatedMergeRecoveryUnitOfWorkV1,
+} from './automated-contact-merge-recovery'
 
 export type ContactMergeErrorCodeV1 =
   | 'CONTACT_NOT_FOUND'
@@ -18,7 +23,6 @@ export type ContactMergeErrorCodeV1 =
 
 export class ContactMergeErrorV1 extends Error {
   readonly code: ContactMergeErrorCodeV1
-
   constructor(code: ContactMergeErrorCodeV1, message: string) {
     super(message)
     this.name = 'MergeError'
@@ -33,21 +37,27 @@ export interface ContactMergePhoneV1 {
   source: string
   isActive: boolean
 }
-
 export interface ContactMergeIdentityV1 {
   id: string
   channel: string
   externalId: string
   displayName: string | null
   reachabilityStatus: string
+  providerAccountId: string
+  source: string
+  phoneId: string | null
 }
-
 export interface ContactMergeSourceV1 {
   id: string
   displayName: string
   displayNameSource: string
   masterSource: string
   yandexDriverId: string | null
+  mainDriverId: string | null
+  mainDriverSelection: string
+  mainDriverSelectedBy: string | null
+  mainDriverSelectedAt: Date | null
+  primaryPhoneId: string | null
   notes: string | null
   tags: string[]
   isArchived: boolean
@@ -55,22 +65,20 @@ export interface ContactMergeSourceV1 {
   identities: ContactMergeIdentityV1[]
   chats: Array<{ id: string }>
   tasks: Array<{ id: string }>
+  calls: Array<{ id: string }>
+  createdAt: Date
+  canonicalPinnedAt: Date | null
+  doNotMerge: boolean
+  customFields: unknown
+  driverProfiles: Array<{ id: string }>
+  driverConfirmations: Array<{ profileClusterKey: string; status: string }>
 }
-
-export interface ContactMergeSurvivorV1 {
-  id: string
-  yandexDriverId: string | null
-  isArchived: boolean
-  phones: Array<{ id: string; phone: string }>
-  identities: Array<{ id: string; channel: string; externalId: string }>
-}
-
+export type ContactMergeSurvivorV1 = ContactMergeSourceV1
 export interface ContactMergeDriverV1 {
   id: string
   yandexDriverId: string
   fullName: string
 }
-
 export interface ContactMergeSnapshotV1 {
   contact: {
     id: string
@@ -78,13 +86,23 @@ export interface ContactMergeSnapshotV1 {
     displayNameSource: string
     masterSource: string
     yandexDriverId: string | null
+    mainDriverId: string | null
+    mainDriverSelection: string
+    mainDriverSelectedBy: string | null
+    mainDriverSelectedAt: Date | null
+    primaryPhoneId: string | null
     notes: string | null
     tags: string[]
+    doNotMerge: boolean
+    customFields: unknown
   }
   phones: ContactMergePhoneV1[]
   identities: ContactMergeIdentityV1[]
   chatIds: string[]
   taskIds: string[]
+  callIds: string[]
+  driverProfileIds: string[]
+  survivorBefore: Omit<ContactMergeSnapshotV1, 'survivorBefore'> | null
 }
 
 export interface ContactMergeContactsQueryRepositoryV1 {
@@ -93,16 +111,13 @@ export interface ContactMergeContactsQueryRepositoryV1 {
   findSurvivorByYandexDriverId(yandexDriverId: string): Promise<ContactMergeSurvivorV1 | null>
   hasCompletedMerge(sourceId: string, targetId: string): Promise<boolean>
 }
-
 export interface ContactMergeFleetQueryRepositoryV1 {
   findDriverById(driverId: string): Promise<ContactMergeDriverV1 | null>
 }
-
 export interface ContactMergeQueryRepositoriesV1 {
   contacts: ContactMergeContactsQueryRepositoryV1
   fleet: ContactMergeFleetQueryRepositoryV1
 }
-
 export interface ContactMergeSimpleLinkContactsRepositoryV1 {
   linkContactToDriver(input: {
     contactId: string
@@ -110,14 +125,25 @@ export interface ContactMergeSimpleLinkContactsRepositoryV1 {
     driverFullName: string
     replaceDisplayName: boolean
   }): Promise<void>
+  transferDriverLink(input: {
+    fromContactId: string
+    toContactId: string
+    driverYandexId: string
+    driverFullName: string
+  }): Promise<void>
 }
-
-export interface ContactMergeContactsRepositoryV1 extends ContactMergeSimpleLinkContactsRepositoryV1 {
+export interface ContactMergeContactsRepositoryV1
+  extends ContactMergeSimpleLinkContactsRepositoryV1, ContactMergeContactsQueryRepositoryV1 {
+  /** First database action in the enclosing merge transaction. */
+  admitOwnershipMutation(): Promise<void>
   lockContactPairOrdered(survivorId: string, mergedId: string): Promise<void>
   deleteDuplicateIdentities(identityIds: string[]): Promise<void>
   moveIdentitiesToContact(sourceContactId: string, targetContactId: string): Promise<void>
   deleteDuplicatePhones(phoneIds: string[]): Promise<void>
+  repointIdentitiesToPhone(oldPhoneId: string, newPhoneId: string): Promise<void>
   movePhonesToContact(sourceContactId: string, targetContactId: string): Promise<void>
+  reconcilePrimaryPhonesAfterMove(sourceContactId: string, targetContactId: string): Promise<void>
+  composeContactState(sourceContactId: string, targetContactId: string): Promise<void>
   recordMerge(input: {
     id: string
     survivorId: string
@@ -126,59 +152,52 @@ export interface ContactMergeContactsRepositoryV1 extends ContactMergeSimpleLink
     reason: 'manual' | 'yandex_link'
     driverYandexId: string | null
     snapshotBefore: ContactMergeSnapshotV1
+    survivorEvaluation: unknown
+    automated: boolean
+    evidenceRoots: string[]
   }): Promise<string>
   archiveContact(contactId: string): Promise<void>
+  setMergedRedirect(contactId: string, survivorId: string): Promise<void>
+  verifyOwnershipPostconditions(): Promise<void>
 }
-
-export interface ContactMergeFleetRepositoryV1 {
+export interface ContactMergeFleetRepositoryV1 extends ContactMergeFleetQueryRepositoryV1 {
   findDriverIdByYandexDriverId(yandexDriverId: string): Promise<string | null>
 }
-
 export interface ContactMergeSimpleLinkMessagingRepositoryV1 {
   attachUnlinkedContactChatsToDriver(contactId: string, driverId: string): Promise<void>
 }
-
 export interface ContactMergeMessagingRepositoryV1 extends ContactMergeSimpleLinkMessagingRepositoryV1 {
   remapChatsToIdentity(oldIdentityId: string, newIdentityId: string): Promise<void>
   moveChatsToContact(sourceContactId: string, targetContactId: string): Promise<void>
   moveChatsToDriverContact(sourceContactId: string, targetContactId: string, driverId: string): Promise<void>
 }
-
 export interface ContactMergeWorkRepositoryV1 {
   moveTasksToContact(sourceContactId: string, targetContactId: string): Promise<void>
 }
-
 export interface ContactMergeTransactionalRepositoriesV1 {
   contacts: ContactMergeContactsRepositoryV1
   fleet: ContactMergeFleetRepositoryV1
   messaging: ContactMergeMessagingRepositoryV1
   work: ContactMergeWorkRepositoryV1
 }
-
 export interface ContactMergeSimpleLinkRepositoriesV1 {
   contacts: ContactMergeSimpleLinkContactsRepositoryV1
   messaging: ContactMergeSimpleLinkMessagingRepositoryV1
 }
-
 export interface ContactMergeUnitOfWorkV1 {
-  runSimpleLink(operation: (repositories: ContactMergeSimpleLinkRepositoriesV1) => Promise<void>): Promise<void>
-  runMerge(operation: (repositories: ContactMergeTransactionalRepositoriesV1) => Promise<void>): Promise<void>
+  run<T>(operation: (repositories: ContactMergeTransactionalRepositoriesV1) => Promise<T>): Promise<T>
 }
-
 export interface ContactMergeHandlerDependenciesV1 {
-  queries: ContactMergeQueryRepositoriesV1
   unitOfWork: ContactMergeUnitOfWorkV1
+  recoveryUnitOfWork?: AutomatedMergeRecoveryUnitOfWorkV1
   generateMergeRecordId?: () => string
   log?: (message: string) => void
 }
 
 function generateCuid(): string {
-  const timestamp = Date.now().toString(36)
-  const random = Math.random().toString(36).substring(2, 10)
-  return `cm${timestamp}${random}`
+  return `cm${Date.now().toString(36)}${Math.random().toString(36).substring(2, 10)}`
 }
-
-function makeSnapshot(source: ContactMergeSourceV1): ContactMergeSnapshotV1 {
+function makeSnapshotBase(source: ContactMergeSourceV1): Omit<ContactMergeSnapshotV1, 'survivorBefore'> {
   return {
     contact: {
       id: source.id,
@@ -186,325 +205,320 @@ function makeSnapshot(source: ContactMergeSourceV1): ContactMergeSnapshotV1 {
       displayNameSource: source.displayNameSource,
       masterSource: source.masterSource,
       yandexDriverId: source.yandexDriverId,
+      mainDriverId: source.mainDriverId,
+      mainDriverSelection: source.mainDriverSelection,
+      mainDriverSelectedBy: source.mainDriverSelectedBy,
+      mainDriverSelectedAt: source.mainDriverSelectedAt,
+      primaryPhoneId: source.primaryPhoneId,
       notes: source.notes,
       tags: source.tags,
+      doNotMerge: source.doNotMerge,
+      customFields: source.customFields,
     },
-    phones: source.phones.map((phone) => ({
-      id: phone.id,
-      phone: phone.phone,
-      isPrimary: phone.isPrimary,
-      source: phone.source,
-      isActive: phone.isActive,
-    })),
-    identities: source.identities.map((identity) => ({
-      id: identity.id,
-      channel: identity.channel,
-      externalId: identity.externalId,
-      displayName: identity.displayName,
-      reachabilityStatus: identity.reachabilityStatus,
-    })),
-    chatIds: source.chats.map((chat) => chat.id),
-    taskIds: source.tasks.map((task) => task.id),
+    phones: source.phones.map(phone => ({ ...phone })),
+    identities: source.identities.map(identity => ({ ...identity })),
+    chatIds: source.chats.map(chat => chat.id),
+    taskIds: source.tasks.map(task => task.id),
+    callIds: source.calls.map(call => call.id),
+    driverProfileIds: source.driverProfiles.map(profile => profile.id),
   }
+}
+function makeSnapshot(
+  source: ContactMergeSourceV1,
+  survivor: ContactMergeSurvivorV1,
+): ContactMergeSnapshotV1 {
+  return { ...makeSnapshotBase(source), survivorBefore: makeSnapshotBase(survivor) }
+}
+function automationSnapshot(contact: ContactMergeSourceV1) {
+  const customFields = contact.customFields && typeof contact.customFields === 'object' && !Array.isArray(contact.customFields)
+    ? contact.customFields as Record<string, unknown>
+    : null
+  const conflicts = Array.isArray(customFields?.identityConflicts)
+    ? customFields.identityConflicts.filter(item => (
+        item && typeof item === 'object' && !Array.isArray(item)
+        && (item as Record<string, unknown>).status === 'open'
+      )) as Array<Record<string, unknown>>
+    : []
+  const recoveryState = typeof customFields?.mergeRecoveryState === 'string'
+    ? customFields.mergeRecoveryState
+    : null
+  return {
+    id: contact.id,
+    createdAt: contact.createdAt,
+    canonicalPinned: Boolean(contact.canonicalPinnedAt),
+    doNotMerge: contact.doNotMerge,
+    isArchived: contact.isArchived,
+    notes: contact.notes,
+    tags: contact.tags,
+    customFields,
+    manualIdentityCount: contact.identities.filter(identity => identity.source === 'manual').length,
+    driverRelationshipCount: contact.yandexDriverId || contact.driverProfiles.length > 0 ? 1 : 0,
+    activeTaskCount: contact.tasks.length,
+    callCount: contact.calls.length,
+    chatCount: contact.chats.length,
+    messageCount: 0,
+    confirmedDriver: contact.driverConfirmations.some(item => item.status === 'confirmed'),
+    confirmedPersonKeys: contact.driverConfirmations
+      .filter(item => item.status === 'confirmed')
+      .map(item => item.profileClusterKey),
+    workflowKeys: contact.tasks.map(task => `task:${task.id}`),
+    openConflictTypes: [
+      ...conflicts
+        .map(conflict => conflict.conflictType)
+        .filter((type): type is string => typeof type === 'string'),
+      ...(recoveryState && recoveryState !== 'clear' ? [`merge_recovery_${recoveryState}`] : []),
+    ],
+  }
+}
+async function moveOwnedState(
+  repositories: ContactMergeTransactionalRepositoriesV1,
+  source: ContactMergeSourceV1,
+  target: ContactMergeSurvivorV1,
+): Promise<void> {
+  const { contacts, messaging } = repositories
+  const targetIdentityMap = new Map(
+    target.identities.map(identity => [`${identity.channel}:${identity.providerAccountId}:${identity.externalId}`, identity.id]),
+  )
+  const duplicateIdentityIds: string[] = []
+  const identityRemaps: Array<{ oldId: string; newId: string }> = []
+  for (const identity of source.identities) {
+    const targetIdentityId = targetIdentityMap.get(`${identity.channel}:${identity.providerAccountId}:${identity.externalId}`)
+    if (targetIdentityId) {
+      duplicateIdentityIds.push(identity.id)
+      identityRemaps.push({ oldId: identity.id, newId: targetIdentityId })
+    }
+  }
+  for (const remap of identityRemaps) {
+    await messaging.remapChatsToIdentity(remap.oldId, remap.newId)
+  }
+  if (duplicateIdentityIds.length > 0) await contacts.deleteDuplicateIdentities(duplicateIdentityIds)
+  await contacts.moveIdentitiesToContact(source.id, target.id)
+  const targetPhones = new Map(target.phones.map(phone => [phone.phone, phone.id]))
+  const duplicatePhones = source.phones.filter(phone => targetPhones.has(phone.phone))
+  for (const duplicate of duplicatePhones) {
+    await contacts.repointIdentitiesToPhone(duplicate.id, targetPhones.get(duplicate.phone)!)
+  }
+  const duplicatePhoneIds = duplicatePhones.map(phone => phone.id)
+  if (duplicatePhoneIds.length > 0) await contacts.deleteDuplicatePhones(duplicatePhoneIds)
+  await contacts.movePhonesToContact(source.id, target.id)
+  await contacts.reconcilePrimaryPhonesAfterMove(source.id, target.id)
 }
 
 export function createMergeContactsHandlerV1(dependencies: ContactMergeHandlerDependenciesV1) {
   const generateMergeRecordId = dependencies.generateMergeRecordId ?? generateCuid
   const log = dependencies.log ?? ((message: string) => console.log(message))
-
-  async function executeSimpleLink(
-    contact: ContactMergeSourceV1,
-    driver: ContactMergeDriverV1,
-  ): Promise<MergeContactsResultV1> {
-    await dependencies.unitOfWork.runSimpleLink(async ({ contacts, messaging }) => {
-      await contacts.linkContactToDriver({
-        contactId: contact.id,
-        driverYandexId: driver.yandexDriverId,
-        driverFullName: driver.fullName,
-        replaceDisplayName: contact.displayNameSource !== 'manual',
-      })
-
-      if (contact.chats.length > 0) {
-        await messaging.attachUnlinkedContactChatsToDriver(contact.id, driver.id)
-      }
-    })
-
-    log(`[ContactMergeService] Simple link: contact=${contact.id} → driver=${driver.yandexDriverId}`)
-    return {
-      contract: MERGE_CONTACTS_RESULT_V1,
-      status: 'linked',
-      contactId: contact.id,
-      driverId: driver.id,
-    }
-  }
-
-  async function executeDriverMerge(
-    merged: ContactMergeSourceV1,
-    survivor: ContactMergeSurvivorV1,
-    driver: ContactMergeDriverV1,
-    mergedBy: string,
-  ): Promise<MergeContactsResultV1> {
-    let mergeRecordId = ''
-
-    await dependencies.unitOfWork.runMerge(async ({ contacts, messaging, work }) => {
-      await contacts.lockContactPairOrdered(survivor.id, merged.id)
-
-      const snapshot = makeSnapshot(merged)
-      const survivorIdentityMap = new Map(
-        survivor.identities.map((identity) => [`${identity.channel}:${identity.externalId}`, identity.id]),
-      )
-      const duplicateIdentityIds: string[] = []
-      const identityRemapping: Array<{ oldIdentityId: string; newIdentityId: string }> = []
-
-      for (const mergedIdentity of merged.identities) {
-        const survivorIdentityId = survivorIdentityMap.get(
-          `${mergedIdentity.channel}:${mergedIdentity.externalId}`,
-        )
-        if (survivorIdentityId) {
-          duplicateIdentityIds.push(mergedIdentity.id)
-          identityRemapping.push({
-            oldIdentityId: mergedIdentity.id,
-            newIdentityId: survivorIdentityId,
-          })
-        }
-      }
-
-      for (const remap of identityRemapping) {
-        await messaging.remapChatsToIdentity(remap.oldIdentityId, remap.newIdentityId)
-      }
-      if (duplicateIdentityIds.length > 0) {
-        await contacts.deleteDuplicateIdentities(duplicateIdentityIds)
-      }
-      await contacts.moveIdentitiesToContact(merged.id, survivor.id)
-
-      const survivorPhones = new Set(survivor.phones.map((phone) => phone.phone))
-      const duplicatePhoneIds = merged.phones
-        .filter((phone) => survivorPhones.has(phone.phone))
-        .map((phone) => phone.id)
-      if (duplicatePhoneIds.length > 0) {
-        await contacts.deleteDuplicatePhones(duplicatePhoneIds)
-      }
-      await contacts.movePhonesToContact(merged.id, survivor.id)
-
-      await messaging.moveChatsToDriverContact(merged.id, survivor.id, driver.id)
-      await messaging.attachUnlinkedContactChatsToDriver(survivor.id, driver.id)
-      await work.moveTasksToContact(merged.id, survivor.id)
-
-      mergeRecordId = await contacts.recordMerge({
-        id: generateMergeRecordId(),
-        survivorId: survivor.id,
-        mergedId: merged.id,
-        mergedBy,
-        reason: 'yandex_link',
-        driverYandexId: driver.yandexDriverId,
-        snapshotBefore: snapshot,
-      })
-      await contacts.archiveContact(merged.id)
-    })
-
-    log(
-      `[ContactMergeService] Full merge: merged=${merged.id} → survivor=${survivor.id} `
-      + `driver=${driver.yandexDriverId} mergeRecord=${mergeRecordId}`,
-    )
-    return {
-      contract: MERGE_CONTACTS_RESULT_V1,
-      status: 'merged',
-      survivorId: survivor.id,
-      mergedId: merged.id,
-      driverId: driver.id,
-      mergeRecordId,
-    }
-  }
-
-  async function executeContactMerge(
-    source: ContactMergeSourceV1,
-    target: ContactMergeSurvivorV1,
-    mergedBy: string,
-  ): Promise<MergeContactsResultV1> {
-    let mergeRecordId = ''
-
-    await dependencies.unitOfWork.runMerge(async ({ contacts, fleet, messaging, work }) => {
-      await contacts.lockContactPairOrdered(target.id, source.id)
-
-      const snapshot = makeSnapshot(source)
-      const targetIdentityMap = new Map(
-        target.identities.map((identity) => [`${identity.channel}:${identity.externalId}`, identity.id]),
-      )
-      const duplicateIdentityIds: string[] = []
-      const identityRemaps: Array<{ oldId: string; newId: string }> = []
-
-      for (const sourceIdentity of source.identities) {
-        const targetIdentityId = targetIdentityMap.get(
-          `${sourceIdentity.channel}:${sourceIdentity.externalId}`,
-        )
-        if (targetIdentityId) {
-          duplicateIdentityIds.push(sourceIdentity.id)
-          identityRemaps.push({ oldId: sourceIdentity.id, newId: targetIdentityId })
-        }
-      }
-
-      for (const remap of identityRemaps) {
-        await messaging.remapChatsToIdentity(remap.oldId, remap.newId)
-      }
-      if (duplicateIdentityIds.length > 0) {
-        await contacts.deleteDuplicateIdentities(duplicateIdentityIds)
-      }
-      await contacts.moveIdentitiesToContact(source.id, target.id)
-
-      const targetPhones = new Set(target.phones.map((phone) => phone.phone))
-      const duplicatePhoneIds = source.phones
-        .filter((phone) => targetPhones.has(phone.phone))
-        .map((phone) => phone.id)
-      if (duplicatePhoneIds.length > 0) {
-        await contacts.deleteDuplicatePhones(duplicatePhoneIds)
-      }
-      await contacts.movePhonesToContact(source.id, target.id)
-
-      let targetDriverId: string | null = null
-      if (target.yandexDriverId) {
-        targetDriverId = await fleet.findDriverIdByYandexDriverId(target.yandexDriverId)
-      }
-      if (targetDriverId) {
-        await messaging.moveChatsToDriverContact(source.id, target.id, targetDriverId)
-      } else {
-        await messaging.moveChatsToContact(source.id, target.id)
-      }
-
-      await work.moveTasksToContact(source.id, target.id)
-      mergeRecordId = await contacts.recordMerge({
-        id: generateMergeRecordId(),
-        survivorId: target.id,
-        mergedId: source.id,
-        mergedBy,
-        reason: 'manual',
-        driverYandexId: target.yandexDriverId || null,
-        snapshotBefore: snapshot,
-      })
-      await contacts.archiveContact(source.id)
-    })
-
-    log(
-      `[ContactMergeService] Contact merge: source=${source.id} → target=${target.id} `
-      + `mergeRecord=${mergeRecordId}`,
-    )
-    return {
-      contract: MERGE_CONTACTS_RESULT_V1,
-      status: 'contact_merged',
-      survivorId: target.id,
-      mergedId: source.id,
-      mergeRecordId,
-    }
-  }
-
-  return async function mergeContactsV1(
+  const mergeContactsV1 = async function mergeContactsV1(
     command: MergeContactsCommandV1 | unknown,
   ): Promise<MergeContactsResultV1> {
     const parsed = parseMergeContactsCommandV1(command)
-
-    if (parsed.operation === 'contact_to_driver') {
-      const contact = await dependencies.queries.contacts.findSourceContact(parsed.contactId)
-      if (!contact) {
-        throw new ContactMergeErrorV1('CONTACT_NOT_FOUND', `Contact ${parsed.contactId} not found`)
-      }
-
-      const driver = await dependencies.queries.fleet.findDriverById(parsed.driverId)
-      if (!driver) {
-        throw new ContactMergeErrorV1('DRIVER_NOT_FOUND', `Driver ${parsed.driverId} not found`)
-      }
-      if (contact.isArchived) {
-        throw new ContactMergeErrorV1(
-          'CONTACT_ARCHIVED',
-          `Contact ${parsed.contactId} is archived (was previously merged)`,
+    return dependencies.unitOfWork.run(async repositories => {
+      const { contacts, fleet, messaging, work } = repositories
+      await contacts.admitOwnershipMutation()
+      if (parsed.operation === 'contact_to_driver') {
+        // Discovery is admitted but non-decisional. Re-read after ordered locks.
+        const discoveredDriver = await fleet.findDriverById(parsed.driverId)
+        const discoveredSurvivor = discoveredDriver
+          ? await contacts.findSurvivorByYandexDriverId(discoveredDriver.yandexDriverId)
+          : null
+        await contacts.lockContactPairOrdered(parsed.contactId, discoveredSurvivor?.id ?? parsed.contactId)
+        const contact = await contacts.findSourceContact(parsed.contactId)
+        if (!contact) {
+          throw new ContactMergeErrorV1('CONTACT_NOT_FOUND', `Contact ${parsed.contactId} not found`)
+        }
+        const driver = await fleet.findDriverById(parsed.driverId)
+        if (!driver) {
+          throw new ContactMergeErrorV1('DRIVER_NOT_FOUND', `Driver ${parsed.driverId} not found`)
+        }
+        if (discoveredDriver && driver.yandexDriverId !== discoveredDriver.yandexDriverId) {
+          throw new ContactMergeErrorV1('INVALID_MERGE_STATE', 'Driver changed during admitted discovery')
+        }
+        if (contact.isArchived) {
+          throw new ContactMergeErrorV1('CONTACT_ARCHIVED', `Contact ${parsed.contactId} is archived`)
+        }
+        if (contact.yandexDriverId === driver.yandexDriverId) {
+          return {
+            contract: MERGE_CONTACTS_RESULT_V1,
+            status: 'already_linked',
+            contactId: parsed.contactId,
+            driverId: parsed.driverId,
+          }
+        }
+        if (contact.yandexDriverId && contact.yandexDriverId !== driver.yandexDriverId) {
+          throw new ContactMergeErrorV1(
+            'CONTACT_LINKED_TO_OTHER_DRIVER',
+            `Contact ${parsed.contactId} is linked to driver ${contact.yandexDriverId}`,
+          )
+        }
+        const survivor = await contacts.findSurvivorByYandexDriverId(driver.yandexDriverId)
+        if (!survivor) {
+          await contacts.linkContactToDriver({
+            contactId: contact.id,
+            driverYandexId: driver.yandexDriverId,
+            driverFullName: driver.fullName,
+            replaceDisplayName: contact.displayNameSource !== 'manual',
+          })
+          if (contact.chats.length > 0) {
+            await messaging.attachUnlinkedContactChatsToDriver(contact.id, driver.id)
+          }
+          await contacts.verifyOwnershipPostconditions()
+          log(`[ContactMergeService] Simple link: contact=${contact.id} → driver=${driver.yandexDriverId}`)
+          return {
+            contract: MERGE_CONTACTS_RESULT_V1,
+            status: 'linked',
+            contactId: contact.id,
+            driverId: driver.id,
+          }
+        }
+        if (survivor.id !== discoveredSurvivor?.id) {
+          throw new ContactMergeErrorV1('INVALID_MERGE_STATE', 'Survivor changed during admitted discovery')
+        }
+        if (survivor.isArchived) {
+          throw new ContactMergeErrorV1('SURVIVOR_ARCHIVED', `Survivor contact ${survivor.id} is archived`)
+        }
+        if (contact.id === survivor.id) {
+          return {
+            contract: MERGE_CONTACTS_RESULT_V1,
+            status: 'already_linked',
+            contactId: parsed.contactId,
+            driverId: parsed.driverId,
+          }
+        }
+        const driverContact = await contacts.findSourceContact(survivor.id)
+        if (!driverContact) throw new ContactMergeErrorV1('CONTACT_NOT_FOUND', `Contact ${survivor.id} not found`)
+        const evaluation = evaluateContactSurvivorV1(automationSnapshot(contact), automationSnapshot(driverContact))
+        const winner = evaluation.survivorId === contact.id ? contact : driverContact
+        const loser = evaluation.mergedId === contact.id ? contact : driverContact
+        if (winner.id === contact.id) {
+          await contacts.transferDriverLink({
+            fromContactId: driverContact.id,
+            toContactId: contact.id,
+            driverYandexId: driver.yandexDriverId,
+            driverFullName: driver.fullName,
+          })
+        }
+        const snapshot = makeSnapshot(loser, winner)
+        await moveOwnedState(repositories, loser, winner)
+        await contacts.composeContactState(loser.id, winner.id)
+        await messaging.moveChatsToDriverContact(loser.id, winner.id, driver.id)
+        await messaging.attachUnlinkedContactChatsToDriver(winner.id, driver.id)
+        await work.moveTasksToContact(loser.id, winner.id)
+        const mergeRecordId = await contacts.recordMerge({
+          id: generateMergeRecordId(),
+          survivorId: winner.id,
+          mergedId: loser.id,
+          mergedBy: parsed.mergedBy,
+          reason: 'yandex_link',
+          driverYandexId: driver.yandexDriverId,
+          snapshotBefore: snapshot,
+          survivorEvaluation: evaluation,
+          automated: false,
+          evidenceRoots: [],
+        })
+        await contacts.archiveContact(loser.id)
+        await contacts.setMergedRedirect(loser.id, winner.id)
+        await contacts.verifyOwnershipPostconditions()
+        log(
+          `[ContactMergeService] Full merge: merged=${contact.id} → survivor=${survivor.id} `
+          + `driver=${driver.yandexDriverId} mergeRecord=${mergeRecordId}`,
         )
-      }
-      if (contact.yandexDriverId === driver.yandexDriverId) {
         return {
           contract: MERGE_CONTACTS_RESULT_V1,
-          status: 'already_linked',
-          contactId: parsed.contactId,
-          driverId: parsed.driverId,
+          status: 'merged',
+          survivorId: winner.id,
+          mergedId: loser.id,
+          driverId: driver.id,
+          mergeRecordId,
         }
       }
-      if (contact.yandexDriverId && contact.yandexDriverId !== driver.yandexDriverId) {
-        throw new ContactMergeErrorV1(
-          'CONTACT_LINKED_TO_OTHER_DRIVER',
-          `Contact ${parsed.contactId} is linked to driver ${contact.yandexDriverId}, `
-          + `cannot merge to ${driver.yandexDriverId}`,
+
+      if (parsed.sourceId === parsed.targetId) {
+        throw new ContactMergeErrorV1('SELF_MERGE', 'Cannot merge contact into itself')
+      }
+      await contacts.lockContactPairOrdered(parsed.targetId, parsed.sourceId)
+      const source = await contacts.findSourceContact(parsed.sourceId)
+      if (!source) {
+        throw new ContactMergeErrorV1('CONTACT_NOT_FOUND', `Source contact ${parsed.sourceId} not found`)
+      }
+      if (source.isArchived) {
+        if (await contacts.hasCompletedMerge(parsed.sourceId, parsed.targetId)) {
+          return {
+            contract: MERGE_CONTACTS_RESULT_V1,
+            status: 'already_merged',
+            sourceId: parsed.sourceId,
+            targetId: parsed.targetId,
+          }
+        }
+        throw new ContactMergeErrorV1('CONTACT_ARCHIVED', `Source contact ${parsed.sourceId} is archived`)
+      }
+      const target = await contacts.findSourceContact(parsed.targetId)
+      if (!target) {
+        throw new ContactMergeErrorV1('CONTACT_NOT_FOUND', `Target contact ${parsed.targetId} not found`)
+      }
+      if (target.isArchived) {
+        throw new ContactMergeErrorV1('SURVIVOR_ARCHIVED', `Target contact ${parsed.targetId} is archived`)
+      }
+      let evaluation = evaluateContactSurvivorV1(automationSnapshot(source), automationSnapshot(target))
+      let automationEvidenceRoots: string[] = []
+      if (parsed.automation) {
+        const automaticDecision = evaluateAutomaticContactMergeV1(
+          automationSnapshot(source),
+          automationSnapshot(target),
+          parsed.automation,
         )
-      }
-
-      const survivor = await dependencies.queries.contacts.findSurvivorByYandexDriverId(
-        driver.yandexDriverId,
-      )
-      if (!survivor) return executeSimpleLink(contact, driver)
-      if (survivor.isArchived) {
-        throw new ContactMergeErrorV1(
-          'SURVIVOR_ARCHIVED',
-          `Survivor contact ${survivor.id} is archived`,
-        )
-      }
-      if (contact.id === survivor.id) {
-        return {
-          contract: MERGE_CONTACTS_RESULT_V1,
-          status: 'already_linked',
-          contactId: parsed.contactId,
-          driverId: parsed.driverId,
+        if (automaticDecision.decision === 'blocked') {
+          throw new ContactMergeErrorV1(
+            'INVALID_MERGE_STATE',
+            `Automatic merge blocked after lock: ${automaticDecision.reason}`,
+          )
         }
+        evaluation = automaticDecision.survivor
+        automationEvidenceRoots = automaticDecision.evidenceRoots
       }
-      return executeDriverMerge(contact, survivor, driver, parsed.mergedBy)
-    }
-
-    if (parsed.sourceId === parsed.targetId) {
-      throw new ContactMergeErrorV1('SELF_MERGE', 'Cannot merge contact into itself')
-    }
-
-    const source = await dependencies.queries.contacts.findSourceContact(parsed.sourceId)
-    if (!source) {
-      throw new ContactMergeErrorV1(
-        'CONTACT_NOT_FOUND',
-        `Source contact ${parsed.sourceId} not found`,
-      )
-    }
-    if (source.isArchived) {
-      const alreadyMerged = await dependencies.queries.contacts.hasCompletedMerge(
-        parsed.sourceId,
-        parsed.targetId,
-      )
-      if (alreadyMerged) {
-        return {
-          contract: MERGE_CONTACTS_RESULT_V1,
-          status: 'already_merged',
-          sourceId: parsed.sourceId,
-          targetId: parsed.targetId,
-        }
+      const winner = evaluation.survivorId === source.id ? source : target
+      const loser = evaluation.mergedId === source.id ? source : target
+      const snapshot = makeSnapshot(loser, winner)
+      await moveOwnedState(repositories, loser, winner)
+      await contacts.composeContactState(loser.id, winner.id)
+      const composedYandexDriverId = winner.yandexDriverId ?? loser.yandexDriverId
+      const targetDriverId = composedYandexDriverId
+        ? await fleet.findDriverIdByYandexDriverId(composedYandexDriverId)
+        : null
+      if (targetDriverId) {
+        await messaging.moveChatsToDriverContact(loser.id, winner.id, targetDriverId)
+      } else {
+        await messaging.moveChatsToContact(loser.id, winner.id)
       }
-      throw new ContactMergeErrorV1(
-        'CONTACT_ARCHIVED',
-        `Source contact ${parsed.sourceId} is archived`,
+      await work.moveTasksToContact(loser.id, winner.id)
+      const mergeRecordId = await contacts.recordMerge({
+        id: generateMergeRecordId(),
+        survivorId: winner.id,
+        mergedId: loser.id,
+        mergedBy: parsed.mergedBy,
+        reason: 'manual',
+        driverYandexId: composedYandexDriverId,
+        snapshotBefore: snapshot,
+        survivorEvaluation: evaluation,
+        automated: Boolean(parsed.automation),
+        evidenceRoots: automationEvidenceRoots,
+      })
+      await contacts.archiveContact(loser.id)
+      await contacts.setMergedRedirect(loser.id, winner.id)
+      await contacts.verifyOwnershipPostconditions()
+      log(
+        `[ContactMergeService] Contact merge: source=${source.id} → target=${target.id} `
+        + `mergeRecord=${mergeRecordId}`,
       )
-    }
-    if (source.yandexDriverId) {
-      throw new ContactMergeErrorV1(
-        'SOURCE_HAS_DRIVER',
-        `Source contact ${parsed.sourceId} is linked to driver ${source.yandexDriverId}. `
-        + 'Use this contact as target instead.',
-      )
-    }
-
-    const target = await dependencies.queries.contacts.findTargetContact(parsed.targetId)
-    if (!target) {
-      throw new ContactMergeErrorV1(
-        'CONTACT_NOT_FOUND',
-        `Target contact ${parsed.targetId} not found`,
-      )
-    }
-    if (target.isArchived) {
-      throw new ContactMergeErrorV1(
-        'SURVIVOR_ARCHIVED',
-        `Target contact ${parsed.targetId} is archived`,
-      )
-    }
-
-    return executeContactMerge(source, target, parsed.mergedBy)
+      return {
+        contract: MERGE_CONTACTS_RESULT_V1,
+        status: 'contact_merged',
+        survivorId: winner.id,
+        mergedId: loser.id,
+        mergeRecordId,
+      }
+    })
   }
+  const recover = dependencies.recoveryUnitOfWork
+    ? createRecoverAutomatedContactMergeHandlerV1(dependencies.recoveryUnitOfWork)
+    : async () => { throw new Error('Automated contact merge recovery is not configured') }
+  return Object.assign(mergeContactsV1, { recover })
 }

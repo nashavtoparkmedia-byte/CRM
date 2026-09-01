@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
-import { resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
+import { isResolvedChannelContactResultV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
 import { ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { ensureConversationContactLinkV1 } from '@/modules/messaging/public/v1'
 
 export async function POST(request: Request) {
     try {
-        const { driverId, channel, externalChatId } = await request.json()
+        const { driverId, channel, externalChatId, providerAccountId } = await request.json()
 
         if (!driverId || !channel) {
             return NextResponse.json({ error: 'DriverId and channel are required' }, { status: 400 })
@@ -28,23 +28,21 @@ export async function POST(request: Request) {
         // Determine externalChatId if not provided
         let finalExternalId = externalChatId
         if (!finalExternalId) {
-            if (isUnsaved) {
-                finalExternalId = driverId.replace('unsaved_', '')
-            } else if (channel === 'whatsapp' || channel === 'max') {
-                finalExternalId = driver?.phone?.replace(/\D/g, '')
-            } else if (channel === 'telegram') {
+            if (!isUnsaved && channel === 'telegram') {
                 const tgList: any[] = await prisma.$queryRaw`SELECT * FROM "DriverTelegram" WHERE "driverId" = ${driverId} LIMIT 1`
                 const tg = tgList[0] || null
                 // Result from $queryRaw might have bigints if the column is bigint
                 const tgId = tg?.telegramId?.toString()
-                finalExternalId = tgId || driver?.phone?.replace(/\D/g, '')
-                console.log(`[API-START-CHAT] Telegram initiation for ${driver?.fullName}: id=${finalExternalId} (fallback used: ${!tg})`)
+                finalExternalId = tgId || null
+                console.log(`[API-START-CHAT] Telegram initiation for ${driver?.fullName}: id=${finalExternalId}`)
             }
         }
 
         if (!finalExternalId) {
             console.error(`[API-START-CHAT] Failed to determine ID for ${driver?.fullName || isUnsaved} on ${channel}`)
-            return NextResponse.json({ error: 'Could not determine external chat ID for this channel' }, { status: 400 })
+            return NextResponse.json({
+                error: 'A stable provider identity is required; a phone number cannot be used as its substitute',
+            }, { status: 400 })
         }
 
         // Create or get chat with channel-prefixed externalChatId
@@ -79,7 +77,18 @@ export async function POST(request: Request) {
                 finalExternalId,
                 phone,
                 displayName,
+                {
+                    chatKind: 'private',
+                    providerAccountId: String(providerAccountId || `${channel}-manual-default`),
+                    phoneEvidence: phone
+                        ? { source: 'unknown', trustedForAutomaticResolution: false }
+                        : null,
+                },
             )
+            if (!isResolvedChannelContactResultV1(contactResult) || !contactResult.identity) {
+                console.warn(`[API-START-CHAT] Contact resolution blocked: ${contactResult.status}`)
+                return NextResponse.json(chat)
+            }
             await ensureConversationContactLinkV1({
                 contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
                 chatId: chat.id,

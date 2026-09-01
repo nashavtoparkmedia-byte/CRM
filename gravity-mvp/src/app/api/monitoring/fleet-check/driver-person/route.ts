@@ -1,0 +1,30 @@
+import { NextRequest, NextResponse } from 'next/server'
+
+import { RECONCILE_YANDEX_FLEET_COMMAND_V1 } from '@/contracts/fleet-operations/v1'
+import {
+  reconcileYandexFleetV1,
+  searchYandexParksByDriverQueryV1,
+} from '@/modules/fleet-operations/public/v1'
+
+export async function GET(req: NextRequest) {
+  const query = req.nextUrl.searchParams.get('query')?.trim() || ''
+  if (query.length < 3) {
+    return NextResponse.json({ error: 'FIO, phone or VU query must contain at least 3 characters' }, { status: 400 })
+  }
+  const result = await searchYandexParksByDriverQueryV1(query)
+  return NextResponse.json(result, { headers: { 'Cache-Control': 'no-store' } })
+}
+
+export async function POST(req: NextRequest) {
+  const body = await req.json() as { query?: string }
+  const query = body.query?.trim() || ''
+  if (query.length < 3) {
+    return NextResponse.json({ error: 'FIO, phone or VU query must contain at least 3 characters' }, { status: 400 })
+  }
+  const reconciliation = await reconcileYandexFleetV1({
+    contract: RECONCILE_YANDEX_FLEET_COMMAND_V1,
+    mode: 'confirmation_followup',
+    query,
+  })
+  return NextResponse.json({ reconciliation })
+}
