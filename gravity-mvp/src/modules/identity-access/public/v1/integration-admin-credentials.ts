@@ -154,6 +154,8 @@ export function normalizeIntegrationAdminReturnTo(value: unknown): string {
         const allowed = parsed.pathname === '/settings'
             || parsed.pathname.startsWith('/settings/')
             || parsed.pathname === '/logs'
+            || parsed.pathname === '/calls/campaigns'
+            || parsed.pathname.startsWith('/calls/campaigns/')
         return allowed ? `${parsed.pathname}${parsed.search}` : '/settings'
     } catch {
         return '/settings'

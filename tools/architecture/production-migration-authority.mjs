@@ -346,6 +346,13 @@ export async function validateProductionMigrationAuthority(root) {
     authority_replay: 'tools/architecture/replay-production-migration-authority.mjs --allow-isolated-replay',
     production_database_touched: false,
   }), 'pending source migration proof boundary mismatch')
+  assert(exactObject(pending.rollback_strategy, {
+    deployment_order: 'MIGRATION_BEFORE_CODE',
+    code_rollback: 'ROLL_BACK_CODE_KEEP_ADDITIVE_TABLES',
+    schema_rollback: 'NO_DESTRUCTIVE_DOWN_MIGRATION',
+    failed_apply_recovery: 'TRANSACTION_ROLLS_BACK_DDL_THEN_PRISMA_MIGRATE_RESOLVE_ROLLED_BACK_BEFORE_RETRY',
+    authority_promotion: 'SEPARATE_REVIEW_MOVES_PENDING_SOURCE_TO_APPLIED_AUTHORITY',
+  }), 'pending source migration rollback strategy mismatch')
   assert(authority.inventory_digest === canonicalInventoryDigest(authority.migrations), 'production migration inventory digest mismatch')
   const independentlyValidatedPredecessorRows = assertSanitizedPredecessorInventory(predecessorInventory)
   const predecessorNames = new Set(independentlyValidatedPredecessorRows

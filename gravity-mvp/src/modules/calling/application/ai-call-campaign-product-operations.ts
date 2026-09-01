@@ -7,10 +7,10 @@ import type {
     GetAiCallCampaignQueryV1,
     ListAiCallCampaignsQueryV1,
 } from '@/contracts/calling/v1'
-import { getScenario } from '@/lib/ai-call/scenarios'
 import {
     AiCallCampaignConflictError,
     aiCallCampaignSha256,
+    freezeAiCallCampaignScenarioSnapshot,
     normalizeAiCallAudienceSnapshot,
     type AiCallCampaignJson,
 } from './ai-call-campaign'
@@ -77,10 +77,42 @@ export function prepareAiCallCampaignCreateV1(
     return { identityKey, campaignId, audienceInput, scheduledAt, commandFingerprint }
 }
 
+export function prepareAiCallCampaignScenarioSnapshotV1(
+    scenario: Awaited<ReturnType<typeof aiCallCampaignProductPrismaPort.getActiveScenario>>,
+) {
+    if (!scenario) throw new AiCallCampaignConflictError('scenario_not_found', 'AI call scenario not found')
+    return freezeAiCallCampaignScenarioSnapshot(scenario.id, {
+        version: 1,
+        scenarioId: scenario.id,
+        name: scenario.name,
+        description: scenario.description ?? null,
+        systemPrompt: scenario.systemPrompt,
+        questions: scenario.questions,
+        targetDurationSec: scenario.targetDurationSec ?? null,
+        outcomeSchema: scenario.outcomeSchema ?? null,
+        greetingVariants: scenario.greetingVariants ?? null,
+        fragments: scenario.fragments ?? null,
+        projectId: scenario.projectId,
+        projectName: scenario.projectName,
+    })
+}
+
 async function requireDetail(campaignId: string): Promise<AiCallCampaignDetailV1> {
     const detail = await aiCallCampaignProductPrismaPort.detail({ campaignId, memberLimit: 50 })
     if (!detail) throw new AiCallCampaignConflictError('campaign_not_found', 'campaign not found')
     return detail
+}
+
+async function requireExactCreateIdentity(prepared: ReturnType<typeof prepareAiCallCampaignCreateV1>) {
+    const identity = await aiCallCampaignPrismaPort.findCreateIdentity({
+        campaignId: prepared.campaignId,
+        identityKey: prepared.identityKey,
+        commandFingerprint: prepared.commandFingerprint,
+    })
+    if (!identity) {
+        throw new AiCallCampaignConflictError('campaign_not_found', 'campaign create identity disappeared')
+    }
+    return identity
 }
 
 export async function createAiCallCampaignV1(
@@ -88,50 +120,73 @@ export async function createAiCallCampaignV1(
     actor: AiCallCampaignActorV1,
     now = new Date(),
 ): Promise<AiCallCampaignDetailV1> {
-    const scenario = await getScenario(command.scenarioId)
-    if (!scenario) throw new AiCallCampaignConflictError('scenario_not_found', 'AI call scenario not found')
     const prepared = prepareAiCallCampaignCreateV1(command, actor)
     const { identityKey, campaignId } = prepared
-    const draft = await aiCallCampaignPrismaPort.createDraft({
+    const existing = await aiCallCampaignPrismaPort.findCreateIdentity({
         campaignId,
         identityKey,
         commandFingerprint: prepared.commandFingerprint,
-        name: command.name,
-        scenarioRef: command.scenarioId,
-        concurrentLimit: command.concurrentLimit,
-        ratePerMinute: command.ratePerMinute,
-        maxAttempts: command.maxAttempts,
-        retryBaseMs: command.retryBaseMs,
-        retryMaxMs: command.retryMaxMs,
-    }, now, {
-        eventId: auditId(campaignId, command.requestId, 'created'),
-        actorId: actor.id,
-        action: 'created',
-        details: { requestId: command.requestId },
     })
+    let state = existing?.state
+    if (!existing) {
+        const scenario = await aiCallCampaignProductPrismaPort.getActiveScenario(command.scenarioId)
+        const frozenScenario = prepareAiCallCampaignScenarioSnapshotV1(scenario)
+        const draft = await aiCallCampaignPrismaPort.createDraft({
+            campaignId,
+            identityKey,
+            commandFingerprint: prepared.commandFingerprint,
+            name: command.name,
+            ...frozenScenario,
+            concurrentLimit: command.concurrentLimit,
+            ratePerMinute: command.ratePerMinute,
+            maxAttempts: command.maxAttempts,
+            retryBaseMs: command.retryBaseMs,
+            retryMaxMs: command.retryMaxMs,
+        }, now, {
+            eventId: auditId(campaignId, command.requestId, 'created'),
+            actorId: actor.id,
+            action: 'created',
+            details: {
+                requestId: command.requestId,
+                scenarioFingerprint: frozenScenario.scenarioFingerprint,
+            },
+        })
+        state = draft.campaign.state
+    }
 
-    let state = draft.campaign.state
     if (state === 'draft') {
-        const frozen = await aiCallCampaignPrismaPort.freezeAudience(campaignId, prepared.audienceInput, now, {
+        await aiCallCampaignPrismaPort.freezeAudience(campaignId, prepared.audienceInput, now, {
             eventId: auditId(campaignId, command.requestId, 'audience_frozen'),
             actorId: actor.id,
             action: 'audience_frozen',
             details: { memberCount: command.audience.members.length },
         })
-        state = frozen.status === 'frozen' ? 'ready' : state
+        // freezeAudience can report an exact duplicate when a concurrent
+        // create already advanced draft -> ready. Always resume from the
+        // authoritative persisted state instead of the stale pre-freeze read.
+        state = (await requireExactCreateIdentity(prepared)).state
     }
     if (state === 'ready') {
-        await aiCallCampaignPrismaPort.schedule(
-            campaignId,
-            prepared.scheduledAt ? new Date(prepared.scheduledAt) : now,
-            now,
-            {
-                eventId: auditId(campaignId, command.requestId, 'scheduled'),
-                actorId: actor.id,
-                action: 'scheduled',
-                details: { requestedScheduledAt: command.scheduledAt },
-            },
-        )
+        try {
+            await aiCallCampaignPrismaPort.schedule(
+                campaignId,
+                prepared.scheduledAt ? new Date(prepared.scheduledAt) : now,
+                now,
+                {
+                    eventId: auditId(campaignId, command.requestId, 'scheduled'),
+                    actorId: actor.id,
+                    action: 'scheduled',
+                    details: { requestedScheduledAt: command.scheduledAt },
+                },
+            )
+        } catch (error) {
+            if (!(error instanceof AiCallCampaignConflictError) || error.code !== 'campaign_not_ready') throw error
+            const resumed = await requireExactCreateIdentity(prepared)
+            // A concurrent exact replay may already have scheduled or even
+            // started the campaign. Accept only that proven forward progress;
+            // draft/ready still means the schedule operation genuinely failed.
+            if (resumed.state === 'draft' || resumed.state === 'ready') throw error
+        }
     }
     return requireDetail(campaignId)
 }
@@ -145,6 +200,13 @@ export async function listAiCallCampaignsV1(query: ListAiCallCampaignsQueryV1): 
         cursor: query.cursor,
         limit: query.limit ?? 25,
     })
+}
+
+export async function listActiveAiCallCampaignScenarioOptionsV1(): Promise<Array<{
+    id: string
+    name: string
+}>> {
+    return aiCallCampaignProductPrismaPort.listActiveScenarioOptions()
 }
 
 export async function getAiCallCampaignV1(query: GetAiCallCampaignQueryV1): Promise<AiCallCampaignDetailV1 | null> {

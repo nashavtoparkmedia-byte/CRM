@@ -4,7 +4,7 @@ import {
     GET_AI_CALL_CAMPAIGN_QUERY_V1,
 } from '@/contracts/calling/v1'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
-import { getCurrentUserIdentityV1 as getCurrentUser } from '@/modules/identity-access/public/v1/user-directory'
+import { getIntegrationAdminPrincipal } from '@/modules/identity-access/public/v1'
 import { aiCallCampaignManagementV1 } from '@/modules/calling/public/v1/ai-call-campaign-management-handler'
 import { AiCallCampaignConflictError, AiCallCampaignInputError } from '@/modules/calling/application/ai-call-campaign'
 import {
@@ -32,8 +32,8 @@ function responseFor(error: unknown) {
 }
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    const user = await getCurrentUser()
-    if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    const principal = await getIntegrationAdminPrincipal()
+    if (!principal) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     const { id } = await params
     try {
         const campaign = await aiCallCampaignManagementV1.get({
@@ -54,11 +54,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    const user = await getCurrentUser()
-    if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-    if (user.role !== 'Администратор' && user.role !== 'Руководитель') {
-        return NextResponse.json({ error: 'forbidden' }, { status: 403 })
-    }
+    const principal = await getIntegrationAdminPrincipal()
+    if (!principal) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     if (!isSameOriginAiCallCampaignMutation(req)) {
         return NextResponse.json({ error: 'forbidden' }, { status: 403 })
     }
@@ -78,11 +75,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         const campaign = await aiCallCampaignManagementV1.control({
             ...(body && typeof body === 'object' ? body : {}),
             campaignId: id,
-        }, { id: user.id })
+        }, { id: principal.id })
         opsLog('info', 'ai_call_campaign_controlled', {
             operation: 'ai_call_campaign',
             campaignId: id,
-            actorId: user.id,
+            actorId: principal.id,
         })
         return NextResponse.json({ campaign })
     } catch (error) {

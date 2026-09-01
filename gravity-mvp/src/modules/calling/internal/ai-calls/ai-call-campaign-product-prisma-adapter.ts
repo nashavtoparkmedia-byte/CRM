@@ -5,9 +5,17 @@ import type {
     AiCallCampaignDetailV1,
     AiCallCampaignMemberV1,
     AiCallCampaignProgressV1,
+    AiCallCampaignRecentOutcomeV1,
     AiCallCampaignSummaryV1,
 } from '@/contracts/calling/v1'
 import { prisma } from '@/lib/prisma'
+import type {
+    AiCallGreetingVariant,
+    AiCallOutcomeSchema,
+    AiCallScenarioConfig,
+    AiCallScenarioFragments,
+    AiCallScenarioQuestion,
+} from '@/lib/ai-call/types'
 import { readAiCallFinalizationJournal } from '../../application/ai-call-finalization'
 import { readAiCallCampaignRuntimeMode } from '../../application/ai-call-campaign-runtime-mode'
 
@@ -16,12 +24,18 @@ interface RawSqlDatabase {
     $queryRawUnsafe<T = unknown>(query: string, ...values: unknown[]): Promise<T>
 }
 
+export interface ActiveAiCallCampaignScenario extends AiCallScenarioConfig {
+    projectId: string | null
+    projectName: string | null
+}
+
 const database = prisma as unknown as RawSqlDatabase
 
 interface CampaignProjectionRow {
     id: string
     name: string
     scenarioRef: string
+    scenarioFingerprint: string
     state: string
     audienceSourceKind: string | null
     audienceSourceRef: string | null
@@ -51,6 +65,7 @@ interface CampaignProjectionRow {
     cancelled: number
     completedCalls: number
     connectedDurationSec: number
+    simulatedCalls: number
 }
 
 interface MemberRow {
@@ -74,6 +89,8 @@ interface AttemptCallRow {
     launchId: string
     state: string
     claimRevision: number
+    dispatchState: 'not_dispatched' | 'acceptance_unknown' | 'accepted'
+    dispatchReceiptRef: string | null
     dialEffectRef: string | null
     failureCode: string | null
     startedAt: Date | null
@@ -101,8 +118,35 @@ interface AuditRow {
     createdAt: Date
 }
 
+interface RecentOutcomeRow {
+    attemptId: string
+    memberId: string
+    targetRef: string
+    phoneE164: string
+    provenance: unknown
+    attemptNumber: number
+    state: string
+    failureCode: string | null
+    completedAt: Date
+    aiOutcome: string | null
+    aiOutcomeReason: string | null
+}
+
+interface StaleLinkedCallRow {
+    attemptId: string
+    memberId: string
+    callId: string
+    attemptState: string
+    failureCode: string | null
+    targetRef: string
+    provenance: unknown
+    sessionStatus: string | null
+    startedAt: Date
+    claimUntil: Date | null
+}
+
 const CAMPAIGN_SELECT = Prisma.sql`
-    SELECT c."id", c."name", c."scenarioRef", c."state",
+    SELECT c."id", c."name", c."scenarioRef", c."scenarioFingerprint", c."state",
            c."audienceSourceKind", c."audienceSourceRef", c."audienceSourceVersion",
            c."audienceFrozenAt", c."scheduledAt", c."startedAt", c."completedAt", c."cancelledAt",
            c."concurrentLimit", c."ratePerMinute", c."maxAttempts", c."retryBaseMs", c."retryMaxMs",
@@ -118,7 +162,8 @@ const CAMPAIGN_SELECT = Prisma.sql`
            COALESCE(p."excluded",0)::int AS "excluded",
            COALESCE(p."cancelled",0)::int AS "cancelled",
            COALESCE(cost."completedCalls",0)::int AS "completedCalls",
-           COALESCE(cost."connectedDurationSec",0)::int AS "connectedDurationSec"
+           COALESCE(cost."connectedDurationSec",0)::int AS "connectedDurationSec",
+           COALESCE(cost."simulatedCalls",0)::int AS "simulatedCalls"
     FROM "AiCallCampaign" c
     LEFT JOIN LATERAL (
         SELECT COUNT(*) AS "total",
@@ -135,6 +180,9 @@ const CAMPAIGN_SELECT = Prisma.sql`
     ) p ON TRUE
     LEFT JOIN LATERAL (
         SELECT COUNT(phone_call."id") FILTER (WHERE phone_call."endedAt" IS NOT NULL) AS "completedCalls",
+               COUNT(phone_call."id") FILTER (
+                 WHERE phone_call."metadata"->>'simulated' = 'true'
+               ) AS "simulatedCalls",
                COALESCE(SUM(
                  GREATEST(0, EXTRACT(EPOCH FROM (phone_call."endedAt"-phone_call."answeredAt")))::int
                ) FILTER (WHERE phone_call."answeredAt" IS NOT NULL AND phone_call."endedAt" IS NOT NULL),0)::int
@@ -172,6 +220,7 @@ function summary(row: CampaignProjectionRow): AiCallCampaignSummaryV1 {
         id: row.id,
         name: row.name,
         scenarioId: row.scenarioRef,
+        scenarioFingerprint: row.scenarioFingerprint,
         state: row.state,
         scheduledAt: iso(row.scheduledAt),
         startedAt: iso(row.startedAt),
@@ -192,6 +241,8 @@ function summary(row: CampaignProjectionRow): AiCallCampaignSummaryV1 {
             amount: null,
             completedCalls: row.completedCalls,
             connectedDurationSec: row.connectedDurationSec,
+            simulatedCalls: row.simulatedCalls,
+            hasSimulatedResults: row.simulatedCalls > 0,
             basis: 'crm_answered_interval_only',
         },
     }
@@ -224,6 +275,35 @@ function callProjection(row: AttemptCallRow): AiCallCampaignCallV1 | null {
 }
 
 export const aiCallCampaignProductPrismaPort = {
+    async getActiveScenario(id: string): Promise<ActiveAiCallCampaignScenario | null> {
+        const row = await prisma.aiCallScenario.findFirst({
+            where: { id, isActive: true },
+            include: { project: { select: { name: true } } },
+        })
+        if (!row) return null
+        return {
+            id: row.id,
+            name: row.name,
+            description: row.description ?? undefined,
+            systemPrompt: row.systemPrompt,
+            questions: (row.questions as unknown as AiCallScenarioQuestion[]) ?? [],
+            targetDurationSec: row.targetDurationSec ?? undefined,
+            outcomeSchema: (row.outcomeSchema as unknown as AiCallOutcomeSchema | null) ?? undefined,
+            greetingVariants: (row.greetingVariants as unknown as AiCallGreetingVariant[] | null) ?? undefined,
+            fragments: (row.fragments as unknown as AiCallScenarioFragments | null) ?? undefined,
+            projectId: row.projectId ?? null,
+            projectName: row.project?.name ?? null,
+        }
+    },
+
+    async listActiveScenarioOptions(): Promise<Array<{ id: string; name: string }>> {
+        return prisma.aiCallScenario.findMany({
+            where: { isActive: true },
+            orderBy: [{ name: 'asc' }, { id: 'asc' }],
+            select: { id: true, name: true },
+        })
+    },
+
     async list(input: { state?: string; cursor?: string; limit: number }): Promise<{
         campaigns: AiCallCampaignSummaryV1[]
         nextCursor: string | null
@@ -263,7 +343,8 @@ export const aiCallCampaignProductPrismaPort = {
         const memberIds = visibleRows.map((row) => row.id)
         const attempts = memberIds.length === 0 ? [] : await database.$queryRawUnsafe<AttemptCallRow[]>(`
             SELECT a."id", a."memberId", a."attemptNumber", a."launchId", a."state", a."claimRevision",
-                   a."dialEffectRef", a."failureCode", a."startedAt", a."completedAt", a."callId",
+                   a."dispatchState", a."dispatchReceiptRef", a."dialEffectRef", a."failureCode",
+                   a."startedAt", a."completedAt", a."callId",
                    phone_call."status"::text AS "callStatus", phone_call."aiSessionStatus"::text AS "aiSessionStatus",
                    phone_call."startedAt" AS "callStartedAt", phone_call."answeredAt", phone_call."endedAt", phone_call."durationSec",
                    phone_call."transcript", phone_call."aiSummary", phone_call."aiOutcome"::text AS "aiOutcome",
@@ -297,7 +378,9 @@ export const aiCallCampaignProductPrismaPort = {
                 launchId: attempt.launchId,
                 state: attempt.state,
                 claimRevision: attempt.claimRevision,
-                providerEffectRef: attempt.dialEffectRef,
+                dispatchState: attempt.dispatchState,
+                dispatchReceiptRef: attempt.dispatchReceiptRef,
+                logicalEffectRef: attempt.dialEffectRef,
                 failureCode: attempt.failureCode,
                 startedAt: iso(attempt.startedAt),
                 completedAt: iso(attempt.completedAt),
@@ -318,16 +401,66 @@ export const aiCallCampaignProductPrismaPort = {
                 : {},
             createdAt: event.createdAt.toISOString(),
         }))
+        const recentRows = await database.$queryRawUnsafe<RecentOutcomeRow[]>(`
+            SELECT a."id" AS "attemptId", a."memberId", m."targetRef", m."phoneE164", m."provenance",
+                   a."attemptNumber", a."state", a."failureCode", a."completedAt",
+                   phone_call."aiOutcome"::text AS "aiOutcome", phone_call."aiOutcomeReason"
+            FROM "AiCallCampaignAttempt" a
+            JOIN "AiCallCampaignMember" m
+              ON m."id"=a."memberId" AND m."campaignId"=a."campaignId"
+            LEFT JOIN "Call" phone_call ON phone_call."id"=a."callId"
+            WHERE a."campaignId"=$1 AND a."completedAt" IS NOT NULL
+            ORDER BY a."completedAt" DESC, a."id" DESC
+            LIMIT 20
+        `, input.campaignId)
+        const recentOutcomes: AiCallCampaignRecentOutcomeV1[] = recentRows.map((row) => ({
+            attemptId: row.attemptId,
+            memberId: row.memberId,
+            targetRef: row.targetRef,
+            phoneE164: row.phoneE164,
+            label: labelFromProvenance(row.provenance),
+            attemptNumber: row.attemptNumber,
+            state: row.state,
+            failureCode: row.failureCode,
+            completedAt: row.completedAt.toISOString(),
+            callOutcome: row.aiOutcome,
+            callOutcomeReason: row.aiOutcomeReason,
+        }))
         const ops = await database.$queryRawUnsafe<Array<{
             activeLeases: number
             staleClaims: number
+            unfinalizedLinkedCalls: number
             lastActivityAt: Date
         }>>(`
             SELECT
               (SELECT COUNT(*)::int FROM "AiCallAdmissionLease" WHERE "campaignId"=$1 AND "releasedAt" IS NULL AND "leaseUntil">now()) AS "activeLeases",
               (SELECT COUNT(*)::int FROM "AiCallCampaignAttempt" WHERE "campaignId"=$1 AND "state" IN ('claimed','running') AND "claimUntil"<=now()) AS "staleClaims",
+              (SELECT COUNT(*)::int FROM "AiCallCampaignAttempt" attempt
+                 JOIN "Call" phone_call ON phone_call."id"=attempt."callId"
+                WHERE attempt."campaignId"=$1 AND phone_call."endedAt" IS NULL) AS "unfinalizedLinkedCalls",
               GREATEST(c."updatedAt", COALESCE((SELECT MAX(a."updatedAt") FROM "AiCallCampaignAttempt" a WHERE a."campaignId"=$1), c."updatedAt")) AS "lastActivityAt"
             FROM "AiCallCampaign" c WHERE c."id"=$1
+        `, input.campaignId)
+        const staleLinkedCallRows = await database.$queryRawUnsafe<StaleLinkedCallRow[]>(`
+            SELECT attempt."id" AS "attemptId", attempt."memberId", attempt."callId",
+                   attempt."state" AS "attemptState", attempt."failureCode",
+                   member."targetRef", member."provenance",
+                   phone_call."aiSessionStatus"::text AS "sessionStatus",
+                   phone_call."startedAt", attempt."claimUntil"
+            FROM "AiCallCampaignAttempt" attempt
+            JOIN "AiCallCampaignMember" member
+              ON member."id"=attempt."memberId" AND member."campaignId"=attempt."campaignId"
+            JOIN "Call" phone_call ON phone_call."id"=attempt."callId"
+            WHERE attempt."campaignId"=$1
+              AND attempt."dispatchState" <> 'not_dispatched'
+              AND (
+                (attempt."state" IN ('claimed','running') AND attempt."claimUntil" <= now())
+                OR attempt."state" IN ('succeeded','retryable_failure','permanent_failure','cancelled')
+              )
+              AND phone_call."endedAt" IS NULL
+            ORDER BY COALESCE(attempt."claimUntil", attempt."completedAt", attempt."updatedAt") ASC,
+                     attempt."id" ASC
+            LIMIT 20
         `, input.campaignId)
         return {
             ...summary(campaign),
@@ -339,14 +472,33 @@ export const aiCallCampaignProductPrismaPort = {
             },
             members,
             nextMemberCursor: hasMore ? visibleRows.at(-1)?.id ?? null : null,
+            recentOutcomes,
             audit: audits,
             operations: {
                 activeLeases: ops[0]?.activeLeases ?? 0,
                 staleClaims: ops[0]?.staleClaims ?? 0,
+                unfinalizedLinkedCalls: ops[0]?.unfinalizedLinkedCalls ?? 0,
+                staleUnfinalizedCalls: staleLinkedCallRows.map((row) => ({
+                    attemptId: row.attemptId,
+                    memberId: row.memberId,
+                    callId: row.callId,
+                    targetRef: row.targetRef,
+                    label: labelFromProvenance(row.provenance),
+                    sessionStatus: row.sessionStatus,
+                    startedAt: row.startedAt.toISOString(),
+                    attemptState: row.attemptState,
+                    failureCode: row.failureCode,
+                    recoveryReason: ['claimed', 'running'].includes(row.attemptState)
+                        ? 'expired_claim' as const
+                        : 'terminal_link_orphan' as const,
+                    claimUntil: row.claimUntil?.toISOString() ?? null,
+                })),
                 retryWaitMembers: campaign.retryWait,
                 permanentFailures: campaign.failed,
                 lastActivityAt: (ops[0]?.lastActivityAt ?? campaign.updatedAt).toISOString(),
                 runtimeMode: readAiCallCampaignRuntimeMode(),
+                simulatedCalls: campaign.simulatedCalls,
+                hasSimulatedResults: campaign.simulatedCalls > 0,
             },
         }
     },

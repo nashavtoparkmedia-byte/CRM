@@ -126,7 +126,8 @@
       "YANDEX_TTS_LANG",
       "YANDEX_TTS_PROBE_DIR",
       "YANDEX_TTS_TIMEOUT_MS",
-      "YANDEX_TTS_VOICE"
+      "YANDEX_TTS_VOICE",
+      "YOKO_AI_CALL_CAMPAIGN_SIMULATION_PROOF"
     ],
     "policy": "Names and access locations only. Values stay inside the owning adapter and never cross a public contract."
   },

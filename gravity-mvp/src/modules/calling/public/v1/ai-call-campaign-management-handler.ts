@@ -8,6 +8,7 @@ import {
     controlAiCallCampaignV1,
     createAiCallCampaignV1,
     getAiCallCampaignV1,
+    listActiveAiCallCampaignScenarioOptionsV1,
     listAiCallCampaignsV1,
     type AiCallCampaignActorV1,
 } from '../../application/ai-call-campaign-product-operations'
@@ -18,6 +19,9 @@ export const aiCallCampaignManagementV1 = {
     },
     list(input: unknown) {
         return listAiCallCampaignsV1(parseListAiCallCampaignsQueryV1(input))
+    },
+    scenarioOptions() {
+        return listActiveAiCallCampaignScenarioOptionsV1()
     },
     get(input: unknown) {
         return getAiCallCampaignV1(parseGetAiCallCampaignQueryV1(input))

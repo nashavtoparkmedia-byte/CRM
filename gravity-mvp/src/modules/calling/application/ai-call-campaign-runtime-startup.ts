@@ -34,10 +34,11 @@ export function startAiCallCampaignRuntimeV1(
         opsLog('info', 'ai_call_campaign_runtime_disabled', { operation: 'startup' })
         return null
     }
-    if (mode === 'unsupported_live') {
+    if (mode === 'unsupported_live' || mode === 'simulated_unavailable') {
         opsLog('error', 'ai_call_campaign_runtime_mode_rejected', {
             operation: 'startup',
             configuredMode: process.env.AI_CALL_CAMPAIGN_RUNTIME_MODE,
+            reason: mode,
         })
         return null
     }

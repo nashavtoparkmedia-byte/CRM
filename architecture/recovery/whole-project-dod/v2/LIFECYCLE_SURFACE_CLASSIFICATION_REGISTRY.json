@@ -1992,7 +1992,7 @@
       "rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
       "functional_owner": "calling",
-      "source_sha256": "a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b"
+      "source_sha256": "ca87d5632938b28364bbd9b98834ef4cc7464aa5fe448f883319cb1601db077a"
     },
     {
       "path": "gravity-mvp/query_driver.sql",
@@ -3682,8 +3682,8 @@
       "production_capability": "POSSIBLE",
       "functional_owner": "calling",
       "owner_context": "calling",
-      "rationale": "Calling-owned source-isolated campaign persistence adapter. It is not wired into the production runtime or production migration inventory; lifecycle classification acknowledges executable source and grants no production activation or cross-context write authority.",
-      "classification_artifact": "architecture/isolation/calling/ai-call-mass-calling-v1/persistence-manifest.json"
+      "rationale": "Calling-owned production-shaped campaign persistence adapter wired only to the disabled-by-default, simulation-gated product runtime. Its additive source migration remains pending and unapplied to production; this classification grants no production migration, live provider, billing, telephony, or cross-context write authority.",
+      "classification_artifact": "architecture/isolation/calling/ai-call-campaign-product-v1/production-boundary.json"
     },
     {
       "path": "gravity-mvp/src/modules/calling/public/v1/legacy-prisma-ai-call-event-maintenance-adapter.js",

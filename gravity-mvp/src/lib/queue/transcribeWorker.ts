@@ -91,8 +91,8 @@ export async function processTranscribe(callId: string): Promise<void> {
 }
 
 async function processOne(callId: string): Promise<void> {
-    const call = await prisma.call.findUnique({
-        where: { id: callId },
+    const call = await prisma.call.findFirst({
+        where: { id: callId, isSimulation: false },
         select: { id: true, recordingPath: true, transcript: true },
     })
 

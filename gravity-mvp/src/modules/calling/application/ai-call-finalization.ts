@@ -64,6 +64,8 @@ export interface AiCallFinalizationCall {
     transcript: string | null
     metadata: unknown
     aiScenario: { outcomeSchema: unknown } | null
+    /** Present only for a campaign Call whose owning campaign froze its scenario. */
+    frozenOutcomeSchema?: unknown
 }
 
 export interface AiCallTerminalUpdate {
@@ -503,7 +505,10 @@ function buildTerminal(
         sessionStatus,
         realUserUtterances: request.realUserUtterances,
     })
-    const validation = validateLeadData(analysis?.lead_data ?? null, call.aiScenario?.outcomeSchema ?? null)
+    const outcomeSchema = Object.prototype.hasOwnProperty.call(call, 'frozenOutcomeSchema')
+        ? call.frozenOutcomeSchema
+        : call.aiScenario?.outcomeSchema ?? null
+    const validation = validateLeadData(analysis?.lead_data ?? null, outcomeSchema)
     const startedAt = call.startedAt ?? endedAt
     const durationSec = Math.max(0, Math.round((endedAt.getTime() - startedAt.getTime()) / 1000))
 

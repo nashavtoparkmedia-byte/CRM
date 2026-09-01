@@ -75,6 +75,8 @@ export interface AiCallCampaignCostVisibilityV1 {
     amount: null
     completedCalls: number
     connectedDurationSec: number
+    simulatedCalls: number
+    hasSimulatedResults: boolean
     basis: 'crm_answered_interval_only'
 }
 
@@ -82,6 +84,7 @@ export interface AiCallCampaignSummaryV1 {
     id: string
     name: string
     scenarioId: string
+    scenarioFingerprint: string
     state: string
     scheduledAt: string | null
     startedAt: string | null
@@ -121,7 +124,9 @@ export interface AiCallCampaignAttemptV1 {
     launchId: string
     state: string
     claimRevision: number
-    providerEffectRef: string | null
+    dispatchState: 'not_dispatched' | 'acceptance_unknown' | 'accepted'
+    dispatchReceiptRef: string | null
+    logicalEffectRef: string | null
     failureCode: string | null
     startedAt: string | null
     completedAt: string | null
@@ -151,13 +156,45 @@ export interface AiCallCampaignAuditEventV1 {
     createdAt: string
 }
 
+export interface AiCallCampaignRecentOutcomeV1 {
+    attemptId: string
+    memberId: string
+    targetRef: string
+    phoneE164: string
+    label: string | null
+    attemptNumber: number
+    state: string
+    failureCode: string | null
+    completedAt: string
+    callOutcome: string | null
+    callOutcomeReason: string | null
+}
+
+export interface AiCallCampaignStaleLinkedCallV1 {
+    attemptId: string
+    memberId: string
+    callId: string
+    targetRef: string
+    label: string | null
+    sessionStatus: string | null
+    startedAt: string
+    attemptState: string
+    failureCode: string | null
+    recoveryReason: 'expired_claim' | 'terminal_link_orphan'
+    claimUntil: string | null
+}
+
 export interface AiCallCampaignOperationalStateV1 {
     activeLeases: number
     staleClaims: number
+    unfinalizedLinkedCalls: number
+    staleUnfinalizedCalls: AiCallCampaignStaleLinkedCallV1[]
     retryWaitMembers: number
     permanentFailures: number
     lastActivityAt: string
-    runtimeMode: 'disabled' | 'simulated' | 'unsupported_live'
+    runtimeMode: 'disabled' | 'simulated' | 'simulated_unavailable' | 'unsupported_live'
+    simulatedCalls: number
+    hasSimulatedResults: boolean
 }
 
 export interface AiCallCampaignDetailV1 extends AiCallCampaignSummaryV1 {
@@ -169,6 +206,7 @@ export interface AiCallCampaignDetailV1 extends AiCallCampaignSummaryV1 {
     }
     members: AiCallCampaignMemberV1[]
     nextMemberCursor: string | null
+    recentOutcomes: AiCallCampaignRecentOutcomeV1[]
     audit: AiCallCampaignAuditEventV1[]
     operations: AiCallCampaignOperationalStateV1
 }

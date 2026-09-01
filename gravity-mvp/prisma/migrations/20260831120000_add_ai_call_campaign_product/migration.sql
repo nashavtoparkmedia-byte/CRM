@@ -3,12 +3,19 @@
 -- applied by this delivery goal; production deployment remains a separate
 -- reviewed operation.
 
+BEGIN;
+
+ALTER TABLE "Call"
+  ADD COLUMN "isSimulation" BOOLEAN NOT NULL DEFAULT false;
+
 CREATE TABLE "AiCallCampaign" (
   "id" TEXT NOT NULL,
   "identityKey" VARCHAR(255) NOT NULL,
   "payloadFingerprint" CHAR(64) NOT NULL,
   "name" VARCHAR(200) NOT NULL,
   "scenarioRef" VARCHAR(255) NOT NULL,
+  "scenarioSnapshot" JSONB NOT NULL,
+  "scenarioFingerprint" CHAR(64) NOT NULL,
   "state" VARCHAR(32) NOT NULL DEFAULT 'draft',
   "audienceSourceKind" VARCHAR(64),
   "audienceSourceRef" VARCHAR(255),
@@ -31,6 +38,15 @@ CREATE TABLE "AiCallCampaign" (
 
   CONSTRAINT "AiCallCampaign_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "AiCallCampaign_identityKey_key" UNIQUE ("identityKey"),
+  CONSTRAINT "AiCallCampaign_scenarioSnapshot_identity_check" CHECK ((
+    jsonb_typeof("scenarioSnapshot") = 'object'
+    AND jsonb_typeof("scenarioSnapshot"->'scenarioId') = 'string'
+    AND "scenarioSnapshot"->>'scenarioId' = "scenarioRef"
+    AND jsonb_typeof("scenarioSnapshot"->'version') = 'number'
+    AND "scenarioSnapshot"->'version' = '1'::jsonb
+    AND "scenarioSnapshot" ? 'outcomeSchema'
+    AND "scenarioFingerprint" ~ '^[0-9a-f]{64}$'
+  ) IS TRUE),
   CONSTRAINT "AiCallCampaign_state_check" CHECK ("state" IN (
     'draft', 'ready', 'scheduled', 'running', 'paused', 'cancelling',
     'completed', 'cancelled', 'failed'
@@ -70,6 +86,7 @@ CREATE TABLE "AiCallCampaignMember" (
   CONSTRAINT "AiCallCampaignMember_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "AiCallCampaignMember_campaign_fkey" FOREIGN KEY ("campaignId")
     REFERENCES "AiCallCampaign" ("id") ON DELETE RESTRICT,
+  CONSTRAINT "AiCallCampaignMember_id_campaign_key" UNIQUE ("id", "campaignId"),
   CONSTRAINT "AiCallCampaignMember_campaign_member_key" UNIQUE ("campaignId", "memberKey"),
   CONSTRAINT "AiCallCampaignMember_campaign_target_key" UNIQUE (
     "campaignId", "targetType", "targetRef"
@@ -99,6 +116,10 @@ CREATE TABLE "AiCallCampaignAttempt" (
   "state" VARCHAR(32) NOT NULL DEFAULT 'claimed',
   "claimRevision" INTEGER NOT NULL DEFAULT 1,
   "dialExecutionCount" INTEGER NOT NULL DEFAULT 0,
+  "dispatchState" VARCHAR(32) NOT NULL DEFAULT 'not_dispatched',
+  "dispatchAuthorizedAt" TIMESTAMPTZ(3),
+  "dispatchAcceptedAt" TIMESTAMPTZ(3),
+  "dispatchReceiptRef" VARCHAR(255),
   "claimFence" CHAR(64),
   "claimedBy" VARCHAR(255),
   "claimUntil" TIMESTAMPTZ(3),
@@ -116,16 +137,28 @@ CREATE TABLE "AiCallCampaignAttempt" (
   CONSTRAINT "AiCallCampaignAttempt_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "AiCallCampaignAttempt_campaign_fkey" FOREIGN KEY ("campaignId")
     REFERENCES "AiCallCampaign" ("id") ON DELETE RESTRICT,
-  CONSTRAINT "AiCallCampaignAttempt_member_fkey" FOREIGN KEY ("memberId")
-    REFERENCES "AiCallCampaignMember" ("id") ON DELETE RESTRICT,
+  CONSTRAINT "AiCallCampaignAttempt_member_campaign_fkey" FOREIGN KEY ("memberId", "campaignId")
+    REFERENCES "AiCallCampaignMember" ("id", "campaignId") ON DELETE RESTRICT,
   CONSTRAINT "AiCallCampaignAttempt_call_fkey" FOREIGN KEY ("callId")
     REFERENCES "Call" ("id") ON DELETE RESTRICT,
   CONSTRAINT "AiCallCampaignAttempt_launchId_key" UNIQUE ("launchId"),
   CONSTRAINT "AiCallCampaignAttempt_callId_key" UNIQUE ("callId"),
+  CONSTRAINT "AiCallCampaignAttempt_id_member_campaign_key" UNIQUE ("id", "memberId", "campaignId"),
   CONSTRAINT "AiCallCampaignAttempt_member_attempt_key" UNIQUE ("memberId", "attemptNumber"),
   CONSTRAINT "AiCallCampaignAttempt_attemptNumber_check" CHECK ("attemptNumber" > 0),
   CONSTRAINT "AiCallCampaignAttempt_claimRevision_check" CHECK ("claimRevision" > 0),
   CONSTRAINT "AiCallCampaignAttempt_dialExecutionCount_check" CHECK ("dialExecutionCount" >= 0),
+  CONSTRAINT "AiCallCampaignAttempt_dispatchState_check" CHECK (
+    "dispatchState" IN ('not_dispatched', 'acceptance_unknown', 'accepted')
+  ),
+  CONSTRAINT "AiCallCampaignAttempt_dispatchState_consistency_check" CHECK (
+    ("dispatchState" = 'not_dispatched'
+      AND "dispatchAuthorizedAt" IS NULL AND "dispatchAcceptedAt" IS NULL AND "dispatchReceiptRef" IS NULL)
+    OR ("dispatchState" = 'acceptance_unknown'
+      AND "dispatchAuthorizedAt" IS NOT NULL AND "dispatchAcceptedAt" IS NULL AND "dispatchReceiptRef" IS NULL)
+    OR ("dispatchState" = 'accepted'
+      AND "dispatchAuthorizedAt" IS NOT NULL AND "dispatchAcceptedAt" IS NOT NULL AND "dispatchReceiptRef" IS NOT NULL)
+  ),
   CONSTRAINT "AiCallCampaignAttempt_state_check" CHECK ("state" IN (
     'waiting', 'claimed', 'running', 'succeeded', 'retryable_failure',
     'permanent_failure', 'cancelled'
@@ -139,8 +172,9 @@ CREATE INDEX "AiCallCampaignAttempt_campaign_state_createdAt_idx"
   ON "AiCallCampaignAttempt" ("campaignId", "state", "createdAt");
 
 ALTER TABLE "AiCallCampaignMember"
-  ADD CONSTRAINT "AiCallCampaignMember_activeAttempt_fkey" FOREIGN KEY ("activeAttemptId")
-  REFERENCES "AiCallCampaignAttempt" ("id") ON DELETE RESTRICT;
+  ADD CONSTRAINT "AiCallCampaignMember_activeAttempt_member_campaign_fkey"
+  FOREIGN KEY ("activeAttemptId", "id", "campaignId")
+  REFERENCES "AiCallCampaignAttempt" ("id", "memberId", "campaignId") ON DELETE RESTRICT;
 
 CREATE TABLE "AiCallAdmissionControl" (
   "id" TEXT NOT NULL,
@@ -172,8 +206,11 @@ CREATE TABLE "AiCallAdmissionLease" (
 
   CONSTRAINT "AiCallAdmissionLease_pkey" PRIMARY KEY ("id"),
   CONSTRAINT "AiCallAdmissionLease_attempt_key" UNIQUE ("attemptId"),
-  CONSTRAINT "AiCallAdmissionLease_attempt_fkey" FOREIGN KEY ("attemptId")
-    REFERENCES "AiCallCampaignAttempt" ("id") ON DELETE RESTRICT,
+  CONSTRAINT "AiCallAdmissionLease_attempt_member_campaign_key"
+    UNIQUE ("attemptId", "memberId", "campaignId"),
+  CONSTRAINT "AiCallAdmissionLease_attempt_member_campaign_fkey"
+    FOREIGN KEY ("attemptId", "memberId", "campaignId")
+    REFERENCES "AiCallCampaignAttempt" ("id", "memberId", "campaignId") ON DELETE RESTRICT,
   CONSTRAINT "AiCallAdmissionLease_campaign_fkey" FOREIGN KEY ("campaignId")
     REFERENCES "AiCallCampaign" ("id") ON DELETE RESTRICT,
   CONSTRAINT "AiCallAdmissionLease_member_fkey" FOREIGN KEY ("memberId")
@@ -199,9 +236,14 @@ CREATE TABLE "AiCallCampaignAuditEvent" (
     REFERENCES "AiCallCampaign" ("id") ON DELETE RESTRICT,
   CONSTRAINT "AiCallCampaignAuditEvent_action_check" CHECK ("action" IN (
     'created', 'audience_frozen', 'scheduled', 'started', 'paused',
-    'resumed', 'cancel_requested', 'cancelled', 'completed', 'failed'
+    'resumed', 'cancel_requested', 'cancelled', 'completed', 'failed',
+    'admission_blocked', 'claim_recovered', 'retry_scheduled',
+    'dispatch_authorized', 'dispatch_reconcile_started',
+    'attempt_succeeded', 'attempt_failed'
   ))
 );
 
 CREATE INDEX "AiCallCampaignAuditEvent_campaign_createdAt_id_idx"
   ON "AiCallCampaignAuditEvent" ("campaignId", "createdAt", "id");
+
+COMMIT;

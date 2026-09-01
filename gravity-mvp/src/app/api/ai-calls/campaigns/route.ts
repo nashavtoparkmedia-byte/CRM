@@ -4,7 +4,7 @@ import {
     LIST_AI_CALL_CAMPAIGNS_QUERY_V1,
 } from '@/contracts/calling/v1'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
-import { getCurrentUserIdentityV1 as getCurrentUser } from '@/modules/identity-access/public/v1/user-directory'
+import { getIntegrationAdminPrincipal } from '@/modules/identity-access/public/v1'
 import { aiCallCampaignManagementV1 } from '@/modules/calling/public/v1/ai-call-campaign-management-handler'
 import { AiCallCampaignConflictError, AiCallCampaignInputError } from '@/modules/calling/application/ai-call-campaign'
 import {
@@ -30,8 +30,8 @@ function responseFor(error: unknown) {
 }
 
 export async function GET(req: NextRequest) {
-    const user = await getCurrentUser()
-    if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    const principal = await getIntegrationAdminPrincipal()
+    if (!principal) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     try {
         const query = req.nextUrl.searchParams
         const result = await aiCallCampaignManagementV1.list({
@@ -47,11 +47,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-    const user = await getCurrentUser()
-    if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-    if (user.role !== 'Администратор' && user.role !== 'Руководитель') {
-        return NextResponse.json({ error: 'forbidden' }, { status: 403 })
-    }
+    const principal = await getIntegrationAdminPrincipal()
+    if (!principal) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     if (!isSameOriginAiCallCampaignMutation(req)) {
         return NextResponse.json({ error: 'forbidden' }, { status: 403 })
     }
@@ -63,11 +60,11 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'invalid_json' }, { status: 400 })
     }
     try {
-        const campaign = await aiCallCampaignManagementV1.create(body, { id: user.id })
+        const campaign = await aiCallCampaignManagementV1.create(body, { id: principal.id })
         opsLog('info', 'ai_call_campaign_created', {
             operation: 'ai_call_campaigns',
             campaignId: campaign.id,
-            actorId: user.id,
+            actorId: principal.id,
         })
         return NextResponse.json({ campaign }, { status: 201 })
     } catch (error) {

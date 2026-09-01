@@ -9,16 +9,16 @@
   },
   "source_schema": {
     "path": "gravity-mvp/prisma/schema.prisma",
-    "sha256": "531fc70162da4bd0378e843ecf151f8f517bffa84e558de390b2fa3a51a5fd02",
-    "size": 142577,
+    "sha256": "1d5dfa10628625e031c721eccaf4f470f19dba5c849be61a8900ceec926801d6",
+    "size": 143439,
     "expected_isolated_replay_parity": "ZERO_PRISMA_DATAMODEL_DIFF_AFTER_PENDING_SOURCE"
   },
   "migrations": [
     {
       "name": "20260831120000_add_ai_call_campaign_product",
       "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
-      "sha256": "a4f65df36f7811657dea34dd38196a2be0b057f58fffd03d9bc1ac6921c8920b",
-      "size": 8913,
+      "sha256": "ca87d5632938b28364bbd9b98834ef4cc7464aa5fe448f883319cb1601db077a",
+      "size": 11063,
       "owner_context": "calling",
       "classification": "EXPAND_ONLY",
       "production_application": false
@@ -29,5 +29,12 @@
     "migration_test": "gravity-mvp/src/modules/calling/internal/ai-calls/ai-call-campaign-product.postgres.test.ts",
     "authority_replay": "tools/architecture/replay-production-migration-authority.mjs --allow-isolated-replay",
     "production_database_touched": false
+  },
+  "rollback_strategy": {
+    "deployment_order": "MIGRATION_BEFORE_CODE",
+    "code_rollback": "ROLL_BACK_CODE_KEEP_ADDITIVE_TABLES",
+    "schema_rollback": "NO_DESTRUCTIVE_DOWN_MIGRATION",
+    "failed_apply_recovery": "TRANSACTION_ROLLS_BACK_DDL_THEN_PRISMA_MIGRATE_RESOLVE_ROLLED_BACK_BEFORE_RETRY",
+    "authority_promotion": "SEPARATE_REVIEW_MOVES_PENDING_SOURCE_TO_APPLIED_AUTHORITY"
   }
 }

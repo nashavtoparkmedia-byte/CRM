@@ -7,12 +7,14 @@ export { queryCrmUserV1 } from '../../application/crm-user-query-operations'
 export {
     clearIntegrationAdminSession,
     establishIntegrationAdminSession,
+    getIntegrationAdminPrincipal,
     hasIntegrationAdminAccess,
     IntegrationAdminAuthorizationError,
     isIntegrationAdminAuthenticationConfigured,
     requireIntegrationAdminAccess,
     requireIntegrationAdminPageAccess,
 } from './integration-admin-auth'
+export type { IntegrationAdminPrincipalV1 } from './integration-admin-auth'
 export {
     normalizeIntegrationAdminReturnTo,
 } from './integration-admin-credentials'

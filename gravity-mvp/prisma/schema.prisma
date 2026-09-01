@@ -1688,6 +1688,8 @@ model Call {
   // AI-initiated outbound calls (voice agent talks to a lead via mod_audio_fork).
   // For ordinary click-to-call rows these are null/false.
   isAi             Boolean              @default(false)
+  /// Controlled proof rows are excluded from ordinary call history, analytics and learning.
+  isSimulation     Boolean              @default(false)
   aiScenarioId     String?
   aiSessionStatus  AiCallSessionStatus?
   aiTransferReason String?
@@ -1754,6 +1756,8 @@ model AiCallCampaign {
   payloadFingerprint    String   @db.Char(64)
   name                  String   @db.VarChar(200)
   scenarioRef           String   @db.VarChar(255)
+  scenarioSnapshot      Json
+  scenarioFingerprint   String   @db.Char(64)
   state                 String   @default("draft") @db.VarChar(32)
   audienceSourceKind    String?  @db.VarChar(64)
   audienceSourceRef     String?  @db.VarChar(255)
@@ -1803,9 +1807,10 @@ model AiCallCampaignMember {
   updatedAt                  DateTime @default(now()) @db.Timestamptz(3)
   campaign                   AiCallCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "AiCallCampaignMember_campaign_fkey")
   attempts                   AiCallCampaignAttempt[] @relation("AiCallCampaignMemberAttempts")
-  activeAttempt              AiCallCampaignAttempt? @relation("AiCallCampaignMemberActiveAttempt", fields: [activeAttemptId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "AiCallCampaignMember_activeAttempt_fkey")
+  activeAttempt              AiCallCampaignAttempt? @relation("AiCallCampaignMemberActiveAttempt", fields: [activeAttemptId, id, campaignId], references: [id, memberId, campaignId], onDelete: Restrict, onUpdate: NoAction, map: "AiCallCampaignMember_activeAttempt_member_campaign_fkey")
   admissionLeases            AiCallAdmissionLease[]
 
+  @@unique([id, campaignId], map: "AiCallCampaignMember_id_campaign_key")
   @@unique([campaignId, memberKey], map: "AiCallCampaignMember_campaign_member_key")
   @@unique([campaignId, targetType, targetRef], map: "AiCallCampaignMember_campaign_target_key")
   @@index([campaignId, state, nextEligibleAt, id], map: "AiCallCampaignMember_campaign_state_nextEligibleAt_id_idx")
@@ -1821,6 +1826,10 @@ model AiCallCampaignAttempt {
   state             String   @default("claimed") @db.VarChar(32)
   claimRevision     Int      @default(1)
   dialExecutionCount Int     @default(0)
+  dispatchState      String   @default("not_dispatched") @db.VarChar(32)
+  dispatchAuthorizedAt DateTime? @db.Timestamptz(3)
+  dispatchAcceptedAt DateTime? @db.Timestamptz(3)
+  dispatchReceiptRef String?  @db.VarChar(255)
   claimFence        String?  @db.Char(64)
   claimedBy         String?  @db.VarChar(255)
   claimUntil        DateTime? @db.Timestamptz(3)
@@ -1835,11 +1844,12 @@ model AiCallCampaignAttempt {
   createdAt         DateTime @default(now()) @db.Timestamptz(3)
   updatedAt         DateTime @default(now()) @db.Timestamptz(3)
   campaign          AiCallCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "AiCallCampaignAttempt_campaign_fkey")
-  member            AiCallCampaignMember @relation("AiCallCampaignMemberAttempts", fields: [memberId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "AiCallCampaignAttempt_member_fkey")
+  member            AiCallCampaignMember @relation("AiCallCampaignMemberAttempts", fields: [memberId, campaignId], references: [id, campaignId], onDelete: Restrict, onUpdate: NoAction, map: "AiCallCampaignAttempt_member_campaign_fkey")
   activeForMembers  AiCallCampaignMember[] @relation("AiCallCampaignMemberActiveAttempt")
   call              Call? @relation(fields: [callId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "AiCallCampaignAttempt_call_fkey")
   admissionLease    AiCallAdmissionLease?
 
+  @@unique([id, memberId, campaignId], map: "AiCallCampaignAttempt_id_member_campaign_key")
   @@unique([memberId, attemptNumber], map: "AiCallCampaignAttempt_member_attempt_key")
   @@index([state, claimUntil, createdAt], map: "AiCallCampaignAttempt_state_claimUntil_createdAt_idx")
   @@index([campaignId, state, createdAt], map: "AiCallCampaignAttempt_campaign_state_createdAt_idx")
@@ -1867,10 +1877,11 @@ model AiCallAdmissionLease {
   releaseReason String?  @db.VarChar(128)
   createdAt     DateTime @default(now()) @db.Timestamptz(3)
   updatedAt     DateTime @default(now()) @db.Timestamptz(3)
-  attempt       AiCallCampaignAttempt @relation(fields: [attemptId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "AiCallAdmissionLease_attempt_fkey")
+  attempt       AiCallCampaignAttempt @relation(fields: [attemptId, memberId, campaignId], references: [id, memberId, campaignId], onDelete: Restrict, onUpdate: NoAction, map: "AiCallAdmissionLease_attempt_member_campaign_fkey")
   campaign      AiCallCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "AiCallAdmissionLease_campaign_fkey")
   member        AiCallCampaignMember @relation(fields: [memberId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "AiCallAdmissionLease_member_fkey")
 
+  @@unique([attemptId, memberId, campaignId], map: "AiCallAdmissionLease_attempt_member_campaign_key")
   @@index([releasedAt, leaseUntil], map: "AiCallAdmissionLease_releasedAt_leaseUntil_idx")
   @@index([campaignId, releasedAt, leaseUntil], map: "AiCallAdmissionLease_campaign_releasedAt_leaseUntil_idx")
 }
