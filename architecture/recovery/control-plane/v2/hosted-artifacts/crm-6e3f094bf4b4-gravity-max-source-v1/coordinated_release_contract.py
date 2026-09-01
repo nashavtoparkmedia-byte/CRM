@@ -548,7 +548,11 @@ def docker_archive_identity(
             normalized = [safe_tar_name(member.name, "Docker archive") for member in members]
             if len(normalized) != len(set(normalized)):
                 fail("Docker archive contains duplicate members")
-            if any(not member.isfile() and not member.isdir() for member in members):
+            if any(
+                (not member.isfile() and not member.isdir())
+                or (member.isdir() and member.size != 0)
+                for member in members
+            ):
                 fail("Docker archive contains a non-regular member")
             member_by_name = dict(zip(normalized, members, strict=True))
             manifest_member = member_by_name.get("manifest.json")
@@ -560,7 +564,12 @@ def docker_archive_identity(
             )
             if type(manifest) is not list or len(manifest) != 1:
                 fail("Docker archive must contain exactly one image")
-            image = exact_object(manifest[0], {"Config", "RepoTags", "Layers"}, "Docker archive image manifest")
+            manifest_fields = set(manifest[0]) if type(manifest[0]) is dict else set()
+            legacy_format = manifest_fields == {"Config", "RepoTags", "Layers"}
+            oci_blob_format = manifest_fields == {"Config", "RepoTags", "Layers", "LayerSources"}
+            if not legacy_format and not oci_blob_format:
+                fail("Docker archive image manifest fields are not exact")
+            image = exact_object(manifest[0], manifest_fields, "Docker archive image manifest")
             layers = image["Layers"]
             if image["RepoTags"] != [expected_reference] or type(layers) is not list or not layers:
                 fail("Docker archive image reference or layers mismatch")
@@ -568,13 +577,17 @@ def docker_archive_identity(
             if len(layer_names) != len(set(layer_names)):
                 fail("Docker archive contains duplicate layer references")
             config_name = image["Config"]
-            if type(config_name) is not str or not re.fullmatch(r"[0-9a-f]{64}\.json", config_name):
+            blob_pattern = re.compile(r"blobs/sha256/([0-9a-f]{64})")
+            legacy_config = re.fullmatch(r"([0-9a-f]{64})\.json", config_name) if type(config_name) is str else None
+            oci_config = blob_pattern.fullmatch(config_name) if type(config_name) is str else None
+            if (legacy_format and legacy_config is None) or (oci_blob_format and oci_config is None):
                 fail("Docker archive config path invalid")
+            config_hex = (legacy_config or oci_config).group(1)  # type: ignore[union-attr]
             config_member = member_by_name.get(config_name)
             if config_member is None:
                 fail("Docker archive config inventory invalid")
             config_bytes = tar_member_bytes(archive, config_member, 16 * 1024 * 1024, "Docker archive config")
-            if sha_bytes(config_bytes) != config_name.removesuffix(".json"):
+            if sha_bytes(config_bytes) != config_hex:
                 fail("Docker archive immutable image ID mismatch")
             config = strict_json_bytes(config_bytes, "Docker image config")
             rootfs = exact_object(config.get("rootfs") if type(config) is dict else None, {"type", "diff_ids"}, "Docker rootfs")
@@ -589,41 +602,252 @@ def docker_archive_identity(
             if tuple(diff_ids[:len(required_diff_id_prefix)]) != required_diff_id_prefix:
                 fail("Docker rootfs base layer authority mismatch")
 
-            required_outer = {"manifest.json", config_name, *layer_names}
-            optional_outer = {"repositories"}
-            for layer_name in layer_names:
-                if layer_name.endswith("/layer.tar"):
+            actual_regular = {name for name, member in member_by_name.items() if member.isfile()}
+            actual_directories = {name for name, member in member_by_name.items() if member.isdir()}
+            containerd_image_id = f"sha256:{config_hex}"
+            if legacy_format:
+                if any(not layer_name.endswith("/layer.tar") for layer_name in layer_names):
+                    fail("Docker legacy layer inventory invalid")
+                required_outer = {"manifest.json", config_name, *layer_names}
+                optional_outer = {"repositories"}
+                for layer_name in layer_names:
                     parent = layer_name.rsplit("/", 1)[0]
                     optional_outer.update({f"{parent}/VERSION", f"{parent}/json"})
-            allowed_outer = required_outer | optional_outer
-            actual_regular = {name for name, member in member_by_name.items() if member.isfile()}
-            if not required_outer <= actual_regular or actual_regular - allowed_outer:
-                fail("Docker archive inner member allowlist mismatch")
-            allowed_directories = {
-                "/".join(name.split("/")[:index])
-                for name in allowed_outer
-                for index in range(1, len(name.split("/")))
-            }
-            actual_directories = {name for name, member in member_by_name.items() if member.isdir()}
-            if actual_directories - allowed_directories:
-                fail("Docker archive directory allowlist mismatch")
-            for name in actual_regular & optional_outer:
-                raw = tar_member_bytes(archive, member_by_name[name], 16 * 1024 * 1024, f"Docker archive metadata {name}")
-                if name.endswith("/VERSION"):
-                    if raw.strip() != b"1.0":
-                        fail("Docker archive layer VERSION mismatch")
-                else:
-                    strict_json_bytes(raw, f"Docker archive metadata {name}")
+                allowed_outer = required_outer | optional_outer
+                if not required_outer <= actual_regular or actual_regular - allowed_outer:
+                    fail("Docker archive inner member allowlist mismatch")
+                allowed_directories = {
+                    "/".join(name.split("/")[:index])
+                    for name in allowed_outer
+                    for index in range(1, len(name.split("/")))
+                }
+                if actual_directories - allowed_directories:
+                    fail("Docker archive directory allowlist mismatch")
+                for name in actual_regular & optional_outer:
+                    raw = tar_member_bytes(
+                        archive, member_by_name[name], 16 * 1024 * 1024,
+                        f"Docker archive metadata {name}",
+                    )
+                    if name.endswith("/VERSION"):
+                        if raw.strip() != b"1.0":
+                            fail("Docker archive layer VERSION mismatch")
+                    else:
+                        strict_json_bytes(raw, f"Docker archive metadata {name}")
+            else:
+                if (
+                    any(blob_pattern.fullmatch(layer_name) is None for layer_name in layer_names)
+                    or actual_directories != {"blobs", "blobs/sha256"}
+                ):
+                    fail("Docker OCI-blob archive inventory invalid")
+                layer_sources = exact_object(
+                    image["LayerSources"],
+                    {f"sha256:{layer_name.removeprefix('blobs/sha256/')}" for layer_name in layer_names},
+                    "Docker OCI layer sources",
+                )
+                for layer_name in layer_names:
+                    layer_member = member_by_name.get(layer_name)
+                    layer_digest = f"sha256:{layer_name.removeprefix('blobs/sha256/')}"
+                    descriptor_value = layer_sources[layer_digest]
+                    descriptor_value = exact_object(
+                        descriptor_value, {"mediaType", "size", "digest"},
+                        "Docker OCI layer source descriptor",
+                    )
+                    if (
+                        layer_member is None
+                        or not layer_member.isfile()
+                        or type(descriptor_value["size"]) is not int
+                        or descriptor_value != {
+                            "mediaType": "application/vnd.oci.image.layer.v1.tar",
+                            "size": layer_member.size if layer_member is not None else None,
+                            "digest": layer_digest,
+                        }
+                    ):
+                        fail("Docker OCI layer source descriptor mismatch")
+
+                layout_member = member_by_name.get("oci-layout")
+                index_member = member_by_name.get("index.json")
+                repositories_member = member_by_name.get("repositories")
+                if layout_member is None or index_member is None or repositories_member is None:
+                    fail("Docker OCI metadata inventory invalid")
+                layout = strict_json_bytes(
+                    tar_member_bytes(archive, layout_member, 1024 * 1024, "Docker OCI layout"),
+                    "Docker OCI layout",
+                )
+                if layout != {"imageLayoutVersion": "1.0.0"}:
+                    fail("Docker OCI layout mismatch")
+                index = exact_object(
+                    strict_json_bytes(
+                        tar_member_bytes(archive, index_member, 1024 * 1024, "Docker OCI index"),
+                        "Docker OCI index",
+                    ),
+                    {"schemaVersion", "mediaType", "manifests"},
+                    "Docker OCI index",
+                )
+                if (
+                    index["schemaVersion"] != 2
+                    or index["mediaType"] != "application/vnd.oci.image.index.v1+json"
+                    or type(index["manifests"]) is not list
+                    or len(index["manifests"]) != 1
+                ):
+                    fail("Docker OCI index inventory mismatch")
+                image_descriptor = exact_object(
+                    index["manifests"][0], {"mediaType", "digest", "size", "annotations"},
+                    "Docker OCI image descriptor",
+                )
+                repository, tag = expected_reference.rsplit(":", 1)
+                if (
+                    image_descriptor["mediaType"] != "application/vnd.oci.image.manifest.v1+json"
+                    or type(image_descriptor["digest"]) is not str
+                    or not re.fullmatch(r"sha256:[0-9a-f]{64}", image_descriptor["digest"])
+                    or type(image_descriptor["size"]) is not int
+                    or image_descriptor["annotations"] != {
+                        "io.containerd.image.name": f"docker.io/{expected_reference}",
+                        "org.opencontainers.image.ref.name": tag,
+                    }
+                ):
+                    fail("Docker OCI image descriptor mismatch")
+                containerd_image_id = image_descriptor["digest"]
+                image_manifest_name = f"blobs/sha256/{containerd_image_id.removeprefix('sha256:')}"
+                image_manifest_member = member_by_name.get(image_manifest_name)
+                if image_manifest_member is None:
+                    fail("Docker OCI image manifest inventory invalid")
+                image_manifest_bytes = tar_member_bytes(
+                    archive, image_manifest_member, 1024 * 1024, "Docker OCI image manifest",
+                )
+                if (
+                    image_descriptor["size"] != len(image_manifest_bytes)
+                    or f"sha256:{sha_bytes(image_manifest_bytes)}" != containerd_image_id
+                ):
+                    fail("Docker OCI image manifest identity mismatch")
+                image_manifest = exact_object(
+                    strict_json_bytes(image_manifest_bytes, "Docker OCI image manifest"),
+                    {"schemaVersion", "mediaType", "config", "layers"},
+                    "Docker OCI image manifest",
+                )
+                config_descriptor = exact_object(
+                    image_manifest["config"], {"mediaType", "digest", "size"},
+                    "Docker OCI config descriptor",
+                )
+                layer_descriptors = image_manifest["layers"]
+                if (
+                    image_manifest["schemaVersion"] != 2
+                    or image_manifest["mediaType"] != "application/vnd.oci.image.manifest.v1+json"
+                    or config_descriptor != {
+                        "mediaType": "application/vnd.oci.image.config.v1+json",
+                        "digest": f"sha256:{config_hex}",
+                        "size": config_member.size,
+                    }
+                    or type(layer_descriptors) is not list
+                    or len(layer_descriptors) != len(layer_names)
+                ):
+                    fail("Docker OCI image manifest inventory mismatch")
+                for layer_name, descriptor_value in zip(layer_names, layer_descriptors, strict=True):
+                    layer_digest = f"sha256:{layer_name.removeprefix('blobs/sha256/')}"
+                    descriptor_value = exact_object(
+                        descriptor_value, {"mediaType", "digest", "size"},
+                        "Docker OCI image layer descriptor",
+                    )
+                    if descriptor_value != layer_sources[layer_digest]:
+                        fail("Docker OCI manifest and layer sources differ")
+
+                fixed_names = {
+                    "manifest.json", "repositories", "index.json", "oci-layout",
+                    config_name, image_manifest_name, *layer_names,
+                }
+                blob_names = {name for name in actual_regular if blob_pattern.fullmatch(name)}
+                legacy_blob_names = blob_names - {config_name, image_manifest_name, *layer_names}
+                if (
+                    actual_regular != fixed_names | legacy_blob_names
+                    or len(legacy_blob_names) != len(layer_names)
+                ):
+                    fail("Docker OCI-blob archive contains unbound members")
+                legacy_rows: list[dict[str, Any]] = []
+                for name in legacy_blob_names:
+                    raw = tar_member_bytes(
+                        archive, member_by_name[name], 1024 * 1024,
+                        "Docker OCI legacy layer metadata",
+                    )
+                    if sha_bytes(raw) != name.removeprefix("blobs/sha256/"):
+                        fail("Docker OCI legacy layer metadata digest mismatch")
+                    row_value = strict_json_bytes(raw, "Docker OCI legacy layer metadata")
+                    row_fields = set(row_value) if type(row_value) is dict else set()
+                    expected_fields = {"id", "created", "container_config", "os"}
+                    if "parent" in row_fields:
+                        expected_fields.add("parent")
+                    if "config" in row_fields or "architecture" in row_fields:
+                        expected_fields.update({"config", "architecture"})
+                    row = exact_object(
+                        row_value, expected_fields, "Docker OCI legacy layer metadata",
+                    )
+                    if (
+                        type(row["id"]) is not str
+                        or not SHA64.fullmatch(row["id"])
+                        or type(row["created"]) is not str
+                        or not row["created"]
+                        or type(row["container_config"]) is not dict
+                        or row["os"] != "linux"
+                        or ("parent" in row and (type(row["parent"]) is not str or not SHA64.fullmatch(row["parent"])))
+                        or ("config" in row and type(row["config"]) is not dict)
+                    ):
+                        fail("Docker OCI legacy layer metadata shape mismatch")
+                    legacy_rows.append(row)
+                rows_by_id = {row["id"]: row for row in legacy_rows}
+                roots = [row for row in legacy_rows if "parent" not in row]
+                parents = [row["parent"] for row in legacy_rows if "parent" in row]
+                children: dict[str, list[str]] = {row_id: [] for row_id in rows_by_id}
+                for row in legacy_rows:
+                    if "parent" in row and row["parent"] in children:
+                        children[row["parent"]].append(row["id"])
+                if (
+                    len(rows_by_id) != len(legacy_rows)
+                    or len(roots) != 1
+                    or any(parent not in rows_by_id for parent in parents)
+                    or any(len(values) > 1 for values in children.values())
+                ):
+                    fail("Docker OCI legacy layer chain mismatch")
+                observed_chain: list[str] = []
+                current = roots[0]["id"]
+                while current not in observed_chain:
+                    observed_chain.append(current)
+                    successors = children[current]
+                    if not successors:
+                        break
+                    current = successors[0]
+                leaf = rows_by_id[observed_chain[-1]]
+                leaf_config = leaf.get("config")
+                leaf_labels = leaf_config.get("Labels") if type(leaf_config) is dict else None
+                if (
+                    len(observed_chain) != len(legacy_rows)
+                    or leaf.get("architecture") != "amd64"
+                    or type(leaf_labels) is not dict
+                    or leaf_labels.get("org.opencontainers.image.revision") != APPLICATION_COMMIT
+                    or leaf_labels.get("yoko.activation.profile") != PROFILE
+                    or sum("config" in row for row in legacy_rows) != 1
+                ):
+                    fail("Docker OCI legacy layer terminal metadata mismatch")
+                repositories = strict_json_bytes(
+                    tar_member_bytes(
+                        archive, repositories_member, 1024 * 1024,
+                        "Docker OCI repository metadata",
+                    ),
+                    "Docker OCI repository metadata",
+                )
+                if repositories != {
+                    repository: {tag: layer_names[-1].removeprefix("blobs/sha256/")},
+                }:
+                    fail("Docker OCI repository metadata mismatch")
 
             for layer_name, diff_id in zip(layer_names, diff_ids, strict=True):
                 layer_member = member_by_name.get(layer_name)
                 if layer_member is None or not layer_member.isfile():
                     fail("Docker archive referenced layer missing")
+                if oci_blob_format and diff_id != f"sha256:{layer_name.removeprefix('blobs/sha256/')}":
+                    fail("Docker OCI layer blob digest differs from rootfs diff ID")
                 inspect_docker_layer(
                     archive, layer_member, diff_id, watched, required_files, filesystem,
                 )
         after = os.fstat(descriptor)
-    except (OSError, tarfile.TarError) as exc:
+    except (AttributeError, KeyError, OSError, TypeError, ValueError, tarfile.TarError) as exc:
         raise ContractError("invalid Docker archive") from exc
     finally:
         os.close(descriptor)
@@ -656,6 +880,7 @@ def docker_archive_identity(
         "archive_sha256": archive_sha256,
         "archive_bytes": archive_bytes,
         "image_id": f"sha256:{sha_bytes(config_bytes)}",
+        "containerd_image_id": containerd_image_id,
         "labels": {
             "org.opencontainers.image.revision": APPLICATION_COMMIT,
             "yoko.activation.profile": PROFILE,
@@ -866,7 +1091,11 @@ def component_attestation(
         "application": {"commit": APPLICATION_COMMIT, "tree": APPLICATION_TREE, "component_subtree": subtree},
         "builder": builder,
         "platform": PLATFORM,
-        "image": {"reference": expected_image_reference(component, builder["commit"]), "id": archive["image_id"]},
+        "image": {
+            "reference": expected_image_reference(component, builder["commit"]),
+            "id": archive["image_id"],
+            "containerd_image_id": archive["containerd_image_id"],
+        },
         "docker_archive": {"path": archive_name, "sha256": archive["archive_sha256"], "bytes": archive["archive_bytes"]},
         "materials": materials,
         "labels": archive["labels"],
@@ -891,12 +1120,14 @@ def coordinated_manifest(
             "gravity": {
                 "image_reference": gravity["image"]["reference"],
                 "image_id": gravity["image"]["id"],
+                "containerd_image_id": gravity["image"]["containerd_image_id"],
                 "docker_archive": gravity["docker_archive"],
                 "attestation": {"path": GRAVITY_ATTESTATION, "sha256": sha_bytes(gravity_bytes), "bytes": len(gravity_bytes)},
             },
             "max_scraper": {
                 "image_reference": maximum["image"]["reference"],
                 "image_id": maximum["image"]["id"],
+                "containerd_image_id": maximum["image"]["containerd_image_id"],
                 "docker_archive": maximum["docker_archive"],
                 "attestation": {"path": MAX_ATTESTATION, "sha256": sha_bytes(maximum_bytes), "bytes": len(maximum_bytes)},
             },
@@ -982,6 +1213,8 @@ def verify_artifact(
         "application_commit": APPLICATION_COMMIT,
         "builder_commit": expected_builder_commit,
         "gravity_image_id": gravity["image"]["id"],
+        "gravity_containerd_image_id": gravity["image"]["containerd_image_id"],
         "max_image_id": maximum["image"]["id"],
+        "max_containerd_image_id": maximum["image"]["containerd_image_id"],
         "combined_docker_archive_bytes": gravity_archive["archive_bytes"] + maximum_archive["archive_bytes"],
     }

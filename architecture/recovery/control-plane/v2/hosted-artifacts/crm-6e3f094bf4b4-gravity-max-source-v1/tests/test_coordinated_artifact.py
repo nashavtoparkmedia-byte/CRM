@@ -93,7 +93,11 @@ def docker_archive(
     include_forbidden: bool = False,
     substitute_base: bool = False,
     tini_bytes: bytes = b"synthetic tini",
-) -> None:
+    oci_blob: bool = False,
+    descriptor_size_delta: int = 0,
+    substitute_blob_digest: bool = False,
+    extra_blob: bool = False,
+) -> tuple[str, str]:
     labels = {
         "org.opencontainers.image.revision": contract.APPLICATION_COMMIT,
         "yoko.activation.profile": contract.PROFILE,
@@ -130,8 +134,13 @@ def docker_archive(
             tini_bytes=tini_bytes,
         ),
     ]
-    layer_names = [f"layer-{index}/layer.tar" for index in range(len(layers))]
     diff_ids = [f"sha256:{hashlib.sha256(layer).hexdigest()}" for layer in layers]
+    layer_names = [
+        f"blobs/sha256/{diff_id.removeprefix('sha256:')}" if oci_blob else f"layer-{index}/layer.tar"
+        for index, diff_id in enumerate(diff_ids)
+    ]
+    if oci_blob and substitute_blob_digest:
+        layer_names[0] = f"blobs/sha256/{'0' * 64}"
     config = contract.canonical_bytes({
         "architecture": "amd64",
         "os": "linux",
@@ -139,21 +148,111 @@ def docker_archive(
         "config": runtime,
     })
     config_hash = hashlib.sha256(config).hexdigest()
-    manifest = contract.canonical_bytes([{
-        "Config": f"{config_hash}.json",
-        "RepoTags": [reference],
-        "Layers": layer_names,
-    }])
-    with tarfile.open(path, "w") as archive:
-        for name, raw in (
+    config_name = f"blobs/sha256/{config_hash}" if oci_blob else f"{config_hash}.json"
+    if not oci_blob:
+        manifest = contract.canonical_bytes([{
+            "Config": config_name,
+            "RepoTags": [reference],
+            "Layers": layer_names,
+        }])
+        files = [
             ("manifest.json", manifest),
-            (f"{config_hash}.json", config),
+            (config_name, config),
             *zip(layer_names, layers, strict=True),
-        ):
+        ]
+        containerd_image_id = f"sha256:{config_hash}"
+        directories: tuple[str, ...] = ()
+    else:
+        layer_descriptors = [
+            {
+                "mediaType": "application/vnd.oci.image.layer.v1.tar",
+                "digest": f"sha256:{layer_name.removeprefix('blobs/sha256/')}",
+                "size": len(layer) + descriptor_size_delta,
+            }
+            for layer_name, layer in zip(layer_names, layers, strict=True)
+        ]
+        image_manifest = contract.canonical_bytes({
+            "schemaVersion": 2,
+            "mediaType": "application/vnd.oci.image.manifest.v1+json",
+            "config": {
+                "mediaType": "application/vnd.oci.image.config.v1+json",
+                "digest": f"sha256:{config_hash}",
+                "size": len(config),
+            },
+            "layers": layer_descriptors,
+        })
+        image_manifest_hash = hashlib.sha256(image_manifest).hexdigest()
+        image_manifest_name = f"blobs/sha256/{image_manifest_hash}"
+        repository, tag = reference.rsplit(":", 1)
+        index = contract.canonical_bytes({
+            "schemaVersion": 2,
+            "mediaType": "application/vnd.oci.image.index.v1+json",
+            "manifests": [{
+                "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                "digest": f"sha256:{image_manifest_hash}",
+                "size": len(image_manifest),
+                "annotations": {
+                    "io.containerd.image.name": f"docker.io/{reference}",
+                    "org.opencontainers.image.ref.name": tag,
+                },
+            }],
+        })
+        layer_sources = {
+            descriptor["digest"]: descriptor
+            for descriptor in layer_descriptors
+        }
+        manifest = contract.canonical_bytes([{
+            "Config": config_name,
+            "RepoTags": [reference],
+            "Layers": layer_names,
+            "LayerSources": layer_sources,
+        }])
+        legacy_files: list[tuple[str, bytes]] = []
+        parent_id: str | None = None
+        for index_value in range(len(layers)):
+            row_id = hashlib.sha256(f"legacy-layer-{index_value}".encode("ascii")).hexdigest()
+            row: dict[str, object] = {
+                "id": row_id,
+                "created": "2026-09-01T00:00:00Z",
+                "container_config": {},
+                "os": "linux",
+            }
+            if parent_id is not None:
+                row["parent"] = parent_id
+            if index_value == len(layers) - 1:
+                row.update({"architecture": "amd64", "config": {"Labels": labels}})
+            raw = contract.canonical_bytes(row)
+            legacy_files.append((f"blobs/sha256/{hashlib.sha256(raw).hexdigest()}", raw))
+            parent_id = row_id
+        files = [
+            ("manifest.json", manifest),
+            ("repositories", contract.canonical_bytes({
+                repository: {tag: layer_names[-1].removeprefix("blobs/sha256/")},
+            })),
+            ("index.json", index),
+            ("oci-layout", contract.canonical_bytes({"imageLayoutVersion": "1.0.0"})),
+            (config_name, config),
+            (image_manifest_name, image_manifest),
+            *zip(layer_names, layers, strict=True),
+            *legacy_files,
+        ]
+        if extra_blob:
+            raw = b"unbound content-addressed payload\n"
+            files.append((f"blobs/sha256/{hashlib.sha256(raw).hexdigest()}", raw))
+        containerd_image_id = f"sha256:{image_manifest_hash}"
+        directories = ("blobs", "blobs/sha256")
+    with tarfile.open(path, "w") as archive:
+        for name in directories:
+            info = tarfile.TarInfo(name)
+            info.type = tarfile.DIRTYPE
+            info.mode = 0o755
+            archive.addfile(info)
+        for name, raw in files:
             info = tarfile.TarInfo(name)
             info.size = len(raw)
             info.mode = 0o444
             archive.addfile(info, BytesIO(raw))
+    return f"sha256:{config_hash}", containerd_image_id
 
 
 def source_proof() -> dict[str, object]:
@@ -343,17 +442,20 @@ class CoordinatedArtifactTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def assert_max_archive_rejected(self, path: Path) -> None:
+        with self.assertRaises(contract.ContractError):
+            self.max_archive_identity(path)
+
+    def max_archive_identity(self, path: Path) -> dict[str, object]:
         probe = contract.validate_max_probe(json.loads(self.probe.read_text()))
         files, directories, forbidden, base = contract.max_rootfs_contract(self.application, probe)
-        with self.assertRaises(contract.ContractError):
-            contract.docker_archive_identity(
-                path,
-                contract.expected_image_reference("max-scraper", self.builder_commit),
-                required_files=files,
-                required_directories=directories,
-                required_diff_id_prefix=base,
-                forbidden_paths=forbidden,
-            )
+        return contract.docker_archive_identity(
+            path,
+            contract.expected_image_reference("max-scraper", self.builder_commit),
+            required_files=files,
+            required_directories=directories,
+            required_diff_id_prefix=base,
+            forbidden_paths=forbidden,
+        )
 
     def rewrite_manifest(self, path: Path, mutation) -> None:
         entries: list[tuple[tarfile.TarInfo, bytes | None]] = []
@@ -373,7 +475,112 @@ class CoordinatedArtifactTests(unittest.TestCase):
     def test_positive_exact_artifact(self) -> None:
         result = self.verify(self.artifact)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertEqual(json.loads(result.stdout)["status"], "PASS")
+        verified = json.loads(result.stdout)
+        self.assertEqual(verified["status"], "PASS")
+        self.assertEqual(verified["gravity_image_id"], verified["gravity_containerd_image_id"])
+        self.assertEqual(verified["max_image_id"], verified["max_containerd_image_id"])
+
+    def test_oci_blob_artifact_binds_both_runtime_image_identities_end_to_end(self) -> None:
+        artifact = self.mutated()
+        for name in contract.ARTIFACT_MEMBERS:
+            if name not in (contract.GRAVITY_ARCHIVE, contract.MAX_ARCHIVE):
+                (artifact / name).unlink()
+        gravity_ids = docker_archive(
+            artifact / contract.GRAVITY_ARCHIVE,
+            contract.expected_image_reference("gravity", self.builder_commit),
+            maximum=False,
+            oci_blob=True,
+        )
+        maximum_ids = docker_archive(
+            artifact / contract.MAX_ARCHIVE,
+            contract.expected_image_reference("max-scraper", self.builder_commit),
+            maximum=True,
+            oci_blob=True,
+        )
+        self.run_emitter(artifact)
+        result = self.verify(artifact)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        verified = json.loads(result.stdout)
+        self.assertEqual(
+            (verified["gravity_image_id"], verified["gravity_containerd_image_id"]),
+            gravity_ids,
+        )
+        self.assertEqual(
+            (verified["max_image_id"], verified["max_containerd_image_id"]),
+            maximum_ids,
+        )
+        gravity_attestation = json.loads((artifact / contract.GRAVITY_ATTESTATION).read_text())
+        maximum_attestation = json.loads((artifact / contract.MAX_ATTESTATION).read_text())
+        manifest = json.loads((artifact / contract.MANIFEST).read_text())
+        self.assertEqual(
+            gravity_attestation["image"],
+            {
+                "reference": contract.expected_image_reference("gravity", self.builder_commit),
+                "id": gravity_ids[0],
+                "containerd_image_id": gravity_ids[1],
+            },
+        )
+        self.assertEqual(
+            maximum_attestation["image"],
+            {
+                "reference": contract.expected_image_reference("max-scraper", self.builder_commit),
+                "id": maximum_ids[0],
+                "containerd_image_id": maximum_ids[1],
+            },
+        )
+        self.assertEqual(manifest["components"]["gravity"]["containerd_image_id"], gravity_ids[1])
+        self.assertEqual(manifest["components"]["max_scraper"]["containerd_image_id"], maximum_ids[1])
+
+    def test_oci_blob_docker_archive_is_fully_validated(self) -> None:
+        path = self.base / "oci-blob-max-image.tar"
+        image_id, containerd_image_id = docker_archive(
+            path,
+            contract.expected_image_reference("max-scraper", self.builder_commit),
+            maximum=True,
+            oci_blob=True,
+        )
+        identity = self.max_archive_identity(path)
+        self.assertEqual(identity["image_id"], image_id)
+        self.assertEqual(identity["containerd_image_id"], containerd_image_id)
+
+    def test_oci_blob_layer_descriptor_drift_rejected(self) -> None:
+        path = self.base / "oci-layer-descriptor-drift.tar"
+        docker_archive(
+            path,
+            contract.expected_image_reference("max-scraper", self.builder_commit),
+            maximum=True,
+            oci_blob=True,
+            descriptor_size_delta=1,
+        )
+        self.assert_max_archive_rejected(path)
+
+    def test_oci_blob_content_digest_substitution_rejected(self) -> None:
+        path = self.base / "oci-layer-content-digest-substitution.tar"
+        docker_archive(
+            path,
+            contract.expected_image_reference("max-scraper", self.builder_commit),
+            maximum=True,
+            oci_blob=True,
+            substitute_blob_digest=True,
+        )
+        self.assert_max_archive_rejected(path)
+
+    def test_oci_blob_unbound_content_rejected(self) -> None:
+        path = self.base / "oci-unbound-content.tar"
+        docker_archive(
+            path,
+            contract.expected_image_reference("max-scraper", self.builder_commit),
+            maximum=True,
+            oci_blob=True,
+            extra_blob=True,
+        )
+        self.assert_max_archive_rejected(path)
+
+    def test_unknown_docker_manifest_field_rejected(self) -> None:
+        path = self.base / "unknown-manifest-field.tar"
+        shutil.copy2(self.artifact / contract.MAX_ARCHIVE, path)
+        self.rewrite_manifest(path, lambda value: value[0].update(Unexpected="rejected"))
+        self.assert_max_archive_rejected(path)
 
     def test_valid_utf8_github_metadata_is_accepted_fail_closed(self) -> None:
         utf8 = '{"display_title":"Merge repair-…"}'.encode("utf-8")

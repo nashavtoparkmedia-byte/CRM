@@ -26,7 +26,10 @@ Docker archive from the same no-follow descriptor used for hashing, validates
 the complete layer/diff-ID graph and inner member allowlist, binds the rootfs
 prefix to the pinned Node or Playwright config, checks the installed MAX Tini
 binary extracted from the checksum-bound package, and proves the fixed runtime
-source/filesystem contract from the merged image layers.
+source/filesystem contract from the merged image layers. For modern Docker
+OCI-blob save archives it binds both the config image ID and the
+runtime-visible containerd manifest ID; legacy archives bind the same config ID
+in both fields.
 
 The post-upload GitHub artifact ID, digest, and byte size are an external
 transport identity recorded by the workflow after upload; they cannot be
