@@ -173,7 +173,7 @@ def strict_json_bytes(raw: bytes, label: str) -> Any:
         return result
 
     try:
-        return json.loads(raw.decode("ascii"), object_pairs_hook=no_duplicates)
+        return json.loads(raw.decode("utf-8"), object_pairs_hook=no_duplicates)
     except (UnicodeError, ValueError) as exc:
         raise ContractError(f"invalid {label}") from exc
 

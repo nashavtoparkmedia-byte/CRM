@@ -375,6 +375,33 @@ class CoordinatedArtifactTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(json.loads(result.stdout)["status"], "PASS")
 
+    def test_valid_utf8_github_metadata_is_accepted_fail_closed(self) -> None:
+        utf8 = '{"display_title":"Merge repair-…"}'.encode("utf-8")
+        escaped = b'{"display_title":"Merge repair-\\u2026"}'
+        self.assertEqual(
+            contract.strict_json_bytes(utf8, "UTF-8 JSON"),
+            contract.strict_json_bytes(escaped, "escaped ASCII JSON"),
+        )
+
+        run_path = self.evidence / "run.json"
+        original = run_path.read_bytes()
+        value = json.loads(original)
+        value["display_title"] = "Merge pull request from repair-main-…"
+        run_path.write_text(json.dumps(value, ensure_ascii=False), encoding="utf-8")
+        try:
+            source_authority, _ = contract.validate_source_authority(self.evidence)
+            self.assertEqual(source_authority["run"]["id"], contract.SOURCE_RUN_ID)
+        finally:
+            run_path.write_bytes(original)
+
+        with self.assertRaises(contract.ContractError):
+            contract.strict_json_bytes(b'{"display_title":"\xe2"}', "invalid UTF-8")
+        with self.assertRaises(contract.ContractError):
+            contract.strict_json_bytes(
+                '{"display_title":"…","display_title":"duplicate"}'.encode("utf-8"),
+                "duplicate UTF-8 JSON",
+            )
+
     def test_empty_max_image_rootfs_rejected(self) -> None:
         path = self.base / "empty-max-image.tar"
         docker_archive(
