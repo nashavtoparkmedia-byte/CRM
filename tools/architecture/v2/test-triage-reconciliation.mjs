@@ -20,8 +20,8 @@ if (counts.RESOLVED_NON_WRITE !== 34 || counts.OWNER_VALID_WRITE !== 3 || counts
   throw new Error('fresh source-freeze ambiguity disposition count drift')
 }
 for (const id of [
-  '36c9b52b2b9c7b0d7ec8bec4120e6772b5421558fb0f591ed1ef2f9306aadce7',
-  'e1c81095a11532a1ba56e2629b9316a15d42ad5062aa52dfa190283adb26f5e1',
+  '42c9a964786f29fa8e6708acab43325249eba279ca89559fe07c03e7809bc9af',
+  '2bd8011eca9a0188606fa41066e222d13e39e9fbdd930e6d6320422bb6842415',
 ]) {
   if (records.find(record => record.record_id === id)?.semantic_state !== 'RESOLVED_NON_WRITE') throw new Error(`read-only SQL regression for ${id}`)
 }
