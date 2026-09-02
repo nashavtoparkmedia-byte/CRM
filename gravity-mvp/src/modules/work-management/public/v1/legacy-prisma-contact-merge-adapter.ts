@@ -22,6 +22,10 @@ export function makeWorkAutomatedMergeRecoveryRepositoryV1(
 ): AutomatedMergeRecoveryOwnerRepositoryV1 {
   return {
     async canRestore(plan) {
+      const archivedContactTaskCount = await transaction.task.count({
+        where: { contactId: plan.mergedId },
+      })
+      if (archivedContactTaskCount !== 0) return false
       if (plan.taskIds.length === 0) return true
       return transaction.task.count({
         where: { id: { in: plan.taskIds }, contactId: plan.survivorId },

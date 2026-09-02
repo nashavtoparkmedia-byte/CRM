@@ -11,6 +11,10 @@ export type { TelegramTransportOptionsV1 } from './http-connect-transport'
 export { buildPendingBotLinkRequests, createRecordBotUserProfileHandlerV1 } from './bot-user-profile-handler'
 export type { BotUserProfilePersistencePortV1, PendingBotLinkRequest } from './bot-user-profile-handler'
 export { registerTelegramMessagingDeliveryCapabilityV1 } from './messaging-delivery-capability'
+export { sendExactTelegramBotMessageV1 } from './bot-message-delivery'
+export type { TelegramBotInlineButtonV1, TelegramBotInlineKeyboardV1 } from './bot-message-delivery'
+export { prepareManualDriverTelegramLinkAuthorityV1 } from './manual-driver-telegram-link-authority'
+export type { PreparedManualDriverTelegramLinkAuthorityV1 } from './manual-driver-telegram-link-authority'
 export {
     deleteDriverTelegramLinkV1,
     dismissBotLinkRequestV1,

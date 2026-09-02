@@ -2,7 +2,6 @@ import { Metadata } from "next"
 import ChatsLayout from "./components/ChatsLayout"
 import MessagesShell from "./components/MessagesShell"
 import { SectionDescription } from "@/infrastructure/ui/SectionDescription"
-import { prisma } from "@/lib/prisma"
 
 export default async function MessagesPage({
     searchParams
@@ -12,77 +11,10 @@ export default async function MessagesPage({
     // 1. Read URL Params
     const resolvedParams = await searchParams
 
-    // Normalize id — also resolve driverId/phone to chatId if needed
-    let idParam = resolvedParams.id ?? resolvedParams.chatId
-    if (!idParam && (typeof resolvedParams.driver === 'string' || typeof resolvedParams.phone === 'string')) {
-        try {
-            let chat = null
-            // Try by driverId first
-            if (typeof resolvedParams.driver === 'string') {
-                chat = await prisma.chat.findFirst({
-                    where: { driverId: resolvedParams.driver },
-                    orderBy: { lastMessageAt: 'desc' },
-                    select: { id: true },
-                })
-            }
-            // Fallback: search by phone
-            if (!chat && typeof resolvedParams.phone === 'string') {
-                const phone = resolvedParams.phone.replace(/\D/g, '')
-                if (phone.length >= 10) {
-                    const last10 = phone.slice(-10)
-                    // Search by externalChatId (WhatsApp uses phone as chat ID)
-                    chat = await prisma.chat.findFirst({
-                        where: { externalChatId: { contains: last10 } },
-                        orderBy: { lastMessageAt: 'desc' },
-                        select: { id: true },
-                    })
-                    // Search by driver phone
-                    if (!chat) {
-                        chat = await prisma.chat.findFirst({
-                            where: { driver: { phone: { contains: last10 } } },
-                            orderBy: { lastMessageAt: 'desc' },
-                            select: { id: true },
-                        })
-                    }
-                    // Search by contact phone
-                    if (!chat) {
-                        const contact = await prisma.contact.findFirst({
-                            where: { phones: { some: { phone: { contains: last10 } } } },
-                            select: { id: true },
-                        })
-                        if (contact) {
-                            chat = await prisma.chat.findFirst({
-                                where: { contactId: contact.id },
-                                orderBy: { lastMessageAt: 'desc' },
-                                select: { id: true },
-                            })
-                        }
-                    }
-                }
-            }
-            if (chat) idParam = chat.id
-
-            // If still no chat found and we have a phone — create one server-side
-            if (!chat && typeof resolvedParams.phone === 'string') {
-                const phone = resolvedParams.phone.replace(/\D/g, '')
-                if (phone.length >= 10) {
-                    const { normalizePhoneE164 } = await import('@/modules/contacts/public/v1/phone-identity')
-                    const normalized = normalizePhoneE164(resolvedParams.phone) || `+${phone}`
-                    const newChat = await prisma.chat.create({
-                        data: {
-                            channel: 'whatsapp',
-                            externalChatId: `whatsapp:${phone}@s.whatsapp.net`,
-                            name: normalized,
-                            driverId: typeof resolvedParams.driver === 'string' ? resolvedParams.driver : undefined,
-                            status: 'new',
-                        },
-                        select: { id: true },
-                    })
-                    idParam = newChat.id
-                }
-            }
-        } catch {}
-    }
+    // Only an explicit, already-admitted Chat identifier may select a
+    // conversation. Driver/phone query strings are display navigation hints,
+    // not identity evidence and never create or guess a Chat during render.
+    const idParam = resolvedParams.id ?? resolvedParams.chatId
     const chatId = typeof idParam === 'string' ? idParam : null
 
     // Normalize list tab (default to 'all')

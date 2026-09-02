@@ -290,13 +290,14 @@ export type ProviderIdentityAliasCommandV1 = {
 }
 
 export async function attachProviderIdentityAliasV1(command: ProviderIdentityAliasCommandV1) {
-  return runContactOwnershipTransaction(async transaction => {
-    const scope = await lockContactOwnershipRows(transaction, { identityIds: [command.identityId] })
+  const result = await runContactOwnershipTransaction(async transaction => {
+    let scope = await lockContactOwnershipRows(transaction, { identityIds: [command.identityId] })
     const identity = await transaction.contactIdentity.findUnique({
       where: { id: command.identityId },
-      select: { id: true, channel: true, metadata: true },
+      select: { id: true, contactId: true, channel: true, isActive: true, metadata: true },
     })
     if (!identity
+      || !identity.isActive
       || identity.channel !== command.channel
       || identityEvidenceState(identity.metadata).providerAccountId !== command.providerAccountId) {
       throw new Error('IDENTITY_ALIAS_SCOPE_MISMATCH')
@@ -306,14 +307,114 @@ export async function attachProviderIdentityAliasV1(command: ProviderIdentityAli
         id: { not: identity.id },
         channel: command.channel,
         isActive: true,
-        metadata: { path: ['providerAliasValues'], array_contains: [command.aliasValue] },
+        OR: [
+          { externalId: command.aliasValue },
+          { metadata: { path: ['providerAliasValues'], array_contains: [command.aliasValue] } },
+        ],
       },
-      select: { id: true, metadata: true },
+      select: { id: true, contactId: true, externalId: true, metadata: true },
     })
-    const collision = candidates.find(candidate => (
+    const scopedCandidates = candidates.filter(candidate => (
       identityEvidenceState(candidate.metadata).providerAccountId === command.providerAccountId
     ))
-    if (collision) throw new Error('IDENTITY_ALIAS_COLLISION')
+    // Redundant legacy identities on the already-owned Contact must not turn
+    // into cross-person conflict, but attaching an alias that is another
+    // primary key would make lookup ambiguous. Leave both primaries unchanged;
+    // their exact Contact owner is already the same.
+    const collision = scopedCandidates.find(candidate => candidate.contactId !== identity.contactId)
+    const sameContactPrimary = scopedCandidates.find(candidate => (
+      candidate.contactId === identity.contactId && candidate.externalId === command.aliasValue
+    ))
+    if (collision) {
+      // CNT1 serializes discovery, and this expanded row scope protects both
+      // persisted sides while the durable contradiction is written.
+      scope = await lockContactOwnershipRows(transaction, {
+        contactIds: [identity.contactId, collision.contactId],
+        identityIds: [identity.id, collision.id],
+      })
+      const contactIds = [...new Set([identity.contactId, collision.contactId])].sort()
+      const contacts = await transaction.contact.findMany({
+        where: { id: { in: contactIds } },
+        select: { id: true, customFields: true },
+      })
+      const now = new Date().toISOString()
+      const evidenceRoot = command.evidenceRoot
+        ?? `provider-alias:${command.channel}:${command.providerAccountId}:${command.aliasType}:${command.aliasValue}`
+      for (const contact of contacts) {
+        const customFields = jsonRecord(contact.customFields)
+        const conflicts = Array.isArray(customFields.identityConflicts)
+          ? customFields.identityConflicts
+          : []
+        const localIdentityId = contact.id === identity.contactId ? identity.id : collision.id
+        const otherIdentityId = localIdentityId === identity.id ? collision.id : identity.id
+        const otherContactIds = contactIds.filter(id => id !== contact.id)
+        const duplicate = conflicts.some(item => {
+          const conflict = jsonRecord(item)
+          const details = jsonRecord(conflict.details)
+          return conflict.status === 'open'
+            && conflict.conflictType === 'provider_identity_alias_collision'
+            && conflict.identityId === localIdentityId
+            && details.channel === command.channel
+            && details.providerAccountId === command.providerAccountId
+            && details.aliasType === command.aliasType
+            && details.aliasValue === command.aliasValue
+            && details.otherIdentityId === otherIdentityId
+        })
+        if (!duplicate) {
+          await transaction.contact.update({
+            where: { id: contact.id },
+            data: {
+              customFields: {
+                ...customFields,
+                identityConflicts: [...conflicts, {
+                  id: randomUUID(),
+                  otherContactIds,
+                  identityId: localIdentityId,
+                  conflictType: 'provider_identity_alias_collision',
+                  evidenceRoot,
+                  source: command.provenance,
+                  details: {
+                    channel: command.channel,
+                    providerAccountId: command.providerAccountId,
+                    aliasType: command.aliasType,
+                    aliasValue: command.aliasValue,
+                    otherIdentityId,
+                  },
+                  detectedAt: now,
+                  status: 'open',
+                }].slice(-100),
+              } as Prisma.InputJsonObject,
+            },
+          })
+        }
+      }
+      for (const candidate of [identity, collision]) {
+        const metadata = jsonRecord(candidate.metadata)
+        if (identityEvidenceState(metadata).conflictState !== 'conflicted') {
+          await transaction.contactIdentity.update({
+            where: { id: candidate.id },
+            data: {
+              metadata: {
+                ...metadata,
+                conflictState: 'conflicted',
+              } as Prisma.InputJsonObject,
+            },
+          })
+        }
+      }
+      await assertContactOwnershipPostconditions(transaction, scope)
+      return { status: 'collision' as const }
+    }
+    if (sameContactPrimary) {
+      await assertContactOwnershipPostconditions(transaction, scope)
+      return {
+        status: 'already_owned' as const,
+        identityId: identity.id,
+        aliasType: command.aliasType,
+        aliasValue: command.aliasValue,
+        observedAt: new Date().toISOString(),
+      }
+    }
     const metadata = jsonRecord(identity.metadata)
     const aliases = Array.isArray(metadata.providerAliases) ? metadata.providerAliases : []
     const withoutAlias = aliases.filter(item => (
@@ -346,10 +447,16 @@ export async function attachProviderIdentityAliasV1(command: ProviderIdentityAli
     })
     await assertContactOwnershipPostconditions(transaction, scope)
     return {
+      status: 'attached' as const,
       identityId: identity.id,
       aliasType: command.aliasType,
       aliasValue: command.aliasValue,
       observedAt,
     }
   })
+  // Throw only after the transaction commits, so callers retain their existing
+  // fail-closed control flow without rolling back the collision evidence.
+  if (result.status === 'collision') throw new Error('IDENTITY_ALIAS_COLLISION')
+  const { status: _status, ...attached } = result
+  return attached
 }

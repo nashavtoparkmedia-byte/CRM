@@ -9,12 +9,13 @@ import { randomUUID } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { NewMessage, Raw } from 'telegram/events'
 import { transportRegistryLifecycleV1 as registry } from '@/modules/messaging/public/v1/transport-registry-lifecycle'
-import { attachBinaryMessageMediaV1, attachMessageMediaV1, createChannelMessageV1, deleteConversationsByIdV1, deleteHistoryImportJobsForChannelV1, deleteHistoryImportJobsForConnectionV1, ensureConversationContactLinkV1, linkMatchedDriverToConversationCapabilityV1, patchChannelConversationV1, patchHistoryImportJobV1, patchMessageDeliveryV1, patchMessageMetadataV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
+import { appendConversationIdentityCollisionV1, attachBinaryMessageMediaV1, attachMessageMediaV1, createChannelMessageV1, deleteConversationsByIdV1, deleteHistoryImportJobsForChannelV1, deleteHistoryImportJobsForConnectionV1, ensureConversationContactLinkV1, patchChannelConversationV1, patchHistoryImportJobV1, patchMessageDeliveryV1, patchMessageMetadataV1, prepareOutboundConversationV1, upsertChannelConversationV1 } from '@/modules/messaging/public/v1'
 import { ATTACH_BINARY_MESSAGE_MEDIA_COMMAND_V1, ATTACH_MESSAGE_MEDIA_COMMAND_V1, CREATE_CHANNEL_MESSAGE_COMMAND_V1, DELETE_CONVERSATIONS_BY_ID_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CHANNEL_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CONNECTION_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_CHANNEL_CONVERSATION_COMMAND_V1, PATCH_HISTORY_IMPORT_JOB_COMMAND_V1, PATCH_MESSAGE_DELIVERY_COMMAND_V1, PATCH_MESSAGE_METADATA_COMMAND_V1, UPSERT_CHANNEL_CONVERSATION_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { projectTelegramConnectionMetadata } from '@/modules/telegram-channel/public/v1/telegram-connection-public-metadata'
 import { getTelegramTransportOptionsV1 } from '@/modules/telegram-channel/public/v1'
 import { requireIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
-import { cleanupDanglingContactIdentitiesV1, isResolvedChannelContactResultV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
+import { cleanupDanglingContactIdentitiesV1, isResolvedChannelContactResultV1, markChannelIdentityConflictV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
+import { contactReachabilityV1 } from '@/modules/contacts/public/v1/contact-reachability'
 
 // Global map to keep track of active login clients for QR
 // Note: In a production serverless environment, this would need a different approach (like a separate service or Redis)
@@ -370,6 +371,8 @@ export async function disconnectTelegram(id: string) {
         data: { isActive: false, sessionString: null, isDefault: false }
     })
 
+    await evictTelegramClient(id)
+
     // If we disconnected the default, try to make another active one the default
     if (connection?.isDefault) {
         const nextActive = await (prisma as any).telegramConnection.findFirst({
@@ -387,10 +390,27 @@ export async function disconnectTelegram(id: string) {
 }
 // Global cache for Telegram clients to prevent constant reconnects
 const clientCache = new Map<string, TelegramClient>()
+// Authenticated provider account observed from client.getMe(), keyed by the
+// transport connection row. A connection label/id is not itself account proof.
+const tgProviderAccountIds = new Map<string, string>()
 // instanceId per connection — links client to registry entry
 const tgInstanceIds = new Map<string, string>()
 // Idempotency guard: track which connections already have listeners attached
 const initializedListeners = new Set<string>()
+
+async function evictTelegramClient(connectionId: string): Promise<void> {
+    const cached = clientCache.get(connectionId)
+    try {
+        await cached?.disconnect()
+    } catch (error: unknown) {
+        console.warn(`[TG-CACHE] Failed to disconnect client ${connectionId}:`, error)
+    } finally {
+        clientCache.delete(connectionId)
+        initializedListeners.delete(connectionId)
+        tgInstanceIds.delete(connectionId)
+        tgProviderAccountIds.delete(connectionId)
+    }
+}
 // Validate a Telegram message timestamp (epoch seconds).
 // Telegram MTProto has had corrupted-date edge cases (mostly around
 // service / forwarded messages); guard matches the WA clampMessageTs
@@ -418,7 +438,6 @@ export async function getTelegramRuntimeStatus() {
     return registry.getAllEntries().filter(e => e.channel === 'telegram')
 }
 
-import { channelDriverMatchV1 as DriverMatchService } from '@/modules/fleet-operations/public/v1/channel-driver-match'
 import { publishPersistedMessageV1 as emitMessageReceived } from '@/modules/messaging/public/v1/persisted-message-ingress'
 import { channelConversationWorkflowV1 as ConversationWorkflowService } from '@/modules/messaging/public/v1/channel-conversation-workflow'
 
@@ -464,15 +483,251 @@ function detectTgMediaType(message: any): { type: string; fallback: string } | n
     return { type: 'text', fallback: '[Медиа]' }
 }
 
-async function processInboundTelegramMessage(message: any, connectionId: string, loggerPrefix = 'TG-LISTENER') {
+type TelegramPrivateIngressPhase = 'inbound' | 'mirror' | 'import'
+
+type TelegramPrivateConversation = {
+    id: string
+    channel: string
+    externalChatId: string
+    chatType: string
+    contactId: string | null
+    contactIdentityId: string | null
+    driverId: string | null
+    metadata: unknown
+}
+
+function metadataRecord(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object' && !Array.isArray(value)
+        ? value as Record<string, unknown>
+        : {}
+}
+
+function concreteOpaqueId(value: unknown): string | null {
+    if (typeof value !== 'string') return null
+    return value !== '' && value === value.trim() && value !== 'legacy' ? value : null
+}
+
+function telegramMessageExternalId(
+    providerAccountId: string,
+    peerId: string,
+    providerMessageId: string,
+): string {
+    if (
+        !/^\d+$/.test(providerAccountId)
+        || !/^\d+$/.test(peerId)
+        || !/^\d+$/.test(providerMessageId)
+        || providerAccountId === '0'
+        || peerId === '0'
+        || providerMessageId === '0'
+    ) {
+        throw new Error('TELEGRAM_MESSAGE_IDENTITY_UNPROVEN')
+    }
+    return `telegram:${providerAccountId}:${peerId}:${providerMessageId}`
+}
+
+function exactTelegramProviderMessageId(
+    externalId: string,
+    providerAccountId: string,
+    peerId: string,
+): string | null {
+    const prefix = `telegram:${providerAccountId}:${peerId}:`
+    if (!externalId.startsWith(prefix)) return null
+    const raw = externalId.slice(prefix.length)
+    return /^\d+$/.test(raw) && raw !== '0' ? raw : null
+}
+
+async function rejectTelegramConversationCollision(
+    chat: TelegramPrivateConversation,
+    input: {
+        phase: TelegramPrivateIngressPhase
+        externalChatId: string
+        peerId: string
+        providerAccountId: string
+        connectionId: string
+    },
+    reason: string,
+): Promise<never> {
+    const storedMetadata = metadataRecord(chat.metadata)
+    const existingProviderAccountId = concreteOpaqueId(storedMetadata.providerAccountId)
+    const existingConnectionId = concreteOpaqueId(storedMetadata.connectionId)
+    const existingPeerId = concreteOpaqueId(storedMetadata.peerId)
+    const evidence = {
+        channel: 'telegram' as const,
+        reason,
+        phase: input.phase,
+        externalChatId: input.externalChatId,
+        existingExternalChatId: chat.externalChatId,
+        incomingPeerId: input.peerId,
+        existingPeerId,
+        incomingProviderAccountId: input.providerAccountId,
+        existingProviderAccountId,
+        incomingConnectionId: input.connectionId,
+        existingConnectionId,
+    }
+    await appendConversationIdentityCollisionV1({ chatId: chat.id, evidence })
+    if (chat.contactId && chat.contactIdentityId) {
+        try {
+            await markChannelIdentityConflictV1({
+                contactId: chat.contactId,
+                identityId: chat.contactIdentityId,
+                channel: 'telegram',
+                reason,
+                evidenceRoot: `channel-collision:telegram:${chat.externalChatId}:${input.providerAccountId}:${input.connectionId}:${input.peerId}:${reason}`,
+                details: {
+                    phase: input.phase,
+                    incomingPeerId: input.peerId,
+                    existingPeerId,
+                    incomingProviderAccountId: input.providerAccountId,
+                    existingProviderAccountId,
+                    incomingConnectionId: input.connectionId,
+                    existingConnectionId,
+                },
+            })
+        } catch (error: unknown) {
+            console.error('[TG-IDENTITY] Failed to mark linked identity conflicted:', error)
+        }
+    }
+    throw new Error(`TELEGRAM_CONVERSATION_IDENTITY_COLLISION:${reason}`)
+}
+
+/**
+ * Admits one private GramJS conversation before any person/link/message write.
+ * Telegram user ids are global-looking, but a CRM conversation is owned by the
+ * exact authenticated account and transport that observed it. Legacy/unbound
+ * rows are evidence gaps, not permission to claim the peer for this account.
+ */
+async function admitTelegramPrivateConversation(input: {
+    phase: TelegramPrivateIngressPhase
+    peerId: string
+    providerAccountId: string
+    connectionId: string
+    displayName: string | null
+    lastMessageAt?: Date
+}): Promise<TelegramPrivateConversation> {
+    const peerId = concreteOpaqueId(input.peerId)
+    const providerAccountId = concreteOpaqueId(input.providerAccountId)
+    const connectionId = concreteOpaqueId(input.connectionId)
+    if (!peerId || !/^\d+$/.test(peerId) || peerId === '0') {
+        throw new Error('TELEGRAM_PEER_ID_UNPROVEN')
+    }
+    if (!providerAccountId || providerAccountId !== input.providerAccountId) {
+        throw new Error('TELEGRAM_PROVIDER_ACCOUNT_ID_UNPROVEN')
+    }
+    if (!connectionId || connectionId !== input.connectionId) {
+        throw new Error('TELEGRAM_CONNECTION_ID_UNPROVEN')
+    }
+
+    const externalChatId = `telegram:${peerId}`
+    const admitted = await upsertChannelConversationV1({
+        contract: UPSERT_CHANNEL_CONVERSATION_COMMAND_V1,
+        externalChatId,
+        channel: 'telegram',
+        name: input.displayName ?? `TG ${peerId}`,
+        chatType: 'private',
+        metadata: {
+            chatKind: 'private',
+            peerId,
+            providerAccountId,
+            connectionId,
+        },
+    })
+    const chat = admitted.conversation as TelegramPrivateConversation
+    const storedMetadata = metadataRecord(chat.metadata)
+    const storedProviderAccountId = concreteOpaqueId(storedMetadata.providerAccountId)
+    const storedConnectionId = concreteOpaqueId(storedMetadata.connectionId)
+    const storedPeerId = concreteOpaqueId(storedMetadata.peerId)
+    const reason = chat.channel !== 'telegram'
+        ? 'channel_mismatch'
+        : chat.externalChatId !== externalChatId
+            ? 'conversation_key_mismatch'
+            : storedProviderAccountId === null
+                ? 'provider_account_unproven'
+                : storedProviderAccountId !== providerAccountId
+                    ? 'provider_account_mismatch'
+                    : storedConnectionId === null
+                        ? 'transport_connection_unproven'
+                        : storedConnectionId !== connectionId
+                            ? 'transport_connection_mismatch'
+                            : storedPeerId === null
+                                ? 'peer_identity_unproven'
+                                : storedPeerId !== peerId
+                                    ? 'peer_identity_mismatch'
+                                    : chat.chatType !== 'private' || storedMetadata.chatKind !== 'private'
+                                        ? 'chat_kind_mismatch'
+                                        : null
+    if (reason) {
+        await rejectTelegramConversationCollision(chat, {
+            phase: input.phase,
+            externalChatId,
+            peerId,
+            providerAccountId,
+            connectionId,
+        }, reason)
+    }
+
+    const contactResult = await resolveChannelContactOperationV1(
+        'telegram',
+        peerId,
+        null,
+        input.displayName,
+        { chatKind: 'private', providerAccountId },
+    )
+    if (
+        !isResolvedChannelContactResultV1(contactResult)
+        || !contactResult.identity
+        || contactResult.identity.channel !== 'telegram'
+        || contactResult.identity.externalId !== peerId
+    ) {
+        throw new Error(`CONTACT_RESOLUTION_BLOCKED:${contactResult.status}`)
+    }
+    await ensureConversationContactLinkV1({
+        contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
+        chatId: chat.id,
+        contactId: contactResult.contact.id,
+        contactIdentityId: contactResult.identity.id,
+    })
+    if (input.phase === 'inbound') {
+        await contactReachabilityV1.recordExactProviderReachability({
+            identityId: contactResult.identity.id,
+            contactId: contactResult.contact.id,
+            channel: 'telegram',
+            providerAccountId,
+            providerTargetId: peerId,
+            status: 'confirmed',
+        })
+    }
+
+    const patched = await patchChannelConversationV1({
+        contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1,
+        selector: { chatId: chat.id },
+        patch: {
+            name: input.displayName ?? `TG ${peerId}`,
+            ...(input.lastMessageAt ? { lastMessageAt: input.lastMessageAt } : {}),
+        },
+    })
+    return patched.conversation as TelegramPrivateConversation
+}
+
+async function processInboundTelegramMessage(
+    message: any,
+    connectionId: string,
+    providerAccountId: string,
+    loggerPrefix = 'TG-LISTENER',
+    phase: 'inbound' | 'import' = 'inbound',
+) {
     if (message && !message.out) {
-        const senderId = message.peerId?.userId?.toString() || message.fromId?.userId?.toString();
+        // Only PeerUser denotes a private conversation. A group/channel update
+        // may still have fromId.userId; treating that sender as the dialog peer
+        // would manufacture a private Chat from a room message.
+        const senderId = message.peerId?.userId?.toString()
         const mediaInfo = detectTgMediaType(message)
         const text = message.message || (mediaInfo ? mediaInfo.fallback : '')
         if (!senderId || !text) return
 
-        const externalChatId = `telegram:${senderId}`
-        const externalMsgId = message.id?.toString()
+        const rawExternalMsgId = message.id?.toString()
+        const externalMsgId = rawExternalMsgId
+            ? telegramMessageExternalId(providerAccountId, senderId, rawExternalMsgId)
+            : null
         // Validate message.date — corrupted timestamps (Y2038 overflow,
         // pre-2013) would wreck chronology. If we can't trust the date,
         // drop the message rather than file it under "now".
@@ -485,10 +740,6 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
 
         console.log(`[${loggerPrefix}] INBOUND connId=${connectionId} senderId=${senderId} msgId=${externalMsgId} text="${text.substring(0, 30)}"`)
 
-        // 1. Resolve or CREATE unified chat
-        let unifiedChat = await (prisma.chat as any).findUnique({ where: { externalChatId } })
-        let chatCreated = false
-
         // Derive display name from GramJS sender entity
         const senderName = (() => {
             const fn = (message.sender?.firstName ?? '').trim()
@@ -499,50 +750,16 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
             return null
         })()
 
-        if (!unifiedChat) {
-            const created = await upsertChannelConversationV1({ contract: UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, externalChatId, channel: 'telegram', name: senderName || `TG ${senderId}`, chatType: 'private', metadata: {} })
-            unifiedChat = created.conversation as any
-            await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: now } })
-            chatCreated = true
-            console.log(`[${loggerPrefix}] AUTO-CREATED chat=${unifiedChat.id} for externalChatId=${externalChatId} name="${senderName || `TG ${senderId}`}"`)
-        } else {
-            const patched = await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: now, ...(senderName ? { name: senderName } : {}) } })
-            unifiedChat = patched.conversation as any
-        }
-
-        // 2. Relink driver if missing (on every inbound)
-        if (!unifiedChat.driverId) {
-            const linked = await DriverMatchService.linkChatToDriver(unifiedChat.id, { telegramId: senderId }, linkMatchedDriverToConversationCapabilityV1)
-            if (linked) {
-                unifiedChat = await (prisma.chat as any).findUnique({ where: { id: unifiedChat.id } })
-                console.log(`[${loggerPrefix}] RELINKED chat=${unifiedChat.id} to driver=${unifiedChat.driverId}`)
-            } else {
-                console.log(`[${loggerPrefix}] chat=${unifiedChat.id} remains UNLINKED (no driver match)`)
-            }
-        }
-
-        // ── Contact Model dual write ──────────────────────────────
-        try {
-            const contactResult = await resolveChannelContactOperationV1(
-                'telegram',
-                senderId,
-                null,  // TG GramJS не передаёт номер телефона
-                message.sender?.firstName || message.sender?.username || null,
-                { chatKind: 'private', providerAccountId: connectionId },
-            )
-            if (!isResolvedChannelContactResultV1(contactResult) || !contactResult.identity) {
-                throw new Error(`CONTACT_RESOLUTION_BLOCKED:${contactResult.status}`)
-            }
-            await ensureConversationContactLinkV1({
-                contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
-                chatId: unifiedChat.id,
-                contactId: contactResult.contact.id,
-                contactIdentityId: contactResult.identity.id,
-            })
-        } catch (contactErr: any) {
-            console.error(`[${loggerPrefix}] ContactService error (non-blocking): ${contactErr.message}`)
-        }
-        // ──────────────────────────────────────────────────────────
+        // Admit the exact provider account + connection + peer and complete
+        // Contacts ownership before any message or workflow side effect.
+        const unifiedChat = await admitTelegramPrivateConversation({
+            phase,
+            peerId: senderId,
+            providerAccountId,
+            connectionId,
+            displayName: senderName,
+            lastMessageAt: now,
+        })
 
         // 3. DE-DUPLICATION: by externalId or content+time
         const existing = await (prisma.message as any).findFirst({
@@ -591,7 +808,7 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
             }
         } else {
             const msgType = mediaInfo?.type || 'text'
-            const savedMsgResult = await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: unifiedChat.id, direction: 'inbound', content: text, channel: 'telegram', type: msgType as any, sentAt: now, status: 'delivered', externalId: externalMsgId || `telegram:${unifiedChat.id}:${now.getTime()}` })
+            const savedMsgResult = await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: unifiedChat.id, direction: 'inbound', content: text, channel: 'telegram', type: msgType as any, sentAt: now, status: 'delivered', externalId: externalMsgId || `telegram:${providerAccountId}:${senderId}:local-${now.getTime()}`, metadata: rawExternalMsgId ? { providerMessageId: rawExternalMsgId, providerAccountId, peerId: senderId } : {} })
             const savedMsg = savedMsgResult.message as any
 
             // Download and save media attachment (photo, voice, video, document, sticker)
@@ -614,7 +831,7 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
                 }
             }
 
-            console.log(`[${loggerPrefix}] SAVED inbound msgId=${externalMsgId} chat=${unifiedChat.id} driver=${unifiedChat.driverId || 'none'} newChat=${chatCreated}`)
+            console.log(`[${loggerPrefix}] SAVED inbound msgId=${externalMsgId} chat=${unifiedChat.id} driver=${unifiedChat.driverId || 'none'}`)
             ConversationWorkflowService.onInboundMessage(unifiedChat.id, now).catch(e =>
                 console.error(`[${loggerPrefix}] onInboundMessage error:`, e.message)
             )
@@ -635,7 +852,12 @@ async function processInboundTelegramMessage(message: any, connectionId: string,
  *   3. If found → update externalId if missing, skip create
  *   4. If not found → external send, create new outbound message
  */
-async function processOutboundMirrorMessage(message: any, connectionId: string, loggerPrefix = 'TG-MIRROR') {
+async function processOutboundMirrorMessage(
+    message: any,
+    connectionId: string,
+    providerAccountId: string,
+    loggerPrefix = 'TG-MIRROR',
+) {
     if (!message?.out) return
 
     // Recipient = the person we're writing TO (only private chats)
@@ -647,69 +869,37 @@ async function processOutboundMirrorMessage(message: any, connectionId: string, 
     // Skip only if there's truly nothing to save (no text, no media)
     if (!text && !mediaInfo) return
 
-    const externalChatId = `telegram:${recipientId}`
-    const externalMsgId = message.id?.toString()
+    const rawExternalMsgId = message.id?.toString()
+    const externalMsgId = rawExternalMsgId
+        ? telegramMessageExternalId(providerAccountId, recipientId, rawExternalMsgId)
+        : null
     const validated = validateTgDate(message.date)
     if (!validated) return
     const sentAt = validated
 
-    let chat = await (prisma.chat as any).findUnique({ where: { externalChatId } })
-    if (!chat) {
-        let recipient: any = message.chat ?? null
-        if (!recipient && typeof message.getChat === 'function') {
-            try { recipient = await message.getChat() } catch { /* fallback below */ }
-        }
-        const recipientName = (() => {
-            const firstName = (recipient?.firstName ?? '').trim()
-            const lastName = (recipient?.lastName ?? '').trim()
-            const fullName = [firstName, lastName].filter(Boolean).join(' ').trim()
-            if (fullName) return fullName
-            if (recipient?.username) return `@${recipient.username}`
-            return `TG ${recipientId}`
-        })()
-
-        const created = await upsertChannelConversationV1({
-            contract: UPSERT_CHANNEL_CONVERSATION_COMMAND_V1,
-            externalChatId,
-            channel: 'telegram',
-            name: recipientName,
-            chatType: 'private',
-            metadata: { connectionId },
-        })
-        chat = created.conversation as any
-        await patchChannelConversationV1({
-            contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1,
-            selector: { chatId: chat.id },
-            patch: { lastMessageAt: sentAt },
-        })
-
-        try {
-            const contactResult = await resolveChannelContactOperationV1(
-                'telegram', recipientId, null, recipientName,
-                { chatKind: 'private', providerAccountId: connectionId },
-            )
-            if (!isResolvedChannelContactResultV1(contactResult) || !contactResult.identity) {
-                throw new Error(`CONTACT_RESOLUTION_BLOCKED:${contactResult.status}`)
-            }
-            await ensureConversationContactLinkV1({
-                contract: ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1,
-                chatId: chat.id,
-                contactId: contactResult.contact.id,
-                contactIdentityId: contactResult.identity.id,
-            })
-        } catch (contactErr: any) {
-            console.error(`[${loggerPrefix}] ContactService error (non-blocking): ${contactErr.message}`)
-        }
-        try {
-            await DriverMatchService.linkChatToDriver(
-                chat.id,
-                { telegramId: recipientId },
-                linkMatchedDriverToConversationCapabilityV1,
-            )
-        } catch { /* an unlinked outbound chat is still valid */ }
-
-        console.log(`[${loggerPrefix}] AUTO-CREATED outbound chat=${chat.id} for externalChatId=${externalChatId}`)
+    let recipient: any = message.chat ?? null
+    if (!recipient && typeof message.getChat === 'function') {
+        try { recipient = await message.getChat() } catch { /* display name remains optional */ }
     }
+    const recipientName = (() => {
+        const firstName = (recipient?.firstName ?? '').trim()
+        const lastName = (recipient?.lastName ?? '').trim()
+        const fullName = [firstName, lastName].filter(Boolean).join(' ').trim()
+        if (fullName) return fullName
+        if (recipient?.username) return `@${recipient.username}`
+        return null
+    })()
+
+    // Mirrored messages are provider observations too. Re-admit and re-link
+    // every event; an existing global peer key is never enough authority.
+    const chat = await admitTelegramPrivateConversation({
+        phase: 'mirror',
+        peerId: recipientId,
+        providerAccountId,
+        connectionId,
+        displayName: recipientName,
+        lastMessageAt: sentAt,
+    })
 
     const msgType = mediaInfo?.type || 'text'
     const contentForDedup = text
@@ -742,7 +932,7 @@ async function processOutboundMirrorMessage(message: any, connectionId: string, 
     }
 
     // New outbound message sent from outside CRM — mirror it
-    const savedResult = await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: chat.id, direction: 'outbound', content: text, channel: 'telegram', type: msgType as any, sentAt, status: 'delivered', externalId: externalMsgId || `telegram:${chat.id}:${sentAt.getTime()}` })
+    const savedResult = await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: chat.id, direction: 'outbound', content: text, channel: 'telegram', type: msgType as any, sentAt, status: 'delivered', externalId: externalMsgId || `telegram:${providerAccountId}:${recipientId}:local-${sentAt.getTime()}`, metadata: rawExternalMsgId ? { providerMessageId: rawExternalMsgId, providerAccountId, peerId: recipientId } : {} })
     const saved = savedResult.message as any
 
     await ensureOutboundTelegramAttachment(message, saved.id, msgType, loggerPrefix)
@@ -794,7 +984,11 @@ async function ensureOutboundTelegramAttachment(
     }
 }
 
-async function catchUpMissedMessages(client: TelegramClient, connectionId: string) {
+async function catchUpMissedMessages(
+    client: TelegramClient,
+    connectionId: string,
+    providerAccountId: string,
+) {
     try {
         console.log(`[TG-CATCHUP] Fetching recent dialogs for connectionId=${connectionId}`)
         const dialogs = await client.getDialogs({ limit: 30 })
@@ -808,9 +1002,20 @@ async function catchUpMissedMessages(client: TelegramClient, connectionId: strin
             const messages = await client.getMessages(dialog.entity, { limit: total })
             for (const msg of messages.reverse()) {
                 if (msg?.out) {
-                    await processOutboundMirrorMessage(msg, connectionId, 'TG-CATCHUP-OUT')
+                    await processOutboundMirrorMessage(
+                        msg,
+                        connectionId,
+                        providerAccountId,
+                        'TG-CATCHUP-OUT',
+                    )
                 } else {
-                    await processInboundTelegramMessage(msg, connectionId, 'TG-CATCHUP')
+                    await processInboundTelegramMessage(
+                        msg,
+                        connectionId,
+                        providerAccountId,
+                        'TG-CATCHUP',
+                        'import',
+                    )
                 }
                 processedCount++
             }
@@ -831,17 +1036,37 @@ async function catchUpMissedMessages(client: TelegramClient, connectionId: strin
  * Формат хранения — тот же {emoji: count} в Message.metadata.reactions,
  * что уже использует /api/messages/reaction для НАШИХ исходящих реакций.
  */
-async function processReactionUpdate(event: any) {
+async function processReactionUpdate(
+    event: any,
+    connectionId: string,
+    providerAccountId: string,
+) {
     try {
         const msgId = event.msgId
-        const externalId = msgId != null ? String(msgId) : null
-        if (!externalId) return
+        const peerId = event.peer?.userId?.toString()
+            ?? event.peerId?.userId?.toString()
+        if (msgId == null || !peerId) return
+        const rawMessageId = String(msgId)
+        const externalId = telegramMessageExternalId(providerAccountId, peerId, rawMessageId)
 
         const message = await (prisma.message as any).findUnique({
             where: { externalId },
-            select: { id: true, chatId: true, metadata: true },
+            select: {
+                id: true,
+                chatId: true,
+                metadata: true,
+                chat: { select: { channel: true, externalChatId: true, metadata: true } },
+            },
         })
         if (!message) return // не наше сообщение (другой чат/история) — пропускаем
+        const chatMetadata = metadataRecord(message.chat?.metadata)
+        if (
+            message.chat?.channel !== 'telegram'
+            || message.chat.externalChatId !== `telegram:${peerId}`
+            || chatMetadata.providerAccountId !== providerAccountId
+            || chatMetadata.connectionId !== connectionId
+            || chatMetadata.peerId !== peerId
+        ) return
 
         const results = event.reactions?.results || []
         const reactionsMap: Record<string, number> = {}
@@ -862,7 +1087,11 @@ async function processReactionUpdate(event: any) {
     }
 }
 
-function attachInboundListener(client: TelegramClient, connectionId: string) {
+function attachInboundListener(
+    client: TelegramClient,
+    connectionId: string,
+    providerAccountId: string,
+) {
     if (initializedListeners.has(connectionId)) {
         console.log(`[TG-LISTENER] Listener already attached for ${connectionId}, skipping.`)
         return
@@ -872,9 +1101,9 @@ function attachInboundListener(client: TelegramClient, connectionId: string) {
         try {
             const msg = event.message
             if (msg?.out) {
-                await processOutboundMirrorMessage(msg, connectionId, 'TG-MIRROR')
+                await processOutboundMirrorMessage(msg, connectionId, providerAccountId, 'TG-MIRROR')
             } else {
-                await processInboundTelegramMessage(msg, connectionId, 'TG-LISTENER')
+                await processInboundTelegramMessage(msg, connectionId, providerAccountId, 'TG-LISTENER')
             }
         } catch (err: any) {
             console.error(`[TG-LISTENER] Error (conn=${connectionId}):`, err.message)
@@ -882,7 +1111,7 @@ function attachInboundListener(client: TelegramClient, connectionId: string) {
     }, new NewMessage({ incoming: true, outgoing: true }))
 
     client.addEventHandler(
-        (event: any) => processReactionUpdate(event),
+        (event: any) => processReactionUpdate(event, connectionId, providerAccountId),
         new Raw({ types: [Api.UpdateMessageReactions] })
     )
 
@@ -990,6 +1219,7 @@ async function scheduleTgHardRestart(connection: any, reason: string): Promise<v
     clientCache.delete(connection.id)
     initializedListeners.delete(connection.id)
     tgInstanceIds.delete(connection.id)
+    tgProviderAccountIds.delete(connection.id)
 
     try {
         opsLog('info', 'tg_hard_restart_init_start', { connectionId: connection.id })
@@ -1019,6 +1249,7 @@ function startTelegramHealthCheck(connections: any[]) {
                 // Connection lost — use registry reconnect policy
                 clientCache.delete(conn.id)
                 initializedListeners.delete(conn.id)
+                tgProviderAccountIds.delete(conn.id)
                 registry.setReconnecting(conn.id, curInstanceId)
                 registry.scheduleReconnect(conn.id, curInstanceId, async () => { await getTelegramClient(conn) })
             }
@@ -1052,23 +1283,43 @@ export async function stopTelegramHealthCheck(): Promise<void> {
     }
 }
 
+async function attestTelegramProviderAccount(
+    client: TelegramClient,
+    connectionId: string,
+): Promise<string> {
+    const me = await client.getMe()
+    const providerAccountId = concreteOpaqueId(me?.id?.toString())
+    if (!providerAccountId || !/^\d+$/.test(providerAccountId) || providerAccountId === '0') {
+        throw new Error('TELEGRAM_PROVIDER_ACCOUNT_ID_UNPROVEN')
+    }
+    const cached = tgProviderAccountIds.get(connectionId)
+    if (cached && cached !== providerAccountId) {
+        throw new Error('TELEGRAM_PROVIDER_ACCOUNT_ID_CHANGED')
+    }
+    tgProviderAccountIds.set(connectionId, providerAccountId)
+    return providerAccountId
+}
+
 async function getTelegramClient(connection: any) {
     if (clientCache.has(connection.id)) {
         const cached = clientCache.get(connection.id)!
         if (cached.connected) {
-            attachInboundListener(cached, connection.id)
-            catchUpMissedMessages(cached, connection.id).catch(() => {})
+            const providerAccountId = await attestTelegramProviderAccount(cached, connection.id)
+            attachInboundListener(cached, connection.id, providerAccountId)
+            catchUpMissedMessages(cached, connection.id, providerAccountId).catch(() => {})
             return cached
         }
         try {
             await cached.connect()
-            attachInboundListener(cached, connection.id)
-            catchUpMissedMessages(cached, connection.id).catch(() => {})
+            const providerAccountId = await attestTelegramProviderAccount(cached, connection.id)
+            attachInboundListener(cached, connection.id, providerAccountId)
+            catchUpMissedMessages(cached, connection.id, providerAccountId).catch(() => {})
             return cached
         } catch (e) {
             console.warn(`[TG-CACHE] Failed to reconnect cached client ${connection.id}, creating new one.`)
             clientCache.delete(connection.id)
             initializedListeners.delete(connection.id)
+            tgProviderAccountIds.delete(connection.id)
         }
     }
 
@@ -1094,28 +1345,83 @@ async function getTelegramClient(connection: any) {
     }
 
     await client.connect()
+    const providerAccountId = await attestTelegramProviderAccount(client, connection.id)
     registry.setReady(connection.id, instanceId)
 
-    attachInboundListener(client, connection.id)
-    catchUpMissedMessages(client, connection.id).catch(() => {})
+    attachInboundListener(client, connection.id, providerAccountId)
+    catchUpMissedMessages(client, connection.id, providerAccountId).catch(() => {})
 
     clientCache.set(connection.id, client)
     return client
 }
 
-/**
- * Thin wrapper around getTelegramClient for callers (e.g. reaction route)
- * that only have a connectionId, not the full connection row.
- */
-export async function getClientForReaction(connectionId: string) {
+type ExactTelegramOutboundProof = {
+    chatId: string
+    providerAccountId: string
+    identityTarget: string
+}
+
+async function resolveExactTelegramOutboundPeer(
+    target: string,
+    connectionId: string,
+    proof: ExactTelegramOutboundProof,
+) {
+    if (
+        !/^\d+$/.test(target)
+        || target === '0'
+        || concreteOpaqueId(connectionId) !== connectionId
+        || concreteOpaqueId(proof.chatId) !== proof.chatId
+        || concreteOpaqueId(proof.providerAccountId) !== proof.providerAccountId
+        || proof.identityTarget !== target
+    ) {
+        throw new Error('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
+    }
     const connection = await (prisma as any).telegramConnection.findUnique({
-        where: { id: connectionId, isActive: true }
+        where: { id: connectionId, isActive: true },
     })
-    if (!connection || !connection.sessionString) return null
-    return getTelegramClient(connection)
+    if (!connection?.sessionString) {
+        throw new Error('CONTACT_CONVERSATION_TRANSPORT_UNAVAILABLE')
+    }
+    const chat = await (prisma.chat as any).findUnique({
+        where: { id: proof.chatId },
+        select: {
+            id: true,
+            contactId: true,
+            contactIdentityId: true,
+            channel: true,
+            externalChatId: true,
+            chatType: true,
+            metadata: true,
+        },
+    })
+    if (!chat) throw new Error('CONTACT_CONVERSATION_IDENTITY_REQUIRED')
+
+    const client = await getTelegramClient(connection)
+    const prepared = await prepareOutboundConversationV1(chat, connection.id)
+    const liveProviderAccountId = await attestTelegramProviderAccount(client, connection.id)
+    if (
+        prepared.channel !== 'telegram'
+        || prepared.chatId !== proof.chatId
+        || prepared.connectionId !== connection.id
+        || prepared.providerAccountId !== proof.providerAccountId
+        || prepared.providerAccountId !== liveProviderAccountId
+        || prepared.identityTarget !== target
+        || prepared.target !== target
+    ) {
+        throw new Error('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
+    }
+
+    const entity = await client.getEntity(BigInt(target) as any)
+    if (entity?.id?.toString() !== target) {
+        throw new Error('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
+    }
+    return { client, connection, entity }
 }
 
 export async function sendTelegramMessage(phoneNumber: string, message: string, connectionId?: string, metadata?: { messageId?: string, chatId?: string, driverId?: string, quotedMsgId?: string }) {
+    if (!metadata?.chatId) {
+        throw new Error('CONTACT_CONVERSATION_IDENTITY_REQUIRED')
+    }
     console.log(`[TG-SEND] START: phone=${phoneNumber}, connectionId=${connectionId}, metadata=${JSON.stringify(metadata)}`)
     let connection
     
@@ -1148,10 +1454,45 @@ export async function sendTelegramMessage(phoneNumber: string, message: string, 
     console.log(`[TG-SEND] Client connected state: ${client.connected}`)
 
     try {
+        // A Messaging-owned Chat id means this is an identity-preflighted send.
+        // Re-run that proof at the transport boundary, bind it to the live
+        // authenticated client, and preserve the exact numeric Telegram peer.
+        let exactPreparedTarget: string | null = null
+        let exactProviderAccountId: string | null = null
+        if (metadata?.chatId) {
+            const chat = await (prisma.chat as any).findUnique({
+                where: { id: metadata.chatId },
+                select: {
+                    id: true,
+                    contactId: true,
+                    contactIdentityId: true,
+                    channel: true,
+                    externalChatId: true,
+                    chatType: true,
+                    metadata: true,
+                },
+            })
+            if (!chat) throw new Error('CONTACT_CONVERSATION_IDENTITY_REQUIRED')
+            const prepared = await prepareOutboundConversationV1(chat, connection.id)
+            const liveProviderAccountId = await attestTelegramProviderAccount(client, connection.id)
+            if (
+                prepared.channel !== 'telegram'
+                || prepared.chatId !== chat.id
+                || prepared.connectionId !== connection.id
+                || prepared.providerAccountId !== liveProviderAccountId
+                || prepared.identityTarget !== phoneNumber
+                || prepared.target !== phoneNumber
+            ) {
+                throw new Error('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
+            }
+            exactPreparedTarget = prepared.target
+            exactProviderAccountId = liveProviderAccountId
+        }
+
         // Normalize target: if it's a mobile number, ensure it has '+'
-        let target: any = phoneNumber
+        let target: any = exactPreparedTarget ?? phoneNumber
         // Only prefix with '+' if it's a long digit string (phone number)
-        if (typeof target === 'string' && target.match(/^\d+$/) && target.length >= 10 && !target.startsWith('+')) {
+        if (!exactPreparedTarget && typeof target === 'string' && target.match(/^\d+$/) && target.length >= 10 && !target.startsWith('+')) {
             target = '+' + target
         }
         
@@ -1162,7 +1503,9 @@ export async function sendTelegramMessage(phoneNumber: string, message: string, 
         try {
             console.log(`[TG-SEND] Resolving entity for ${target}...`)
             // If it's a numeric ID (no plus, just digits), try resolving as number
-            if (typeof target === 'string' && target.match(/^\d+$/) && !target.startsWith('+')) {
+            if (exactPreparedTarget) {
+                entity = await client.getEntity(BigInt(exactPreparedTarget) as any)
+            } else if (typeof target === 'string' && target.match(/^\d+$/) && !target.startsWith('+')) {
                 try {
                     entity = await client.getEntity(BigInt(target) as any)
                 } catch (e) {
@@ -1172,8 +1515,15 @@ export async function sendTelegramMessage(phoneNumber: string, message: string, 
                 entity = await client.getEntity(target)
             }
             console.log(`[TG-SEND] Entity resolved: ${entity.id.toString()}`)
+            if (exactPreparedTarget && entity?.id?.toString() !== exactPreparedTarget) {
+                throw new Error('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
+            }
         } catch (entityErr: any) {
             console.warn(`[TG-SEND] getEntity FAILED for ${target}: ${entityErr.message}. Attempting import...`)
+
+            if (exactPreparedTarget) {
+                throw new Error(`Cannot resolve exact Telegram peer ${exactPreparedTarget}`)
+            }
             
             try {
                 // Try importing contact if it's a phone number
@@ -1219,84 +1569,16 @@ export async function sendTelegramMessage(phoneNumber: string, message: string, 
         const sendInstanceId = tgInstanceIds.get(connection?.id)
         if (connection && sendInstanceId) registry.touch(connection.id, sendInstanceId)
 
-        // SYNC TO UNIFIED MESSAGE TABLE
-        try {
-            const tgId = entity?.id?.toString() || (typeof entity === 'string' ? entity : null)
-            if (tgId) {
-                const externalChatId = `telegram:${tgId}`
-                
-                // 1. Check if we already have this chat via its ID
-                let unifiedChat = await (prisma.chat as any).findUnique({ where: { externalChatId } })
-                
-                // 2. If not found, check if we were passed an original chatId (migrating from phone -> ID)
-                if (!unifiedChat && metadata?.chatId) {
-                     unifiedChat = await (prisma.chat as any).findUnique({ where: { id: metadata.chatId } })
-                     if (unifiedChat) {
-                         console.log(`[TG-SEND] Migrating chat ${unifiedChat.id} from ${unifiedChat.externalChatId} to ${externalChatId}`)
-                         const migrated = await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { externalChatId, lastMessageAt: new Date() } })
-                         unifiedChat = migrated.conversation as any
-                     }
-                }
-
-                // 3. Create if still not found
-                if (!unifiedChat) {
-                    const created = await upsertChannelConversationV1({ contract: UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, externalChatId, channel: 'telegram', name: `TG ${tgId}`, chatType: 'private', metadata: {} })
-                    unifiedChat = created.conversation as any
-                    await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: new Date(), ...(metadata?.driverId ? { driverId: metadata.driverId } : {}) } })
-                } else {
-                    await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { lastMessageAt: new Date(), ...(metadata?.driverId ? { driverId: unifiedChat.driverId || metadata.driverId } : {}) } })
-                }
-
-                // 4. Update DriverTelegram link if possible
-                if (metadata?.driverId) {
-                    await (prisma as any).driverTelegram.upsert({
-                        where: { telegramId: BigInt(tgId) },
-                        create: { telegramId: BigInt(tgId), driverId: metadata.driverId, phoneVerified: true },
-                        update: { driverId: metadata.driverId }
-                    })
-                }
-
-                // DE-DUPLICATION: Check for existing optimistic message
-                const externalId = result?.id?.toString()
-                console.log(`[TG-SEND] Attempting de-duplication for messageId=${metadata?.messageId}, content_len=${message.length}`)
-                
-                let existing = null;
-                if (metadata?.messageId) {
-                    console.log(`[TG-SEND] Searching by explicit messageId: ${metadata.messageId}`)
-                    existing = await (prisma.message as any).findUnique({ where: { id: metadata.messageId } })
-                }
-                
-                if (!existing) {
-                    console.log(`[TG-SEND] Not found by ID, searching by content/chat/time...`)
-                    existing = await (prisma.message as any).findFirst({
-                        where: {
-                            chatId: metadata?.chatId || unifiedChat.id,
-                            content: message,
-                            direction: 'outbound',
-                            sentAt: {
-                                gte: new Date(Date.now() - 30000),
-                                lte: new Date(Date.now() + 30000)
-                            }
-                        }
-                    })
-                }
-
-                if (existing) {
-                    console.log(`[TG-SEND] Found existing message ${existing.id}, updating status to delivered...`)
-                    await patchMessageDeliveryV1({ contract: PATCH_MESSAGE_DELIVERY_COMMAND_V1, messageId: existing.id, externalId, status: 'delivered', sentAt: existing.sentAt })
-                    console.log(`[TG-SEND] Update SUCCESS`)
-                } else {
-                    console.log(`[TG-SEND] No existing message found, creating new record...`)
-                    await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: unifiedChat.id, direction: 'outbound', content: message, channel: 'telegram', type: 'text', sentAt: new Date(), status: 'delivered', externalId })
-                    console.log(`[TG-SEND] Create SUCCESS`)
-                }
-                return { success: true, externalId: result?.id?.toString() }
-            }
-        } catch (syncErr: any) {
-            console.error(`[TG-SEND] Failed to sync message to unified table:`, syncErr.message)
+        // Messaging owns the already-created optimistic row and applies this
+        // exact provider result. The transport must not migrate/create Chats
+        // or grant DriverTelegram authority as a side effect of delivery.
+        const rawExternalId = (result as any)?.id?.toString()
+        return {
+            success: true,
+            externalId: rawExternalId && exactPreparedTarget && exactProviderAccountId
+                ? telegramMessageExternalId(exactProviderAccountId, exactPreparedTarget, rawExternalId)
+                : undefined,
         }
-
-        return { success: true, externalId: (result as any)?.id?.toString() }
     } catch (err: any) {
         console.error('[TG-SEND] SEND ERROR:', err)
         throw new Error(`Telegram delivery failed: ${err.message}`)
@@ -1320,59 +1602,18 @@ export async function sendTelegramMedia(
     base64: string,
     filename: string,
     mimeType: string,
-    caption?: string,
-    connectionId?: string
+    caption: string | undefined,
+    connectionId: string,
+    proof: ExactTelegramOutboundProof,
 ): Promise<{ success: boolean; externalId?: string }> {
     console.log(`[TG-MEDIA] START: phone=${phoneNumber} filename=${filename} mime=${mimeType} connId=${connectionId}`)
 
-    let connection
-    if (connectionId) {
-        connection = await (prisma as any).telegramConnection.findUnique({
-            where: { id: connectionId, isActive: true }
-        })
-    } else {
-        connection = await (prisma as any).telegramConnection.findFirst({ where: { isActive: true, isDefault: true } })
-        if (!connection) {
-            connection = await (prisma as any).telegramConnection.findFirst({ where: { isActive: true } })
-        }
-    }
-
-    if (!connection || !connection.sessionString) {
-        throw new Error('Telegram is not connected or selected account is inactive')
-    }
-
-    const client = await getTelegramClient(connection)
-
     try {
-        // Normalize target
-        let target: any = phoneNumber
-        if (typeof target === 'string' && target.match(/^\d+$/) && target.length >= 10 && !target.startsWith('+')) {
-            target = '+' + target
-        }
-
-        // Resolve entity
-        let entity
-        try {
-            if (typeof target === 'string' && target.match(/^\d+$/) && !target.startsWith('+')) {
-                try { entity = await client.getEntity(BigInt(target) as any) }
-                catch { entity = await client.getEntity(target) }
-            } else {
-                entity = await client.getEntity(target)
-            }
-        } catch (entityErr: any) {
-            if (target.startsWith('+')) {
-                const result = await client.invoke(new Api.contacts.ImportContacts({
-                    contacts: [new Api.InputPhoneContact({
-                        clientId: BigInt(Math.floor(Math.random() * 1000000)) as any,
-                        phone: target, firstName: 'Driver', lastName: ''
-                    })]
-                }))
-                if (result && 'users' in result && result.users.length > 0) entity = result.users[0]
-                else throw new Error(`Cannot import contact ${target}`)
-            } else {
-                throw entityErr
-            }
-        }
+        const { client, connection, entity } = await resolveExactTelegramOutboundPeer(
+            phoneNumber,
+            connectionId,
+            proof,
+        )
 
         // Decode base64 → Buffer
         const cleanBase64 = base64.startsWith('data:') ? base64.split(',')[1] : base64
@@ -1400,7 +1641,7 @@ export async function sendTelegramMedia(
         console.log(`[TG-MEDIA] Sending: image=${isImage} video=${isVideo} voice=${isVoice} audio=${isAudio} doc=${sendOpts.forceDocument || false}`)
 
         const result = await Promise.race([
-            client.sendFile(entity || target, sendOpts),
+            client.sendFile(entity, sendOpts),
             new Promise<any>((_, reject) => setTimeout(() => reject(new Error('Telegram sendFile timeout (60s)')), 60000))
         ])
 
@@ -1409,11 +1650,46 @@ export async function sendTelegramMedia(
         const sendInstanceId = tgInstanceIds.get(connection?.id)
         if (connection && sendInstanceId) registry.touch(connection.id, sendInstanceId)
 
-        return { success: true, externalId: result?.id?.toString() }
+        const rawExternalId = result?.id?.toString()
+        return {
+            success: true,
+            externalId: rawExternalId
+                ? telegramMessageExternalId(proof.providerAccountId, proof.identityTarget, rawExternalId)
+                : undefined,
+        }
     } catch (err: any) {
         console.error('[TG-MEDIA] SEND ERROR:', err)
         throw new Error(`Telegram media delivery failed: ${err.message}`)
     }
+}
+
+export async function sendTelegramReaction(input: {
+    target: string
+    messageId: string
+    emoji: string
+    remove: boolean
+    connectionId: string
+    proof: ExactTelegramOutboundProof
+}): Promise<void> {
+    const rawMessageId = exactTelegramProviderMessageId(
+        input.messageId,
+        input.proof.providerAccountId,
+        input.target,
+    )
+    const messageId = rawMessageId ? Number.parseInt(rawMessageId, 10) : Number.NaN
+    if (!Number.isSafeInteger(messageId) || messageId <= 0 || String(messageId) !== rawMessageId) {
+        throw new Error('TELEGRAM_MESSAGE_ID_INVALID')
+    }
+    const { client, entity } = await resolveExactTelegramOutboundPeer(
+        input.target,
+        input.connectionId,
+        input.proof,
+    )
+    await client.invoke(new Api.messages.SendReaction({
+        peer: entity,
+        msgId: messageId,
+        reaction: input.remove ? [] : [new Api.ReactionEmoji({ emoticon: input.emoji })],
+    }))
 }
 
 /**
@@ -1425,27 +1701,26 @@ export async function importTelegramHistory(
 ) {
     console.log(`[TG-IMPORT] Starting job=${jobId} mode=${mode} daysBack=${daysBack} conn=${connectionId}`)
 
-    // 1. Resolve connection
-    let connection: any
-    if (connectionId) {
-        connection = await (prisma as any).telegramConnection.findUnique({ where: { id: connectionId } })
-    } else {
-        const conns = await (prisma as any).telegramConnection.findMany({
-            where: { isActive: true, sessionString: { not: null } }
-        })
-        connection = conns[0] ?? null
-    }
+    // 1. Resolve only the caller-selected import job connection. History from
+    // an arbitrary default/first account must never be admitted under another
+    // provider account's ContactIdentity.
+    const exactConnectionId = concreteOpaqueId(connectionId)
+    const connection: any = exactConnectionId && exactConnectionId === connectionId
+        ? await (prisma as any).telegramConnection.findUnique({ where: { id: exactConnectionId } })
+        : null
 
-    if (!connection || !connection.sessionString) {
-        console.error('[TG-IMPORT] No active Telegram connection found')
+    if (!connection || !connection.isActive || !connection.sessionString) {
+        console.error('[TG-IMPORT] Exact active Telegram connection is required')
         await updateTgImportJob(jobId, { status: 'failed', resultType: 'failed', finishedAt: new Date() })
         return
     }
 
     // 2. Get or create client
     let client: TelegramClient
+    let providerAccountId: string
     try {
         client = await getTelegramClient(connection)
+        providerAccountId = await attestTelegramProviderAccount(client, connection.id)
     } catch (err: any) {
         console.error(`[TG-IMPORT] Failed to get client: ${err.message}`)
         await updateTgImportJob(jobId, { status: 'failed', resultType: 'failed', finishedAt: new Date() })
@@ -1487,36 +1762,19 @@ export async function importTelegramHistory(
             const peerId = dialog.entity?.id?.toString()
             if (!peerId) continue
 
-            const externalChatId = `telegram:${peerId}`
-            const chatName = (dialog.entity as any)?.firstName
+            const providerDisplayName = (dialog.entity as any)?.firstName
                 || (dialog.entity as any)?.username
-                || `TG ${peerId}`
+                || null
 
             try {
-                // Upsert unified Chat
-                let unifiedChat = await (prisma.chat as any).findUnique({ where: { externalChatId } })
-                if (!unifiedChat) {
-                    const created = await upsertChannelConversationV1({ contract: UPSERT_CHANNEL_CONVERSATION_COMMAND_V1, externalChatId, channel: 'telegram', name: chatName, chatType: 'private', metadata: { connectionId: connection.id } })
-                    unifiedChat = created.conversation as any
-                } else {
-                    await patchChannelConversationV1({ contract: PATCH_CHANNEL_CONVERSATION_COMMAND_V1, selector: { chatId: unifiedChat.id }, patch: { name: chatName } })
-                }
-
-                // Contact resolution
-                if (!unifiedChat.contactId) {
-                    try {
-                        const contactResult = await resolveChannelContactOperationV1(
-                            'telegram', peerId, null, chatName,
-                            { chatKind: 'private', providerAccountId: connection.id },
-                        )
-                        if (isResolvedChannelContactResultV1(contactResult)) totalContacts++
-                    } catch {}
-                }
-
-                // Driver linking
-                if (!unifiedChat.driverId) {
-                    await DriverMatchService.linkChatToDriver(unifiedChat.id, { telegramId: peerId }, linkMatchedDriverToConversationCapabilityV1)
-                }
+                const unifiedChat = await admitTelegramPrivateConversation({
+                    phase: 'import',
+                    peerId,
+                    providerAccountId,
+                    connectionId: connection.id,
+                    displayName: providerDisplayName,
+                })
+                totalContacts++
 
                 // Fetch messages — determine limit based on mode
                 const msgLimit = mode === 'from_connection_time' ? 20 : 200
@@ -1535,7 +1793,10 @@ export async function importTelegramHistory(
                     if (!maxDate || ts > maxDate) maxDate = ts
                     if (!chatMaxTs || ts > chatMaxTs) chatMaxTs = ts
 
-                    const externalMsgId = msg.id?.toString()
+                    const rawExternalMsgId = msg.id?.toString()
+                    const externalMsgId = rawExternalMsgId
+                        ? telegramMessageExternalId(providerAccountId, peerId, rawExternalMsgId)
+                        : null
                     const isOutbound = !!msg.out
                     const histMsgType = histMediaInfo?.type || 'text'
 
@@ -1556,7 +1817,7 @@ export async function importTelegramHistory(
 
                     totalMessages++
                     if (!existing) {
-                        const savedHistResult = await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: unifiedChat.id, direction: isOutbound ? 'outbound' : 'inbound', content: msgText, channel: 'telegram', type: histMsgType as any, sentAt: ts, status: 'delivered', externalId: externalMsgId || `telegram:${unifiedChat.id}:${ts.getTime()}` })
+                        const savedHistResult = await createChannelMessageV1({ contract: CREATE_CHANNEL_MESSAGE_COMMAND_V1, chatId: unifiedChat.id, direction: isOutbound ? 'outbound' : 'inbound', content: msgText, channel: 'telegram', type: histMsgType as any, sentAt: ts, status: 'delivered', externalId: externalMsgId || `telegram:${providerAccountId}:${peerId}:local-${ts.getTime()}`, metadata: rawExternalMsgId ? { providerMessageId: rawExternalMsgId, providerAccountId, peerId } : {} })
                         const savedHistMsg = savedHistResult.message as any
 
                         // Download media for history import
@@ -1687,11 +1948,10 @@ export async function pauseTelegramConnection(id: string, deleteMessages?: boole
         data: { isActive: false }
     })
 
-    // Stop the listener for this connection
-    if (clientCache.has(id)) {
-        initializedListeners.delete(id)
-        console.log(`[TG] Listener removed for paused connection ${id}`)
-    }
+    // Disconnect and evict the client as well as the account attestation. An
+    // event handler on a cached live client would otherwise outlive the pause.
+    await evictTelegramClient(id)
+    console.log(`[TG] Listener removed for paused connection ${id}`)
 
     // Optionally delete messages
     if (deleteMessages) {
@@ -1717,7 +1977,8 @@ export async function resumeTelegramConnection(id: string, catchUp?: boolean) {
         try {
             const client = await getTelegramClient(conn)
             if (catchUp) {
-                await catchUpMissedMessages(client, id)
+                const providerAccountId = await attestTelegramProviderAccount(client, id)
+                await catchUpMissedMessages(client, id, providerAccountId)
             }
         } catch (err: any) {
             console.error(`[TG] Failed to resume connection ${id}: ${err.message}`)
@@ -1789,15 +2050,15 @@ async function cleanupImportJobs(channel: string, connectionId?: string) {
  */
 export async function checkTelegramReachability(
     phone: string,
-    connectionId?: string
-): Promise<{ reachable: boolean; telegramId?: string; error?: string }> {
+    requestedProviderAccountId?: string
+): Promise<{ reachable: boolean; telegramId?: string; providerAccountId?: string; error?: string }> {
     const TIMEOUT_MS = 10_000
 
     // Wrap EVERYTHING (including getTelegramClient which can hang on connect())
     // in a single timeout. On timeout returns { reachable: true } — soft fallback,
     // meaning "don't show a warning", NOT "confirmed reachable".
     const result = await Promise.race([
-        doCheck(phone, connectionId),
+        doCheck(phone, requestedProviderAccountId),
         new Promise<{ reachable: true }>((resolve) =>
             setTimeout(() => {
                 console.warn(`[TG-CHECK] Timeout (${TIMEOUT_MS}ms) for ${phone} — soft fallback`)
@@ -1811,31 +2072,40 @@ export async function checkTelegramReachability(
 
 async function doCheck(
     phone: string,
-    connectionId?: string
-): Promise<{ reachable: boolean; telegramId?: string; error?: string }> {
+    requestedProviderAccountId?: string
+): Promise<{ reachable: boolean; telegramId?: string; providerAccountId?: string; error?: string }> {
     try {
-        // Find connection (same logic as sendTelegramMessage)
-        let connection
-        if (connectionId) {
-            connection = await (prisma as any).telegramConnection.findUnique({
-                where: { id: connectionId, isActive: true }
-            })
-        } else {
-            connection = await (prisma as any).telegramConnection.findFirst({
-                where: { isActive: true, isDefault: true }
-            })
-            if (!connection) {
-                connection = await (prisma as any).telegramConnection.findFirst({
-                    where: { isActive: true }
-                })
+        const requestedAccount = requestedProviderAccountId === undefined
+            ? null
+            : concreteOpaqueId(requestedProviderAccountId)
+        if (requestedProviderAccountId !== undefined && !requestedAccount) {
+            return { reachable: true, error: 'Telegram provider account binding is invalid' }
+        }
+
+        // A provider account id is the authenticated Telegram user id, never a
+        // local TelegramConnection primary key. Enumerate active transports and
+        // accept one only after live getMe() attestation proves that account.
+        const connections = await (prisma as any).telegramConnection.findMany({
+            where: { isActive: true },
+            orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }],
+        })
+        let exactBinding: {
+            client: TelegramClient
+            providerAccountId: string
+        } | null = null
+        for (const connection of connections) {
+            if (!connection?.sessionString) continue
+            try {
+                const client = await getTelegramClient(connection)
+                const providerAccountId = await attestTelegramProviderAccount(client, connection.id)
+                if (requestedAccount && providerAccountId !== requestedAccount) continue
+                exactBinding = { client, providerAccountId }
+                break
+            } catch (error: unknown) {
+                console.warn(`[TG-CHECK] Account attestation failed for ${connection?.id}: ${error instanceof Error ? error.message : String(error)}`)
             }
         }
-
-        if (!connection || !connection.sessionString) {
-            return { reachable: true }
-        }
-
-        const client = await getTelegramClient(connection)
+        if (!exactBinding) return { reachable: true, error: 'Telegram provider account is not live' }
 
         // Normalize: prefix '+' for digit strings >= 10 chars
         let target: string = phone
@@ -1843,7 +2113,11 @@ async function doCheck(
             target = '+' + target
         }
 
-        return await resolveEntity(client, target)
+        return await resolveEntity(
+            exactBinding.client,
+            target,
+            exactBinding.providerAccountId,
+        )
     } catch (err: any) {
         console.error(`[TG-CHECK] Error for ${phone}: ${err.message}`)
         return { reachable: true }
@@ -1853,19 +2127,21 @@ async function doCheck(
 /** Resolve phone to Telegram entity without sending a message. */
 async function resolveEntity(
     client: TelegramClient,
-    target: string
-): Promise<{ reachable: boolean; telegramId?: string; error?: string }> {
+    target: string,
+    providerAccountId: string,
+): Promise<{ reachable: boolean; telegramId?: string; providerAccountId: string; error?: string }> {
     // Step 1: Try getEntity
     try {
         const entity = await client.getEntity(target)
-        return { reachable: true, telegramId: entity.id.toString() }
+        const telegramId = concreteOpaqueId(entity?.id?.toString())
+        if (telegramId) return { reachable: true, telegramId, providerAccountId }
     } catch {
         // Fall through to ImportContacts
     }
 
     // Step 2: Try ImportContacts (only for phone numbers starting with '+')
     if (!target.startsWith('+')) {
-        return { reachable: false, error: 'Номер не найден в Telegram' }
+        return { reachable: false, providerAccountId, error: 'Номер не найден в Telegram' }
     }
 
     try {
@@ -1879,11 +2155,12 @@ async function resolveEntity(
         }))
 
         if (result && 'users' in result && result.users.length > 0) {
-            return { reachable: true, telegramId: result.users[0].id.toString() }
+            const telegramId = concreteOpaqueId(result.users[0]?.id?.toString())
+            if (telegramId) return { reachable: true, telegramId, providerAccountId }
         }
     } catch {
         // Import failed — number not on Telegram
     }
 
-    return { reachable: false, error: 'Номер не найден в Telegram' }
+    return { reachable: false, providerAccountId, error: 'Номер не найден в Telegram' }
 }

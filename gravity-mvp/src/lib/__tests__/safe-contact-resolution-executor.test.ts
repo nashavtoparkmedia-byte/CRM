@@ -4,6 +4,8 @@ import { describe, expect, test, vi } from 'vitest'
 import { ContactService } from '../ContactService'
 import { ContactResolutionService } from '../contacts/ContactResolutionService'
 import {
+  createPrismaContactResolutionExecutionTransactionV1,
+  ProviderIdentityAliasCollisionError,
   SafeContactResolutionExecutor,
   type ContactResolutionExecutionTransaction,
   type ContactResolutionUnitOfWork,
@@ -87,6 +89,119 @@ function expectNoMutation(tx: ContactResolutionExecutionTransaction) {
 }
 
 describe('SafeContactResolutionExecutor', () => {
+  test('scopes provider aliases by account before limiting candidates', async () => {
+    const aliases = [
+      {
+        id: 'identity-account-1',
+        contactId: 'contact-1',
+        channel: ChatChannel.whatsapp,
+        externalId: 'opaque-1@lid',
+        phoneId: 'phone-1',
+        metadata: {
+          providerAccountId: 'wa-account-1',
+          providerAliasValues: ['79990000000@c.us'],
+        },
+      },
+      {
+        id: 'identity-account-2',
+        contactId: 'contact-2',
+        channel: ChatChannel.whatsapp,
+        externalId: 'opaque-2@lid',
+        phoneId: 'phone-2',
+        metadata: {
+          providerAccountId: 'wa-account-2',
+          providerAliasValues: ['79990000000@c.us'],
+        },
+      },
+      {
+        id: 'identity-account-3',
+        contactId: 'contact-3',
+        channel: ChatChannel.whatsapp,
+        externalId: 'opaque-3@lid',
+        phoneId: 'phone-3',
+        metadata: {
+          providerAccountId: 'wa-account-3',
+          providerAliasValues: ['79990000000@c.us'],
+        },
+      },
+    ]
+    const contactIdentity = {
+      findUnique: vi.fn(async () => null),
+      findMany: vi.fn(async ({ where, take }: {
+        where: { AND?: Array<{ metadata?: { path: string[]; equals?: string } }> }
+        take: number
+      }) => {
+        const providerAccountId = where.AND
+          ?.find(filter => filter.metadata?.path[0] === 'providerAccountId')
+          ?.metadata?.equals
+        return aliases
+          .filter(candidate => (
+            !providerAccountId || candidate.metadata.providerAccountId === providerAccountId
+          ))
+          .slice(0, take)
+      }),
+    }
+    const tx = createPrismaContactResolutionExecutionTransactionV1({
+      contactIdentity,
+    } as never)
+
+    await expect(tx.findIdentity(
+      ChatChannel.whatsapp,
+      'wa-account-3',
+      '79990000000@c.us',
+    )).resolves.toMatchObject({
+      id: 'identity-account-3',
+      contactId: 'contact-3',
+      externalId: 'opaque-3@lid',
+      providerAccountId: 'wa-account-3',
+    })
+    expect(contactIdentity.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        channel: ChatChannel.whatsapp,
+        AND: expect.arrayContaining([
+          { metadata: { path: ['providerAliasValues'], array_contains: ['79990000000@c.us'] } },
+          { metadata: { path: ['providerAccountId'], equals: 'wa-account-3' } },
+        ]),
+      }),
+      take: 2,
+    }))
+  })
+
+  test('persists same-account alias multiplicity and never creates a third identity', async () => {
+    const decision = plan({ status: 'create_required' })
+    const tx = transaction(decision)
+    vi.mocked(tx.findIdentity).mockRejectedValue(new ProviderIdentityAliasCollisionError([
+      {
+        id: 'identity-a', contactId: 'contact-a', channel: ChatChannel.whatsapp,
+        externalId: 'opaque-a@lid', providerAccountId: 'wa-account', phoneId: null,
+      },
+      {
+        id: 'identity-b', contactId: 'contact-b', channel: ChatChannel.whatsapp,
+        externalId: 'opaque-b@lid', providerAccountId: 'wa-account', phoneId: null,
+      },
+    ]))
+
+    await expect(executor(decision, tx).executor.execute({
+      channel: 'whatsapp',
+      externalUserId: '79990000000@c.us',
+      providerAccountId: 'wa-account',
+      chatKind: 'private',
+    })).resolves.toMatchObject({
+      status: 'error',
+      reason: 'provider_identity_alias_collision',
+      contactIds: ['contact-a', 'contact-b'],
+    })
+    expect(tx.recordConflict).toHaveBeenCalledTimes(2)
+    expect(tx.recordConflict).toHaveBeenCalledWith(expect.objectContaining({
+      contactId: 'contact-a',
+      identityId: 'identity-a',
+      conflictType: 'provider_identity_alias_collision',
+      otherContactIds: ['contact-b'],
+    }))
+    expect(tx.createContact).not.toHaveBeenCalled()
+    expect(tx.createIdentity).not.toHaveBeenCalled()
+  })
+
   test('locks authoritative resolution state before revalidation', async () => {
     const decision = plan({
       status: 'phone_matched', contactId: 'contact-1', canonicalContactId: 'contact-1',
@@ -226,6 +341,40 @@ describe('SafeContactResolutionExecutor', () => {
       contactId: 'contact-account-a',
       identityId: 'identity-account-a',
       conflictType: 'provider_account_identity_collision',
+    }))
+    expect(tx.createContact).not.toHaveBeenCalled()
+    expect(tx.createIdentity).not.toHaveBeenCalled()
+    expect(tx.updateIdentity).not.toHaveBeenCalled()
+  })
+
+  test('rejects a concrete provider account colliding with a legacy-scoped identity', async () => {
+    const decision = plan({ status: 'create_required' })
+    const tx = transaction(decision)
+    vi.mocked(tx.findIdentity).mockResolvedValue({
+      id: 'identity-legacy',
+      contactId: 'contact-legacy',
+      channel: ChatChannel.max,
+      externalId: 'opaque-user',
+      providerAccountId: 'legacy',
+      phoneId: null,
+    })
+
+    await expect(executor(decision, tx).executor.execute({
+      channel: 'max',
+      providerAccountId: 'account-b',
+      externalUserId: 'opaque-user',
+      chatKind: 'private',
+    })).resolves.toMatchObject({
+      status: 'identity_phone_conflict',
+      identityContactId: 'contact-legacy',
+    })
+    expect(tx.recordConflict).toHaveBeenCalledWith(expect.objectContaining({
+      identityId: 'identity-legacy',
+      conflictType: 'provider_account_identity_collision',
+      details: expect.objectContaining({
+        storedProviderAccountId: 'legacy',
+        requestedProviderAccountId: 'account-b',
+      }),
     }))
     expect(tx.createContact).not.toHaveBeenCalled()
     expect(tx.createIdentity).not.toHaveBeenCalled()

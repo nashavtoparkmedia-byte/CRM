@@ -5,7 +5,7 @@ import { X, Phone, UserCheck, ClipboardList, MoreHorizontal, ExternalLink, Plus,
 import { useChatNavigation } from "../hooks/useChatNavigation"
 import { useConversations, refreshConversations } from "../hooks/useConversations"
 import { useContactSearch } from "../hooks/useContactSearch"
-import { useContact, type Contact, type ContactIdentity } from "../hooks/useContact"
+import { normalizeParkCheckViewStatus, useContact, type Contact, type ContactIdentity, type ParkCheckViewStatus } from "../hooks/useContact"
 import { useChannelStatus } from "../hooks/useChannelStatus"
 import { AlertCircle } from "lucide-react"
 import DriverTasksWidget from "./DriverTasksWidget"
@@ -15,6 +15,14 @@ import { getSegmentLabel } from '@/modules/contacts/public/v1/contact-display-po
 import ContactResolutionAmbiguityBanner from './ContactResolutionAmbiguityBanner'
 import LinkContactModal from './LinkContactModal'
 import DriverPersonSearchModal from './DriverPersonSearchModal'
+import ContactEvidenceDetails from './ContactEvidenceDetails'
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/infrastructure/ui/dialog'
 
 // Custom field types
 interface CustomField {
@@ -42,6 +50,7 @@ type ParkCheckProfile = {
 }
 
 type ParkCheckResult = {
+    checkStatus: ParkCheckViewStatus
     checkedAt: string
     checkedPhones: string[]
     checkedParks: number
@@ -49,7 +58,7 @@ type ParkCheckResult = {
     results: Array<{ parkId: string; parkName: string; profiles: ParkCheckProfile[] }>
     errors: Array<{ parkId: string; parkName: string; message: string }>
     driverLink: {
-        status: 'not_found' | 'ambiguous' | 'linked' | 'already_linked' | 'merged' | 'error'
+        status: 'not_found' | 'ambiguous' | 'review_required' | 'linked' | 'already_linked' | 'merged' | 'error'
         contactId: string | null
         driverId: string | null
         displayName: string | null
@@ -107,15 +116,18 @@ function OrphanIdentityRow({ identity, cfg, isWriting, onWrite, onAttached, cont
     const [attaching, setAttaching] = useState(false)
     const [attachError, setAttachError] = useState<string | null>(null)
     // metadata may contain { username, firstName, lastName } saved by TG webhook
-    const meta = (identity.metadata as Record<string, string | null> | null) ?? {}
+    const meta = identity.metadata ?? {}
     // Only use metadata (populated on each incoming TG message).
     // Falls back to displayName ONLY for @username format — regular names
     // like "Check" are placeholder-grade and not shown until metadata arrives.
-    const tgName = meta.firstName
-        ? [meta.firstName, meta.lastName].filter(Boolean).join(' ')
+    const firstName = typeof meta.firstName === 'string' ? meta.firstName : null
+    const lastName = typeof meta.lastName === 'string' ? meta.lastName : null
+    const username = typeof meta.username === 'string' ? meta.username : null
+    const tgName = firstName
+        ? [firstName, lastName].filter(Boolean).join(' ')
         : null
-    const tgUsername = meta.username
-        ? `@${meta.username}`
+    const tgUsername = username
+        ? `@${username}`
         : (identity.displayName?.startsWith('@') ? identity.displayName : null)
     // Format: "Имя (@username)" | "@username" | "Имя" — без числового ID
     const identifierLabel = tgName && tgUsername
@@ -172,6 +184,9 @@ function OrphanIdentityRow({ identity, cfg, isWriting, onWrite, onAttached, cont
                 )}
                 {identity.source === 'manual' && (
                     <span className="text-[8px] text-violet-400 bg-violet-50 px-1 py-px rounded">ручной</span>
+                )}
+                {identity.conflictState === 'conflicted' && (
+                    <span className="rounded bg-red-50 px-1 py-px text-[8px] text-red-600">конфликт</span>
                 )}
             </div>
             <div className="ml-[4px]">
@@ -234,7 +249,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     const [showMergeDialog, setShowMergeDialog] = useState(false)
     const [mergeSearch, setMergeSearch] = useState("")
     const [mergeTarget, setMergeTarget] = useState<any>(null)
-    const [mergeMode, setMergeMode] = useState<'contact' | 'driver' | null>(null)
+    const [mergeMode, setMergeMode] = useState<'contact' | null>(null)
     const [mergeLoading, setMergeLoading] = useState(false)
     const [mergeError, setMergeError] = useState<string | null>(null)
     const [mergeSuccess, setMergeSuccess] = useState(false)
@@ -253,14 +268,20 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     const [parkCheckError, setParkCheckError] = useState<string | null>(null)
     const [showManualLinkModal, setShowManualLinkModal] = useState(false)
     const [showDriverPersonSearch, setShowDriverPersonSearch] = useState(false)
-    const [showAllDriverProfiles, setShowAllDriverProfiles] = useState(false)
+    const [showContactEvidence, setShowContactEvidence] = useState(false)
 
     useEffect(() => {
-        const saved = contact?.customFields?.parkCheckResult
-        setParkCheckResult(saved && typeof saved === 'object' ? saved as ParkCheckResult : null)
+        const saved = contact?.customFields?.parkCheckLastAttempt ?? contact?.customFields?.parkCheckResult
+        setParkCheckResult(saved && typeof saved === 'object'
+            ? { ...(saved as Omit<ParkCheckResult, 'checkStatus'>), checkStatus: normalizeParkCheckViewStatus(saved) }
+            : null)
         setParkCheckError(null)
         setParkCheckLoading(false)
-    }, [contact?.id, contact?.customFields?.parkCheckResult?.checkedAt])
+    }, [
+        contact?.id,
+        contact?.customFields?.parkCheckLastAttempt?.checkedAt,
+        contact?.customFields?.parkCheckResult?.checkedAt,
+    ])
 
     // TG Bot link state
     const [tgIdCopied, setTgIdCopied] = useState(false)
@@ -288,22 +309,49 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
     // "checking" is an operational state, not a green confirmation.
     const [liveReachability, setLiveReachability] = useState<Record<string, LiveReachabilityEntry>>({})
     const reachabilityPhoneSignature = contact?.phones.map(phone => `${phone.id}:${phone.phone}`).join('|') || ''
-    const reachabilityKey = (phoneId: string, channel: string) => `${phoneId}:${channel}`
+    const reachabilityIdentitySignature = contact?.identities
+        .map(identity => `${identity.id}:${identity.phoneId}:${identity.channel}:${identity.providerAccountId ?? ''}:${identity.isActive !== false}:${identity.conflictState ?? 'clear'}`)
+        .join('|') || ''
+    const reachabilityKey = (phoneId: string, channel: string, identityId?: string) => (
+        `${phoneId}:${channel}:${identityId ?? 'unbound'}`
+    )
 
     useEffect(() => {
         if (!contact || contact.phones.length === 0) return
 
         let cancelled = false
+        const retryTimers: Array<ReturnType<typeof setTimeout>> = []
         const checkChannels = ['telegram', 'whatsapp', 'max'] as const
         setLiveReachability({})
 
-        const runCheck = (phoneId: string, phone: string, channel: typeof checkChannels[number]) => {
-            const key = reachabilityKey(phoneId, channel)
+        const runCheck = (
+            phoneId: string,
+            phone: string,
+            channel: typeof checkChannels[number],
+            identity?: ContactIdentity,
+            attempt = 1,
+        ) => {
+            const key = reachabilityKey(phoneId, channel, identity?.id)
+            const providerAccountId = typeof identity?.providerAccountId === 'string'
+                && identity.providerAccountId.trim() === identity.providerAccountId
+                && identity.providerAccountId !== 'legacy'
+                ? identity.providerAccountId
+                : null
+            const exactIdentityBinding = identity
+                && identity.isActive !== false
+                && identity.conflictState !== 'conflicted'
+                && providerAccountId
+                ? {
+                    identityId: identity.id,
+                    contactId: contact.id,
+                    providerAccountId,
+                }
+                : {}
             setLiveReachability(prev => prev[key] ? prev : { ...prev, [key]: { status: 'checking', retryable: true } })
             fetch('/api/channels/check-reachability', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phone, channel }),
+                body: JSON.stringify({ phone, channel, ...exactIdentityBinding }),
             })
                 .then(r => r.json())
                 .then(data => {
@@ -320,30 +368,48 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                         error: data.error,
                     }
                     setLiveReachability(prev => ({ ...prev, [key]: nextEntry }))
+                    if (nextStatus === 'checking' && data.retryable !== false && attempt < 5) {
+                        retryTimers.push(setTimeout(() => {
+                            if (!cancelled) runCheck(phoneId, phone, channel, identity, attempt + 1)
+                        }, 5_000))
+                    }
                 })
                 .catch(() => {
                     if (cancelled) return
                     setLiveReachability(prev => ({ ...prev, [key]: { status: 'checking', retryable: true, error: 'Ошибка сети' } }))
+                    if (attempt < 5) {
+                        retryTimers.push(setTimeout(() => {
+                            if (!cancelled) runCheck(phoneId, phone, channel, identity, attempt + 1)
+                        }, 5_000))
+                    }
                 })
         }
 
         for (const phone of contact.phones) {
             for (const channel of checkChannels) {
-                const identity = contact.identities.find(item => item.phoneId === phone.id && item.channel === channel)
-                const hasLinkedChat = identity && contact.chats.some(chat => chat.contactIdentityId === identity.id)
-                if (hasLinkedChat) {
-                    const key = reachabilityKey(phone.id, channel)
-                    setLiveReachability(prev => ({ ...prev, [key]: { status: 'confirmed', retryable: false } }))
-                } else {
+                const channelIdentities = contact.identities.filter(
+                    item => item.phoneId === phone.id && item.channel === channel,
+                )
+                if (channelIdentities.length === 0) {
                     runCheck(phone.id, phone.phone, channel)
+                }
+                for (const identity of channelIdentities) {
+                    const hasLinkedChat = contact.chats.some(chat => chat.contactIdentityId === identity.id)
+                    if (hasLinkedChat) {
+                        const key = reachabilityKey(phone.id, channel, identity.id)
+                        setLiveReachability(prev => ({ ...prev, [key]: { status: 'confirmed', retryable: false } }))
+                    } else {
+                        runCheck(phone.id, phone.phone, channel, identity)
+                    }
                 }
             }
         }
 
         return () => {
             cancelled = true
+            for (const timer of retryTimers) clearTimeout(timer)
         }
-    }, [contact?.id, reachabilityPhoneSignature])
+    }, [contact, reachabilityPhoneSignature, reachabilityIdentitySignature])
 
     // Load bot link status when a TG identity is present
     const tgIdentity = contact?.identities.find(i => i.channel === 'telegram') ?? null
@@ -382,7 +448,9 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
         const hasChat = contact?.chats?.some(c => c.contactIdentityId === identity.id)
         if (hasChat) return true
         // Live check result takes priority (if definitive)
-        const live = identity.phoneId ? liveReachability[reachabilityKey(identity.phoneId, identity.channel)] : undefined
+        const live = identity.phoneId
+            ? liveReachability[reachabilityKey(identity.phoneId, identity.channel, identity.id)]
+            : undefined
         if (live !== undefined) {
             if (live.status === 'confirmed') return true
             if (live.status === 'unreachable') return false
@@ -427,14 +495,13 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
         try {
             const response = await fetch(`/api/contacts/${contact.id}/parks`, { method: 'POST' })
             const body = await response.json()
+            if (body?.checkStatus) setParkCheckResult(body)
             if (!response.ok) throw new Error(body.message || 'Не удалось проверить парки')
-            setParkCheckResult(body)
             if (['linked', 'already_linked', 'merged'].includes(body.driverLink?.status)) {
                 await refreshConversations()
                 if (body.driverLink.contactId === contact.id) await refetchContact()
             }
         } catch (error: any) {
-            setParkCheckResult(null)
             setParkCheckError(error?.message || 'Не удалось проверить парки')
         } finally {
             setParkCheckLoading(false)
@@ -703,15 +770,25 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                     <div className="px-[4px] py-2.5">
                         <div className="flex items-center justify-between mb-[2px]">
                             <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Телефоны и каналы</h4>
-                            {!showAddPhone && (
+                            <div className="flex items-center gap-2">
                                 <button
-                                    onClick={() => { setShowAddPhone(true); setAddPhoneError(null); setPhoneConflict(null) }}
-                                    className="text-[10px] font-semibold text-[#3390EC] hover:text-[#2B7FD4] flex items-center gap-0.5"
+                                    type="button"
+                                    aria-haspopup="dialog"
+                                    onClick={() => setShowContactEvidence(true)}
+                                    className="text-[10px] font-semibold text-gray-500 hover:text-[#3390EC]"
                                 >
-                                    <Plus size={10} />
-                                    Добавить номер
+                                    Все каналы ({(contact.channelIdentities ?? contact.identities).length})
                                 </button>
-                            )}
+                                {!showAddPhone && (
+                                    <button
+                                        onClick={() => { setShowAddPhone(true); setAddPhoneError(null); setPhoneConflict(null) }}
+                                        className="text-[10px] font-semibold text-[#3390EC] hover:text-[#2B7FD4] flex items-center gap-0.5"
+                                    >
+                                        <Plus size={10} />
+                                        Добавить номер
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
                         {/* Inline form for adding a new phone manually. POST hits
@@ -897,7 +974,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                             const isCheckable = identity.channel === 'telegram' || identity.channel === 'whatsapp' || identity.channel === 'max'
                                             const reachable = getReachability(identity)
                                             const liveEntry = identity.phoneId
-                                                ? liveReachability[reachabilityKey(identity.phoneId, identity.channel)]
+                                                ? liveReachability[reachabilityKey(identity.phoneId, identity.channel, identity.id)]
                                                 : undefined
                                             const linkedToCurrentContact = identityHasChat(identity)
                                             const reachBadge = linkedToCurrentContact
@@ -931,6 +1008,9 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                                             )}
                                                             {identity.source === 'manual' && (
                                                                 <span className="text-[8px] text-violet-400 bg-violet-50 px-1 py-px rounded" title="Канал добавлен вручную">ручной</span>
+                                                            )}
+                                                            {identity.conflictState === 'conflicted' && (
+                                                                <span className="rounded bg-red-50 px-1 py-px text-[8px] text-red-600">конфликт</span>
                                                             )}
                                                             {hasFailed && <AlertCircle size={10} className="text-red-500" />}
                                                         </div>
@@ -1204,8 +1284,29 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                 <span>Проверено парков: {parkCheckResult.checkedParks}</span>
                                 <span>Найдено: {parkCheckResult.foundProfiles}</span>
                             </div>
+                            <div className={`mb-1.5 text-[10px] font-semibold ${
+                                parkCheckResult.checkStatus === 'failed'
+                                    ? 'text-red-600'
+                                    : parkCheckResult.checkStatus === 'partial' || parkCheckResult.checkStatus === 'unknown'
+                                        ? 'text-amber-700'
+                                        : 'text-emerald-700'
+                            }`}>
+                                {parkCheckResult.checkStatus === 'failed'
+                                    ? 'Проверка не завершена'
+                                    : parkCheckResult.checkStatus === 'partial'
+                                        ? 'Проверены не все парки'
+                                        : parkCheckResult.checkStatus === 'unknown'
+                                            ? 'Полнота прошлой проверки не подтверждена'
+                                            : 'Проверка завершена'}
+                            </div>
                             {parkCheckResult.results.length === 0 ? (
-                                <div className="text-[11px] text-gray-500">Профили по этим телефонам не найдены</div>
+                                <div className="text-[11px] text-gray-500">
+                                    {parkCheckResult.checkStatus === 'complete'
+                                        ? 'Профили по этим телефонам не найдены'
+                                        : parkCheckResult.checkStatus === 'unknown'
+                                            ? 'Нет достоверного результата: полнота прошлой проверки не подтверждена'
+                                            : 'Нет достоверного результата: часть источников недоступна'}
+                                </div>
                             ) : (
                                 <div className="space-y-1.5">
                                     {parkCheckResult.results.map(park => (
@@ -1280,7 +1381,14 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                         <div className="mb-2 rounded-lg bg-blue-50 p-2 text-[10px] text-blue-800">
                             <div>{contact.driverSummary.profileCount} профилей · {contact.driverSummary.parkCount} парков</div>
                             <div>{contact.driverSummary.staleCount} устаревших · {contact.driverSummary.failedCount} с ошибкой</div>
-                            <button onClick={() => setShowAllDriverProfiles(true)} className="mt-1 font-semibold underline">Все профили</button>
+                            <button
+                                type="button"
+                                aria-haspopup="dialog"
+                                onClick={() => setShowContactEvidence(true)}
+                                className="mt-1 font-semibold underline"
+                            >
+                                Все профили
+                            </button>
                         </div>
                     )}
 
@@ -1458,20 +1566,23 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                 />
             )}
 
-            {showAllDriverProfiles && contact?.driverProfiles && (
-                <div className="fixed inset-0 z-[105] flex items-center justify-center bg-black/40" onClick={() => setShowAllDriverProfiles(false)}>
-                    <div className="max-h-[75vh] w-[620px] overflow-y-auto rounded-xl bg-white p-4" onClick={event => event.stopPropagation()}>
-                        <div className="mb-3 flex items-center justify-between"><h3 className="font-semibold">Все профили водителя</h3><button onClick={() => setShowAllDriverProfiles(false)}><X size={18} /></button></div>
-                        {contact.driverProfiles.map(profile => (
-                            <div key={profile.id} className="mb-2 grid grid-cols-3 gap-2 rounded-lg border p-3 text-xs">
-                                <span>{profile.externalParkId || 'Парк —'}<br />{profile.legalRole || profile.sourceProfileType || 'Роль —'}</span>
-                                <span>{profile.fullName}<br />{profile.phone || 'Телефон —'}</span>
-                                <span>{profile.sourceStatus || 'Статус —'}<br />{profile.sourceFreshness || 'unknown'} / {profile.sourceState || 'unknown'}</span>
-                            </div>
-                        ))}
+            <Dialog open={showContactEvidence} onOpenChange={setShowContactEvidence}>
+                <DialogContent className="max-h-[82vh] max-w-3xl overflow-hidden">
+                    <DialogHeader>
+                        <DialogTitle>Каналы и профили водителя</DialogTitle>
+                        <DialogDescription>
+                            Все идентичности, их доказательства и парк-квалифицированные профили без свёртки.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="overflow-y-auto pr-1">
+                        <ContactEvidenceDetails
+                            identities={contact?.channelIdentities ?? contact?.identities ?? []}
+                            phones={contact?.phones ?? []}
+                            profiles={contact?.driverProfiles ?? []}
+                        />
                     </div>
-                </div>
-            )}
+                </DialogContent>
+            </Dialog>
 
             {/* Merge Dialog */}
             {showMergeDialog && (
@@ -1503,23 +1614,14 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                     <div className="text-[12px] font-semibold text-[#111]">С другим контактом</div>
                                     <div className="text-[11px] text-gray-400 mt-0.5">Объединить два контакта (lead-to-lead)</div>
                                 </button>
-                                <button
-                                    onClick={() => setMergeMode('driver')}
-                                    className="w-full px-3 py-2.5 text-left bg-gray-50 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-200"
-                                >
-                                    <div className="text-[12px] font-semibold text-[#111]">С карточкой водителя</div>
-                                    <div className="text-[11px] text-gray-400 mt-0.5">Привязать к существующему водителю (Driver)</div>
-                                </button>
                             </div>
                         ) : mergeTarget ? (
                             /* Confirmation */
                             <div className="px-[4px] py-[4px] space-y-3">
                                 <p className="text-[12px] text-gray-600">
-                                    {mergeMode === 'contact'
-                                        ? contact?.yandexDriverId
-                                            ? <>Влить <strong>{mergeTarget.displayName}</strong> в текущий контакт <strong>{displayName}</strong>?</>
-                                            : <>Влить <strong>{displayName}</strong> в <strong>{mergeTarget.displayName}</strong>?</>
-                                        : <>Привязать <strong>{displayName}</strong> к водителю <strong>{mergeTarget.fullName || mergeTarget.displayName}</strong>?</>
+                                    {contact?.yandexDriverId
+                                        ? <>Влить <strong>{mergeTarget.displayName}</strong> в текущий контакт <strong>{displayName}</strong>?</>
+                                        : <>Влить <strong>{displayName}</strong> в <strong>{mergeTarget.displayName}</strong>?</>
                                     }
                                 </p>
                                 {mergeError && <p className="text-[11px] text-red-500 bg-red-50 px-[2px] py-1 rounded">{mergeError}</p>}
@@ -1532,21 +1634,13 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                             setMergeLoading(true); setMergeError(null)
                                             try {
                                                 const userId = document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('crm_user_id='))?.split('=')[1] || 'system'
-                                                let res: Response
-                                                if (mergeMode === 'driver') {
-                                                    res = await fetch(`/api/contacts/${contact?.id || chat?.contactId}/merge`, {
-                                                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                                        body: JSON.stringify({ driverId: mergeTarget.id, mergedBy: userId }),
-                                                    })
-                                                } else {
-                                                    // contact-to-contact: if current is driver-linked, current is target (survivor)
-                                                    const sourceId = contact?.yandexDriverId ? mergeTarget.id : (contact?.id || chat?.contactId)
-                                                    const targetId = contact?.yandexDriverId ? (contact?.id || chat?.contactId) : mergeTarget.id
-                                                    res = await fetch(`/api/contacts/${sourceId}/merge-to/${targetId}`, {
-                                                        method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                                        body: JSON.stringify({ mergedBy: userId }),
-                                                    })
-                                                }
+                                                // contact-to-contact: if current is driver-linked, current is target (survivor)
+                                                const sourceId = contact?.yandexDriverId ? mergeTarget.id : (contact?.id || chat?.contactId)
+                                                const targetId = contact?.yandexDriverId ? (contact?.id || chat?.contactId) : mergeTarget.id
+                                                const res = await fetch(`/api/contacts/${sourceId}/merge-to/${targetId}`, {
+                                                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({ mergedBy: userId }),
+                                                })
                                                 const data = await res.json()
                                                 if (!res.ok) throw new Error(data.error || 'Ошибка объединения')
                                                 setMergeSuccess(true)
@@ -1576,7 +1670,7 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                             type="text"
                                             value={mergeSearch}
                                             onChange={e => setMergeSearch(e.target.value)}
-                                            placeholder={mergeMode === 'driver' ? 'Поиск водителя...' : 'Поиск контакта (имя, телефон)...'}
+                                            placeholder="Поиск контакта (имя, телефон)..."
                                             className="w-full h-[32px] bg-[#F4F5F7] rounded-lg pl-[8px] pr-3 text-[12px] outline-none placeholder:text-gray-400"
                                             autoFocus
                                         />
@@ -1596,16 +1690,11 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                     )}
                                     {mergeSearchResults.filter(r => r.id !== contact?.id).map(result => {
                                         const phone = result.phones?.[0]?.phone
-                                        const hasDriver = !!(result as any).driver || result.masterSource === 'yandex'
-                                        const isValidTarget = mergeMode === 'driver' ? hasDriver : true
                                         return (
                                             <button
                                                 key={result.id}
-                                                onClick={() => isValidTarget && setMergeTarget(mergeMode === 'driver' ? { id: result.id, displayName: result.displayName, fullName: result.displayName } : result)}
-                                                disabled={!isValidTarget}
-                                                className={`w-full px-3 py-[2px] text-left flex items-center gap-2.5 transition-colors ${
-                                                    isValidTarget ? 'hover:bg-blue-50 cursor-pointer' : 'opacity-40 cursor-not-allowed'
-                                                }`}
+                                                onClick={() => setMergeTarget(result)}
+                                                className="w-full px-3 py-[2px] text-left flex items-center gap-2.5 transition-colors hover:bg-blue-50 cursor-pointer"
                                             >
                                                 <div className="h-[36px] w-[36px] rounded-full bg-[#E3E8ED] text-[#6B7A8D] flex items-center justify-center font-bold text-[12px] shrink-0">
                                                     {(result.displayName || '?')[0].toUpperCase()}
@@ -1617,7 +1706,6 @@ export default function ContactProfileDrawer({ chatId }: { chatId: string }) {
                                                         {result.channels?.map((ch: string) => (
                                                             <span key={ch} className="text-[8px] font-bold bg-gray-100 px-1 py-px rounded">{ch === 'whatsapp' ? 'WA' : ch === 'telegram' ? 'TG' : ch.toUpperCase()}</span>
                                                         ))}
-                                                        {!isValidTarget && <span className="text-[9px] text-orange-500">нет водителя</span>}
                                                     </div>
                                                 </div>
                                             </button>

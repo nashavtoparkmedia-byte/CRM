@@ -57,6 +57,13 @@ export type MergeContactsResultV1 =
       mergedId: string
       mergeRecordId: string
     }
+  | {
+      contract: typeof MERGE_CONTACTS_RESULT_V1
+      status: 'automatic_merge_blocked'
+      leftContactId: string
+      rightContactId: string
+      reason: string
+    }
 
 export class MergeContactsCommandValidationError extends Error {
   readonly code: 'INVALID_CONTRACT' | 'UNSUPPORTED_CONTRACT_VERSION'

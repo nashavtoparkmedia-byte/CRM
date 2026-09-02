@@ -128,5 +128,5 @@ export function withoutPhoneEvidence(customFields: unknown, phoneIds: readonly s
 
 export function providerAccountMatches(metadata: unknown, requested: string): boolean {
   const stored = identityEvidenceState(metadata).providerAccountId
-  return stored === requested || stored === 'legacy' || requested === 'legacy'
+  return stored === requested
 }

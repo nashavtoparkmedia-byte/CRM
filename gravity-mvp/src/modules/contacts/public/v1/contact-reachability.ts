@@ -1,23 +1,18 @@
 import {
-    findIdentityByPhoneAndChannel,
-    isReachabilityConfirmed,
-    updateReachability,
-    updateReachabilityByChatId,
+    recordExactProviderReachability,
+    type RecordExactProviderReachabilityCommandV1,
+    type RecordExactProviderReachabilityResultV1,
 } from '@/lib/ReachabilityService'
 
-export type ContactReachabilityStatusV1 = 'confirmed' | 'unreachable'
+export type {
+    RecordExactProviderReachabilityCommandV1,
+    RecordExactProviderReachabilityResultV1,
+}
 
 export const contactReachabilityV1 = Object.freeze({
-    findIdentityByPhoneAndChannel: (phone: string, channel: string): Promise<string | null> => (
-        findIdentityByPhoneAndChannel(phone, channel)
-    ),
-    isReachabilityConfirmed: (identityId: string): Promise<boolean> => (
-        isReachabilityConfirmed(identityId)
-    ),
-    updateReachability: (identityId: string, status: ContactReachabilityStatusV1): Promise<void> => (
-        updateReachability(identityId, status)
-    ),
-    updateReachabilityByChatId: (chatId: string, status: ContactReachabilityStatusV1): Promise<void> => (
-        updateReachabilityByChatId(chatId, status)
+    recordExactProviderReachability: (
+        command: RecordExactProviderReachabilityCommandV1,
+    ): Promise<RecordExactProviderReachabilityResultV1> => (
+        recordExactProviderReachability(command)
     ),
 })

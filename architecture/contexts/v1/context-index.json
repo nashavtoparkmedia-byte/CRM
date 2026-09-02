@@ -48,7 +48,7 @@
     {
       "context": "max_channel",
       "path": "architecture/contexts/v1/manifests/max_channel.json",
-      "sha256": "3bc82cbee62905688ebb8cac98e9b38ebfe67d1740f15e35acd3efd683745d23"
+      "sha256": "1ca09259a166e9c04fdc92fcf9a922490e3bb6bbd39696f5396fa331935c4f04"
     },
     {
       "context": "messaging",
@@ -159,7 +159,7 @@
     },
     "executable_path_ownership_coverage": {
       "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
-      "sha256": "9d86722a70afd21c418ea2e5eade0e8d39710f9352433a5b17612725e1b2ca25"
+      "sha256": "b0c99e2ee1dabee82af50ee345387e7c68f1dc1b172ab739761cbc663be96ee5"
     },
     "executable_path_ownership_current_dependencies": {
       "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json",
@@ -167,11 +167,11 @@
     },
     "final_dependency_current": {
       "path": "architecture/contexts/v1/final-dependency-current.json",
-      "sha256": "a19d3b40c39d55084ddc744516ef0ac810700c741d88e2252ab0c34308fb9f91"
+      "sha256": "55461b207eca97b52c09f420cc78099a3b0ad0e62ede31c55b9a5bbd27dc2460"
     },
     "final_dependency_source": {
       "path": "architecture/contexts/v1/final-dependency-source.json",
-      "sha256": "9bd76d6c92c09ae357223cd4aacd46f4dd4d15e6f5320a7f5ce4895b83eb5766"
+      "sha256": "197947dc449ba6ce9503a0af79cde91095e6a62349a7327f6b90f8e76327572a"
     },
     "foreign_write_migration_plan": {
       "path": "architecture/contexts/v1/foreign-write-migration-plan.json",

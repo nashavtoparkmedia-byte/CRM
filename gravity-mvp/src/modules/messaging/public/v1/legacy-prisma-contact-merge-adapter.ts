@@ -45,10 +45,38 @@ export function makeMessagingAutomatedMergeRecoveryRepositoryV1(
 ): AutomatedMergeRecoveryOwnerRepositoryV1 {
   return {
     async canRestore(plan) {
-      if (plan.chatIds.length === 0) return true
-      return transaction.chat.count({
-        where: { id: { in: plan.chatIds }, contactId: plan.survivorId },
-      }).then(count => count === plan.chatIds.length)
+      const plannedChatIds = new Set(plan.chatIds)
+      const sourceIdentityIds = new Set(plan.identityIds)
+      if (plannedChatIds.size !== plan.chatIds.length
+        || sourceIdentityIds.size !== plan.identityIds.length) return false
+      const archivedContactChatCount = await transaction.chat.count({
+        where: { contactId: plan.mergedId },
+      })
+      if (archivedContactChatCount !== 0) return false
+      if (plannedChatIds.size === 0 && sourceIdentityIds.size === 0) return true
+      const chats = await transaction.chat.findMany({
+        where: {
+          OR: [
+            ...(plannedChatIds.size > 0 ? [{ id: { in: [...plannedChatIds] } }] : []),
+            ...(sourceIdentityIds.size > 0
+              ? [{ contactIdentityId: { in: [...sourceIdentityIds] } }]
+              : []),
+          ],
+        },
+        select: { id: true, contactId: true, contactIdentityId: true },
+      })
+      const currentById = new Map(chats.map(chat => [chat.id, chat]))
+      for (const chatId of plannedChatIds) {
+        const chat = currentById.get(chatId)
+        if (!chat) return false
+        if (chat.contactId !== plan.survivorId) return false
+        if (chat.contactIdentityId !== null && !sourceIdentityIds.has(chat.contactIdentityId)) return false
+      }
+      return chats.every(chat => (
+        !chat.contactIdentityId
+        || !sourceIdentityIds.has(chat.contactIdentityId)
+        || (chat.contactId === plan.survivorId && plannedChatIds.has(chat.id))
+      ))
     },
     async restore(plan) {
       if (plan.chatIds.length === 0) return

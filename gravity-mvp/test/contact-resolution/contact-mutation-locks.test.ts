@@ -22,6 +22,13 @@ import {
 vi.mock('@/modules/contacts/public/v1/contact-phone-evidence', () => ({
   manageContactPhoneEvidenceV1: vi.fn(),
 }))
+vi.mock('@/modules/identity-access/public/v1', async importOriginal => ({
+  ...await importOriginal<typeof import('@/modules/identity-access/public/v1')>(),
+  getIntegrationAdminPrincipal: vi.fn(async () => ({
+    id: 'identity-access:integration-admin-session',
+    kind: 'integration_admin_session',
+  })),
+}))
 
 const HISTORICAL_RESOLVER_SHA = '0af09758de2b7b9df88169aa2f7e5d93868c7e05'
 const HISTORICAL_PHONE_SHA = 'bc44093c099e7099ba67cbd0fb11bb4e5c3148ba'
@@ -214,7 +221,11 @@ describe('public phone route coordinator busy contract', () => {
     const response = await addPhoneRoute(
       new NextRequest('http://localhost/api/contacts/contact-1/phones', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          host: 'localhost',
+          origin: 'http://localhost',
+        },
         body: JSON.stringify({ phone: '+79990000001', isPrimary: true }),
       }),
       { params: Promise.resolve({ id: 'contact-1' }) },
@@ -228,7 +239,11 @@ describe('public phone route coordinator busy contract', () => {
     const response = await patchPhoneRoute(
       new NextRequest('http://localhost/api/contacts/contact-1/phones/phone-1', {
         method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          host: 'localhost',
+          origin: 'http://localhost',
+        },
         body: JSON.stringify({ isPrimary: true }),
       }),
       { params: Promise.resolve({ id: 'contact-1', phoneId: 'phone-1' }) },
@@ -242,6 +257,7 @@ describe('public phone route coordinator busy contract', () => {
     const response = await deletePhoneRoute(
       new NextRequest('http://localhost/api/contacts/contact-1/phones/phone-1', {
         method: 'DELETE',
+        headers: { host: 'localhost', origin: 'http://localhost' },
       }),
       { params: Promise.resolve({ id: 'contact-1', phoneId: 'phone-1' }) },
     )
@@ -254,7 +270,11 @@ describe('public phone route coordinator busy contract', () => {
     await expect(patchPhoneRoute(
       new NextRequest('http://localhost/api/contacts/contact-1/phones/phone-1', {
         method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          host: 'localhost',
+          origin: 'http://localhost',
+        },
         body: JSON.stringify({ isPrimary: true }),
       }),
       { params: Promise.resolve({ id: 'contact-1', phoneId: 'phone-1' }) },
@@ -265,6 +285,7 @@ describe('public phone route coordinator busy contract', () => {
     await expect(deletePhoneRoute(
       new NextRequest('http://localhost/api/contacts/contact-1/phones/phone-1', {
         method: 'DELETE',
+        headers: { host: 'localhost', origin: 'http://localhost' },
       }),
       { params: Promise.resolve({ id: 'contact-1', phoneId: 'phone-1' }) },
     )).rejects.toBe(unexpectedDelete)

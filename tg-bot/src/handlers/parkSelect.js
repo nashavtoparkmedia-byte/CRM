@@ -2,6 +2,7 @@ const { Scenes, Markup } = require('telegraf');
 const https = require('https');
 const http = require('http');
 const logger = require('../utils/logger');
+const { exactTelegramActionBinding } = require('../services/exactTelegramActionBinding');
 
 const CRM_URL = () => {
     if (process.env.BOT_ACTIONS_URL) return process.env.BOT_ACTIONS_URL;
@@ -99,7 +100,11 @@ const parkSelectScene = new Scenes.WizardScene('parkSelect',
         const telegramId = String(ctx.from.id);
         const { ok, data } = await postJSON(CRM_URL(), {
             action: 'set_active_park',
-            payload: { telegramId, parkId: selected.parkId }
+            payload: {
+                telegramId,
+                parkId: selected.parkId,
+                ...exactTelegramActionBinding(ctx),
+            }
         });
 
         if (data?.error === 'NOT_IN_PARK') {

@@ -9,6 +9,10 @@ import {
   identityEvidenceState,
   phoneEvidenceState,
 } from '@/modules/contacts/public/v1/contact-evidence-state'
+import {
+  getIntegrationAdminPrincipal,
+  isExactSameOriginMutationRequest,
+} from '@/modules/identity-access/public/v1'
 
 function driverFleetReadModel(customFields: unknown) {
   const fields = customFields && typeof customFields === 'object' && !Array.isArray(customFields)
@@ -22,6 +26,12 @@ function driverFleetReadModel(customFields: unknown) {
     : {}
   return {
     legalRole: typeof source.legalRole === 'string' ? source.legalRole : null,
+    workStatus: typeof source.workStatus === 'string'
+      ? source.workStatus
+      : typeof source.sourceStatus === 'string' ? source.sourceStatus : null,
+    currentStatus: typeof source.currentStatus === 'string'
+      ? source.currentStatus
+      : typeof source.sourceStatus === 'string' ? source.sourceStatus : null,
     sourceStatus: typeof source.sourceStatus === 'string' ? source.sourceStatus : null,
     sourceCity: typeof source.sourceCity === 'string' ? source.sourceCity : null,
     sourceProfileType: typeof source.sourceProfileType === 'string' ? source.sourceProfileType : null,
@@ -71,8 +81,7 @@ export async function GET(
           },
         },
         identities: {
-          where: { isActive: true },
-          orderBy: { createdAt: 'asc' },
+          orderBy: [{ isActive: 'desc' }, { createdAt: 'asc' }],
           select: {
             id: true,
             channel: true,
@@ -183,7 +192,7 @@ export async function GET(
             : (item as Record<string, unknown>).status === 'open'
         ))
       : []
-    const identities = contact.identities.map(identity => {
+    const channelIdentities = contact.identities.map(identity => {
       const metadata = identity.metadata && typeof identity.metadata === 'object' && !Array.isArray(identity.metadata)
         ? identity.metadata as Record<string, unknown>
         : {}
@@ -197,11 +206,17 @@ export async function GET(
         )),
       }
     })
+    const identities = channelIdentities.filter(identity => identity.isActive)
     const driverProfiles = allDriverProfiles.map(profile => {
       const evidence = driverFleetReadModel(profile.customFields)
       return {
         ...profile,
         ...evidence,
+        normalizedVu: profile.personKeyType === 'normalized_vu'
+          && profile.externalPersonKey?.startsWith('vu:')
+          ? profile.externalPersonKey.slice(3)
+          : null,
+        sourceConflict: evidence.sourceMetadata.authoritativeContradiction ?? null,
         licenseObservations: Array.isArray(evidence.sourceMetadata.licenseHistory)
           ? evidence.sourceMetadata.licenseHistory
           : [],
@@ -227,6 +242,7 @@ export async function GET(
       updatedAt: contact.updatedAt,
       phones,
       identities,
+      channelIdentities,
       chats: contact.chats,
       driver,
       driverProfiles,
@@ -264,7 +280,8 @@ export async function GET(
 /**
  * PATCH /api/contacts/:id
  *
- * Обновляемые поля: displayName, primaryPhoneId, tags, notes, customFields.
+ * Обновляемые поля: displayName, primaryPhoneId, tags, notes.
+ * customFields is owner-managed evidence and cannot be replaced wholesale.
  * displayName → displayNameSource = "manual".
  * masterSource и yandexDriverId НЕ редактируются.
  *
@@ -274,6 +291,13 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!isExactSameOriginMutationRequest(req)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  if (!await getIntegrationAdminPrincipal()) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const { id } = await params
     const input: unknown = await req.json()
@@ -287,6 +311,15 @@ export async function PATCH(
       return NextResponse.json(
         { error: 'IMMUTABLE_FIELD', message: 'masterSource and yandexDriverId cannot be changed via PATCH' },
         { status: 400 }
+      )
+    }
+    if ('customFields' in body) {
+      return NextResponse.json(
+        {
+          error: 'CUSTOM_FIELDS_REPLACEMENT_FORBIDDEN',
+          message: 'customFields cannot be replaced wholesale via PATCH',
+        },
+        { status: 400 },
       )
     }
 
@@ -309,10 +342,6 @@ export async function PATCH(
 
     if ('notes' in body) {
       data.notes = typeof body.notes === 'string' ? body.notes : null
-    }
-
-    if ('customFields' in body && typeof body.customFields === 'object') {
-      data.customFields = body.customFields as Prisma.InputJsonValue
     }
 
     if (Object.keys(data).length === 0) {
@@ -339,7 +368,6 @@ export async function PATCH(
             displayNameSource: data.displayNameSource,
             tags: data.tags,
             notes: data.notes,
-            customFields: data.customFields,
           },
         }).catch((error: { code?: string }) => {
           if (error?.code === 'P2025') return null

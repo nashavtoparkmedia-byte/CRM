@@ -4,7 +4,12 @@ import {
   type MergeContactsCommandV1,
   type MergeContactsResultV1,
 } from '../../../../contracts/contacts/v1'
-import { evaluateAutomaticContactMergeV1, evaluateContactSurvivorV1 } from './contact-automation-policy'
+import {
+  evaluateAutomaticContactMergeV1,
+  evaluateContactSurvivorV1,
+  type ContactAutomationSnapshotV1,
+} from './contact-automation-policy'
+import { contactAutomationState, phoneEvidenceState } from './contact-evidence-state'
 import {
   createRecoverAutomatedContactMergeHandlerV1,
   type AutomatedMergeRecoveryUnitOfWorkV1,
@@ -19,14 +24,26 @@ export type ContactMergeErrorCodeV1 =
   | 'ALREADY_MERGED'
   | 'SELF_MERGE'
   | 'SOURCE_HAS_DRIVER'
+  | 'DRIVER_PERSON_CONFIRMATION_REQUIRED'
   | 'INVALID_MERGE_STATE'
 
 export class ContactMergeErrorV1 extends Error {
   readonly code: ContactMergeErrorCodeV1
-  constructor(code: ContactMergeErrorCodeV1, message: string) {
+  readonly automaticBlockReason: string | null
+  constructor(code: ContactMergeErrorCodeV1, message: string, automaticBlockReason: string | null = null) {
     super(message)
     this.name = 'MergeError'
     this.code = code
+    this.automaticBlockReason = automaticBlockReason
+  }
+}
+
+function rejectDeprecatedContactToDriverMerge(command: MergeContactsCommandV1): void {
+  if (command.operation === 'contact_to_driver') {
+    throw new ContactMergeErrorV1(
+      'DRIVER_PERSON_CONFIRMATION_REQUIRED',
+      'Contact to Driver attachment requires canonical all-park person confirmation',
+    )
   }
 }
 
@@ -36,6 +53,7 @@ export interface ContactMergePhoneV1 {
   isPrimary: boolean
   source: string
   isActive: boolean
+  verifiedAt?: Date | string | null
 }
 export interface ContactMergeIdentityV1 {
   id: string
@@ -70,7 +88,7 @@ export interface ContactMergeSourceV1 {
   canonicalPinnedAt: Date | null
   doNotMerge: boolean
   customFields: unknown
-  driverProfiles: Array<{ id: string }>
+  driverProfiles: Array<{ id: string; personResolutionStatus: string }>
   driverConfirmations: Array<{ profileClusterKey: string; status: string }>
 }
 export type ContactMergeSurvivorV1 = ContactMergeSourceV1
@@ -134,13 +152,20 @@ export interface ContactMergeSimpleLinkContactsRepositoryV1 {
 }
 export interface ContactMergeContactsRepositoryV1
   extends ContactMergeSimpleLinkContactsRepositoryV1, ContactMergeContactsQueryRepositoryV1 {
-  /** First database action in the enclosing merge transaction. */
+  /** First Contacts-owned database action in the enclosing merge transaction. */
   admitOwnershipMutation(): Promise<void>
   lockContactPairOrdered(survivorId: string, mergedId: string): Promise<void>
+  findLockedMergeLineageNode(contactId: string): Promise<{
+    id: string
+    isArchived: boolean
+    mergedIntoContactId: string | null
+  } | null>
+  hasCompletedMergePath(sourceId: string, targetId: string): Promise<boolean>
   deriveAutomaticMergeEvidence(
     leftContactId: string,
     rightContactId: string,
   ): Promise<import('./contact-automation-policy').AutomaticMergeEvidenceV1>
+  recordAutomaticMergeBlock(leftContactId: string, rightContactId: string, reason: string): Promise<void>
   deleteDuplicateIdentities(identityIds: string[]): Promise<void>
   moveIdentitiesToContact(sourceContactId: string, targetContactId: string): Promise<void>
   deleteDuplicatePhones(phoneIds: string[]): Promise<void>
@@ -165,6 +190,8 @@ export interface ContactMergeContactsRepositoryV1
   verifyOwnershipPostconditions(): Promise<void>
 }
 export interface ContactMergeFleetRepositoryV1 extends ContactMergeFleetQueryRepositoryV1 {
+  /** Must precede CNT1 admission for automatic evidence reads (FLT1 -> CNT1). */
+  admitAutomaticMergeEvidenceRead(): Promise<void>
   findDriverIdByYandexDriverId(yandexDriverId: string): Promise<string | null>
   moveDriverProfilesToContact(sourceContactId: string, targetContactId: string): Promise<void>
 }
@@ -206,6 +233,62 @@ export interface ContactMergeHandlerDependenciesV1 {
 function generateCuid(): string {
   return `cm${Date.now().toString(36)}${Math.random().toString(36).substring(2, 10)}`
 }
+
+const MAX_COMPLETED_MERGE_CHAIN_DEPTH = 32
+
+async function resolveLockedCanonicalContactId(
+  contacts: ContactMergeContactsRepositoryV1,
+  requestedContactId: string,
+): Promise<string> {
+  let cursor = requestedContactId
+  const visited = new Set<string>()
+  const archivedContactIds: string[] = []
+  for (let depth = 0; depth < MAX_COMPLETED_MERGE_CHAIN_DEPTH; depth += 1) {
+    if (visited.has(cursor)) {
+      throw new ContactMergeErrorV1(
+        'INVALID_MERGE_STATE',
+        `Completed merge lineage for ${requestedContactId} contains a redirect cycle`,
+      )
+    }
+    visited.add(cursor)
+    const node = await contacts.findLockedMergeLineageNode(cursor)
+    if (!node) {
+      throw new ContactMergeErrorV1(
+        'INVALID_MERGE_STATE',
+        `Completed merge lineage for ${requestedContactId} points to missing contact ${cursor}`,
+      )
+    }
+    if (!node.isArchived) {
+      if (node.mergedIntoContactId) {
+        throw new ContactMergeErrorV1(
+          'INVALID_MERGE_STATE',
+          `Active contact ${node.id} has a merge redirect`,
+        )
+      }
+      for (const archivedContactId of archivedContactIds) {
+        if (!await contacts.hasCompletedMergePath(archivedContactId, node.id)) {
+          throw new ContactMergeErrorV1(
+            'INVALID_MERGE_STATE',
+            `Merge redirect ${archivedContactId} -> ${node.id} has no completed ledger path`,
+          )
+        }
+      }
+      return node.id
+    }
+    if (!node.mergedIntoContactId) {
+      throw new ContactMergeErrorV1(
+        'INVALID_MERGE_STATE',
+        `Archived contact ${node.id} has no completed merge redirect`,
+      )
+    }
+    archivedContactIds.push(node.id)
+    cursor = node.mergedIntoContactId
+  }
+  throw new ContactMergeErrorV1(
+    'INVALID_MERGE_STATE',
+    `Completed merge lineage for ${requestedContactId} exceeds ${MAX_COMPLETED_MERGE_CHAIN_DEPTH} redirects`,
+  )
+}
 function makeSnapshotBase(source: ContactMergeSourceV1): Omit<ContactMergeSnapshotV1, 'survivorBefore'> {
   return {
     contact: {
@@ -238,7 +321,7 @@ function makeSnapshot(
 ): ContactMergeSnapshotV1 {
   return { ...makeSnapshotBase(source), survivorBefore: makeSnapshotBase(survivor) }
 }
-function automationSnapshot(contact: ContactMergeSourceV1) {
+function automationSnapshot(contact: ContactMergeSourceV1): ContactAutomationSnapshotV1 {
   const customFields = contact.customFields && typeof contact.customFields === 'object' && !Array.isArray(contact.customFields)
     ? contact.customFields as Record<string, unknown>
     : null
@@ -251,9 +334,27 @@ function automationSnapshot(contact: ContactMergeSourceV1) {
   const recoveryState = typeof customFields?.mergeRecoveryState === 'string'
     ? customFields.mergeRecoveryState
     : null
+  const currentPhoneConflictTypes = contact.phones.flatMap(phone => {
+    if (!phone.isActive) return []
+    const evidence = phoneEvidenceState(contact.customFields, phone.id, {
+      phone: phone.phone,
+      isActive: phone.isActive,
+      verifiedAt: phone.verifiedAt ?? null,
+    })
+    return evidence.lifecycle === 'current'
+      && (evidence.resolutionState === 'shared' || evidence.resolutionState === 'disputed')
+      ? [`${evidence.resolutionState}_phone`]
+      : []
+  })
   return {
     id: contact.id,
     createdAt: contact.createdAt,
+    displayName: contact.displayName,
+    displayNameSource: contact.displayNameSource,
+    masterSource: contact.masterSource,
+    yandexDriverId: contact.yandexDriverId,
+    mainDriverId: contact.mainDriverId,
+    mainDriverSelection: contact.mainDriverSelection,
     canonicalPinned: Boolean(contact.canonicalPinnedAt),
     doNotMerge: contact.doNotMerge,
     isArchived: contact.isArchived,
@@ -276,6 +377,10 @@ function automationSnapshot(contact: ContactMergeSourceV1) {
         .map(conflict => conflict.conflictType)
         .filter((type): type is string => typeof type === 'string'),
       ...(recoveryState && recoveryState !== 'clear' ? [`merge_recovery_${recoveryState}`] : []),
+      ...currentPhoneConflictTypes,
+      ...(contact.driverProfiles.some(profile => profile.personResolutionStatus === 'conflict')
+        ? ['fleet_driver_profile_conflict']
+        : []),
     ],
   }
 }
@@ -320,8 +425,18 @@ export function createMergeContactsHandlerV1(dependencies: ContactMergeHandlerDe
     command: MergeContactsCommandV1 | unknown,
   ): Promise<MergeContactsResultV1> {
     const parsed = parseMergeContactsCommandV1(command)
+    // This legacy command deliberately remains parseable for a stable error
+    // envelope, but it cannot enter the unit of work. Driver attachment is
+    // exclusively owned by DriverPersonConfirmation.v1.
+    rejectDeprecatedContactToDriverMerge(parsed)
     return dependencies.unitOfWork.run(async repositories => {
       const { contacts, fleet, messaging, work, calling } = repositories
+      if (parsed.operation === 'contact_to_contact' && parsed.automation) {
+        // Fleet owns every field used as Driver/VU evidence. Its mutation
+        // lease is acquired before CNT1 so a reconciliation cannot publish a
+        // new person key/conflict state between the evidence read and commit.
+        await fleet.admitAutomaticMergeEvidenceRead()
+      }
       await contacts.admitOwnershipMutation()
       if (parsed.operation === 'contact_to_driver') {
         // Discovery is admitted but non-decisional. Re-read after ordered locks.
@@ -450,22 +565,84 @@ export function createMergeContactsHandlerV1(dependencies: ContactMergeHandlerDe
       if (!source) {
         throw new ContactMergeErrorV1('CONTACT_NOT_FOUND', `Source contact ${parsed.sourceId} not found`)
       }
-      if (source.isArchived) {
-        if (await contacts.hasCompletedMerge(parsed.sourceId, parsed.targetId)) {
-          return {
-            contract: MERGE_CONTACTS_RESULT_V1,
-            status: 'already_merged',
-            sourceId: parsed.sourceId,
-            targetId: parsed.targetId,
-          }
-        }
-        throw new ContactMergeErrorV1('CONTACT_ARCHIVED', `Source contact ${parsed.sourceId} is archived`)
-      }
       const target = await contacts.findSourceContact(parsed.targetId)
       if (!target) {
         throw new ContactMergeErrorV1('CONTACT_NOT_FOUND', `Target contact ${parsed.targetId} not found`)
       }
-      if (target.isArchived) {
+      if (source.isArchived || target.isArchived) {
+        const sourceRedirect = contactAutomationState(source.customFields).mergedIntoContactId
+        const targetRedirect = contactAutomationState(target.customFields).mergedIntoContactId
+        const sourceLedgerIntoTarget = source.isArchived
+          ? await contacts.hasCompletedMerge(source.id, target.id)
+          : false
+        const targetLedgerIntoSource = target.isArchived
+          ? await contacts.hasCompletedMerge(target.id, source.id)
+          : false
+        if (source.isArchived && !sourceRedirect) {
+          if (!sourceLedgerIntoTarget) {
+            throw new ContactMergeErrorV1('CONTACT_ARCHIVED', `Source contact ${parsed.sourceId} is archived`)
+          }
+          if (targetLedgerIntoSource) {
+            throw new ContactMergeErrorV1(
+              'INVALID_MERGE_STATE',
+              `Completed merge ledger for ${source.id} and ${target.id} is cyclic`,
+            )
+          }
+          const canonicalId = await resolveLockedCanonicalContactId(contacts, target.id)
+          if (!await contacts.hasCompletedMergePath(source.id, canonicalId)) {
+            throw new ContactMergeErrorV1(
+              'INVALID_MERGE_STATE',
+              `Completed merge ledger for ${source.id} does not reach ${canonicalId}`,
+            )
+          }
+          return {
+            contract: MERGE_CONTACTS_RESULT_V1,
+            status: 'already_merged',
+            sourceId: source.id,
+            targetId: canonicalId,
+          }
+        }
+        if (target.isArchived && !targetRedirect) {
+          if (!targetLedgerIntoSource) {
+            throw new ContactMergeErrorV1('SURVIVOR_ARCHIVED', `Target contact ${parsed.targetId} is archived`)
+          }
+          const canonicalId = await resolveLockedCanonicalContactId(contacts, source.id)
+          if (!await contacts.hasCompletedMergePath(target.id, canonicalId)) {
+            throw new ContactMergeErrorV1(
+              'INVALID_MERGE_STATE',
+              `Completed merge ledger for ${target.id} does not reach ${canonicalId}`,
+            )
+          }
+          return {
+            contract: MERGE_CONTACTS_RESULT_V1,
+            status: 'already_merged',
+            sourceId: target.id,
+            targetId: canonicalId,
+          }
+        }
+        // The ownership lock expands through the complete merge graph, so every
+        // redirect followed here is stable and row-locked. Resolve both request
+        // ends: this makes retries direction-independent and never exposes an
+        // archived intermediate survivor from A -> B -> C.
+        const sourceCanonicalId = await resolveLockedCanonicalContactId(contacts, source.id)
+        const targetCanonicalId = await resolveLockedCanonicalContactId(contacts, target.id)
+        if (sourceCanonicalId === targetCanonicalId) {
+          return {
+            contract: MERGE_CONTACTS_RESULT_V1,
+            status: 'already_merged',
+            sourceId: source.isArchived ? source.id : target.id,
+            targetId: sourceCanonicalId,
+          }
+        }
+        if (sourceLedgerIntoTarget || targetLedgerIntoSource) {
+          throw new ContactMergeErrorV1(
+            'INVALID_MERGE_STATE',
+            `Completed merge ledger contradicts redirects for ${source.id} and ${target.id}`,
+          )
+        }
+        if (source.isArchived) {
+          throw new ContactMergeErrorV1('CONTACT_ARCHIVED', `Source contact ${parsed.sourceId} is archived`)
+        }
         throw new ContactMergeErrorV1('SURVIVOR_ARCHIVED', `Target contact ${parsed.targetId} is archived`)
       }
       let evaluation = evaluateContactSurvivorV1(automationSnapshot(source), automationSnapshot(target))
@@ -480,10 +657,18 @@ export function createMergeContactsHandlerV1(dependencies: ContactMergeHandlerDe
           persistedEvidence,
         )
         if (automaticDecision.decision === 'blocked') {
-          throw new ContactMergeErrorV1(
-            'INVALID_MERGE_STATE',
-            `Automatic merge blocked after lock: ${automaticDecision.reason}`,
-          )
+          await contacts.recordAutomaticMergeBlock(source.id, target.id, automaticDecision.reason)
+          // The block audit does not change contact ownership. Running the
+          // ownership postcondition here can reject unrelated, pre-existing
+          // duplicate evidence and roll back the durable explanation for why
+          // automation declined the merge.
+          return {
+            contract: MERGE_CONTACTS_RESULT_V1,
+            status: 'automatic_merge_blocked',
+            leftContactId: source.id,
+            rightContactId: target.id,
+            reason: automaticDecision.reason,
+          }
         }
         evaluation = automaticDecision.survivor
         automationEvidenceRoots = automaticDecision.evidenceRoots

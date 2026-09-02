@@ -13,7 +13,11 @@ describe('Messaging channel delivery runtime ports', () => {
     it('keeps provider transport behind registered narrow channel capabilities', async () => {
         const whatsappText = vi.fn().mockResolvedValue({ externalId: 'wa-1' })
         const telegramText = vi.fn().mockResolvedValue({ externalId: 'tg-1' })
-        const maxText = vi.fn().mockResolvedValue({ externalId: 'max-1' })
+        const maxText = vi.fn().mockResolvedValue({
+            outcome: 'delivered',
+            externalId: 'max-1',
+            resolvedChatId: null,
+        })
         registerWhatsAppChannelDeliveryV1({
             sendText: whatsappText,
             sendMedia: vi.fn(),
@@ -25,18 +29,28 @@ describe('Messaging channel delivery runtime ports', () => {
             sendReaction: vi.fn(),
         })
         registerMaxChannelDeliveryV1({
+            assertTransportBinding: vi.fn(),
             sendText: maxText,
             sendMedia: vi.fn(),
             sendReaction: vi.fn(),
+            deleteMessage: vi.fn(),
         })
 
         await expect(getWhatsAppChannelDeliveryV1().sendText({ chatId: '79990000000', content: 'hello' }))
             .resolves.toEqual({ externalId: 'wa-1' })
         await getTelegramChannelDeliveryV1().sendText({ target: '42', content: 'hello' })
-        await getMaxChannelDeliveryV1().sendText({ target: 'max:42', content: 'hello' })
+        await getMaxChannelDeliveryV1().sendText({
+            target: 'max:42',
+            content: 'hello',
+            options: { providerAccountId: 'max-account-42', isPersonal: true },
+        })
 
         expect(whatsappText).toHaveBeenCalledWith({ chatId: '79990000000', content: 'hello' })
         expect(telegramText).toHaveBeenCalledWith({ target: '42', content: 'hello' })
-        expect(maxText).toHaveBeenCalledWith({ target: 'max:42', content: 'hello' })
+        expect(maxText).toHaveBeenCalledWith({
+            target: 'max:42',
+            content: 'hello',
+            options: { providerAccountId: 'max-account-42', isPersonal: true },
+        })
     })
 })

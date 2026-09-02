@@ -1,87 +1,58 @@
-import { prisma } from '@/lib/prisma'
 import { MERGE_CONTACTS_COMMAND_V1 } from '@/contracts/contacts/v1'
-import {
-  evaluateAutomaticContactMergeV1,
-  type AutomaticMergeEvidenceV1,
-  type ContactAutomationSnapshotV1,
-} from '@/modules/contacts/public/v1/contact-automation-policy'
+import { ContactMergeErrorV1 } from '@/modules/contacts/public/v1/contact-merge-handler'
 import { mergeContactsV1 } from './contact-merge-composition'
-import { contactAutomationState } from '@/modules/contacts/public/v1/contact-evidence-state'
 
-async function snapshot(contactId: string): Promise<ContactAutomationSnapshotV1 | null> {
-  const contact = await prisma.contact.findUnique({
-    where: { id: contactId },
-    include: {
-      identities: { where: { isActive: true }, select: { source: true } },
-      tasks: { where: { isActive: true }, select: { id: true, status: true, assigneeId: true } },
-      calls: { select: { id: true } },
-      chats: { select: { id: true, _count: { select: { messages: true } } } },
-    },
-  })
-  if (!contact) return null
-  const customFields = contact.customFields && typeof contact.customFields === 'object' && !Array.isArray(contact.customFields)
-    ? contact.customFields as Record<string, unknown>
-    : null
-  const confirmations = Array.isArray(customFields?.driverConfirmations)
-    ? customFields.driverConfirmations.filter(item => (
-        item && typeof item === 'object' && !Array.isArray(item)
-        && (item as Record<string, unknown>).status === 'confirmed'
-      )) as Array<Record<string, unknown>>
-    : []
-  const conflicts = Array.isArray(customFields?.identityConflicts)
-    ? customFields.identityConflicts.filter(item => (
-        item && typeof item === 'object' && !Array.isArray(item)
-        && (item as Record<string, unknown>).status === 'open'
-      )) as Array<Record<string, unknown>>
-    : []
-  const automation = contactAutomationState(contact.customFields)
-  return {
-    id: contact.id,
-    createdAt: contact.createdAt,
-    canonicalPinned: Boolean(automation.canonicalPinnedAt),
-    doNotMerge: automation.doNotMerge,
-    isArchived: contact.isArchived,
-    notes: contact.notes,
-    tags: contact.tags,
-    customFields,
-    manualIdentityCount: contact.identities.filter(identity => identity.source === 'manual').length,
-    driverRelationshipCount: contact.yandexDriverId ? 1 : 0,
-    activeTaskCount: contact.tasks.length,
-    callCount: contact.calls.length,
-    chatCount: contact.chats.length,
-    messageCount: contact.chats.reduce((sum, chat) => sum + chat._count.messages, 0),
-    confirmedDriver: confirmations.length > 0,
-    confirmedPersonKeys: confirmations
-      .map(item => item.profileClusterKey)
-      .filter((key): key is string => typeof key === 'string'),
-    workflowKeys: contact.tasks.map(task => `task:${task.status}:${task.assigneeId ?? 'unassigned'}`),
-    openConflictTypes: [
-      ...conflicts
-        .map(conflict => conflict.conflictType)
-        .filter((type): type is string => typeof type === 'string'),
-      ...(automation.mergeRecoveryState && automation.mergeRecoveryState !== 'clear'
-        ? [`merge_recovery_${automation.mergeRecoveryState}`]
-        : []),
-    ],
-  }
-}
+const AUTOMATION_ATTEMPT_V1 = {
+  // These values are deliberately non-authoritative. Their presence marks an
+  // automation attempt for the v1 command parser; the Contacts merge handler
+  // re-derives all evidence from persisted state after CNT1 + pair locking.
+  trustedUniqueCurrentPhone: false,
+  phoneEvidenceRoot: null,
+  confirmedPersonEvidenceRoots: [],
+  normalizedVuEvidenceRoots: [],
+} as const
 
 export async function executeAutomaticContactMergeV1(input: {
   leftContactId: string
   rightContactId: string
-  evidence: AutomaticMergeEvidenceV1
 }) {
-  const [left, right] = await Promise.all([snapshot(input.leftContactId), snapshot(input.rightContactId)])
-  if (!left || !right) return { status: 'blocked' as const, reason: 'contact_not_found' }
-  const decision = evaluateAutomaticContactMergeV1(left, right, input.evidence)
-  if (decision.decision === 'blocked') return { status: 'blocked' as const, reason: decision.reason }
-  const result = await mergeContactsV1({
-    contract: MERGE_CONTACTS_COMMAND_V1,
-    operation: 'contact_to_contact',
-    sourceId: decision.survivor.mergedId,
-    targetId: decision.survivor.survivorId,
-    mergedBy: 'system:auto-merge',
-    automation: input.evidence,
-  })
-  return { status: 'merged' as const, decision, result }
+  const contactIds = [...new Set([input.leftContactId, input.rightContactId])].sort()
+  if (contactIds.length !== 2 || contactIds.some(contactId => !contactId.trim())) {
+    return { status: 'invalid_pair' as const, reason: 'invalid_contact_pair' as const }
+  }
+  try {
+    const result = await mergeContactsV1({
+      contract: MERGE_CONTACTS_COMMAND_V1,
+      operation: 'contact_to_contact',
+      sourceId: contactIds[0],
+      targetId: contactIds[1],
+      mergedBy: 'system:auto-merge',
+      automation: AUTOMATION_ATTEMPT_V1,
+    })
+    if (result.status === 'automatic_merge_blocked') {
+      return { status: 'policy_blocked' as const, reason: result.reason, result }
+    }
+    const survivorContactId = result.status === 'contact_merged'
+      ? result.survivorId
+      : result.status === 'already_merged' ? result.targetId : null
+    if (!survivorContactId) {
+      return { status: 'stale_pair' as const, reason: `unexpected_result:${result.status}` }
+    }
+    return { status: 'merged' as const, survivorContactId, result }
+  } catch (error) {
+    if (error instanceof ContactMergeErrorV1) {
+      if (error.automaticBlockReason) {
+        return {
+          status: 'policy_blocked' as const,
+          reason: error.automaticBlockReason,
+          mergeErrorCode: error.code,
+        }
+      }
+      if (['CONTACT_NOT_FOUND', 'CONTACT_ARCHIVED', 'SURVIVOR_ARCHIVED'].includes(error.code)) {
+        return { status: 'stale_pair' as const, reason: error.code }
+      }
+      return { status: 'stale_pair' as const, reason: error.code }
+    }
+    throw error
+  }
 }

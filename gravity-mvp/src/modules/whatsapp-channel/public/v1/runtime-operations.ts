@@ -27,6 +27,8 @@ export type WhatsAppReachabilityResultV1 = {
   retryable?: boolean
   error?: string
   reason?: string
+  providerAccountId?: string
+  providerTargetId?: string
 }
 
 export type WhatsAppRuntimeEntryV1 = {

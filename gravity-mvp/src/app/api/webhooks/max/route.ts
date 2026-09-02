@@ -7,16 +7,19 @@ import { publishPersistedMessageV1 as emitMessageReceived } from '@/modules/mess
 import { broadcastChatMessageV1 as broadcastChatMessage } from '@/modules/messaging/public/v1/message-stream'
 import { channelConversationWorkflowV1 as ConversationWorkflowService } from '@/modules/messaging/public/v1/channel-conversation-workflow'
 import {
+  markChannelIdentityConflictV1,
   startMaxContactResolutionShadowV1,
   type LegacyContactResolutionOutcome,
 } from '@/modules/contacts/public/v1'
 import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
+import { contactReachabilityV1 } from '@/modules/contacts/public/v1/contact-reachability'
 import { isResolvedChannelContactResultV1, resolveChannelContactOperationV1 } from '@/modules/contacts/public/v1'
 import { selectUniqueExactMaxSenderCandidate } from '@/modules/max-channel/internal/max-contact-ingress-policy'
+import { isAuthorizedMaxScraperWebhookV1 } from '@/modules/max-channel/internal/scraper-webhook-auth'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { CREATE_EXTERNAL_CONVERSATION_COMMAND_V1, DELETE_MESSAGE_COMMAND_V1, DELETE_MESSAGE_MEDIA_COMMAND_V1, ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1, PATCH_EXTERNAL_CONVERSATION_COMMAND_V1, REPLACE_EXTERNAL_MESSAGE_COMMAND_V1, UPSERT_EXTERNAL_MESSAGE_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { ATTACH_MESSAGE_MEDIA_COMMAND_V2 } from '@/contracts/messaging/v2'
-import { createExternalConversationV1, deleteMessageMediaV1, deleteMessageV1, ensureConversationContactLinkV1, patchExternalConversationV1, replaceExternalMessageV1, upsertExternalMessageV1 } from '@/modules/messaging/public/v1'
+import { appendConversationIdentityCollisionV1, createExternalConversationV1, deleteMessageMediaV1, deleteMessageV1, ensureConversationContactLinkV1, patchExternalConversationV1, replaceExternalMessageV1, upsertExternalMessageV1 } from '@/modules/messaging/public/v1'
 import { attachMessageMediaV2 } from '@/modules/messaging/public/v2'
 
 const MAX_RUNTIME_TRACE_PREFIX = '[MAX_RUNTIME_TRACE]'
@@ -53,6 +56,33 @@ function metadataRecord(metadata: unknown): Record<string, unknown> {
   return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
     ? metadata as Record<string, unknown>
     : {}
+}
+
+function concreteProviderAccountId(metadata: unknown): string | null {
+  const value = metadataRecord(metadata).providerAccountId
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  return normalized !== '' && normalized !== 'legacy' && normalized !== 'max-default' ? normalized : null
+}
+
+function concreteIncomingProviderAccountId(value: unknown): string | null {
+  if (typeof value !== 'string' && typeof value !== 'number') return null
+  const normalized = String(value).trim()
+  return normalized !== '' && normalized !== 'legacy' && normalized !== 'max-default' ? normalized : null
+}
+
+type MaxIdentityCollisionEvidence = {
+  channel: 'max'
+  reason: string
+  incomingProviderAccountId: string
+  existingProviderAccountId: string | null
+  incomingSenderId: string | null
+  existingSenderId: string | null
+  incomingChatKind: 'private' | 'group' | 'unknown'
+  existingChatKind: 'private' | 'group' | 'unknown'
+  hasPersonOwnership: boolean
+  externalChatId: string
+  existingExternalChatId?: string
 }
 
 function sanitizeMaxValue(value: unknown): unknown {
@@ -164,9 +194,13 @@ function sameMaxAttachmentSet(incomingAttachments: AttachmentLike[], existingAtt
 }
 
 export async function POST(request: Request) {
+  if (!isAuthorizedMaxScraperWebhookV1(request)) {
+    return NextResponse.json({ error: 'MAX_SCRAPER_WEBHOOK_UNAUTHORIZED' }, { status: 401 })
+  }
   try {
     const body = sanitizeMaxValue(await request.json()) as MaxWebhookBody
     const { externalId, chatId, rawChatId, senderId, senderName, senderPhone, phone, text, timestamp, messageType, attachments, isOutgoing, deleted, forwardedFrom, source, replyToExternalId, chatKind } = body
+    const maxProviderAccountId = concreteIncomingProviderAccountId(body.accountId)
     maxRuntimeTrace('webhook.received', {
       providerMessageId: externalId ? String(externalId) : null,
       chatId: chatId ? String(chatId) : null,
@@ -179,20 +213,9 @@ export async function POST(request: Request) {
       deleted: Boolean(deleted),
     })
 
-    // MAX server confirmed a message was deleted — remove from CRM DB
-    if (deleted && externalId) {
-      const msg = await prisma.message.findUnique({ where: { externalId: String(externalId) } })
-      if (msg) {
-        await deleteMessageMediaV1({
-          contract: DELETE_MESSAGE_MEDIA_COMMAND_V1,
-          messageId: msg.id,
-        })
-        await deleteMessageV1({ contract: DELETE_MESSAGE_COMMAND_V1, messageId: msg.id })
-        console.log(`[MAX Webhook] deleted externalId=${externalId}`)
-        // Broadcast directly (skip AI pipeline — message is gone)
-        broadcastChatMessage(msg.chatId, { ...msg, deleted: true })
-      }
-      return NextResponse.json({ ok: true, deleted: externalId })
+    if (!maxProviderAccountId) {
+      maxRuntimeTrace('webhook.skipped', { providerMessageId: externalId ? String(externalId) : null, reason: 'provider_account_unproven' })
+      return NextResponse.json({ error: 'MAX_PROVIDER_ACCOUNT_UNPROVEN' }, { status: 400 })
     }
 
     if (!chatId) {
@@ -204,14 +227,14 @@ export async function POST(request: Request) {
     // frames shouldn't render as empty bubbles in the UI).
     const trimmedText = typeof text === 'string' ? text.trim() : ''
     const isTextType = !messageType || messageType === 'text'
-    if (isTextType && !trimmedText && (!attachments || attachments.length === 0)) {
+    if (!deleted && isTextType && !trimmedText && (!attachments || attachments.length === 0)) {
       maxRuntimeTrace('webhook.skipped', { providerMessageId: externalId ? String(externalId) : null, chatId: String(chatId), reason: 'empty_text' })
       return NextResponse.json({ ok: true, skipped: 'empty_text' })
     }
     const usableAttachments = Array.isArray(attachments)
       ? attachments.filter((att): att is AttachmentLike & { url: string } => att && typeof att.url === 'string' && att.url.length > 0)
       : []
-    if (!isOutgoing && messageType === 'image' && usableAttachments.length === 0) {
+    if (!deleted && !isOutgoing && messageType === 'image' && usableAttachments.length === 0) {
       console.warn(`[MAX Webhook] skipped image without attachment chatId=${chatId} externalId=${externalId || 'n/a'}`)
       opsLog('warn', 'max_image_without_attachment_skipped', {
         channel: 'max',
@@ -259,7 +282,7 @@ export async function POST(request: Request) {
       trimmedText.length > 0
     )
 
-    if (isTextProviderEvent && (!externalIdString || isPlaceholderTextId) && !allowLiveDomTextRecovery) {
+    if (!deleted && isTextProviderEvent && (!externalIdString || isPlaceholderTextId) && !allowLiveDomTextRecovery) {
       maxRuntimeTrace('webhook.skipped', { providerMessageId: externalIdString, chatId: String(chatId), text, reason: 'text_without_provider_identity' })
       return NextResponse.json({
         ok: true,
@@ -268,35 +291,17 @@ export async function POST(request: Request) {
       })
     }
 
-    if (isTextProviderEvent && externalIdString) {
-      const existingText = await prisma.message.findUnique({
-        where: { externalId: externalIdString },
-        select: { id: true, chatId: true },
-      })
-      if (existingText) {
-        maxRuntimeTrace('webhook.duplicate', {
-          providerMessageId: externalIdString,
-          chatId: String(chatId),
-          text,
-          chatInternalId: existingText.chatId,
-          messageId: existingText.id,
-        })
-        return NextResponse.json({
-          success: true,
-          chatInternalId: existingText.chatId,
-          messageId: existingText.id,
-          deduped: true,
-        })
-      }
-    }
-
     const rawExternalChatId = String(rawChatId || chatId)
     const externalChatId = normalizeMaxChatId(chatId)
-    const senderIdString = senderId ? String(senderId) : null
-    const normalizedSenderPhone = senderPhone || phone ? normalizePhoneE164(String(senderPhone || phone)) : null
-    const effectiveSenderPhone = normalizedSenderPhone || null
+    // Scraper echoes identify our own MAX account as the sender. Only inbound
+    // events can contribute peer identity evidence to a conversation.
+    const peerSenderIdString = isOutgoing || !senderId ? null : String(senderId)
+    const normalizedPeerSenderPhone = isOutgoing || !(senderPhone || phone)
+      ? null
+      : normalizePhoneE164(String(senderPhone || phone))
+    const effectivePeerSenderPhone = normalizedPeerSenderPhone || null
+    const peerSenderName = isOutgoing ? null : senderName || null
     const maxChatKind = chatKind === 'private' || chatKind === 'group' ? chatKind : 'unknown'
-    const maxProviderAccountId = String(body.accountId || 'max-default')
     const shadowEventSource = source === 'history'
       ? 'history'
       : source === 'catchup'
@@ -312,12 +317,12 @@ export async function POST(request: Request) {
     const maxContactResolutionShadow = await startMaxContactResolutionShadowV1({
       resolutionInput: {
         channel: 'max',
-        externalUserId: senderIdString,
+        externalUserId: peerSenderIdString,
         externalChatId,
         providerAccountId: maxProviderAccountId,
-        channelDisplayName: senderName || null,
-        normalizedPhone: effectiveSenderPhone,
-        phoneEvidence: effectiveSenderPhone
+        channelDisplayName: peerSenderName,
+        normalizedPhone: effectivePeerSenderPhone,
+        phoneEvidence: effectivePeerSenderPhone
           ? { source: 'unknown', trustedForAutomaticResolution: false }
           : null,
         chatKind: maxChatKind,
@@ -332,12 +337,225 @@ export async function POST(request: Request) {
     })
     let senderCandidateCount = 0
 
-    if (!isOutgoing && senderIdString) {
+    const persistMaxIdentityCollision = async (
+      existingChat: Chat,
+      evidence: MaxIdentityCollisionEvidence,
+    ) => {
+      await appendConversationIdentityCollisionV1({
+        chatId: existingChat.id,
+        evidence,
+      })
+      if (existingChat.contactId && existingChat.contactIdentityId) {
+        await markChannelIdentityConflictV1({
+          contactId: existingChat.contactId,
+          identityId: existingChat.contactIdentityId,
+          channel: 'max',
+          reason: evidence.reason,
+          evidenceRoot: `channel-collision:max:${existingChat.externalChatId}:${evidence.incomingProviderAccountId}:${evidence.reason}`,
+          details: {
+            incomingProviderAccountId: evidence.incomingProviderAccountId,
+            existingProviderAccountId: evidence.existingProviderAccountId,
+            incomingSenderId: evidence.incomingSenderId,
+            existingSenderId: evidence.existingSenderId,
+            incomingChatKind: evidence.incomingChatKind,
+            existingChatKind: evidence.existingChatKind,
+          },
+        })
+      }
+    }
+
+    const rejectExistingChatCollision = async (
+      existingChat: Chat,
+      options: {
+        requireExactExternalChatId?: boolean
+        expectedChatId?: string
+        incomingPeerSenderId?: string | null
+        requirePeerSenderProof?: boolean
+      } = {},
+    ) => {
+      const existingMetadata = metadataRecord(existingChat.metadata)
+      const existingProviderAccountId = concreteProviderAccountId(existingMetadata)
+      const providerCollisionReason = existingProviderAccountId !== null
+        ? existingProviderAccountId !== maxProviderAccountId
+          ? 'provider_account_mismatch'
+          : null
+        : 'provider_account_unproven'
+      const existingSenderId = typeof existingMetadata.senderId === 'string'
+        && existingMetadata.senderId.trim() !== ''
+        ? existingMetadata.senderId
+        : null
+      const existingChatKind = existingMetadata.chatKind === 'private' || existingMetadata.chatKind === 'group'
+        ? existingMetadata.chatKind
+        : 'unknown'
+      const hasPersonOwnership = Boolean(existingChat.contactId || existingChat.contactIdentityId)
+      const hasPrivateConversationAuthority = !isOutgoing && (
+        hasPersonOwnership || existingChatKind === 'private'
+      )
+      const hasConcreteChatKindMismatch = existingChatKind !== 'unknown'
+        && maxChatKind !== 'unknown'
+        && existingChatKind !== maxChatKind
+      const chatKindCollisionReason = hasConcreteChatKindMismatch
+        || (hasPrivateConversationAuthority && maxChatKind === 'group')
+        ? 'chat_kind_mismatch'
+        : null
+      const incomingPeerSenderId = options.incomingPeerSenderId === undefined
+        ? peerSenderIdString
+        : options.incomingPeerSenderId
+      const requiresPeerSenderProof = options.requirePeerSenderProof ?? (!isOutgoing && (
+        hasPrivateConversationAuthority
+        || (options.requireExactExternalChatId && maxChatKind === 'private')
+      ))
+      const senderCollisionReason = requiresPeerSenderProof && !chatKindCollisionReason
+        ? existingSenderId && incomingPeerSenderId
+          ? existingSenderId !== incomingPeerSenderId ? 'sender_identity_mismatch' : null
+          : 'sender_identity_unproven'
+        : null
+      const channelCollisionReason = existingChat.channel !== 'max'
+        ? 'channel_mismatch'
+        : null
+      const messageChatCollisionReason = options.requireExactExternalChatId
+        && (
+          normalizeMaxChatId(existingChat.externalChatId) !== externalChatId
+          || (options.expectedChatId !== undefined && existingChat.id !== options.expectedChatId)
+        )
+        ? 'message_chat_mismatch'
+        : null
+      const collisionReason = channelCollisionReason
+        ?? messageChatCollisionReason
+        ?? providerCollisionReason
+        ?? chatKindCollisionReason
+        ?? senderCollisionReason
+      if (collisionReason) {
+        await persistMaxIdentityCollision(existingChat, {
+          channel: 'max',
+          reason: collisionReason,
+          incomingProviderAccountId: maxProviderAccountId,
+          existingProviderAccountId,
+          incomingSenderId: incomingPeerSenderId,
+          existingSenderId,
+          incomingChatKind: maxChatKind,
+          existingChatKind,
+          hasPersonOwnership,
+          externalChatId,
+          existingExternalChatId: existingChat.externalChatId,
+        })
+        maxRuntimeTrace('webhook.skipped', {
+          providerMessageId: externalIdString,
+          chatId: String(chatId),
+          chatInternalId: existingChat.id,
+          reason: collisionReason,
+        })
+        opsLog('warn', 'max_chat_identity_collision', {
+          channel: 'max',
+          chatId: existingChat.id,
+          reason: collisionReason,
+        })
+        await maxContactResolutionShadow.session?.complete({
+          status: 'no_contact',
+          reason: collisionReason,
+        })
+        return NextResponse.json({
+          error: collisionReason === 'provider_account_mismatch'
+            ? 'MAX_PROVIDER_ACCOUNT_COLLISION'
+            : collisionReason === 'provider_account_unproven'
+              ? 'MAX_PROVIDER_ACCOUNT_UNPROVEN'
+              : collisionReason === 'sender_identity_mismatch'
+                ? 'MAX_SENDER_IDENTITY_COLLISION'
+                : collisionReason === 'sender_identity_unproven'
+                  ? 'MAX_SENDER_IDENTITY_UNPROVEN'
+                  : collisionReason === 'chat_kind_mismatch'
+                    ? 'MAX_CHAT_KIND_COLLISION'
+                    : collisionReason === 'channel_mismatch'
+                      ? 'MAX_CHANNEL_COLLISION'
+                      : 'MAX_MESSAGE_IDENTITY_COLLISION',
+        }, { status: 409 })
+      }
+      return null
+    }
+
+    if (chat) {
+      const collision = await rejectExistingChatCollision(chat, deleted
+        ? { requirePeerSenderProof: false }
+        : {})
+      if (collision) return collision
+    }
+
+    // Message.externalId is globally unique in the current schema. Never let
+    // that global key delete or suppress a message until the owning Chat has
+    // passed the exact account/conversation/peer admission above.
+    if (deleted) {
+      if (!externalIdString) {
+        return NextResponse.json({ error: 'externalId is required for deletion' }, { status: 400 })
+      }
+      const existingMessage = await prisma.message.findUnique({
+        where: { externalId: externalIdString },
+        include: { chat: true },
+      })
+      if (existingMessage) {
+        const storedMessageMetadata = metadataRecord(existingMessage.metadata)
+        const storedMessageSenderId = typeof storedMessageMetadata.senderId === 'string'
+          && storedMessageMetadata.senderId.trim() !== ''
+          ? storedMessageMetadata.senderId
+          : null
+        const collision = await rejectExistingChatCollision(existingMessage.chat, {
+          requireExactExternalChatId: true,
+          ...(chat ? { expectedChatId: chat.id } : {}),
+          incomingPeerSenderId: existingMessage.direction === 'inbound' ? storedMessageSenderId : null,
+          requirePeerSenderProof: existingMessage.direction === 'inbound',
+        })
+        if (collision) return collision
+        await deleteMessageMediaV1({
+          contract: DELETE_MESSAGE_MEDIA_COMMAND_V1,
+          messageId: existingMessage.id,
+        })
+        await deleteMessageV1({ contract: DELETE_MESSAGE_COMMAND_V1, messageId: existingMessage.id })
+        console.log(`[MAX Webhook] deleted externalId=${externalIdString}`)
+        broadcastChatMessage(existingMessage.chatId, { ...existingMessage, deleted: true })
+      }
+      await maxContactResolutionShadow.session?.complete({
+        status: 'no_contact',
+        reason: 'deleted_provider_message',
+      })
+      return NextResponse.json({ ok: true, deleted: externalIdString })
+    }
+
+    if (isTextProviderEvent && externalIdString) {
+      const existingText = await prisma.message.findUnique({
+        where: { externalId: externalIdString },
+        include: { chat: true },
+      })
+      if (existingText) {
+        const collision = await rejectExistingChatCollision(existingText.chat, {
+          requireExactExternalChatId: true,
+          ...(chat ? { expectedChatId: chat.id } : {}),
+        })
+        if (collision) return collision
+        maxRuntimeTrace('webhook.duplicate', {
+          providerMessageId: externalIdString,
+          chatId: String(chatId),
+          text,
+          chatInternalId: existingText.chatId,
+          messageId: existingText.id,
+        })
+        await maxContactResolutionShadow.session?.complete({
+          status: 'no_contact',
+          reason: 'existing_provider_message',
+        })
+        return NextResponse.json({
+          success: true,
+          chatInternalId: existingText.chatId,
+          messageId: existingText.id,
+          deduped: true,
+        })
+      }
+    }
+
+    if (peerSenderIdString) {
       const senderCandidates = await prisma.chat.findMany({
         where: {
           channel: 'max',
           AND: [
-            { metadata: { path: ['senderId'], equals: senderIdString } },
+            { metadata: { path: ['senderId'], equals: peerSenderIdString } },
             { metadata: { path: ['providerAccountId'], equals: maxProviderAccountId } },
           ],
         },
@@ -347,6 +565,8 @@ export async function POST(request: Request) {
 
       if (!chat && maxChatKind === 'private' && senderSelection.status === 'reuse') {
         const existingBySender = senderSelection.candidate
+        const collision = await rejectExistingChatCollision(existingBySender)
+        if (collision) return collision
         const existingMetadata = metadataRecord(existingBySender.metadata)
         chat = (await patchExternalConversationV1({
           contract: PATCH_EXTERNAL_CONVERSATION_COMMAND_V1,
@@ -354,13 +574,13 @@ export async function POST(request: Request) {
           patch: {
             externalChatId,
             ...(isHistoryReplay ? {} : { lastMessageAt: sentAt }),
-            ...(senderName && existingBySender.name?.startsWith('MAX:') ? { name: senderName } : {}),
+            ...(peerSenderName && existingBySender.name?.startsWith('MAX:') ? { name: peerSenderName } : {}),
             metadata: {
               ...existingMetadata,
               previousExternalChatId: existingBySender.externalChatId,
               rawExternalChatId,
-              senderId: senderIdString,
-              ...(effectiveSenderPhone ? { phone: effectiveSenderPhone } : {}),
+              senderId: peerSenderIdString,
+              ...(effectivePeerSenderPhone ? { phone: effectivePeerSenderPhone } : {}),
               chatKind: maxChatKind,
               providerAccountId: maxProviderAccountId,
               connectionId: existingMetadata.connectionId || 'max_scraper',
@@ -375,12 +595,12 @@ export async function POST(request: Request) {
         contract: CREATE_EXTERNAL_CONVERSATION_COMMAND_V1,
           channel:       'max',
           externalChatId,
-          name:          senderName || (senderId ? `MAX:${senderId}` : `MAX:${externalChatId}`),
+          name:          peerSenderName || (peerSenderIdString ? `MAX:${peerSenderIdString}` : `MAX:${externalChatId}`),
           lastMessageAt: sentAt,
           status:        'new',
           metadata: {
-            ...(senderIdString       ? { senderId: senderIdString }       : {}),
-            ...(effectiveSenderPhone ? { phone: effectiveSenderPhone } : {}),
+            ...(peerSenderIdString       ? { senderId: peerSenderIdString }       : {}),
+            ...(effectivePeerSenderPhone ? { phone: effectivePeerSenderPhone } : {}),
             rawExternalChatId,
             chatKind: maxChatKind,
             providerAccountId: maxProviderAccountId,
@@ -395,13 +615,13 @@ export async function POST(request: Request) {
         patch: {
           ...(isHistoryReplay ? {} : { lastMessageAt: sentAt }),
           // Обновляем имя если раньше было только MAX:ID
-          ...(senderName && chat.name?.startsWith('MAX:') ? { name: senderName } : {}),
+          ...(peerSenderName && chat.name?.startsWith('MAX:') ? { name: peerSenderName } : {}),
           // Обновляем senderId / phone в metadata
-          ...((senderIdString || effectiveSenderPhone) ? {
+          ...((peerSenderIdString || effectivePeerSenderPhone) ? {
             metadata: {
               ...existingMetadata,
-              ...(senderIdString       ? { senderId: senderIdString }       : {}),
-              ...(effectiveSenderPhone ? { phone: effectiveSenderPhone } : {}),
+              ...(peerSenderIdString       ? { senderId: peerSenderIdString }       : {}),
+              ...(effectivePeerSenderPhone ? { phone: effectivePeerSenderPhone } : {}),
               rawExternalChatId,
               chatKind: maxChatKind,
               providerAccountId: maxProviderAccountId,
@@ -535,13 +755,6 @@ export async function POST(request: Request) {
       }
     }
 
-    // Workflow: update status/unread/requiresResponse via centralized service
-    if (!isOutgoing && !isHistoryReplay) {
-      await ConversationWorkflowService.onInboundMessage(chat.id, sentAt)
-    } else if (isOutgoing && !isHistoryReplay) {
-      await ConversationWorkflowService.onOutboundMessage(chat.id, sentAt)
-    }
-
     // Create Message (skip if already seen)
     if (!message) {
       message = (await upsertExternalMessageV1({
@@ -556,6 +769,25 @@ export async function POST(request: Request) {
         sentAt, // validated above
         metadata: { senderId, maxChatId: externalChatId, maxRawChatId: rawExternalChatId, attachments: attachments || [], ...(source ? { source } : {}), ...(replyToExternalIdString ? { replyToExternalId: replyToExternalIdString } : {}), ...(forwardedFrom ? { forwardedFrom } : {}) },
       })).message as Message
+      if (message.chatId !== chat.id) {
+        const owningChat = await prisma.chat.findUnique({ where: { id: message.chatId } })
+        if (owningChat) {
+          const collision = await rejectExistingChatCollision(owningChat, {
+            requireExactExternalChatId: true,
+            expectedChatId: chat.id,
+          })
+          if (collision) return collision
+        }
+        return NextResponse.json({ error: 'MAX_MESSAGE_IDENTITY_COLLISION' }, { status: 409 })
+      }
+    }
+
+    // Apply conversation workflow only after the globally keyed message has
+    // been proven to belong to this exact admitted Chat.
+    if (!isOutgoing && !isHistoryReplay) {
+      await ConversationWorkflowService.onInboundMessage(chat.id, sentAt)
+    } else if (isOutgoing && !isHistoryReplay) {
+      await ConversationWorkflowService.onOutboundMessage(chat.id, sentAt)
     }
     maxRuntimeTrace('webhook.stored', {
       providerMessageId: externalIdString,
@@ -625,7 +857,7 @@ export async function POST(request: Request) {
             reason: 'multiple_exact_sender_chats',
           }
           legacyContactResolution = { status: 'no_contact', reason: 'ambiguous_sender_mapping' }
-        } else if (!senderIdString) {
+        } else if (!peerSenderIdString) {
           contactResolutionMetadata = {
             status: 'unknown_kind_limited',
             candidateCount: 0,
@@ -638,13 +870,13 @@ export async function POST(request: Request) {
           // substituted for senderId and cannot become a person identity.
           const contactResult = await resolveChannelContactOperationV1(
             'max',
-            senderIdString,
-            effectiveSenderPhone,
-            senderName || null,
+            peerSenderIdString,
+            effectivePeerSenderPhone,
+            peerSenderName,
             {
               chatKind: maxChatKind,
               providerAccountId: maxProviderAccountId,
-              phoneEvidence: effectiveSenderPhone
+              phoneEvidence: effectivePeerSenderPhone
                 ? { source: 'unknown', trustedForAutomaticResolution: false }
                 : null,
             },
@@ -656,6 +888,16 @@ export async function POST(request: Request) {
               contactId: contactResult.contact.id,
               contactIdentityId: contactResult.identity.id,
             })
+            if (maxChatKind === 'private' && !isHistoryReplay) {
+              await contactReachabilityV1.recordExactProviderReachability({
+                identityId: contactResult.identity.id,
+                contactId: contactResult.contact.id,
+                channel: 'max',
+                providerAccountId: maxProviderAccountId,
+                providerTargetId: peerSenderIdString,
+                status: 'confirmed',
+              })
+            }
             contactResolutionMetadata = {
               status: contactResult.status,
               candidateCount: 1,

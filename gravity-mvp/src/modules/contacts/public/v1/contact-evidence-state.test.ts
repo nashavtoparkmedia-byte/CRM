@@ -50,12 +50,14 @@ describe('Contact JSON evidence compatibility', () => {
     })
   })
 
-  test('scopes opaque provider identities while preserving conservative legacy compatibility', () => {
+  test('scopes opaque provider identities without treating legacy as a wildcard account', () => {
     expect(identityEvidenceState({ providerAccountId: 'account-a', origin: 'provider' }))
       .toMatchObject({ providerAccountId: 'account-a', origin: 'provider' })
     expect(providerAccountMatches({ providerAccountId: 'account-a' }, 'account-a')).toBe(true)
     expect(providerAccountMatches({ providerAccountId: 'account-a' }, 'account-b')).toBe(false)
-    expect(providerAccountMatches({}, 'account-b')).toBe(true)
+    expect(providerAccountMatches({}, 'account-b')).toBe(false)
+    expect(providerAccountMatches({ providerAccountId: 'account-b' }, 'legacy')).toBe(false)
+    expect(providerAccountMatches({}, 'legacy')).toBe(true)
   })
 
   test('reads merge redirect, recovery, canonical pin and do-not-merge from existing JSON', () => {

@@ -82,7 +82,7 @@ describe('durable multi-park reconciliation context', () => {
     mocks.driverUpdateMany.mockResolvedValue({ count: 0 })
   })
 
-  test('loads a failed-park same-VU profile and fails closed on its existing Contact link', async () => {
+  test('loads a failed-park same-VU profile and defers an exact Contact pair to locked Contacts policy', async () => {
     mocks.driverFindMany.mockResolvedValueOnce([
       {
         id: 'driver-a', externalParkId: 'park-a', externalDriverProfileId: 'profile-a',
@@ -109,16 +109,13 @@ describe('durable multi-park reconciliation context', () => {
     expect(mocks.driverFindMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { externalPersonKey: 'vu:1234567890' },
     }))
-    expect(mocks.persistClusterConflict).toHaveBeenCalledWith(expect.objectContaining({
-      profileClusterKey: 'vu:1234567890',
-      contactIds: ['contact-a', 'contact-b'],
-      driverIds: ['driver-a', 'driver-b'],
-    }))
+    expect(mocks.persistClusterConflict).not.toHaveBeenCalled()
     expect(mocks.driverUpdateMany).not.toHaveBeenCalled()
     expect(result[0]).toMatchObject({
       contactId: null,
+      contactMergeCandidateIds: ['contact-a', 'contact-b'],
       profileIds: ['driver-a', 'driver-b'],
-      warnings: ['confirmed_person_contradiction'],
+      warnings: ['contact_auto_merge_candidate'],
     })
   })
 
@@ -145,7 +142,38 @@ describe('durable multi-park reconciliation context', () => {
     expect(mocks.ownershipAdmission.mock.invocationCallOrder[0])
       .toBeLessThan(mocks.reconcile.mock.invocationCallOrder[0])
     expect(mocks.driverUpdateMany).not.toHaveBeenCalled()
-    expect(result[0]).toMatchObject({ contactId: null, warnings: ['contact_phone_ambiguity'] })
+    expect(mocks.persistClusterConflict).not.toHaveBeenCalled()
+    expect(result[0]).toMatchObject({
+      contactId: null,
+      contactMergeCandidateIds: ['contact-a', 'contact-b'],
+      warnings: ['contact_auto_merge_candidate'],
+    })
+  })
+
+  test('persists a contradiction rather than proposing automation for more than two Contacts', async () => {
+    mocks.driverFindMany.mockResolvedValueOnce([{
+      id: 'driver-a', externalParkId: 'park-a', externalDriverProfileId: 'profile-a',
+      sourceConnectionId: 'connection-a', fullName: 'Driver A', phone: '+79990000001',
+      licenseNumber: null, customFields: { fleetSource: { sourceFreshness: 'fresh' } },
+      contactId: null, personResolutionStatus: 'unlinked',
+    }])
+    mocks.reconcile.mockResolvedValueOnce({
+      status: 'conflict',
+      contactIds: ['contact-c', 'contact-a', 'contact-b'],
+    })
+
+    const result = await reconcileClusters([{
+      driverId: 'driver-a',
+      observation: observation({ normalizedVu: null, rawVu: null }),
+    }])
+
+    expect(mocks.persistClusterConflict).toHaveBeenCalledWith(expect.objectContaining({
+      contactIds: ['contact-c', 'contact-a', 'contact-b'],
+    }))
+    expect(result[0]).toMatchObject({
+      contactMergeCandidateIds: [],
+      warnings: ['contact_phone_ambiguity'],
+    })
   })
 
   test('uses the operator confirmation observed after CNT1 admission', async () => {

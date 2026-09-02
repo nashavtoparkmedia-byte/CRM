@@ -6,6 +6,8 @@ describe('Driver Fleet JSON evidence compatibility', () => {
   test('round-trips source profile provenance and preserves unrelated Driver fields', () => {
     const customFields = withDriverFleetEvidence({ retained: true }, {
       legalRole: 'driver',
+      workStatus: 'working',
+      currentStatus: 'online',
       sourceStatus: 'working',
       sourceCity: 'Москва',
       sourceProfileType: 'self_employed',
@@ -21,6 +23,8 @@ describe('Driver Fleet JSON evidence compatibility', () => {
     expect(customFields.retained).toBe(true)
     expect(driverFleetEvidenceState(customFields)).toMatchObject({
       legalRole: 'driver',
+      workStatus: 'working',
+      currentStatus: 'online',
       sourcePhones: ['+79990000000'],
       sourceFreshness: 'fresh',
       sourceState: 'current',
@@ -32,6 +36,14 @@ describe('Driver Fleet JSON evidence compatibility', () => {
       sourceFreshness: 'unknown',
       sourceState: 'unknown',
       sourcePhones: [],
+    })
+  })
+
+  test('uses the legacy combined source status for both views', () => {
+    expect(driverFleetEvidenceState({ fleetSource: { sourceStatus: 'working' } })).toMatchObject({
+      workStatus: 'working',
+      currentStatus: 'working',
+      sourceStatus: 'working',
     })
   })
 })

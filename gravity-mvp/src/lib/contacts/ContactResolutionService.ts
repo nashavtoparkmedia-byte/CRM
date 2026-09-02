@@ -102,10 +102,10 @@ export function createPrismaContactResolutionRepository(
           metadata: true,
         },
       })
-      const alias = aliases.find(candidate => (
+      const scopedAliases = aliases.filter(candidate => (
         identityEvidenceState(candidate.metadata).providerAccountId === providerAccountId
       ))
-      return alias?.contact ?? null
+      return scopedAliases.length === 1 ? scopedAliases[0].contact : null
     },
 
     async findActivePhoneClaims(normalizedPhone) {
@@ -230,12 +230,8 @@ export class ContactResolutionService {
         && claim.freshness === 'fresh'
         && claim.resolutionState === 'unique'
     })
-    if (phoneClaims.length > 0 && eligibleClaims.length === 0) {
-      return canonicalIdentity
-        ? this.identitySuccess(canonicalIdentity, warnings)
-        : { status: 'ineligible_phone', warnings }
-    }
-    const phoneOwners = eligibleClaims.map(claim => claim.contact)
+    const everyClaimEligible = eligibleClaims.length === phoneClaims.length
+    const phoneOwners = phoneClaims.map(claim => claim.contact)
     const ownersById = new Map<string, ResolutionContact>()
     for (const owner of phoneOwners) ownersById.set(owner.id, owner)
 
@@ -260,7 +256,9 @@ export class ContactResolutionService {
         canonicalPhoneOwners.length === 1
         && canonicalPhoneOwners[0] === canonicalIdentity.canonicalContactId
       ) {
-        return this.identitySuccess(canonicalIdentity, warnings)
+        return everyClaimEligible
+          ? this.identitySuccess(canonicalIdentity, warnings)
+          : { status: 'ineligible_phone', warnings }
       }
       return {
         status: 'identity_phone_conflict',
@@ -274,6 +272,10 @@ export class ContactResolutionService {
     if (canonicalPhoneOwners.length > 1) {
       return { status: 'ambiguous_phone', candidateContactIds: canonicalPhoneOwners, warnings }
     }
+    // A single eligible row cannot hide another active row. Once every claim
+    // resolves to the same canonical Contact, mixed evidence is still
+    // ineligible rather than an authority to match or create ownership.
+    if (!everyClaimEligible) return { status: 'ineligible_phone', warnings }
 
     const matchingPhoneResolutions = phoneResolutions.filter(
       (result): result is Extract<CanonicalContactResult, { kind: 'canonical' }> =>

@@ -6,6 +6,18 @@ import {
 } from '@/modules/contacts/public/v1/contact-ownership-lock-contract'
 import type { ConversationContactLinkPersistencePortV1 } from './conversation-contact-link-handler'
 
+function hasConfirmedRepresentativeDriver(customFields: unknown, driverId: string): boolean {
+  if (!customFields || typeof customFields !== 'object' || Array.isArray(customFields)) return false
+  const confirmations = (customFields as Record<string, unknown>).driverConfirmations
+  if (!Array.isArray(confirmations)) return false
+  return confirmations.some(item => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) return false
+    const confirmation = item as Record<string, unknown>
+    return confirmation.status === 'confirmed'
+      && confirmation.representativeDriverId === driverId
+  })
+}
+
 export const legacyPrismaConversationContactLinkPortV1: ConversationContactLinkPersistencePortV1 = {
   async ensure(input) {
     await prisma.$transaction(async transaction => {
@@ -33,7 +45,12 @@ export const legacyPrismaConversationContactLinkPortV1: ConversationContactLinkP
       if (!identity?.isActive) throw new Error('CONTACT_IDENTITY_LINK_STALE')
       const canonical = await transaction.contact.findUnique({
         where: { id: identity.contactId },
-        select: { id: true, isArchived: true, yandexDriverId: true },
+        select: {
+          id: true,
+          isArchived: true,
+          mainDriverId: true,
+          customFields: true,
+        },
       })
       if (!canonical || canonical.isArchived) throw new Error('CONTACT_IDENTITY_LINK_STALE')
 
@@ -66,14 +83,25 @@ export const legacyPrismaConversationContactLinkPortV1: ConversationContactLinkP
       }
       const chat = await transaction.chat.findUnique({
         where: { id: input.chatId },
-        select: { driverId: true },
+        select: { contactId: true, contactIdentityId: true, driverId: true },
       })
-      if (chat && !chat.driverId && canonical.yandexDriverId) {
-        const driver = await transaction.driver.findUnique({
-          where: { yandexDriverId: canonical.yandexDriverId },
-          select: { id: true },
-        })
-        if (driver) updateData.driverId = driver.id
+      if (!chat) throw new Error('CONTACT_CONVERSATION_LINK_STALE')
+      if (
+        (chat.contactId !== null && chat.contactId !== canonical.id)
+        || (chat.contactIdentityId !== null && chat.contactIdentityId !== identity.id)
+      ) {
+        throw new Error('CONTACT_CONVERSATION_OWNERSHIP_MISMATCH')
+      }
+      const confirmedMainDriverId = canonical.mainDriverId
+        && hasConfirmedRepresentativeDriver(canonical.customFields, canonical.mainDriverId)
+        ? canonical.mainDriverId
+        : null
+      if (chat.driverId !== null) {
+        if (!confirmedMainDriverId || chat.driverId !== confirmedMainDriverId) {
+          throw new Error('CONTACT_CONVERSATION_DRIVER_MISMATCH')
+        }
+      } else if (confirmedMainDriverId) {
+        updateData.driverId = confirmedMainDriverId
       }
       await transaction.chat.update({ where: { id: input.chatId }, data: updateData })
     }, {

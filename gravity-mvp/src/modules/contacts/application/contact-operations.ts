@@ -41,6 +41,7 @@ import {
 import {
     confirmDriverPersonV1 as confirmDriverPerson,
     getConfirmedContactForDriverClusterV1 as getConfirmedContactForDriverCluster,
+    isContactConfirmedMainDriverV1 as isContactConfirmedMainDriver,
     persistDriverClusterContradictionV1 as persistDriverClusterContradiction,
     reconcileDriverClusterContactV1 as reconcileDriverClusterContact,
     runDriverClusterContactOwnershipV1 as runDriverClusterContactOwnership,
@@ -88,6 +89,7 @@ export const manageContactPhoneEvidenceV1 = (...args: Parameters<typeof manageCo
 export const attachProviderIdentityAliasV1 = (...args: Parameters<typeof attachProviderIdentityAlias>) => attachProviderIdentityAlias(...args)
 export const confirmDriverPersonV1 = (...args: Parameters<typeof confirmDriverPerson>) => confirmDriverPerson(...args)
 export const getConfirmedContactForDriverClusterV1 = (...args: Parameters<typeof getConfirmedContactForDriverCluster>) => getConfirmedContactForDriverCluster(...args)
+export const isContactConfirmedMainDriverV1 = (...args: Parameters<typeof isContactConfirmedMainDriver>) => isContactConfirmedMainDriver(...args)
 export const reconcileDriverClusterContactV1 = (...args: Parameters<typeof reconcileDriverClusterContact>) => reconcileDriverClusterContact(...args)
 export const persistDriverClusterContradictionV1 = (...args: Parameters<typeof persistDriverClusterContradiction>) => persistDriverClusterContradiction(...args)
 export function runDriverClusterContactOwnershipV1<T>(

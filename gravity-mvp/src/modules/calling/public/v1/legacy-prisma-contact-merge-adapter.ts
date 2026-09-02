@@ -19,6 +19,10 @@ export function makeCallingAutomatedMergeRecoveryRepositoryV1(
 ): AutomatedMergeRecoveryOwnerRepositoryV1 {
   return {
     async canRestore(plan) {
+      const archivedContactCallCount = await transaction.call.count({
+        where: { contactId: plan.mergedId },
+      })
+      if (archivedContactCallCount !== 0) return false
       if (plan.callIds.length === 0) return true
       return transaction.call.count({
         where: { id: { in: plan.callIds }, contactId: plan.survivorId },

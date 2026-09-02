@@ -1,5 +1,7 @@
 export type DriverFleetEvidenceV1 = {
   legalRole: string | null
+  workStatus: string | null
+  currentStatus: string | null
   sourceStatus: string | null
   sourceCity: string | null
   sourceProfileType: string | null
@@ -28,7 +30,9 @@ export function driverFleetEvidenceState(customFields: unknown): DriverFleetEvid
   const state = value.sourceState
   return {
     legalRole: text(value.legalRole),
-    sourceStatus: text(value.sourceStatus),
+    workStatus: text(value.workStatus) ?? text(value.sourceStatus),
+    currentStatus: text(value.currentStatus) ?? text(value.sourceStatus),
+    sourceStatus: text(value.sourceStatus) ?? text(value.currentStatus) ?? text(value.workStatus),
     sourceCity: text(value.sourceCity),
     sourceProfileType: text(value.sourceProfileType),
     sourcePhones: Array.isArray(value.sourcePhones)

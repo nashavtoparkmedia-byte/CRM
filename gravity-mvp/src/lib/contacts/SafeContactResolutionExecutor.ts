@@ -69,6 +69,7 @@ export type SafeContactResolutionResult =
         | 'revalidation_changed'
         | 'canonical_contact_missing'
         | 'identity_required'
+        | 'provider_identity_alias_collision'
         | 'execution_failed'
       contactIds?: string[]
       warnings: ResolutionWarning[]
@@ -96,6 +97,13 @@ type IdentityRow = {
   externalId: string
   providerAccountId: string
   phoneId: string | null
+}
+
+export class ProviderIdentityAliasCollisionError extends Error {
+  constructor(readonly identities: IdentityRow[]) {
+    super('PROVIDER_IDENTITY_ALIAS_COLLISION')
+    this.name = 'ProviderIdentityAliasCollisionError'
+  }
 }
 
 type PhoneRow = {
@@ -271,7 +279,7 @@ function blockedResult(result: ContactResolutionResult): SafeContactResolutionRe
   }
 }
 
-function prismaExecutionTransaction(tx: Prisma.TransactionClient): ContactResolutionExecutionTransaction & {
+export function createPrismaContactResolutionExecutionTransactionV1(tx: Prisma.TransactionClient): ContactResolutionExecutionTransaction & {
   verifyPostconditions(): Promise<void>
 } {
   const planner = new ContactResolutionService(createPrismaContactResolutionRepository(tx))
@@ -296,8 +304,31 @@ function prismaExecutionTransaction(tx: Prisma.TransactionClient): ContactResolu
         where: { channel_externalId: { channel, externalId } },
         select: { id: true, contactId: true, channel: true, externalId: true, phoneId: true, metadata: true },
       })
-      if (!row) return null
-      return identityRow(row)
+      // Preserve a concrete primary-key collision so executeRevalidated can
+      // persist the account contradiction instead of treating the identity as
+      // absent. Only when no primary exists may an exact, account-scoped alias
+      // satisfy revalidation.
+      if (row) return identityRow(row)
+      const aliases = await tx.contactIdentity.findMany({
+        where: {
+          channel,
+          isActive: true,
+          AND: [
+            { metadata: { path: ['providerAliasValues'], array_contains: [externalId] } },
+            { metadata: { path: ['providerAccountId'], equals: providerAccountId } },
+          ],
+        },
+        orderBy: { id: 'asc' },
+        take: 2,
+        select: { id: true, contactId: true, channel: true, externalId: true, phoneId: true, metadata: true },
+      })
+      const scoped = aliases.filter(candidate => (
+        identityEvidenceState(candidate.metadata).providerAccountId === providerAccountId
+      ))
+      if (scoped.length > 1) {
+        throw new ProviderIdentityAliasCollisionError(scoped.map(identityRow))
+      }
+      return scoped.length === 1 ? identityRow(scoped[0]) : null
     },
     async findContact(contactId) {
       return tx.contact.findUnique({
@@ -454,7 +485,7 @@ function prismaExecutionTransaction(tx: Prisma.TransactionClient): ContactResolu
 export const prismaContactResolutionUnitOfWork: ContactResolutionUnitOfWork = {
   run(work) {
     return runContactOwnershipTransaction(async tx => {
-      const transaction = prismaExecutionTransaction(tx)
+      const transaction = createPrismaContactResolutionExecutionTransactionV1(tx)
       const result = await work(transaction)
       await transaction.verifyPostconditions()
       return result
@@ -484,6 +515,44 @@ export class SafeContactResolutionExecutor {
   async execute(input: ContactResolutionInput): Promise<SafeContactResolutionResult> {
     return this.unitOfWork.run(async transaction => {
       await transaction.lockResolutionState(input)
+      const externalId = nonEmpty(input.externalUserId)
+      const providerAccountId = nonEmpty(input.providerAccountId) ?? 'legacy'
+      if (input.channel !== 'phone' && externalId) {
+        try {
+          await transaction.findIdentity(
+            input.channel as ChatChannel,
+            providerAccountId,
+            externalId,
+          )
+        } catch (error: unknown) {
+          if (!(error instanceof ProviderIdentityAliasCollisionError)) throw error
+          const contactIds = [...new Set(error.identities.map(identity => identity.contactId))].sort()
+          for (const identity of error.identities) {
+            await transaction.recordConflict({
+              contactId: identity.contactId,
+              otherContactIds: contactIds.filter(contactId => contactId !== identity.contactId),
+              identityId: identity.id,
+              conflictType: 'provider_identity_alias_collision',
+              evidenceRoot: `provider-alias:${input.channel}:${providerAccountId}:${externalId}`,
+              details: {
+                channel: input.channel,
+                providerAccountId,
+                aliasValue: externalId,
+                otherIdentityIds: error.identities
+                  .filter(candidate => candidate.id !== identity.id)
+                  .map(candidate => candidate.id)
+                  .sort(),
+              },
+            })
+          }
+          return {
+            status: 'error',
+            reason: 'provider_identity_alias_collision',
+            contactIds,
+            warnings: [],
+          }
+        }
+      }
       const admittedPlan = await transaction.plan(input)
       if (admittedPlan.status === 'identity_phone_conflict') {
         const identity = input.externalUserId

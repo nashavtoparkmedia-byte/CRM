@@ -92,6 +92,40 @@ describe('bounded automated Contact merge recovery', () => {
     expect(testHarness.repositories.contacts.restore).not.toHaveBeenCalled()
   })
 
+  test('durably marks a Messaging identity/chat binding conflict before any restore', async () => {
+    const testHarness = harness('messaging')
+    await expect(testHarness.handler(testHarness.command)).resolves.toMatchObject({
+      status: 'manual_reconciliation', reason: 'messaging_state_changed',
+    })
+    expect(testHarness.calls).toEqual([
+      'contacts.admit', 'contacts.discover', 'contacts.lock', 'contacts.inspect',
+      'messaging.canRestore', 'contacts.manual',
+    ])
+    expect(testHarness.repositories.contacts.restore).not.toHaveBeenCalled()
+  })
+
+  test.each([
+    'dependent_merge_lineage_redirect_changed',
+    'phone_lifecycle_state_changed',
+    'identity_phone_link_changed',
+  ])('durably marks an eligible inspection blocker before any restore: %s', async reason => {
+    const testHarness = harness()
+    vi.mocked(testHarness.repositories.contacts.inspect).mockImplementationOnce(async () => {
+      testHarness.calls.push('contacts.inspect')
+      return { status: 'blocked', reason, eligibleAttempt: true }
+    })
+
+    await expect(testHarness.handler(testHarness.command)).resolves.toMatchObject({
+      status: 'manual_reconciliation',
+      reason,
+    })
+    expect(testHarness.calls).toEqual([
+      'contacts.admit', 'contacts.discover', 'contacts.lock', 'contacts.inspect', 'contacts.manual',
+    ])
+    expect(testHarness.repositories.contacts.restore).not.toHaveBeenCalled()
+    expect(testHarness.repositories.contacts.markRecovered).not.toHaveBeenCalled()
+  })
+
   test('replay after recovery is idempotent and does not overwrite terminal state', async () => {
     const testHarness = harness()
     vi.mocked(testHarness.repositories.contacts.inspect).mockImplementationOnce(async () => {

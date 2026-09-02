@@ -1,5 +1,9 @@
 import { prisma } from '@/lib/prisma'
 import { getMaxChannelDeliveryV1, getTelegramChannelDeliveryV1, getWhatsAppChannelDeliveryV1 } from '@/modules/messaging/public/v1/channel-delivery-runtime'
+import {
+  prepareOutboundConversationV1,
+  type PreparedOutboundConversationV1,
+} from '@/modules/messaging/public/v1/outbound-conversation-identity-runtime'
 
 export interface SendMessageParams {
   chatId:         string   // внутренний Chat.id
@@ -10,17 +14,21 @@ export interface SendMessageParams {
 }
 
 export interface ChannelAdapter {
-  send(params: SendMessageParams): Promise<void>
+  send(params: SendMessageParams, binding: PreparedOutboundConversationV1): Promise<void>
 }
 
 // ─── MAX ──────────────────────────────────────────────────────────────────────
 
 class MaxAdapter implements ChannelAdapter {
-  async send(params: SendMessageParams) {
+  async send(params: SendMessageParams, binding: PreparedOutboundConversationV1) {
     await getMaxChannelDeliveryV1().sendText({
-      target: params.externalChatId,
+      target: binding.target,
       content: params.content,
-      options: { isPersonal: true },
+      options: {
+        providerAccountId: binding.providerAccountId,
+        connectionId: binding.connectionId,
+        isPersonal: binding.isMaxPersonal,
+      },
     })
   }
 }
@@ -28,13 +36,12 @@ class MaxAdapter implements ChannelAdapter {
 // ─── Telegram ─────────────────────────────────────────────────────────────────
 
 class TelegramAdapter implements ChannelAdapter {
-  async send(params: SendMessageParams) {
-    // externalChatId имеет вид "telegram:XXXXXXX" или просто ID
-    const target = params.externalChatId.replace(/^telegram:/, '')
+  async send(params: SendMessageParams, binding: PreparedOutboundConversationV1) {
     await getTelegramChannelDeliveryV1().sendText({
-      target,
+      target: binding.target,
       content: params.content,
-      connectionId: params.connectionId,
+      connectionId: binding.connectionId,
+      metadata: { chatId: params.chatId },
     })
   }
 }
@@ -42,20 +49,12 @@ class TelegramAdapter implements ChannelAdapter {
 // ─── WhatsApp ─────────────────────────────────────────────────────────────────
 
 class WhatsAppAdapter implements ChannelAdapter {
-  async send(params: SendMessageParams) {
-    // externalChatId имеет вид "whatsapp:7XXXXXXXXXX"
-    const target = params.externalChatId.replace(/^whatsapp:/, '')
-    const connectionId = params.connectionId || await this._resolveConnectionId(params.chatId)
-    if (!connectionId) throw new Error(`WhatsApp: no connectionId for chat ${params.chatId}`)
-    await getWhatsAppChannelDeliveryV1().sendText({ connectionId, chatId: target, content: params.content })
-  }
-
-  private async _resolveConnectionId(chatId: string): Promise<string | null> {
-    const chat = await prisma.chat.findUnique({
-      where: { id: chatId },
-      select: { metadata: true }
+  async send(params: SendMessageParams, binding: PreparedOutboundConversationV1) {
+    await getWhatsAppChannelDeliveryV1().sendText({
+      connectionId: binding.connectionId,
+      chatId: binding.target,
+      content: params.content,
     })
-    return (chat?.metadata as any)?.connectionId || null
   }
 }
 
@@ -76,7 +75,27 @@ class ChannelAdapterRegistry {
   async send(channel: string, params: SendMessageParams): Promise<void> {
     const adapter = this.adapters.get(channel)
     if (!adapter) throw new Error(`[ChannelRegistry] No adapter for channel: ${channel}`)
-    await adapter.send(params)
+    if (params.channel !== channel) {
+      throw new Error('CONTACT_CONVERSATION_CHANNEL_MISMATCH')
+    }
+    const chat = await prisma.chat.findUnique({
+      where: { id: params.chatId },
+      select: {
+        id: true,
+        contactId: true,
+        contactIdentityId: true,
+        channel: true,
+        externalChatId: true,
+        chatType: true,
+        metadata: true,
+      },
+    })
+    if (!chat) throw new Error(`Chat with ID ${params.chatId} not found`)
+    const binding = await prepareOutboundConversationV1(chat, params.connectionId)
+    if (binding.channel !== channel) {
+      throw new Error('CONTACT_CONVERSATION_CHANNEL_MISMATCH')
+    }
+    await adapter.send(params, binding)
   }
 }
 

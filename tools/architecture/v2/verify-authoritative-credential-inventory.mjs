@@ -447,7 +447,6 @@ export const RUNTIME_BOUNDARY_REVIEW_POLICIES = [
     consumer_edges: [
       runtimeEdge('gravity-mvp/src/modules/fleet-operations/public/v1/yandex-connection-capability.ts', 'getYandexConnectionCredentialsV1', 'gravity-mvp/src/app/api/webhooks/bot/route.ts', 'MIXED_OUTBOUND_PROVIDER_USE_AND_NONSECRET_PARK_NAME_PROJECTION'),
       runtimeEdge('gravity-mvp/src/modules/fleet-operations/public/v1/yandex-connection-capability.ts', 'getYandexConnectionCredentialsV1', 'gravity-mvp/src/modules/fleet-operations/public/v1/yandex-fleet-operations.ts', 'OUTBOUND_PROVIDER_REQUEST_ONLY'),
-      runtimeEdge('gravity-mvp/src/modules/fleet-operations/public/v1/yandex-connection-capability.ts', 'listYandexConnectionCredentialsV1', 'gravity-mvp/src/app/api/webhooks/bot/route.ts', 'OUTBOUND_PROVIDER_REQUEST_ONLY'),
       runtimeEdge('gravity-mvp/src/modules/fleet-operations/public/v1/yandex-connection-capability.ts', 'listYandexConnectionCredentialsV1', 'gravity-mvp/src/modules/fleet-operations/internal/legacy-prisma-yandex-fleet-reconciler-adapter.ts', 'OUTBOUND_PROVIDER_REQUEST_ONLY'),
       runtimeEdge('gravity-mvp/src/modules/fleet-operations/public/v1/yandex-connection-capability.ts', 'listYandexConnectionCredentialsV1', 'gravity-mvp/src/modules/fleet-operations/public/v1/park-phone-search.ts', 'OUTBOUND_PROVIDER_REQUEST_ONLY'),
     ],

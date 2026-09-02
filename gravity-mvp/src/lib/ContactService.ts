@@ -14,6 +14,8 @@ import {
 } from '@/lib/contacts/SafeContactResolutionExecutor'
 import type { ContactResolutionInput } from '@/lib/contacts/contact-resolution.types'
 import {
+  identityEvidenceState,
+  jsonRecord,
   phoneEvidenceState,
   withPhoneEvidence,
   type ContactPhoneEvidenceStateV1,
@@ -101,6 +103,94 @@ function isTrustedUniqueCurrentPhone(row: {
     && ['provider_bound', 'manually_verified'].includes(evidence.trust)
     && evidence.freshness === 'fresh'
     && evidence.resolutionState === 'unique'
+}
+
+async function persistStableIdentityPhoneConflict(
+  transaction: ContactOwnershipTransaction,
+  input: {
+    contactId: string
+    contactCustomFields: Prisma.JsonValue | null
+    identity: {
+      id: string
+      channel: ChatChannel
+      externalId: string
+      metadata: Prisma.JsonValue | null
+    }
+    normalizedPhone: string
+    otherContactId: string
+  },
+): Promise<void> {
+  const customFields = jsonRecord(input.contactCustomFields)
+  const conflicts = Array.isArray(customFields.identityConflicts)
+    ? customFields.identityConflicts
+    : []
+  const phoneOwners = await transaction.contactPhone.findMany({
+    where: {
+      phone: input.normalizedPhone,
+      isActive: true,
+      contactId: { not: input.contactId },
+    },
+    select: { contactId: true },
+    orderBy: { contactId: 'asc' },
+  })
+  const otherContactIds = [...new Set([
+    ...phoneOwners.map(owner => owner.contactId),
+    input.otherContactId,
+  ])].sort()
+  const duplicate = conflicts.some(item => {
+    const conflict = jsonRecord(item)
+    const details = jsonRecord(conflict.details)
+    const storedOtherContactIds = Array.isArray(conflict.otherContactIds)
+      ? conflict.otherContactIds.filter((value): value is string => typeof value === 'string')
+      : []
+    return conflict.status === 'open'
+      && conflict.conflictType === 'stable_identity_phone_contradiction'
+      && conflict.identityId === input.identity.id
+      && details.normalizedPhone === input.normalizedPhone
+      && storedOtherContactIds.sort().join('\0') === otherContactIds.join('\0')
+  })
+  const identityMetadata = jsonRecord(input.identity.metadata)
+  const identityEvidence = identityEvidenceState(identityMetadata)
+
+  if (!duplicate) {
+    await transaction.contact.update({
+      where: { id: input.contactId },
+      data: {
+        customFields: {
+          ...customFields,
+          identityConflicts: [...conflicts, {
+            otherContactIds,
+            identityId: input.identity.id,
+            conflictType: 'stable_identity_phone_contradiction',
+            evidenceRoot: identityEvidence.evidenceRoot
+              ?? `provider:${input.identity.channel}:${identityEvidence.providerAccountId}:${input.identity.externalId}`,
+            source: 'attach-phone-to-identity',
+            details: {
+              channel: input.identity.channel,
+              providerAccountId: identityEvidence.providerAccountId,
+              externalUserId: input.identity.externalId,
+              normalizedPhone: input.normalizedPhone,
+              phoneContactIds: otherContactIds,
+            },
+            detectedAt: new Date().toISOString(),
+            status: 'open',
+          }].slice(-100),
+        } as Prisma.InputJsonObject,
+      },
+    })
+  }
+
+  if (identityEvidence.conflictState !== 'conflicted') {
+    await transaction.contactIdentity.update({
+      where: { id: input.identity.id },
+      data: {
+        metadata: {
+          ...identityMetadata,
+          conflictState: 'conflicted',
+        } as Prisma.InputJsonObject,
+      },
+    })
+  }
 }
 
 /**
@@ -401,12 +491,20 @@ export class ContactService {
           externalId: true,
           phoneId: true,
           reachabilityStatus: true,
+          channel: true,
+          metadata: true,
           phone: { select: { phone: true, isActive: true, isPrimary: true, verifiedAt: true } },
         },
       }),
         transaction.contact.findUnique({
         where: { id: contactId },
-        select: { id: true, displayName: true, displayNameSource: true, primaryPhoneId: true },
+        select: {
+          id: true,
+          displayName: true,
+          displayNameSource: true,
+          primaryPhoneId: true,
+          customFields: true,
+        },
       }),
       ])
 
@@ -446,7 +544,17 @@ export class ContactService {
         false,
       )
 
-    if (result.kind === 'conflict') return result
+      if (result.kind === 'conflict') {
+        await persistStableIdentityPhoneConflict(transaction, {
+          contactId,
+          contactCustomFields: contact.customFields,
+          identity,
+          normalizedPhone: normalized,
+          otherContactId: result.otherContactId,
+        })
+        await assertContactOwnershipPostconditions(transaction, scope)
+        return result
+      }
 
     const now = new Date()
       if (makePrimary || updateTechnicalName) {

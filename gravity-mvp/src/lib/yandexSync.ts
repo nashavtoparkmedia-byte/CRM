@@ -16,7 +16,7 @@ import { YandexFleetService } from '@/lib/YandexFleetService'
 import { getThresholds, recalculateAllSegments } from '@/lib/scoring'
 import {
     RECONCILE_YANDEX_FLEET_COMMAND_V1,
-    reconcileYandexFleetV1,
+    requireYandexFleetReconciliationRunnerV1,
 } from '@/modules/fleet-operations/public/v1'
 
 export const YANDEX_SYNC_SERVICE = 'yandex_fleet'
@@ -230,6 +230,11 @@ export async function runYandexSync(
     let ordersProcessed = 0
 
     try {
+        // Snapshot the Platform-composed runner once for the full fenced run.
+        // Missing bootstrap composition fails closed instead of silently
+        // completing a Fleet sync without handing exact Contact pairs to the
+        // Contacts automatic-merge policy.
+        const reconcileYandexFleet = requireYandexFleetReconciliationRunnerV1()
         const thresholdsPhase = await runWithLeaseHeartbeat(lease.leaseMarker, getThresholds)
         if (!thresholdsPhase.leaseHeld) return { ok: false, reason: 'lease_lost' }
         const thresholds = thresholdsPhase.value
@@ -237,7 +242,7 @@ export async function runYandexSync(
         // 1. One shared, park-qualified reconciler owns profile ingestion for
         // nightly, manual, Contact refresh and confirmation follow-up modes.
         const reconciliationPhase = await runWithLeaseHeartbeat(lease.leaseMarker, () => (
-            reconcileYandexFleetV1({
+            reconcileYandexFleet({
                 contract: RECONCILE_YANDEX_FLEET_COMMAND_V1,
                 mode: 'nightly',
             })

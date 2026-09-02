@@ -16,7 +16,7 @@ def test_messaging_delivery_runtime_has_no_provider_sdk_or_internal_provider_imp
             "@/app/max-actions",
             "@/app/tg-actions",
         ],
-        "lib/pipeline/ChannelAdapterRegistry.ts": [
+        "modules/messaging/internal/ai-reply-pipeline/ChannelAdapterRegistry.ts": [
             "@/app/max-actions",
             "@/app/tg-actions",
             "@/lib/whatsapp/WhatsAppService",
@@ -31,10 +31,15 @@ def test_messaging_delivery_runtime_has_no_provider_sdk_or_internal_provider_imp
             "@/app/tg-actions",
             "MAX_SCRAPER_URL",
         ],
+        "app/api/messages/send-image/route.ts": [
+            "@/app/max-actions",
+            "MAX_SCRAPER_URL",
+        ],
     }
     for relative, forbidden in targets.items():
         source = read(relative)
         assert "channel-delivery-runtime" in source
+        assert "prepareOutboundConversationV1" in source
         for marker in forbidden:
             assert marker not in source, f"{relative} still reaches provider transport through {marker}"
 
@@ -45,6 +50,9 @@ def test_provider_capabilities_are_registered_only_at_platform_startup():
     assert "registerTelegramMessagingDeliveryCapabilityV1" in instrumentation
     assert "registerMaxMessagingDeliveryCapabilityV1" in instrumentation
     assert "channel_delivery_capabilities_registered" in instrumentation
+    assert "registerOutboundConversationPreparerV1" in instrumentation
+    assert "platform.prepareOutboundConversationV1" in instrumentation
+    assert "outbound_conversation_preparer_registered" in instrumentation
     assert instrumentation.index("registerWhatsAppMessagingDeliveryCapabilityV1") < instrumentation.index("setTimeout(async () =>")
 
 

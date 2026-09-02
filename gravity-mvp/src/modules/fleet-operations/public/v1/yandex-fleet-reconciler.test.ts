@@ -1,11 +1,44 @@
-import { describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 
 import {
+  createReconcileYandexFleetHandlerV1,
   makeParkQualifiedDriverKeyV1,
   canAdoptUnqualifiedLegacyDriverProfileV1,
   normalizeDriverLicenceVuV1,
+  registerYandexFleetReconciliationRunnerV1,
+  requireYandexFleetReconciliationRunnerV1,
   yandexFleetProfileObservationV1,
 } from './yandex-fleet-reconciler'
+import {
+  RECONCILE_YANDEX_FLEET_COMMAND_V1,
+  ReconcileYandexFleetCommandValidationError,
+} from '@/contracts/fleet-operations/v1'
+
+afterEach(() => {
+  globalThis.__yandexFleetReconciliationRunnerV1 = undefined
+})
+
+describe('Fleet reconciliation runtime composition', () => {
+  test('fails closed while the Platform Shell runner is unconfigured', () => {
+    expect(() => requireYandexFleetReconciliationRunnerV1())
+      .toThrow('YANDEX_FLEET_RECONCILIATION_RUNNER_NOT_REGISTERED')
+  })
+
+  test('registers idempotently for one stable runner and rejects replacement', () => {
+    const runner = vi.fn()
+    const competingRunner = vi.fn()
+    const unregister = registerYandexFleetReconciliationRunnerV1(runner)
+
+    expect(requireYandexFleetReconciliationRunnerV1()).toBe(runner)
+    expect(() => registerYandexFleetReconciliationRunnerV1(runner)).not.toThrow()
+    expect(() => registerYandexFleetReconciliationRunnerV1(competingRunner))
+      .toThrow('YANDEX_FLEET_RECONCILIATION_RUNNER_ALREADY_REGISTERED')
+
+    unregister()
+    expect(() => requireYandexFleetReconciliationRunnerV1())
+      .toThrow('YANDEX_FLEET_RECONCILIATION_RUNNER_NOT_REGISTERED')
+  })
+})
 
 describe('Fleet profile identity and VU evidence', () => {
   test.each([
@@ -51,5 +84,48 @@ describe('Fleet profile identity and VU evidence', () => {
       workStatus: 'working', currentStatus: 'online', city: 'Москва', profileType: 'staff',
     })
     expect(observation?.rawMetadata).toHaveProperty('driverProfile')
+  })
+})
+
+describe('Fleet reconciliation command boundary', () => {
+  test('uses the fleet_operations namespace and passes an exact v1 command to the port', async () => {
+    expect(RECONCILE_YANDEX_FLEET_COMMAND_V1)
+      .toBe('fleet_operations.ReconcileYandexFleetCommand.v1')
+    const result = {
+      mode: 'manual' as const,
+      checkedParks: 0,
+      succeededParks: 0,
+      failedParks: 0,
+      profilesObserved: 0,
+      profilesUpserted: 0,
+      clusters: [],
+      errors: [],
+      partial: false,
+    }
+    const port = { reconcile: vi.fn().mockResolvedValue(result) }
+    const command = { contract: RECONCILE_YANDEX_FLEET_COMMAND_V1, mode: 'manual' as const, query: 'Ivanov' }
+    await expect(createReconcileYandexFleetHandlerV1(port)(command)).resolves.toEqual(result)
+    expect(port.reconcile).toHaveBeenCalledWith(command)
+  })
+
+  test.each([
+    ['legacy namespace', { contract: 'fleet.ReconcileYandexFleetCommand.v1', mode: 'manual' }],
+    ['unknown field', { contract: RECONCILE_YANDEX_FLEET_COMMAND_V1, mode: 'manual', extra: true }],
+    ['coerced mode', { contract: RECONCILE_YANDEX_FLEET_COMMAND_V1, mode: ['manual'] }],
+    ['non-string query', { contract: RECONCILE_YANDEX_FLEET_COMMAND_V1, mode: 'manual', query: 42 }],
+  ])('rejects %s without invoking the Fleet port', async (_label, command) => {
+    const port = { reconcile: vi.fn() }
+    await expect(createReconcileYandexFleetHandlerV1(port)(command))
+      .rejects.toBeInstanceOf(ReconcileYandexFleetCommandValidationError)
+    expect(port.reconcile).not.toHaveBeenCalled()
+  })
+
+  test('distinguishes an unsupported fleet_operations version', async () => {
+    const port = { reconcile: vi.fn() }
+    await expect(createReconcileYandexFleetHandlerV1(port)({
+      contract: 'fleet_operations.ReconcileYandexFleetCommand.v2',
+      mode: 'manual',
+    })).rejects.toMatchObject({ code: 'UNSUPPORTED_CONTRACT_VERSION' })
+    expect(port.reconcile).not.toHaveBeenCalled()
   })
 })

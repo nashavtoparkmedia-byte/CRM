@@ -1,5 +1,24 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 
+export type ParkCheckViewStatus = 'complete' | 'partial' | 'failed' | 'unknown'
+
+/** Legacy snapshots predate an explicit completeness marker and must never be
+ * upgraded to an authoritative complete/not-found result by absence alone. */
+export function normalizeParkCheckViewStatus(snapshot: unknown): ParkCheckViewStatus {
+    if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return 'unknown'
+    const candidate = snapshot as Record<string, unknown>
+    if (candidate.checkStatus === 'complete' || candidate.checkStatus === 'partial' || candidate.checkStatus === 'failed') {
+        return candidate.checkStatus
+    }
+    const errors = Array.isArray(candidate.errors) ? candidate.errors.length : 0
+    if (errors === 0) return 'unknown'
+    const checkedParks = typeof candidate.checkedParks === 'number' && Number.isFinite(candidate.checkedParks)
+        ? candidate.checkedParks
+        : 0
+    const resultCount = Array.isArray(candidate.results) ? candidate.results.length : 0
+    return checkedParks > 0 || resultCount > 0 ? 'partial' : 'failed'
+}
+
 export interface ContactPhone {
     id: string
     phone: string
@@ -29,13 +48,25 @@ export interface ContactIdentity {
     confidence: number
     reachabilityStatus: 'confirmed' | 'unreachable' | 'unknown'
     reachabilityCheckedAt: string | null
-    metadata?: Record<string, string | null> | null
+    metadata?: Record<string, unknown> | null
     providerAccountId?: string
     origin?: string
     evidenceRoot?: string | null
     conflictState?: 'clear' | 'conflicted'
-    aliases?: Array<{ id: string; aliasType: string; aliasValue: string }>
-    conflicts?: Array<{ id: string; conflictType: string; detectedAt: string }>
+    isActive?: boolean
+    createdAt?: string
+    aliases?: Array<{
+        id?: string
+        type?: string
+        aliasType?: string
+        value?: string
+        aliasValue?: string
+        provenance?: string
+        evidenceRoot?: string | null
+        observedAt?: string
+        active?: boolean
+    }>
+    conflicts?: Array<{ id?: string; conflictType?: string; detectedAt?: string; status?: string }>
 }
 
 export interface ContactChat {
@@ -60,13 +91,31 @@ export interface ContactDriver {
     dismissedAt: string | null
     externalParkId?: string | null
     externalDriverProfileId?: string | null
+    externalPersonKey?: string | null
+    personKeyType?: string | null
+    personResolutionStatus?: string | null
+    personResolutionBasis?: string | null
+    personResolutionAt?: string | null
+    personResolvedBy?: string | null
+    licenseNumber?: string | null
+    normalizedVu?: string | null
     legalRole?: string | null
+    workStatus?: string | null
+    currentStatus?: string | null
     sourceStatus?: string | null
     sourceCity?: string | null
     sourceProfileType?: string | null
     sourceFreshness?: 'fresh' | 'stale' | 'unknown'
     sourceState?: 'current' | 'stale' | 'failed' | 'unknown'
+    sourcePhones?: string[]
+    sourceDates?: Record<string, string | null>
     lastObservedAt?: string | null
+    lastSynchronizedAt?: string | null
+    createdAt?: string
+    updatedAt?: string
+    park?: { id: string; parkName: string; externalParkId: string } | null
+    sourceConflict?: unknown
+    licenseObservations?: unknown[]
 }
 
 export interface CanonicalContactSummary {
@@ -99,6 +148,7 @@ export interface Contact {
     updatedAt: string
     phones: ContactPhone[]
     identities: ContactIdentity[]
+    channelIdentities?: ContactIdentity[]
     chats: ContactChat[]
     driver: ContactDriver | null
     driverProfiles?: ContactDriver[]

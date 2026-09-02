@@ -13,6 +13,8 @@ type Profile = {
   rawVu?: string | null
   legalRole?: string | null
   status?: string | null
+  workStatus?: string | null
+  currentStatus?: string | null
   city?: string | null
   profileType?: string | null
   sourceFreshness: 'fresh' | 'stale' | 'unknown'
@@ -86,14 +88,6 @@ export default function DriverPersonSearchModal({
       })
       const body = await response.json()
       if (!response.ok) throw new Error(body.error || body.confirmation?.status || 'Подтверждение не сохранено')
-      const followup = await fetch('/api/monitoring/fleet-check/driver-person', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query }),
-      })
-      if (!followup.ok) {
-        throw new Error('Подтверждение сохранено, но обновление парков не выполнено. Повторите проверку парков.')
-      }
       onConfirmed()
       onClose()
     } catch (cause) {
@@ -133,9 +127,17 @@ export default function DriverPersonSearchModal({
               <div className="space-y-1">
                 {cluster.profiles.map(profile => (
                   <div key={profile.driverId} className="grid grid-cols-[1fr_1fr_1fr] gap-2 rounded bg-gray-50 p-2 text-[10px]">
-                    <span>{profile.externalParkId}<br />{profile.legalRole || profile.profileType || 'роль —'}</span>
+                    <span>
+                      {profile.externalParkId}<br />
+                      ID {profile.externalDriverProfileId}<br />
+                      {profile.legalRole || profile.profileType || 'роль —'}
+                    </span>
                     <span>{profile.phones.join(', ') || 'телефон —'}<br />ВУ {profile.rawVu || profile.normalizedVu || '—'}</span>
-                    <span>{profile.status || 'статус —'}<br />{profile.city || 'город —'} · {profile.sourceFreshness}</span>
+                    <span>
+                      Работа: {profile.workStatus || profile.status || '—'}<br />
+                      Сейчас: {profile.currentStatus || profile.status || '—'}<br />
+                      {profile.city || 'город —'} · {profile.sourceFreshness}
+                    </span>
                   </div>
                 ))}
               </div>

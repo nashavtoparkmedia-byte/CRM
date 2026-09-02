@@ -47,8 +47,21 @@ function leadSourceToChatChannel(source: LeadSource): ChatChannel | null {
   }
 }
 
+function requireConcreteProviderAccountId(value: string): string {
+  if (typeof value !== 'string'
+    || value.length === 0
+    || value.length > 512
+    || value.trim() !== value
+    || value === 'legacy') {
+    throw new Error('[LeadIntake] concrete providerAccountId is required')
+  }
+  return value
+}
+
 export interface IngestLeadInput {
   source: LeadSource
+  /** Concrete provider account. Provider-local ids are unsafe without this scope. */
+  providerAccountId: string
   /** Уникальный идентификатор лида внутри источника (avito_responses.external_id) */
   sourceExternalId: string
   /** Имя кандидата из источника (может быть null) */
@@ -80,6 +93,7 @@ export interface IngestLeadResult {
  */
 export async function ingestLead(input: IngestLeadInput): Promise<IngestLeadResult> {
   const channel = leadSourceToChatChannel(input.source)
+  const providerAccountId = requireConcreteProviderAccountId(input.providerAccountId)
 
   // ─── Step 1: Contact + Identity ─────────────────────────────────────
   // Для site-лидов канала нет — создаём Contact напрямую без Identity
@@ -96,6 +110,7 @@ export async function ingestLead(input: IngestLeadInput): Promise<IngestLeadResu
     input.sourceExternalId,
     input.phone,
     input.candidateName,
+    { providerAccountId },
   )
   if (!isResolvedChannelContactResultV1(resolved) || !resolved.identity) {
     throw new Error(`[LeadIntake] Contact resolution blocked: ${resolved.status}`)
@@ -125,14 +140,19 @@ export async function ingestLead(input: IngestLeadInput): Promise<IngestLeadResu
     contactId: resolved.contact.id,
     contactIdentityId: resolved.identity.id,
     channel,
-    externalChatId: `${input.source}:contact:${resolved.contact.id}`,
+    providerAccountId,
+    externalChatId: `${input.source}:${providerAccountId}:${resolved.identity.externalId}`,
     name: input.chatTitle ?? input.candidateName ?? null,
     receivedAt: input.receivedAt,
-    metadata: { source: input.source, ...input.sourceMeta },
+    metadata: {
+      source: input.source,
+      providerAccountId,
+      ...input.sourceMeta,
+    },
   })
 
   // ─── Step 3: Append Message (idempotent by externalId) ─────────────
-  const messageExternalId = `${input.source}:msg:${input.sourceExternalId}`
+  const messageExternalId = `${input.source}:${providerAccountId}:msg:${input.sourceExternalId}`
   const messageContent =
     input.preview && input.preview.trim().length > 0
       ? input.preview.trim()
@@ -170,6 +190,7 @@ export async function ingestLead(input: IngestLeadInput): Promise<IngestLeadResu
 
 export interface UpdateLeadPhoneInput {
   source: LeadSource
+  providerAccountId: string
   sourceExternalId: string
   /** Существующий contactId если уже создан (ускорит lookup; иначе найдём по identity) */
   contactId?: string | null
@@ -193,6 +214,7 @@ export async function updateLeadPhone(
   input: UpdateLeadPhoneInput,
 ): Promise<{ phoneId: string; merged: boolean }> {
   const channel = leadSourceToChatChannel(input.source)
+  const providerAccountId = requireConcreteProviderAccountId(input.providerAccountId)
   if (!channel) {
     throw new Error(
       `[LeadIntake] updateLeadPhone: source='${input.source}' has no chat channel`,
@@ -204,24 +226,30 @@ export async function updateLeadPhone(
     throw new Error(`[LeadIntake] updateLeadPhone: invalid phone '${input.phone}'`)
   }
 
-  // Найти Contact либо по входному contactId, либо по identity (channel + externalId)
-  let contactId = input.contactId ?? null
-  if (!contactId) {
-    const identity = await prisma.contactIdentity.findUnique({
-      where: {
-        channel_externalId: {
-          channel,
-          externalId: input.sourceExternalId,
-        },
-      },
-      select: { contactId: true },
-    })
-    if (!identity) {
-      throw new Error(
-        `[LeadIntake] updateLeadPhone: no identity for ${input.source}:${input.sourceExternalId}`,
-      )
-    }
-    contactId = identity.contactId
+  // A source backlink is only a hint. Re-read the exact active, account-scoped
+  // identity and require it to own any supplied Contact before phone mutation.
+  const identities = await prisma.contactIdentity.findMany({
+    where: {
+      channel,
+      externalId: input.sourceExternalId,
+      isActive: true,
+    },
+    select: { contactId: true, metadata: true },
+    take: 2,
+  })
+  const exactIdentities = identities.filter(candidate => {
+    const metadata = candidate.metadata
+    return metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+      && (metadata as Record<string, unknown>).providerAccountId === providerAccountId
+  })
+  if (exactIdentities.length !== 1) {
+    throw new Error(
+      `[LeadIntake] updateLeadPhone: no unique exact identity for ${input.source}:${providerAccountId}:${input.sourceExternalId}`,
+    )
+  }
+  const contactId = exactIdentities[0].contactId
+  if (input.contactId && input.contactId !== contactId) {
+    throw new Error('[LeadIntake] updateLeadPhone: source Contact backlink does not own the exact identity')
   }
 
   // Avito-worker раскрыл настоящий номер — добавляем его как новый

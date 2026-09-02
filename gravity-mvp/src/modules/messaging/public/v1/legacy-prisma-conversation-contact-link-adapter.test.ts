@@ -31,10 +31,19 @@ describe('admitted conversation Contact link', () => {
     })
     mocks.transaction.contact.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => (
       where.id === 'survivor'
-        ? { id: 'survivor', isArchived: false, yandexDriverId: null }
+        ? {
+            id: 'survivor',
+            isArchived: false,
+            mainDriverId: null,
+            customFields: {},
+          }
         : { isArchived: true, customFields: { mergedIntoContactId: 'survivor' } }
     ))
-    mocks.transaction.chat.findUnique.mockResolvedValue({ driverId: null })
+    mocks.transaction.chat.findUnique.mockResolvedValue({
+      contactId: null,
+      contactIdentityId: null,
+      driverId: null,
+    })
     mocks.transaction.chat.update.mockResolvedValue({ id: 'chat-1' })
   })
 
@@ -57,12 +66,143 @@ describe('admitted conversation Contact link', () => {
   test('an unrelated stale Contact cannot be paired with the identity', async () => {
     mocks.transaction.contact.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => (
       where.id === 'survivor'
-        ? { id: 'survivor', isArchived: false, yandexDriverId: null }
+        ? {
+            id: 'survivor',
+            isArchived: false,
+            mainDriverId: null,
+            customFields: {},
+          }
         : { isArchived: false, customFields: {} }
     ))
     await expect(legacyPrismaConversationContactLinkPortV1.ensure({
       chatId: 'chat-1', contactId: 'other', contactIdentityId: 'identity-1',
     })).rejects.toThrow('CONTACT_IDENTITY_LINK_MISMATCH')
+    expect(mocks.transaction.chat.update).not.toHaveBeenCalled()
+  })
+
+  test('rejects an existing Driver that differs from the canonical confirmed main Driver', async () => {
+    mocks.transaction.contact.findUnique.mockResolvedValue({
+      id: 'survivor',
+      isArchived: false,
+      mainDriverId: 'canonical-driver',
+      customFields: {
+        driverConfirmations: [{
+          status: 'confirmed',
+          representativeDriverId: 'canonical-driver',
+        }],
+      },
+    })
+    mocks.transaction.chat.findUnique.mockResolvedValue({
+      contactId: 'survivor',
+      contactIdentityId: 'identity-1',
+      driverId: 'different-driver',
+    })
+
+    await expect(legacyPrismaConversationContactLinkPortV1.ensure({
+      chatId: 'chat-1', contactId: 'survivor', contactIdentityId: 'identity-1',
+    })).rejects.toThrow('CONTACT_CONVERSATION_DRIVER_MISMATCH')
+
+    expect(mocks.transaction.chat.update).not.toHaveBeenCalled()
+  })
+
+  test('rejects an existing Driver when the canonical Contact has no matching confirmation', async () => {
+    mocks.transaction.contact.findUnique.mockResolvedValue({
+      id: 'survivor',
+      isArchived: false,
+      mainDriverId: 'driver-1',
+      customFields: {
+        driverConfirmations: [{
+          status: 'needs_reconciliation',
+          representativeDriverId: 'driver-1',
+        }],
+      },
+    })
+    mocks.transaction.chat.findUnique.mockResolvedValue({
+      contactId: 'survivor',
+      contactIdentityId: 'identity-1',
+      driverId: 'driver-1',
+    })
+
+    await expect(legacyPrismaConversationContactLinkPortV1.ensure({
+      chatId: 'chat-1', contactId: 'survivor', contactIdentityId: 'identity-1',
+    })).rejects.toThrow('CONTACT_CONVERSATION_DRIVER_MISMATCH')
+
+    expect(mocks.transaction.chat.update).not.toHaveBeenCalled()
+  })
+
+  test('populates Driver only from the canonical confirmed main Driver', async () => {
+    mocks.transaction.contact.findUnique.mockResolvedValue({
+      id: 'survivor',
+      isArchived: false,
+      mainDriverId: 'canonical-driver',
+      customFields: {
+        driverConfirmations: [{
+          status: 'confirmed',
+          representativeDriverId: 'canonical-driver',
+        }],
+      },
+    })
+
+    await legacyPrismaConversationContactLinkPortV1.ensure({
+      chatId: 'chat-1', contactId: 'survivor', contactIdentityId: 'identity-1',
+    })
+
+    expect(mocks.transaction.driver.findUnique).not.toHaveBeenCalled()
+    expect(mocks.transaction.chat.update).toHaveBeenCalledWith({
+      where: { id: 'chat-1' },
+      data: {
+        contactId: 'survivor',
+        contactIdentityId: 'identity-1',
+        driverId: 'canonical-driver',
+      },
+    })
+  })
+
+  test('does not populate Driver from a legacy Yandex link alone', async () => {
+    mocks.transaction.contact.findUnique.mockResolvedValue({
+      id: 'survivor',
+      isArchived: false,
+      yandexDriverId: 'legacy-yandex-driver',
+      mainDriverId: null,
+      customFields: {},
+    })
+
+    await legacyPrismaConversationContactLinkPortV1.ensure({
+      chatId: 'chat-1', contactId: 'survivor', contactIdentityId: 'identity-1',
+    })
+
+    expect(mocks.transaction.driver.findUnique).not.toHaveBeenCalled()
+    expect(mocks.transaction.chat.update).toHaveBeenCalledWith({
+      where: { id: 'chat-1' },
+      data: { contactId: 'survivor', contactIdentityId: 'identity-1' },
+    })
+  })
+
+  test.each([
+    {
+      existing: { contactId: 'other-contact', contactIdentityId: null, driverId: null },
+      label: 'Contact',
+    },
+    {
+      existing: { contactId: 'survivor', contactIdentityId: 'other-identity', driverId: null },
+      label: 'ContactIdentity',
+    },
+    {
+      existing: {
+        contactId: 'other-contact',
+        contactIdentityId: 'other-identity',
+        driverId: null,
+      },
+      label: 'Contact and ContactIdentity',
+    },
+  ])('does not overwrite an existing non-null $label binding', async ({ existing }) => {
+    mocks.transaction.chat.findUnique.mockResolvedValue(existing)
+
+    await expect(legacyPrismaConversationContactLinkPortV1.ensure({
+      chatId: 'chat-1', contactId: 'survivor', contactIdentityId: 'identity-1',
+    })).rejects.toThrow('CONTACT_CONVERSATION_OWNERSHIP_MISMATCH')
+
+    expect(mocks.transaction.driver.findUnique).not.toHaveBeenCalled()
     expect(mocks.transaction.chat.update).not.toHaveBeenCalled()
   })
 })

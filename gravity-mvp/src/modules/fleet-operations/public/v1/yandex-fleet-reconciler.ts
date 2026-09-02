@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 
 import {
   RECONCILE_YANDEX_FLEET_COMMAND_V1,
+  parseReconcileYandexFleetCommandV1,
   type ReconcileYandexFleetCommandV1,
   type YandexFleetReconciliationModeV1,
 } from '@/contracts/fleet-operations/v1'
@@ -36,6 +37,8 @@ export type ReconciledDriverClusterV1 = {
   profileClusterKey: string
   normalizedVu: string | null
   contactId: string | null
+  /** Exact two-Contact ownership ambiguity, eligible only for Contacts policy evaluation. */
+  contactMergeCandidateIds: string[]
   profileIds: string[]
   profiles: DriverClusterProfileEvidenceV1[]
   warnings: string[]
@@ -57,10 +60,48 @@ export interface YandexFleetReconcilerPortV1 {
   reconcile(command: ReconcileYandexFleetCommandV1): Promise<ReconcileYandexFleetResultV1>
 }
 
+export type YandexFleetReconciliationRunnerV1 = (
+  command: ReconcileYandexFleetCommandV1 | unknown,
+) => Promise<ReconcileYandexFleetResultV1>
+
+declare global {
+  // Platform Shell supplies the cross-owner coordinator during application
+  // bootstrap. Fleet owns the port and snapshots it once per sync run.
+  var __yandexFleetReconciliationRunnerV1: YandexFleetReconciliationRunnerV1 | undefined
+}
+
+/**
+ * Bind the application-level reconciliation runner without introducing a
+ * Fleet -> Platform Shell import. Registration is stable and idempotent for
+ * the same function; a competing composition fails closed.
+ */
+export function registerYandexFleetReconciliationRunnerV1(
+  runner: YandexFleetReconciliationRunnerV1,
+): () => void {
+  if (typeof runner !== 'function') throw new TypeError('runner must be a function')
+  const existing = globalThis.__yandexFleetReconciliationRunnerV1
+  if (existing && existing !== runner) {
+    throw new Error('YANDEX_FLEET_RECONCILIATION_RUNNER_ALREADY_REGISTERED')
+  }
+  globalThis.__yandexFleetReconciliationRunnerV1 = runner
+  return () => {
+    if (globalThis.__yandexFleetReconciliationRunnerV1 === runner) {
+      globalThis.__yandexFleetReconciliationRunnerV1 = undefined
+    }
+  }
+}
+
+/** No raw fallback: missing application composition must remain visible. */
+export function requireYandexFleetReconciliationRunnerV1(): YandexFleetReconciliationRunnerV1 {
+  const runner = globalThis.__yandexFleetReconciliationRunnerV1
+  if (!runner) throw new Error('YANDEX_FLEET_RECONCILIATION_RUNNER_NOT_REGISTERED')
+  return runner
+}
+
 export function createReconcileYandexFleetHandlerV1(port: YandexFleetReconcilerPortV1) {
-  return async (command: ReconcileYandexFleetCommandV1): Promise<ReconcileYandexFleetResultV1> => {
-    if (command.contract !== RECONCILE_YANDEX_FLEET_COMMAND_V1) throw new TypeError('unsupported contract')
-    return port.reconcile(command)
+  return async (command: ReconcileYandexFleetCommandV1 | unknown): Promise<ReconcileYandexFleetResultV1> => {
+    const parsed = parseReconcileYandexFleetCommandV1(command)
+    return port.reconcile(parsed)
   }
 }
 

@@ -4,10 +4,11 @@ import type { Prisma } from "@prisma/client"
 
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
-import { SET_CONTACT_DISPLAY_NAME_COMMAND_V1 } from "@/contracts/contacts/v1"
-import { setContactDisplayNameV1 } from "@/modules/contacts/public/v1"
 import { ENSURE_CONVERSATION_CONTACT_LINK_COMMAND_V1 } from "@/contracts/messaging/v1"
-import { ensureConversationContactLinkV1 } from "@/modules/messaging/public/v1"
+import {
+    ensureConversationContactLinkV1,
+    linkMatchedDriverToConversationCapabilityV1,
+} from "@/modules/messaging/public/v1"
 
 /**
  * PR-О: Server actions для UI «Привязать контакт» в чатах.
@@ -67,6 +68,14 @@ export async function linkChatToDriverManually(chatId: string, driverId: string)
                 contactIdentityId: true,
                 metadata: true,
                 contactIdentity: { select: { contactId: true, isActive: true } },
+                contact: {
+                    select: {
+                        id: true,
+                        isArchived: true,
+                        mainDriverId: true,
+                        customFields: true,
+                    },
+                },
             },
         })
         if (!chat) return { error: 'Чат не найден' }
@@ -84,9 +93,34 @@ export async function linkChatToDriverManually(chatId: string, driverId: string)
 
         const driver = await prisma.driver.findUnique({
             where: { id: driverId },
-            select: { id: true, fullName: true, phone: true },
+            select: { id: true },
         })
         if (!driver) return { error: 'Водитель не найден' }
+
+        const contactFields = chat.contact?.customFields
+            && typeof chat.contact.customFields === 'object'
+            && !Array.isArray(chat.contact.customFields)
+            ? chat.contact.customFields as Record<string, unknown>
+            : {}
+        const driverConfirmations = Array.isArray(contactFields.driverConfirmations)
+            ? contactFields.driverConfirmations
+            : []
+        const hasExactConfirmation = driverConfirmations.some(item => {
+            if (!item || typeof item !== 'object' || Array.isArray(item)) return false
+            const confirmation = item as Record<string, unknown>
+            return confirmation.status === 'confirmed'
+                && confirmation.representativeDriverId === driver.id
+        })
+        if (
+            !chat.contact
+            || chat.contact.isArchived
+            || chat.contact.mainDriverId !== driver.id
+            || !hasExactConfirmation
+        ) {
+            return {
+                error: 'Сначала подтвердите физлицо водителя через «Это он» и завершите сверку противоречий.',
+            }
+        }
 
         const contactResult = {
             contact: { id: chat.contactId },
@@ -99,33 +133,13 @@ export async function linkChatToDriverManually(chatId: string, driverId: string)
             contactIdentityId: contactResult.identity.id,
         })
 
-        const metadata = chat.metadata && typeof chat.metadata === 'object' && !Array.isArray(chat.metadata)
-            ? chat.metadata as Record<string, unknown>
-            : {}
-
-        // The existing opaque identity remains attached to its current Contact.
-        await prisma.chat.update({
-            where: { id: chatId },
-            data: {
-                driverId: driver.id,
-                name: driver.fullName,
-                metadata: {
-                    ...metadata,
-                    contactResolution: {
-                        status: 'manual_driver_linked',
-                        candidateCount: 1,
-                        automaticLinkPerformed: false,
-                        contactIdentityId: chat.contactIdentityId,
-                    },
-                },
-            },
+        const linked = await linkMatchedDriverToConversationCapabilityV1({
+            chatId: chat.id,
+            driverId: driver.id,
         })
-
-        await setContactDisplayNameV1({
-            contract: SET_CONTACT_DISPLAY_NAME_COMMAND_V1,
-            contactId: chat.contactId,
-            displayName: driver.fullName,
-        })
+        if (!linked.linked) {
+            return { error: 'Чат уже привязан к другому профилю водителя; требуется сверка.' }
+        }
 
         revalidatePath('/messages')
         return { success: true }

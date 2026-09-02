@@ -25,6 +25,7 @@ import {
   withDriverFleetEvidence,
 } from '../public/v1/driver-fleet-evidence'
 import { canAdoptUnqualifiedLegacyDriverProfileV1 } from '../public/v1/yandex-fleet-reconciler'
+import { admitFleetReconciliationTransactionV1 } from '../public/v1/legacy-prisma-contact-merge-adapter'
 
 export { RECONCILE_YANDEX_FLEET_COMMAND_V1 }
 export type { ReconcileYandexFleetCommandV1, YandexFleetReconciliationModeV1 }
@@ -54,6 +55,7 @@ export type ReconciledDriverClusterV1 = {
   profileClusterKey: string
   normalizedVu: string | null
   contactId: string | null
+  contactMergeCandidateIds: string[]
   profileIds: string[]
   profiles: DriverClusterProfileEvidenceV1[]
   warnings: string[]
@@ -311,6 +313,8 @@ export async function upsertObservation(
       licenseNumber: observation.rawVu,
       customFields: withDriverFleetEvidence(legacy?.customFields, {
         legalRole: observation.legalRole,
+        workStatus: observation.workStatus,
+        currentStatus: observation.currentStatus,
         sourceStatus: observation.currentStatus ?? observation.workStatus,
         sourceCity: observation.city,
         sourceProfileType: observation.profileType,
@@ -402,24 +406,9 @@ function clusterKeyFor(
     : `profile:${row.observation.externalParkId}:${row.observation.externalDriverProfileId}`
 }
 
-const FLEET_RECONCILIATION_ADVISORY_CLASS_ID = 0x594f4b4f
-const FLEET_RECONCILIATION_ADVISORY_OBJECT_ID = 0x464c5431 // "FLT1"
-
 async function withFleetReconciliationMutationLease<T>(work: () => Promise<T>): Promise<T> {
   return prisma.$transaction(async transaction => {
-    await transaction.$queryRaw(Prisma.sql`
-      WITH "fleet_reconciliation_lock_policy" AS MATERIALIZED (
-        SELECT set_config('lock_timeout', '10000ms', true) AS configured
-      )
-      SELECT (
-        pg_advisory_xact_lock(
-          CAST(${FLEET_RECONCILIATION_ADVISORY_CLASS_ID} AS integer)
-            + octet_length(configured) * 0,
-          CAST(${FLEET_RECONCILIATION_ADVISORY_OBJECT_ID} AS integer)
-        ) IS NULL
-      ) AS admitted
-      FROM "fleet_reconciliation_lock_policy"
-    `)
+    await admitFleetReconciliationTransactionV1(transaction)
     return work()
   }, {
     isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
@@ -524,8 +513,8 @@ export async function reconcileClusters(
           rawVu: row.licenseNumber,
           normalizedVu: normalizeDriverLicenceVuV1(row.licenseNumber),
           legalRole: evidence.legalRole,
-          workStatus: evidence.sourceStatus,
-          currentStatus: evidence.sourceStatus,
+          workStatus: evidence.workStatus,
+          currentStatus: evidence.currentStatus,
           city: evidence.sourceCity,
           profileType: evidence.sourceProfileType,
           sourceDates: evidence.sourceDates,
@@ -547,6 +536,8 @@ export async function reconcileClusters(
         sourceFreshness: member.sourceFreshness,
         legalRole: member.observation.legalRole,
         status: member.observation.currentStatus ?? member.observation.workStatus,
+        workStatus: member.observation.workStatus,
+        currentStatus: member.observation.currentStatus,
         city: member.observation.city,
         profileType: member.observation.profileType,
         rawVu: member.observation.rawVu,
@@ -562,29 +553,42 @@ export async function reconcileClusters(
         .filter((id): id is string => Boolean(id)))].sort()
       const warnings: string[] = []
       let contactId: string | null = null
+      let contactMergeCandidateIds: string[] = []
       const driverIds = members.map(member => member.driverId)
       const evidenceRoot = profiles.map(profile => profile.evidenceRoot).sort().join('|')
       const incompleteClusterEvidence = members.some(member => member.sourceFreshness !== 'fresh')
+      const deferExactPairToContacts = (contactIds: string[]): boolean => {
+        const candidateIds = [...new Set(contactIds)].sort()
+        if (candidateIds.length !== 2) return false
+        contactMergeCandidateIds = candidateIds
+        warnings.push('contact_auto_merge_candidate')
+        return true
+      }
       if (persisted.some(row => row.personResolutionStatus === 'conflict')) {
         warnings.push('authoritative_source_contradiction')
       } else if (decision.status === 'conflict') {
-        warnings.push('contact_phone_ambiguity')
-        await contactRepository.persistContradiction({
-          profileClusterKey,
-          contactIds: decision.contactIds,
-          driverIds,
-          evidenceRoot,
-        })
-      } else if (decision.status === 'link') {
-        contactId = decision.contactId
-        if (existingContactIds.some(id => id !== contactId)) {
-          warnings.push('confirmed_person_contradiction')
+        if (!deferExactPairToContacts(decision.contactIds)) {
+          warnings.push('contact_phone_ambiguity')
           await contactRepository.persistContradiction({
             profileClusterKey,
-            contactIds: [...new Set([...existingContactIds, contactId])],
+            contactIds: decision.contactIds,
             driverIds,
             evidenceRoot,
           })
+        }
+      } else if (decision.status === 'link') {
+        contactId = decision.contactId
+        if (existingContactIds.some(id => id !== contactId)) {
+          const conflictingContactIds = [...new Set([...existingContactIds, contactId])]
+          if (!deferExactPairToContacts(conflictingContactIds)) {
+            warnings.push('confirmed_person_contradiction')
+            await contactRepository.persistContradiction({
+              profileClusterKey,
+              contactIds: conflictingContactIds,
+              driverIds,
+              evidenceRoot,
+            })
+          }
           contactId = null
         } else if (incompleteClusterEvidence && existingContactIds.length === 0) {
           warnings.push('partial_cluster_evidence')
@@ -612,17 +616,19 @@ export async function reconcileClusters(
           })
         }
       } else if (existingContactIds.length > 1) {
-        warnings.push('vu_contact_contradiction')
-        await contactRepository.persistContradiction({
-          profileClusterKey,
-          contactIds: existingContactIds,
-          driverIds,
-          evidenceRoot,
-        })
-        await transaction.driver.updateMany({
-          where: { id: { in: driverIds } },
-          data: { personResolutionStatus: 'conflict', personResolutionBasis: 'normalized_vu_contradiction' },
-        })
+        if (!deferExactPairToContacts(existingContactIds)) {
+          warnings.push('vu_contact_contradiction')
+          await contactRepository.persistContradiction({
+            profileClusterKey,
+            contactIds: existingContactIds,
+            driverIds,
+            evidenceRoot,
+          })
+          await transaction.driver.updateMany({
+            where: { id: { in: driverIds } },
+            data: { personResolutionStatus: 'conflict', personResolutionBasis: 'normalized_vu_contradiction' },
+          })
+        }
       } else if (members[0].observation.normalizedVu && members.length > 1 && !incompleteClusterEvidence) {
         await transaction.driver.updateMany({
           where: { id: { in: driverIds } },
@@ -640,6 +646,7 @@ export async function reconcileClusters(
         profileClusterKey,
         normalizedVu: members[0].observation.normalizedVu,
         contactId,
+        contactMergeCandidateIds,
         profileIds: driverIds.sort(),
         profiles,
         warnings,

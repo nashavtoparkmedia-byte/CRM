@@ -29,6 +29,20 @@ function trustedPhone(source: NonNullable<ContactResolutionInput['phoneEvidence'
   return { source, trustedForAutomaticResolution: true } as const
 }
 
+function phoneClaim(
+  owner: ResolutionContact,
+  patch: Partial<Omit<ResolutionPhoneClaim, 'contact'>> = {},
+): ResolutionPhoneClaim {
+  return {
+    contact: owner,
+    lifecycle: 'current',
+    trust: 'provider_bound',
+    freshness: 'fresh',
+    resolutionState: 'unique',
+    ...patch,
+  }
+}
+
 function repository(options: {
   identities?: Record<string, ResolutionContact | null>
   phoneOwners?: ResolutionContact[]
@@ -152,6 +166,67 @@ describe('ContactResolutionService read-only planner', () => {
     })
     expect(result).toMatchObject({ status: 'ineligible_phone' })
     expect(result.warnings).toContain(warning)
+  })
+
+  test.each([
+    ['legacy/unknown', { trust: 'unknown' as const, freshness: 'unknown' as const, resolutionState: 'unknown' as const }],
+    ['shared', { resolutionState: 'shared' as const }],
+    ['disputed', { resolutionState: 'disputed' as const }],
+    ['untrusted', { trust: 'claimed' as const }],
+    ['stale', { freshness: 'stale' as const }],
+    ['lifecycle-ineligible', { lifecycle: 'removed' as const }],
+  ])('keeps active %s owner B in the ambiguity set when owner A is eligible', async (
+    _label,
+    patch,
+  ) => {
+    const { resolver } = service({
+      phoneClaims: [
+        phoneClaim(contact('A')),
+        phoneClaim(contact('B'), patch),
+      ],
+    })
+
+    await expect(resolver.resolve({
+      channel: 'max', normalizedPhone: PHONE, phoneEvidence: trustedPhone(),
+    })).resolves.toMatchObject({
+      status: 'ambiguous_phone',
+      candidateContactIds: ['A', 'B'],
+    })
+  })
+
+  test('treats mixed eligible and ineligible active claims on one Contact as ineligible', async () => {
+    const { resolver } = service({
+      phoneClaims: [
+        phoneClaim(contact('A')),
+        phoneClaim(contact('A'), { resolutionState: 'shared' }),
+      ],
+    })
+
+    const result = await resolver.resolve({
+      channel: 'max', normalizedPhone: PHONE, phoneEvidence: trustedPhone(),
+    })
+
+    expect(result).toMatchObject({ status: 'ineligible_phone' })
+    expect(result.warnings).toContain('phone_shared')
+  })
+
+  test('does not let an exact identity hide a second active ineligible phone claimant', async () => {
+    const { resolver } = service({
+      identities: { 'telegram:1001': contact('A') },
+      phoneClaims: [
+        phoneClaim(contact('A')),
+        phoneClaim(contact('B'), { trust: 'unknown', freshness: 'unknown', resolutionState: 'unknown' }),
+      ],
+    })
+
+    await expect(resolver.resolve({
+      channel: 'telegram', externalUserId: '1001', normalizedPhone: PHONE,
+      phoneEvidence: trustedPhone(),
+    })).resolves.toMatchObject({
+      status: 'identity_phone_conflict',
+      identityContactId: 'A',
+      phoneContactIds: ['A', 'B'],
+    })
   })
 
   test('an archived phone owner cannot authorize linking', async () => {

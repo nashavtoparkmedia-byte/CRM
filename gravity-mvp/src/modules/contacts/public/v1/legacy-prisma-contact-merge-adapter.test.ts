@@ -55,6 +55,7 @@ describe('persisted automatic merge evidence', () => {
       trustedUniqueCurrentPhone: true,
       phoneEvidenceRoot: 'phone:+79990000000:provider:left|provider:right',
       confirmedPersonEvidenceRoots: [],
+      confirmedPersonKeys: [],
       normalizedVuEvidenceRoots: [],
     })
   })
@@ -126,6 +127,56 @@ describe('persisted automatic merge evidence', () => {
     await expect(makeLegacyPrismaContactMergeRepositoriesV1(transaction as never).contacts
       .deriveAutomaticMergeEvidence('left', 'right')).resolves.toMatchObject({
       normalizedVuEvidenceRoots: [],
+    })
+  })
+})
+
+describe('merge policy snapshot inputs', () => {
+  test('retains persisted identity sources and Fleet conflict state on adapter reads', async () => {
+    const findUnique = vi.fn(async () => ({
+      id: 'manual-contact',
+      displayName: 'Curated name',
+      displayNameSource: 'manual',
+      masterSource: 'manual',
+      yandexDriverId: null,
+      mainDriverId: null,
+      mainDriverSelection: 'auto',
+      mainDriverSelectedBy: null,
+      mainDriverSelectedAt: null,
+      primaryPhoneId: null,
+      notes: null,
+      customFields: {},
+      tags: [],
+      isArchived: false,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      phones: [],
+      identities: [],
+      chats: [],
+      tasks: [],
+      calls: [],
+      driverProfiles: [{ id: 'driver-conflict', personResolutionStatus: 'conflict' }],
+      driver: null,
+      mainDriver: null,
+    }))
+    const transaction = {
+      contact: { findUnique },
+    }
+    const repositories = makeLegacyPrismaContactMergeRepositoriesV1(transaction as never)
+
+    await expect(repositories.contacts.findSourceContact('manual-contact')).resolves.toMatchObject({
+      id: 'manual-contact',
+      displayNameSource: 'manual',
+      masterSource: 'manual',
+      driverProfiles: [{ id: 'driver-conflict', personResolutionStatus: 'conflict' }],
+    })
+    expect(findUnique).toHaveBeenCalledWith({
+      where: { id: 'manual-contact' },
+      include: expect.objectContaining({
+        driverProfiles: { select: { id: true, personResolutionStatus: true } },
+        driver: { select: { id: true, personResolutionStatus: true } },
+        mainDriver: { select: { id: true, personResolutionStatus: true } },
+      }),
     })
   })
 })

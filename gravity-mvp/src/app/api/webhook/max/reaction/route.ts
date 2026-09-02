@@ -3,38 +3,47 @@ import { prisma } from '@/lib/prisma'
 import { broadcastChatMessageV1 as broadcastChatMessage } from '@/modules/messaging/public/v1/message-stream'
 import { PATCH_MESSAGE_METADATA_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { patchMessageMetadataV1 } from '@/modules/messaging/public/v1'
+import { isAuthorizedMaxScraperWebhookV1 } from '@/modules/max-channel/internal/scraper-webhook-auth'
+
+function concreteProviderAccountId(value: unknown): string | null {
+    if (typeof value !== 'string' && typeof value !== 'number') return null
+    const normalized = String(value).trim()
+    return normalized && normalized !== 'legacy' && normalized !== 'max-default'
+        ? normalized
+        : null
+}
+
+function metadataRecord(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object' && !Array.isArray(value)
+        ? value as Record<string, unknown>
+        : {}
+}
 
 // POST /api/webhook/max/reaction
 // Вызывается скрапером когда пользователь ставит/убирает реакцию в MAX веб-интерфейсе.
 // Синхронизирует metadata.reactions в БД и рассылает SSE-обновление клиентам.
 export async function POST(req: NextRequest) {
+    if (!isAuthorizedMaxScraperWebhookV1(req)) {
+        return NextResponse.json({ error: 'MAX_SCRAPER_WEBHOOK_UNAUTHORIZED' }, { status: 401 })
+    }
     try {
         const body = await req.json()
-        const { externalMsgId, emoji, isRemove, counters } = body
+        const { externalMsgId, emoji, isRemove, counters, providerAccountId } = body
+        const incomingProviderAccountId = concreteProviderAccountId(providerAccountId)
 
         if (!externalMsgId) {
             return NextResponse.json({ error: 'externalMsgId required' }, { status: 400 })
         }
-
-        // MAX can echo a differently packed id. Prefer exact identity, then
-        // use only a bounded hexadecimal suffix inside the MAX channel.
-        let message = await (prisma.message as any).findFirst({
-            where: { externalId: String(externalMsgId) },
-        })
-
-        if (!message) {
-            const compactId = String(externalMsgId).replace(/[^a-fA-F0-9]/g, '')
-            const suffix = compactId.slice(-10)
-            if (suffix.length >= 8) {
-                message = await (prisma.message as any).findFirst({
-                    where: {
-                        channel: 'max',
-                        externalId: { contains: suffix },
-                    },
-                    orderBy: { sentAt: 'desc' },
-                })
-            }
+        if (!incomingProviderAccountId) {
+            return NextResponse.json({ error: 'MAX_PROVIDER_ACCOUNT_UNPROVEN' }, { status: 400 })
         }
+
+        // Message IDs are globally unique. Fuzzy suffix lookup could mutate a
+        // different account's message, so reaction ingress is exact-only.
+        const message = await (prisma.message as any).findUnique({
+            where: { externalId: String(externalMsgId) },
+            include: { chat: true },
+        })
 
         if (!message) {
             console.warn(`[WEBHOOK-MAX/reaction] Message not found: externalMsgId=${externalMsgId}`)
@@ -46,6 +55,20 @@ export async function POST(req: NextRequest) {
                 error: 'message not found',
             }))
             return NextResponse.json({ ok: false, reason: 'message not found' })
+        }
+
+        const owningChat = message.chat
+        const storedProviderAccountId = concreteProviderAccountId(
+            metadataRecord(owningChat?.metadata).providerAccountId,
+        )
+        if (owningChat?.channel !== 'max') {
+            return NextResponse.json({ error: 'MAX_MESSAGE_IDENTITY_COLLISION' }, { status: 409 })
+        }
+        if (!storedProviderAccountId) {
+            return NextResponse.json({ error: 'MAX_PROVIDER_ACCOUNT_UNPROVEN' }, { status: 409 })
+        }
+        if (storedProviderAccountId !== incomingProviderAccountId) {
+            return NextResponse.json({ error: 'MAX_PROVIDER_ACCOUNT_COLLISION' }, { status: 409 })
         }
 
         const meta = (message.metadata as any) || {}

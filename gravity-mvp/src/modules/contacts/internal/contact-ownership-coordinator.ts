@@ -114,7 +114,10 @@ function isLockTimeout(error: unknown): boolean {
 }
 
 /**
- * Must be the first database operation in a Contacts ownership transaction.
+ * Must precede every Contacts-owned read/write in an ownership transaction.
+ * A shared cross-owner transaction may first acquire another owner's advisory
+ * fence when its documented global order requires that (for example FLT1 ->
+ * CNT1); no business row may be read before this admission.
  * The MATERIALIZED CTE and the data dependency force lock_timeout to be set
  * before PostgreSQL evaluates pg_advisory_xact_lock, while both happen in one
  * statement. The transaction-scoped lock is released automatically at end.

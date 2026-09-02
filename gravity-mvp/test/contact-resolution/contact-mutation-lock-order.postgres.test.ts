@@ -1,7 +1,7 @@
 import { ContactPhoneSource, PrismaClient, type Prisma } from '@prisma/client'
 import { createRequire } from 'node:module'
 import { NextRequest } from 'next/server'
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { DELETE, PATCH } from '@/app/api/contacts/[id]/phones/[phoneId]/route'
 import { POST as ADD_PHONE } from '@/app/api/contacts/[id]/phones/route'
@@ -26,6 +26,14 @@ import {
   reconcileFleetContactOwnershipV1,
 } from '@/modules/contacts/public/v1'
 import { prisma } from '@/lib/prisma'
+
+vi.mock('@/modules/identity-access/public/v1', async importOriginal => ({
+  ...await importOriginal<typeof import('@/modules/identity-access/public/v1')>(),
+  getIntegrationAdminPrincipal: vi.fn(async () => ({
+    id: 'identity-access:integration-admin-session',
+    kind: 'integration_admin_session',
+  })),
+}))
 
 const TEST_DATABASE_URL = process.env.CONTACT_RESOLUTION_TEST_DATABASE_URL
 const REQUIRE_DATABASE = process.env.REQUIRE_CONTACT_RESOLUTION_DB_TESTS === '1'
@@ -149,7 +157,11 @@ function addRoute(contactId: string, phone = PHONE) {
   const request = new NextRequest(`http://localhost/api/contacts/${contactId}/phones`, {
     method: 'POST',
     body: JSON.stringify({ phone, isPrimary: true }),
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      host: 'localhost',
+      origin: 'http://localhost',
+    },
   })
   return ADD_PHONE(request, { params: Promise.resolve({ id: contactId }) })
 }
@@ -159,14 +171,21 @@ function patchRoute(contactId: string, phoneId: string) {
     {
       method: 'PATCH',
       body: JSON.stringify({ isPrimary: true }),
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        host: 'localhost',
+        origin: 'http://localhost',
+      },
     },
   )
   return PATCH(request, { params: Promise.resolve({ id: contactId, phoneId }) })
 }
 function deleteRoute(contactId: string, phoneId: string) {
   return DELETE(
-    new NextRequest(`http://localhost/api/contacts/${contactId}/phones/${phoneId}`),
+    new NextRequest(`http://localhost/api/contacts/${contactId}/phones/${phoneId}`, {
+      method: 'DELETE',
+      headers: { host: 'localhost', origin: 'http://localhost' },
+    }),
     { params: Promise.resolve({ id: contactId, phoneId }) },
   )
 }

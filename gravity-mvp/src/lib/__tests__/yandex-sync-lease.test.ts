@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   findStatus: vi.fn(),
   updateStatus: vi.fn(),
   getThresholds: vi.fn(),
+  requireRunner: vi.fn(),
   reconcile: vi.fn(),
   syncTrips: vi.fn(),
   recalculate: vi.fn(),
@@ -28,7 +29,7 @@ vi.mock('@/lib/scoring', () => ({
 }))
 vi.mock('@/modules/fleet-operations/public/v1', () => ({
   RECONCILE_YANDEX_FLEET_COMMAND_V1: 'fleet_operations.ReconcileYandexFleetCommand.v1',
-  reconcileYandexFleetV1: mocks.reconcile,
+  requireYandexFleetReconciliationRunnerV1: mocks.requireRunner,
 }))
 
 import {
@@ -42,6 +43,7 @@ describe('Yandex sync fenced lease', () => {
     vi.clearAllMocks()
     mocks.updateStatus.mockResolvedValue({ count: 1 })
     mocks.getThresholds.mockResolvedValue({ analysis_period: 45 })
+    mocks.requireRunner.mockReturnValue(mocks.reconcile)
     mocks.reconcile.mockResolvedValue({ profilesUpserted: 2 })
     mocks.syncTrips.mockResolvedValue({ ordersProcessed: 3 })
     mocks.recalculate.mockResolvedValue({ count: 4 })
@@ -89,6 +91,28 @@ describe('Yandex sync fenced lease', () => {
     expect(mocks.updateStatus).toHaveBeenLastCalledWith(expect.objectContaining({
       where: expect.objectContaining({ status: 'running', errorMessage: expect.stringMatching(/^lease:/) }),
       data: expect.objectContaining({ status: 'success' }),
+    }))
+  })
+
+  test('fails closed when Platform Shell reconciliation composition is not registered', async () => {
+    mocks.acquire.mockResolvedValueOnce(1)
+    mocks.requireRunner.mockImplementationOnce(() => {
+      throw new Error('YANDEX_FLEET_RECONCILIATION_RUNNER_NOT_REGISTERED')
+    })
+
+    await expect(runYandexSync({ bypassCooldown: true })).resolves.toEqual({
+      ok: false,
+      reason: 'error',
+      errorMessage: 'YANDEX_FLEET_RECONCILIATION_RUNNER_NOT_REGISTERED',
+    })
+
+    expect(mocks.getThresholds).not.toHaveBeenCalled()
+    expect(mocks.reconcile).not.toHaveBeenCalled()
+    expect(mocks.updateStatus).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        status: 'error',
+        errorMessage: 'YANDEX_FLEET_RECONCILIATION_RUNNER_NOT_REGISTERED',
+      }),
     }))
   })
 

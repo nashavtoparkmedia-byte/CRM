@@ -11,6 +11,11 @@ const reconcileYandexFleetV1 = legacyPrismaYandexFleetReconcilerPortV1.reconcile
 
 export type ParkPhoneProfileV1 = {
     id: string
+    driverId?: string
+    profileClusterKey?: string
+    contactId?: string | null
+    clusterWarnings?: string[]
+    contactMergeCandidateIds?: string[]
     fullName: string
     phones: string[]
     workStatus: string | null
@@ -187,10 +192,15 @@ export async function searchYandexParksByPhonesV1(phones: string[]): Promise<Par
                 const park = byPark.get(profile.externalParkId) ?? new Map()
                 park.set(profile.externalDriverProfileId, {
                     id: profile.externalDriverProfileId,
+                    driverId: profile.driverId,
+                    profileClusterKey: cluster.profileClusterKey,
+                    contactId: cluster.contactId,
+                    clusterWarnings: cluster.warnings,
+                    contactMergeCandidateIds: cluster.contactMergeCandidateIds,
                     fullName: profile.fullName,
                     phones: profile.phones,
-                    workStatus: profile.status ?? null,
-                    currentStatus: profile.status ?? null,
+                    workStatus: profile.workStatus ?? profile.status ?? null,
+                    currentStatus: profile.currentStatus ?? profile.status ?? null,
                     legalRole: profile.legalRole ?? null,
                     city: profile.city ?? null,
                     profileType: profile.profileType ?? null,
@@ -235,10 +245,15 @@ export async function searchYandexParksByDriverQueryV1(query: string): Promise<P
             const profiles = byPark.get(profile.externalParkId) ?? []
             profiles.push({
                 id: profile.externalDriverProfileId,
+                driverId: profile.driverId,
+                profileClusterKey: cluster.profileClusterKey,
+                contactId: cluster.contactId,
+                clusterWarnings: cluster.warnings,
+                contactMergeCandidateIds: cluster.contactMergeCandidateIds,
                 fullName: profile.fullName,
                 phones: profile.phones,
-                workStatus: profile.status ?? null,
-                currentStatus: profile.status ?? null,
+                workStatus: profile.workStatus ?? profile.status ?? null,
+                currentStatus: profile.currentStatus ?? profile.status ?? null,
                 legalRole: profile.legalRole ?? null,
                 city: profile.city ?? null,
                 profileType: profile.profileType ?? null,

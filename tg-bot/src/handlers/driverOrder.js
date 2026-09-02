@@ -25,6 +25,7 @@ const { Scenes, Markup } = require('telegraf');
 const https = require('https');
 const http = require('http');
 const logger = require('../utils/logger');
+const { exactTelegramActionBinding } = require('../services/exactTelegramActionBinding');
 
 // Same env resolution as carManagement.js — action calls must go to
 // /api/webhooks/bot, NOT /api/webhook/telegram. CRM_WEBHOOK_URL is reserved
@@ -86,8 +87,12 @@ async function callCRM(action, payload) {
  * Fire an action then poll for terminal status. Returns the final state
  * object (whatever CRM returned in the last poll), or an error envelope.
  */
-async function actionAndPoll(telegramId, action, extraPayload = {}) {
-    const initial = await callCRM(action, { telegramId: String(telegramId), ...extraPayload });
+async function actionAndPoll(ctx, action, extraPayload = {}) {
+    const authorityPayload = {
+        telegramId: String(ctx.from.id),
+        ...exactTelegramActionBinding(ctx),
+    };
+    const initial = await callCRM(action, { ...extraPayload, ...authorityPayload });
     if (!initial.ok || initial.data?.ok === false) {
         return { ok: false, ...(initial.data || {}) };
     }
@@ -99,7 +104,10 @@ async function actionAndPoll(telegramId, action, extraPayload = {}) {
     const started = Date.now();
     while (state.status === 'PENDING' && Date.now() - started < TIMEOUT_MS) {
         await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
-        const poll = await callCRM('poll_driver_action', { taskId: state.taskId });
+        const poll = await callCRM('poll_driver_action', {
+            taskId: state.taskId,
+            ...authorityPayload,
+        });
         if (poll.ok && poll.data?.ok) {
             state = { ...state, ...poll.data };
         }
@@ -205,7 +213,7 @@ const driverOrderScene = new Scenes.WizardScene(
     // ── Step 0: enter — fetch the price card ──────────────────────────
     async (ctx) => {
         await ctx.reply('⏳ Запрашиваю текущий заказ…', Markup.removeKeyboard());
-        const state = await actionAndPoll(ctx.from.id, 'get_order_price');
+        const state = await actionAndPoll(ctx, 'get_order_price');
         if (!state.ok || (state.status && state.status !== 'DONE')) {
             await reportFailure(ctx, state);
             return goToMainMenu(ctx);
@@ -226,7 +234,7 @@ const driverOrderScene = new Scenes.WizardScene(
 
         if (text === '🔄 Обновить') {
             await ctx.reply('⏳ Обновляю…');
-            const state = await actionAndPoll(ctx.from.id, 'get_order_price');
+            const state = await actionAndPoll(ctx, 'get_order_price');
             if (!state.ok || state.status !== 'DONE') { await reportFailure(ctx, state); return goToMainMenu(ctx); }
             if (state.result?.noActiveOrder) {
                 await ctx.reply('🚫 Заказ уже завершён или отменён.');
@@ -262,7 +270,7 @@ const driverOrderScene = new Scenes.WizardScene(
         if (!action) return goToMainMenu(ctx);
 
         await ctx.reply('⏳ Передаю в систему…', Markup.removeKeyboard());
-        const state = await actionAndPoll(ctx.from.id, action);
+        const state = await actionAndPoll(ctx, action);
 
         if (state.status === 'DONE' && state.result?.noActiveOrder) {
             await ctx.reply('🚫 Заказа уже нет — наверное, его только что закрыли.');

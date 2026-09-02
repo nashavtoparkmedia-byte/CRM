@@ -1,6 +1,12 @@
 export type ContactAutomationSnapshotV1 = {
   id: string
   createdAt: Date
+  displayName: string
+  displayNameSource: string | null
+  masterSource: string | null
+  yandexDriverId: string | null
+  mainDriverId: string | null
+  mainDriverSelection: string | null
   canonicalPinned: boolean
   doNotMerge: boolean
   isArchived: boolean
@@ -25,6 +31,7 @@ export type ContactClassificationV1 = {
 }
 
 const CONTACT_SYSTEM_EVIDENCE_FIELDS = new Set([
+  'automaticMergeBlocks',
   'canonicalPinnedAt',
   'canonicalPinnedBy',
   'confirmedDriverClusterKeys',
@@ -33,21 +40,72 @@ const CONTACT_SYSTEM_EVIDENCE_FIELDS = new Set([
   'identityConflicts',
   'mergeRecoveryState',
   'mergedIntoContactId',
+  'parkCheckLastAttempt',
+  'parkCheckResult',
   'phoneEvidenceByPhoneId',
 ])
 
+const KNOWN_DISPLAY_NAME_SOURCES = new Set(['channel', 'yandex', 'manual'])
+const KNOWN_MASTER_SOURCES = new Set(['chat', 'yandex', 'manual'])
+
 function hasBusinessCustomFields(customFields: Record<string, unknown> | null): boolean {
   return Boolean(customFields && Object.keys(customFields).some(key => !CONTACT_SYSTEM_EVIDENCE_FIELDS.has(key)))
+}
+
+function stableValue(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableValue).join(',')}]`
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    return `{${Object.keys(record).sort().map(key => `${JSON.stringify(key)}:${stableValue(record[key])}`).join(',')}}`
+  }
+  return JSON.stringify(value) ?? String(value)
+}
+
+function meaningfulBusinessValue(value: unknown): boolean {
+  return value !== null && value !== undefined && (typeof value !== 'string' || Boolean(value.trim()))
+}
+
+function hasCompetingBusinessState(
+  left: ContactAutomationSnapshotV1,
+  right: ContactAutomationSnapshotV1,
+): boolean {
+  if (left.notes?.trim() && right.notes?.trim() && left.notes.trim() !== right.notes.trim()) return true
+  if (left.canonicalPinned && right.canonicalPinned) return true
+  const leftManualIdentity = left.displayNameSource === 'manual' || left.masterSource === 'manual'
+  const rightManualIdentity = right.displayNameSource === 'manual' || right.masterSource === 'manual'
+  if (leftManualIdentity !== rightManualIdentity) return true
+  if (leftManualIdentity && rightManualIdentity
+    && left.displayName.trim() !== right.displayName.trim()) return true
+  if (left.mainDriverId && right.mainDriverId
+    && (left.mainDriverId !== right.mainDriverId
+      || left.mainDriverSelection !== right.mainDriverSelection)) return true
+  if (left.yandexDriverId && right.yandexDriverId && left.yandexDriverId !== right.yandexDriverId) return true
+  const leftFields = left.customFields ?? {}
+  const rightFields = right.customFields ?? {}
+  for (const key of Object.keys(leftFields)) {
+    if (CONTACT_SYSTEM_EVIDENCE_FIELDS.has(key) || !(key in rightFields)) continue
+    if (!meaningfulBusinessValue(leftFields[key]) && !meaningfulBusinessValue(rightFields[key])) continue
+    if (stableValue(leftFields[key]) !== stableValue(rightFields[key])) return true
+  }
+  return false
 }
 
 export function classifyContactForAutomationV1(
   contact: ContactAutomationSnapshotV1,
 ): ContactClassificationV1 {
   const reasons: string[] = []
+  if (contact.displayNameSource === 'manual' || contact.masterSource === 'manual') {
+    reasons.push('manually_curated_identity')
+  }
+  if (!KNOWN_DISPLAY_NAME_SOURCES.has(contact.displayNameSource ?? '')
+    || !KNOWN_MASTER_SOURCES.has(contact.masterSource ?? '')) {
+    reasons.push('unknown_identity_source')
+  }
   if (contact.canonicalPinned) reasons.push('manual_canonical_pin')
   if (contact.doNotMerge) reasons.push('do_not_merge')
   if (contact.confirmedDriver) reasons.push('confirmed_driver')
   if (contact.driverRelationshipCount > 0) reasons.push('driver_relationship')
+  if (contact.mainDriverId || contact.mainDriverSelection === 'manual') reasons.push('main_driver_selection')
   if (contact.manualIdentityCount > 0) reasons.push('manual_identity')
   if (contact.activeTaskCount > 0) reasons.push('active_work')
   if (contact.callCount > 0) reasons.push('call_history')
@@ -102,6 +160,7 @@ export type AutomaticMergeEvidenceV1 = {
   trustedUniqueCurrentPhone: boolean
   phoneEvidenceRoot: string | null
   confirmedPersonEvidenceRoots: string[]
+  confirmedPersonKeys?: string[]
   normalizedVuEvidenceRoots: string[]
 }
 
@@ -125,7 +184,42 @@ export function evaluateAutomaticContactMergeV1(
 
   const leftClass = classifyContactForAutomationV1(left)
   const rightClass = classifyContactForAutomationV1(right)
-  const sameConfirmedPerson = left.confirmedPersonKeys.some(key => right.confirmedPersonKeys.includes(key))
+  if (leftClass.kind === 'substantive' && rightClass.kind === 'substantive'
+    && hasCompetingBusinessState(left, right)) {
+    return { decision: 'blocked', reason: 'business_state_collision' }
+  }
+  const leftConfirmedPersonKeys = [...new Set(left.confirmedPersonKeys)].sort()
+  const rightConfirmedPersonKeys = [...new Set(right.confirmedPersonKeys)].sort()
+  const evidenceConfirmedPersonKeys = [...new Set(evidence.confirmedPersonKeys ?? [])].sort()
+  const nonemptyContactKeySets = [leftConfirmedPersonKeys, rightConfirmedPersonKeys]
+    .filter(keys => keys.length > 0)
+  const bothContactsHaveKeys = nonemptyContactKeySets.length === 2
+  const contactsHaveIncompatibleKeys = bothContactsHaveKeys
+    && (leftConfirmedPersonKeys.length !== rightConfirmedPersonKeys.length
+      || leftConfirmedPersonKeys.some((key, index) => key !== rightConfirmedPersonKeys[index]))
+  const oneContactHasAmbiguousKeys = nonemptyContactKeySets.length === 1
+    && nonemptyContactKeySets[0].length !== 1
+  if (contactsHaveIncompatibleKeys || oneContactHasAmbiguousKeys) {
+    return { decision: 'blocked', reason: 'confirmed_person_key_mismatch' }
+  }
+  const suppliedConfirmedPersonEvidence = evidenceConfirmedPersonKeys.length > 0
+    || evidence.confirmedPersonEvidenceRoots.length > 0
+  const suppliedConfirmedPersonKey = evidenceConfirmedPersonKeys.length === 1
+    ? evidenceConfirmedPersonKeys[0]
+    : null
+  const consistentSuppliedConfirmation = Boolean(
+    suppliedConfirmedPersonKey
+    && evidence.confirmedPersonEvidenceRoots.length > 0
+    && nonemptyContactKeySets.length > 0
+    && nonemptyContactKeySets.every(keys => (
+      keys.length === 1 && keys[0] === suppliedConfirmedPersonKey
+    )),
+  )
+  if ((suppliedConfirmedPersonEvidence && !consistentSuppliedConfirmation)
+    || (bothContactsHaveKeys && !consistentSuppliedConfirmation)) {
+    return { decision: 'blocked', reason: 'confirmed_person_key_mismatch' }
+  }
+  const sameConfirmedPerson = suppliedConfirmedPersonEvidence && consistentSuppliedConfirmation
   const independentStrongRoots = new Set([
     ...evidence.confirmedPersonEvidenceRoots,
     ...evidence.normalizedVuEvidenceRoots,

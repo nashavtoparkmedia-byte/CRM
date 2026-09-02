@@ -9,6 +9,8 @@ export interface ContactConversationV1 {
   status: string
   contactId: string | null
   contactIdentityId: string | null
+  providerAccountId: string
+  transportConnectionId: string | null
 }
 
 export const FIND_AND_BACKFILL_CONTACT_CONVERSATION_COMMAND_V1 =
@@ -25,6 +27,9 @@ export interface FindAndBackfillContactConversationCommandV1 {
   contactId: string
   contactIdentityId: string
   channel: ContactConversationChannelV1
+  identityExternalId: string
+  exactExternalChatIds: string[]
+  providerAccountId: string | null
   allowContactFallback: boolean
 }
 
@@ -37,17 +42,25 @@ export interface OpenFallbackContactConversationCommandV1 {
   contract: typeof OPEN_FALLBACK_CONTACT_CONVERSATION_COMMAND_V1
   legacyDriverId: string | null
   channel: ContactConversationChannelV1
-  externalChatId: string
+  identityExternalId: string
+  exactExternalChatIds: string[]
   name: string | null
   contactId: string
   contactIdentityId: string
+  providerAccountId: string | null
 }
 
-export interface OpenFallbackContactConversationResultV1 {
-  contract: typeof OPEN_FALLBACK_CONTACT_CONVERSATION_RESULT_V1
-  conversation: ContactConversationV1
-  isNew: boolean
-}
+export type OpenFallbackContactConversationResultV1 =
+  | {
+      contract: typeof OPEN_FALLBACK_CONTACT_CONVERSATION_RESULT_V1
+      status: 'ready'
+      conversation: ContactConversationV1
+      isNew: boolean
+    }
+  | {
+      contract: typeof OPEN_FALLBACK_CONTACT_CONVERSATION_RESULT_V1
+      status: 'provider_account_unproven' | 'transport_unbound' | 'conversation_target_unproven'
+    }
 
 export class ContactConversationCommandValidationError extends Error {
   readonly code: 'INVALID_CONTRACT' | 'UNSUPPORTED_CONTRACT_VERSION'
@@ -95,12 +108,20 @@ function parseEnvelope(
   return input
 }
 
-function requireString(value: unknown, field: string): void {
+function requireString(value: unknown, field: string): asserts value is string {
   if (typeof value !== 'string' || value.trim() === '') invalid(`${field} is required`)
 }
 
 function requireChannel(value: unknown): void {
   if (typeof value !== 'string' || !CHANNELS.has(value)) invalid('channel is invalid')
+}
+
+function requireUniqueStrings(value: unknown, field: string): void {
+  if (!Array.isArray(value)
+    || value.some(item => typeof item !== 'string' || item.trim() === '')
+    || new Set(value).size !== value.length) {
+    invalid(`${field} must be an array of unique non-empty strings`)
+  }
 }
 
 export function parseFindAndBackfillContactConversationCommandV1(
@@ -110,11 +131,23 @@ export function parseFindAndBackfillContactConversationCommandV1(
     input,
     FIND_AND_BACKFILL_CONTACT_CONVERSATION_COMMAND_V1,
     'messaging.FindAndBackfillContactConversationCommand.',
-    ['contract', 'contactId', 'contactIdentityId', 'channel', 'allowContactFallback'],
+    [
+      'contract',
+      'contactId',
+      'contactIdentityId',
+      'channel',
+      'identityExternalId',
+      'exactExternalChatIds',
+      'providerAccountId',
+      'allowContactFallback',
+    ],
   )
   requireString(value.contactId, 'contactId')
   requireString(value.contactIdentityId, 'contactIdentityId')
   requireChannel(value.channel)
+  requireString(value.identityExternalId, 'identityExternalId')
+  requireUniqueStrings(value.exactExternalChatIds, 'exactExternalChatIds')
+  if (value.providerAccountId !== null) requireString(value.providerAccountId, 'providerAccountId')
   if (typeof value.allowContactFallback !== 'boolean') invalid('allowContactFallback must be a boolean')
   return value as unknown as FindAndBackfillContactConversationCommandV1
 }
@@ -130,17 +163,21 @@ export function parseOpenFallbackContactConversationCommandV1(
       'contract',
       'legacyDriverId',
       'channel',
-      'externalChatId',
+      'identityExternalId',
+      'exactExternalChatIds',
       'name',
       'contactId',
       'contactIdentityId',
+      'providerAccountId',
     ],
   )
   if (value.legacyDriverId !== null) requireString(value.legacyDriverId, 'legacyDriverId')
   requireChannel(value.channel)
-  requireString(value.externalChatId, 'externalChatId')
+  requireString(value.identityExternalId, 'identityExternalId')
+  requireUniqueStrings(value.exactExternalChatIds, 'exactExternalChatIds')
   if (value.name !== null && typeof value.name !== 'string') invalid('name must be a string or null')
   requireString(value.contactId, 'contactId')
   requireString(value.contactIdentityId, 'contactIdentityId')
+  if (value.providerAccountId !== null) requireString(value.providerAccountId, 'providerAccountId')
   return value as unknown as OpenFallbackContactConversationCommandV1
 }

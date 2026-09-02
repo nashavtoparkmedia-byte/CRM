@@ -64,6 +64,7 @@ export {
     attachProviderIdentityAliasV1,
     confirmDriverPersonV1,
     getConfirmedContactForDriverClusterV1,
+    isContactConfirmedMainDriverV1,
     reconcileDriverClusterContactV1,
     persistDriverClusterContradictionV1,
     runDriverClusterContactOwnershipV1,
@@ -100,11 +101,19 @@ export type {
 } from './contact-identity-maintenance'
 export * from './contact-automation-policy'
 export * from './automated-contact-merge-recovery'
+export {
+    markChannelIdentityConflictV1,
+    type MarkChannelIdentityConflictInputV1,
+} from './channel-identity-conflict'
 export type {
     ManualPhoneEvidenceCommandV1,
     ManualPhoneEvidenceResultV1,
     ProviderIdentityAliasCommandV1,
 } from './contact-phone-evidence'
+export type {
+    ContactParkCheckSnapshotV1,
+    ContactParkCheckStatusV1,
+} from './contact-park-check'
 export type {
     ConfirmDriverPersonResultV1,
     ReconcileDriverClusterResultV1,

@@ -1,7 +1,7 @@
 'use server'
 
 import { prisma } from '@/lib/prisma'
-import { initializeClient, destroyClient, sendMessage as waSendMessage, resetSyncGuard } from '@/lib/whatsapp/WhatsAppService'
+import { initializeClient, destroyClient, resetSyncGuard } from '@/lib/whatsapp/WhatsAppService'
 import { revalidatePath } from 'next/cache'
 import { DELETE_CONVERSATIONS_BY_CHANNEL_COMMAND_V1, DELETE_CONVERSATIONS_BY_ID_COMMAND_V1, DELETE_HISTORY_IMPORT_JOBS_FOR_CONNECTION_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { deleteConversationsByChannelV1, deleteConversationsByIdV1, deleteHistoryImportJobsForConnectionV1 } from '@/modules/messaging/public/v1'
@@ -370,11 +370,4 @@ export async function getWhatsAppMessages(chatId: string) {
         orderBy: { timestamp: 'asc' },
         take: 100
     })
-}
-
-export async function sendWhatsAppMessage(connectionId: string, chatId: string, text: string, quotedMsgId?: string) {
-    console.log(`[WA-ACTIONS] sendWhatsAppMessage called for: ${connectionId}, chat: ${chatId}`)
-    const result = await waSendMessage(connectionId, chatId, text, quotedMsgId)
-    revalidatePath(`/whatsapp/chat/${chatId}`)
-    return result
 }

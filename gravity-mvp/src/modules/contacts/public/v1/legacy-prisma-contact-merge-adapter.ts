@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import type {
   ContactMergeSourceV1,
@@ -16,6 +17,7 @@ import {
   jsonRecord,
   phoneEvidenceState,
 } from './contact-evidence-state'
+import { composeContactCustomFieldsV1 } from '../../internal/contact-merge-state-composer'
 
 const contactMergeInclude = {
   phones: true,
@@ -23,12 +25,21 @@ const contactMergeInclude = {
   chats: { select: { id: true } },
   tasks: { select: { id: true } },
   calls: { select: { id: true } },
-  driverProfiles: { select: { id: true } },
-  driver: { select: { id: true } },
-  mainDriver: { select: { id: true } },
+  driverProfiles: { select: { id: true, personResolutionStatus: true } },
+  driver: { select: { id: true, personResolutionStatus: true } },
+  mainDriver: { select: { id: true, personResolutionStatus: true } },
 } satisfies Prisma.ContactInclude
 
 type ContactMergeRow = Prisma.ContactGetPayload<{ include: typeof contactMergeInclude }>
+
+class LockedContactMergeLineageError extends Error {
+  readonly code = 'CONTACT_OWNERSHIP_INVARIANT'
+
+  constructor(message: string) {
+    super(message)
+    this.name = 'LockedContactMergeLineageError'
+  }
+}
 
 function normalizeContactMergeRow(row: ContactMergeRow | null): ContactMergeSourceV1 | null {
   if (!row) return null
@@ -60,6 +71,10 @@ function normalizeContactMergeRow(row: ContactMergeRow | null): ContactMergeSour
     driverProfiles: [...driverProfiles.values()],
     driverConfirmations,
   }
+}
+
+function isCurrentCompletedMerge(snapshotBefore: unknown): boolean {
+  return jsonRecord(jsonRecord(snapshotBefore)._merge).recoveryState !== 'recovered'
 }
 
 /**
@@ -107,17 +122,78 @@ export function makeLegacyPrismaContactMergeRepositoriesV1(
       },
 
       async hasCompletedMerge(sourceId, targetId) {
-        const existing = await transaction.contactMerge.findFirst({
+        if (!lockedScope?.contactIds.includes(sourceId)
+          || !lockedScope.contactIds.includes(targetId)) {
+          throw new LockedContactMergeLineageError(
+            `Completed merge edge ${sourceId} -> ${targetId} is outside the locked merge lineage`,
+          )
+        }
+        const existing = await transaction.contactMerge.findMany({
           where: { mergedId: sourceId, survivorId: targetId, action: 'merge' },
-          select: { id: true },
+          select: { snapshotBefore: true },
         })
-        return existing !== null
+        return existing.some(merge => isCurrentCompletedMerge(merge.snapshotBefore))
       },
 
       async lockContactPairOrdered(survivorId, mergedId) {
         lockedScope = await lockContactOwnershipRows(transaction, {
           contactIds: [survivorId, mergedId],
         })
+      },
+
+      async findLockedMergeLineageNode(contactId) {
+        if (!lockedScope?.contactIds.includes(contactId)) {
+          throw new LockedContactMergeLineageError(
+            `Contact ${contactId} is outside the locked merge lineage`,
+          )
+        }
+        const contact = await transaction.contact.findUnique({
+          where: { id: contactId },
+          select: { id: true, isArchived: true, customFields: true },
+        })
+        if (!contact) return null
+        return {
+          id: contact.id,
+          isArchived: contact.isArchived,
+          mergedIntoContactId: contactAutomationState(contact.customFields).mergedIntoContactId,
+        }
+      },
+
+      async hasCompletedMergePath(sourceId, targetId) {
+        if (!lockedScope?.contactIds.includes(sourceId)
+          || !lockedScope.contactIds.includes(targetId)) {
+          throw new LockedContactMergeLineageError(
+            `Completed merge path ${sourceId} -> ${targetId} is outside the locked merge lineage`,
+          )
+        }
+        if (sourceId === targetId) return true
+        const edges = await transaction.contactMerge.findMany({
+          where: {
+            action: 'merge',
+            mergedId: { in: lockedScope.contactIds },
+            survivorId: { in: lockedScope.contactIds },
+          },
+          select: { mergedId: true, survivorId: true, snapshotBefore: true },
+        })
+        const adjacency = new Map<string, Set<string>>()
+        for (const edge of edges) {
+          if (!isCurrentCompletedMerge(edge.snapshotBefore)) continue
+          const targets = adjacency.get(edge.mergedId) ?? new Set<string>()
+          targets.add(edge.survivorId)
+          adjacency.set(edge.mergedId, targets)
+        }
+        const visited = new Set<string>()
+        const pending = [sourceId]
+        while (pending.length > 0) {
+          const current = pending.shift()!
+          if (visited.has(current)) continue
+          visited.add(current)
+          for (const next of adjacency.get(current) ?? []) {
+            if (next === targetId) return true
+            if (!visited.has(next)) pending.push(next)
+          }
+        }
+        return false
       },
 
       async deriveAutomaticMergeEvidence(leftContactId, rightContactId) {
@@ -146,6 +222,7 @@ export function makeLegacyPrismaContactMergeRepositoriesV1(
             trustedUniqueCurrentPhone: false,
             phoneEvidenceRoot: null,
             confirmedPersonEvidenceRoots: [],
+            confirmedPersonKeys: [],
             normalizedVuEvidenceRoots: [],
           }
         }
@@ -204,21 +281,42 @@ export function makeLegacyPrismaContactMergeRepositoriesV1(
           return Array.isArray(items)
             ? items
               .map(item => jsonRecord(item))
-              .filter(item => item.status === 'confirmed'
+              .filter(item => (item.status === 'confirmed' || item.status === 'needs_reconciliation')
                 && typeof item.profileClusterKey === 'string'
-                && typeof item.evidenceRoot === 'string')
+                && Boolean(item.profileClusterKey.trim())
+                && typeof item.evidenceRoot === 'string'
+                && Boolean(item.evidenceRoot.trim()))
             : []
         }
-        const leftConfirmations = storedConfirmations(left.customFields)
-        const rightConfirmationKeys = new Set(
-          storedConfirmations(right.customFields).map(item => String(item.profileClusterKey)),
+        const pairConfirmations = (customFields: unknown, otherContactId: string) => (
+          storedConfirmations(customFields).filter(item => (
+            item.status === 'confirmed'
+            || (item.status === 'needs_reconciliation' && item.reconciliationContactId === otherContactId)
+          ))
         )
+        const leftConfirmations = pairConfirmations(left.customFields, rightContactId)
+        const rightConfirmations = pairConfirmations(right.customFields, leftContactId)
+        const rightConfirmationKeys = new Set(rightConfirmations.map(item => String(item.profileClusterKey)))
         const sharedConfirmationKeys = [...new Set(leftConfirmations
           .map(item => String(item.profileClusterKey))
           .filter(key => rightConfirmationKeys.has(key)))]
           .sort()
         const confirmedPersonEvidenceRoots: string[] = []
+        const confirmedPersonKeys: string[] = []
         for (const profileClusterKey of sharedConfirmationKeys) {
+          const pairItems = [
+            ...leftConfirmations.filter(item => item.profileClusterKey === profileClusterKey),
+            ...rightConfirmations.filter(item => item.profileClusterKey === profileClusterKey),
+          ]
+          if (!pairItems.some(item => item.status === 'confirmed')) continue
+          const leftRoots = new Set(leftConfirmations
+            .filter(item => item.profileClusterKey === profileClusterKey)
+            .map(item => String(item.evidenceRoot)))
+          const rightRoots = new Set(rightConfirmations
+            .filter(item => item.profileClusterKey === profileClusterKey)
+            .map(item => String(item.evidenceRoot)))
+          const distinctRoots = [...new Set([...leftRoots, ...rightRoots])].sort()
+          if (leftRoots.size === 0 || rightRoots.size === 0 || distinctRoots.length < 2) continue
           const owners = await transaction.contact.findMany({
             where: {
               isArchived: false,
@@ -230,16 +328,18 @@ export function makeLegacyPrismaContactMergeRepositoriesV1(
             select: { id: true, customFields: true },
           })
           const eligibleOwners = owners.filter(owner => storedConfirmations(owner.customFields)
-            .some(item => String(item.profileClusterKey) === profileClusterKey))
+            .some(item => String(item.profileClusterKey) === profileClusterKey
+              && (item.status === 'confirmed'
+                || (item.status === 'needs_reconciliation'
+                  && typeof item.reconciliationContactId === 'string'
+                  && Boolean(item.reconciliationContactId)))))
           if ([...new Set(eligibleOwners.map(owner => owner.id))].sort().join('\u0000') !== contactIds.join('\u0000')) {
             continue
           }
-          const roots = eligibleOwners.flatMap(owner => storedConfirmations(owner.customFields)
-            .filter(item => String(item.profileClusterKey) === profileClusterKey)
-            .map(item => String(item.evidenceRoot)))
           confirmedPersonEvidenceRoots.push(
-            `confirmed-person:${profileClusterKey}:${[...new Set(roots)].sort().join('|')}`,
+            `confirmed-person:${profileClusterKey}:${distinctRoots.join('|')}`,
           )
+          confirmedPersonKeys.push(profileClusterKey)
         }
 
         const currentVuKeys = (contact: typeof left) => new Set(contact.driverProfiles
@@ -274,7 +374,47 @@ export function makeLegacyPrismaContactMergeRepositoriesV1(
           trustedUniqueCurrentPhone: phoneEvidenceRoot !== null,
           phoneEvidenceRoot,
           confirmedPersonEvidenceRoots: [...new Set(confirmedPersonEvidenceRoots)].sort(),
+          confirmedPersonKeys: [...new Set(confirmedPersonKeys)].sort(),
           normalizedVuEvidenceRoots,
+        }
+      },
+
+      async recordAutomaticMergeBlock(leftContactId, rightContactId, reason) {
+        for (const [contactId, otherContactId] of [
+          [leftContactId, rightContactId],
+          [rightContactId, leftContactId],
+        ]) {
+          const contact = await transaction.contact.findUnique({
+            where: { id: contactId },
+            select: { customFields: true },
+          })
+          const contactFields = jsonRecord(contact?.customFields)
+          const current = Array.isArray(contactFields.automaticMergeBlocks)
+            ? contactFields.automaticMergeBlocks
+            : []
+          const duplicate = current.some(item => {
+            const block = jsonRecord(item)
+            return block.status === 'open'
+              && block.otherContactId === otherContactId
+              && block.reason === reason
+          })
+          if (duplicate) continue
+          await transaction.contact.update({
+            where: { id: contactId },
+            data: {
+              customFields: {
+                ...contactFields,
+                automaticMergeBlocks: [...current, {
+                  id: randomUUID(),
+                  otherContactId,
+                  reason,
+                  source: 'automatic-merge-policy',
+                  detectedAt: new Date().toISOString(),
+                  status: 'open',
+                }].slice(-100),
+              } as Prisma.InputJsonObject,
+            },
+          })
         }
       },
 
@@ -398,10 +538,6 @@ export function makeLegacyPrismaContactMergeRepositoriesV1(
           ? target.customFields as Prisma.JsonObject
           : {}
         const useSourceMainDriver = !target.mainDriverId && Boolean(source.mainDriverId)
-        const sourceAutomation = contactAutomationState(sourceFields)
-        const targetAutomation = contactAutomationState(targetFields)
-        const sourcePhoneEvidence = jsonRecord(sourceFields.phoneEvidenceByPhoneId)
-        const targetPhoneEvidence = jsonRecord(targetFields.phoneEvidenceByPhoneId)
         await transaction.contact.update({
           where: { id: sourceContactId },
           data: { yandexDriverId: null, mainDriverId: null },
@@ -416,12 +552,12 @@ export function makeLegacyPrismaContactMergeRepositoriesV1(
             mainDriverSelectedAt: useSourceMainDriver ? source.mainDriverSelectedAt : target.mainDriverSelectedAt,
             tags: [...new Set([...target.tags, ...source.tags])],
             notes: target.notes || source.notes,
-            customFields: {
-              ...sourceFields,
-              ...targetFields,
-              doNotMerge: targetAutomation.doNotMerge || sourceAutomation.doNotMerge,
-              phoneEvidenceByPhoneId: { ...sourcePhoneEvidence, ...targetPhoneEvidence },
-            } as Prisma.InputJsonObject,
+            customFields: composeContactCustomFieldsV1({
+              sourceContactId,
+              targetContactId,
+              sourceFields,
+              targetFields,
+            }) as Prisma.InputJsonObject,
           },
         })
       },

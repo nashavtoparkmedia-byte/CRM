@@ -2,9 +2,8 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { readFileSync } from 'fs'
 import path from 'path'
 
-const { prismaMock } = vi.hoisted(() => ({
-  prismaMock: {
-    $queryRaw: vi.fn(),
+const { prismaMock, transactionMock } = vi.hoisted(() => {
+  const models = {
     driver: {
       findUnique: vi.fn(),
       findMany: vi.fn(),
@@ -15,17 +14,32 @@ const { prismaMock } = vi.hoisted(() => ({
     },
     contactPhone: {
       findFirst: vi.fn(),
+      findUnique: vi.fn(),
       findMany: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
     },
     contact: {
       findUnique: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
     },
-  },
-}))
+  }
+  return {
+    prismaMock: {
+      $queryRaw: vi.fn(),
+      $transaction: vi.fn(),
+      ...models,
+    },
+    transactionMock: {
+      // Coordinator admission/row-lock/postcondition SQL is intentionally
+      // isolated from DriverMatchService's own raw-query result queue.
+      $queryRaw: vi.fn(),
+      ...models,
+    },
+  }
+})
 
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 
@@ -69,12 +83,50 @@ function contactPhoneRecord(
   }
 }
 
+function createdContactPhone(id = 'phone-1', contactId = 'contact-1') {
+  return {
+    id,
+    contactId,
+    phone: '+79990000000',
+    isActive: true,
+    isPrimary: true,
+    isTemporary: false,
+    source: 'yandex',
+    label: null,
+    expiresAt: null,
+    verifiedAt: null,
+  }
+}
+
 function readProjectFile(relativePath: string) {
   return readFileSync(path.join(process.cwd(), relativePath), 'utf8')
 }
 
 beforeEach(() => {
   vi.resetAllMocks()
+  prismaMock.$transaction.mockImplementation(async (
+    work: (transaction: typeof transactionMock) => Promise<unknown>,
+  ) => work(transactionMock))
+  transactionMock.$queryRaw.mockResolvedValue([])
+  prismaMock.contact.findUnique.mockResolvedValue({
+    id: 'contact-1',
+    isArchived: false,
+    primaryPhoneId: null,
+    displayName: 'Driver One',
+    displayNameSource: 'yandex',
+    customFields: {},
+    phones: [{ id: 'phone-1', phone: '+79990000000' }],
+  })
+  prismaMock.contactPhone.findMany.mockResolvedValue([])
+  prismaMock.contactPhone.findFirst.mockResolvedValue({
+    id: 'phone-1',
+    contactId: 'contact-1',
+    isActive: true,
+  })
+  prismaMock.contactPhone.findUnique.mockResolvedValue(null)
+  prismaMock.contactPhone.updateMany.mockResolvedValue({ count: 0 })
+  prismaMock.contactPhone.update.mockResolvedValue(createdContactPhone())
+  prismaMock.contact.update.mockResolvedValue({})
   vi.spyOn(console, 'log').mockImplementation(() => {})
   vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
@@ -322,7 +374,7 @@ describe('Yandex monitoring sync Contact creation idempotency', () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
     prismaMock.contact.create.mockResolvedValueOnce({ id: 'contact-1', primaryPhoneId: null })
-    prismaMock.contactPhone.create.mockResolvedValueOnce({ id: 'phone-1' })
+    prismaMock.contactPhone.create.mockResolvedValueOnce(createdContactPhone())
     prismaMock.contact.update.mockResolvedValueOnce({})
 
     const result = await syncContactForDriver('yd-1', 'Driver One', '+7 999 000-00-00')
@@ -335,10 +387,6 @@ describe('Yandex monitoring sync Contact creation idempotency', () => {
         displayNameSource: 'yandex',
         masterSource: 'yandex',
         yandexDriverId: 'yd-1',
-      },
-      select: {
-        id: true,
-        primaryPhoneId: true,
       },
     })
   })
@@ -358,7 +406,7 @@ describe('Yandex monitoring sync Contact creation idempotency', () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([contactPhoneRecord('contact-1')])
     prismaMock.contact.create.mockResolvedValueOnce({ id: 'contact-1', primaryPhoneId: null })
-    prismaMock.contactPhone.create.mockResolvedValueOnce({ id: 'phone-1' })
+    prismaMock.contactPhone.create.mockResolvedValueOnce(createdContactPhone())
     prismaMock.contact.update.mockResolvedValueOnce({})
 
     const first = await syncContactForDriver('yd-1', 'Driver One', '+7 999 000-00-00')
@@ -378,7 +426,7 @@ describe('Yandex monitoring sync Contact creation idempotency', () => {
       phones: [],
     })
     prismaMock.contactPhone.findMany.mockResolvedValueOnce([])
-    prismaMock.contactPhone.create.mockResolvedValueOnce({ id: 'phone-1' })
+    prismaMock.contactPhone.create.mockResolvedValueOnce(createdContactPhone())
     prismaMock.contact.update.mockResolvedValueOnce({})
 
     const result = await syncContactForDriver('yd-1', 'Driver One', '+7 999 000-00-00')
@@ -391,6 +439,9 @@ describe('Yandex monitoring sync Contact creation idempotency', () => {
         phone: '+79990000000',
         source: 'yandex',
         isPrimary: true,
+        isTemporary: false,
+        label: null,
+        expiresAt: null,
       },
     })
   })
@@ -403,7 +454,7 @@ describe('Yandex monitoring sync Contact creation idempotency', () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
     prismaMock.contact.create.mockRejectedValueOnce({ code: 'P2002' })
-    prismaMock.contactPhone.create.mockResolvedValueOnce({ id: 'phone-1' })
+    prismaMock.contactPhone.create.mockResolvedValueOnce(createdContactPhone())
     prismaMock.contact.update.mockResolvedValueOnce({})
 
     const result = await syncContactForDriver('yd-1', 'Driver One', '+7 999 000-00-00')
@@ -450,7 +501,7 @@ describe('Yandex monitoring sync Contact creation idempotency', () => {
       phones: [],
     })
     prismaMock.contactPhone.findMany.mockResolvedValueOnce([])
-    prismaMock.contactPhone.create.mockResolvedValueOnce({ id: 'phone-1' })
+    prismaMock.contactPhone.create.mockResolvedValueOnce(createdContactPhone())
     prismaMock.contact.update.mockResolvedValueOnce({})
 
     const result = await syncContactForDriver('yd-1', 'Driver One', '+7 999 000-00-00')
@@ -525,6 +576,7 @@ describe('Yandex monitoring sync Contact creation idempotency', () => {
     })
     prismaMock.contactPhone.findMany
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([contactPhoneRecord('contact-1')])
     prismaMock.contactPhone.create.mockRejectedValueOnce({ code: 'P2002' })
     prismaMock.contact.update.mockResolvedValueOnce({})
@@ -548,6 +600,7 @@ describe('Yandex monitoring sync Contact creation idempotency', () => {
       phones: [],
     })
     prismaMock.contactPhone.findMany
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([contactPhoneRecord('contact-other')])
     prismaMock.contactPhone.create.mockRejectedValueOnce({ code: 'P2002' })
@@ -576,26 +629,13 @@ describe('Driver matching source-level route safety', () => {
       .not.toContain('prisma.contact.update')
   })
 
-  test('legacy MAX webhook blocks name and active-chat driver fallback', () => {
+  test('legacy MAX webhook is a static tombstone with no identity fallback', () => {
     const source = readProjectFile('src/app/api/webhook/max/route.ts')
-    const noPhoneSection = source.split('if (phoneDigits.length < 10)')[1].split('// Use MAX internal chatId')[0]
-
-    expect(source).toContain('Deprecated route /api/webhook/max')
-    expect(noPhoneSection).toContain("event: 'legacy_max_name_phone_resolution_blocked'")
-    expect(noPhoneSection).not.toContain('DriverMatchService.findDriverId')
-    expect(noPhoneSection).not.toContain('recentDriverChats')
-    expect(noPhoneSection).not.toContain('matchedActiveChat')
-    expect(noPhoneSection).not.toContain('existingChatByName')
-    expect(noPhoneSection).not.toContain('phoneDigits = matched')
-  })
-
-  test('legacy MAX old-chat migration does not choose first Driver by phone', () => {
-    const source = readProjectFile('src/app/api/webhook/max/route.ts')
-    const migrationSection = source.split('// Migration pass 2:')[1].split('// 1. Upsert unified Chat')[0]
-
-    expect(migrationSection).toContain('findMany')
-    expect(migrationSection).not.toContain('driver.findFirst')
-    expect(migrationSection).toContain('driverCandidates.length === 1')
-    expect(migrationSection).toContain("event: 'legacy_max_old_chat_migration_ambiguous_driver_phone'")
+    expect(source).toContain('MAX_LEGACY_WEBHOOK_RETIRED')
+    expect(source).toContain("replacement: '/api/webhooks/max'")
+    expect(source).not.toContain('prisma')
+    expect(source).not.toContain('await req.json')
+    expect(source).not.toContain('externalChatId =')
+    expect(source).not.toContain('phoneDigits')
   })
 })

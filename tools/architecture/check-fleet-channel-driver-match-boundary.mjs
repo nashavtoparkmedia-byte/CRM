@@ -13,7 +13,6 @@ const sha256 = (source) => createHash('sha256').update(source).digest('hex')
 const implementationPath = 'gravity-mvp/src/lib/DriverMatchService.ts'
 const publicPath = 'gravity-mvp/src/modules/fleet-operations/public/v1/channel-driver-match.ts'
 const consumers = [
-    'gravity-mvp/src/app/api/webhook/max/route.ts',
     'gravity-mvp/src/app/api/webhook/telegram/route.ts',
     'gravity-mvp/src/app/api/webhooks/max/route.ts',
     'gravity-mvp/src/app/tg-actions.ts',

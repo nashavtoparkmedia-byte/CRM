@@ -4,6 +4,10 @@ import { broadcastChatMessage } from '@/lib/messageStreamBus'
 import { getMaxChannelDeliveryV1, getTelegramChannelDeliveryV1, getWhatsAppChannelDeliveryV1 } from '@/modules/messaging/public/v1/channel-delivery-runtime'
 import { PATCH_MESSAGE_METADATA_COMMAND_V1 } from '@/contracts/messaging/v1'
 import { patchMessageMetadataV1 } from '@/modules/messaging/public/v1'
+import {
+    prepareOutboundConversationV1,
+    type PreparedOutboundConversationV1,
+} from '@/modules/messaging/public/v1/outbound-conversation-identity-runtime'
 
 /**
  * POST /api/messages/reaction
@@ -30,7 +34,12 @@ export async function POST(req: NextRequest) {
                 chatId: true,
                 chat: {
                     select: {
+                        id: true,
+                        contactId: true,
+                        contactIdentityId: true,
+                        channel: true,
                         externalChatId: true,
+                        chatType: true,
                         metadata: true,
                     }
                 }
@@ -39,6 +48,14 @@ export async function POST(req: NextRequest) {
 
         if (!msg) {
             return NextResponse.json({ error: 'Message not found' }, { status: 404 })
+        }
+        const outbound = await prepareOutboundConversationV1(msg.chat)
+        if (
+            !outbound.chatId
+            || outbound.chatId !== msg.chatId
+            || outbound.channel !== msg.channel
+        ) {
+            throw new Error('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
         }
 
         const metadata = (msg.metadata as Record<string, any>) || {}
@@ -59,12 +76,10 @@ export async function POST(req: NextRequest) {
         if (msg.channel === 'max') {
             try {
                 const result = await sendReactionToChannel(
-                    msg.channel,
+                    outbound,
                     msg.externalId,
-                    msg.chat?.externalChatId || '',
                     emoji,
                     isRemoving,
-                    msg.chat?.metadata,
                 )
                 if (!result.reactionConfirmed) {
                     console.log('[MAX_DELIVERY]', JSON.stringify({
@@ -73,7 +88,7 @@ export async function POST(req: NextRequest) {
                         status: result.status || 'send_requested',
                         crmMessageId: msg.id,
                         maxMessageId: msg.externalId,
-                        conversationId: msg.chat?.externalChatId || '',
+                        conversationId: outbound.target,
                         error: null,
                     }))
                     return NextResponse.json({
@@ -102,7 +117,7 @@ export async function POST(req: NextRequest) {
         // Send reaction to messenger channel (best-effort, don't fail on error)
         if (msg.channel !== 'max') {
             try {
-                await sendReactionToChannel(msg.channel || '', msg.externalId, msg.chat?.externalChatId || '', emoji, isRemoving, msg.chat?.metadata)
+                await sendReactionToChannel(outbound, msg.externalId, emoji, isRemoving)
             } catch (err: any) {
                 console.warn(`[API/reaction] Failed to send reaction to ${msg.channel}:`, err.message)
             }
@@ -116,23 +131,21 @@ export async function POST(req: NextRequest) {
 }
 
 async function sendReactionToChannel(
-    channel: string,
+    outbound: PreparedOutboundConversationV1,
     externalMsgId: string | null | undefined,
-    externalChatId: string,
     emoji: string,
     isRemoving: boolean,
-    chatMetadata: any
 ): Promise<{ reactionConfirmed: boolean; status?: string }> {
     if (!externalMsgId) {
         console.log(`[reaction] No externalId for message, skipping channel delivery`)
         return { reactionConfirmed: false }
     }
 
-    switch (channel) {
+    switch (outbound.channel) {
         case 'whatsapp':
             await getWhatsAppChannelDeliveryV1().sendReaction({
-                connectionId: chatMetadata?.connectionId,
-                chatId: externalChatId,
+                connectionId: outbound.connectionId,
+                chatId: outbound.target,
                 messageId: externalMsgId,
                 emoji,
                 remove: isRemoving,
@@ -140,8 +153,11 @@ async function sendReactionToChannel(
             return { reactionConfirmed: true }
         case 'telegram':
             await getTelegramChannelDeliveryV1().sendReaction({
-                connectionId: chatMetadata?.connectionId,
-                chatId: externalChatId,
+                connectionId: outbound.connectionId,
+                internalChatId: outbound.chatId!,
+                providerAccountId: outbound.providerAccountId,
+                identityTarget: outbound.identityTarget,
+                chatId: outbound.target,
                 messageId: externalMsgId,
                 emoji,
                 remove: isRemoving,
@@ -149,13 +165,16 @@ async function sendReactionToChannel(
             return { reactionConfirmed: true }
         case 'max':
             return getMaxChannelDeliveryV1().sendReaction({
-                chatId: externalChatId.replace(/^max:/, ''),
+                chatId: outbound.target,
                 messageId: externalMsgId,
                 emoji,
                 remove: isRemoving,
+                providerAccountId: outbound.providerAccountId,
+                connectionId: outbound.connectionId,
+                isPersonal: outbound.isMaxPersonal,
             })
         default:
-            console.log(`[reaction] Channel ${channel} not supported for reactions`)
+            console.log(`[reaction] Channel ${outbound.channel} not supported for reactions`)
             return { reactionConfirmed: false }
     }
 }

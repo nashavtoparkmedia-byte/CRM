@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { contactOwnershipBusyResultV1 } from '@/modules/contacts/public/v1'
-import { manageContactPhoneEvidenceV1 } from '@/modules/contacts/public/v1'
+import { contactOwnershipBusyResultV1, manageContactPhoneEvidenceV1 } from '@/modules/contacts/public/v1'
+import {
+  getIntegrationAdminPrincipal,
+  isExactSameOriginMutationRequest,
+} from '@/modules/identity-access/public/v1'
 
 /**
  * DELETE /api/contacts/:id/phones/:phoneId
@@ -27,6 +30,14 @@ export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; phoneId: string }> },
 ) {
+  if (!isExactSameOriginMutationRequest(req)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  const principal = await getIntegrationAdminPrincipal()
+  if (!principal) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const { id: contactId, phoneId } = await params
 
@@ -34,7 +45,7 @@ export async function DELETE(
       operation: 'set_state',
       contactId,
       phoneId,
-      actor: req.headers.get('x-crm-user-id') || 'operator:unknown',
+      actor: principal.id,
       basis: 'manual removal',
       lifecycle: 'removed',
       freshness: 'stale',
@@ -56,6 +67,14 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; phoneId: string }> },
 ) {
+  if (!isExactSameOriginMutationRequest(req)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  const principal = await getIntegrationAdminPrincipal()
+  if (!principal) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const { id: contactId, phoneId } = await params
     const body = await req.json().catch(() => ({}))
@@ -64,7 +83,7 @@ export async function PATCH(
       operation: 'set_state',
       contactId,
       phoneId,
-      actor: String(body.actor || req.headers.get('x-crm-user-id') || 'operator:unknown'),
+      actor: principal.id,
       basis: String(body.basis || 'manual phone update'),
       ...(typeof body.lifecycle === 'string' ? { lifecycle: body.lifecycle } : {}),
       ...(typeof body.freshness === 'string' ? { freshness: body.freshness } : {}),

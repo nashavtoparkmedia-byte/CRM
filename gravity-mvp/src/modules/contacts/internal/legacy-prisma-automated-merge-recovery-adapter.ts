@@ -14,6 +14,7 @@ import {
   contactAutomationState,
   jsonRecord,
 } from '../public/v1/contact-evidence-state'
+import { composeContactCustomFieldsV1 } from './contact-merge-state-composer'
 
 type PhoneSnapshot = { id: string; isActive: boolean; isPrimary: boolean }
 type ContactSnapshot = {
@@ -34,7 +35,7 @@ type ContactSnapshot = {
     customFields: unknown
   }
   phones: PhoneSnapshot[]
-  identities: Array<{ id: string }>
+  identities: Array<{ id: string; phoneId: string | null }>
   chatIds: string[]
   taskIds: string[]
   callIds: string[]
@@ -118,8 +119,6 @@ function expectedComposedPrimary(source: ContactSnapshot, survivor: ContactSnaps
 function expectedComposedContact(source: ContactSnapshot, survivor: ContactSnapshot) {
   const sourceFields = isRecord(source.contact.customFields) ? source.contact.customFields : {}
   const survivorFields = isRecord(survivor.contact.customFields) ? survivor.contact.customFields : {}
-  const sourcePhones = jsonRecord(sourceFields.phoneEvidenceByPhoneId)
-  const survivorPhones = jsonRecord(survivorFields.phoneEvidenceByPhoneId)
   return {
     displayName: survivor.contact.displayName,
     displayNameSource: survivor.contact.displayNameSource,
@@ -138,12 +137,12 @@ function expectedComposedContact(source: ContactSnapshot, survivor: ContactSnaps
     notes: survivor.contact.notes || source.contact.notes,
     tags: [...new Set([...survivor.contact.tags, ...source.contact.tags])],
     doNotMerge: survivor.contact.doNotMerge || source.contact.doNotMerge,
-    customFields: {
-      ...sourceFields,
-      ...survivorFields,
-      doNotMerge: survivor.contact.doNotMerge || source.contact.doNotMerge,
-      phoneEvidenceByPhoneId: { ...sourcePhones, ...survivorPhones },
-    },
+    customFields: composeContactCustomFieldsV1({
+      sourceContactId: source.contact.id,
+      targetContactId: survivor.contact.id,
+      sourceFields,
+      targetFields: survivorFields,
+    }),
     primaryPhoneId: expectedComposedPrimary(source, survivor),
   }
 }
@@ -197,6 +196,21 @@ export function makePrismaAutomatedMergeRecoveryContactsRepositoryV1(
       if (merge.merged.identities.length > 0 || merge.merged.phones.length > 0) {
         return { status: 'blocked', reason: 'loser_received_new_identity_state', eligibleAttempt: true }
       }
+      const dependentMerges = await transaction.contactMerge.findMany({
+        where: { survivorId: merge.mergedId, action: 'merge' },
+        select: {
+          merged: { select: { id: true, isArchived: true, customFields: true } },
+        },
+      })
+      if (dependentMerges.some(dependent => (
+        dependent.merged.isArchived
+        && contactAutomationState(dependent.merged.customFields).mergedIntoContactId !== merge.mergedId
+      ))) {
+        // setMergedRedirect flattens descendants when A -> B is followed by
+        // B -> C. Restoring B -> C alone would otherwise leave A pointing at
+        // C instead of its restored canonical B.
+        return { status: 'blocked', reason: 'dependent_merge_lineage_redirect_changed', eligibleAttempt: true }
+      }
 
       const sourceIdentityIds = snapshot.identities.map(identity => identity.id)
       const survivorIdentityIds = snapshot.survivorBefore.identities.map(identity => identity.id)
@@ -206,10 +220,28 @@ export function makePrismaAutomatedMergeRecoveryContactsRepositoryV1(
         ...sourceIdentityIds,
         ...survivorIdentityIds,
       ])) return { status: 'blocked', reason: 'identity_set_changed_or_deduplicated', eligibleAttempt: true }
+      const expectedIdentityPhoneIds = new Map(
+        [...snapshot.identities, ...snapshot.survivorBefore.identities]
+          .map(identity => [identity.id, identity.phoneId] as const),
+      )
+      if (merge.survivor.identities.some(identity => (
+        expectedIdentityPhoneIds.get(identity.id) !== identity.phoneId
+      ))) {
+        return { status: 'blocked', reason: 'identity_phone_link_changed', eligibleAttempt: true }
+      }
       if (!sameIds(merge.survivor.phones.map(phone => phone.id), [
         ...sourcePhoneIds,
         ...survivorPhoneIds,
       ])) return { status: 'blocked', reason: 'phone_set_changed_or_deduplicated', eligibleAttempt: true }
+      const expectedPhoneState = new Map(
+        [...snapshot.phones, ...snapshot.survivorBefore.phones]
+          .map(phone => [phone.id, phone] as const),
+      )
+      if (merge.survivor.phones.some(phone => (
+        expectedPhoneState.get(phone.id)?.isActive !== phone.isActive
+      ))) {
+        return { status: 'blocked', reason: 'phone_lifecycle_state_changed', eligibleAttempt: true }
+      }
 
       const composed = expectedComposedContact(snapshot, snapshot.survivorBefore)
       if (merge.survivor.isArchived
@@ -355,16 +387,10 @@ export function makePrismaAutomatedMergeRecoveryContactsRepositoryV1(
           }),
         },
       })
-      for (const contactId of [input.mergedId, input.survivorId]) {
-        const contact = await transaction.contact.findUnique({ where: { id: contactId }, select: { customFields: true } })
-        const fields = { ...jsonRecord(contact?.customFields) }
-        delete fields.mergeRecoveryState
-        delete fields.mergedIntoContactId
-        await transaction.contact.update({
-          where: { id: contactId },
-          data: { customFields: fields as Prisma.InputJsonObject },
-        })
-      }
+      // contacts.restore has already reinstated each exact pre-merge snapshot.
+      // Do not clear redirect/recovery fields here: the survivor snapshot can
+      // legitimately carry an unresolved predecessor merge (X -> C) that must
+      // remain recoverable after reversing only the later B -> C merge.
     },
 
     async verifyPostconditions() {
