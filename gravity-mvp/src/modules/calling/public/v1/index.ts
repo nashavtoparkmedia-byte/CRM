@@ -42,3 +42,8 @@ export{
   setActiveAiProfileV1,
   saveExtractionQualityTierV1,
 }from'../../application/ai-agent-operations'
+export { aiCallCampaignManagementV1 } from './ai-call-campaign-management-handler'
+export {
+  runAiCallCampaignRuntimeCycleV1,
+  startAiCallCampaignRuntimeV1,
+} from '../../application/ai-call-campaign-runtime-startup'

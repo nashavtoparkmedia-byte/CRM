@@ -1,0 +1,39 @@
+{
+  "schema": "yoko.crm.ai-call-campaign-product-boundary.v1",
+  "version": 1,
+  "owner_context": "calling",
+  "source_migration": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+  "migration_authority": "architecture/migrations/v1/pending-source-migrations.json",
+  "production_migration_applied": false,
+  "deployment_strategy": "migration-before-code; code rollback retains additive unused tables",
+  "runtime_default": "disabled",
+  "supported_runtime_modes": [
+    "disabled",
+    "simulated"
+  ],
+  "simulated_runtime_boundary": {
+    "required_flag": "YOKO_AI_CALL_CAMPAIGN_SIMULATION_PROOF=1",
+    "production_environment_allowed": false,
+    "provider_network_used": false,
+    "ordinary_call_surfaces_exclude_simulation": true
+  },
+  "unsupported_runtime_modes_fail_closed": true,
+  "audience_scope": "explicit_external_snapshot_only",
+  "dynamic_owner_segments": false,
+  "scenario_authority": "immutable_campaign_snapshot_with_sha256_fingerprint",
+  "dispatch_acceptance_protocol": [
+    "not_dispatched",
+    "acceptance_unknown",
+    "accepted"
+  ],
+  "cancellation_fences_first_dispatch": true,
+  "provider_billing_ingested": false,
+  "live_launch_blockers": [
+    "production_migration_not_applied",
+    "provider_adapter_not_reviewed",
+    "provider_billing_not_ingested",
+    "spend_and_duration_budgets_not_implemented",
+    "emergency_global_stop_not_implemented"
+  ],
+  "real_pstn_proof_permitted": false
+}

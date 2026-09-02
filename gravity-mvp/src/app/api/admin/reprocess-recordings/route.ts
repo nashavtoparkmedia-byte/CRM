@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
 
     const recordingsDir = process.env.RECORDINGS_HOST_PATH ?? path.resolve(process.cwd(), '..', 'telephony', 'recordings')
 
-    const where: any = { transcript: null, status: 'completed' }
+    const where: any = { transcript: null, status: 'completed', isSimulation: false }
     if (callIdFilter) {
         where.id = callIdFilter
     } else {

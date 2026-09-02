@@ -112,8 +112,8 @@ export async function processAnalyze(callId: string): Promise<void> {
 }
 
 async function processOne(callId: string): Promise<void> {
-    const call = await prisma.call.findUnique({
-        where: { id: callId },
+    const call = await prisma.call.findFirst({
+        where: { id: callId, isSimulation: false },
         // `isAi` decides which prompt/parser we use — manager evaluation
         // (rubric) for human inbound/outbound calls, qualification
         // extraction (QualificationResult shape) for AI-bot outbound calls.

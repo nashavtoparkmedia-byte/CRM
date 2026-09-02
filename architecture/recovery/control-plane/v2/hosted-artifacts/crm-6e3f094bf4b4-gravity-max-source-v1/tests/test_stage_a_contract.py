@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import subprocess
 import unittest
@@ -11,6 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[7]
 AUTHORITY = Path(__file__).resolve().parents[1]
 APPLICATION_COMMIT = "6e3f094bf4b42c1400c705843ab107dacd6d1cf8"
+CHANGE_BASE = os.environ.get("YOKO_STAGE_A_CHANGE_BASE", APPLICATION_COMMIT)
 PROFILE = "crm-6e3f094bf4b4-gravity-max-source-v1"
 
 
@@ -22,14 +24,14 @@ class StageAContractTests(unittest.TestCase):
             "deploy/docker-compose.production.yml",
         ]
         result = subprocess.run(
-            ["git", "-C", str(ROOT), "diff", "--exit-code", APPLICATION_COMMIT, "--", *protected],
+            ["git", "-C", str(ROOT), "diff", "--exit-code", CHANGE_BASE, "HEAD", "--", *protected],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
         self.assertEqual(result.returncode, 0, result.stdout.decode() + result.stderr.decode())
 
     def test_change_set_is_stage_a_control_plane_only(self) -> None:
         names = subprocess.check_output(
-            ["git", "-C", str(ROOT), "diff", "--name-only", APPLICATION_COMMIT], text=True,
+            ["git", "-C", str(ROOT), "diff", "--name-only", CHANGE_BASE, "HEAD"], text=True,
         ).splitlines()
         allowed_exact = {
             ".github/workflows/architecture-enforcement.yml",

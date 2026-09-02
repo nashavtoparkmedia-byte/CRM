@@ -358,7 +358,7 @@ assert.notEqual(
 )
 assert.deepEqual(workflowJobStepNames(workflow, 'architecture'), [
   'Check out exact revision',
-  'Fetch exact Stage A application authority',
+  'Fetch exact Stage A authorities',
   'Run targeted Runtime TG base-reference contract',
   'Fetch exact Runtime v10 predecessor',
   'Set up exact Node.js',
@@ -433,6 +433,22 @@ for (const stageAApplicationFetchMutation of [
 }
 assert.match(
   workflow,
+  /STAGE_A_CHANGE_BASE_COMMIT: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.before \}\}[\s\S]*grep -Eq '\^\[0-9a-f\]\{40\}\$'[\s\S]*STAGE_A_CHANGE_BASE_COMMIT:refs\/heads\/stage-a-change-base[\s\S]*git rev-parse 'refs\/heads\/stage-a-change-base\^\{commit\}'/u,
+  'hosted Stage A scope must fetch the exact event base into a clone-visible ref and verify its commit identity',
+)
+for (const stageAChangeBaseFetchMutation of [
+  workflow.replace('${{ github.event.pull_request.base.sha || github.event.before }}', '${{ github.sha }}'),
+  workflow.replace(':refs/heads/stage-a-change-base', ''),
+  workflow.replace("git rev-parse 'refs/heads/stage-a-change-base^{commit}'", 'true'),
+]) {
+  assert.doesNotMatch(
+    stageAChangeBaseFetchMutation,
+    /STAGE_A_CHANGE_BASE_COMMIT: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.before \}\}[\s\S]*STAGE_A_CHANGE_BASE_COMMIT:refs\/heads\/stage-a-change-base[\s\S]*git rev-parse 'refs\/heads\/stage-a-change-base\^\{commit\}'/u,
+    'wrong, unreachable, or unverified Stage A change-base fetch must fail the workflow contract',
+  )
+}
+assert.match(
+  workflow,
   /RUNTIME_V10_PREDECESSOR_COMMIT: 7aea2823efe50e13a156540993d424594025e403[\s\S]*git fetch --no-tags --depth=1 origin \\\n\s+"\$RUNTIME_V10_PREDECESSOR_COMMIT:refs\/heads\/yoko-runtime-v10-predecessor"[\s\S]*git rev-parse 'refs\/heads\/yoko-runtime-v10-predecessor\^\{commit\}'/u,
   'hosted Runtime v10 contract must fetch the exact predecessor into a clone-visible ref and verify its commit identity',
 )
@@ -455,6 +471,7 @@ assert.match(
 assert.match(workflow, /node-version: 20\.20\.2/u, 'hosted CI must install the exact locally reviewed Node.js release')
 assert.match(workflow, /process\.versions\.node !== '20\.20\.2'/u, 'hosted CI must fail closed if the exact Node.js release was not activated')
 assert.match(workflow, /YOKO_BLAST_BASE: HEAD\^/u, 'hosted blast-radius analysis must use the exact accepted commit parent available in the shallow checkout')
+assert.match(workflow, /YOKO_STAGE_A_CHANGE_BASE: refs\/heads\/stage-a-change-base/u, 'hosted Stage A scope checks must use the separately fetched exact event base')
 assert.doesNotMatch(workflow, /YOKO_BLAST_BASE:.*pull_request\.base\.sha/u, 'hosted CI must not select an unfetched PR base as its change-set authority')
 assert.match(workflow, /DATABASE_URL: postgresql:\/\/postgres:postgres@localhost:5432\/postgres\?schema=yoko_migration_authority_replay_ci/u)
 assert.match(workflow, /YOKO_POSTGRES_CLIENT_CONTAINER: \$\{\{ job\.services\.postgres\.id \}\}/u)

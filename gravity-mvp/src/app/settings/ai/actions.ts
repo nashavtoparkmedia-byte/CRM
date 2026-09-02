@@ -1817,7 +1817,8 @@ export async function getMessageCountsByConnection(): Promise<ConnectionMessageC
                     MIN("startedAt")                           AS "earliestSentAt",
                     MAX("startedAt")                           AS "latestSentAt"
                 FROM "Call"
-                WHERE transcript IS NOT NULL
+                WHERE "isSimulation" = false
+                  AND transcript IS NOT NULL
                   AND length(transcript) > 50
             `
             const v = voiceRows[0]
@@ -1886,7 +1887,8 @@ export async function getChannelTotalsForUi(): Promise<ChannelTotalsRow[]> {
                     COUNT(DISTINCT "contactId")::int           AS contacts,
                     MAX("startedAt")                           AS "lastMessageAt"
                 FROM "Call"
-                WHERE transcript IS NOT NULL
+                WHERE "isSimulation" = false
+                  AND transcript IS NOT NULL
                   AND length(transcript) > 50
             `
             const v = voiceRows[0]
@@ -2114,7 +2116,8 @@ export async function listChannelConnections(): Promise<ChannelConnection[]> {
                 COUNT(*)::int        AS transcripts,
                 MAX("startedAt")     AS "lastTranscriptAt"
             FROM "Call"
-            WHERE transcript IS NOT NULL
+            WHERE "isSimulation" = false
+              AND transcript IS NOT NULL
               AND length(transcript) > 50
         `
         const v = voiceRows[0]

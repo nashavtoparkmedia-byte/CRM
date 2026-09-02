@@ -39,15 +39,21 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 2
 
-      - name: Fetch exact Stage A application authority
+      - name: Fetch exact Stage A authorities
         env:
           STAGE_A_APPLICATION_COMMIT: 6e3f094bf4b42c1400c705843ab107dacd6d1cf8
+          STAGE_A_CHANGE_BASE_COMMIT: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
           set -Eeuo pipefail
+          printf '%s\n' "$STAGE_A_CHANGE_BASE_COMMIT" | grep -Eq '^[0-9a-f]{40}$'
+          test "$STAGE_A_CHANGE_BASE_COMMIT" != 0000000000000000000000000000000000000000
           git fetch --no-tags --depth=1 origin \
-            "$STAGE_A_APPLICATION_COMMIT:refs/heads/stage-a-accepted-application"
+            "$STAGE_A_APPLICATION_COMMIT:refs/heads/stage-a-accepted-application" \
+            "$STAGE_A_CHANGE_BASE_COMMIT:refs/heads/stage-a-change-base"
           test "$(git rev-parse 'refs/heads/stage-a-accepted-application^{commit}')" = \
             "$STAGE_A_APPLICATION_COMMIT"
+          test "$(git rev-parse 'refs/heads/stage-a-change-base^{commit}')" = \
+            "$STAGE_A_CHANGE_BASE_COMMIT"
 
       - name: Run targeted Runtime TG base-reference contract
         env:
@@ -102,6 +108,7 @@ jobs:
           # reproducible even when the hosted PR base is hundreds of commits
           # behind and is not present in the shallow checkout.
           YOKO_BLAST_BASE: HEAD^
+          YOKO_STAGE_A_CHANGE_BASE: refs/heads/stage-a-change-base
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres?schema=yoko_migration_authority_replay_ci
           YOKO_POSTGRES_CLIENT_CONTAINER: ${{ job.services.postgres.id }}
           YOKO_CI_ATTESTATION_OUTPUT: authoritative-ci-execution.json

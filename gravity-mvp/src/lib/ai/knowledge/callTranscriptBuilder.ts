@@ -82,7 +82,8 @@ export async function buildCallChunks(scope: ExtractionScope): Promise<{
     const rows = await prisma.$queryRaw<CallRow[]>`
         SELECT id, transcript, "startedAt"
         FROM "Call"
-        WHERE transcript IS NOT NULL
+        WHERE "isSimulation" = false
+          AND transcript IS NOT NULL
           AND length(transcript) > ${MIN_TRANSCRIPT_LENGTH}
           AND (${from}::timestamp IS NULL OR "startedAt" >= ${from})
           AND (${to}::timestamp   IS NULL OR "startedAt" <= ${to})
