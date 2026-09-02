@@ -12,8 +12,29 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[7]
 AUTHORITY = Path(__file__).resolve().parents[1]
 APPLICATION_COMMIT = "6e3f094bf4b42c1400c705843ab107dacd6d1cf8"
-CHANGE_BASE = os.environ.get("YOKO_STAGE_A_CHANGE_BASE", APPLICATION_COMMIT)
 PROFILE = "crm-6e3f094bf4b4-gravity-max-source-v1"
+
+
+def resolve_change_base() -> str:
+    configured = os.environ.get("YOKO_STAGE_A_CHANGE_BASE")
+    if configured:
+        return configured
+    try:
+        origin_main = subprocess.check_output(
+            ["git", "-C", str(ROOT), "rev-parse", "--verify", "refs/remotes/origin/main^{commit}"],
+            text=True,
+        ).strip()
+        head = subprocess.check_output(
+            ["git", "-C", str(ROOT), "rev-parse", "HEAD^{commit}"], text=True,
+        ).strip()
+        if origin_main != head:
+            return origin_main
+    except subprocess.CalledProcessError:
+        pass
+    return "HEAD^"
+
+
+CHANGE_BASE = resolve_change_base()
 
 
 class StageAContractTests(unittest.TestCase):
@@ -42,6 +63,7 @@ class StageAContractTests(unittest.TestCase):
             "tools/architecture/test-hosted-coordinated-gravity-max-stage-a.mjs",
             "tools/architecture/v2/test-original-dod-canonical-mapping.mjs",
             "tools/architecture/v2/verify-final-rereview-closure.mjs",
+            "architecture/contexts/v1/SHA256SUMS",
             "architecture/contexts/v1/context-index.json",
             "architecture/contexts/v1/executable-path-ownership-coverage.json",
             "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json",
