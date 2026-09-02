@@ -14,9 +14,11 @@ const implementationPath = 'gravity-mvp/src/lib/DriverMatchService.ts'
 const publicPath = 'gravity-mvp/src/modules/fleet-operations/public/v1/channel-driver-match.ts'
 const consumers = [
     'gravity-mvp/src/app/api/webhook/telegram/route.ts',
+    'gravity-mvp/src/lib/whatsapp/WhatsAppService.ts',
+]
+const retiredAutomaticLinkIngresses = [
     'gravity-mvp/src/app/api/webhooks/max/route.ts',
     'gravity-mvp/src/app/tg-actions.ts',
-    'gravity-mvp/src/lib/whatsapp/WhatsAppService.ts',
 ]
 const exactCapabilities = ['linkChatToDriver']
 
@@ -38,7 +40,16 @@ for (const consumerPath of consumers) {
     const consumer = read(consumerPath)
     assert.match(consumer, /channelDriverMatchV1 as DriverMatchService/)
     assert.match(consumer, /@\/modules\/fleet-operations\/public\/v1\/channel-driver-match/)
+    assert.match(consumer, /linkMatchedDriverToConversationCapabilityV1/)
     assert.doesNotMatch(consumer, /@\/lib\/DriverMatchService/)
+}
+
+for (const ingressPath of retiredAutomaticLinkIngresses) {
+    const ingress = read(ingressPath)
+    assert.doesNotMatch(
+        ingress,
+        /channelDriverMatchV1|DriverMatchService|linkMatchedDriverToConversationCapabilityV1|@\/lib\/DriverMatchService/,
+    )
 }
 
 const fleetManifest = JSON.parse(read('architecture/contexts/v1/manifests/fleet_operations.json'))
@@ -48,13 +59,14 @@ assert(whatsAppManifest.allowed_dependencies.some((dependency) => dependency.con
 
 const scan = await scanArchitecture(root)
 assert.deepEqual(scan.findings.filter((finding) => (
-    consumers.includes(finding.file) && finding.details?.target === implementationPath
+    finding.details?.target === implementationPath
 )), [])
 assert.deepEqual(scan.findings.filter((finding) => finding.rule === 'dependency_graph_cycle'), [])
 
 process.stdout.write(`${JSON.stringify({
     status: 'PASS',
     runtime_consumers: consumers.length,
+    retired_automatic_link_ingresses: retiredAutomaticLinkIngresses.length,
     match_capabilities: exactCapabilities.length,
     negative_unrelated_match_probe: 'REJECTED',
     dependency_cycle: 'ABSENT',
