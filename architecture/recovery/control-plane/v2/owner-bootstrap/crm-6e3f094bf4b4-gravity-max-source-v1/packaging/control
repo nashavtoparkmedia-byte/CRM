@@ -1,0 +1,11 @@
+Package: yoko-privileged-runtime
+Version: 2.0.0-15
+Section: admin
+Priority: optional
+Architecture: all
+Depends: python3 (>= 3.10), sudo (>= 1.9.9), util-linux, docker-ce-cli
+Maintainer: YOKO Control Plane <noreply@example.invalid>
+Description: Exact coordinated Gravity and MAX privileged release profile
+ This same-ABI successor installs one immutable zero-argument profile for the
+ accepted coordinated Gravity and MAX artifact. It has no generic deployment,
+ database mutation, package installation, or Docker socket capability.

@@ -1,0 +1,1056 @@
+#!/usr/bin/python3 -I
+"""Exact zero-argument coordinated Gravity + MAX activation profile."""
+from __future__ import annotations
+
+import fcntl
+import hashlib
+import json
+import os
+import re
+import stat
+import subprocess
+import time
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Any, Iterator
+
+
+PROFILE_ID = "crm-6e3f094bf4b4-gravity-max-source-v1"
+PROFILE_DIR = f"/usr/local/share/yoko-privileged-runtime/profiles/{PROFILE_ID}"
+PROFILE_PATH = PROFILE_DIR + "/profile.v1.json"
+SEALED_INPUTS_PATH = PROFILE_DIR + "/sealed-inputs.v1.json"
+STATE_DIR = f"/var/lib/yoko-privileged-runtime/profiles/{PROFILE_ID}"
+STATE_PATH = STATE_DIR + "/state.v1.json"
+LOCK_PATH = STATE_DIR + "/operation.lock"
+ACTIVATE_OVERLAY = STATE_DIR + "/activate.compose.yml"
+ROLLBACK_OVERLAY = STATE_DIR + "/rollback.compose.yml"
+COMPOSE_LOG = STATE_DIR + "/compose.log"
+DOCKER = "/usr/bin/docker"
+SHA256 = re.compile(r"[0-9a-f]{64}")
+IMAGE_ID = re.compile(r"sha256:[0-9a-f]{64}")
+DB_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_$]{0,62}")
+PROFILE_SCHEMA = "yoko.crm.coordinated-pair-activation-profile.v1"
+STATE_SCHEMA = "yoko.crm.coordinated-pair-state.v1"
+RECEIPT_SCHEMA = "yoko.crm.coordinated-artifact-admission.v1"
+TARGET_GRAVITY = "yoko/crm-gravity-mvp:6e3f094bf4b4-64f3f529e5e31368c55a40a91157db7e740e5ed1-coordinated-v1"
+TARGET_MAX = "yoko/crm-max-scraper:6e3f094bf4b4-64f3f529e5e31368c55a40a91157db7e740e5ed1-coordinated-v1"
+ROLLBACK_GRAVITY = "yoko/crm-gravity-mvp:rollback-5531c67e99b572356f897246b8c845ab4f9b232d"
+ROLLBACK_MAX = "yoko/crm-max-scraper:rollback-87835969ed6335a99d50e1cc2eaf70aa33fdbaf9"
+
+
+def _canonical(value: Any) -> bytes:
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
+
+
+def _digest(value: Any) -> str:
+    return hashlib.sha256(_canonical(value)).hexdigest()
+
+
+def _sha_file(path: Path, maximum: int) -> str:
+    fd = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+    output = hashlib.sha256()
+    total = 0
+    try:
+        while True:
+            chunk = os.read(fd, 1024 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > maximum:
+                raise RuntimeError("FILE_TOO_LARGE")
+            output.update(chunk)
+    finally:
+        os.close(fd)
+    return output.hexdigest()
+
+
+def _write_all(fd: int, raw: bytes) -> None:
+    remaining = memoryview(raw)
+    while remaining:
+        written = os.write(fd, remaining)
+        if written <= 0:
+            raise OSError("short write")
+        remaining = remaining[written:]
+
+
+def _exact_dict(core: Any, value: Any, keys: set[str], code: str) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != keys:
+        raise core.RuntimeFault(code, 78)
+    return value
+
+
+def _load_profile(core: Any) -> dict[str, Any]:
+    descriptor = core.secure_file(PROFILE_PATH, 0o444, maximum=2 * 1024 * 1024)
+    profile = core.parse_json(core.mapped(PROFILE_PATH).read_bytes(), maximum=descriptor.st_size + 1)
+    required = {
+        "schema", "profile_id", "host", "runtime_abi", "package_version",
+        "accepted_application", "stage_a", "artifact_admission", "deployment",
+        "predecessor", "target", "database", "limits",
+        "enabled_zero_argument_profiles", "disabled_profiles", "negative_properties",
+    }
+    _exact_dict(core, profile, required, "ACTIVATION_PROFILE_INVALID")
+    if (
+        profile["schema"] != PROFILE_SCHEMA
+        or profile["profile_id"] != PROFILE_ID
+        or profile["host"] != "jvxthcorvm"
+        or profile["runtime_abi"] != "2.0.0"
+        or profile["package_version"] != "2.0.0-15"
+        or profile["accepted_application"] != {
+            "commit": "6e3f094bf4b42c1400c705843ab107dacd6d1cf8",
+            "tree": "8d3e507cda69a2862db946b2e34c5ea329c425ac",
+            "gravity_subtree": "abbe37034aa88c478eb8e44b6be5b047e9bcd574",
+            "max_subtree": "e9c3c0ce56c744de1843547276e70d8f2d970197",
+        }
+        or profile["enabled_zero_argument_profiles"] != [
+            "database-status", "release-preflight", "release-activate", "rollback"
+        ]
+        or set(profile["disabled_profiles"]) != {"config-activate", "database-migrate"}
+        or any(profile["negative_properties"].values())
+    ):
+        raise core.RuntimeFault("ACTIVATION_PROFILE_INVALID", 78)
+    stage_a = _exact_dict(
+        core, profile["stage_a"],
+        {"builder_commit", "builder_tree", "run_id", "artifact_id", "artifact_name", "artifact_digest", "artifact_bytes"},
+        "ACTIVATION_PROFILE_INVALID",
+    )
+    if stage_a != {
+        "builder_commit": "64f3f529e5e31368c55a40a91157db7e740e5ed1",
+        "builder_tree": "a5448a31ffdb84ead24e9cbf6a8252c755c55293",
+        "run_id": 33542881677,
+        "artifact_id": 9814812256,
+        "artifact_name": "coordinated-gravity-max-6e3f094bf4b4-64f3f529e5e31368c55a40a91157db7e740e5ed1",
+        "artifact_digest": "sha256:721c56b5800a4b2b4855cd5f9dff323c27057e3c8368f155e72c6cd01558f3ea",
+        "artifact_bytes": 4803272912,
+    }:
+        raise core.RuntimeFault("ACTIVATION_PROFILE_INVALID", 78)
+    deployment = _exact_dict(
+        core, profile["deployment"],
+        {"compose_path", "environment_path", "project", "project_directory", "gravity_service", "max_service", "gravity_resource", "max_resource", "postgres_container"},
+        "ACTIVATION_PROFILE_INVALID",
+    )
+    if deployment != {
+        "compose_path": "/opt/crm/deploy/docker-compose.production.yml",
+        "environment_path": "/opt/crm/.env.production",
+        "project": "crm",
+        "project_directory": "/opt/crm/deploy",
+        "gravity_service": "gravity-mvp",
+        "max_service": "max-web-scraper",
+        "gravity_resource": "crm.container.gravity_mvp",
+        "max_resource": "crm.container.max_scraper",
+        "postgres_container": "crm-postgres",
+    }:
+        raise core.RuntimeFault("ACTIVATION_PROFILE_INVALID", 78)
+    for section in ("predecessor", "target", "database", "limits", "artifact_admission"):
+        if not isinstance(profile[section], dict):
+            raise core.RuntimeFault("ACTIVATION_PROFILE_INVALID", 78)
+    if profile["target"].get("gravity", {}).get("reference") != TARGET_GRAVITY or profile["target"].get("max_scraper", {}).get("reference") != TARGET_MAX:
+        raise core.RuntimeFault("ACTIVATION_PROFILE_INVALID", 78)
+    if profile["predecessor"].get("gravity", {}).get("rollback_reference") != ROLLBACK_GRAVITY or profile["predecessor"].get("max_scraper", {}).get("rollback_reference") != ROLLBACK_MAX:
+        raise core.RuntimeFault("ACTIVATION_PROFILE_INVALID", 78)
+    return profile
+
+
+def _ensure_roots(core: Any) -> None:
+    core.secure_directory("/var/lib/yoko-privileged-runtime", 0o700, create=True)
+    core.secure_directory("/var/lib/yoko-privileged-runtime/profiles", 0o700, create=True)
+    core.secure_directory(STATE_DIR, 0o700, create=True)
+
+
+@contextmanager
+def _lock(core: Any) -> Iterator[None]:
+    _ensure_roots(core)
+    path = core.mapped(LOCK_PATH)
+    fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600)
+    try:
+        os.fchmod(fd, 0o600)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
+
+
+def _read_state(core: Any) -> dict[str, Any]:
+    _ensure_roots(core)
+    path = core.mapped(STATE_PATH)
+    if not path.exists():
+        return {"schema": STATE_SCHEMA, "profile_id": PROFILE_ID, "phase": "UNINITIALIZED"}
+    descriptor = core.secure_file(STATE_PATH, 0o600, maximum=4 * 1024 * 1024)
+    state = core.parse_json(path.read_bytes(), maximum=descriptor.st_size + 1)
+    if not isinstance(state, dict) or state.get("schema") != STATE_SCHEMA or state.get("profile_id") != PROFILE_ID or not isinstance(state.get("phase"), str):
+        raise core.RuntimeFault("ACTIVATION_STATE_INVALID", 78)
+    return state
+
+
+def _write_state(core: Any, value: dict[str, Any]) -> None:
+    if value.get("schema") != STATE_SCHEMA or value.get("profile_id") != PROFILE_ID:
+        raise core.RuntimeFault("ACTIVATION_STATE_INVALID", 78)
+    raw = _canonical(value) + b"\n"
+    if len(raw) > 4 * 1024 * 1024:
+        raise core.RuntimeFault("ACTIVATION_STATE_INVALID", 78)
+    target = core.mapped(STATE_PATH)
+    temporary = core.mapped(STATE_PATH + ".new")
+    temporary.unlink(missing_ok=True)
+    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600)
+    try:
+        _write_all(fd, raw)
+        os.fchmod(fd, 0o600)
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    os.replace(temporary, target)
+    directory = os.open(target.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+
+
+def _audit(core: Any, invocation: Any, before: dict[str, Any], result: str, after: dict[str, Any]) -> None:
+    core.append_audit(invocation, core.request_digest(invocation), _digest(before), result, _digest(after))
+
+
+def _write_fixed_file(core: Any, path: str, raw: bytes, mode: int) -> None:
+    target = core.mapped(path)
+    temporary = core.mapped(path + ".new")
+    temporary.unlink(missing_ok=True)
+    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC | os.O_NOFOLLOW, mode)
+    try:
+        _write_all(fd, raw)
+        os.fchmod(fd, mode)
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    os.replace(temporary, target)
+
+
+def _run(
+    core: Any,
+    args: list[str],
+    *,
+    timeout: int,
+    code: str,
+    stdin_fd: int | None = None,
+    stdout_fd: int | None = None,
+    stderr_fd: int | None = None,
+    pass_fds: tuple[int, ...] = (),
+) -> subprocess.CompletedProcess[bytes]:
+    if not args or args[0] not in {DOCKER}:
+        raise core.RuntimeFault("INTERNAL_EXECUTABLE_INVALID", 78)
+    executable = str(core.mapped(args[0]))
+    try:
+        completed = subprocess.run(
+            [executable, *args[1:]],
+            stdin=stdin_fd if stdin_fd is not None else subprocess.DEVNULL,
+            stdout=stdout_fd if stdout_fd is not None else subprocess.PIPE,
+            stderr=stderr_fd if stderr_fd is not None else subprocess.PIPE,
+            env=core.command_env(),
+            cwd=str(core.mapped("/")),
+            timeout=timeout,
+            check=False,
+            pass_fds=pass_fds,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        raise core.RuntimeFault(code, 74) from exc
+    if completed.returncode != 0:
+        raise core.RuntimeFault(code, 74)
+    return completed
+
+
+def _docker_json(core: Any, args: list[str], code: str) -> Any:
+    completed = _run(core, [DOCKER, *args], timeout=60, code=code)
+    try:
+        return json.loads(completed.stdout)
+    except (UnicodeError, ValueError) as exc:
+        raise core.RuntimeFault(code, 74) from exc
+
+
+def _image_inspect(core: Any, reference: str, *, required: bool = True) -> dict[str, Any] | None:
+    try:
+        value = _docker_json(core, ["image", "inspect", reference], "IMAGE_INSPECT_FAILED")
+    except Exception as exc:
+        if not required and isinstance(exc, core.RuntimeFault) and exc.code == "IMAGE_INSPECT_FAILED":
+            return None
+        raise
+    if not isinstance(value, list) or len(value) != 1 or not isinstance(value[0], dict):
+        raise core.RuntimeFault("IMAGE_INSPECT_INVALID", 74)
+    return value[0]
+
+
+def _artifact_receipt(core: Any, profile: dict[str, Any]) -> dict[str, Any]:
+    admission = profile["artifact_admission"]
+    path = str(admission.get("receipt_path", ""))
+    expected = str(admission.get("receipt_sha256", ""))
+    if not path.startswith("/var/lib/yoko-privileged-runtime/coordinated-artifacts/") or not SHA256.fullmatch(expected):
+        raise core.RuntimeFault("ARTIFACT_RECEIPT_PROFILE_INVALID", 78)
+    descriptor = core.secure_file(path, 0o400, maximum=2 * 1024 * 1024)
+    target = core.mapped(path)
+    if _sha_file(target, 2 * 1024 * 1024) != expected:
+        raise core.RuntimeFault("ARTIFACT_RECEIPT_IDENTITY_MISMATCH", 78)
+    receipt = core.parse_json(target.read_bytes(), maximum=descriptor.st_size + 1)
+    if (
+        not isinstance(receipt, dict)
+        or receipt.get("schema") != RECEIPT_SCHEMA
+        or receipt.get("profile_id") != PROFILE_ID
+        or receipt.get("application_commit") != profile["accepted_application"]["commit"]
+        or receipt.get("stage_a_artifact_id") != profile["stage_a"]["artifact_id"]
+        or receipt.get("production_mutated") is not False
+        or receipt.get("files") != admission.get("files")
+    ):
+        raise core.RuntimeFault("ARTIFACT_RECEIPT_INVALID", 78)
+    return receipt
+
+
+def _artifact_path(core: Any, profile: dict[str, Any], name: str, *, hash_content: bool) -> Path:
+    files = profile["artifact_admission"].get("files")
+    record = files.get(name) if isinstance(files, dict) else None
+    if not isinstance(record, dict) or set(record) != {"path", "sha256", "bytes"}:
+        raise core.RuntimeFault("ARTIFACT_PROFILE_INVALID", 78)
+    path = record["path"]
+    digest = record["sha256"]
+    size = record["bytes"]
+    if (
+        not isinstance(path, str)
+        or not path.startswith("/var/lib/yoko-privileged-runtime/coordinated-artifacts/")
+        or not isinstance(digest, str)
+        or not SHA256.fullmatch(digest)
+        or isinstance(size, bool)
+        or not isinstance(size, int)
+        or not 0 <= size <= 4 * 1024 * 1024 * 1024
+    ):
+        raise core.RuntimeFault("ARTIFACT_PROFILE_INVALID", 78)
+    descriptor = core.secure_file(path, 0o400, maximum=max(1, size))
+    if descriptor.st_size != size:
+        raise core.RuntimeFault("ARTIFACT_SIZE_MISMATCH", 78)
+    target = core.mapped(path)
+    if hash_content and _sha_file(target, max(1, size)) != digest:
+        raise core.RuntimeFault("ARTIFACT_IDENTITY_MISMATCH", 78)
+    return target
+
+
+def _validate_target_image(core: Any, record: dict[str, Any], reference: str, component: str) -> dict[str, Any]:
+    image = _image_inspect(core, reference)
+    config = image.get("Config") if isinstance(image, dict) else None
+    labels = config.get("Labels") if isinstance(config, dict) else None
+    if (
+        image.get("Id") != record.get("image_id")
+        or image.get("Os") != "linux"
+        or image.get("Architecture") != "amd64"
+        or not isinstance(labels, dict)
+        or labels.get("org.opencontainers.image.revision") != "6e3f094bf4b42c1400c705843ab107dacd6d1cf8"
+        or labels.get("yoko.activation.profile") != PROFILE_ID
+    ):
+        raise core.RuntimeFault(f"{component.upper()}_TARGET_IMAGE_IDENTITY_MISMATCH", 74)
+    if component == "gravity":
+        expected = {
+            "User": "app", "WorkingDir": "/app", "Entrypoint": ["/usr/bin/tini", "--"],
+            "Cmd": ["sh", "-c", "npx prisma migrate deploy && npm run start"],
+        }
+    else:
+        expected = {
+            "User": "pwuser", "WorkingDir": "/app", "Entrypoint": ["/usr/bin/tini", "--"],
+            "Cmd": ["node", "index.js"],
+        }
+    if any(config.get(key) != value for key, value in expected.items()):
+        raise core.RuntimeFault(f"{component.upper()}_TARGET_RUNTIME_CONTRACT_MISMATCH", 74)
+    return image
+
+
+def _load_target(core: Any, profile: dict[str, Any], component: str, archive_name: str, reference: str) -> dict[str, Any]:
+    target_record = profile["target"]["gravity" if component == "gravity" else "max_scraper"]
+    existing = _image_inspect(core, reference, required=False)
+    if existing is not None:
+        return _validate_target_image(core, target_record, reference, component)
+    archive = _artifact_path(core, profile, archive_name, hash_content=True)
+    fd = os.open(archive, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+    try:
+        _run(
+            core,
+            [DOCKER, "image", "load", "--input", f"/proc/self/fd/{fd}"],
+            timeout=int(profile["limits"]["image_load_timeout_seconds"]),
+            code=f"{component.upper()}_IMAGE_LOAD_FAILED",
+            pass_fds=(fd,),
+        )
+    finally:
+        os.close(fd)
+    try:
+        return _validate_target_image(core, target_record, reference, component)
+    except Exception:
+        current = _image_inspect(core, reference, required=False)
+        if current is not None:
+            try:
+                _run(core, [DOCKER, "image", "rm", reference], timeout=60, code=f"{component.upper()}_IMAGE_CLEANUP_FAILED")
+            except Exception as cleanup:
+                raise core.RuntimeFault(f"{component.upper()}_IMAGE_CLEANUP_FAILED", 74) from cleanup
+        raise
+
+
+def _seal_rollback_reference(core: Any, image_id: str, reference: str, component: str) -> None:
+    existing = _image_inspect(core, reference, required=False)
+    if existing is not None:
+        if existing.get("Id") != image_id:
+            raise core.RuntimeFault(f"{component.upper()}_ROLLBACK_REFERENCE_COLLISION", 74)
+        return
+    _run(core, [DOCKER, "image", "tag", image_id, reference], timeout=60, code=f"{component.upper()}_ROLLBACK_TAG_FAILED")
+    sealed = _image_inspect(core, reference)
+    if sealed is None or sealed.get("Id") != image_id:
+        raise core.RuntimeFault(f"{component.upper()}_ROLLBACK_REFERENCE_MISMATCH", 74)
+
+
+def _raw_container(core: Any, name: str) -> dict[str, Any]:
+    value = _docker_json(core, ["container", "inspect", name], "CONTAINER_INSPECT_FAILED")
+    if not isinstance(value, list) or len(value) != 1 or not isinstance(value[0], dict) or value[0].get("Name") != "/" + name:
+        raise core.RuntimeFault("CONTAINER_IDENTITY_FAILED", 74)
+    return value[0]
+
+
+def _container_environment(core: Any, name: str) -> dict[str, str]:
+    configured = (_raw_container(core, name).get("Config") or {}).get("Env")
+    if not isinstance(configured, list) or len(configured) > 512:
+        raise core.RuntimeFault("CONTAINER_ENVIRONMENT_INVALID", 74)
+    output: dict[str, str] = {}
+    for item in configured:
+        if not isinstance(item, str) or "=" not in item or "\x00" in item:
+            raise core.RuntimeFault("CONTAINER_ENVIRONMENT_INVALID", 74)
+        key, value = item.split("=", 1)
+        if not re.fullmatch(r"[A-Z][A-Z0-9_]{0,127}", key) or key in output:
+            raise core.RuntimeFault("CONTAINER_ENVIRONMENT_INVALID", 74)
+        output[key] = value
+    return output
+
+
+def _postgres_identity(core: Any, profile: dict[str, Any]) -> dict[str, Any]:
+    name = profile["deployment"]["postgres_container"]
+    raw = _raw_container(core, name)
+    state = raw.get("State") or {}
+    if not state.get("Running") or (state.get("Health") or {}).get("Status") != "healthy":
+        raise core.RuntimeFault("POSTGRES_NOT_HEALTHY", 74)
+    environment = _container_environment(core, name)
+    user = environment.get("POSTGRES_USER", "")
+    database = environment.get("POSTGRES_DB", "")
+    if not DB_IDENTIFIER.fullmatch(user) or not DB_IDENTIFIER.fullmatch(database):
+        raise core.RuntimeFault("POSTGRES_DATABASE_IDENTITY_INVALID", 74)
+    sql = "SELECT current_setting('server_version_num'), system_identifier::text, current_database() FROM pg_control_system();"
+    completed = _run(
+        core,
+        [DOCKER, "exec", name, "psql", "-X", "-v", "ON_ERROR_STOP=1", "-At", "-F", "|", "-U", user, "-d", database, "-c", sql],
+        timeout=30,
+        code="POSTGRES_IDENTITY_QUERY_FAILED",
+    )
+    try:
+        version, system_identifier, observed_database = completed.stdout.decode("utf-8").strip().split("|", 2)
+    except (UnicodeError, ValueError) as exc:
+        raise core.RuntimeFault("POSTGRES_IDENTITY_QUERY_INVALID", 74) from exc
+    if not version.isdigit() or not system_identifier.isdigit() or observed_database != database:
+        raise core.RuntimeFault("POSTGRES_IDENTITY_QUERY_INVALID", 74)
+    identity = hashlib.sha256(f"{raw.get('Id')}|{raw.get('Image')}|{version}|{system_identifier}|{user}|{database}".encode("utf-8")).hexdigest()
+    return {
+        "container": name,
+        "container_id": raw.get("Id"),
+        "image_id": raw.get("Image"),
+        "server_version_num": version,
+        "system_identifier_sha256": hashlib.sha256(system_identifier.encode("ascii")).hexdigest(),
+        "database_name_sha256": hashlib.sha256(database.encode("utf-8")).hexdigest(),
+        "database_user_sha256": hashlib.sha256(user.encode("utf-8")).hexdigest(),
+        "database_identity_sha256": identity,
+        "user": user,
+        "database": database,
+    }
+
+
+def _migration_rows(core: Any, identity: dict[str, Any]) -> list[dict[str, Any]]:
+    sql = """
+SELECT COALESCE(json_agg(json_build_object(
+  'id', id, 'checksum', checksum, 'migration_name', migration_name,
+  'finished_at', CASE WHEN finished_at IS NULL THEN NULL ELSE to_char(finished_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') END,
+  'rolled_back_at', CASE WHEN rolled_back_at IS NULL THEN NULL ELSE to_char(rolled_back_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') END,
+  'started_at', to_char(started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"'),
+  'applied_steps_count', applied_steps_count
+) ORDER BY started_at, migration_name, id), '[]'::json)::text
+FROM public."_prisma_migrations";
+"""
+    completed = _run(
+        core,
+        [DOCKER, "exec", identity["container"], "psql", "-X", "-v", "ON_ERROR_STOP=1", "-At", "-U", identity["user"], "-d", identity["database"], "-c", sql],
+        timeout=60,
+        code="MIGRATION_LEDGER_QUERY_FAILED",
+    )
+    timestamp = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{6}Z")
+    try:
+        decoded = json.loads(completed.stdout.decode("utf-8"))
+    except (UnicodeError, ValueError) as exc:
+        raise core.RuntimeFault("MIGRATION_LEDGER_INVALID", 74) from exc
+    if not isinstance(decoded, list) or len(decoded) > 1000:
+        raise core.RuntimeFault("MIGRATION_LEDGER_INVALID", 74)
+    rows: list[dict[str, Any]] = []
+    active_names: set[str] = set()
+    for ordinal, row in enumerate(decoded, 1):
+        if not isinstance(row, dict) or set(row) != {"id", "checksum", "migration_name", "finished_at", "rolled_back_at", "started_at", "applied_steps_count"}:
+            raise core.RuntimeFault("MIGRATION_LEDGER_INVALID", 74)
+        if (
+            not isinstance(row["id"], str)
+            or not re.fullmatch(r"[A-Za-z0-9-]{1,200}", row["id"])
+            or not isinstance(row["migration_name"], str)
+            or not re.fullmatch(r"[0-9][A-Za-z0-9_-]{1,199}", row["migration_name"])
+            or not isinstance(row["checksum"], str)
+            or not SHA256.fullmatch(row["checksum"])
+            or not isinstance(row["started_at"], str)
+            or not timestamp.fullmatch(row["started_at"])
+            or not isinstance(row["finished_at"], str)
+            or not timestamp.fullmatch(row["finished_at"])
+            or row["rolled_back_at"] is not None
+            or isinstance(row["applied_steps_count"], bool)
+            or not isinstance(row["applied_steps_count"], int)
+            or row["applied_steps_count"] < 0
+            or row["migration_name"] in active_names
+        ):
+            raise core.RuntimeFault("MIGRATION_LEDGER_INVALID", 74)
+        active_names.add(row["migration_name"])
+        rows.append({"ordinal": ordinal, **row})
+    return rows
+
+
+def _database_status(core: Any, profile: dict[str, Any]) -> dict[str, Any]:
+    identity = _postgres_identity(core, profile)
+    rows = _migration_rows(core, identity)
+    baseline = profile["database"]
+    row_digest = _digest(rows)
+    exact = (
+        identity["container_id"] == baseline.get("postgres_container_id")
+        and identity["image_id"] == baseline.get("postgres_image_id")
+        and identity["database_identity_sha256"] == baseline.get("database_identity_sha256")
+        and row_digest == baseline.get("migration_rows_sha256")
+        and len(rows) == baseline.get("applied_migration_count")
+    )
+    return {
+        "profile_id": PROFILE_ID,
+        "read_only": True,
+        "state": "EXACT" if exact else "DRIFTED",
+        "database_identity_sha256": identity["database_identity_sha256"],
+        "database_name_sha256": identity["database_name_sha256"],
+        "database_user_sha256": identity["database_user_sha256"],
+        "system_identifier_sha256": identity["system_identifier_sha256"],
+        "server_version_num": identity["server_version_num"],
+        "postgres_container_id": identity["container_id"],
+        "postgres_image_id": identity["image_id"],
+        "applied_migration_count": len(rows),
+        "migration_rows_sha256": row_digest,
+        "secret_values_emitted": False,
+        "production_mutated": False,
+    }
+
+
+def _pair(core: Any, policy: dict[str, Any], profile: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    deployment = profile["deployment"]
+    return (
+        core.container_projection(policy, deployment["gravity_resource"]),
+        core.container_projection(policy, deployment["max_resource"]),
+    )
+
+
+def _classify(profile: dict[str, Any], gravity: dict[str, Any], maximum: dict[str, Any]) -> tuple[str, tuple[str, str]]:
+    def component(actual: Any, predecessor: Any, target: Any) -> str:
+        if actual == predecessor:
+            return "predecessor"
+        if actual == target:
+            return "target"
+        return "unknown"
+    vector = (
+        component(gravity.get("image_id"), profile["predecessor"]["gravity"]["image_id"], profile["target"]["gravity"]["image_id"]),
+        component(maximum.get("image_id"), profile["predecessor"]["max_scraper"]["image_id"], profile["target"]["max_scraper"]["image_id"]),
+    )
+    if vector == ("predecessor", "predecessor"):
+        return "PREDECESSOR_PAIR", vector
+    if vector == ("target", "target"):
+        return "TARGET_PAIR", vector
+    if "unknown" in vector:
+        return "UNKNOWN", vector
+    return "MIXED_KNOWN", vector
+
+
+def _max_volume_exact(core: Any, profile: dict[str, Any], maximum: dict[str, Any]) -> None:
+    expected = profile["predecessor"]["max_scraper"]["volume"]
+    mounts = maximum.get("mounts")
+    semantic_mounts = maximum.get("semantic", {}).get("mounts")
+    named = [item for item in mounts if isinstance(item, dict) and item.get("target") == "/app/user_data"] if isinstance(mounts, list) else []
+    projected = [item for item in semantic_mounts if isinstance(item, dict) and item.get("destination") == "/app/user_data"] if isinstance(semantic_mounts, list) else []
+    if (
+        named != [{"name": "crm_max_user_data", "read_write": True, "target": "/app/user_data", "type": "volume"}]
+        or projected != [{"destination": "/app/user_data", "read_only": False, "source_sha256": expected.get("source_sha256"), "type": "volume"}]
+    ):
+        raise core.RuntimeFault("MAX_PERSISTENT_VOLUME_IDENTITY_DRIFT", 74)
+
+
+def _preserved_semantic(value: dict[str, Any]) -> dict[str, Any]:
+    output = dict(value)
+    output.pop("image_id", None)
+    output.pop("command", None)
+    labels = dict(output.get("compose_labels") or {})
+    labels.pop("com.docker.compose.config-hash", None)
+    output["compose_labels"] = labels
+    return output
+
+
+def _unrelated_fingerprint(core: Any, policy: dict[str, Any]) -> str:
+    provenance = core.docker_provenance(policy)
+    if not provenance.get("complete") or provenance.get("failures"):
+        raise core.RuntimeFault("PRODUCTION_PROVENANCE_INCOMPLETE", 74)
+    records = provenance.get("semantic", {}).get("records")
+    if not isinstance(records, list):
+        raise core.RuntimeFault("PRODUCTION_PROVENANCE_INVALID", 74)
+    excluded = {"crm-gravity-mvp", "crm-max-scraper"}
+    return _digest([record for record in records if isinstance(record, dict) and record.get("name") not in excluded])
+
+
+def _fixed_production_file(core: Any, path: str, mode: int, maximum: int) -> os.stat_result:
+    """Bind a fixed root-owned leaf below a non-caller-writable production tree."""
+    target = core.mapped(path)
+    core.assert_noncaller_writable_chain(target)
+    try:
+        value = target.lstat()
+    except OSError as exc:
+        raise core.RuntimeFault("PRODUCTION_CONFIGURATION_FILE_UNSAFE", 74) from exc
+    owner = core.expected_owner()
+    if (
+        target.is_symlink()
+        or not stat.S_ISREG(value.st_mode)
+        or (value.st_uid, value.st_gid) != owner
+        or stat.S_IMODE(value.st_mode) != mode
+        or value.st_nlink != 1
+        or not 0 <= value.st_size <= maximum
+    ):
+        raise core.RuntimeFault("PRODUCTION_CONFIGURATION_FILE_UNSAFE", 74)
+    return value
+
+
+def _secure_compose_inputs(core: Any, profile: dict[str, Any]) -> tuple[Path, Path]:
+    deployment = profile["deployment"]
+    compose = core.mapped(deployment["compose_path"])
+    environment = core.mapped(deployment["environment_path"])
+    _fixed_production_file(core, deployment["compose_path"], 0o644, 4 * 1024 * 1024)
+    _fixed_production_file(core, deployment["environment_path"], 0o600, 4 * 1024 * 1024)
+    if _sha_file(compose, 4 * 1024 * 1024) != profile["predecessor"]["compose_sha256"]:
+        raise core.RuntimeFault("PRODUCTION_COMPOSE_IDENTITY_DRIFT", 74)
+    return compose, environment
+
+
+def _validate_compose_inputs(core: Any, profile: dict[str, Any], state: dict[str, Any]) -> None:
+    _, environment = _secure_compose_inputs(core, profile)
+    if not SHA256.fullmatch(str(state.get("environment_sha256", ""))) or _sha_file(environment, 4 * 1024 * 1024) != state["environment_sha256"]:
+        raise core.RuntimeFault("PRODUCTION_ENVIRONMENT_IDENTITY_DRIFT", 74)
+
+
+def _compose_overlay(gravity: str, maximum: str, *, activate: bool) -> bytes:
+    if (gravity, maximum) not in {(TARGET_GRAVITY, TARGET_MAX), (ROLLBACK_GRAVITY, ROLLBACK_MAX)}:
+        raise RuntimeError("IMAGE_REFERENCE_INVALID")
+    command = "    command: [\"npm\", \"run\", \"start\"]\n" if activate else ""
+    return (
+        "services:\n"
+        "  gravity-mvp:\n"
+        f"    image: {gravity}\n"
+        f"{command}"
+        "  max-web-scraper:\n"
+        f"    image: {maximum}\n"
+    ).encode("ascii")
+
+
+def _compose_args(profile: dict[str, Any], overlay: str | None = None) -> list[str]:
+    deployment = profile["deployment"]
+    output = [
+        DOCKER, "compose", "--project-directory", deployment["project_directory"],
+        "--env-file", deployment["environment_path"], "-f", deployment["compose_path"],
+    ]
+    if overlay is not None:
+        output.extend(["-f", overlay])
+    return output
+
+
+def _compose_config(core: Any, args: list[str]) -> dict[str, Any]:
+    completed = _run(core, [*args, "config", "--format", "json"], timeout=60, code="ACTIVATION_COMPOSE_CONFIG_INVALID")
+    try:
+        value = json.loads(completed.stdout)
+    except (UnicodeError, ValueError) as exc:
+        raise core.RuntimeFault("ACTIVATION_COMPOSE_CONFIG_INVALID", 74) from exc
+    if not isinstance(value, dict) or not isinstance(value.get("services"), dict):
+        raise core.RuntimeFault("ACTIVATION_COMPOSE_CONFIG_INVALID", 74)
+    return value
+
+
+def _validate_projection(core: Any, profile: dict[str, Any], overlay: str, *, activate: bool) -> None:
+    base = _compose_config(core, _compose_args(profile))
+    candidate = _compose_config(core, _compose_args(profile, overlay))
+    if set(base) != set(candidate) or set(base["services"]) != set(candidate["services"]):
+        raise core.RuntimeFault("PAIR_COMPOSE_PROJECTION_DRIFT", 74)
+    base_top = {key: value for key, value in base.items() if key != "services"}
+    candidate_top = {key: value for key, value in candidate.items() if key != "services"}
+    if _canonical(base_top) != _canonical(candidate_top):
+        raise core.RuntimeFault("UNRELATED_COMPOSE_TOP_LEVEL_DRIFT", 74)
+    changed = {"gravity-mvp", "max-web-scraper"}
+    if _canonical({key: value for key, value in base["services"].items() if key not in changed}) != _canonical({key: value for key, value in candidate["services"].items() if key not in changed}):
+        raise core.RuntimeFault("UNRELATED_COMPOSE_SERVICE_DRIFT", 74)
+    expected = {
+        "gravity-mvp": TARGET_GRAVITY if activate else ROLLBACK_GRAVITY,
+        "max-web-scraper": TARGET_MAX if activate else ROLLBACK_MAX,
+    }
+    for name in sorted(changed):
+        original = dict(base["services"][name])
+        actual = dict(candidate["services"][name])
+        if actual.get("image") != expected[name]:
+            raise core.RuntimeFault("PAIR_COMPOSE_IMAGE_DRIFT", 74)
+        actual["image"] = original.get("image")
+        if activate and name == "gravity-mvp":
+            if actual.get("command") != ["npm", "run", "start"]:
+                raise core.RuntimeFault("GRAVITY_SAFE_COMMAND_DRIFT", 74)
+            if "command" in original:
+                actual["command"] = original["command"]
+            else:
+                actual.pop("command", None)
+        if _canonical(actual) != _canonical(original):
+            raise core.RuntimeFault("PAIR_COMPOSE_PROJECTION_DRIFT", 74)
+
+
+def _compose_hash(core: Any, profile: dict[str, Any], overlay: str, service: str) -> str:
+    resolved = _compose_config(core, _compose_args(profile, overlay))
+    raw = _canonical(resolved)
+    if len(raw) > 4 * 1024 * 1024:
+        raise core.RuntimeFault("COMPOSE_HASH_INPUT_TOO_LARGE", 74)
+    fd = os.memfd_create("yoko-resolved-compose", os.MFD_CLOEXEC)
+    stream = os.fdopen(fd, "w+b", closefd=True)
+    try:
+        stream.write(raw)
+        stream.flush()
+        stream.seek(0)
+        completed = _run(core, [DOCKER, "compose", "-f", "-", "config", "--hash", service], timeout=60, code="COMPOSE_HASH_DERIVATION_FAILED", stdin_fd=stream.fileno())
+    finally:
+        stream.close()
+    try:
+        parts = completed.stdout.decode("ascii").strip().split()
+    except UnicodeError as exc:
+        raise core.RuntimeFault("COMPOSE_HASH_DERIVATION_INVALID", 74) from exc
+    if len(parts) != 2 or parts[0] != service or not SHA256.fullmatch(parts[1]):
+        raise core.RuntimeFault("COMPOSE_HASH_DERIVATION_INVALID", 74)
+    return parts[1]
+
+
+def _derive_compose_domains(core: Any, profile: dict[str, Any]) -> dict[str, str]:
+    _write_fixed_file(core, ACTIVATE_OVERLAY, _compose_overlay(TARGET_GRAVITY, TARGET_MAX, activate=True), 0o400)
+    _write_fixed_file(core, ROLLBACK_OVERLAY, _compose_overlay(ROLLBACK_GRAVITY, ROLLBACK_MAX, activate=False), 0o400)
+    _validate_projection(core, profile, ACTIVATE_OVERLAY, activate=True)
+    _validate_projection(core, profile, ROLLBACK_OVERLAY, activate=False)
+    return {
+        "target_gravity_compose_hash": _compose_hash(core, profile, ACTIVATE_OVERLAY, "gravity-mvp"),
+        "target_max_compose_hash": _compose_hash(core, profile, ACTIVATE_OVERLAY, "max-web-scraper"),
+        "rollback_gravity_compose_hash": _compose_hash(core, profile, ROLLBACK_OVERLAY, "gravity-mvp"),
+        "rollback_max_compose_hash": _compose_hash(core, profile, ROLLBACK_OVERLAY, "max-web-scraper"),
+    }
+
+
+def _storage_guard(core: Any, profile: dict[str, Any]) -> dict[str, int]:
+    filesystem = os.statvfs(core.mapped("/var/lib/yoko-privileged-runtime"))
+    available = filesystem.f_bavail * filesystem.f_frsize
+    minimum = int(profile["limits"]["minimum_free_bytes"])
+    if available < minimum:
+        raise core.RuntimeFault("INSUFFICIENT_RELEASE_STORAGE", 75, {"available_bytes": available, "minimum_free_bytes": minimum})
+    return {"available_bytes": available, "minimum_free_bytes": minimum}
+
+
+def _predecessor_identity(core: Any, policy: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any]:
+    gravity, maximum = _pair(core, policy, profile)
+    kind, vector = _classify(profile, gravity, maximum)
+    predecessor = profile["predecessor"]
+    if kind != "PREDECESSOR_PAIR":
+        raise core.RuntimeFault("PREDECESSOR_PAIR_REQUIRED", 74, {"pair_state": kind, "vector": list(vector)})
+    for current, expected, name in (
+        (gravity, predecessor["gravity"], "GRAVITY"),
+        (maximum, predecessor["max_scraper"], "MAX"),
+    ):
+        if (
+            current.get("container_id") != expected.get("container_id")
+            or current.get("image_id") != expected.get("image_id")
+            or current.get("compose_labels", {}).get("com.docker.compose.config-hash") != expected.get("compose_config_hash")
+            or current.get("running") is not True
+            or current.get("health") != "healthy"
+            or current.get("restart_count") != 0
+        ):
+            raise core.RuntimeFault(f"{name}_PREDECESSOR_IDENTITY_DRIFT", 74)
+    _max_volume_exact(core, profile, maximum)
+    database = _database_status(core, profile)
+    if database["state"] != "EXACT":
+        raise core.RuntimeFault("DATABASE_PREDECESSOR_IDENTITY_DRIFT", 74)
+    unrelated = _unrelated_fingerprint(core, policy)
+    if unrelated != predecessor.get("unrelated_semantic_fingerprint_sha256"):
+        raise core.RuntimeFault("UNRELATED_SERVICE_IDENTITY_DRIFT", 74)
+    _, environment = _secure_compose_inputs(core, profile)
+    return {
+        "gravity_semantic": gravity["semantic"],
+        "max_semantic": maximum["semantic"],
+        "environment_sha256": _sha_file(environment, 4 * 1024 * 1024),
+        "unrelated_semantic_fingerprint_sha256": unrelated,
+        "database": database,
+    }
+
+
+def _compose_up(core: Any, profile: dict[str, Any], state: dict[str, Any], overlay: str, *, activate: bool) -> None:
+    _validate_compose_inputs(core, profile, state)
+    _validate_projection(core, profile, overlay, activate=activate)
+    log = core.mapped(COMPOSE_LOG)
+    fd = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600)
+    try:
+        deployment = profile["deployment"]
+        _run(
+            core,
+            [
+                *_compose_args(profile, overlay), "up", "-d", "--no-deps", "--no-build", "--pull", "never",
+                "--force-recreate", "--wait", "--wait-timeout", str(profile["limits"]["health_timeout_seconds"]),
+                deployment["gravity_service"], deployment["max_service"],
+            ],
+            timeout=int(profile["limits"]["activation_timeout_seconds"]),
+            code="PAIR_COMPOSE_ACTIVATION_FAILED",
+            stdout_fd=fd,
+            stderr_fd=fd,
+        )
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _wait_pair(core: Any, policy: dict[str, Any], profile: dict[str, Any], expected: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    deadline = time.monotonic() + int(profile["limits"]["health_timeout_seconds"])
+    last: tuple[dict[str, Any], dict[str, Any]] | None = None
+    while time.monotonic() <= deadline:
+        last = _pair(core, policy, profile)
+        kind, _ = _classify(profile, *last)
+        if kind == expected and all(item.get("running") is True and item.get("health") == "healthy" for item in last):
+            return last
+        time.sleep(2)
+    raise core.RuntimeFault("PAIR_HEALTH_TIMEOUT", 74, {"expected_pair": expected})
+
+
+def _postcheck(core: Any, policy: dict[str, Any], profile: dict[str, Any], state: dict[str, Any], expected: str) -> dict[str, Any]:
+    _validate_compose_inputs(core, profile, state)
+    gravity, maximum = _wait_pair(core, policy, profile, expected)
+    kind, vector = _classify(profile, gravity, maximum)
+    if kind != expected:
+        raise core.RuntimeFault("PAIR_POSTCHECK_IDENTITY_DRIFT", 74)
+    _max_volume_exact(core, profile, maximum)
+    if _preserved_semantic(gravity["semantic"]) != _preserved_semantic(state["gravity_semantic"]):
+        raise core.RuntimeFault("GRAVITY_RUNTIME_SEMANTIC_DRIFT", 74)
+    if _preserved_semantic(maximum["semantic"]) != _preserved_semantic(state["max_semantic"]):
+        raise core.RuntimeFault("MAX_RUNTIME_SEMANTIC_DRIFT", 74)
+    if expected == "TARGET_PAIR":
+        if gravity["semantic"].get("command") != ["npm", "run", "start"] or maximum["semantic"].get("command") != state["max_semantic"].get("command"):
+            raise core.RuntimeFault("TARGET_RUNTIME_COMMAND_DRIFT", 74)
+        expected_hashes = (state["target_gravity_compose_hash"], state["target_max_compose_hash"])
+    else:
+        if gravity["semantic"].get("command") != state["gravity_semantic"].get("command") or maximum["semantic"].get("command") != state["max_semantic"].get("command"):
+            raise core.RuntimeFault("ROLLBACK_RUNTIME_COMMAND_DRIFT", 74)
+        expected_hashes = (state["rollback_gravity_compose_hash"], state["rollback_max_compose_hash"])
+    actual_hashes = (
+        gravity.get("compose_labels", {}).get("com.docker.compose.config-hash"),
+        maximum.get("compose_labels", {}).get("com.docker.compose.config-hash"),
+    )
+    if actual_hashes != expected_hashes:
+        raise core.RuntimeFault("PAIR_COMPOSE_CONFIG_HASH_DRIFT", 74)
+    database = _database_status(core, profile)
+    if database["state"] != "EXACT":
+        raise core.RuntimeFault("DATABASE_CHANGED_DURING_RELEASE", 74)
+    unrelated = _unrelated_fingerprint(core, policy)
+    if unrelated != state["unrelated_semantic_fingerprint_sha256"]:
+        raise core.RuntimeFault("UNRELATED_SERVICE_CHANGED_DURING_RELEASE", 74)
+    return {
+        "pair_state": kind,
+        "vector": list(vector),
+        "gravity_container_id": gravity["container_id"],
+        "gravity_image_id": gravity["image_id"],
+        "max_container_id": maximum["container_id"],
+        "max_image_id": maximum["image_id"],
+        "max_volume_preserved": True,
+        "database": database,
+        "unrelated_services_unchanged": True,
+        "healthy": True,
+    }
+
+
+def _rollback_pair(core: Any, policy: dict[str, Any], profile: dict[str, Any], state: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    gravity, maximum = _pair(core, policy, profile)
+    kind, vector = _classify(profile, gravity, maximum)
+    if kind == "UNKNOWN":
+        raise core.RuntimeFault("UNKNOWN_PAIR_FAIL_CLOSED", 74, {"vector": list(vector)})
+    mutated = kind != "PREDECESSOR_PAIR"
+    if mutated:
+        _compose_up(core, profile, state, ROLLBACK_OVERLAY, activate=False)
+    return _postcheck(core, policy, profile, state, "PREDECESSOR_PAIR"), mutated
+
+
+def _release_preflight(core: Any, policy: dict[str, Any], profile: dict[str, Any], invocation: Any) -> dict[str, Any]:
+    with _lock(core):
+        if core.audit_status()["state"] not in {"EMPTY", "VALID"}:
+            raise core.RuntimeFault("AUDIT_MUTATION_DISABLED", 78)
+        state = _read_state(core)
+        gravity, maximum = _pair(core, policy, profile)
+        pair_state, vector = _classify(profile, gravity, maximum)
+        if pair_state == "UNKNOWN":
+            raise core.RuntimeFault("UNKNOWN_PAIR_FAIL_CLOSED", 74, {"vector": list(vector)})
+        if pair_state == "TARGET_PAIR" and state.get("phase") == "ACTIVATED":
+            post = _postcheck(core, policy, profile, state, "TARGET_PAIR")
+            return {"profile_id": PROFILE_ID, "status": "ALREADY_ACTIVATED", "postcheck": post, "production_mutated": False}
+        if pair_state == "MIXED_KNOWN":
+            if state.get("phase") == "UNINITIALIZED":
+                raise core.RuntimeFault("MIXED_PAIR_WITHOUT_PREFLIGHT_AUTHORITY", 74)
+            rollback, mutated = _rollback_pair(core, policy, profile, state)
+            next_state = {**state, "phase": "ROLLED_BACK", "mixed_recovery_at": core.now()}
+            _write_state(core, next_state)
+            _audit(core, invocation, state, "mixed_rolled_back", next_state)
+            return {"profile_id": PROFILE_ID, "status": "MIXED_STATE_ROLLED_BACK", "rollback": rollback, "production_mutated": mutated}
+        if pair_state != "PREDECESSOR_PAIR":
+            raise core.RuntimeFault("PREDECESSOR_PAIR_REQUIRED", 74)
+        identity = _predecessor_identity(core, policy, profile)
+        receipt = _artifact_receipt(core, profile)
+        for name in sorted(receipt["files"]):
+            _artifact_path(core, profile, name, hash_content=True)
+        storage = _storage_guard(core, profile)
+        target_gravity = _load_target(core, profile, "gravity", "gravity-image.docker.tar", TARGET_GRAVITY)
+        target_max = _load_target(core, profile, "max", "max-scraper-image.docker.tar", TARGET_MAX)
+        _seal_rollback_reference(core, profile["predecessor"]["gravity"]["image_id"], ROLLBACK_GRAVITY, "gravity")
+        _seal_rollback_reference(core, profile["predecessor"]["max_scraper"]["image_id"], ROLLBACK_MAX, "max")
+        domains = _derive_compose_domains(core, profile)
+        next_state = {
+            "schema": STATE_SCHEMA,
+            "profile_id": PROFILE_ID,
+            "phase": "PREFLIGHTED",
+            "preflight_at": core.now(),
+            "environment_sha256": identity["environment_sha256"],
+            "gravity_semantic": identity["gravity_semantic"],
+            "max_semantic": identity["max_semantic"],
+            "unrelated_semantic_fingerprint_sha256": identity["unrelated_semantic_fingerprint_sha256"],
+            "database_identity_sha256": identity["database"]["database_identity_sha256"],
+            "migration_rows_sha256": identity["database"]["migration_rows_sha256"],
+            "target_gravity_image_id": target_gravity["Id"],
+            "target_max_image_id": target_max["Id"],
+            **domains,
+        }
+        _write_state(core, next_state)
+        _audit(core, invocation, state, "ok", next_state)
+        return {
+            "profile_id": PROFILE_ID,
+            "status": "PREFLIGHTED",
+            "pair_state": "PREDECESSOR_PAIR",
+            "target_gravity_image_id": target_gravity["Id"],
+            "target_max_image_id": target_max["Id"],
+            "artifact_receipt_sha256": profile["artifact_admission"]["receipt_sha256"],
+            "max_volume_preserved": True,
+            "database": identity["database"],
+            "storage": storage,
+            "production_mutated": False,
+        }
+
+
+def _activation_failure(core: Any, failure: BaseException) -> dict[str, Any]:
+    if isinstance(failure, core.RuntimeFault):
+        return {"code": failure.code, "details": failure.details if isinstance(failure.details, dict) else {}}
+    return {"code": "INTERNAL_ACTIVATION_FAILURE", "details": {}}
+
+
+def _release_activate(core: Any, policy: dict[str, Any], profile: dict[str, Any], invocation: Any) -> dict[str, Any]:
+    with _lock(core):
+        if core.audit_status()["state"] not in {"EMPTY", "VALID"}:
+            raise core.RuntimeFault("AUDIT_MUTATION_DISABLED", 78)
+        state = _read_state(core)
+        if state.get("phase") not in {"PREFLIGHTED", "ACTIVATION_INTENT", "ACTIVATED", "ROLLED_BACK"}:
+            raise core.RuntimeFault("RELEASE_PREFLIGHT_REQUIRED", 77)
+        gravity, maximum = _pair(core, policy, profile)
+        pair_state, vector = _classify(profile, gravity, maximum)
+        if pair_state == "UNKNOWN":
+            raise core.RuntimeFault("UNKNOWN_PAIR_FAIL_CLOSED", 74, {"vector": list(vector)})
+        if pair_state == "TARGET_PAIR":
+            try:
+                post = _postcheck(core, policy, profile, state, "TARGET_PAIR")
+            except Exception as failure:
+                activation = _activation_failure(core, failure)
+                rollback, mutated = _rollback_pair(core, policy, profile, state)
+                next_state = {**state, "phase": "ROLLED_BACK", "activation_failure": activation, "rollback_at": core.now()}
+                _write_state(core, next_state)
+                _audit(core, invocation, state, "target_postcheck_failed_rolled_back", next_state)
+                raise core.RuntimeFault("ACTIVATION_FAILED_AUTOMATIC_ROLLBACK_OK", 74, {"activation_failure": activation, "rollback": rollback, "production_mutated": mutated})
+            next_state = {**state, "phase": "ACTIVATED", "activation_completed_at": core.now()}
+            _write_state(core, next_state)
+            _audit(core, invocation, state, "recovered_ok", next_state)
+            return {"profile_id": PROFILE_ID, "status": "ACTIVATED_RECOVERED" if state.get("phase") == "ACTIVATION_INTENT" else "ALREADY_ACTIVATED", "postcheck": post, "production_mutated": False}
+        if pair_state == "MIXED_KNOWN":
+            rollback, mutated = _rollback_pair(core, policy, profile, state)
+            next_state = {**state, "phase": "ROLLED_BACK", "mixed_recovery_at": core.now()}
+            _write_state(core, next_state)
+            _audit(core, invocation, state, "mixed_rolled_back", next_state)
+            return {"profile_id": PROFILE_ID, "status": "MIXED_STATE_ROLLED_BACK_RECOVERED", "rollback": rollback, "production_mutated": mutated}
+        if state.get("phase") in {"ACTIVATED", "ROLLED_BACK"}:
+            raise core.RuntimeFault("FRESH_PREFLIGHT_REQUIRED", 77)
+        _validate_compose_inputs(core, profile, state)
+        _validate_target_image(core, profile["target"]["gravity"], TARGET_GRAVITY, "gravity")
+        _validate_target_image(core, profile["target"]["max_scraper"], TARGET_MAX, "max")
+        before = state
+        if state.get("phase") == "PREFLIGHTED":
+            state = {**state, "phase": "ACTIVATION_INTENT", "activation_intent_at": core.now()}
+            _write_state(core, state)
+            _audit(core, invocation, before, "intent", state)
+        try:
+            _compose_up(core, profile, state, ACTIVATE_OVERLAY, activate=True)
+            post = _postcheck(core, policy, profile, state, "TARGET_PAIR")
+            next_state = {**state, "phase": "ACTIVATED", "activation_completed_at": core.now()}
+            _write_state(core, next_state)
+            _audit(core, invocation, state, "ok", next_state)
+            return {"profile_id": PROFILE_ID, "status": "ACTIVATED", "postcheck": post, "production_mutated": True, "automatic_rollback": False}
+        except Exception as failure:
+            activation = _activation_failure(core, failure)
+            current_gravity, current_max = _pair(core, policy, profile)
+            current_kind, current_vector = _classify(profile, current_gravity, current_max)
+            failed_state = {**state, "activation_failure": activation, "activation_failed_at": core.now()}
+            _write_state(core, failed_state)
+            if current_kind == "UNKNOWN":
+                _audit(core, invocation, state, "failed_unknown_fail_closed", failed_state)
+                raise core.RuntimeFault("ACTIVATION_FAILED_UNKNOWN_STATE_NOT_OVERWRITTEN", 74, {"activation_failure": activation, "vector": list(current_vector)})
+            try:
+                rollback, mutated = _rollback_pair(core, policy, profile, failed_state)
+            except Exception as rollback_failure:
+                rollback_identity = _activation_failure(core, rollback_failure)
+                terminal = {**failed_state, "phase": "ROLLBACK_FAILED", "rollback_failure": rollback_identity}
+                _write_state(core, terminal)
+                _audit(core, invocation, failed_state, "activation_and_rollback_failed", terminal)
+                raise core.RuntimeFault("ACTIVATION_AND_AUTOMATIC_ROLLBACK_FAILED", 74, {"activation_failure": activation, "rollback_failure": rollback_identity})
+            terminal = {**failed_state, "phase": "ROLLED_BACK", "rollback_at": core.now()}
+            _write_state(core, terminal)
+            _audit(core, invocation, failed_state, "failed_rolled_back", terminal)
+            raise core.RuntimeFault("ACTIVATION_FAILED_AUTOMATIC_ROLLBACK_OK", 74, {"activation_failure": activation, "rollback": rollback, "production_mutated": mutated})
+
+
+def _rollback(core: Any, policy: dict[str, Any], profile: dict[str, Any], invocation: Any) -> dict[str, Any]:
+    with _lock(core):
+        if core.audit_status()["state"] not in {"EMPTY", "VALID"}:
+            raise core.RuntimeFault("AUDIT_MUTATION_DISABLED", 78)
+        state = _read_state(core)
+        if state.get("phase") == "UNINITIALIZED":
+            raise core.RuntimeFault("ROLLBACK_NOT_AVAILABLE_BEFORE_PREFLIGHT", 77)
+        gravity, maximum = _pair(core, policy, profile)
+        pair_state, vector = _classify(profile, gravity, maximum)
+        if pair_state == "UNKNOWN":
+            raise core.RuntimeFault("UNKNOWN_PAIR_FAIL_CLOSED", 74, {"vector": list(vector)})
+        post, mutated = _rollback_pair(core, policy, profile, state)
+        next_state = {**state, "phase": "ROLLED_BACK", "rollback_at": core.now()}
+        _write_state(core, next_state)
+        _audit(core, invocation, state, "ok", next_state)
+        return {"profile_id": PROFILE_ID, "status": "ROLLED_BACK" if mutated else "ALREADY_ROLLED_BACK", "postcheck": post, "production_mutated": mutated}
+
+
+def dispatch(core: Any, policy: dict[str, Any], invocation: Any) -> dict[str, Any]:
+    profile = _load_profile(core)
+    if invocation.resource is not None or invocation.relative_path is not None:
+        raise core.RuntimeFault("PROFILE_ARGUMENTS_FORBIDDEN", 64)
+    if invocation.primitive == "database-status":
+        with _lock(core):
+            return _database_status(core, profile)
+    if invocation.primitive == "release-preflight":
+        return _release_preflight(core, policy, profile, invocation)
+    if invocation.primitive == "release-activate":
+        return _release_activate(core, policy, profile, invocation)
+    if invocation.primitive == "rollback":
+        return _rollback(core, policy, profile, invocation)
+    raise core.RuntimeFault("PROFILE_DISABLED", 77, {"profile": invocation.primitive.replace("-", "_")})

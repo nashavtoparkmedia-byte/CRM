@@ -1,0 +1,258 @@
+#!/usr/bin/python3 -I
+"""Integrity-bound Runtime V2 wrapper for one coordinated Gravity + MAX pair."""
+from __future__ import annotations
+
+import hashlib
+import importlib.machinery
+import importlib.util
+import json
+import os
+import stat
+import sys
+from pathlib import Path
+from types import ModuleType
+from typing import Any
+
+
+RUNTIME_ABI = "2.0.0"
+PACKAGE_VERSION = "2.0.0-15"
+TEST_ENV = "YOKO_PRIVILEGED_RUNTIME_TEST_ROOT"
+CORE_PATH = "/usr/local/libexec/yoko-privileged-runtime/core-2.0.0.py"
+CORE_SHA256 = "0f97bafbfe5b430fa7994119b1fc76fead4bdbee26766c730d9e399551ebdffa"
+PREDECESSOR_OBSERVABILITY_PATH = "/usr/local/libexec/yoko-privileged-runtime/predecessor-observability-v1.py"
+PREDECESSOR_OBSERVABILITY_SHA256 = "b5ea36c50e12b0fe6c171896258ddfc00a9d2666778735cae6a9b2a8df6d4084"
+PROFILE_ID = "crm-6e3f094bf4b4-gravity-max-source-v1"
+PROFILE_RUNTIME_PATH = f"/usr/local/libexec/yoko-privileged-runtime/{PROFILE_ID}.py"
+PROFILE_ROOT = f"/usr/local/share/yoko-privileged-runtime/profiles/{PROFILE_ID}"
+PROFILE_MANIFEST_PATH = PROFILE_ROOT + "/manifest.v1.json"
+PROFILE_MANIFEST_SHA256 = "@PROFILE_MANIFEST_SHA256@"
+BOOTSTRAP_GUARD = "/var/lib/yoko-privileged-runtime/activation-bootstrap-installing.v1"
+
+
+def _root() -> Path | None:
+    supplied = os.environ.get(TEST_ENV)
+    if supplied is None:
+        return None
+    candidate = Path(supplied)
+    resolved = candidate.resolve(strict=True)
+    value = candidate.lstat()
+    if (
+        os.geteuid() == 0
+        or not candidate.is_absolute()
+        or resolved != candidate
+        or not stat.S_ISDIR(value.st_mode)
+        or value.st_uid != os.geteuid()
+        or stat.S_IMODE(value.st_mode) & 0o022
+    ):
+        raise RuntimeError("TEST_ROOT_UNSAFE")
+    return candidate
+
+
+def _mapped(path: str, root: Path | None) -> Path:
+    if not path.startswith("/"):
+        raise RuntimeError("PATH_INVALID")
+    return Path(path) if root is None else root / path.lstrip("/")
+
+
+def _secure_file(path: str, mode: int, root: Path | None, maximum: int) -> Path:
+    target = _mapped(path, root)
+    owner = (0, 0) if root is None else (os.geteuid(), os.getegid())
+    current = _mapped("/", root)
+    for part in Path(path).parts[1:-1]:
+        current = current / part
+        value = current.lstat()
+        if current.is_symlink() or not stat.S_ISDIR(value.st_mode) or (value.st_uid, value.st_gid) != owner or stat.S_IMODE(value.st_mode) & 0o022:
+            raise RuntimeError("UNSAFE_ANCESTOR")
+    value = target.lstat()
+    if (
+        target.is_symlink()
+        or not stat.S_ISREG(value.st_mode)
+        or (value.st_uid, value.st_gid) != owner
+        or stat.S_IMODE(value.st_mode) != mode
+        or value.st_nlink != 1
+        or not 0 <= value.st_size <= maximum
+    ):
+        raise RuntimeError("UNSAFE_FILE")
+    return target
+
+
+def _sha(path: Path, maximum: int) -> str:
+    fd = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+    digest = hashlib.sha256()
+    total = 0
+    try:
+        while True:
+            chunk = os.read(fd, 1024 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > maximum:
+                raise RuntimeError("FILE_TOO_LARGE")
+            digest.update(chunk)
+    finally:
+        os.close(fd)
+    return digest.hexdigest()
+
+
+def _load(name: str, path: Path) -> ModuleType:
+    loader = importlib.machinery.SourceFileLoader(name, str(path))
+    spec = importlib.util.spec_from_loader(name, loader)
+    if spec is None:
+        raise RuntimeError("MODULE_LOAD_FAILED")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    loader.exec_module(module)
+    return module
+
+
+def _load_core(root: Path | None) -> ModuleType:
+    target = _secure_file(CORE_PATH, 0o444, root, 4 * 1024 * 1024)
+    if _sha(target, 4 * 1024 * 1024) != CORE_SHA256:
+        raise RuntimeError("CORE_IDENTITY_MISMATCH")
+    return _load("yoko_privileged_runtime_core_2_0_0", target)
+
+
+def _load_observer(root: Path | None) -> ModuleType:
+    target = _secure_file(PREDECESSOR_OBSERVABILITY_PATH, 0o444, root, 4 * 1024 * 1024)
+    if _sha(target, 4 * 1024 * 1024) != PREDECESSOR_OBSERVABILITY_SHA256:
+        raise RuntimeError("PREDECESSOR_OBSERVABILITY_IDENTITY_MISMATCH")
+    return _load("yoko_predecessor_observability_v1", target)
+
+
+def _overlay_identity(core: ModuleType, root: Path | None) -> dict[str, str]:
+    target = _secure_file(PROFILE_MANIFEST_PATH, 0o444, root, 256 * 1024)
+    if _sha(target, 256 * 1024) != PROFILE_MANIFEST_SHA256:
+        raise core.RuntimeFault("PROFILE_MANIFEST_IDENTITY_MISMATCH", 78)
+    try:
+        manifest = json.loads(target.read_text(encoding="ascii"))
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise core.RuntimeFault("PROFILE_MANIFEST_INVALID", 78) from exc
+    required = {"schema", "runtime_abi", "package_version", "profile_id", "files"}
+    expected = {
+        CORE_PATH: 0o444,
+        PROFILE_RUNTIME_PATH: 0o444,
+        PROFILE_ROOT + "/profile.v1.json": 0o444,
+        PROFILE_ROOT + "/sealed-inputs.v1.json": 0o444,
+    }
+    if (
+        not isinstance(manifest, dict)
+        or set(manifest) != required
+        or manifest.get("schema") != "yoko.crm.activation-profile-install-manifest.v1"
+        or manifest.get("runtime_abi") != RUNTIME_ABI
+        or manifest.get("package_version") != PACKAGE_VERSION
+        or manifest.get("profile_id") != PROFILE_ID
+        or not isinstance(manifest.get("files"), dict)
+        or set(manifest["files"]) != set(expected)
+    ):
+        raise core.RuntimeFault("PROFILE_MANIFEST_INVALID", 78)
+    output: dict[str, str] = {}
+    for path, mode in expected.items():
+        record = manifest["files"].get(path)
+        if (
+            not isinstance(record, dict)
+            or set(record) != {"sha256", "mode"}
+            or record.get("mode") != format(mode, "04o")
+            or not isinstance(record.get("sha256"), str)
+            or len(record["sha256"]) != 64
+        ):
+            raise core.RuntimeFault("PROFILE_MANIFEST_INVALID", 78)
+        item = _secure_file(path, mode, root, 4 * 1024 * 1024)
+        actual = _sha(item, 4 * 1024 * 1024)
+        if actual != record["sha256"]:
+            raise core.RuntimeFault("PROFILE_ARTIFACT_IDENTITY_MISMATCH", 78)
+        output[path] = actual
+    return output
+
+
+def _dispatch(core: ModuleType, profile: ModuleType, observer: ModuleType, policy: dict[str, Any], invocation: Any, overlay: dict[str, str]) -> dict[str, Any]:
+    if invocation.primitive == "version":
+        result = core.dispatch(policy, invocation)
+        result.update({"package_version": PACKAGE_VERSION, "activation_profile": PROFILE_ID})
+        return result
+    if invocation.primitive == "capabilities":
+        result = core.dispatch(policy, invocation)
+        result.update({
+            "enabled_activation_profiles": ["database-status", "release-preflight", "release-activate", "rollback"],
+            "enabled_read_only_profiles": ["predecessor-observe"],
+            "disabled_profiles": {
+                "config-activation": "No configuration transaction is authorized.",
+                "database-migration": "Coordinated source release; database mutation is not authorized.",
+            },
+            "activation_profile_id": PROFILE_ID,
+            "activation_profile_manifest_sha256": PROFILE_MANIFEST_SHA256,
+        })
+        return result
+    if invocation.primitive == "self-check":
+        result = core.self_check(policy)
+        result.update({
+            "package_version": PACKAGE_VERSION,
+            "activation_profile_id": PROFILE_ID,
+            "activation_profile_manifest_sha256": PROFILE_MANIFEST_SHA256,
+            "activation_profile_identity": overlay,
+            "profile_argument_shape": "ZERO_ARGUMENT_ONLY",
+            "predecessor_observability_sha256": PREDECESSOR_OBSERVABILITY_SHA256,
+            "coordinated_pair": ["gravity-mvp", "max-web-scraper"],
+        })
+        return result
+    if invocation.primitive == "recovery-status":
+        result = core.dispatch(policy, invocation)
+        result.update({
+            "package_version": PACKAGE_VERSION,
+            "activation_profile_id": PROFILE_ID,
+            "activation_profile_manifest_sha256": PROFILE_MANIFEST_SHA256,
+        })
+        return result
+    if invocation.primitive == "predecessor-observe":
+        return observer.observe(core, policy)
+    if invocation.primitive in {"database-status", "release-preflight", "release-activate", "rollback"}:
+        guard = _mapped(BOOTSTRAP_GUARD, _root())
+        if guard.exists():
+            _secure_file(BOOTSTRAP_GUARD, 0o400, _root(), 0)
+            raise core.RuntimeFault("ACTIVATION_BOOTSTRAP_IN_PROGRESS", 77)
+        return profile.dispatch(core, policy, invocation)
+    return core.dispatch(policy, invocation)
+
+
+def _early_failure(code: str) -> int:
+    value = {
+        "schema": "yoko.privileged-runtime.response.v1", "runtime_version": RUNTIME_ABI,
+        "primitive": "invalid", "resource": None, "timestamp": "UNAVAILABLE",
+        "ok": False, "warnings": [], "evidence": {}, "errors": [{"code": code, "details": {}}],
+    }
+    print(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True))
+    return 78
+
+
+def main(argv: list[str]) -> int:
+    try:
+        root = _root()
+        core = _load_core(root)
+    except Exception:
+        return _early_failure("RUNTIME_CORE_LOAD_FAILED")
+    invocation = core.Invocation("invalid", None)
+    try:
+        core.configure_mode()
+        policy = core.load_policy()
+        core.verify_caller(policy)
+        invocation = core.parse_cli(argv)
+        overlay = _overlay_identity(core, root)
+        observer = _load_observer(root)
+        profile_target = _secure_file(PROFILE_RUNTIME_PATH, 0o444, root, 4 * 1024 * 1024)
+        profile = _load("yoko_crm_coordinated_pair_profile_v1", profile_target)
+        evidence = _dispatch(core, profile, observer, policy, invocation, overlay)
+        warnings = []
+        if core.audit_status()["state"] == "INVALID":
+            warnings.append("AUDIT_DEGRADED_READONLY")
+        print(json.dumps(core.response(invocation, evidence=evidence, warnings=warnings), sort_keys=True, separators=(",", ":"), ensure_ascii=True))
+        return 0
+    except core.RuntimeFault as exc:
+        print(json.dumps(core.response(invocation, fault=exc), sort_keys=True, separators=(",", ":"), ensure_ascii=True))
+        return exc.exit_code
+    except Exception:
+        fault = core.RuntimeFault("INTERNAL_ERROR", 70)
+        print(json.dumps(core.response(invocation, fault=fault), sort_keys=True, separators=(",", ":"), ensure_ascii=True))
+        return fault.exit_code
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))

@@ -1,0 +1,28 @@
+#!/bin/sh
+set -eu
+
+case "${1:-}" in
+    configure)
+        /usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n /usr/local/sbin/yoko-privileged-runtime self-check >/dev/null
+        /usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n /usr/local/sbin/yoko-privileged-runtime capabilities \
+            | /usr/bin/python3 -I -c 'import json,sys; v=json.load(sys.stdin); e=v["evidence"]; assert v["ok"] and e["activation_profile_id"] == "crm-6e3f094bf4b4-gravity-max-source-v1" and e["enabled_activation_profiles"] == ["database-status","release-preflight","release-activate","rollback"] and e["enabled_read_only_profiles"] == ["predecessor-observe"] and set(e["disabled_profiles"]) == {"config-activation","database-migration"}'
+        for command in "/bin/sh -c :" "/usr/bin/docker ps" "/usr/bin/dpkg --status sudo"; do
+            if /usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n $command >/dev/null 2>&1; then
+                echo 'effective sudo boundary unexpectedly allowed a forbidden command' >&2
+                exit 1
+            fi
+        done
+        for verb in self-check predecessor-observe database-status release-preflight release-activate rollback; do
+            if /usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n /usr/local/sbin/yoko-privileged-runtime "$verb" unexpected >/dev/null 2>&1; then
+                echo 'effective sudo boundary unexpectedly allowed profile arguments' >&2
+                exit 1
+            fi
+        done
+        if /usr/sbin/runuser -u codexbot -- /usr/bin/sudo -n /usr/local/sbin/yoko-privileged-runtime predecessor-observe crm.container.max_scraper >/dev/null 2>&1; then
+            echo 'predecessor observation unexpectedly accepted an argument' >&2
+            exit 1
+        fi
+        ;;
+esac
+
+exit 0

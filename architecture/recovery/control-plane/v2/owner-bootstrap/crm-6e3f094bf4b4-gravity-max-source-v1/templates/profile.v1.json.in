@@ -1,0 +1,112 @@
+{
+  "schema": "yoko.crm.coordinated-pair-activation-profile.v1",
+  "profile_id": "crm-6e3f094bf4b4-gravity-max-source-v1",
+  "host": "jvxthcorvm",
+  "runtime_abi": "2.0.0",
+  "package_version": "2.0.0-15",
+  "accepted_application": {
+    "commit": "6e3f094bf4b42c1400c705843ab107dacd6d1cf8",
+    "tree": "8d3e507cda69a2862db946b2e34c5ea329c425ac",
+    "gravity_subtree": "abbe37034aa88c478eb8e44b6be5b047e9bcd574",
+    "max_subtree": "e9c3c0ce56c744de1843547276e70d8f2d970197"
+  },
+  "stage_a": {
+    "builder_commit": "64f3f529e5e31368c55a40a91157db7e740e5ed1",
+    "builder_tree": "a5448a31ffdb84ead24e9cbf6a8252c755c55293",
+    "run_id": 33542881677,
+    "artifact_id": 9814812256,
+    "artifact_name": "coordinated-gravity-max-6e3f094bf4b4-64f3f529e5e31368c55a40a91157db7e740e5ed1",
+    "artifact_digest": "sha256:721c56b5800a4b2b4855cd5f9dff323c27057e3c8368f155e72c6cd01558f3ea",
+    "artifact_bytes": 4803272912
+  },
+  "artifact_admission": {
+    "receipt_path": "@ARTIFACT_RECEIPT_PATH@",
+    "receipt_sha256": "@ARTIFACT_RECEIPT_SHA256@",
+    "files": @ARTIFACT_FILES_JSON@
+  },
+  "deployment": {
+    "compose_path": "/opt/crm/deploy/docker-compose.production.yml",
+    "environment_path": "/opt/crm/.env.production",
+    "project": "crm",
+    "project_directory": "/opt/crm/deploy",
+    "gravity_service": "gravity-mvp",
+    "max_service": "max-web-scraper",
+    "gravity_resource": "crm.container.gravity_mvp",
+    "max_resource": "crm.container.max_scraper",
+    "postgres_container": "crm-postgres"
+  },
+  "predecessor": {
+    "capture_completed_at": "@CAPTURE_COMPLETED_AT@",
+    "release_critical_identity_sha256": "@PREDECESSOR_RELEASE_IDENTITY@",
+    "compose_sha256": "84a9f46904a65a69afcf19d2e56162e026b29718da52c43160abfc5449f84cc1",
+    "unrelated_semantic_fingerprint_sha256": "@UNRELATED_FINGERPRINT@",
+    "gravity": {
+      "container_id": "@PREDECESSOR_GRAVITY_CONTAINER@",
+      "image_id": "sha256:5531c67e99b572356f897246b8c845ab4f9b232d9dc029fa311397e46a4d715c",
+      "compose_config_hash": "@PREDECESSOR_GRAVITY_CONFIG_HASH@",
+      "rollback_reference": "yoko/crm-gravity-mvp:rollback-5531c67e99b572356f897246b8c845ab4f9b232d"
+    },
+    "max_scraper": {
+      "container_id": "@PREDECESSOR_MAX_CONTAINER@",
+      "image_id": "sha256:87835969ed6335a99d50e1cc2eaf70aa33fdbaf937f4cef658a926f55b26f365",
+      "compose_config_hash": "@PREDECESSOR_MAX_CONFIG_HASH@",
+      "rollback_reference": "yoko/crm-max-scraper:rollback-87835969ed6335a99d50e1cc2eaf70aa33fdbaf9",
+      "volume": {
+        "name": "crm_max_user_data",
+        "target": "/app/user_data",
+        "read_write": true,
+        "source_sha256": "fc08035e511fd21c704ef93e6de3948239f40b5f1a6fb6869aec247a3406f2a3"
+      }
+    }
+  },
+  "target": {
+    "gravity": {
+      "reference": "yoko/crm-gravity-mvp:6e3f094bf4b4-64f3f529e5e31368c55a40a91157db7e740e5ed1-coordinated-v1",
+      "image_id": "sha256:707a0e82514468338192d01600cf5cc46c15be6ca0a37e0498a48156b0fb5a3e",
+      "containerd_image_id": "sha256:00ffd8b1ae64aa3018f26578da05a96c9f1e77e42d8fc9906f0f4ddaa7918af2",
+      "runtime_command_override": ["npm", "run", "start"]
+    },
+    "max_scraper": {
+      "reference": "yoko/crm-max-scraper:6e3f094bf4b4-64f3f529e5e31368c55a40a91157db7e740e5ed1-coordinated-v1",
+      "image_id": "sha256:653d3c3714ed62777b3307a1da96c21ddc5218ce103a8b0fcf0a0bad88c86307",
+      "containerd_image_id": "sha256:75e2e96bb07acf9fe25f4aab6c89175b6c13fa10bf71e2b9005f6f8cc319ab5a"
+    }
+  },
+  "database": {
+    "postgres_container_id": "@POSTGRES_CONTAINER@",
+    "postgres_image_id": "sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229",
+    "database_identity_sha256": "ed88dfeaad2a3dc2e759590d295992cd06531d4403d896ded00b21ea667be1c9",
+    "applied_migration_count": 62,
+    "migration_rows_sha256": "@MIGRATION_ROWS_SHA256@",
+    "mutation_authorized": false
+  },
+  "limits": {
+    "minimum_free_bytes": 8589934592,
+    "image_load_timeout_seconds": 3600,
+    "activation_timeout_seconds": 300,
+    "health_timeout_seconds": 180
+  },
+  "enabled_zero_argument_profiles": [
+    "database-status",
+    "release-preflight",
+    "release-activate",
+    "rollback"
+  ],
+  "disabled_profiles": {
+    "config-activate": "No configuration transaction is required or authorized.",
+    "database-migrate": "Coordinated release; production database mutation is not authorized."
+  },
+  "negative_properties": {
+    "arbitrary_command_execution": false,
+    "arbitrary_paths": false,
+    "arbitrary_sql": false,
+    "arbitrary_artifact_selection": false,
+    "arbitrary_service_selection": false,
+    "arbitrary_environment_override": false,
+    "docker_socket_delegation": false,
+    "package_install_capability": false,
+    "database_mutation": false,
+    "persistent_volume_mutation": false,
+    "contact_identity_mutation": false
+  }
+}

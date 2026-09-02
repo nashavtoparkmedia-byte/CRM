@@ -1,0 +1,9 @@
+{
+  "schema": "yoko.crm.coordinated-runtime-production-snapshot.v1",
+  "started_at": "PENDING",
+  "completed_at": "PENDING",
+  "production_mutated": false,
+  "secret_values_emitted": false,
+  "commands": {},
+  "sealing": {}
+}
