@@ -16,7 +16,7 @@
   "current": {
     "tracked_inventory_sha256": "23312474f974e5321ec9e3140ad91fec00b75ce06b64563c051e2e16f9a22cdb",
     "tracked_executable_surfaces": 2305,
-    "coverage_sha256": "60fab809d88356e9b182b9ae0149d1b6c19ff6e30aa300d1cf013348e5370bd8"
+    "coverage_sha256": "988764783e0ee9ac2850b4378c716f26d9c1fcda5a1d12237266863ea802a805"
   },
   "exact_inventory_changes": [
     {
