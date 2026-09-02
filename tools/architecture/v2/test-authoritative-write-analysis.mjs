@@ -329,6 +329,94 @@ const escapedHashingReadTriage = {
   }],
 }
 assert.equal(verifyAuthoritativeWriteAnalysis(escapedHashingReadAnalysis, escapedHashingReadTriage, analysis, capabilities).status, 'PASS')
+const analyzerResolvedFunctionReadSite = {
+  ...mixedScriptReadSite,
+  site_signature: 'reviewed-static-mixed-script-analyzer-resolved-functions',
+  ambiguity_reasons: ['dynamic_sql_fragment'],
+}
+const analyzerResolvedFunctionReadAnalysis = {
+  ...mixedScriptReadAnalysis,
+  write_sites: mixedScriptReadAnalysis.write_sites.map(site => (
+    site.site_signature === mixedScriptReadSite.site_signature ? analyzerResolvedFunctionReadSite : site
+  )),
+}
+const analyzerResolvedFunctionReadTriage = {
+  ...mixedScriptReadTriage,
+  current_exact_review: {
+    ...mixedScriptReadTriage.current_exact_review,
+    sorted_site_signatures_sha256: createHash('sha256').update(`${analyzerResolvedFunctionReadSite.site_signature}\n`).digest('hex'),
+  },
+  records: [{
+    ...reviewRecordFor(analyzerResolvedFunctionReadSite, 'RESOLVED_NON_WRITE'),
+    rationale: 'Exact SQL review proves a read-only projection after the analyzer resolved function side effects.',
+  }],
+  non_write_proofs: [{
+    ...mixedScriptReadProof,
+    site_signature: analyzerResolvedFunctionReadSite.site_signature,
+    evidence: mixedScriptReadProof.evidence.map(value => value === `analysis_site_signature:${mixedScriptReadSite.site_signature}`
+      ? `analysis_site_signature:${analyzerResolvedFunctionReadSite.site_signature}`
+      : value),
+  }],
+}
+assert.equal(verifyAuthoritativeWriteAnalysis(
+  analyzerResolvedFunctionReadAnalysis,
+  analyzerResolvedFunctionReadTriage,
+  analysis,
+  capabilities,
+).status, 'PASS')
+const escapedAnalyzerResolvedFunctionReadSite = {
+  ...analyzerResolvedFunctionReadSite,
+  site_signature: 'reviewed-static-mixed-script-escaped-analyzer-resolved-functions',
+  ambiguity_reasons: ['dialect_dependent_string_escape', 'dynamic_sql_fragment'],
+}
+const escapedAnalyzerResolvedFunctionReadAnalysis = {
+  ...analyzerResolvedFunctionReadAnalysis,
+  write_sites: analyzerResolvedFunctionReadAnalysis.write_sites.map(site => (
+    site.site_signature === analyzerResolvedFunctionReadSite.site_signature ? escapedAnalyzerResolvedFunctionReadSite : site
+  )),
+}
+const escapedAnalyzerResolvedFunctionReadTriage = {
+  ...analyzerResolvedFunctionReadTriage,
+  current_exact_review: {
+    ...analyzerResolvedFunctionReadTriage.current_exact_review,
+    sorted_site_signatures_sha256: createHash('sha256').update(`${escapedAnalyzerResolvedFunctionReadSite.site_signature}\n`).digest('hex'),
+  },
+  records: [{
+    ...reviewRecordFor(escapedAnalyzerResolvedFunctionReadSite, 'RESOLVED_NON_WRITE'),
+    rationale: 'Exact escaped SQL review proves a read-only projection after the analyzer resolved function side effects.',
+  }],
+  non_write_proofs: [{
+    ...analyzerResolvedFunctionReadTriage.non_write_proofs[0],
+    site_signature: escapedAnalyzerResolvedFunctionReadSite.site_signature,
+    evidence: analyzerResolvedFunctionReadTriage.non_write_proofs[0].evidence.map(value => (
+      value === `analysis_site_signature:${analyzerResolvedFunctionReadSite.site_signature}`
+        ? `analysis_site_signature:${escapedAnalyzerResolvedFunctionReadSite.site_signature}`
+        : value
+    )),
+  }],
+}
+assert.equal(verifyAuthoritativeWriteAnalysis(
+  escapedAnalyzerResolvedFunctionReadAnalysis,
+  escapedAnalyzerResolvedFunctionReadTriage,
+  analysis,
+  capabilities,
+).status, 'PASS')
+const invalidMixedScriptReasonSite = {
+  ...analyzerResolvedFunctionReadSite,
+  ambiguity_reasons: ['dynamic_sql_fragment', 'unreviewed_reason'],
+}
+assert.throws(() => verifyAuthoritativeWriteAnalysis({
+  ...analyzerResolvedFunctionReadAnalysis,
+  write_sites: analyzerResolvedFunctionReadAnalysis.write_sites.map((site) => (
+    site.site_signature === analyzerResolvedFunctionReadSite.site_signature ? invalidMixedScriptReasonSite : site
+  )),
+}, {
+  ...analyzerResolvedFunctionReadTriage,
+  records: [{
+    ...reviewRecordFor(invalidMixedScriptReasonSite, 'RESOLVED_NON_WRITE'),
+    rationale: 'Malformed analyzer ambiguity reason must remain fail closed.',
+  }],
+}, analysis, capabilities), /ambiguity shape drift/)
 assert.throws(() => verifyAuthoritativeWriteAnalysis(mixedScriptReadAnalysis, {
   ...mixedScriptReadTriage,
   non_write_proofs: [{ ...mixedScriptReadProof, resolved_target: { ...mixedScriptReadProof.resolved_target, sql_sha256: 'c'.repeat(64) } }],
