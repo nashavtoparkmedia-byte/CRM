@@ -11,7 +11,6 @@
 // If a second invocation arrives, it can check this and refuse to start.
 
 import { randomUUID } from 'node:crypto'
-import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { YandexFleetService } from '@/lib/YandexFleetService'
 import { getThresholds, recalculateAllSegments } from '@/lib/scoring'
@@ -147,11 +146,15 @@ async function acquireLease(bypassCooldown: boolean): Promise<{
     const staleBefore = new Date(now.getTime() - YANDEX_SYNC_RUNNING_STALE_MS)
     const cooldownBefore = new Date(now.getTime() - COOLDOWN_MS)
     const leaseMarker = `${LEASE_PREFIX}${randomUUID()}`
-    const acquired = await prisma.$queryRaw<Array<{ service: string }>>(Prisma.sql`
+    // The statement is deliberately a fixed SQL literal. `$executeRawUnsafe`
+    // is used only to pass PostgreSQL positional parameters; no identifier or
+    // value is interpolated into the SQL text.
+    const acquired = await prisma.$executeRawUnsafe(
+        `
         INSERT INTO "SyncStatus" (
             service, "lastRunAt", status, "errorMessage", "driversUpdated", "ordersProcessed", "updatedAt"
         ) VALUES (
-            ${YANDEX_SYNC_SERVICE}, ${now}, 'running', ${leaseMarker}, NULL, NULL, ${now}
+            $1, $2, 'running', $3, NULL, NULL, $2
         )
         ON CONFLICT (service) DO UPDATE SET
             "lastRunAt" = EXCLUDED."lastRunAt",
@@ -162,15 +165,21 @@ async function acquireLease(bypassCooldown: boolean): Promise<{
             "updatedAt" = EXCLUDED."updatedAt"
         WHERE (
             "SyncStatus".status <> 'running'
-            OR "SyncStatus"."lastRunAt" <= ${staleBefore}
+            OR "SyncStatus"."lastRunAt" <= $4
         ) AND (
-            ${bypassCooldown}
+            $5::boolean
             OR "SyncStatus".status <> 'success'
-            OR "SyncStatus"."lastRunAt" <= ${cooldownBefore}
+            OR "SyncStatus"."lastRunAt" <= $6
         )
-        RETURNING service
-    `)
-    return { acquired: acquired.length === 1, leaseMarker }
+        `,
+        YANDEX_SYNC_SERVICE,
+        now,
+        leaseMarker,
+        staleBefore,
+        bypassCooldown,
+        cooldownBefore,
+    )
+    return { acquired: acquired === 1, leaseMarker }
 }
 
 export interface RunYandexSyncOptions {

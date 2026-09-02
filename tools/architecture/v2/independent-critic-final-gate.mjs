@@ -274,13 +274,14 @@ const criticRuntimeBoundaryPolicies = [
   },
   {
     review_id: 'fleet-yandex-runtime-provider-v1',
-    access_review_ids: ['production-secret-read-053', 'production-secret-read-054'],
+    access_review_ids: ['production-secret-read-053', 'production-secret-read-054', 'production-secret-read-075'],
     classification: 'APPROVED_RUNTIME_PROVIDER_CAPABILITY', secret_bearing_runtime_flow: true,
     modules: { 'gravity-mvp/src/modules/fleet-operations/public/v1/yandex-connection-capability.ts': ['getYandexConnectionCredentialsV1', 'listYandexConnectionCredentialsV1'] },
     edges: [
       criticRuntimeEdge('gravity-mvp/src/modules/fleet-operations/public/v1/yandex-connection-capability.ts', 'getYandexConnectionCredentialsV1', 'gravity-mvp/src/app/api/webhooks/bot/route.ts', 'MIXED_OUTBOUND_PROVIDER_USE_AND_NONSECRET_PARK_NAME_PROJECTION'),
       criticRuntimeEdge('gravity-mvp/src/modules/fleet-operations/public/v1/yandex-connection-capability.ts', 'getYandexConnectionCredentialsV1', 'gravity-mvp/src/modules/fleet-operations/public/v1/yandex-fleet-operations.ts', 'OUTBOUND_PROVIDER_REQUEST_ONLY'),
       criticRuntimeEdge('gravity-mvp/src/modules/fleet-operations/public/v1/yandex-connection-capability.ts', 'listYandexConnectionCredentialsV1', 'gravity-mvp/src/app/api/webhooks/bot/route.ts', 'OUTBOUND_PROVIDER_REQUEST_ONLY'),
+      criticRuntimeEdge('gravity-mvp/src/modules/fleet-operations/public/v1/yandex-connection-capability.ts', 'listYandexConnectionCredentialsV1', 'gravity-mvp/src/modules/fleet-operations/internal/legacy-prisma-yandex-fleet-reconciler-adapter.ts', 'OUTBOUND_PROVIDER_REQUEST_ONLY'),
       criticRuntimeEdge('gravity-mvp/src/modules/fleet-operations/public/v1/yandex-connection-capability.ts', 'listYandexConnectionCredentialsV1', 'gravity-mvp/src/modules/fleet-operations/public/v1/park-phone-search.ts', 'OUTBOUND_PROVIDER_REQUEST_ONLY'),
     ],
   },
@@ -712,7 +713,7 @@ assert.deepEqual(
 )
 assert.deepEqual(
   productionSecretRecords.filter((record) => record.classification === 'APPROVED_RUNTIME_PROVIDER_CAPABILITY').map((record) => record.review_id).sort(),
-  ['production-secret-read-035', 'production-secret-read-044', 'production-secret-read-053', 'production-secret-read-054'],
+  ['production-secret-read-035', 'production-secret-read-044', 'production-secret-read-053', 'production-secret-read-054', 'production-secret-read-075'],
   'runtime provider secret capability classification denominator drift',
 )
 assert.equal(productionSecretReview.summary?.application_runtime, currentProductionSecretReads.filter((entry) => entry.surface.lifecycle === 'APPLICATION_RUNTIME').length, 'production application secret-read summary drift')

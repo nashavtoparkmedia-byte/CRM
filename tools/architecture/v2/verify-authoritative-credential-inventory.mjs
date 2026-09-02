@@ -437,7 +437,7 @@ export const RUNTIME_BOUNDARY_REVIEW_POLICIES = [
   },
   {
     review_id: 'fleet-yandex-runtime-provider-v1',
-    access_review_ids: ['production-secret-read-053', 'production-secret-read-054'],
+    access_review_ids: ['production-secret-read-053', 'production-secret-read-054', 'production-secret-read-075'],
     classification: 'APPROVED_RUNTIME_PROVIDER_CAPABILITY',
     resolved_semantics: 'EXACT_SOURCE_BOUND_RUNTIME_PROVIDER_SECRET_USE_AT_REVIEWED_NON_PUBLIC_BOUNDARIES',
     secret_bearing_runtime_flow: true,
@@ -448,6 +448,7 @@ export const RUNTIME_BOUNDARY_REVIEW_POLICIES = [
       runtimeEdge('gravity-mvp/src/modules/fleet-operations/public/v1/yandex-connection-capability.ts', 'getYandexConnectionCredentialsV1', 'gravity-mvp/src/app/api/webhooks/bot/route.ts', 'MIXED_OUTBOUND_PROVIDER_USE_AND_NONSECRET_PARK_NAME_PROJECTION'),
       runtimeEdge('gravity-mvp/src/modules/fleet-operations/public/v1/yandex-connection-capability.ts', 'getYandexConnectionCredentialsV1', 'gravity-mvp/src/modules/fleet-operations/public/v1/yandex-fleet-operations.ts', 'OUTBOUND_PROVIDER_REQUEST_ONLY'),
       runtimeEdge('gravity-mvp/src/modules/fleet-operations/public/v1/yandex-connection-capability.ts', 'listYandexConnectionCredentialsV1', 'gravity-mvp/src/app/api/webhooks/bot/route.ts', 'OUTBOUND_PROVIDER_REQUEST_ONLY'),
+      runtimeEdge('gravity-mvp/src/modules/fleet-operations/public/v1/yandex-connection-capability.ts', 'listYandexConnectionCredentialsV1', 'gravity-mvp/src/modules/fleet-operations/internal/legacy-prisma-yandex-fleet-reconciler-adapter.ts', 'OUTBOUND_PROVIDER_REQUEST_ONLY'),
       runtimeEdge('gravity-mvp/src/modules/fleet-operations/public/v1/yandex-connection-capability.ts', 'listYandexConnectionCredentialsV1', 'gravity-mvp/src/modules/fleet-operations/public/v1/park-phone-search.ts', 'OUTBOUND_PROVIDER_REQUEST_ONLY'),
     ],
   },

@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {
-    $queryRaw: mocks.acquire,
+    $executeRawUnsafe: mocks.acquire,
     syncStatus: {
       findUnique: mocks.findStatus,
       updateMany: mocks.updateStatus,
@@ -50,7 +50,7 @@ describe('Yandex sync fenced lease', () => {
   test('simultaneous starts cannot both acquire the atomic lease', async () => {
     let releaseThresholds!: (value: { analysis_period: number }) => void
     const thresholds = new Promise<{ analysis_period: number }>(resolve => { releaseThresholds = resolve })
-    mocks.acquire.mockResolvedValueOnce([{ service: 'yandex_fleet' }]).mockResolvedValueOnce([])
+    mocks.acquire.mockResolvedValueOnce(1).mockResolvedValueOnce(0)
     mocks.getThresholds.mockReturnValueOnce(thresholds)
     mocks.findStatus.mockResolvedValueOnce({
       service: 'yandex_fleet', lastRunAt: new Date(), status: 'running',
@@ -65,10 +65,17 @@ describe('Yandex sync fenced lease', () => {
     releaseThresholds({ analysis_period: 45 })
     await expect(first).resolves.toMatchObject({ ok: true, driversUpdated: 2, ordersProcessed: 3 })
     expect(mocks.acquire).toHaveBeenCalledTimes(2)
+    const [sql, service, , leaseMarker, , bypassCooldown] = mocks.acquire.mock.calls[0]
+    expect(sql).toContain('VALUES (\n            $1, $2')
+    expect(sql).toContain('$5::boolean')
+    expect(sql).not.toContain('yandex_fleet')
+    expect(service).toBe('yandex_fleet')
+    expect(leaseMarker).toMatch(/^lease:/)
+    expect(bypassCooldown).toBe(true)
   })
 
   test('a superseded run cannot publish a late terminal status', async () => {
-    mocks.acquire.mockResolvedValueOnce([{ service: 'yandex_fleet' }])
+    mocks.acquire.mockResolvedValueOnce(1)
     mocks.updateStatus
       .mockResolvedValueOnce({ count: 1 })
       .mockResolvedValueOnce({ count: 1 })
@@ -95,9 +102,9 @@ describe('Yandex sync fenced lease', () => {
         acquireCount += 1
         if (acquireCount === 1 || Date.now() - lastRenewedAt > YANDEX_SYNC_RUNNING_STALE_MS) {
           lastRenewedAt = Date.now()
-          return [{ service: 'yandex_fleet' }]
+          return 1
         }
-        return []
+        return 0
       })
       mocks.updateStatus.mockImplementation(async (input: { data: { lastRunAt?: Date } }) => {
         if (input.data.lastRunAt) lastRenewedAt = input.data.lastRunAt.getTime()
@@ -134,8 +141,8 @@ describe('Yandex sync fenced lease', () => {
       const staleLastRunAt = Date.now() - YANDEX_SYNC_RUNNING_STALE_MS - 1
       mocks.acquire.mockImplementationOnce(async () => (
         Date.now() - staleLastRunAt > YANDEX_SYNC_RUNNING_STALE_MS
-          ? [{ service: 'yandex_fleet' }]
-          : []
+          ? 1
+          : 0
       ))
 
       await expect(runYandexSync({ bypassCooldown: true })).resolves.toMatchObject({
