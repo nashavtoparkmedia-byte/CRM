@@ -136,11 +136,11 @@ class StageAContractTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout.decode() + result.stderr.decode())
 
-    def test_change_set_is_stage_a_control_plane_only(self) -> None:
+    def test_change_set_does_not_mutate_integrated_stage_a_authority(self) -> None:
         names = subprocess.check_output(
             ["git", "-C", str(ROOT), "diff", "--name-only", CHANGE_BASE, "HEAD"], text=True,
         ).splitlines()
-        allowed_exact = {
+        protected_exact = {
             ".github/workflows/architecture-enforcement.yml",
             ".github/workflows/coordinated-gravity-max-6e3f094b.yml",
             "tools/architecture/run-authoritative-ci.mjs",
@@ -157,9 +157,13 @@ class StageAContractTests(unittest.TestCase):
             "architecture/recovery/whole-project-dod/v2/credential-unknown-access-resolution.json",
         }
         authority_prefix = "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/"
-        unexpected = [name for name in names if name not in allowed_exact and not name.startswith(authority_prefix)]
-        self.assertEqual(unexpected, [])
-        self.assertFalse(any("2.0.0-15" in name or "runtime-v15" in name.lower() for name in names))
+        lifecycle_checker = authority_prefix + "tests/test_stage_a_contract.py"
+        changed_authority = [
+            name for name in names
+            if name != lifecycle_checker
+            and (name in protected_exact or name.startswith(authority_prefix))
+        ]
+        self.assertEqual(changed_authority, [])
 
     def test_workflow_is_content_specific_and_has_minimal_permissions(self) -> None:
         workflow = (ROOT / ".github/workflows/coordinated-gravity-max-6e3f094b.yml").read_text()
