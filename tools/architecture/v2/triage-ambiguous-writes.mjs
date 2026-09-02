@@ -56,8 +56,18 @@ const focusedOwnershipDecisions = new Map([
   ['cf582460b117a919402f002cc2e6d46c86c2705456e676e4bb8eb416712dcdd4', 'OWNER_VALID'],
   ['e54be07b8050d4ff83e4f53490c748987cfc4b96708d9a237291e20a5cbdb240', 'OWNER_VALID'],
   ['1155e3e8871948983914b57936052d47582d93288599be197d0e087b543f9fe1', 'OWNER_VALID'],
-  ['c3b1d82673f656bcf2590f40a70eb462c4ebc1a89a7a78f8bb8cf53565c124f1', 'OWNER_VALID'],
   ['6e7331a679f00f5453dcda4a4b0b66f9a0fbe81b250152f4b9cc138eb1c6e567', 'OWNER_VALID'],
+  // PR #81 conflict repair relocates the Fleet advisory lock to its public
+  // owner adapter and adds exact Messaging/Telegram transaction locks. The
+  // independent high-risk review confirmed all seven are synchronization
+  // side effects within their declared owner boundaries.
+  ['4725bd8e337bd59adcedfd797a456722a31f900ddabc83ebeb64a6d990850978', 'OWNER_VALID'],
+  ['4290848e7cb22a18b0ea2ae7e44a4e922a951d64d94e613357a08e51e3f77993', 'OWNER_VALID'],
+  ['8094e623e03dce25fee65e3d52acb95d4829fce9229d77976ac54b6f31fa19a7', 'OWNER_VALID'],
+  ['14602442299bcce66d1f52e21acc108ae4718e87affc4e4bbd69823cc68011ce', 'OWNER_VALID'],
+  ['368bd8ff0ab5fddba71b1faced7c709383a4f40c610f7a248fa47c720e0ea874', 'OWNER_VALID'],
+  ['2d9fe65392a642c52a7f3fc0ee35856583113275a12526a71afc486579742fe4', 'OWNER_VALID'],
+  ['269fe8d0c425f83ce1d07f1c25c6da409d023629a7f328ecaf387b99865e0485', 'OWNER_VALID'],
 ])
 
 const confirmedReadOnlyDecisions = new Set([
