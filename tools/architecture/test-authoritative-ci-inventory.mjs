@@ -471,7 +471,22 @@ assert.match(
 assert.match(workflow, /node-version: 20\.20\.2/u, 'hosted CI must install the exact locally reviewed Node.js release')
 assert.match(workflow, /process\.versions\.node !== '20\.20\.2'/u, 'hosted CI must fail closed if the exact Node.js release was not activated')
 assert.match(workflow, /YOKO_BLAST_BASE: HEAD\^/u, 'hosted blast-radius analysis must use the exact accepted commit parent available in the shallow checkout')
-assert.match(workflow, /YOKO_STAGE_A_CHANGE_BASE: refs\/heads\/stage-a-change-base/u, 'hosted Stage A scope checks must use the separately fetched exact event base')
+const stageARunnerBaseContract = /YOKO_STAGE_A_CHANGE_BASE: refs\/heads\/stage-a-change-base\n\s+YOKO_STAGE_A_CHANGE_BASE_COMMIT: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.before \}\}/u
+assert.match(
+  workflow,
+  stageARunnerBaseContract,
+  'hosted Stage A scope checks must use the separately fetched event-base ref bound to its exact commit identity',
+)
+for (const stageARunnerBaseMutation of [
+  workflow.replace('YOKO_STAGE_A_CHANGE_BASE: refs/heads/stage-a-change-base', 'YOKO_STAGE_A_CHANGE_BASE: HEAD'),
+  workflow.replace('YOKO_STAGE_A_CHANGE_BASE_COMMIT: ${{ github.event.pull_request.base.sha || github.event.before }}', 'YOKO_STAGE_A_CHANGE_BASE_COMMIT: ${{ github.sha }}'),
+]) {
+  assert.doesNotMatch(
+    stageARunnerBaseMutation,
+    stageARunnerBaseContract,
+    'self or identity-unbound Stage A runner base must fail the workflow contract',
+  )
+}
 assert.doesNotMatch(workflow, /YOKO_BLAST_BASE:.*pull_request\.base\.sha/u, 'hosted CI must not select an unfetched PR base as its change-set authority')
 assert.match(workflow, /DATABASE_URL: postgresql:\/\/postgres:postgres@localhost:5432\/postgres\?schema=yoko_migration_authority_replay_ci/u)
 assert.match(workflow, /YOKO_POSTGRES_CLIENT_CONTAINER: \$\{\{ job\.services\.postgres\.id \}\}/u)

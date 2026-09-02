@@ -109,6 +109,7 @@ jobs:
           # behind and is not present in the shallow checkout.
           YOKO_BLAST_BASE: HEAD^
           YOKO_STAGE_A_CHANGE_BASE: refs/heads/stage-a-change-base
+          YOKO_STAGE_A_CHANGE_BASE_COMMIT: ${{ github.event.pull_request.base.sha || github.event.before }}
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres?schema=yoko_migration_authority_replay_ci
           YOKO_POSTGRES_CLIENT_CONTAINER: ${{ job.services.postgres.id }}
           YOKO_CI_ATTESTATION_OUTPUT: authoritative-ci-execution.json
