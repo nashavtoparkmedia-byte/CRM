@@ -10,6 +10,7 @@ import path from 'node:path'
 import {
   AUTHORITATIVE_BLAST_BASE,
   AUTHORITATIVE_NODE_VERSION,
+  HOSTED_AUTHORITATIVE_BLAST_BASE,
   assertAuthoritativeRuntimeContract,
   assertCleanWorktree,
   assertExecutionProofIdentity,
@@ -51,6 +52,22 @@ try {
   git(cleanFixture, ['commit', '--quiet', '-m', 'fixture head'])
   assert.doesNotThrow(() => assertCleanWorktree(cleanFixture, 'fixture baseline'))
   const capturedIdentity = captureExecutionProofIdentity(cleanFixture)
+  const hostedBaseCommit = capturedIdentity.parent
+  git(cleanFixture, ['update-ref', HOSTED_AUTHORITATIVE_BLAST_BASE, hostedBaseCommit])
+  const hostedEnvironment = {
+    YOKO_BLAST_BASE: HOSTED_AUTHORITATIVE_BLAST_BASE,
+    YOKO_BLAST_BASE_COMMIT: hostedBaseCommit,
+  }
+  const hostedIdentity = captureExecutionProofIdentity(cleanFixture, hostedEnvironment)
+  assert.equal(hostedIdentity.blast_base, HOSTED_AUTHORITATIVE_BLAST_BASE)
+  assert.equal(hostedIdentity.blast_base_commit, hostedBaseCommit)
+  assert.throws(
+    () => captureExecutionProofIdentity(cleanFixture, {
+      ...hostedEnvironment,
+      YOKO_BLAST_BASE_COMMIT: 'f'.repeat(40),
+    }),
+    /blast-base ref does not match/u,
+  )
 
   writeFileSync(path.join(cleanFixture, 'tracked.txt'), 'dirty\n')
   assert.throws(() => assertCleanWorktree(cleanFixture, 'dirty tracked fixture'), /clean worktree.*tracked\.txt/su)
@@ -73,16 +90,32 @@ try {
 }
 
 assert.doesNotThrow(() => assertAuthoritativeRuntimeContract({ YOKO_BLAST_BASE: 'HEAD^' }, '20.20.2'))
+assert.doesNotThrow(() => assertAuthoritativeRuntimeContract({
+  YOKO_BLAST_BASE: HOSTED_AUTHORITATIVE_BLAST_BASE,
+  YOKO_BLAST_BASE_COMMIT: 'a'.repeat(40),
+}, '20.20.2'))
 assert.throws(
   () => assertAuthoritativeRuntimeContract({ YOKO_BLAST_BASE: 'HEAD^' }, '20.20.1'),
   /requires Node\.js 20\.20\.2/u,
 )
 assert.throws(
   () => assertAuthoritativeRuntimeContract({ YOKO_BLAST_BASE: 'HEAD^^' }, '20.20.2'),
-  /requires YOKO_BLAST_BASE=HEAD\^/u,
+  /requires YOKO_BLAST_BASE=HEAD\^ or refs\/heads\/yoko-architecture-candidate-base/u,
+)
+assert.throws(
+  () => assertAuthoritativeRuntimeContract({ YOKO_BLAST_BASE: HOSTED_AUTHORITATIVE_BLAST_BASE }, '20.20.2'),
+  /requires an exact YOKO_BLAST_BASE_COMMIT/u,
+)
+assert.throws(
+  () => assertAuthoritativeRuntimeContract({
+    YOKO_BLAST_BASE: AUTHORITATIVE_BLAST_BASE,
+    YOKO_BLAST_BASE_COMMIT: 'a'.repeat(40),
+  }, '20.20.2'),
+  /must derive the HEAD\^ blast-base identity directly/u,
 )
 assert.equal(AUTHORITATIVE_NODE_VERSION, '20.20.2')
 assert.equal(AUTHORITATIVE_BLAST_BASE, 'HEAD^')
+assert.equal(HOSTED_AUTHORITATIVE_BLAST_BASE, 'refs/heads/yoko-architecture-candidate-base')
 const proofOutputFixture = path.join(os.tmpdir(), `yoko-authoritative-ci-proof-${process.pid}.json`)
 try {
   assert.doesNotThrow(() => assertExecutionProofOutputAbsent(proofOutputFixture))
@@ -359,6 +392,7 @@ assert.notEqual(
 assert.deepEqual(workflowJobStepNames(workflow, 'architecture'), [
   'Check out exact revision',
   'Fetch exact Stage A authorities',
+  'Fetch exact architecture candidate base',
   'Run targeted Runtime TG base-reference contract',
   'Fetch exact Runtime v10 predecessor',
   'Set up exact Node.js',
@@ -414,7 +448,29 @@ assert.match(workflow, /image: postgres:16\.14-alpine/u)
 assert.match(workflow, /ports:\s*\n\s*- 5432:5432/u, 'PostgreSQL must be published to the host runner used by Prisma')
 assert.doesNotMatch(workflow, /fetch-depth:\s*0/u, 'hosted controls must not require an unbounded full-history checkout')
 assert.match(workflow, /ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/u, 'hosted PR CI must test the exact accepted source commit rather than a synthetic merge commit')
-assert.match(workflow, /fetch-depth: 2/u, 'hosted blast-radius analysis needs the accepted source parent without full-history dependence')
+assert.match(workflow, /fetch-depth: 2/u, 'hosted blast-radius analysis needs the source parent for the bounded zero-event fallback')
+const candidateBaseFetchContract = /EVENT_BASE_COMMIT: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.before \}\}\n\s+HEAD_COMMIT: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}[\s\S]*git rev-parse 'HEAD\^\{commit\}'[\s\S]*if test "\$candidate_base" = 0000000000000000000000000000000000000000; then[\s\S]*git rev-parse 'HEAD\^\^\{commit\}'[\s\S]*git update-ref refs\/heads\/yoko-architecture-candidate-base[\s\S]*candidate_base:refs\/heads\/yoko-architecture-candidate-base[\s\S]*git rev-parse 'refs\/heads\/yoko-architecture-candidate-base\^\{commit\}'[\s\S]*for deepen_by in 32 64 128 256 512 1024 2048; do[\s\S]*git merge-base refs\/heads\/yoko-architecture-candidate-base HEAD[\s\S]*git fetch --no-tags --deepen="\$deepen_by" origin "\$HEAD_COMMIT" "\$candidate_base"[\s\S]*merge_base=\$\(git merge-base refs\/heads\/yoko-architecture-candidate-base HEAD\)[\s\S]*printf 'commit=%s\\n' "\$candidate_base" >> "\$GITHUB_OUTPUT"/u
+assert.match(
+  workflow,
+  candidateBaseFetchContract,
+  'hosted candidate scope must fetch and verify the exact PR-base/push-before identity with a bounded zero-event fallback',
+)
+for (const candidateBaseFetchMutation of [
+  workflow.replace(
+    'EVENT_BASE_COMMIT: ${{ github.event.pull_request.base.sha || github.event.before }}',
+    'EVENT_BASE_COMMIT: ${{ github.sha }}',
+  ),
+  workflow.replace(':refs/heads/yoko-architecture-candidate-base', ''),
+  workflow.replace("git rev-parse 'refs/heads/yoko-architecture-candidate-base^{commit}'", 'true'),
+  workflow.replace("candidate_base=$(git rev-parse 'HEAD^^{commit}')", 'candidate_base="$EVENT_BASE_COMMIT"'),
+  workflow.replace('merge_base=$(git merge-base refs/heads/yoko-architecture-candidate-base HEAD)', 'merge_base="$candidate_base"'),
+]) {
+  assert.doesNotMatch(
+    candidateBaseFetchMutation,
+    candidateBaseFetchContract,
+    'wrong, self-selected, unverified, or zero-identity candidate bases must fail the workflow contract',
+  )
+}
 assert.match(
   workflow,
   /STAGE_A_APPLICATION_COMMIT: 6e3f094bf4b42c1400c705843ab107dacd6d1cf8[\s\S]*git fetch --no-tags --depth=1 origin \\\n+\s+"\$STAGE_A_APPLICATION_COMMIT:refs\/heads\/stage-a-accepted-application"[\s\S]*git rev-parse 'refs\/heads\/stage-a-accepted-application\^\{commit\}'/u,
@@ -470,7 +526,6 @@ assert.match(
 )
 assert.match(workflow, /node-version: 20\.20\.2/u, 'hosted CI must install the exact locally reviewed Node.js release')
 assert.match(workflow, /process\.versions\.node !== '20\.20\.2'/u, 'hosted CI must fail closed if the exact Node.js release was not activated')
-assert.match(workflow, /YOKO_BLAST_BASE: HEAD\^/u, 'hosted blast-radius analysis must use the exact accepted commit parent available in the shallow checkout')
 const stageARunnerBaseContract = /YOKO_STAGE_A_CHANGE_BASE: refs\/heads\/stage-a-change-base\n\s+YOKO_STAGE_A_CHANGE_BASE_COMMIT: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.before \}\}/u
 assert.match(
   workflow,
@@ -487,6 +542,23 @@ for (const stageARunnerBaseMutation of [
     'self or identity-unbound Stage A runner base must fail the workflow contract',
   )
 }
+const candidateRunnerBaseContract = /YOKO_BLAST_BASE: refs\/heads\/yoko-architecture-candidate-base\n\s+YOKO_BLAST_BASE_COMMIT: \$\{\{ steps\.architecture_candidate_base\.outputs\.commit \}\}/u
+assert.match(
+  workflow,
+  candidateRunnerBaseContract,
+  'hosted blast-radius analysis must bind the fetched candidate-base ref to the verified event-base commit',
+)
+for (const candidateRunnerBaseMutation of [
+  workflow.replace('YOKO_BLAST_BASE: refs/heads/yoko-architecture-candidate-base', 'YOKO_BLAST_BASE: HEAD^'),
+  workflow.replace('YOKO_BLAST_BASE_COMMIT: ${{ steps.architecture_candidate_base.outputs.commit }}', 'YOKO_BLAST_BASE_COMMIT: ${{ github.sha }}'),
+]) {
+  assert.doesNotMatch(
+    candidateRunnerBaseMutation,
+    candidateRunnerBaseContract,
+    'parent-only or identity-unbound hosted change-set bases must fail the workflow contract',
+  )
+}
+assert.doesNotMatch(workflow, /YOKO_BLAST_BASE: HEAD\^/u, 'hosted CI must not reduce candidate scope to the final commit parent')
 assert.doesNotMatch(workflow, /YOKO_BLAST_BASE:.*pull_request\.base\.sha/u, 'hosted CI must not select an unfetched PR base as its change-set authority')
 assert.match(workflow, /DATABASE_URL: postgresql:\/\/postgres:postgres@localhost:5432\/postgres\?schema=yoko_migration_authority_replay_ci/u)
 assert.match(workflow, /YOKO_POSTGRES_CLIENT_CONTAINER: \$\{\{ job\.services\.postgres\.id \}\}/u)
