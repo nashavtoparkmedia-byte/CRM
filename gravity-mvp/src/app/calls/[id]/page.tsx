@@ -16,8 +16,8 @@ export const dynamic = 'force-dynamic'
  */
 export default async function CallDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const call = await prisma.call.findUnique({
-        where: { id },
+    const call = await prisma.call.findFirst({
+        where: { id, isSimulation: false },
         include: {
             driver: { select: { id: true, fullName: true, phone: true } },
             contact: { select: { id: true, displayName: true } },

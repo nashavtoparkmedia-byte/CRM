@@ -14,8 +14,8 @@ import { listUserIdentitiesV1 as getUsers } from '@/modules/identity-access/publ
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
     try {
-        const call = await prisma.call.findUnique({
-            where: { id },
+        const call = await prisma.call.findFirst({
+            where: { id, isSimulation: false },
             include: {
                 driver: { select: { id: true, fullName: true, phone: true } },
                 contact: { select: { id: true, displayName: true } },

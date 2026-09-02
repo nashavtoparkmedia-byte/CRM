@@ -4,23 +4,40 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 690,
+    "total_entries": 691,
     "test": 35,
     "dead_historical": 92,
-    "migration_only": 79,
+    "migration_only": 80,
     "active_operational": 479,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
   "surfaces": [
     {
-      "path": "architecture/isolation/calling/ai-call-mass-calling-v1/migration.sql",
-      "lifecycle": "TEST",
-      "disposition": "TEST_SUPPORT",
+      "path": ".agents/skills/yoko-ci-triage/agents/openai.yaml",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
       "production_capability": "NONE",
-      "functional_owner": "calling",
-      "owner_context": "calling",
-      "rationale": "Calling-owned schema fixture whose only executable consumer is the gated disposable Postgres campaign proof. It is outside the sealed production migration inventory; promotion requires a separately governed production migration and this classification grants no production application, deployment, or cross-context write authority.",
-      "classification_artifact": "architecture/isolation/calling/ai-call-mass-calling-v1/persistence-manifest.json"
+      "rationale": "Active native Codex skill discovery metadata; exact source review proves explicit invocation, no executable command, no credential or production input, and no database, provider, telephony, or write capability. Lifecycle classification grants no additional authority.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/NATIVE_CODEX_AUTONOMY_STAGE0_OPERATIONAL_SURFACE_REVIEW_20260830.json",
+      "functional_owner": "repository_operations"
+    },
+    {
+      "path": ".agents/skills/yoko-stage/agents/openai.yaml",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "NONE",
+      "rationale": "Active native Codex skill discovery metadata; exact source review proves explicit invocation, no executable command, no credential or production input, and no database, provider, telephony, or write capability. Lifecycle classification grants no additional authority.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/NATIVE_CODEX_AUTONOMY_STAGE0_OPERATIONAL_SURFACE_REVIEW_20260830.json",
+      "functional_owner": "repository_operations"
+    },
+    {
+      "path": ".github/workflows/agent-architecture-contract.yml",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active read-only architecture contract workflow; the reviewed source declares contents: read and no database, provider, production, or secret input. Lifecycle classification does not grant credential access, business-data ownership, or direct writes.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/AGENT_ARCHITECTURE_CONTRACT_OPERATIONAL_SURFACE_REVIEW_20260829.json",
+      "functional_owner": "platform_engineering"
     },
     {
       "path": ".github/workflows/architecture-enforcement.yml",
@@ -48,6 +65,16 @@
       "rationale": "Tracked TypeScript scaffold template is executable source input for the repository-backed module generator. It can only create a candidate versioned public contract through the reviewed generator and gains no application-runtime, database, or provider authority from classification.",
       "classification_artifact": "architecture/contexts/v1/NEW_MODULE_OPERATIONS.md",
       "functional_owner": "architecture_governance"
+    },
+    {
+      "path": "architecture/isolation/calling/ai-call-mass-calling-v1/migration.sql",
+      "lifecycle": "TEST",
+      "disposition": "TEST_SUPPORT",
+      "production_capability": "NONE",
+      "functional_owner": "calling",
+      "owner_context": "calling",
+      "rationale": "Calling-owned schema fixture whose only executable consumer is the gated disposable Postgres campaign proof. It is outside the sealed production migration inventory; promotion requires a separately governed production migration and this classification grants no production application, deployment, or cross-context write authority.",
+      "classification_artifact": "architecture/isolation/calling/ai-call-mass-calling-v1/persistence-manifest.json"
     },
     {
       "path": "architecture/migrations/v1/archive/pre-outbox/20260712000000_multi_park_driver_profiles/migration.sql",
@@ -1958,6 +1985,16 @@
       "source_sha256": "433b0d503f054ed6a8161a059e2650d5e401829dabe8c9d992a1d1763eef0016"
     },
     {
+      "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+      "lifecycle": "MIGRATION",
+      "disposition": "MIGRATION_ONLY",
+      "production_capability": "CONTROLLED_MIGRATION",
+      "rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+      "functional_owner": "calling",
+      "source_sha256": "ca87d5632938b28364bbd9b98834ef4cc7464aa5fe448f883319cb1601db077a"
+    },
+    {
       "path": "gravity-mvp/query_driver.sql",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
@@ -3645,8 +3682,8 @@
       "production_capability": "POSSIBLE",
       "functional_owner": "calling",
       "owner_context": "calling",
-      "rationale": "Calling-owned source-isolated campaign persistence adapter. It is not wired into the production runtime or production migration inventory; lifecycle classification acknowledges executable source and grants no production activation or cross-context write authority.",
-      "classification_artifact": "architecture/isolation/calling/ai-call-mass-calling-v1/persistence-manifest.json"
+      "rationale": "Calling-owned production-shaped campaign persistence adapter wired only to the disabled-by-default, simulation-gated product runtime. Its additive source migration remains pending and unapplied to production; this classification grants no production migration, live provider, billing, telephony, or cross-context write authority.",
+      "classification_artifact": "architecture/isolation/calling/ai-call-campaign-product-v1/production-boundary.json"
     },
     {
       "path": "gravity-mvp/src/modules/calling/public/v1/legacy-prisma-ai-call-event-maintenance-adapter.js",
@@ -4343,6 +4380,15 @@
       "production_capability": "POSSIBLE",
       "rationale": "Active operational surface classified in exact-set batch; functional owner architecture_recovery; approved path: bounded analyzer/enforcement capability. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
       "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
+      "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/check-agent-architecture-contract.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active bounded read-only repository contract verifier; the reviewed source has no database client, provider/network call, environment-secret read, or write primitive. Lifecycle classification does not grant credential access, business-data ownership, or direct writes.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/AGENT_ARCHITECTURE_CONTRACT_OPERATIONAL_SURFACE_REVIEW_20260829.json",
       "functional_owner": "architecture_recovery"
     },
     {
@@ -5597,15 +5643,6 @@
       "functional_owner": "architecture_recovery"
     },
     {
-      "path": "tools/architecture/run-local-clean-acceptance.mjs",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active architecture acceptance harness owned by architecture_governance. It requires a fresh source checkout, performs only locked local dependency generation, bounded isolated migration replay, architecture verification and production build evidence outside the repository; lifecycle classification grants no application-runtime or business-data write authority.",
-      "classification_artifact": "tools/architecture/run-local-clean-acceptance.mjs",
-      "functional_owner": "architecture_governance"
-    },
-    {
       "path": "tools/architecture/run-boundary-controls.mjs",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",
@@ -5613,6 +5650,15 @@
       "rationale": "Active architecture control-plane surface; approved path is a bounded analyzer, verifier, critic, or enforcement capability. It writes repository evidence/CI artifacts only and does not gain business-data ownership.",
       "classification_artifact": "LIFECYCLE_ARCHITECTURE_CONTROLS_BATCH_20260811.json",
       "functional_owner": "architecture_recovery"
+    },
+    {
+      "path": "tools/architecture/run-local-clean-acceptance.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Active architecture acceptance harness owned by architecture_governance. It requires a fresh source checkout, performs only locked local dependency generation, bounded isolated migration replay, architecture verification and production build evidence outside the repository; lifecycle classification grants no application-runtime or business-data write authority.",
+      "classification_artifact": "tools/architecture/run-local-clean-acceptance.mjs",
+      "functional_owner": "architecture_governance"
     },
     {
       "path": "tools/architecture/v2/analyze-js-worker.mjs",
@@ -6262,42 +6308,6 @@
       "rationale": "Active operational surface classified in exact-set batch; functional owner fleet_acquisition; approved path: yandex-fleet-scraper command. Lifecycle classification does not authorize direct writes; exact owner capability remains separately enforced.",
       "classification_artifact": "OPERATIONAL_SURFACE_CLASSIFICATION_REMAINING_BATCH_20260811.json",
       "functional_owner": "fleet_acquisition"
-    },
-    {
-      "path": ".github/workflows/agent-architecture-contract.yml",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active read-only architecture contract workflow; the reviewed source declares contents: read and no database, provider, production, or secret input. Lifecycle classification does not grant credential access, business-data ownership, or direct writes.",
-      "classification_artifact": "architecture/recovery/whole-project-dod/v2/AGENT_ARCHITECTURE_CONTRACT_OPERATIONAL_SURFACE_REVIEW_20260829.json",
-      "functional_owner": "platform_engineering"
-    },
-    {
-      "path": "tools/architecture/check-agent-architecture-contract.mjs",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "POSSIBLE",
-      "rationale": "Active bounded read-only repository contract verifier; the reviewed source has no database client, provider/network call, environment-secret read, or write primitive. Lifecycle classification does not grant credential access, business-data ownership, or direct writes.",
-      "classification_artifact": "architecture/recovery/whole-project-dod/v2/AGENT_ARCHITECTURE_CONTRACT_OPERATIONAL_SURFACE_REVIEW_20260829.json",
-      "functional_owner": "architecture_recovery"
-    },
-    {
-      "path": ".agents/skills/yoko-ci-triage/agents/openai.yaml",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "NONE",
-      "rationale": "Active native Codex skill discovery metadata; exact source review proves explicit invocation, no executable command, no credential or production input, and no database, provider, telephony, or write capability. Lifecycle classification grants no additional authority.",
-      "classification_artifact": "architecture/recovery/whole-project-dod/v2/NATIVE_CODEX_AUTONOMY_STAGE0_OPERATIONAL_SURFACE_REVIEW_20260830.json",
-      "functional_owner": "repository_operations"
-    },
-    {
-      "path": ".agents/skills/yoko-stage/agents/openai.yaml",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
-      "production_capability": "NONE",
-      "rationale": "Active native Codex skill discovery metadata; exact source review proves explicit invocation, no executable command, no credential or production input, and no database, provider, telephony, or write capability. Lifecycle classification grants no additional authority.",
-      "classification_artifact": "architecture/recovery/whole-project-dod/v2/NATIVE_CODEX_AUTONOMY_STAGE0_OPERATIONAL_SURFACE_REVIEW_20260830.json",
-      "functional_owner": "repository_operations"
     }
   ]
 }

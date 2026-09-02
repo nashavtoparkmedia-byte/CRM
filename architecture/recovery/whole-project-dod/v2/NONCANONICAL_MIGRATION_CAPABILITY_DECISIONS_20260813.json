@@ -94,6 +94,31 @@
       ]
     },
     {
+      "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+      "functional_owner": "calling",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "lifecycle_evidence_status": "REVIEWED_SOURCE_ONLY_EXPAND_MIGRATION",
+      "rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority.",
+      "expected_site_signatures": [
+        "06bf87e29774002cd55a6d94ae21ad4f76bc0434efe47afc2c7494209f641898",
+        "196a23de2a6296793dac656b6c808f824dd73535bc2ca30a385b0d89a74e216f",
+        "1cab0d06ad2af07af49879bb63d7b9e9152a9a05d5e04a62b5f44cc5bd48f889",
+        "20c472282602fb0e90bc5e5d48d0069f7f91b4634a786c86db2c941100339427",
+        "2ab889fe89ad035d0ebb2e3019e5a2820eeba3575cf75589aca487af88b067ba",
+        "3b127306f3a6a9b5489584bba6da17d4febb2f750fd6db410a10476b0f7e2688",
+        "499f478e4e10287aa860e70310f0775e42749080add14f36f1511d4d8cfdcf51",
+        "553b1bf45663b198b4d8d6679a19e3175e351c9b301c4dfa450237c87a8e3dca",
+        "62700671c5e8ee95d46ec2268d1fd3a5268bdab11acafb52ded2a64d41189939",
+        "7813aeff2d57752d2555f016306f5a9e1b9be1a803f87f0610baa6853c1c15de",
+        "79fc90132b2acddd458e42a9cf99d142ef6200614dd3a48b83525b3623f0b7f9",
+        "9a4c75fb7ffc3d275124895ce90ee5ce12e759a5d3cf2eca0db3cd407216c23e",
+        "a37f19b3006969bfba9bfe33bab5cc3d018a150f911519f953456708eadc94cc",
+        "ed8cd5d4956b2c71a97d40eced0bda74566223e3e6ad5d8728c4af227520209a",
+        "f0a232d869d8ad02e0bfa1d3074fc96536f4238e66626f8b5403d59baa917fde",
+        "f8f267ad4e615b01d151e0f6ae1ea033a6c76f2f588b7f47f5fed826a514d546"
+      ]
+    },
+    {
       "path": "gravity-mvp/scripts/add-scenario-field-settings-table.js",
       "functional_owner": "task_management",
       "production_reachability": "CONFIRMED_MANUAL_DATA_MIGRATION",
@@ -275,6 +300,24 @@
       "review_rationale": "Explicit operator-run contacts migration has separately enumerated cross-owner task and messaging exceptions below."
     },
     {
+      "site_signature": "f8f267ad4e615b01d151e0f6ae1ea033a6c76f2f588b7f47f5fed826a514d546",
+      "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+      "source_sha256": "ca87d5632938b28364bbd9b98834ef4cc7464aa5fe448f883319cb1601db077a",
+      "line": 171,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "calling",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "AiCallCampaignAttempt",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
       "site_signature": "0ff9642cf11720e899ad611c8133fa5f981eba484091cd2c062b36317f38a6cb",
       "path": "gravity-mvp/prisma/migrations/20260805110000_restore_linked_bot_registry/migration.sql",
       "source_sha256": "cd7ebed3043b4d4989ca1a57aeab34b808aa7ec56f8479e97d5063ada7c4dc70",
@@ -383,6 +426,42 @@
       "review_rationale": "Explicit operator-run recovery imports only the exact legacy WhatsApp message target."
     },
     {
+      "site_signature": "62700671c5e8ee95d46ec2268d1fd3a5268bdab11acafb52ded2a64d41189939",
+      "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+      "source_sha256": "ca87d5632938b28364bbd9b98834ef4cc7464aa5fe448f883319cb1601db077a",
+      "line": 8,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "calling",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "Call",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration adds the Calling-owned simulation discriminator and creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "ed8cd5d4956b2c71a97d40eced0bda74566223e3e6ad5d8728c4af227520209a",
+      "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+      "source_sha256": "ca87d5632938b28364bbd9b98834ef4cc7464aa5fe448f883319cb1601db077a",
+      "line": 65,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "calling",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "AiCallCampaignMember",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
       "site_signature": "1c6697b84d5591fa711b6af06418e920271bc8a0a2d50ac6e04f57c9f62eb7c4",
       "path": "scripts/migrate-data-apply.sh",
       "source_sha256": "273c450c56a5daa82887405f1bce2daefbabd060e4a084ebb960897fb1d43098",
@@ -476,6 +555,24 @@
       "existing_capability_id": "mmc.reviewed.v1.production_migration_authority.deploy_script_migrate_deploy"
     },
     {
+      "site_signature": "7813aeff2d57752d2555f016306f5a9e1b9be1a803f87f0610baa6853c1c15de",
+      "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+      "source_sha256": "ca87d5632938b28364bbd9b98834ef4cc7464aa5fe448f883319cb1601db077a",
+      "line": 104,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "calling",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "AiCallCampaignMember",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
       "site_signature": "396980c54d65db94ee7d3275be101007a09eaacc848b357eda7b92d0a74e70af",
       "path": "tg-bot/prisma/migrations/20260223211509_add_is_linear_to_survey/migration.sql",
       "source_sha256": "1e6f4be04902cc74473bb37b512acb3d1c3ce1010ad696dea48e8969f762fc8e",
@@ -510,6 +607,24 @@
         }
       ],
       "review_rationale": "Separate TG-bot Prisma migration targets the TG-bot PostgreSQL schema and is explicitly excluded from the 62-row Gravity production migration authority."
+    },
+    {
+      "site_signature": "f0a232d869d8ad02e0bfa1d3074fc96536f4238e66626f8b5403d59baa917fde",
+      "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+      "source_sha256": "ca87d5632938b28364bbd9b98834ef4cc7464aa5fe448f883319cb1601db077a",
+      "line": 193,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "calling",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "AiCallAdmissionLease",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
     },
     {
       "site_signature": "3ee0870919940d07e708d5e5c39dd402e9b2a5860a4dce96465260e912e85ce7",
@@ -566,6 +681,96 @@
       "review_rationale": "Separate TG-bot Prisma migration targets the TG-bot PostgreSQL schema and is explicitly excluded from the 62-row Gravity production migration authority."
     },
     {
+      "site_signature": "1cab0d06ad2af07af49879bb63d7b9e9152a9a05d5e04a62b5f44cc5bd48f889",
+      "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+      "source_sha256": "ca87d5632938b28364bbd9b98834ef4cc7464aa5fe448f883319cb1601db077a",
+      "line": 62,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "calling",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "AiCallCampaign",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "9a4c75fb7ffc3d275124895ce90ee5ce12e759a5d3cf2eca0db3cd407216c23e",
+      "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+      "source_sha256": "ca87d5632938b28364bbd9b98834ef4cc7464aa5fe448f883319cb1601db077a",
+      "line": 168,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "calling",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "AiCallCampaignAttempt",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "a37f19b3006969bfba9bfe33bab5cc3d018a150f911519f953456708eadc94cc",
+      "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+      "source_sha256": "ca87d5632938b28364bbd9b98834ef4cc7464aa5fe448f883319cb1601db077a",
+      "line": 11,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "calling",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "AiCallCampaign",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "3b127306f3a6a9b5489584bba6da17d4febb2f750fd6db410a10476b0f7e2688",
+      "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+      "source_sha256": "ca87d5632938b28364bbd9b98834ef4cc7464aa5fe448f883319cb1601db077a",
+      "line": 174,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "calling",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "AiCallCampaignMember",
+          "operation": "ALTER_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "196a23de2a6296793dac656b6c808f824dd73535bc2ca30a385b0d89a74e216f",
+      "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+      "source_sha256": "ca87d5632938b28364bbd9b98834ef4cc7464aa5fe448f883319cb1601db077a",
+      "line": 226,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "calling",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "AiCallCampaignAuditEvent",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
       "site_signature": "6e58a444585e3d01ab32d1aff7b7c249b80fc07b86d9a9963a418869ae18e6d2",
       "path": "scripts/migrate-data-apply.sh",
       "source_sha256": "273c450c56a5daa82887405f1bce2daefbabd060e4a084ebb960897fb1d43098",
@@ -600,6 +805,24 @@
         }
       ],
       "review_rationale": "Explicit operator-run contacts migration has separately enumerated cross-owner task and messaging exceptions below."
+    },
+    {
+      "site_signature": "79fc90132b2acddd458e42a9cf99d142ef6200614dd3a48b83525b3623f0b7f9",
+      "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+      "source_sha256": "ca87d5632938b28364bbd9b98834ef4cc7464aa5fe448f883319cb1601db077a",
+      "line": 220,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "calling",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "AiCallAdmissionLease",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
     },
     {
       "site_signature": "774f170415e96018ac5b9430dd02beff9631a5764c6eb3e9818aff0d737124a6",
@@ -672,6 +895,24 @@
         }
       ],
       "review_rationale": "Separate TG-bot Prisma migration targets the TG-bot PostgreSQL schema and is explicitly excluded from the 62-row Gravity production migration authority."
+    },
+    {
+      "site_signature": "20c472282602fb0e90bc5e5d48d0069f7f91b4634a786c86db2c941100339427",
+      "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+      "source_sha256": "ca87d5632938b28364bbd9b98834ef4cc7464aa5fe448f883319cb1601db077a",
+      "line": 246,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "calling",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "AiCallCampaignAuditEvent",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
     },
     {
       "site_signature": "80034cf7e367c26352d1d89a3d7f06429081347883db528536714927908e4085",
@@ -818,6 +1059,24 @@
       "review_rationale": "Explicit restore entrypoint replaces and restores only the reviewed production database."
     },
     {
+      "site_signature": "499f478e4e10287aa860e70310f0775e42749080add14f36f1511d4d8cfdcf51",
+      "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+      "source_sha256": "ca87d5632938b28364bbd9b98834ef4cc7464aa5fe448f883319cb1601db077a",
+      "line": 110,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "calling",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "AiCallCampaignAttempt",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
       "site_signature": "a336fa130fa93547fa640e9bacd80299ad8afd28e8b7ebc669ddd5a67d5b530d",
       "path": "gravity-mvp/scripts/migrate-contacts.ts",
       "source_sha256": "17c25cc9f4f2645bdb0f6f8ac1a19031965567a4ad110db622bde4c72622d2d1",
@@ -852,6 +1111,24 @@
         }
       ],
       "review_rationale": "Standalone operator-run SQL repairs exact Message channel values; it is not a runtime writer."
+    },
+    {
+      "site_signature": "553b1bf45663b198b4d8d6679a19e3175e351c9b301c4dfa450237c87a8e3dca",
+      "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+      "source_sha256": "ca87d5632938b28364bbd9b98834ef4cc7464aa5fe448f883319cb1601db077a",
+      "line": 107,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "calling",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "AiCallCampaignMember",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
     },
     {
       "site_signature": "a7bb579420666341312247c8ba0cb7b7e5cd1eb149bad7b40489d11ac803c02a",
@@ -1050,6 +1327,42 @@
         }
       ],
       "review_rationale": "Explicit operator-run contacts migration has separately enumerated cross-owner task and messaging exceptions below."
+    },
+    {
+      "site_signature": "2ab889fe89ad035d0ebb2e3019e5a2820eeba3575cf75589aca487af88b067ba",
+      "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+      "source_sha256": "ca87d5632938b28364bbd9b98834ef4cc7464aa5fe448f883319cb1601db077a",
+      "line": 179,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "calling",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "AiCallAdmissionControl",
+          "operation": "CREATE_TABLE"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
+    },
+    {
+      "site_signature": "06bf87e29774002cd55a6d94ae21ad4f76bc0434efe47afc2c7494209f641898",
+      "path": "gravity-mvp/prisma/migrations/20260831120000_add_ai_call_campaign_product/migration.sql",
+      "source_sha256": "ca87d5632938b28364bbd9b98834ef4cc7464aa5fe448f883319cb1601db077a",
+      "line": 223,
+      "column": 1,
+      "method": "sql-script",
+      "functional_owner": "calling",
+      "production_reachability": "CONTROLLED_MIGRATION",
+      "writes": [
+        {
+          "kind": "TABLE",
+          "exact_name": "AiCallAdmissionLease",
+          "operation": "CREATE_INDEX"
+        }
+      ],
+      "review_rationale": "Byte-pinned source-only expand-only migration creates only Calling-owned campaign schema through controlled migration tooling; this review grants no application-runtime or production-application authority."
     },
     {
       "site_signature": "e2437e44902cb7387eb871eccd3076e165596cdae4019f4d72affdde6f53ae5b",

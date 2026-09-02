@@ -14,7 +14,33 @@ import {
 
 const root = process.cwd()
 const authorityPath = 'architecture/migrations/v1/production-migration-authority.json'
+const pendingSourcePath = 'architecture/migrations/v1/pending-source-migrations.json'
 const authority = JSON.parse(await readFile(path.join(root, authorityPath), 'utf8'))
+
+const [runtimeDockerfile, deployScript] = await Promise.all([
+  readFile(path.join(root, 'gravity-mvp/Dockerfile'), 'utf8'),
+  readFile(path.join(root, 'scripts/deploy.sh'), 'utf8'),
+])
+const dockerMigrationBeforeCode = 'CMD ["sh", "-c", "npx prisma migrate deploy && npm run start"]'
+assert.equal(
+  runtimeDockerfile.split(dockerMigrationBeforeCode).length - 1,
+  1,
+  'gravity runtime must deploy accepted source migrations before starting code',
+)
+const deployMigration = '${COMPOSE} run --rm gravity-mvp npx prisma migrate deploy'
+const deployMigrationIndex = deployScript.indexOf(deployMigration)
+const deployMigrationFailureIndex = deployScript.indexOf('fail "миграции не применились"', deployMigrationIndex)
+const deployCodeIndex = deployScript.indexOf('${COMPOSE} up -d --remove-orphans', deployMigrationFailureIndex)
+assert(deployScript.indexOf('set -euo pipefail') >= 0, 'deployment entrypoint must fail closed')
+assert(deployMigrationIndex >= 0, 'deployment entrypoint must invoke the accepted migration authority path')
+assert(
+  deployMigrationFailureIndex > deployMigrationIndex,
+  'deployment entrypoint must abort when migration deploy fails',
+)
+assert(
+  deployCodeIndex > deployMigrationFailureIndex,
+  'deployment entrypoint must apply migrations successfully before replacing application code',
+)
 
 async function makeFixtureTreeWritable(directory) {
   await chmod(directory, 0o700)
@@ -63,6 +89,7 @@ try {
   await cp(path.join(root, 'gravity-mvp/prisma/schema.prisma'), path.join(fixture, 'gravity-mvp/prisma/schema.prisma'))
   await mkdir(path.join(fixture, 'architecture/migrations/v1'), { recursive: true })
   await cp(path.join(root, authorityPath), path.join(fixture, authorityPath), { recursive: true })
+  await cp(path.join(root, pendingSourcePath), path.join(fixture, pendingSourcePath))
   await cp(path.join(root, 'architecture/migrations/v1/provenance'), path.join(fixture, 'architecture/migrations/v1/provenance'), { recursive: true })
   await makeFixtureTreeWritable(path.join(fixture, 'architecture/migrations/v1/provenance'))
   await cp(
@@ -334,8 +361,15 @@ try {
   await writeFile(schemaCapture, schemaCaptureBytes)
 
   await writeFile(path.join(fixture, 'gravity-mvp/prisma/schema.prisma'), '// schema drift\n')
-  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /current production schema checksum mismatch/)
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /pending source schema checksum\/size mismatch/)
   await cp(path.join(root, 'gravity-mvp/prisma/schema.prisma'), path.join(fixture, 'gravity-mvp/prisma/schema.prisma'))
+
+  const pendingPath = path.join(fixture, pendingSourcePath)
+  const pending = JSON.parse(await readFile(pendingPath, 'utf8'))
+  pending.rollback_strategy.code_rollback = 'DROP_TABLES'
+  await writeFile(pendingPath, `${JSON.stringify(pending, null, 2)}\n`)
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /pending source migration rollback strategy mismatch/)
+  await cp(path.join(root, pendingSourcePath), pendingPath)
 
   // Rewriting an archived migration and every self-authored checksum is still
   // rejected by the independently captured raw predecessor runtime bytes.

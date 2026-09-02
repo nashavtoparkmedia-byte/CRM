@@ -67,6 +67,9 @@ describe('integration administrator authentication', () => {
     test('normalizes return targets to a narrow same-origin allowlist', () => {
         expect(normalizeIntegrationAdminReturnTo('/settings/integrations/telegram?tab=login')).toBe('/settings/integrations/telegram?tab=login')
         expect(normalizeIntegrationAdminReturnTo('/logs')).toBe('/logs')
+        expect(normalizeIntegrationAdminReturnTo('/calls/campaigns')).toBe('/calls/campaigns')
+        expect(normalizeIntegrationAdminReturnTo('/calls/campaigns/campaign-1?tab=failures')).toBe('/calls/campaigns/campaign-1?tab=failures')
+        expect(normalizeIntegrationAdminReturnTo('/calls/campaigns-unsafe')).toBe('/settings')
         expect(normalizeIntegrationAdminReturnTo('https://attacker.invalid/')).toBe('/settings')
         expect(normalizeIntegrationAdminReturnTo('//attacker.invalid/')).toBe('/settings')
         expect(normalizeIntegrationAdminReturnTo('/messages')).toBe('/settings')

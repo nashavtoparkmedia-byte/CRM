@@ -18,8 +18,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
     const { id } = await params
-    const call = await prisma.call.findUnique({
-        where: { id },
+    const call = await prisma.call.findFirst({
+        where: { id, isSimulation: false },
         select: { recordingPath: true },
     })
     if (!call) return NextResponse.json({ error: 'not_found' }, { status: 404 })

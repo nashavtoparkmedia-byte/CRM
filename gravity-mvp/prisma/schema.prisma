@@ -1688,11 +1688,14 @@ model Call {
   // AI-initiated outbound calls (voice agent talks to a lead via mod_audio_fork).
   // For ordinary click-to-call rows these are null/false.
   isAi             Boolean              @default(false)
+  /// Controlled proof rows are excluded from ordinary call history, analytics and learning.
+  isSimulation     Boolean              @default(false)
   aiScenarioId     String?
   aiSessionStatus  AiCallSessionStatus?
   aiTransferReason String?
   aiScenario       AiCallScenario?      @relation(fields: [aiScenarioId], references: [id])
   aiMessages       AiCallMessage[]
+  campaignAttempt  AiCallCampaignAttempt?
 
   // Structured Outcome Layer (PR #57). Lifts qualification result out of
   // the opaque `aiAnalysis Json?` blob into typed, queryable columns.
@@ -1742,6 +1745,158 @@ model Call {
   // Funnel analytics: «qualified leads last 7 days», «outcome distribution
   // per scenario». Bounded scan even at high call volume.
   @@index([aiOutcome, startedAt(sort: Desc)])
+}
+
+/// Calling-owned durable campaign aggregate for production-shaped AI calling.
+/// The first product surface accepts only immutable explicit audience snapshots;
+/// dynamic CRM audiences require a separate owner query contract.
+model AiCallCampaign {
+  id                    String   @id
+  identityKey           String   @unique @db.VarChar(255)
+  payloadFingerprint    String   @db.Char(64)
+  name                  String   @db.VarChar(200)
+  scenarioRef           String   @db.VarChar(255)
+  scenarioSnapshot      Json
+  scenarioFingerprint   String   @db.Char(64)
+  state                 String   @default("draft") @db.VarChar(32)
+  audienceSourceKind    String?  @db.VarChar(64)
+  audienceSourceRef     String?  @db.VarChar(255)
+  audienceSourceVersion String?  @db.VarChar(255)
+  audienceFingerprint   String?  @db.Char(64)
+  audienceFrozenAt      DateTime? @db.Timestamptz(3)
+  scheduledAt           DateTime? @db.Timestamptz(3)
+  startedAt             DateTime? @db.Timestamptz(3)
+  completedAt           DateTime? @db.Timestamptz(3)
+  cancelledAt           DateTime? @db.Timestamptz(3)
+  concurrentLimit       Int
+  ratePerMinute         Int
+  maxAttempts           Int
+  retryBaseMs           Int
+  retryMaxMs            Int
+  nextAdmitAt           DateTime? @db.Timestamptz(3)
+  failureCode           String?  @db.VarChar(128)
+  createdAt             DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime @default(now()) @db.Timestamptz(3)
+  members               AiCallCampaignMember[]
+  attempts              AiCallCampaignAttempt[]
+  admissionLeases       AiCallAdmissionLease[]
+  auditEvents           AiCallCampaignAuditEvent[]
+
+  @@index([state, scheduledAt, createdAt], map: "AiCallCampaign_state_scheduledAt_createdAt_idx")
+}
+
+model AiCallCampaignMember {
+  id                         String   @id
+  campaignId                 String
+  memberKey                  String   @db.VarChar(320)
+  targetType                 String   @db.VarChar(32)
+  targetRef                  String   @db.VarChar(255)
+  phoneE164                  String   @db.VarChar(32)
+  provenance                Json
+  snapshotFingerprint        String   @db.Char(64)
+  excludedReason             String?  @db.VarChar(128)
+  state                      String   @db.VarChar(32)
+  attemptCount               Int      @default(0)
+  nextEligibleAt             DateTime? @db.Timestamptz(3)
+  activeAttemptId            String?
+  terminalEventId            String?  @db.VarChar(255)
+  terminalPayloadFingerprint String?  @db.Char(64)
+  outcomeCode                String?  @db.VarChar(128)
+  failureCode                String?  @db.VarChar(128)
+  createdAt                  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt                  DateTime @default(now()) @db.Timestamptz(3)
+  campaign                   AiCallCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "AiCallCampaignMember_campaign_fkey")
+  attempts                   AiCallCampaignAttempt[] @relation("AiCallCampaignMemberAttempts")
+  activeAttempt              AiCallCampaignAttempt? @relation("AiCallCampaignMemberActiveAttempt", fields: [activeAttemptId, id, campaignId], references: [id, memberId, campaignId], onDelete: Restrict, onUpdate: NoAction, map: "AiCallCampaignMember_activeAttempt_member_campaign_fkey")
+  admissionLeases            AiCallAdmissionLease[]
+
+  @@unique([id, campaignId], map: "AiCallCampaignMember_id_campaign_key")
+  @@unique([campaignId, memberKey], map: "AiCallCampaignMember_campaign_member_key")
+  @@unique([campaignId, targetType, targetRef], map: "AiCallCampaignMember_campaign_target_key")
+  @@index([campaignId, state, nextEligibleAt, id], map: "AiCallCampaignMember_campaign_state_nextEligibleAt_id_idx")
+  @@index([state, nextEligibleAt, id], map: "AiCallCampaignMember_state_nextEligibleAt_id_idx")
+}
+
+model AiCallCampaignAttempt {
+  id                String   @id
+  campaignId        String
+  memberId          String
+  attemptNumber     Int
+  launchId          String   @unique @db.VarChar(255)
+  state             String   @default("claimed") @db.VarChar(32)
+  claimRevision     Int      @default(1)
+  dialExecutionCount Int     @default(0)
+  dispatchState      String   @default("not_dispatched") @db.VarChar(32)
+  dispatchAuthorizedAt DateTime? @db.Timestamptz(3)
+  dispatchAcceptedAt DateTime? @db.Timestamptz(3)
+  dispatchReceiptRef String?  @db.VarChar(255)
+  claimFence        String?  @db.Char(64)
+  claimedBy         String?  @db.VarChar(255)
+  claimUntil        DateTime? @db.Timestamptz(3)
+  admissionLeaseId  String?
+  dialEffectRef     String?  @db.VarChar(255)
+  callId            String?  @unique
+  resultEventId     String?  @db.VarChar(255)
+  resultFingerprint String?  @db.Char(64)
+  failureCode       String?  @db.VarChar(128)
+  startedAt         DateTime? @db.Timestamptz(3)
+  completedAt       DateTime? @db.Timestamptz(3)
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime @default(now()) @db.Timestamptz(3)
+  campaign          AiCallCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "AiCallCampaignAttempt_campaign_fkey")
+  member            AiCallCampaignMember @relation("AiCallCampaignMemberAttempts", fields: [memberId, campaignId], references: [id, campaignId], onDelete: Restrict, onUpdate: NoAction, map: "AiCallCampaignAttempt_member_campaign_fkey")
+  activeForMembers  AiCallCampaignMember[] @relation("AiCallCampaignMemberActiveAttempt")
+  call              Call? @relation(fields: [callId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "AiCallCampaignAttempt_call_fkey")
+  admissionLease    AiCallAdmissionLease?
+
+  @@unique([id, memberId, campaignId], map: "AiCallCampaignAttempt_id_member_campaign_key")
+  @@unique([memberId, attemptNumber], map: "AiCallCampaignAttempt_member_attempt_key")
+  @@index([state, claimUntil, createdAt], map: "AiCallCampaignAttempt_state_claimUntil_createdAt_idx")
+  @@index([campaignId, state, createdAt], map: "AiCallCampaignAttempt_campaign_state_createdAt_idx")
+}
+
+model AiCallAdmissionControl {
+  id              String   @id
+  concurrentLimit Int
+  ratePerMinute   Int
+  nextAdmitAt     DateTime? @db.Timestamptz(3)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @default(now()) @db.Timestamptz(3)
+}
+
+model AiCallAdmissionLease {
+  id            String   @id
+  attemptId     String   @unique(map: "AiCallAdmissionLease_attempt_key")
+  campaignId    String
+  memberId      String
+  workerId      String   @db.VarChar(255)
+  leaseFence    String   @db.Char(64)
+  acquiredAt    DateTime @db.Timestamptz(3)
+  leaseUntil    DateTime @db.Timestamptz(3)
+  releasedAt    DateTime? @db.Timestamptz(3)
+  releaseReason String?  @db.VarChar(128)
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @default(now()) @db.Timestamptz(3)
+  attempt       AiCallCampaignAttempt @relation(fields: [attemptId, memberId, campaignId], references: [id, memberId, campaignId], onDelete: Restrict, onUpdate: NoAction, map: "AiCallAdmissionLease_attempt_member_campaign_fkey")
+  campaign      AiCallCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "AiCallAdmissionLease_campaign_fkey")
+  member        AiCallCampaignMember @relation(fields: [memberId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "AiCallAdmissionLease_member_fkey")
+
+  @@unique([attemptId, memberId, campaignId], map: "AiCallAdmissionLease_attempt_member_campaign_key")
+  @@index([releasedAt, leaseUntil], map: "AiCallAdmissionLease_releasedAt_leaseUntil_idx")
+  @@index([campaignId, releasedAt, leaseUntil], map: "AiCallAdmissionLease_campaign_releasedAt_leaseUntil_idx")
+}
+
+/// Append-only user/system audit facts for campaign commands and lifecycle.
+model AiCallCampaignAuditEvent {
+  id         String   @id
+  campaignId String
+  actorId    String   @db.VarChar(255)
+  action     String   @db.VarChar(64)
+  details    Json     @default("{}")
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  campaign   AiCallCampaign @relation(fields: [campaignId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "AiCallCampaignAuditEvent_campaign_fkey")
+
+  @@index([campaignId, createdAt, id], map: "AiCallCampaignAuditEvent_campaign_createdAt_id_idx")
 }
 
 /// Reliable cross-module integration events. Domain state and the outbox row
