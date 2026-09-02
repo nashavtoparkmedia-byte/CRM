@@ -433,18 +433,34 @@ for (const stageAApplicationFetchMutation of [
 }
 assert.match(
   workflow,
-  /STAGE_A_CHANGE_BASE_COMMIT: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.before \}\}[\s\S]*grep -Eq '\^\[0-9a-f\]\{40\}\$'[\s\S]*STAGE_A_CHANGE_BASE_COMMIT:refs\/heads\/stage-a-change-base[\s\S]*git rev-parse 'refs\/heads\/stage-a-change-base\^\{commit\}'/u,
-  'hosted Stage A scope must fetch the exact event base into a clone-visible ref and verify its commit identity',
+  /STAGE_A_SCOPE_BASE_COMMIT: ba94bb493cef9938b07f187faf86bc81724cc9c0[\s\S]*"\$STAGE_A_SCOPE_BASE_COMMIT:refs\/heads\/stage-a-scope-base"[\s\S]*git rev-parse 'refs\/heads\/stage-a-scope-base\^\{commit\}'/u,
+  'hosted Stage A scope must fetch the frozen historical base into a clone-visible ref and verify its identity',
 )
-for (const stageAChangeBaseFetchMutation of [
-  workflow.replace('${{ github.event.pull_request.base.sha || github.event.before }}', '${{ github.sha }}'),
-  workflow.replace(':refs/heads/stage-a-change-base', ''),
-  workflow.replace("git rev-parse 'refs/heads/stage-a-change-base^{commit}'", 'true'),
+for (const stageAScopeBaseFetchMutation of [
+  workflow.replace('ba94bb493cef9938b07f187faf86bc81724cc9c0', '0'.repeat(40)),
+  workflow.replace(':refs/heads/stage-a-scope-base', ''),
+  workflow.replace("git rev-parse 'refs/heads/stage-a-scope-base^{commit}'", 'true'),
 ]) {
   assert.doesNotMatch(
-    stageAChangeBaseFetchMutation,
-    /STAGE_A_CHANGE_BASE_COMMIT: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.before \}\}[\s\S]*STAGE_A_CHANGE_BASE_COMMIT:refs\/heads\/stage-a-change-base[\s\S]*git rev-parse 'refs\/heads\/stage-a-change-base\^\{commit\}'/u,
-    'wrong, unreachable, or unverified Stage A change-base fetch must fail the workflow contract',
+    stageAScopeBaseFetchMutation,
+    /STAGE_A_SCOPE_BASE_COMMIT: ba94bb493cef9938b07f187faf86bc81724cc9c0[\s\S]*"\$STAGE_A_SCOPE_BASE_COMMIT:refs\/heads\/stage-a-scope-base"[\s\S]*git rev-parse 'refs\/heads\/stage-a-scope-base\^\{commit\}'/u,
+    'wrong, unreachable, or unverified Stage A historical scope-base fetch must fail the workflow contract',
+  )
+}
+assert.match(
+  workflow,
+  /STAGE_A_ACCEPTED_CHANGE_COMMIT: e8ea2ab5cbd88b5dccf993eb2da5f1947afc7b65[\s\S]*"\$STAGE_A_ACCEPTED_CHANGE_COMMIT:refs\/heads\/stage-a-accepted-change"[\s\S]*git rev-parse 'refs\/heads\/stage-a-accepted-change\^\{commit\}'/u,
+  'hosted Stage A scope must fetch the frozen accepted merge into a clone-visible ref and verify its identity',
+)
+for (const stageAAcceptedChangeFetchMutation of [
+  workflow.replace('e8ea2ab5cbd88b5dccf993eb2da5f1947afc7b65', '0'.repeat(40)),
+  workflow.replace(':refs/heads/stage-a-accepted-change', ''),
+  workflow.replace("git rev-parse 'refs/heads/stage-a-accepted-change^{commit}'", 'true'),
+]) {
+  assert.doesNotMatch(
+    stageAAcceptedChangeFetchMutation,
+    /STAGE_A_ACCEPTED_CHANGE_COMMIT: e8ea2ab5cbd88b5dccf993eb2da5f1947afc7b65[\s\S]*"\$STAGE_A_ACCEPTED_CHANGE_COMMIT:refs\/heads\/stage-a-accepted-change"[\s\S]*git rev-parse 'refs\/heads\/stage-a-accepted-change\^\{commit\}'/u,
+    'wrong, unreachable, or unverified Stage A accepted-change fetch must fail the workflow contract',
   )
 }
 assert.match(
@@ -471,23 +487,26 @@ assert.match(
 assert.match(workflow, /node-version: 20\.20\.2/u, 'hosted CI must install the exact locally reviewed Node.js release')
 assert.match(workflow, /process\.versions\.node !== '20\.20\.2'/u, 'hosted CI must fail closed if the exact Node.js release was not activated')
 assert.match(workflow, /YOKO_BLAST_BASE: HEAD\^/u, 'hosted blast-radius analysis must use the exact accepted commit parent available in the shallow checkout')
-const stageARunnerBaseContract = /YOKO_STAGE_A_CHANGE_BASE: refs\/heads\/stage-a-change-base\n\s+YOKO_STAGE_A_CHANGE_BASE_COMMIT: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.before \}\}/u
+const stageARunnerScopeContract = /YOKO_STAGE_A_SCOPE_BASE: refs\/heads\/stage-a-scope-base\n\s+YOKO_STAGE_A_SCOPE_BASE_COMMIT: ba94bb493cef9938b07f187faf86bc81724cc9c0\n\s+YOKO_STAGE_A_ACCEPTED_CHANGE: refs\/heads\/stage-a-accepted-change\n\s+YOKO_STAGE_A_ACCEPTED_CHANGE_COMMIT: e8ea2ab5cbd88b5dccf993eb2da5f1947afc7b65/u
 assert.match(
   workflow,
-  stageARunnerBaseContract,
-  'hosted Stage A scope checks must use the separately fetched event-base ref bound to its exact commit identity',
+  stageARunnerScopeContract,
+  'hosted Stage A scope checks must use the separately fetched frozen historical range bound to exact commit identities',
 )
-for (const stageARunnerBaseMutation of [
-  workflow.replace('YOKO_STAGE_A_CHANGE_BASE: refs/heads/stage-a-change-base', 'YOKO_STAGE_A_CHANGE_BASE: HEAD'),
-  workflow.replace('YOKO_STAGE_A_CHANGE_BASE_COMMIT: ${{ github.event.pull_request.base.sha || github.event.before }}', 'YOKO_STAGE_A_CHANGE_BASE_COMMIT: ${{ github.sha }}'),
+for (const stageARunnerScopeMutation of [
+  workflow.replace('YOKO_STAGE_A_SCOPE_BASE: refs/heads/stage-a-scope-base', 'YOKO_STAGE_A_SCOPE_BASE: HEAD'),
+  workflow.replace('YOKO_STAGE_A_SCOPE_BASE_COMMIT: ba94bb493cef9938b07f187faf86bc81724cc9c0', 'YOKO_STAGE_A_SCOPE_BASE_COMMIT: ${{ github.sha }}'),
+  workflow.replace('YOKO_STAGE_A_ACCEPTED_CHANGE: refs/heads/stage-a-accepted-change', 'YOKO_STAGE_A_ACCEPTED_CHANGE: HEAD'),
+  workflow.replace('YOKO_STAGE_A_ACCEPTED_CHANGE_COMMIT: e8ea2ab5cbd88b5dccf993eb2da5f1947afc7b65', 'YOKO_STAGE_A_ACCEPTED_CHANGE_COMMIT: ${{ github.sha }}'),
 ]) {
   assert.doesNotMatch(
-    stageARunnerBaseMutation,
-    stageARunnerBaseContract,
-    'self or identity-unbound Stage A runner base must fail the workflow contract',
+    stageARunnerScopeMutation,
+    stageARunnerScopeContract,
+    'self or identity-unbound Stage A historical range must fail the workflow contract',
   )
 }
 assert.doesNotMatch(workflow, /YOKO_BLAST_BASE:.*pull_request\.base\.sha/u, 'hosted CI must not select an unfetched PR base as its change-set authority')
+assert.doesNotMatch(workflow, /STAGE_A_(?:SCOPE_BASE|ACCEPTED_CHANGE)_COMMIT: \$\{\{/u, 'Stage A historical scope must not drift with later workflow events')
 assert.match(workflow, /DATABASE_URL: postgresql:\/\/postgres:postgres@localhost:5432\/postgres\?schema=yoko_migration_authority_replay_ci/u)
 assert.match(workflow, /YOKO_POSTGRES_CLIENT_CONTAINER: \$\{\{ job\.services\.postgres\.id \}\}/u)
 assert.match(workflow, /docker exec "\$YOKO_POSTGRES_CLIENT_CONTAINER" psql --version \| grep -F '16\.14'/u)

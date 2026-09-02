@@ -14,9 +14,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[7]
 AUTHORITY = Path(__file__).resolve().parents[1]
 APPLICATION_COMMIT = "6e3f094bf4b42c1400c705843ab107dacd6d1cf8"
+STAGE_A_SCOPE_BASE_COMMIT = "ba94bb493cef9938b07f187faf86bc81724cc9c0"
+STAGE_A_ACCEPTED_CHANGE_COMMIT = "e8ea2ab5cbd88b5dccf993eb2da5f1947afc7b65"
 PROFILE = "crm-6e3f094bf4b4-gravity-max-source-v1"
 COMMIT_SHA = re.compile(r"^[0-9a-f]{40}$")
-HOSTED_CHANGE_BASE_REF = "refs/heads/stage-a-change-base"
+HOSTED_SCOPE_BASE_REF = "refs/heads/stage-a-scope-base"
+HOSTED_ACCEPTED_CHANGE_REF = "refs/heads/stage-a-accepted-change"
 
 
 def git_commit(root: Path, revision: str) -> str:
@@ -30,45 +33,64 @@ def git_commit(root: Path, revision: str) -> str:
         raise RuntimeError(f"unavailable Stage A change-base authority: {revision}") from error
 
 
-def resolve_change_base(
-    *, root: Path = ROOT, environment: Mapping[str, str] = os.environ,
+def resolve_fixed_authority(
+    *,
+    root: Path = ROOT,
+    environment: Mapping[str, str] = os.environ,
+    ref_variable: str,
+    commit_variable: str,
+    trusted_ref: str,
+    authority_commit: str,
 ) -> str:
-    configured = environment.get("YOKO_STAGE_A_CHANGE_BASE")
-    expected = environment.get("YOKO_STAGE_A_CHANGE_BASE_COMMIT")
+    configured = environment.get(ref_variable)
+    expected = environment.get(commit_variable)
     if configured:
-        if configured != HOSTED_CHANGE_BASE_REF:
-            raise RuntimeError("explicit Stage A change base must use the trusted hosted ref")
-        if not expected or not COMMIT_SHA.fullmatch(expected) or expected == "0" * 40:
-            raise RuntimeError("explicit Stage A change base requires an exact nonzero commit identity")
-        change_base = git_commit(root, configured)
-        if change_base != expected:
-            raise RuntimeError("Stage A change-base ref does not match its expected commit identity")
+        if configured != trusted_ref:
+            raise RuntimeError("explicit Stage A authority must use its trusted hosted ref")
+        if not expected or not COMMIT_SHA.fullmatch(expected):
+            raise RuntimeError("explicit Stage A authority requires an exact commit identity")
+        if expected != authority_commit:
+            raise RuntimeError("explicit Stage A authority does not match the frozen commit identity")
+        resolved = git_commit(root, configured)
+        if resolved != expected:
+            raise RuntimeError("Stage A authority ref does not match its expected commit identity")
     else:
         if expected:
-            raise RuntimeError("Stage A change-base identity cannot be supplied without its ref")
-        change_base = git_commit(root, "refs/remotes/origin/main")
-
-    head = git_commit(root, "HEAD")
-    if change_base == head:
-        raise RuntimeError("Stage A change base must differ from HEAD")
-    if not configured:
-        ancestor = subprocess.run(
-            ["git", "-C", str(root), "merge-base", "--is-ancestor", change_base, head],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-        if ancestor.returncode != 0:
-            raise RuntimeError("local Stage A change base must be an ancestor of HEAD")
-    return change_base
+            raise RuntimeError("Stage A authority identity cannot be supplied without its ref")
+        resolved = git_commit(root, authority_commit)
+    if resolved != authority_commit:
+        raise RuntimeError("Stage A authority does not resolve to the frozen commit identity")
+    return resolved
 
 
-CHANGE_BASE = resolve_change_base()
+SCOPE_BASE = resolve_fixed_authority(
+    ref_variable="YOKO_STAGE_A_SCOPE_BASE",
+    commit_variable="YOKO_STAGE_A_SCOPE_BASE_COMMIT",
+    trusted_ref=HOSTED_SCOPE_BASE_REF,
+    authority_commit=STAGE_A_SCOPE_BASE_COMMIT,
+)
+ACCEPTED_CHANGE = resolve_fixed_authority(
+    ref_variable="YOKO_STAGE_A_ACCEPTED_CHANGE",
+    commit_variable="YOKO_STAGE_A_ACCEPTED_CHANGE_COMMIT",
+    trusted_ref=HOSTED_ACCEPTED_CHANGE_REF,
+    authority_commit=STAGE_A_ACCEPTED_CHANGE_COMMIT,
+)
 
 
 class StageAContractTests(unittest.TestCase):
-    def test_explicit_change_base_requires_exact_nonself_identity(self) -> None:
+    def test_explicit_authority_requires_exact_frozen_identity(self) -> None:
+        arguments = {
+            "ref_variable": "YOKO_TEST_REF",
+            "commit_variable": "YOKO_TEST_COMMIT",
+            "trusted_ref": HOSTED_SCOPE_BASE_REF,
+        }
         with self.assertRaisesRegex(RuntimeError, "trusted hosted ref"):
-            resolve_change_base(root=ROOT, environment={"YOKO_STAGE_A_CHANGE_BASE": "HEAD"})
+            resolve_fixed_authority(
+                root=ROOT,
+                environment={"YOKO_TEST_REF": "HEAD"},
+                authority_commit=STAGE_A_SCOPE_BASE_COMMIT,
+                **arguments,
+            )
 
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -79,40 +101,45 @@ class StageAContractTests(unittest.TestCase):
             subprocess.run(["git", "-C", str(root), "add", "fixture"], check=True)
             subprocess.run(["git", "-C", str(root), "commit", "--quiet", "-m", "base"], check=True)
             base = git_commit(root, "HEAD")
-            subprocess.run(["git", "-C", str(root), "update-ref", HOSTED_CHANGE_BASE_REF, base], check=True)
+            subprocess.run(["git", "-C", str(root), "update-ref", HOSTED_SCOPE_BASE_REF, base], check=True)
             (root / "fixture").write_text("head\n")
             subprocess.run(["git", "-C", str(root), "commit", "--quiet", "-am", "head"], check=True)
             head = git_commit(root, "HEAD")
 
             self.assertEqual(
-                resolve_change_base(
+                resolve_fixed_authority(
                     root=root,
                     environment={
-                        "YOKO_STAGE_A_CHANGE_BASE": HOSTED_CHANGE_BASE_REF,
-                        "YOKO_STAGE_A_CHANGE_BASE_COMMIT": base,
+                        "YOKO_TEST_REF": HOSTED_SCOPE_BASE_REF,
+                        "YOKO_TEST_COMMIT": base,
                     },
+                    authority_commit=base,
+                    **arguments,
                 ),
                 base,
             )
-            with self.assertRaisesRegex(RuntimeError, "does not match"):
-                resolve_change_base(
+            with self.assertRaisesRegex(RuntimeError, "frozen commit"):
+                resolve_fixed_authority(
                     root=root,
                     environment={
-                        "YOKO_STAGE_A_CHANGE_BASE": HOSTED_CHANGE_BASE_REF,
-                        "YOKO_STAGE_A_CHANGE_BASE_COMMIT": head,
+                        "YOKO_TEST_REF": HOSTED_SCOPE_BASE_REF,
+                        "YOKO_TEST_COMMIT": head,
                     },
+                    authority_commit=base,
+                    **arguments,
                 )
-            subprocess.run(["git", "-C", str(root), "update-ref", HOSTED_CHANGE_BASE_REF, head], check=True)
-            with self.assertRaisesRegex(RuntimeError, "must differ from HEAD"):
-                resolve_change_base(
+            with self.assertRaisesRegex(RuntimeError, "does not match its expected"):
+                resolve_fixed_authority(
                     root=root,
                     environment={
-                        "YOKO_STAGE_A_CHANGE_BASE": HOSTED_CHANGE_BASE_REF,
-                        "YOKO_STAGE_A_CHANGE_BASE_COMMIT": head,
+                        "YOKO_TEST_REF": HOSTED_SCOPE_BASE_REF,
+                        "YOKO_TEST_COMMIT": head,
                     },
+                    authority_commit=head,
+                    **arguments,
                 )
 
-    def test_missing_origin_main_fails_closed(self) -> None:
+    def test_missing_frozen_authority_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             subprocess.run(["git", "-C", str(root), "init", "--quiet"], check=True)
@@ -122,7 +149,14 @@ class StageAContractTests(unittest.TestCase):
             subprocess.run(["git", "-C", str(root), "add", "fixture"], check=True)
             subprocess.run(["git", "-C", str(root), "commit", "--quiet", "-m", "fixture"], check=True)
             with self.assertRaisesRegex(RuntimeError, "unavailable Stage A change-base authority"):
-                resolve_change_base(root=root, environment={})
+                resolve_fixed_authority(
+                    root=root,
+                    environment={},
+                    ref_variable="YOKO_TEST_REF",
+                    commit_variable="YOKO_TEST_COMMIT",
+                    trusted_ref=HOSTED_SCOPE_BASE_REF,
+                    authority_commit=STAGE_A_SCOPE_BASE_COMMIT,
+                )
 
     def test_accepted_application_and_runtime_surfaces_are_byte_identical(self) -> None:
         protected = [
@@ -131,14 +165,14 @@ class StageAContractTests(unittest.TestCase):
             "deploy/docker-compose.production.yml",
         ]
         result = subprocess.run(
-            ["git", "-C", str(ROOT), "diff", "--exit-code", CHANGE_BASE, "HEAD", "--", *protected],
+            ["git", "-C", str(ROOT), "diff", "--exit-code", SCOPE_BASE, ACCEPTED_CHANGE, "--", *protected],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
         self.assertEqual(result.returncode, 0, result.stdout.decode() + result.stderr.decode())
 
     def test_change_set_is_stage_a_control_plane_only(self) -> None:
         names = subprocess.check_output(
-            ["git", "-C", str(ROOT), "diff", "--name-only", CHANGE_BASE, "HEAD"], text=True,
+            ["git", "-C", str(ROOT), "diff", "--name-only", SCOPE_BASE, ACCEPTED_CHANGE], text=True,
         ).splitlines()
         allowed_exact = {
             ".github/workflows/architecture-enforcement.yml",

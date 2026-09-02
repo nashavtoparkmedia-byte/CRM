@@ -42,18 +42,20 @@ jobs:
       - name: Fetch exact Stage A authorities
         env:
           STAGE_A_APPLICATION_COMMIT: 6e3f094bf4b42c1400c705843ab107dacd6d1cf8
-          STAGE_A_CHANGE_BASE_COMMIT: ${{ github.event.pull_request.base.sha || github.event.before }}
+          STAGE_A_SCOPE_BASE_COMMIT: ba94bb493cef9938b07f187faf86bc81724cc9c0
+          STAGE_A_ACCEPTED_CHANGE_COMMIT: e8ea2ab5cbd88b5dccf993eb2da5f1947afc7b65
         run: |
           set -Eeuo pipefail
-          printf '%s\n' "$STAGE_A_CHANGE_BASE_COMMIT" | grep -Eq '^[0-9a-f]{40}$'
-          test "$STAGE_A_CHANGE_BASE_COMMIT" != 0000000000000000000000000000000000000000
           git fetch --no-tags --depth=1 origin \
             "$STAGE_A_APPLICATION_COMMIT:refs/heads/stage-a-accepted-application" \
-            "$STAGE_A_CHANGE_BASE_COMMIT:refs/heads/stage-a-change-base"
+            "$STAGE_A_SCOPE_BASE_COMMIT:refs/heads/stage-a-scope-base" \
+            "$STAGE_A_ACCEPTED_CHANGE_COMMIT:refs/heads/stage-a-accepted-change"
           test "$(git rev-parse 'refs/heads/stage-a-accepted-application^{commit}')" = \
             "$STAGE_A_APPLICATION_COMMIT"
-          test "$(git rev-parse 'refs/heads/stage-a-change-base^{commit}')" = \
-            "$STAGE_A_CHANGE_BASE_COMMIT"
+          test "$(git rev-parse 'refs/heads/stage-a-scope-base^{commit}')" = \
+            "$STAGE_A_SCOPE_BASE_COMMIT"
+          test "$(git rev-parse 'refs/heads/stage-a-accepted-change^{commit}')" = \
+            "$STAGE_A_ACCEPTED_CHANGE_COMMIT"
 
       - name: Run targeted Runtime TG base-reference contract
         env:
@@ -108,8 +110,10 @@ jobs:
           # reproducible even when the hosted PR base is hundreds of commits
           # behind and is not present in the shallow checkout.
           YOKO_BLAST_BASE: HEAD^
-          YOKO_STAGE_A_CHANGE_BASE: refs/heads/stage-a-change-base
-          YOKO_STAGE_A_CHANGE_BASE_COMMIT: ${{ github.event.pull_request.base.sha || github.event.before }}
+          YOKO_STAGE_A_SCOPE_BASE: refs/heads/stage-a-scope-base
+          YOKO_STAGE_A_SCOPE_BASE_COMMIT: ba94bb493cef9938b07f187faf86bc81724cc9c0
+          YOKO_STAGE_A_ACCEPTED_CHANGE: refs/heads/stage-a-accepted-change
+          YOKO_STAGE_A_ACCEPTED_CHANGE_COMMIT: e8ea2ab5cbd88b5dccf993eb2da5f1947afc7b65
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres?schema=yoko_migration_authority_replay_ci
           YOKO_POSTGRES_CLIENT_CONTAINER: ${{ job.services.postgres.id }}
           YOKO_CI_ATTESTATION_OUTPUT: authoritative-ci-execution.json
