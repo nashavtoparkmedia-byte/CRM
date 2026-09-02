@@ -6,12 +6,6 @@ import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 
-import {
-  controlIdCatalogSha256,
-  normalizedControlCatalog,
-  semanticControlCatalogSha256,
-} from '../run-authoritative-ci.mjs'
-
 export const CLOSURE_PATH = 'architecture/recovery/whole-project-dod/v2/FINAL_EXTERNAL_REREVIEW_CLOSURE.json'
 export const TEMPLATE_PATH = 'architecture/recovery/whole-project-dod/v2/FINAL_EXTERNAL_REREVIEW_CLOSURE.template.json'
 export const MAPPING_PATH = 'architecture/recovery/whole-project-dod/v2/ORIGINAL_DOD_CANONICAL_MAPPING.json'
@@ -84,6 +78,62 @@ const PREREQUISITES = Object.freeze([
 ])
 const EMPTY_SHA256 = createHash('sha256').update('').digest('hex')
 const CLOSURE_TOKEN = Symbol('verified-final-rereview-closure')
+export const FINAL_CLOSURE_CONTROL_CATALOG = Object.freeze([
+  'authoritative-ci-inventory',
+  'whole-repository-credential-inventory',
+  'fresh-credential-verification',
+  'whole-repository-write-scan',
+  'fresh-write-verification',
+  'fresh-migration-write-site-authorizations',
+  'original-dod-canonical-mapping',
+  'original-dod-canonical-mapping-negatives',
+  'manifest-policy',
+  'manifest-negatives',
+  'executable-path-ownership-negatives',
+  'final-dependency-artifact',
+  'module-scaffold-negatives',
+  'production-migration-authority',
+  'production-migration-authority-negatives',
+  'production-migration-default-clean-checkout',
+  'production-migration-runtime-semantics',
+  'source-only-runtime-v10-contract',
+  'production-migration-committed-runtime-inventory',
+  'production-migration-canonical-replay',
+  'production-migration-predecessor-recovery-replay',
+  'architecture-policy',
+  'architecture-negatives',
+  'write-analyzer-negatives',
+  'write-runner-negatives',
+  'write-gate-negatives',
+  'surface-lifecycle-negatives',
+  'ambiguity-reconciliation',
+  'scoped-ownership-negatives',
+  'maintenance-capability-negatives',
+  'credential-field-registry',
+  'credential-analyzer-negatives',
+  'credential-inventory-negatives',
+  'credential-boundary-negatives',
+  'credential-gate-negatives',
+  'credential-migration-boundary',
+  'contract-registry-policy',
+  'contract-registry-negatives',
+  'contract-policy',
+  'contract-behavior',
+  'outbox-policy',
+  'outbox-behavior-negatives',
+  'static-sql-policy',
+  'typescript-baseline-negatives',
+  'typescript-baseline',
+  'blast-radius-negatives',
+  'blast-radius',
+  'boundary-control-lifecycle-negatives',
+  'all-current-boundaries',
+  'independent-source-critic',
+  'gravity-security',
+  'tg-bot-security',
+])
+export const FINAL_CLOSURE_CONTROL_CATALOG_SHA256 = '7268cb0b049390bee10aebf53277c1f771b04670ed5c59ae022db0e9ff317680'
+export const FINAL_CLOSURE_SEMANTIC_CATALOG_SHA256 = '24ad32ba5a97e617e34bd19a3bcb2109807bf946636737d02b12fd7607185483'
 
 export function sha256(value) {
   return createHash('sha256').update(value).digest('hex')
@@ -211,7 +261,13 @@ export function verifyClosureTemplate(template) {
 }
 
 function expectedCatalog() {
-  return normalizedControlCatalog().map(({ id }) => id)
+  const catalog = [...FINAL_CLOSURE_CONTROL_CATALOG]
+  assert.equal(
+    sha256(canonicalBytes(catalog)),
+    FINAL_CLOSURE_CONTROL_CATALOG_SHA256,
+    'historical final-closure control catalog digest drift',
+  )
+  return catalog
 }
 
 function verifyHostedCi(attestation, source, repository) {
@@ -270,8 +326,8 @@ function verifyHostedCi(attestation, source, repository) {
   assert.equal(catalog.length, 52, 'authoritative control catalog is not 52')
   assert.deepEqual(attestation.controls, {
     count: 52,
-    catalog_sha256: controlIdCatalogSha256(),
-    semantic_catalog_sha256: semanticControlCatalogSha256(),
+    catalog_sha256: FINAL_CLOSURE_CONTROL_CATALOG_SHA256,
+    semantic_catalog_sha256: FINAL_CLOSURE_SEMANTIC_CATALOG_SHA256,
     catalog,
   }, 'hosted CI does not contain the exact ordered 52-control catalog')
   return attestation
@@ -295,8 +351,8 @@ function verifyExecutionProof(proof, source, repository) {
   const catalog = expectedCatalog()
   assert.deepEqual(proof.controls, {
     count: 52,
-    catalog_sha256: controlIdCatalogSha256(),
-    semantic_catalog_sha256: semanticControlCatalogSha256(),
+    catalog_sha256: FINAL_CLOSURE_CONTROL_CATALOG_SHA256,
+    semantic_catalog_sha256: FINAL_CLOSURE_SEMANTIC_CATALOG_SHA256,
     executions: catalog.map((id) => ({ id, status: 'PASS' })),
   }, 'clean CI proof requires all exact 52 ordered PASS controls')
 }

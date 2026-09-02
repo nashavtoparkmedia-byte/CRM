@@ -17,6 +17,9 @@ import {
 import {
   CLOSURE_PATH,
   EVIDENCE_PATHS,
+  FINAL_CLOSURE_CONTROL_CATALOG,
+  FINAL_CLOSURE_CONTROL_CATALOG_SHA256,
+  FINAL_CLOSURE_SEMANTIC_CATALOG_SHA256,
   canonicalBytes,
   expectedValidatorIdentity,
   parseJsonRejectDuplicates,
@@ -26,9 +29,7 @@ import {
   verifyFinalClosureEvidence,
 } from './verify-final-rereview-closure.mjs'
 import {
-  controlIdCatalogSha256,
   normalizedControlCatalog,
-  semanticControlCatalogSha256,
 } from '../run-authoritative-ci.mjs'
 
 const mapping = JSON.parse(await readFile(
@@ -48,6 +49,11 @@ const capturedAdr = await readFile(adrSource.repository_byte_capture, 'utf8')
 const capturedReview = await readFile(mapping.sources.find((source) => source.id === 'EXTERNAL_REVIEW_CONTRACT_20260812').repository_byte_capture, 'utf8')
 const capturedRemediation = await readFile(mapping.sources.find((source) => source.id === 'EXTERNAL_REREVIEW_REMEDIATION_CONTRACT_20260813').repository_byte_capture, 'utf8')
 const recompute = JSON.parse(await readFile('architecture/recovery/whole-project-dod/v2/ORIGINAL_DOD_RECOMPUTE_20260812.json', 'utf8'))
+const currentControlCatalog = normalizedControlCatalog().map(({ id }) => id)
+
+assert.equal(currentControlCatalog.includes('hosted-coordinated-gravity-max-stage-a'), true)
+assert.equal(FINAL_CLOSURE_CONTROL_CATALOG.length, 52, 'historical final-closure catalog denominator drift')
+assert.equal(FINAL_CLOSURE_CONTROL_CATALOG.includes('hosted-coordinated-gravity-max-stage-a'), false)
 
 assert.equal(verifyOriginalDodCanonicalMapping(mapping, ledger).status, 'PASS')
 await verifyRepositoryEvidenceExists(process.cwd(), mapping)
@@ -287,7 +293,7 @@ assert.notEqual(
 )
 assert.throws(() => verifyCleanRepositoryStatus('?? attacker-untracked.json'), /including untracked files/)
 
-const catalog = normalizedControlCatalog().map(({ id }) => id)
+const catalog = [...FINAL_CLOSURE_CONTROL_CATALOG]
 const fixtureRaw = (value) => Buffer.from(`${JSON.stringify(value, null, 2)}\n`, 'ascii')
 const fixtureDigestWithoutNewline = (value) => createHash('sha256')
   .update(JSON.stringify(value, (_key, item) => item && typeof item === 'object' && !Array.isArray(item)
@@ -389,8 +395,8 @@ function buildFinalClosureFixture() {
     },
     controls: {
       count: 52,
-      catalog_sha256: controlIdCatalogSha256(),
-      semantic_catalog_sha256: semanticControlCatalogSha256(),
+      catalog_sha256: FINAL_CLOSURE_CONTROL_CATALOG_SHA256,
+      semantic_catalog_sha256: FINAL_CLOSURE_SEMANTIC_CATALOG_SHA256,
       catalog,
     },
   }
@@ -415,8 +421,8 @@ function buildFinalClosureFixture() {
     runtime: { node: '20.20.2', blast_base: 'HEAD^', blast_base_commit: repository.acceptedSourceParent },
     controls: {
       count: 52,
-      catalog_sha256: controlIdCatalogSha256(),
-      semantic_catalog_sha256: semanticControlCatalogSha256(),
+      catalog_sha256: FINAL_CLOSURE_CONTROL_CATALOG_SHA256,
+      semantic_catalog_sha256: FINAL_CLOSURE_SEMANTIC_CATALOG_SHA256,
       executions: catalog.map((id) => ({ id, status: 'PASS' })),
     },
   }
