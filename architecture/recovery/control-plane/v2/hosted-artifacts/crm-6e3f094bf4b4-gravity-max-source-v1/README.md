@@ -10,6 +10,12 @@ activation profile, rollback implementation, production snapshot, or deploy
 capability. The application checkout is fixed independently from the release
 builder checkout; there is no application-ref input.
 
+The authoritative Stage A control validates the immutable builder change from
+base `ba94bb493cef9938b07f187faf86bc81724cc9c0` to builder
+`80b17fbf143c3d67d786b26cae7e2b09829e52f7`. Later repository candidates do
+not redefine that historical builder scope; their application and control-plane
+changes remain governed by the repository-wide candidate-delta controls.
+
 The MAX release Dockerfile preserves the accepted `pwuser`, `/app`, Playwright,
 `tini`, `node index.js`, healthcheck, environment, and `/app/user_data`
 contracts. It copies only the runtime module graph. Accepted test, diagnostic,

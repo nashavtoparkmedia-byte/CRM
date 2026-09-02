@@ -51,7 +51,8 @@ try {
   git(cleanFixture, ['add', 'baseline.txt'])
   git(cleanFixture, ['commit', '--quiet', '-m', 'fixture head'])
   assert.doesNotThrow(() => assertCleanWorktree(cleanFixture, 'fixture baseline'))
-  const capturedIdentity = captureExecutionProofIdentity(cleanFixture)
+  const localEnvironment = { YOKO_BLAST_BASE: AUTHORITATIVE_BLAST_BASE }
+  const capturedIdentity = captureExecutionProofIdentity(cleanFixture, localEnvironment)
   const hostedBaseCommit = capturedIdentity.parent
   git(cleanFixture, ['update-ref', HOSTED_AUTHORITATIVE_BLAST_BASE, hostedBaseCommit])
   const hostedEnvironment = {
@@ -82,7 +83,12 @@ try {
   git(cleanFixture, ['add', 'tracked.txt'])
   git(cleanFixture, ['commit', '--quiet', '-m', 'head transition'])
   assert.throws(
-    () => assertExecutionProofIdentity(capturedIdentity, cleanFixture, 'after fixture head transition'),
+    () => assertExecutionProofIdentity(
+      capturedIdentity,
+      cleanFixture,
+      'after fixture head transition',
+      localEnvironment,
+    ),
     /source identity drift .*: (?:commit|tree|parent)/u,
   )
 } finally {
@@ -487,20 +493,24 @@ for (const stageAApplicationFetchMutation of [
     'wrong, unreachable, or unverified Stage A application fetch must fail the workflow contract',
   )
 }
+const stageABuilderFetchContract = /STAGE_A_BUILDER_COMMIT: 80b17fbf143c3d67d786b26cae7e2b09829e52f7\n\s+STAGE_A_BUILDER_BASE_COMMIT: ba94bb493cef9938b07f187faf86bc81724cc9c0[\s\S]*STAGE_A_BUILDER_COMMIT:refs\/heads\/stage-a-builder[\s\S]*STAGE_A_BUILDER_BASE_COMMIT:refs\/heads\/stage-a-builder-base[\s\S]*git rev-parse 'refs\/heads\/stage-a-builder\^\{commit\}'[\s\S]*git rev-parse 'refs\/heads\/stage-a-builder-base\^\{commit\}'/u
 assert.match(
   workflow,
-  /STAGE_A_CHANGE_BASE_COMMIT: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.before \}\}[\s\S]*grep -Eq '\^\[0-9a-f\]\{40\}\$'[\s\S]*STAGE_A_CHANGE_BASE_COMMIT:refs\/heads\/stage-a-change-base[\s\S]*git rev-parse 'refs\/heads\/stage-a-change-base\^\{commit\}'/u,
-  'hosted Stage A scope must fetch the exact event base into a clone-visible ref and verify its commit identity',
+  stageABuilderFetchContract,
+  'hosted Stage A scope must fetch and verify the immutable builder/base authority pair',
 )
-for (const stageAChangeBaseFetchMutation of [
-  workflow.replace('${{ github.event.pull_request.base.sha || github.event.before }}', '${{ github.sha }}'),
-  workflow.replace(':refs/heads/stage-a-change-base', ''),
-  workflow.replace("git rev-parse 'refs/heads/stage-a-change-base^{commit}'", 'true'),
+for (const stageABuilderFetchMutation of [
+  workflow.replace('80b17fbf143c3d67d786b26cae7e2b09829e52f7', '0'.repeat(40)),
+  workflow.replace('ba94bb493cef9938b07f187faf86bc81724cc9c0', '0'.repeat(40)),
+  workflow.replace(':refs/heads/stage-a-builder"', '"'),
+  workflow.replace(':refs/heads/stage-a-builder-base', ''),
+  workflow.replace("git rev-parse 'refs/heads/stage-a-builder^{commit}'", 'true'),
+  workflow.replace("git rev-parse 'refs/heads/stage-a-builder-base^{commit}'", 'true'),
 ]) {
   assert.doesNotMatch(
-    stageAChangeBaseFetchMutation,
-    /STAGE_A_CHANGE_BASE_COMMIT: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.before \}\}[\s\S]*STAGE_A_CHANGE_BASE_COMMIT:refs\/heads\/stage-a-change-base[\s\S]*git rev-parse 'refs\/heads\/stage-a-change-base\^\{commit\}'/u,
-    'wrong, unreachable, or unverified Stage A change-base fetch must fail the workflow contract',
+    stageABuilderFetchMutation,
+    stageABuilderFetchContract,
+    'wrong, unreachable, or unverified Stage A builder/base fetches must fail the workflow contract',
   )
 }
 assert.match(
@@ -526,22 +536,29 @@ assert.match(
 )
 assert.match(workflow, /node-version: 20\.20\.2/u, 'hosted CI must install the exact locally reviewed Node.js release')
 assert.match(workflow, /process\.versions\.node !== '20\.20\.2'/u, 'hosted CI must fail closed if the exact Node.js release was not activated')
-const stageARunnerBaseContract = /YOKO_STAGE_A_CHANGE_BASE: refs\/heads\/stage-a-change-base\n\s+YOKO_STAGE_A_CHANGE_BASE_COMMIT: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.before \}\}/u
+const stageARunnerBaseContract = /YOKO_STAGE_A_BUILDER: refs\/heads\/stage-a-builder\n\s+YOKO_STAGE_A_BUILDER_COMMIT: 80b17fbf143c3d67d786b26cae7e2b09829e52f7\n\s+YOKO_STAGE_A_BUILDER_BASE: refs\/heads\/stage-a-builder-base\n\s+YOKO_STAGE_A_BUILDER_BASE_COMMIT: ba94bb493cef9938b07f187faf86bc81724cc9c0/u
 assert.match(
   workflow,
   stageARunnerBaseContract,
-  'hosted Stage A scope checks must use the separately fetched event-base ref bound to its exact commit identity',
+  'hosted Stage A checks must use the immutable builder/base refs bound to their exact commit identities',
 )
 for (const stageARunnerBaseMutation of [
-  workflow.replace('YOKO_STAGE_A_CHANGE_BASE: refs/heads/stage-a-change-base', 'YOKO_STAGE_A_CHANGE_BASE: HEAD'),
-  workflow.replace('YOKO_STAGE_A_CHANGE_BASE_COMMIT: ${{ github.event.pull_request.base.sha || github.event.before }}', 'YOKO_STAGE_A_CHANGE_BASE_COMMIT: ${{ github.sha }}'),
+  workflow.replace('YOKO_STAGE_A_BUILDER: refs/heads/stage-a-builder', 'YOKO_STAGE_A_BUILDER: HEAD'),
+  workflow.replace('YOKO_STAGE_A_BUILDER_COMMIT: 80b17fbf143c3d67d786b26cae7e2b09829e52f7', `YOKO_STAGE_A_BUILDER_COMMIT: ${'0'.repeat(40)}`),
+  workflow.replace('YOKO_STAGE_A_BUILDER_BASE: refs/heads/stage-a-builder-base', 'YOKO_STAGE_A_BUILDER_BASE: HEAD^'),
+  workflow.replace('YOKO_STAGE_A_BUILDER_BASE_COMMIT: ba94bb493cef9938b07f187faf86bc81724cc9c0', `YOKO_STAGE_A_BUILDER_BASE_COMMIT: ${'0'.repeat(40)}`),
 ]) {
   assert.doesNotMatch(
     stageARunnerBaseMutation,
     stageARunnerBaseContract,
-    'self or identity-unbound Stage A runner base must fail the workflow contract',
+    'mutable, self-selected, or identity-unbound Stage A runner authorities must fail the workflow contract',
   )
 }
+assert.doesNotMatch(
+  workflow,
+  /YOKO_STAGE_A_[A-Z_]+:.*github\.event/u,
+  'later candidates must not redefine the immutable Stage A builder scope',
+)
 const candidateRunnerBaseContract = /YOKO_BLAST_BASE: refs\/heads\/yoko-architecture-candidate-base\n\s+YOKO_BLAST_BASE_COMMIT: \$\{\{ steps\.architecture_candidate_base\.outputs\.commit \}\}/u
 assert.match(
   workflow,
