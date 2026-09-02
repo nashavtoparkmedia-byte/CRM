@@ -108,11 +108,16 @@ def main() -> None:
         raise ValueError("generated profile contract mismatch")
     if args.phase == "package-output":
         package = DIST / "yoko-privileged-runtime_2.0.0-15_all.deb"
-        completed = subprocess.run(
-            ["dpkg-deb", "-f", str(package), "Package", "Version", "Architecture"],
-            check=False, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        )
-        if completed.returncode != 0 or completed.stdout.splitlines() != ["yoko-privileged-runtime", "2.0.0-15", "all"]:
+        fields = []
+        for field in ("Package", "Version", "Architecture"):
+            completed = subprocess.run(
+                ["dpkg-deb", "-f", str(package), field],
+                check=False, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            )
+            if completed.returncode != 0:
+                raise ValueError("package metadata query failed")
+            fields.append(completed.stdout.strip())
+        if fields != ["yoko-privileged-runtime", "2.0.0-15", "all"]:
             raise ValueError("package metadata mismatch")
     print(json.dumps({"status": "PASS", "phase": args.phase}, sort_keys=True))
 

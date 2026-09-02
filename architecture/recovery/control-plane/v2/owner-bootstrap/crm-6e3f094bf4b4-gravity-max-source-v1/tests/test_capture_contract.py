@@ -30,6 +30,10 @@ SEAL_LOADER.exec_module(seal)
 
 
 class CaptureContractTests(unittest.TestCase):
+    def test_v14_package_metadata_is_parsed_as_values_not_labeled_multi_field_output(self) -> None:
+        path = Path("/opt/codex-work/runtime-v14-seal-f9f05a7c/builder/architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/dist/yoko-privileged-runtime_2.0.0-14_all.deb")
+        self.assertEqual(seal.deb_metadata(path), ["yoko-privileged-runtime", "2.0.0-14", "all"])
+
     def test_capture_plan_is_finite_and_read_only(self) -> None:
         self.assertEqual(capture.COMMANDS, (
             ("version", None),

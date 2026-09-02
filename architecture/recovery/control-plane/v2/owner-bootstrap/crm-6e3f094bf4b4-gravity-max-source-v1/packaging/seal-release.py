@@ -118,6 +118,13 @@ def assert_clean_identity(repository: Path, commit: str, tree: str, label: str) 
         raise ValueError(f"{label} is dirty")
 
 
+def deb_metadata(path: Path) -> list[str]:
+    return [
+        command(["dpkg-deb", "-f", str(path), field]).stdout.decode("ascii").strip()
+        for field in ("Package", "Version", "Architecture")
+    ]
+
+
 def builder_inventory(repository: Path) -> tuple[list[dict[str, Any]], str, str]:
     commit = git(repository, "rev-parse", "HEAD^{commit}")
     tree = git(repository, "rev-parse", "HEAD^{tree}")
@@ -313,7 +320,7 @@ def main() -> None:
     snapshot, snapshot_sha = validate_snapshot(args.production_snapshot)
     if sha(args.v14_package) != V14_SHA:
         raise ValueError("Runtime v14 rollback package mismatch")
-    if command(["dpkg-deb", "-f", str(args.v14_package), "Package", "Version", "Architecture"]).stdout.decode("ascii").splitlines() != ["yoko-privileged-runtime", "2.0.0-14", "all"]:
+    if deb_metadata(args.v14_package) != ["yoko-privileged-runtime", "2.0.0-14", "all"]:
         raise ValueError("Runtime v14 rollback metadata mismatch")
     if sha(args.v14_seal, 16 * 1024 * 1024) != V14_SEAL_SHA:
         raise ValueError("Runtime v14 rollback seal mismatch")
