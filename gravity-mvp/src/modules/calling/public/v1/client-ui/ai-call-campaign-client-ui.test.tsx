@@ -2,6 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { AiCallCampaignDetailV1 } from '@/contracts/calling/v1'
 import { AiCallCampaignDetail } from './AiCallCampaignDetail'
 import { AiCallCampaignWorkspace } from './AiCallCampaignWorkspace'
 
@@ -87,7 +88,11 @@ function member(id: string, label: string) {
     }
 }
 
-function detail(members: ReturnType<typeof member>[], nextMemberCursor: string | null, state = 'running') {
+function detail(
+    members: ReturnType<typeof member>[],
+    nextMemberCursor: string | null,
+    state = 'running',
+): AiCallCampaignDetailV1 {
     return {
         ...summary('campaign-1', 'Campaign one'),
         state,
@@ -242,7 +247,9 @@ describe('AI call campaign CRM workspace', () => {
     })
 
     it('keeps managers read-only and does not fetch write-support scenario options', async () => {
-        const fetchMock = vi.fn(async () => response({ campaigns: [], nextCursor: null }))
+        const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => (
+            response({ campaigns: [], nextCursor: null })
+        ))
         vi.stubGlobal('fetch', fetchMock)
         render(<AiCallCampaignWorkspace canEdit={false} actorId="manager-1" />)
         expect(await screen.findByText('Режим просмотра')).toBeTruthy()
@@ -272,7 +279,7 @@ describe('AI call campaign CRM workspace', () => {
                 },
             },
         }))
-        const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+        const fetchMock = vi.fn(async (input: RequestInfo | URL, _init?: RequestInit) => {
             if (String(input).endsWith('/scenario-options')) {
                 return response({ scenarios: [{ id: 'scenario-1', name: 'Scenario one' }] })
             }
