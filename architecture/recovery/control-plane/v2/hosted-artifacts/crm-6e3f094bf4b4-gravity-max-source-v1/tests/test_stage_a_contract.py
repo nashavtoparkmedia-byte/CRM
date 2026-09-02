@@ -140,21 +140,20 @@ class StageAContractTests(unittest.TestCase):
         names = subprocess.check_output(
             ["git", "-C", str(ROOT), "diff", "--name-only", CHANGE_BASE, "HEAD"], text=True,
         ).splitlines()
+        # Whole-repository lifecycle, ownership, credential-review and context
+        # denominators must evolve when a later content-specific Stage B adds
+        # executable surfaces. Their own authoritative controls bind them
+        # exactly; they are not members of the sealed Stage A artifact or this
+        # content-specific Stage A authority.
         protected_exact = {
             ".github/workflows/architecture-enforcement.yml",
             ".github/workflows/coordinated-gravity-max-6e3f094b.yml",
             "tools/architecture/run-authoritative-ci.mjs",
             "tools/architecture/test-authoritative-ci-inventory.mjs",
-            "tools/architecture/test-executable-path-ownership.mjs",
             "tools/architecture/test-hosted-coordinated-gravity-max-stage-a.mjs",
             "tools/architecture/v2/test-original-dod-canonical-mapping.mjs",
             "tools/architecture/v2/verify-final-rereview-closure.mjs",
             "architecture/contexts/v1/SHA256SUMS",
-            "architecture/contexts/v1/context-index.json",
-            "architecture/contexts/v1/executable-path-ownership-coverage.json",
-            "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json",
-            "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
-            "architecture/recovery/whole-project-dod/v2/credential-unknown-access-resolution.json",
         }
         authority_prefix = "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/"
         lifecycle_checker = authority_prefix + "tests/test_stage_a_contract.py"
