@@ -32,6 +32,7 @@ class StageAContractTests(unittest.TestCase):
             ["git", "-C", str(ROOT), "diff", "--name-only", APPLICATION_COMMIT], text=True,
         ).splitlines()
         allowed_exact = {
+            ".github/workflows/architecture-enforcement.yml",
             ".github/workflows/coordinated-gravity-max-6e3f094b.yml",
             "tools/architecture/run-authoritative-ci.mjs",
             "tools/architecture/test-authoritative-ci-inventory.mjs",

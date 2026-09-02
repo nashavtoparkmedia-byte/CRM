@@ -39,6 +39,16 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 2
 
+      - name: Fetch exact Stage A application authority
+        env:
+          STAGE_A_APPLICATION_COMMIT: 6e3f094bf4b42c1400c705843ab107dacd6d1cf8
+        run: |
+          set -Eeuo pipefail
+          git fetch --no-tags --depth=1 origin \
+            "$STAGE_A_APPLICATION_COMMIT:refs/heads/stage-a-accepted-application"
+          test "$(git rev-parse 'refs/heads/stage-a-accepted-application^{commit}')" = \
+            "$STAGE_A_APPLICATION_COMMIT"
+
       - name: Run targeted Runtime TG base-reference contract
         env:
           YOKO_RUNTIME_REAL_DOCKER: '1'

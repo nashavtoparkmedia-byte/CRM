@@ -358,6 +358,7 @@ assert.notEqual(
 )
 assert.deepEqual(workflowJobStepNames(workflow, 'architecture'), [
   'Check out exact revision',
+  'Fetch exact Stage A application authority',
   'Run targeted Runtime TG base-reference contract',
   'Fetch exact Runtime v10 predecessor',
   'Set up exact Node.js',
@@ -414,6 +415,22 @@ assert.match(workflow, /ports:\s*\n\s*- 5432:5432/u, 'PostgreSQL must be publish
 assert.doesNotMatch(workflow, /fetch-depth:\s*0/u, 'hosted controls must not require an unbounded full-history checkout')
 assert.match(workflow, /ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| github\.sha \}\}/u, 'hosted PR CI must test the exact accepted source commit rather than a synthetic merge commit')
 assert.match(workflow, /fetch-depth: 2/u, 'hosted blast-radius analysis needs the accepted source parent without full-history dependence')
+assert.match(
+  workflow,
+  /STAGE_A_APPLICATION_COMMIT: 6e3f094bf4b42c1400c705843ab107dacd6d1cf8[\s\S]*git fetch --no-tags --depth=1 origin \\\n+\s+"\$STAGE_A_APPLICATION_COMMIT:refs\/heads\/stage-a-accepted-application"[\s\S]*git rev-parse 'refs\/heads\/stage-a-accepted-application\^\{commit\}'/u,
+  'hosted Stage A contract must fetch the exact accepted application authority into a clone-visible ref and verify its commit identity',
+)
+for (const stageAApplicationFetchMutation of [
+  workflow.replace('6e3f094bf4b42c1400c705843ab107dacd6d1cf8', '0'.repeat(40)),
+  workflow.replace(':refs/heads/stage-a-accepted-application', ''),
+  workflow.replace("git rev-parse 'refs/heads/stage-a-accepted-application^{commit}'", 'true'),
+]) {
+  assert.doesNotMatch(
+    stageAApplicationFetchMutation,
+    /STAGE_A_APPLICATION_COMMIT: 6e3f094bf4b42c1400c705843ab107dacd6d1cf8[\s\S]*git fetch --no-tags --depth=1 origin \\\n+\s+"\$STAGE_A_APPLICATION_COMMIT:refs\/heads\/stage-a-accepted-application"[\s\S]*git rev-parse 'refs\/heads\/stage-a-accepted-application\^\{commit\}'/u,
+    'wrong, unreachable, or unverified Stage A application fetch must fail the workflow contract',
+  )
+}
 assert.match(
   workflow,
   /RUNTIME_V10_PREDECESSOR_COMMIT: 7aea2823efe50e13a156540993d424594025e403[\s\S]*git fetch --no-tags --depth=1 origin \\\n\s+"\$RUNTIME_V10_PREDECESSOR_COMMIT:refs\/heads\/yoko-runtime-v10-predecessor"[\s\S]*git rev-parse 'refs\/heads\/yoko-runtime-v10-predecessor\^\{commit\}'/u,
