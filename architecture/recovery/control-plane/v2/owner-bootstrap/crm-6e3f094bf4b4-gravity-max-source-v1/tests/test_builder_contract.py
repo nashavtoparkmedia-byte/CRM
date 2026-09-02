@@ -36,6 +36,14 @@ class BuilderContractTests(unittest.TestCase):
         sealer = (ROOT / "packaging/seal-release.py").read_text(encoding="ascii")
         self.assertIn('"/usr/bin/python3", "-I", "-B", str(verifier)', sealer)
 
+    def test_review_directory_is_writable_only_during_staging(self) -> None:
+        sealer = (ROOT / "packaging/seal-release.py").read_text(encoding="ascii")
+        create = sealer.index("review.mkdir(parents=True, mode=0o700)")
+        write = sealer.index('copy_exact(ROOT / "human-manifest.md", review / "human-manifest.md", 0o400)')
+        close = sealer.index("review.chmod(0o500)")
+        self.assertLess(create, write)
+        self.assertLess(write, close)
+
     def test_profile_and_wrapper_expose_only_exact_zero_argument_mutations(self) -> None:
         profile = (ROOT / "templates/crm-activation-profile.py.in").read_text(encoding="ascii")
         wrapper = (ROOT / "templates/yoko-privileged-runtime.in").read_text(encoding="ascii")

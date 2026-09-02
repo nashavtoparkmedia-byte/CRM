@@ -428,7 +428,7 @@ def main() -> None:
 
     payload = generated / "bundle/payload"
     review = payload / "review"
-    review.mkdir(parents=True, mode=0o500)
+    review.mkdir(parents=True, mode=0o700)
     payload.chmod(0o700)
     installer = (ROOT / "templates/install.sh.in").read_text(encoding="ascii")
     replacements = {
@@ -450,6 +450,7 @@ def main() -> None:
     copy_exact(generated / "artifact-admission.v1.json", payload / "artifact-admission.v1.json", 0o400)
     copy_exact(args.v14_seal, payload / "runtime-v14-SEALED_RELEASE.json", 0o400)
     copy_exact(ROOT / "human-manifest.md", review / "human-manifest.md", 0o400)
+    review.chmod(0o500)
     payload_files = {}
     for item in sorted(path for path in payload.rglob("*") if path.is_file()):
         relative = str(item.relative_to(payload))
