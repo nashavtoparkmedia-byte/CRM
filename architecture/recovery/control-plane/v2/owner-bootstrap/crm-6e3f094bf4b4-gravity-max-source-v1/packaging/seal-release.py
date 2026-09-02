@@ -301,6 +301,18 @@ def build_tar(bundle: Path, destination: Path) -> None:
     ], stdout=subprocess.DEVNULL)
 
 
+def reopen_generated_review_for_cleanup(directory: Path) -> None:
+    review = directory / "bundle/payload/review"
+    if review.is_symlink():
+        raise ValueError("unsafe generated review output path")
+    if not review.exists():
+        return
+    value = review.lstat()
+    if not stat.S_ISDIR(value.st_mode) or not review.resolve().is_relative_to(directory.resolve()):
+        raise ValueError("unsafe generated review output path")
+    review.chmod(0o700)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--builder-repo", required=True, type=Path)
@@ -332,6 +344,7 @@ def main() -> None:
         if directory.exists():
             if directory.is_symlink() or not directory.resolve().is_relative_to(ROOT.resolve()):
                 raise ValueError("unsafe generated output path")
+            reopen_generated_review_for_cleanup(directory)
             shutil.rmtree(directory)
     generated.mkdir(mode=0o700)
     dist.mkdir(mode=0o755)

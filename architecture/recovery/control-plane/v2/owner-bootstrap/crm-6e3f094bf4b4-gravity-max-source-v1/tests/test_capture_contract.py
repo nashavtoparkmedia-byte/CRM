@@ -6,6 +6,7 @@ import hashlib
 import importlib.machinery
 import importlib.util
 import json
+import stat
 import sys
 import tempfile
 import unittest
@@ -30,6 +31,33 @@ SEAL_LOADER.exec_module(seal)
 
 
 class CaptureContractTests(unittest.TestCase):
+    def test_sealer_reopens_only_exact_generated_review_directory_for_restart_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            generated = Path(temporary) / "generated"
+            review = generated / "bundle/payload/review"
+            sibling = generated / "bundle/payload/unrelated"
+            review.mkdir(parents=True)
+            sibling.mkdir()
+            (review / "human-manifest.md").write_text("review\n", encoding="ascii")
+            review.chmod(0o500)
+            sibling.chmod(0o500)
+
+            seal.reopen_generated_review_for_cleanup(generated)
+
+            self.assertEqual(stat.S_IMODE(review.stat().st_mode), 0o700)
+            self.assertEqual(stat.S_IMODE(sibling.stat().st_mode), 0o500)
+            sibling.chmod(0o700)
+
+    def test_sealer_rejects_symlinked_generated_review_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            generated = Path(temporary) / "generated"
+            target = Path(temporary) / "outside"
+            (generated / "bundle/payload").mkdir(parents=True)
+            target.mkdir()
+            (generated / "bundle/payload/review").symlink_to(target, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "unsafe generated review output path"):
+                seal.reopen_generated_review_for_cleanup(generated)
+
     def test_v14_package_metadata_is_parsed_as_values_not_labeled_multi_field_output(self) -> None:
         path = Path("/opt/codex-work/runtime-v14-seal-f9f05a7c/builder/architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/dist/yoko-privileged-runtime_2.0.0-14_all.deb")
         self.assertEqual(seal.deb_metadata(path), ["yoko-privileged-runtime", "2.0.0-14", "all"])
