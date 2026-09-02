@@ -217,7 +217,7 @@ def validate_artifact(handoff: Path, application: Path, stage_a_builder: Path, r
             raise ValueError(f"Stage A metadata digest mismatch: {name}")
     verifier = repository / "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/verify-coordinated-artifact.py"
     completed = command([
-        "/usr/bin/python3", "-I", str(verifier),
+        "/usr/bin/python3", "-I", "-B", str(verifier),
         "--artifact-directory", str(artifact),
         "--application-source", str(application),
         "--builder-source", str(stage_a_builder),

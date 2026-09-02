@@ -32,6 +32,10 @@ class BuilderContractTests(unittest.TestCase):
         ).stdout.strip()
         self.assertEqual(accepted, "8d3e507cda69a2862db946b2e34c5ea329c425ac")
 
+    def test_stage_a_verifier_cannot_dirty_the_runtime_builder(self) -> None:
+        sealer = (ROOT / "packaging/seal-release.py").read_text(encoding="ascii")
+        self.assertIn('"/usr/bin/python3", "-I", "-B", str(verifier)', sealer)
+
     def test_profile_and_wrapper_expose_only_exact_zero_argument_mutations(self) -> None:
         profile = (ROOT / "templates/crm-activation-profile.py.in").read_text(encoding="ascii")
         wrapper = (ROOT / "templates/yoko-privileged-runtime.in").read_text(encoding="ascii")
