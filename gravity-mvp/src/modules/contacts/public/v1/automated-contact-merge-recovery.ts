@@ -19,7 +19,10 @@ export type AutomatedMergeRecoveryPlanV1 = {
 
 export type AutomatedMergeRecoveryInspectionV1 =
   | { status: 'eligible'; plan: AutomatedMergeRecoveryPlanV1 }
-  | { status: 'blocked'; reason: string }
+  | { status: 'blocked'; reason: string; eligibleAttempt: boolean }
+  | { status: 'already_recovered' }
+  | { status: 'manual_reconciliation'; reason: string }
+  | { status: 'not_recoverable'; reason: string }
 
 export interface AutomatedMergeRecoveryContactsRepositoryV1 {
   /** Must be the first database action in the transaction. */
@@ -53,6 +56,8 @@ export type AutomatedMergeRecoveryRepositoriesV1 = {
   contacts: AutomatedMergeRecoveryContactsRepositoryV1
   messaging: AutomatedMergeRecoveryOwnerRepositoryV1
   work: AutomatedMergeRecoveryOwnerRepositoryV1
+  calling: AutomatedMergeRecoveryOwnerRepositoryV1
+  fleet: AutomatedMergeRecoveryOwnerRepositoryV1
 }
 
 export interface AutomatedMergeRecoveryUnitOfWorkV1 {
@@ -73,16 +78,33 @@ export function createRecoverAutomatedContactMergeHandlerV1(
       if (!pair) throw new Error(`Contact merge ${parsed.mergeId} not found`)
       await contacts.lockPair(pair.mergedId, pair.survivorId)
       const inspection = await contacts.inspect(parsed.mergeId)
-      if (inspection.status === 'blocked') {
-        await contacts.markManualReconciliation({
-          mergeId: parsed.mergeId,
-          requestedBy: parsed.requestedBy,
-          basis: parsed.basis,
-          reason: inspection.reason,
-        })
+      if (inspection.status === 'already_recovered') {
         return {
           contract: RECOVER_AUTOMATED_CONTACT_MERGE_RESULT_V1,
-          status: 'manual_reconciliation',
+          status: 'already_recovered',
+          mergeId: parsed.mergeId,
+        }
+      }
+      if (inspection.status === 'manual_reconciliation' || inspection.status === 'not_recoverable') {
+        return {
+          contract: RECOVER_AUTOMATED_CONTACT_MERGE_RESULT_V1,
+          status: inspection.status,
+          mergeId: parsed.mergeId,
+          reason: inspection.reason,
+        }
+      }
+      if (inspection.status === 'blocked') {
+        if (inspection.eligibleAttempt) {
+          await contacts.markManualReconciliation({
+            mergeId: parsed.mergeId,
+            requestedBy: parsed.requestedBy,
+            basis: parsed.basis,
+            reason: inspection.reason,
+          })
+        }
+        return {
+          contract: RECOVER_AUTOMATED_CONTACT_MERGE_RESULT_V1,
+          status: inspection.eligibleAttempt ? 'manual_reconciliation' : 'not_recoverable',
           mergeId: parsed.mergeId,
           reason: inspection.reason,
         }
@@ -92,6 +114,8 @@ export function createRecoverAutomatedContactMergeHandlerV1(
       for (const [owner, repository] of Object.entries({
         messaging: repositories.messaging,
         work: repositories.work,
+        calling: repositories.calling,
+        fleet: repositories.fleet,
       })) {
         if (!await repository.canRestore(plan)) {
           const reason = `${owner}_state_changed`
@@ -112,6 +136,8 @@ export function createRecoverAutomatedContactMergeHandlerV1(
 
       await repositories.messaging.restore(plan)
       await repositories.work.restore(plan)
+      await repositories.calling.restore(plan)
+      await repositories.fleet.restore(plan)
       await contacts.restore(plan)
       await contacts.markRecovered({
         mergeId: parsed.mergeId,

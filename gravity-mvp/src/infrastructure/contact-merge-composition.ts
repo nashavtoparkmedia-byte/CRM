@@ -11,6 +11,8 @@ import {
 } from '@/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter'
 import { makeMessagingContactMergeRepositories } from '@/modules/messaging/public/v1/legacy-prisma-contact-merge-adapter'
 import { makeWorkContactMergeRepositories } from '@/modules/work-management/public/v1/legacy-prisma-contact-merge-adapter'
+import { makeCallingContactMergeRepositories } from '@/modules/calling/public/v1/legacy-prisma-contact-merge-adapter'
+import { makeFleetContactMergeRepositories } from '@/modules/fleet-operations/public/v1/legacy-prisma-contact-merge-adapter'
 
 /**
  * Shared-infrastructure composition for the one cross-owner contact merge
@@ -22,11 +24,14 @@ function makeTransactionalRepositories(transaction: Parameters<typeof makeLegacy
   const contacts = makeLegacyPrismaContactMergeRepositoriesV1(transaction)
   const messaging = makeMessagingContactMergeRepositories(transaction)
   const work = makeWorkContactMergeRepositories(transaction)
+  const calling = makeCallingContactMergeRepositories(transaction)
+  const fleet = makeFleetContactMergeRepositories(transaction)
   return {
     contacts: contacts.contacts,
-    fleet: contacts.fleet,
+    fleet,
     messaging,
     work,
+    calling,
   }
 }
 
@@ -50,10 +55,14 @@ function makeRecoveryRepositories(
   const contacts = makeLegacyPrismaContactMergeRepositoriesV1(transaction)
   const messaging = makeMessagingContactMergeRepositories(transaction)
   const work = makeWorkContactMergeRepositories(transaction)
+  const calling = makeCallingContactMergeRepositories(transaction)
+  const fleet = makeFleetContactMergeRepositories(transaction)
   return {
     contacts: contacts.recoveryContacts,
     messaging: messaging.recovery,
     work: work.recovery,
+    calling: calling.recovery,
+    fleet: fleet.recovery,
   }
 }
 

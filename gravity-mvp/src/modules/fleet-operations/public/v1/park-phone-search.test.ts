@@ -62,7 +62,7 @@ describe('manual Telegram link multi-park wiring', () => {
         const application = source('src/modules/fleet-operations/application/fleet-operations.ts')
         const route = source('src/app/api/bot-link/route.ts')
         const contactDrawer = source('src/app/messages/components/ContactProfileDrawer.tsx')
-        const reconciler = source('src/modules/fleet-operations/public/v1/legacy-prisma-yandex-fleet-reconciler-adapter.ts')
+        const reconciler = source('src/modules/fleet-operations/internal/legacy-prisma-yandex-fleet-reconciler-adapter.ts')
         expect(capability).toContain('listYandexConnectionCredentialsV1()')
         expect(capability).toContain('reconcileYandexFleetV1({')
         expect(capability).toContain("mode: 'manual'")

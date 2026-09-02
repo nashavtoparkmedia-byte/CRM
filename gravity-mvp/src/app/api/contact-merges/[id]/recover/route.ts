@@ -18,7 +18,7 @@ export async function POST(
       basis: String(body.basis || 'operator requested automated merge recovery'),
     })
     return NextResponse.json(result, {
-      status: result.status === 'recovered' ? 200 : 409,
+      status: result.status === 'recovered' || result.status === 'already_recovered' ? 200 : 409,
     })
   } catch (error: unknown) {
     const busy = contactOwnershipBusyResultV1(error)

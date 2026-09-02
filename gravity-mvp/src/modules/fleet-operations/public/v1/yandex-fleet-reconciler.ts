@@ -81,6 +81,11 @@ export function makeParkQualifiedDriverKeyV1(externalParkId: string, externalDri
   return `park-profile:${digest}`
 }
 
+/** An unqualified legacy provider id is adoptable only in a one-park topology. */
+export function canAdoptUnqualifiedLegacyDriverProfileV1(configuredParkCount: number): boolean {
+  return configuredParkCount === 1
+}
+
 function stringValue(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null
 }

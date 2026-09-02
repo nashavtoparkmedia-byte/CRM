@@ -137,6 +137,10 @@ export interface ContactMergeContactsRepositoryV1
   /** First database action in the enclosing merge transaction. */
   admitOwnershipMutation(): Promise<void>
   lockContactPairOrdered(survivorId: string, mergedId: string): Promise<void>
+  deriveAutomaticMergeEvidence(
+    leftContactId: string,
+    rightContactId: string,
+  ): Promise<import('./contact-automation-policy').AutomaticMergeEvidenceV1>
   deleteDuplicateIdentities(identityIds: string[]): Promise<void>
   moveIdentitiesToContact(sourceContactId: string, targetContactId: string): Promise<void>
   deleteDuplicatePhones(phoneIds: string[]): Promise<void>
@@ -162,6 +166,7 @@ export interface ContactMergeContactsRepositoryV1
 }
 export interface ContactMergeFleetRepositoryV1 extends ContactMergeFleetQueryRepositoryV1 {
   findDriverIdByYandexDriverId(yandexDriverId: string): Promise<string | null>
+  moveDriverProfilesToContact(sourceContactId: string, targetContactId: string): Promise<void>
 }
 export interface ContactMergeSimpleLinkMessagingRepositoryV1 {
   attachUnlinkedContactChatsToDriver(contactId: string, driverId: string): Promise<void>
@@ -174,11 +179,15 @@ export interface ContactMergeMessagingRepositoryV1 extends ContactMergeSimpleLin
 export interface ContactMergeWorkRepositoryV1 {
   moveTasksToContact(sourceContactId: string, targetContactId: string): Promise<void>
 }
+export interface ContactMergeCallingRepositoryV1 {
+  moveCallsToContact(sourceContactId: string, targetContactId: string): Promise<void>
+}
 export interface ContactMergeTransactionalRepositoriesV1 {
   contacts: ContactMergeContactsRepositoryV1
   fleet: ContactMergeFleetRepositoryV1
   messaging: ContactMergeMessagingRepositoryV1
   work: ContactMergeWorkRepositoryV1
+  calling: ContactMergeCallingRepositoryV1
 }
 export interface ContactMergeSimpleLinkRepositoriesV1 {
   contacts: ContactMergeSimpleLinkContactsRepositoryV1
@@ -312,7 +321,7 @@ export function createMergeContactsHandlerV1(dependencies: ContactMergeHandlerDe
   ): Promise<MergeContactsResultV1> {
     const parsed = parseMergeContactsCommandV1(command)
     return dependencies.unitOfWork.run(async repositories => {
-      const { contacts, fleet, messaging, work } = repositories
+      const { contacts, fleet, messaging, work, calling } = repositories
       await contacts.admitOwnershipMutation()
       if (parsed.operation === 'contact_to_driver') {
         // Discovery is admitted but non-decisional. Re-read after ordered locks.
@@ -402,6 +411,8 @@ export function createMergeContactsHandlerV1(dependencies: ContactMergeHandlerDe
         await messaging.moveChatsToDriverContact(loser.id, winner.id, driver.id)
         await messaging.attachUnlinkedContactChatsToDriver(winner.id, driver.id)
         await work.moveTasksToContact(loser.id, winner.id)
+        await calling.moveCallsToContact(loser.id, winner.id)
+        await fleet.moveDriverProfilesToContact(loser.id, winner.id)
         const mergeRecordId = await contacts.recordMerge({
           id: generateMergeRecordId(),
           survivorId: winner.id,
@@ -460,10 +471,13 @@ export function createMergeContactsHandlerV1(dependencies: ContactMergeHandlerDe
       let evaluation = evaluateContactSurvivorV1(automationSnapshot(source), automationSnapshot(target))
       let automationEvidenceRoots: string[] = []
       if (parsed.automation) {
+        // Caller evidence is only a request to attempt automation. Authority is
+        // re-derived from persisted state after CNT1 admission and pair locking.
+        const persistedEvidence = await contacts.deriveAutomaticMergeEvidence(source.id, target.id)
         const automaticDecision = evaluateAutomaticContactMergeV1(
           automationSnapshot(source),
           automationSnapshot(target),
-          parsed.automation,
+          persistedEvidence,
         )
         if (automaticDecision.decision === 'blocked') {
           throw new ContactMergeErrorV1(
@@ -489,6 +503,8 @@ export function createMergeContactsHandlerV1(dependencies: ContactMergeHandlerDe
         await messaging.moveChatsToContact(loser.id, winner.id)
       }
       await work.moveTasksToContact(loser.id, winner.id)
+      await calling.moveCallsToContact(loser.id, winner.id)
+      await fleet.moveDriverProfilesToContact(loser.id, winner.id)
       const mergeRecordId = await contacts.recordMerge({
         id: generateMergeRecordId(),
         survivorId: winner.id,

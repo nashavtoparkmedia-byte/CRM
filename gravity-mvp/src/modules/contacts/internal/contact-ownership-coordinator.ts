@@ -1,6 +1,10 @@
 import { Prisma, type ChatChannel } from '@prisma/client'
 
 import { prisma } from '@/lib/prisma'
+import {
+  CONTACT_OWNERSHIP_ADVISORY_CLASS_ID_V1,
+  CONTACT_OWNERSHIP_ADVISORY_OBJECT_ID_V1,
+} from '../public/v1/contact-ownership-lock-contract'
 
 /**
  * PostgreSQL advisory-lock namespace registry (two-int32 key space).
@@ -12,8 +16,8 @@ import { prisma } from '@/lib/prisma'
  * cluster-wide advisory namespace. New coordinators must reserve another
  * four-byte objid here instead of reusing CNT1.
  */
-export const CONTACT_OWNERSHIP_ADVISORY_CLASS_ID = 0x594f4b4f
-export const CONTACT_OWNERSHIP_ADVISORY_OBJECT_ID = 0x434e5431
+export const CONTACT_OWNERSHIP_ADVISORY_CLASS_ID = CONTACT_OWNERSHIP_ADVISORY_CLASS_ID_V1
+export const CONTACT_OWNERSHIP_ADVISORY_OBJECT_ID = CONTACT_OWNERSHIP_ADVISORY_OBJECT_ID_V1
 
 const DEFAULT_LOCK_TIMEOUT_MS = 2_000
 const DEFAULT_TRANSACTION_TIMEOUT_MS = 10_000
@@ -469,6 +473,10 @@ export async function assertContactOwnershipPostconditions(
           )
           OR EXISTS (SELECT 1 FROM "ContactPhone" AS phone WHERE phone."contactId" = contact.id)
           OR EXISTS (SELECT 1 FROM "ContactIdentity" AS identity WHERE identity."contactId" = contact.id)
+          OR EXISTS (SELECT 1 FROM "Chat" AS chat WHERE chat."contactId" = contact.id)
+          OR EXISTS (SELECT 1 FROM "Task" AS task WHERE task."contactId" = contact.id)
+          OR EXISTS (SELECT 1 FROM "Call" AS call WHERE call."contactId" = contact.id)
+          OR EXISTS (SELECT 1 FROM "Driver" AS driver WHERE driver."contactId" = contact.id)
         )
       ORDER BY contact.id
       LIMIT 1

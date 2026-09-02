@@ -113,6 +113,12 @@ interface HarnessOptions {
   driver?: ContactMergeDriverV1 | null
   completedMerge?: boolean
   targetDriverId?: string | null
+  automaticEvidence?: {
+    trustedUniqueCurrentPhone: boolean
+    phoneEvidenceRoot: string | null
+    confirmedPersonEvidenceRoots: string[]
+    normalizedVuEvidenceRoots: string[]
+  }
   failAt?: string
 }
 
@@ -165,6 +171,15 @@ function makeHarness(options: HarnessOptions = {}) {
       async lockContactPairOrdered(survivorId, mergedId) {
         await stage('contacts.lockContactPairOrdered', survivorId, mergedId)
       },
+      async deriveAutomaticMergeEvidence() {
+        await stage('contacts.deriveAutomaticMergeEvidence')
+        return options.automaticEvidence ?? {
+          trustedUniqueCurrentPhone: false,
+          phoneEvidenceRoot: null,
+          confirmedPersonEvidenceRoots: [],
+          normalizedVuEvidenceRoots: [],
+        }
+      },
       async linkContactToDriver(input) {
         await stage('contacts.linkContactToDriver', input)
       },
@@ -214,6 +229,9 @@ function makeHarness(options: HarnessOptions = {}) {
         await stage('fleet.findDriverIdByYandexDriverId', yandexDriverId)
         return options.targetDriverId ?? null
       },
+      async moveDriverProfilesToContact(sourceContactId, targetContactId) {
+        await stage('fleet.moveDriverProfilesToContact', sourceContactId, targetContactId)
+      },
     },
     messaging: {
       async remapChatsToIdentity(oldIdentityId, newIdentityId) {
@@ -232,6 +250,11 @@ function makeHarness(options: HarnessOptions = {}) {
     work: {
       async moveTasksToContact(sourceContactId, targetContactId) {
         await stage('work.moveTasksToContact', sourceContactId, targetContactId)
+      },
+    },
+    calling: {
+      async moveCallsToContact(sourceContactId, targetContactId) {
+        await stage('calling.moveCallsToContact', sourceContactId, targetContactId)
       },
     },
   }
@@ -614,6 +637,8 @@ describe('MergeContactsCommand.v1 ordered unit of work', () => {
       'messaging.moveChatsToDriverContact',
       'messaging.attachUnlinkedContactChatsToDriver',
       'work.moveTasksToContact',
+      'calling.moveCallsToContact',
+      'fleet.moveDriverProfilesToContact',
       'contacts.recordMerge',
       'contacts.archiveContact',
       'contacts.setMergedRedirect',
@@ -689,6 +714,8 @@ describe('MergeContactsCommand.v1 ordered unit of work', () => {
       'fleet.findDriverIdByYandexDriverId',
       'messaging.moveChatsToDriverContact',
       'work.moveTasksToContact',
+      'calling.moveCallsToContact',
+      'fleet.moveDriverProfilesToContact',
       'contacts.recordMerge',
       'contacts.archiveContact',
       'contacts.setMergedRedirect',
@@ -722,7 +749,7 @@ describe('MergeContactsCommand.v1 ordered unit of work', () => {
     expect(names(harness.committed)).not.toContain('fleet.findDriverIdByYandexDriverId')
   })
 
-  it('preserves a losing legacy Driver link in the recovery snapshot without a foreign-owner write', async () => {
+  it('moves losing Driver profiles through the Fleet owner and preserves them in recovery', async () => {
     const harness = makeHarness({
       sources: {
         'source-contact': source({
@@ -743,7 +770,8 @@ describe('MergeContactsCommand.v1 ordered unit of work', () => {
       mergedBy: 'manager',
     })
 
-    expect(names(harness.committed)).not.toContain('fleet.moveDriverProfilesToContact')
+    expect(harness.committed.find(call => call.name === 'fleet.moveDriverProfilesToContact')?.args)
+      .toEqual(['source-contact', 'target-contact'])
     expect(harness.committed.find(call => call.name === 'fleet.findDriverIdByYandexDriverId')?.args)
       .toEqual(['source-yandex-driver'])
     expect(harness.committed.find(call => call.name === 'contacts.recordMerge')?.args[0])
@@ -795,6 +823,78 @@ describe('MergeContactsCommand.v1 ordered unit of work', () => {
     expect(names(harness.committed)).toEqual([])
   })
 
+  it('does not trust fabricated automatic evidence after the ownership lock', async () => {
+    const shell = source({
+      chats: [], tasks: [], calls: [], driverProfiles: [], driverConfirmations: [],
+      notes: null, tags: [], customFields: {}, yandexDriverId: null,
+    })
+    const otherShell = survivor({
+      id: 'target-contact', chats: [], tasks: [], calls: [], driverProfiles: [], driverConfirmations: [],
+      notes: null, tags: [], customFields: {}, yandexDriverId: null, canonicalPinnedAt: null,
+    })
+    const harness = makeHarness({
+      sources: { 'source-contact': shell },
+      targets: { 'target-contact': otherShell },
+    })
+    await expect(harness.handler({
+      contract: MERGE_CONTACTS_COMMAND_V1,
+      operation: 'contact_to_contact',
+      sourceId: 'source-contact',
+      targetId: 'target-contact',
+      mergedBy: 'system:auto-merge',
+      automation: {
+        trustedUniqueCurrentPhone: true,
+        phoneEvidenceRoot: 'fabricated-root',
+        confirmedPersonEvidenceRoots: ['fabricated-confirmation'],
+        normalizedVuEvidenceRoots: ['fabricated-vu'],
+      },
+    })).rejects.toMatchObject({
+      code: 'INVALID_MERGE_STATE',
+      message: 'Automatic merge blocked after lock: insufficient_evidence',
+    })
+    expect(names(harness.committed)).toEqual([])
+    expect(names(harness.attempted)).toEqual([
+      'contacts.lockContactPairOrdered', 'contacts.deriveAutomaticMergeEvidence',
+    ])
+  })
+
+  it('uses persisted locked evidence for the approved channel-shell merge', async () => {
+    const shell = source({
+      chats: [], tasks: [], calls: [], driverProfiles: [], driverConfirmations: [],
+      notes: null, tags: [], customFields: {}, yandexDriverId: null,
+    })
+    const otherShell = survivor({
+      id: 'target-contact', chats: [], tasks: [], calls: [], driverProfiles: [], driverConfirmations: [],
+      notes: null, tags: [], customFields: {}, yandexDriverId: null, canonicalPinnedAt: null,
+    })
+    const persistedEvidence = {
+      trustedUniqueCurrentPhone: true,
+      phoneEvidenceRoot: 'phone:+79990000000:provider:left|provider:right',
+      confirmedPersonEvidenceRoots: [],
+      normalizedVuEvidenceRoots: [],
+    }
+    const harness = makeHarness({
+      sources: { 'source-contact': shell },
+      targets: { 'target-contact': otherShell },
+      automaticEvidence: persistedEvidence,
+    })
+    await expect(harness.handler({
+      contract: MERGE_CONTACTS_COMMAND_V1,
+      operation: 'contact_to_contact',
+      sourceId: 'source-contact',
+      targetId: 'target-contact',
+      mergedBy: 'system:auto-merge',
+      automation: {
+        trustedUniqueCurrentPhone: false,
+        phoneEvidenceRoot: null,
+        confirmedPersonEvidenceRoots: [],
+        normalizedVuEvidenceRoots: [],
+      },
+    })).resolves.toMatchObject({ status: 'contact_merged' })
+    expect(harness.committed.find(call => call.name === 'contacts.recordMerge')?.args[0])
+      .toEqual(expect.objectContaining({ automated: true, evidenceRoots: [persistedEvidence.phoneEvidenceRoot] }))
+  })
+
   const simpleLinkSequence = [
     'contacts.lockContactPairOrdered',
     'contacts.linkContactToDriver',
@@ -814,6 +914,8 @@ describe('MergeContactsCommand.v1 ordered unit of work', () => {
     'messaging.moveChatsToDriverContact',
     'messaging.attachUnlinkedContactChatsToDriver',
     'work.moveTasksToContact',
+    'calling.moveCallsToContact',
+    'fleet.moveDriverProfilesToContact',
     'contacts.recordMerge',
     'contacts.archiveContact',
     'contacts.setMergedRedirect',
@@ -832,6 +934,8 @@ describe('MergeContactsCommand.v1 ordered unit of work', () => {
     'fleet.findDriverIdByYandexDriverId',
     'messaging.moveChatsToDriverContact',
     'work.moveTasksToContact',
+    'calling.moveCallsToContact',
+    'fleet.moveDriverProfilesToContact',
     'contacts.recordMerge',
     'contacts.archiveContact',
     'contacts.setMergedRedirect',
@@ -850,6 +954,8 @@ describe('MergeContactsCommand.v1 ordered unit of work', () => {
     'fleet.findDriverIdByYandexDriverId',
     'messaging.moveChatsToContact',
     'work.moveTasksToContact',
+    'calling.moveCallsToContact',
+    'fleet.moveDriverProfilesToContact',
     'contacts.recordMerge',
     'contacts.archiveContact',
     'contacts.setMergedRedirect',

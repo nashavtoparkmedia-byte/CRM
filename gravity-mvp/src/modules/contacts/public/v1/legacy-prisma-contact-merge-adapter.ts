@@ -14,6 +14,7 @@ import {
   contactAutomationState,
   identityEvidenceState,
   jsonRecord,
+  phoneEvidenceState,
 } from './contact-evidence-state'
 
 const contactMergeInclude = {
@@ -70,26 +71,11 @@ function normalizeContactMergeRow(row: ContactMergeRow | null): ContactMergeSour
  */
 export function makeLegacyPrismaContactMergeRepositoriesV1(
   transaction: Prisma.TransactionClient,
-): Pick<ContactMergeTransactionalRepositoriesV1, 'contacts' | 'fleet'> & {
+): Pick<ContactMergeTransactionalRepositoriesV1, 'contacts'> & {
   recoveryContacts: ReturnType<typeof makePrismaAutomatedMergeRecoveryContactsRepositoryV1>
 } {
   let lockedScope: ContactOwnershipLockedScope | null = null
   return {
-    fleet: {
-      async findDriverById(driverId) {
-        return transaction.driver.findUnique({
-          where: { id: driverId },
-          select: { id: true, yandexDriverId: true, fullName: true },
-        })
-      },
-      async findDriverIdByYandexDriverId(yandexDriverId) {
-        const driver = await transaction.driver.findUnique({
-          where: { yandexDriverId },
-          select: { id: true },
-        })
-        return driver?.id ?? null
-      },
-    },
     recoveryContacts: makePrismaAutomatedMergeRecoveryContactsRepositoryV1(transaction),
     contacts: {
       async admitOwnershipMutation() {
@@ -132,6 +118,164 @@ export function makeLegacyPrismaContactMergeRepositoriesV1(
         lockedScope = await lockContactOwnershipRows(transaction, {
           contactIds: [survivorId, mergedId],
         })
+      },
+
+      async deriveAutomaticMergeEvidence(leftContactId, rightContactId) {
+        const contactIds = [leftContactId, rightContactId].sort()
+        const contacts = await transaction.contact.findMany({
+          where: { id: { in: contactIds }, isArchived: false },
+          select: {
+            id: true,
+            customFields: true,
+            phones: {
+              where: { isActive: true },
+              select: { id: true, phone: true, isActive: true, verifiedAt: true },
+            },
+            driverProfiles: {
+              select: {
+                externalPersonKey: true,
+                personKeyType: true,
+                personResolutionStatus: true,
+                customFields: true,
+              },
+            },
+          },
+        })
+        if (contacts.length !== 2) {
+          return {
+            trustedUniqueCurrentPhone: false,
+            phoneEvidenceRoot: null,
+            confirmedPersonEvidenceRoots: [],
+            normalizedVuEvidenceRoots: [],
+          }
+        }
+
+        const byId = new Map(contacts.map(contact => [contact.id, contact]))
+        const left = byId.get(leftContactId)!
+        const right = byId.get(rightContactId)!
+        const leftPhones = new Map(left.phones.map(phone => [phone.phone, phone]))
+        const commonPhones = right.phones
+          .map(phone => phone.phone)
+          .filter(phone => leftPhones.has(phone))
+          .sort()
+        let phoneEvidenceRoot: string | null = null
+        for (const phone of commonPhones) {
+          const owners = await transaction.contactPhone.findMany({
+            where: { phone, isActive: true, contact: { isArchived: false } },
+            select: {
+              id: true,
+              contactId: true,
+              phone: true,
+              isActive: true,
+              verifiedAt: true,
+              contact: { select: { customFields: true } },
+            },
+          })
+          if ([...new Set(owners.map(owner => owner.contactId))].sort().join('\u0000') !== contactIds.join('\u0000')) {
+            continue
+          }
+          const roots: string[] = []
+          let eligible = true
+          for (const contactId of contactIds) {
+            const candidate = owners.find(owner => owner.contactId === contactId)
+            if (!candidate) {
+              eligible = false
+              break
+            }
+            const evidence = phoneEvidenceState(candidate.contact.customFields, candidate.id, candidate)
+            if (evidence.lifecycle !== 'current'
+              || !['provider_bound', 'manually_verified'].includes(evidence.trust)
+              || evidence.freshness !== 'fresh'
+              || evidence.resolutionState !== 'unique'
+              || !evidence.evidenceRoot) {
+              eligible = false
+              break
+            }
+            roots.push(evidence.evidenceRoot)
+          }
+          if (eligible) {
+            phoneEvidenceRoot = `phone:${phone}:${[...new Set(roots)].sort().join('|')}`
+            break
+          }
+        }
+
+        const storedConfirmations = (customFields: unknown) => {
+          const items = jsonRecord(customFields).driverConfirmations
+          return Array.isArray(items)
+            ? items
+              .map(item => jsonRecord(item))
+              .filter(item => item.status === 'confirmed'
+                && typeof item.profileClusterKey === 'string'
+                && typeof item.evidenceRoot === 'string')
+            : []
+        }
+        const leftConfirmations = storedConfirmations(left.customFields)
+        const rightConfirmationKeys = new Set(
+          storedConfirmations(right.customFields).map(item => String(item.profileClusterKey)),
+        )
+        const sharedConfirmationKeys = [...new Set(leftConfirmations
+          .map(item => String(item.profileClusterKey))
+          .filter(key => rightConfirmationKeys.has(key)))]
+          .sort()
+        const confirmedPersonEvidenceRoots: string[] = []
+        for (const profileClusterKey of sharedConfirmationKeys) {
+          const owners = await transaction.contact.findMany({
+            where: {
+              isArchived: false,
+              customFields: {
+                path: ['confirmedDriverClusterKeys'],
+                array_contains: [profileClusterKey],
+              },
+            },
+            select: { id: true, customFields: true },
+          })
+          const eligibleOwners = owners.filter(owner => storedConfirmations(owner.customFields)
+            .some(item => String(item.profileClusterKey) === profileClusterKey))
+          if ([...new Set(eligibleOwners.map(owner => owner.id))].sort().join('\u0000') !== contactIds.join('\u0000')) {
+            continue
+          }
+          const roots = eligibleOwners.flatMap(owner => storedConfirmations(owner.customFields)
+            .filter(item => String(item.profileClusterKey) === profileClusterKey)
+            .map(item => String(item.evidenceRoot)))
+          confirmedPersonEvidenceRoots.push(
+            `confirmed-person:${profileClusterKey}:${[...new Set(roots)].sort().join('|')}`,
+          )
+        }
+
+        const currentVuKeys = (contact: typeof left) => new Set(contact.driverProfiles
+          .filter(profile => profile.personKeyType === 'normalized_vu'
+            && profile.externalPersonKey
+            && profile.personResolutionStatus !== 'conflict'
+            && jsonRecord(jsonRecord(profile.customFields).fleetSource).sourceFreshness === 'fresh')
+          .map(profile => profile.externalPersonKey as string))
+        const leftVuKeys = currentVuKeys(left)
+        const normalizedVuEvidenceRoots: string[] = []
+        for (const key of [...currentVuKeys(right)].filter(candidate => leftVuKeys.has(candidate)).sort()) {
+          const owners = await transaction.driver.findMany({
+            where: {
+              externalPersonKey: key,
+              personKeyType: 'normalized_vu',
+              personResolutionStatus: { not: 'conflict' },
+              contactId: { not: null },
+              contact: { isArchived: false },
+            },
+            select: { contactId: true, customFields: true },
+          })
+          const currentOwners = owners.filter(owner => (
+            jsonRecord(jsonRecord(owner.customFields).fleetSource).sourceFreshness === 'fresh'
+          ))
+          if ([...new Set(currentOwners.map(owner => owner.contactId).filter(Boolean))].sort().join('\u0000')
+            === contactIds.join('\u0000')) {
+            normalizedVuEvidenceRoots.push(`normalized-vu:${key}`)
+          }
+        }
+
+        return {
+          trustedUniqueCurrentPhone: phoneEvidenceRoot !== null,
+          phoneEvidenceRoot,
+          confirmedPersonEvidenceRoots: [...new Set(confirmedPersonEvidenceRoots)].sort(),
+          normalizedVuEvidenceRoots,
+        }
       },
 
       async linkContactToDriver(input) {

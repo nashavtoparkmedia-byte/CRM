@@ -12,7 +12,7 @@ export interface RecoverAutomatedContactMergeCommandV1 {
 
 export type RecoverAutomatedContactMergeResultV1 = {
   contract: typeof RECOVER_AUTOMATED_CONTACT_MERGE_RESULT_V1
-  status: 'recovered' | 'manual_reconciliation'
+  status: 'recovered' | 'already_recovered' | 'manual_reconciliation' | 'not_recoverable'
   mergeId: string
   reason?: string
 }

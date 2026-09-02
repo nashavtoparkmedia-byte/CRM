@@ -21,7 +21,7 @@ const plan: AutomatedMergeRecoveryPlanV1 = {
 
 function harness(blockedOwner?: keyof Pick<
   AutomatedMergeRecoveryRepositoriesV1,
-  'messaging' | 'work'
+  'messaging' | 'work' | 'calling' | 'fleet'
 >) {
   const calls: string[] = []
   const owner = (name: string) => ({
@@ -50,6 +50,8 @@ function harness(blockedOwner?: keyof Pick<
     },
     messaging: owner('messaging'),
     work: owner('work'),
+    calling: owner('calling'),
+    fleet: owner('fleet'),
   }
   const handler = createRecoverAutomatedContactMergeHandlerV1({
     run: operation => operation(repositories),
@@ -71,8 +73,8 @@ describe('bounded automated Contact merge recovery', () => {
     })
     expect(testHarness.calls).toEqual([
       'contacts.admit', 'contacts.discover', 'contacts.lock', 'contacts.inspect',
-      'messaging.canRestore', 'work.canRestore',
-      'messaging.restore', 'work.restore',
+      'messaging.canRestore', 'work.canRestore', 'calling.canRestore', 'fleet.canRestore',
+      'messaging.restore', 'work.restore', 'calling.restore', 'fleet.restore',
       'contacts.restore', 'contacts.recovered', 'contacts.verify',
     ])
   })
@@ -88,5 +90,32 @@ describe('bounded automated Contact merge recovery', () => {
     ])
     expect(testHarness.repositories.messaging.restore).not.toHaveBeenCalled()
     expect(testHarness.repositories.contacts.restore).not.toHaveBeenCalled()
+  })
+
+  test('replay after recovery is idempotent and does not overwrite terminal state', async () => {
+    const testHarness = harness()
+    vi.mocked(testHarness.repositories.contacts.inspect).mockImplementationOnce(async () => {
+      testHarness.calls.push('contacts.inspect')
+      return { status: 'already_recovered' }
+    })
+    await expect(testHarness.handler(testHarness.command)).resolves.toMatchObject({
+      status: 'already_recovered', mergeId: 'merge-1',
+    })
+    expect(testHarness.calls).toEqual([
+      'contacts.admit', 'contacts.discover', 'contacts.lock', 'contacts.inspect',
+    ])
+    expect(testHarness.repositories.contacts.markManualReconciliation).not.toHaveBeenCalled()
+  })
+
+  test('manual merges are rejected without mutating recovery metadata', async () => {
+    const testHarness = harness()
+    vi.mocked(testHarness.repositories.contacts.inspect).mockImplementationOnce(async () => {
+      testHarness.calls.push('contacts.inspect')
+      return { status: 'not_recoverable', reason: 'manual_merge' }
+    })
+    await expect(testHarness.handler(testHarness.command)).resolves.toMatchObject({
+      status: 'not_recoverable', reason: 'manual_merge',
+    })
+    expect(testHarness.repositories.contacts.markManualReconciliation).not.toHaveBeenCalled()
   })
 })

@@ -39,7 +39,7 @@ import {
     upsertParkMatchedDriverV1 as upsertParkMatchedDriver,
 } from '../public/v1/park-phone-search'
 import { createReconcileYandexFleetHandlerV1 } from '../public/v1/yandex-fleet-reconciler'
-import { legacyPrismaYandexFleetReconcilerPortV1 } from '../public/v1/legacy-prisma-yandex-fleet-reconciler-adapter'
+import { legacyPrismaYandexFleetReconcilerPortV1 } from '../internal/legacy-prisma-yandex-fleet-reconciler-adapter'
 
 const updateDriverState = createUpdateDriverStateHandlerV1(legacyPrismaUpdateDriverStatePortV1)
 const updateScoringThresholds = createUpdateScoringThresholdsHandlerV1(legacyPrismaUpdateScoringThresholdsPortV1)

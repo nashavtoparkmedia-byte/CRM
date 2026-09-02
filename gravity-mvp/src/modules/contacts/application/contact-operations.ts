@@ -43,6 +43,7 @@ import {
     getConfirmedContactForDriverClusterV1 as getConfirmedContactForDriverCluster,
     persistDriverClusterContradictionV1 as persistDriverClusterContradiction,
     reconcileDriverClusterContactV1 as reconcileDriverClusterContact,
+    runDriverClusterContactOwnershipV1 as runDriverClusterContactOwnership,
 } from '../public/v1/driver-person-confirmation'
 import { createResolveContactLineageHandlerV1 } from '../public/v1/contact-lineage-handler'
 import { legacyPrismaContactLineagePortV1 } from '../public/v1/legacy-prisma-contact-lineage-adapter'
@@ -89,4 +90,9 @@ export const confirmDriverPersonV1 = (...args: Parameters<typeof confirmDriverPe
 export const getConfirmedContactForDriverClusterV1 = (...args: Parameters<typeof getConfirmedContactForDriverCluster>) => getConfirmedContactForDriverCluster(...args)
 export const reconcileDriverClusterContactV1 = (...args: Parameters<typeof reconcileDriverClusterContact>) => reconcileDriverClusterContact(...args)
 export const persistDriverClusterContradictionV1 = (...args: Parameters<typeof persistDriverClusterContradiction>) => persistDriverClusterContradiction(...args)
+export function runDriverClusterContactOwnershipV1<T>(
+    work: Parameters<typeof runDriverClusterContactOwnership<T>>[0],
+): Promise<T> {
+    return runDriverClusterContactOwnership<T>(work)
+}
 export const resolveContactLineageV1 = (...args: Parameters<typeof resolveContactLineage>) => resolveContactLineage(...args)

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest'
 
 import {
   makeParkQualifiedDriverKeyV1,
+  canAdoptUnqualifiedLegacyDriverProfileV1,
   normalizeDriverLicenceVuV1,
   yandexFleetProfileObservationV1,
 } from './yandex-fleet-reconciler'
@@ -24,6 +25,12 @@ describe('Fleet profile identity and VU evidence', () => {
       .toBe(makeParkQualifiedDriverKeyV1('park-a', 'profile-1'))
     expect(makeParkQualifiedDriverKeyV1('park-a', 'profile-1'))
       .not.toBe(makeParkQualifiedDriverKeyV1('park-b', 'profile-1'))
+  })
+
+  test('never lets the first of several parks claim an unqualified legacy provider id', () => {
+    expect(canAdoptUnqualifiedLegacyDriverProfileV1(1)).toBe(true)
+    expect(canAdoptUnqualifiedLegacyDriverProfileV1(2)).toBe(false)
+    expect(canAdoptUnqualifiedLegacyDriverProfileV1(6)).toBe(false)
   })
 
   test('preserves raw profile metadata while producing normalized comparison evidence', () => {

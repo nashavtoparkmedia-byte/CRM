@@ -27,6 +27,8 @@ import {
   makeLegacyPrismaContactMergeRepositoriesV1,
 } from '@/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter'
 import { makeWorkContactMergeRepositories } from '@/modules/work-management/public/v1/legacy-prisma-contact-merge-adapter'
+import { makeCallingContactMergeRepositories } from '@/modules/calling/public/v1/legacy-prisma-contact-merge-adapter'
+import { makeFleetContactMergeRepositories } from '@/modules/fleet-operations/public/v1/legacy-prisma-contact-merge-adapter'
 
 import ContactProfileDrawer from '../../app/messages/components/ContactProfileDrawer'
 import { MessageService } from '../MessageService'
@@ -215,10 +217,13 @@ async function persistBackendAmbiguity(): Promise<ListedConversation> {
 function transactionalMergeRepositories(
   transaction: Prisma.TransactionClient,
 ): ContactMergeTransactionalRepositoriesV1 {
+  const contacts = makeLegacyPrismaContactMergeRepositoriesV1(transaction)
   return {
-    ...makeLegacyPrismaContactMergeRepositoriesV1(transaction),
+    contacts: contacts.contacts,
+    fleet: makeFleetContactMergeRepositories(transaction),
     messaging: makeMessagingContactMergeRepositories(transaction),
     work: makeWorkContactMergeRepositories(transaction),
+    calling: makeCallingContactMergeRepositories(transaction),
   }
 }
 

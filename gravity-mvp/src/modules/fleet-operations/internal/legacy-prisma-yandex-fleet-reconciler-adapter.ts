@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import {
   RECONCILE_YANDEX_FLEET_COMMAND_V1,
   type ReconcileYandexFleetCommandV1,
@@ -9,7 +9,7 @@ import {
 import { prisma } from '@/lib/prisma'
 import {
   persistDriverClusterContradictionV1,
-  reconcileDriverClusterContactV1,
+  runDriverClusterContactOwnershipV1,
 } from '@/modules/contacts/public/v1'
 import {
   RECONCILE_DRIVER_CLUSTER_COMMAND_V1,
@@ -18,12 +18,13 @@ import {
 import {
   listYandexConnectionCredentialsV1,
   type YandexConnectionCredentialsV1,
-} from './yandex-connection-capability'
+} from '../public/v1/yandex-connection-capability'
 import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
 import {
   driverFleetEvidenceState,
   withDriverFleetEvidence,
-} from './driver-fleet-evidence'
+} from '../public/v1/driver-fleet-evidence'
+import { canAdoptUnqualifiedLegacyDriverProfileV1 } from '../public/v1/yandex-fleet-reconciler'
 
 export { RECONCILE_YANDEX_FLEET_COMMAND_V1 }
 export type { ReconcileYandexFleetCommandV1, YandexFleetReconciliationModeV1 }
@@ -233,9 +234,10 @@ async function ensureLocalPark(
   return observation.localParkId
 }
 
-async function upsertObservation(
+export async function upsertObservation(
   observation: YandexFleetProfileObservationV1,
-): Promise<{ driverId: string; observation: YandexFleetProfileObservationV1 }> {
+  configuredParkCount: number,
+): Promise<{ driverId: string; observation: YandexFleetProfileObservationV1 } | null> {
   const result = await prisma.$transaction(async transaction => {
     const parkId = await ensureLocalPark(observation)
     const composite = await transaction.driver.findUnique({
@@ -247,7 +249,7 @@ async function upsertObservation(
       },
       select: { id: true, contactId: true, yandexDriverId: true, licenseNumber: true, customFields: true },
     })
-    const legacy = composite ?? await transaction.driver.findFirst({
+    const unqualifiedLegacy = composite ? null : await transaction.driver.findFirst({
       where: {
         yandexDriverId: observation.externalDriverProfileId,
         externalParkId: null,
@@ -255,6 +257,12 @@ async function upsertObservation(
       },
       select: { id: true, contactId: true, yandexDriverId: true, licenseNumber: true, customFields: true },
     })
+    // A provider profile id is not globally unique across parks. Preserve the
+    // legacy row when several parks are configured; the qualified observation
+    // becomes a separate profile and is fenced as a reconciliation conflict.
+    const mayAdoptLegacy = canAdoptUnqualifiedLegacyDriverProfileV1(configuredParkCount)
+    const unsafeLegacyCollision = mayAdoptLegacy ? null : unqualifiedLegacy
+    const legacy = composite ?? (mayAdoptLegacy ? unqualifiedLegacy : null)
     const previousNormalizedVu = normalizeDriverLicenceVuV1(legacy?.licenseNumber)
     const authoritativeContradiction = Boolean(
       previousNormalizedVu
@@ -262,6 +270,19 @@ async function upsertObservation(
         && previousNormalizedVu !== observation.normalizedVu,
     )
     const previousFleetEvidence = driverFleetEvidenceState(legacy?.customFields)
+    const previousObservedAt = previousFleetEvidence.lastObservedAt
+      ? new Date(previousFleetEvidence.lastObservedAt)
+      : null
+    if (legacy && previousObservedAt && !Number.isNaN(previousObservedAt.getTime())
+      && previousObservedAt.getTime() >= observation.observedAt.getTime()) {
+      return {
+        ignoredAsStale: true as const,
+        driverId: legacy.id,
+        observation,
+        conflictContactId: null,
+        conflictBasis: null,
+      }
+    }
     const previousMetadata = previousFleetEvidence.sourceMetadata
     const licenseHistory = Array.isArray(previousMetadata.licenseHistory) ? previousMetadata.licenseHistory : []
     const nextLicenseHistory = observation.rawVu && (
@@ -337,23 +358,37 @@ async function upsertObservation(
               observation.externalParkId,
               observation.externalDriverProfileId,
             ),
-            personResolutionStatus: observation.normalizedVu ? 'vu_observed' : 'unlinked',
+            personResolutionStatus: unsafeLegacyCollision
+              ? 'conflict'
+              : observation.normalizedVu ? 'vu_observed' : 'unlinked',
+            ...(unsafeLegacyCollision ? {
+              personResolutionBasis: 'legacy_unqualified_provider_id',
+              personResolutionAt: observation.observedAt,
+              personResolvedBy: 'fleet-reconciler',
+            } : {}),
           },
           select: { id: true },
         })
 
     return {
+      ignoredAsStale: false as const,
       driverId: driver.id,
       observation,
-      conflictContactId: authoritativeContradiction ? legacy?.contactId ?? null : null,
+      conflictContactId: authoritativeContradiction
+        ? legacy?.contactId ?? null
+        : unsafeLegacyCollision?.contactId ?? null,
+      conflictBasis: authoritativeContradiction
+        ? 'authoritative_vu_change'
+        : unsafeLegacyCollision ? 'legacy_unqualified_provider_id' : null,
     }
   })
+  if (result.ignoredAsStale) return null
   if (result.conflictContactId) {
     await persistDriverClusterContradictionV1({
       profileClusterKey: clusterKeyFor(result),
       contactIds: [result.conflictContactId],
       driverIds: [result.driverId],
-      evidenceRoot: observation.evidenceRoot,
+      evidenceRoot: `${result.conflictBasis}:${observation.evidenceRoot}`,
     })
   }
   return { driverId: result.driverId, observation: result.observation }
@@ -367,7 +402,78 @@ function clusterKeyFor(
     : `profile:${row.observation.externalParkId}:${row.observation.externalDriverProfileId}`
 }
 
-async function reconcileClusters(
+const FLEET_RECONCILIATION_ADVISORY_CLASS_ID = 0x594f4b4f
+const FLEET_RECONCILIATION_ADVISORY_OBJECT_ID = 0x464c5431 // "FLT1"
+
+async function withFleetReconciliationMutationLease<T>(work: () => Promise<T>): Promise<T> {
+  return prisma.$transaction(async transaction => {
+    await transaction.$queryRaw(Prisma.sql`
+      WITH "fleet_reconciliation_lock_policy" AS MATERIALIZED (
+        SELECT set_config('lock_timeout', '10000ms', true) AS configured
+      )
+      SELECT (
+        pg_advisory_xact_lock(
+          CAST(${FLEET_RECONCILIATION_ADVISORY_CLASS_ID} AS integer)
+            + octet_length(configured) * 0,
+          CAST(${FLEET_RECONCILIATION_ADVISORY_OBJECT_ID} AS integer)
+        ) IS NULL
+      ) AS admitted
+      FROM "fleet_reconciliation_lock_policy"
+    `)
+    return work()
+  }, {
+    isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+    maxWait: 10_000,
+    timeout: 240_000,
+  })
+}
+
+async function updateDriverClusterContactLink(transaction: Prisma.TransactionClient, input: {
+  driverIds: string[]
+  contactId: string
+  status: string
+  basis: string
+  onlyUnlinked: boolean
+}): Promise<string> {
+  let canonicalId = input.contactId
+  for (let depth = 0; depth < 16; depth += 1) {
+    const contact = await transaction.contact.findUnique({
+      where: { id: canonicalId },
+      select: { isArchived: true, customFields: true },
+    })
+    if (!contact) throw new Error('DRIVER_CLUSTER_CONTACT_NOT_FOUND')
+    if (!contact.isArchived) break
+    const fields = contact.customFields && typeof contact.customFields === 'object'
+      && !Array.isArray(contact.customFields)
+      ? contact.customFields as Record<string, unknown>
+      : {}
+    if (typeof fields.mergedIntoContactId !== 'string' || fields.mergedIntoContactId === canonicalId) {
+      throw new Error('DRIVER_CLUSTER_CONTACT_ARCHIVED')
+    }
+    canonicalId = fields.mergedIntoContactId
+  }
+  const canonical = await transaction.contact.findUnique({
+    where: { id: canonicalId },
+    select: { isArchived: true },
+  })
+  if (!canonical || canonical.isArchived) throw new Error('DRIVER_CLUSTER_CONTACT_ARCHIVED')
+  await transaction.driver.updateMany({
+    where: {
+      id: { in: input.driverIds },
+      ...(input.onlyUnlinked ? { contactId: null } : {}),
+    },
+    data: {
+      contactId: canonicalId,
+      personResolutionStatus: input.status,
+      personResolutionBasis: input.basis,
+      personResolutionAt: new Date(),
+      personResolvedBy: 'fleet-reconciler',
+    },
+  })
+  return canonicalId
+}
+
+export async function reconcileClusters(
   rows: Array<{ driverId: string; observation: YandexFleetProfileObservationV1 }>,
 ): Promise<ReconciledDriverClusterV1[]> {
   const grouped = new Map<string, typeof rows>()
@@ -376,107 +482,175 @@ async function reconcileClusters(
     grouped.set(key, [...(grouped.get(key) ?? []), row])
   }
   const clusters: ReconciledDriverClusterV1[] = []
-  for (const [profileClusterKey, members] of [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b))) {
-    const profiles: DriverClusterProfileEvidenceV1[] = members.map(member => ({
-      driverId: member.driverId,
-      externalParkId: member.observation.externalParkId,
-      externalDriverProfileId: member.observation.externalDriverProfileId,
-      fullName: member.observation.fullName,
-      phones: member.observation.phones,
-      normalizedVu: member.observation.normalizedVu,
-      evidenceRoot: member.observation.evidenceRoot,
-      sourceFreshness: 'fresh',
-      legalRole: member.observation.legalRole,
-      status: member.observation.currentStatus ?? member.observation.workStatus,
-      city: member.observation.city,
-      profileType: member.observation.profileType,
-      rawVu: member.observation.rawVu,
-      sourceDates: member.observation.sourceDates,
-    }))
-    const decision = await reconcileDriverClusterContactV1({
-      contract: RECONCILE_DRIVER_CLUSTER_COMMAND_V1,
-      profileClusterKey,
-      profiles,
-    })
-    const existing = await prisma.driver.findMany({
-      where: { id: { in: members.map(member => member.driverId) } },
-      select: { id: true, contactId: true, personResolutionStatus: true },
-    })
-    const existingContactIds = [...new Set(existing.map(row => row.contactId).filter((id): id is string => Boolean(id)))].sort()
-    const warnings: string[] = []
-    let contactId: string | null = null
-    if (existing.some(row => row.personResolutionStatus === 'conflict')) {
-      warnings.push('authoritative_source_contradiction')
-    } else if (decision.status === 'conflict') {
-      warnings.push('contact_phone_ambiguity')
-    } else if (decision.status === 'link') {
-      contactId = decision.contactId
-      if (existingContactIds.some(id => id !== contactId)) {
-        warnings.push('confirmed_person_contradiction')
-        await persistDriverClusterContradictionV1({
+  for (const [profileClusterKey, observedMembers] of [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    const cluster = await runDriverClusterContactOwnershipV1(contactRepository => (
+      prisma.$transaction(async transaction => {
+      // The Contacts owner holds CNT1 while this Fleet transaction re-reads
+      // the complete Driver cluster, derives Contact evidence, and links it.
+      const observedById = new Map(observedMembers.map(member => [member.driverId, member.observation]))
+      const persisted = await transaction.driver.findMany({
+        where: profileClusterKey.startsWith('vu:')
+          ? { externalPersonKey: profileClusterKey }
+          : { id: { in: observedMembers.map(member => member.driverId) } },
+        select: {
+          id: true,
+          externalParkId: true,
+          externalDriverProfileId: true,
+          sourceConnectionId: true,
+          fullName: true,
+          phone: true,
+          licenseNumber: true,
+          customFields: true,
+          contactId: true,
+          personResolutionStatus: true,
+        },
+      })
+      const members = persisted.map(row => {
+        const observed = observedById.get(row.id)
+        if (observed) return { driverId: row.id, observation: observed, sourceFreshness: 'fresh' as const }
+        const evidence = driverFleetEvidenceState(row.customFields)
+        const lastObservedAt = evidence.lastObservedAt ? new Date(evidence.lastObservedAt) : new Date(0)
+        const observation: YandexFleetProfileObservationV1 = {
+          externalParkId: row.externalParkId ?? 'legacy',
+          localParkId: null,
+          sourceConnectionId: row.sourceConnectionId ?? 'legacy',
+          externalDriverProfileId: row.externalDriverProfileId ?? row.id,
+          fullName: row.fullName,
+          phones: [...new Set([
+            ...evidence.sourcePhones.map(normalizePhoneE164).filter((phone): phone is string => Boolean(phone)),
+            ...(normalizePhoneE164(row.phone) ? [normalizePhoneE164(row.phone)!] : []),
+          ])].sort(),
+          rawPhones: evidence.sourcePhones,
+          rawVu: row.licenseNumber,
+          normalizedVu: normalizeDriverLicenceVuV1(row.licenseNumber),
+          legalRole: evidence.legalRole,
+          workStatus: evidence.sourceStatus,
+          currentStatus: evidence.sourceStatus,
+          city: evidence.sourceCity,
+          profileType: evidence.sourceProfileType,
+          sourceDates: evidence.sourceDates,
+          observedAt: Number.isNaN(lastObservedAt.getTime()) ? new Date(0) : lastObservedAt,
+          rawMetadata: evidence.sourceMetadata,
+          evidenceRoot: `persisted:${row.id}:${evidence.lastObservedAt ?? 'unknown'}`,
+        }
+        return { driverId: row.id, observation, sourceFreshness: evidence.sourceFreshness }
+      })
+      if (members.length === 0) throw new Error('DRIVER_CLUSTER_EMPTY_AFTER_ADMISSION')
+      const profiles: DriverClusterProfileEvidenceV1[] = members.map(member => ({
+        driverId: member.driverId,
+        externalParkId: member.observation.externalParkId,
+        externalDriverProfileId: member.observation.externalDriverProfileId,
+        fullName: member.observation.fullName,
+        phones: member.observation.phones,
+        normalizedVu: member.observation.normalizedVu,
+        evidenceRoot: member.observation.evidenceRoot,
+        sourceFreshness: member.sourceFreshness,
+        legalRole: member.observation.legalRole,
+        status: member.observation.currentStatus ?? member.observation.workStatus,
+        city: member.observation.city,
+        profileType: member.observation.profileType,
+        rawVu: member.observation.rawVu,
+        sourceDates: member.observation.sourceDates,
+      }))
+      const decision = await contactRepository.reconcile({
+        contract: RECONCILE_DRIVER_CLUSTER_COMMAND_V1,
+        profileClusterKey,
+        profiles,
+      })
+      const existingContactIds = [...new Set(persisted
+        .map(row => row.contactId)
+        .filter((id): id is string => Boolean(id)))].sort()
+      const warnings: string[] = []
+      let contactId: string | null = null
+      const driverIds = members.map(member => member.driverId)
+      const evidenceRoot = profiles.map(profile => profile.evidenceRoot).sort().join('|')
+      const incompleteClusterEvidence = members.some(member => member.sourceFreshness !== 'fresh')
+      if (persisted.some(row => row.personResolutionStatus === 'conflict')) {
+        warnings.push('authoritative_source_contradiction')
+      } else if (decision.status === 'conflict') {
+        warnings.push('contact_phone_ambiguity')
+        await contactRepository.persistContradiction({
           profileClusterKey,
-          contactIds: [...new Set([...existingContactIds, contactId])],
-          driverIds: members.map(member => member.driverId),
-          evidenceRoot: profiles.map(profile => profile.evidenceRoot).sort().join('|'),
+          contactIds: decision.contactIds,
+          driverIds,
+          evidenceRoot,
         })
-        contactId = null
-      } else {
-        await prisma.driver.updateMany({
-          where: { id: { in: members.map(member => member.driverId) } },
-          data: {
+      } else if (decision.status === 'link') {
+        contactId = decision.contactId
+        if (existingContactIds.some(id => id !== contactId)) {
+          warnings.push('confirmed_person_contradiction')
+          await contactRepository.persistContradiction({
+            profileClusterKey,
+            contactIds: [...new Set([...existingContactIds, contactId])],
+            driverIds,
+            evidenceRoot,
+          })
+          contactId = null
+        } else if (incompleteClusterEvidence && existingContactIds.length === 0) {
+          warnings.push('partial_cluster_evidence')
+          contactId = null
+        } else {
+          contactId = await updateDriverClusterContactLink(transaction, {
+            driverIds,
             contactId,
-            personResolutionStatus: decision.basis === 'operator_confirmation'
-              ? 'operator_confirmed'
-              : 'phone_linked',
-            personResolutionBasis: decision.basis,
+            status: decision.basis === 'operator_confirmation' ? 'operator_confirmed' : 'phone_linked',
+            basis: decision.basis,
+            onlyUnlinked: false,
+          })
+        }
+      } else if (existingContactIds.length === 1) {
+        contactId = existingContactIds[0]
+        if (incompleteClusterEvidence) {
+          warnings.push('partial_cluster_evidence')
+        } else {
+          contactId = await updateDriverClusterContactLink(transaction, {
+            driverIds,
+            contactId,
+            status: 'vu_clustered',
+            basis: 'normalized_vu',
+            onlyUnlinked: true,
+          })
+        }
+      } else if (existingContactIds.length > 1) {
+        warnings.push('vu_contact_contradiction')
+        await contactRepository.persistContradiction({
+          profileClusterKey,
+          contactIds: existingContactIds,
+          driverIds,
+          evidenceRoot,
+        })
+        await transaction.driver.updateMany({
+          where: { id: { in: driverIds } },
+          data: { personResolutionStatus: 'conflict', personResolutionBasis: 'normalized_vu_contradiction' },
+        })
+      } else if (members[0].observation.normalizedVu && members.length > 1 && !incompleteClusterEvidence) {
+        await transaction.driver.updateMany({
+          where: { id: { in: driverIds } },
+          data: {
+            personResolutionStatus: 'vu_clustered',
+            personResolutionBasis: 'normalized_vu',
             personResolutionAt: new Date(),
             personResolvedBy: 'fleet-reconciler',
           },
         })
+      } else if (incompleteClusterEvidence) {
+        warnings.push('partial_cluster_evidence')
       }
-    } else if (existingContactIds.length === 1) {
-      contactId = existingContactIds[0]
-      await prisma.driver.updateMany({
-        where: { id: { in: members.map(member => member.driverId) }, contactId: null },
-        data: {
-          contactId,
-          personResolutionStatus: 'vu_clustered',
-          personResolutionBasis: 'normalized_vu',
-          personResolutionAt: new Date(),
-          personResolvedBy: 'fleet-reconciler',
-        },
-      })
-    } else if (existingContactIds.length > 1) {
-      warnings.push('vu_contact_contradiction')
-      await persistDriverClusterContradictionV1({
+      return {
         profileClusterKey,
-        contactIds: existingContactIds,
-        driverIds: members.map(member => member.driverId),
-        evidenceRoot: profiles.map(profile => profile.evidenceRoot).sort().join('|'),
+        normalizedVu: members[0].observation.normalizedVu,
+        contactId,
+        profileIds: driverIds.sort(),
+        profiles,
+        warnings,
+      }
+      }, {
+        isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted,
+        maxWait: 2_000,
+        timeout: 15_000,
       })
-      await prisma.driver.updateMany({
-        where: { id: { in: members.map(member => member.driverId) } },
-        data: { personResolutionStatus: 'conflict', personResolutionBasis: 'normalized_vu_contradiction' },
-      })
-    } else if (members[0].observation.normalizedVu && members.length > 1) {
-      await prisma.driver.updateMany({
-        where: { id: { in: members.map(member => member.driverId) } },
-        data: {
-          personResolutionStatus: 'vu_clustered',
-          personResolutionBasis: 'normalized_vu',
-          personResolutionAt: new Date(),
-          personResolvedBy: 'fleet-reconciler',
-        },
-      })
-    }
-    clusters.push({
-      profileClusterKey,
-      normalizedVu: members[0].observation.normalizedVu,
-      contactId,
-      profileIds: members.map(member => member.driverId).sort(),
-      profiles,
-      warnings,
-    })
+    ))
+    clusters.push(cluster)
   }
   return clusters
 }
@@ -504,10 +678,12 @@ async function reconcileYandexFleetV1(
   command: ReconcileYandexFleetCommandV1,
 ): Promise<ReconcileYandexFleetResultV1> {
   if (command.contract !== RECONCILE_YANDEX_FLEET_COMMAND_V1) throw new TypeError('unsupported contract')
+  const reconciliationStartedAt = new Date()
   const query = command.query?.trim() || null
   const connections = await listYandexConnectionCredentialsV1()
   const errors: ReconcileYandexFleetResultV1['errors'] = []
   const observations: YandexFleetProfileObservationV1[] = []
+  const failedConnections: YandexConnectionCredentialsV1[] = []
   for (const connection of connections) {
     const startedAt = Date.now()
     try {
@@ -516,13 +692,25 @@ async function reconcileYandexFleetV1(
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Yandex Fleet request failed'
       errors.push({ parkId: connection.parkId, parkName: connection.name || connection.parkId, message })
+      failedConnections.push(connection)
       await recordParkReconciliationOutcome(connection, startedAt, message)
+      // Preserve every last-good source value while exposing stale provenance.
+      // A failed absence is not evidence of termination or a different person.
+    }
+  }
+  const { upserted, clusters } = await withFleetReconciliationMutationLease(async () => {
+    for (const connection of failedConnections) {
       const staleDrivers = await prisma.driver.findMany({
         where: { sourceConnectionId: connection.connectionId },
         select: { id: true, customFields: true },
       })
       for (const driver of staleDrivers) {
         const evidence = driverFleetEvidenceState(driver.customFields)
+        const lastObservedAt = evidence.lastObservedAt ? new Date(evidence.lastObservedAt) : null
+        if (lastObservedAt && !Number.isNaN(lastObservedAt.getTime())
+          && lastObservedAt.getTime() > reconciliationStartedAt.getTime()) {
+          continue
+        }
         await prisma.driver.update({
           where: { id: driver.id },
           data: {
@@ -534,13 +722,14 @@ async function reconcileYandexFleetV1(
           },
         })
       }
-      // Preserve every last-good source value while exposing stale provenance.
-      // A failed absence is not evidence of termination or a different person.
     }
-  }
-  const upserted = []
-  for (const observation of observations) upserted.push(await upsertObservation(observation))
-  const clusters = await reconcileClusters(upserted)
+    const upserted: Array<{ driverId: string; observation: YandexFleetProfileObservationV1 }> = []
+    for (const observation of observations) {
+      const applied = await upsertObservation(observation, connections.length)
+      if (applied) upserted.push(applied)
+    }
+    return { upserted, clusters: await reconcileClusters(upserted) }
+  })
   return {
     mode: command.mode,
     checkedParks: connections.length,

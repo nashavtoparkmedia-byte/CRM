@@ -10,6 +10,8 @@
 // Concurrency guard: while a sync is running, we mark status = 'running'.
 // If a second invocation arrives, it can check this and refuse to start.
 
+import { randomUUID } from 'node:crypto'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { YandexFleetService } from '@/lib/YandexFleetService'
 import { getThresholds, recalculateAllSegments } from '@/lib/scoring'
@@ -20,7 +22,9 @@ import {
 
 export const YANDEX_SYNC_SERVICE = 'yandex_fleet'
 const COOLDOWN_MS = 5 * 60 * 1000  // 5 minutes between manual triggers
-const RUNNING_STALE_MS = 30 * 60 * 1000  // a "running" lock older than 30min is stale
+export const YANDEX_SYNC_RUNNING_STALE_MS = 30 * 60 * 1000
+export const YANDEX_SYNC_LEASE_HEARTBEAT_MS = 60 * 1000
+const LEASE_PREFIX = 'lease:'
 
 export interface SyncStatusRow {
     service: string
@@ -66,8 +70,10 @@ export async function getYandexSyncStatus(): Promise<SyncStatusView> {
 
     return {
         lastRunAt: row.lastRunAt.toISOString(),
-        status: row.status as any,
-        errorMessage: row.errorMessage,
+        status: row.status as SyncStatusView['status'],
+        errorMessage: row.status === 'running' && row.errorMessage?.startsWith(LEASE_PREFIX)
+            ? null
+            : row.errorMessage,
         driversUpdated: row.driversUpdated,
         ordersProcessed: row.ordersProcessed,
         cooldownRemainingMs,
@@ -79,30 +85,18 @@ export async function getYandexSyncStatus(): Promise<SyncStatusView> {
  * RUNNING_STALE_MS) are treated as not running — protects against process
  * crashes that leave the lock dangling.
  */
-async function isSyncRunning(): Promise<boolean> {
-    const row = await prisma.syncStatus.findUnique({
-        where: { service: YANDEX_SYNC_SERVICE },
-    })
-    if (!row || row.status !== 'running') return false
-    const age = Date.now() - row.lastRunAt.getTime()
-    return age < RUNNING_STALE_MS
-}
-
-async function setStatus(
+async function finishStatus(
+    leaseMarker: string,
     status: 'success' | 'error' | 'running',
     extras?: Partial<Pick<SyncStatusRow, 'errorMessage' | 'driversUpdated' | 'ordersProcessed'>>
-) {
-    await prisma.syncStatus.upsert({
-        where: { service: YANDEX_SYNC_SERVICE },
-        update: {
-            lastRunAt: new Date(),
-            status,
-            errorMessage: extras?.errorMessage ?? null,
-            driversUpdated: extras?.driversUpdated ?? null,
-            ordersProcessed: extras?.ordersProcessed ?? null,
-        },
-        create: {
+) : Promise<boolean> {
+    const result = await prisma.syncStatus.updateMany({
+        where: {
             service: YANDEX_SYNC_SERVICE,
+            status: 'running',
+            errorMessage: leaseMarker,
+        },
+        data: {
             lastRunAt: new Date(),
             status,
             errorMessage: extras?.errorMessage ?? null,
@@ -110,6 +104,73 @@ async function setStatus(
             ordersProcessed: extras?.ordersProcessed ?? null,
         },
     })
+    return result.count === 1
+}
+
+async function renewLease(leaseMarker: string): Promise<boolean> {
+    const result = await prisma.syncStatus.updateMany({
+        where: { service: YANDEX_SYNC_SERVICE, status: 'running', errorMessage: leaseMarker },
+        data: { lastRunAt: new Date() },
+    })
+    return result.count === 1
+}
+
+async function runWithLeaseHeartbeat<T>(
+    leaseMarker: string,
+    operation: () => Promise<T>,
+): Promise<{ leaseHeld: true; value: T } | { leaseHeld: false }> {
+    let leaseLost = false
+    let renewal = Promise.resolve()
+    const heartbeat = () => {
+        renewal = renewal.then(async () => {
+            if (!leaseLost && !await renewLease(leaseMarker)) leaseLost = true
+        }).catch(() => {
+            leaseLost = true
+        })
+    }
+    const timer = setInterval(heartbeat, YANDEX_SYNC_LEASE_HEARTBEAT_MS)
+    try {
+        const value = await operation()
+        await renewal
+        if (leaseLost || !await renewLease(leaseMarker)) return { leaseHeld: false }
+        return { leaseHeld: true, value }
+    } finally {
+        clearInterval(timer)
+    }
+}
+
+async function acquireLease(bypassCooldown: boolean): Promise<{
+    acquired: boolean
+    leaseMarker: string
+}> {
+    const now = new Date()
+    const staleBefore = new Date(now.getTime() - YANDEX_SYNC_RUNNING_STALE_MS)
+    const cooldownBefore = new Date(now.getTime() - COOLDOWN_MS)
+    const leaseMarker = `${LEASE_PREFIX}${randomUUID()}`
+    const acquired = await prisma.$queryRaw<Array<{ service: string }>>(Prisma.sql`
+        INSERT INTO "SyncStatus" (
+            service, "lastRunAt", status, "errorMessage", "driversUpdated", "ordersProcessed", "updatedAt"
+        ) VALUES (
+            ${YANDEX_SYNC_SERVICE}, ${now}, 'running', ${leaseMarker}, NULL, NULL, ${now}
+        )
+        ON CONFLICT (service) DO UPDATE SET
+            "lastRunAt" = EXCLUDED."lastRunAt",
+            status = EXCLUDED.status,
+            "errorMessage" = EXCLUDED."errorMessage",
+            "driversUpdated" = NULL,
+            "ordersProcessed" = NULL,
+            "updatedAt" = EXCLUDED."updatedAt"
+        WHERE (
+            "SyncStatus".status <> 'running'
+            OR "SyncStatus"."lastRunAt" <= ${staleBefore}
+        ) AND (
+            ${bypassCooldown}
+            OR "SyncStatus".status <> 'success'
+            OR "SyncStatus"."lastRunAt" <= ${cooldownBefore}
+        )
+        RETURNING service
+    `)
+    return { acquired: acquired.length === 1, leaseMarker }
 }
 
 export interface RunYandexSyncOptions {
@@ -120,7 +181,7 @@ export interface RunYandexSyncOptions {
 export interface RunYandexSyncResult {
     ok: boolean
     /** Reason for refusal when ok = false. */
-    reason?: 'already_running' | 'cooldown' | 'error'
+    reason?: 'already_running' | 'cooldown' | 'error' | 'lease_lost'
     cooldownRemainingMs?: number
     errorMessage?: string
     driversUpdated?: number
@@ -140,14 +201,12 @@ export interface RunYandexSyncResult {
 export async function runYandexSync(
     options: RunYandexSyncOptions = {}
 ): Promise<RunYandexSyncResult> {
-    // Guard 1: concurrency
-    if (await isSyncRunning()) {
-        return { ok: false, reason: 'already_running' }
-    }
-
-    // Guard 2: cooldown for manual triggers
-    if (!options.bypassCooldown) {
+    // One compare-and-set both enforces the cooldown and acquires a unique
+    // fenced lease. Parallel invocations cannot both pass this boundary.
+    const lease = await acquireLease(Boolean(options.bypassCooldown))
+    if (!lease.acquired) {
         const status = await getYandexSyncStatus()
+        if (status.status === 'running') return { ok: false, reason: 'already_running' }
         if (status.cooldownRemainingMs > 0) {
             return {
                 ok: false,
@@ -155,32 +214,45 @@ export async function runYandexSync(
                 cooldownRemainingMs: status.cooldownRemainingMs,
             }
         }
+        return { ok: false, reason: 'already_running' }
     }
-
-    await setStatus('running')
 
     let driversUpdated = 0
     let ordersProcessed = 0
 
     try {
-        const thresholds = await getThresholds()
+        const thresholdsPhase = await runWithLeaseHeartbeat(lease.leaseMarker, getThresholds)
+        if (!thresholdsPhase.leaseHeld) return { ok: false, reason: 'lease_lost' }
+        const thresholds = thresholdsPhase.value
 
         // 1. One shared, park-qualified reconciler owns profile ingestion for
         // nightly, manual, Contact refresh and confirmation follow-up modes.
-        const reconciliation = await reconcileYandexFleetV1({
-            contract: RECONCILE_YANDEX_FLEET_COMMAND_V1,
-            mode: 'nightly',
-        })
+        const reconciliationPhase = await runWithLeaseHeartbeat(lease.leaseMarker, () => (
+            reconcileYandexFleetV1({
+                contract: RECONCILE_YANDEX_FLEET_COMMAND_V1,
+                mode: 'nightly',
+            })
+        ))
+        if (!reconciliationPhase.leaseHeld) return { ok: false, reason: 'lease_lost' }
+        const reconciliation = reconciliationPhase.value
         driversUpdated += reconciliation.profilesUpserted
 
         // 2. Trips for the analysis period
-        const trips = await YandexFleetService.syncTrips(thresholds.analysis_period)
+        const tripsPhase = await runWithLeaseHeartbeat(lease.leaseMarker, () => (
+            YandexFleetService.syncTrips(thresholds.analysis_period)
+        ))
+        if (!tripsPhase.leaseHeld) return { ok: false, reason: 'lease_lost' }
+        const trips = tripsPhase.value
         ordersProcessed = trips.ordersProcessed
 
         // 3. Recalculate segments
-        const recalc = await recalculateAllSegments()
+        const recalcPhase = await runWithLeaseHeartbeat(lease.leaseMarker, recalculateAllSegments)
+        if (!recalcPhase.leaseHeld) return { ok: false, reason: 'lease_lost' }
+        const recalc = recalcPhase.value
 
-        await setStatus('success', { driversUpdated, ordersProcessed })
+        if (!await finishStatus(lease.leaseMarker, 'success', { driversUpdated, ordersProcessed })) {
+            return { ok: false, reason: 'lease_lost' }
+        }
 
         return {
             ok: true,
@@ -188,9 +260,11 @@ export async function runYandexSync(
             ordersProcessed,
             recalculatedCount: recalc.count,
         }
-    } catch (err: any) {
-        const errorMessage = err?.message || String(err)
-        await setStatus('error', { errorMessage, driversUpdated, ordersProcessed })
+    } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : String(err)
+        if (!await finishStatus(lease.leaseMarker, 'error', { errorMessage, driversUpdated, ordersProcessed })) {
+            return { ok: false, reason: 'lease_lost', errorMessage }
+        }
         return { ok: false, reason: 'error', errorMessage }
     }
 }

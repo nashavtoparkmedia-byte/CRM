@@ -66,6 +66,7 @@ export {
     getConfirmedContactForDriverClusterV1,
     reconcileDriverClusterContactV1,
     persistDriverClusterContradictionV1,
+    runDriverClusterContactOwnershipV1,
     resolveContactLineageV1,
     prepareContactConversationIdentityV1,
     resolveChannelContactOperationV1,
@@ -87,6 +88,10 @@ export {
     reconcileFleetContactOwnershipV1,
     expireTemporaryContactPhonesV1,
 } from './contact-identity-maintenance'
+export {
+    CONTACT_OWNERSHIP_ADVISORY_CLASS_ID_V1,
+    CONTACT_OWNERSHIP_ADVISORY_OBJECT_ID_V1,
+} from './contact-ownership-lock-contract'
 export type {
     ContactOwnershipBusyResultV1,
     ResolveChannelContactPolicyV1,

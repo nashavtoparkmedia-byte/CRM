@@ -178,20 +178,24 @@ export function makePrismaAutomatedMergeRecoveryContactsRepositoryV1(
           survivor: { include: { identities: true, phones: true } },
         },
       })
-      if (!merge) return { status: 'blocked', reason: 'merge_not_found' }
+      if (!merge) return { status: 'blocked', reason: 'merge_not_found', eligibleAttempt: false }
       const metadata = mergeMetadata(merge.snapshotBefore)
-      if (!metadata.automated) return { status: 'blocked', reason: 'manual_merge' }
+      if (!metadata.automated) return { status: 'not_recoverable', reason: 'manual_merge' }
+      if (metadata.recoveryState === 'recovered') return { status: 'already_recovered' }
+      if (metadata.recoveryState === 'manual_reconciliation') {
+        return { status: 'manual_reconciliation', reason: 'recovery_state_manual_reconciliation' }
+      }
       if (!['recoverable', 'recovery_requested'].includes(metadata.recoveryState)) {
-        return { status: 'blocked', reason: `recovery_state_${metadata.recoveryState}` }
+        return { status: 'not_recoverable', reason: `recovery_state_${metadata.recoveryState}` }
       }
       const snapshot = parseSnapshot(merge.snapshotBefore)
-      if (!snapshot?.survivorBefore) return { status: 'blocked', reason: 'legacy_snapshot_incomplete' }
+      if (!snapshot?.survivorBefore) return { status: 'blocked', reason: 'legacy_snapshot_incomplete', eligibleAttempt: true }
       if (!merge.merged.isArchived
         || contactAutomationState(merge.merged.customFields).mergedIntoContactId !== merge.survivorId) {
-        return { status: 'blocked', reason: 'loser_redirect_changed' }
+        return { status: 'blocked', reason: 'loser_redirect_changed', eligibleAttempt: true }
       }
       if (merge.merged.identities.length > 0 || merge.merged.phones.length > 0) {
-        return { status: 'blocked', reason: 'loser_received_new_identity_state' }
+        return { status: 'blocked', reason: 'loser_received_new_identity_state', eligibleAttempt: true }
       }
 
       const sourceIdentityIds = snapshot.identities.map(identity => identity.id)
@@ -201,11 +205,11 @@ export function makePrismaAutomatedMergeRecoveryContactsRepositoryV1(
       if (!sameIds(merge.survivor.identities.map(identity => identity.id), [
         ...sourceIdentityIds,
         ...survivorIdentityIds,
-      ])) return { status: 'blocked', reason: 'identity_set_changed_or_deduplicated' }
+      ])) return { status: 'blocked', reason: 'identity_set_changed_or_deduplicated', eligibleAttempt: true }
       if (!sameIds(merge.survivor.phones.map(phone => phone.id), [
         ...sourcePhoneIds,
         ...survivorPhoneIds,
-      ])) return { status: 'blocked', reason: 'phone_set_changed_or_deduplicated' }
+      ])) return { status: 'blocked', reason: 'phone_set_changed_or_deduplicated', eligibleAttempt: true }
 
       const composed = expectedComposedContact(snapshot, snapshot.survivorBefore)
       if (merge.survivor.isArchived
@@ -222,11 +226,11 @@ export function makePrismaAutomatedMergeRecoveryContactsRepositoryV1(
         || contactAutomationState(merge.survivor.customFields).doNotMerge !== composed.doNotMerge
         || stableJson(stateFields(merge.survivor.customFields)) !== stableJson(stateFields(composed.customFields))
         || merge.survivor.primaryPhoneId !== composed.primaryPhoneId) {
-        return { status: 'blocked', reason: 'survivor_contact_state_changed' }
+        return { status: 'blocked', reason: 'survivor_contact_state_changed', eligibleAttempt: true }
       }
       const selectedPrimary = composed.primaryPhoneId
       if (merge.survivor.phones.some(phone => phone.isPrimary !== (phone.id === selectedPrimary))) {
-        return { status: 'blocked', reason: 'primary_phone_state_changed' }
+        return { status: 'blocked', reason: 'primary_phone_state_changed', eligibleAttempt: true }
       }
 
       recoveryPlan = {

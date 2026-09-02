@@ -5,7 +5,7 @@ import {
     RECONCILE_YANDEX_FLEET_COMMAND_V1,
     type ReconciledDriverClusterV1,
 } from './yandex-fleet-reconciler'
-import { legacyPrismaYandexFleetReconcilerPortV1 } from './legacy-prisma-yandex-fleet-reconciler-adapter'
+import { legacyPrismaYandexFleetReconcilerPortV1 } from '../../internal/legacy-prisma-yandex-fleet-reconciler-adapter'
 
 const reconcileYandexFleetV1 = legacyPrismaYandexFleetReconcilerPortV1.reconcile
 
@@ -154,6 +154,9 @@ async function searchDriverQueryInPark(
     throw lastError instanceof Error ? lastError : new Error('Yandex Fleet request failed')
 }
 
+// Retained as the bounded provider-search primitive used by boundary probes
+// and available for a future non-persisting phone lookup path.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function searchPhoneInPark(
     connection: { parkId: string; clid: string; apiKey: string },
     phone: string,

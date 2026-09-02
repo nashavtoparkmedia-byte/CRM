@@ -174,16 +174,39 @@ export type ReconcileDriverClusterResultV1 =
   | { status: 'unlinked' }
   | { status: 'conflict'; contactIds: string[] }
 
-export async function reconcileDriverClusterContactV1(
+type DriverClusterContactReadClientV1 = Pick<Prisma.TransactionClient, 'contact' | 'contactPhone'>
+
+async function reconcileDriverClusterContactWithClientV1(
+  client: DriverClusterContactReadClientV1,
   command: ReconcileDriverClusterCommandV1,
 ): Promise<ReconcileDriverClusterResultV1> {
   if (command.contract !== RECONCILE_DRIVER_CLUSTER_COMMAND_V1) throw new TypeError('unsupported contract')
-  const confirmed = await getConfirmedContactForDriverClusterV1(command.profileClusterKey)
-  if (confirmed) return { status: 'link', contactId: confirmed.contactId, basis: 'operator_confirmation' }
+  const confirmationOwners = await client.contact.findMany({
+    where: {
+      isArchived: false,
+      customFields: {
+        path: ['confirmedDriverClusterKeys'],
+        array_contains: [command.profileClusterKey],
+      },
+    },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true, customFields: true },
+  })
+  const confirmedContactIds = [...new Set(confirmationOwners
+    .filter(contact => confirmations(fields(contact.customFields)).some(item => (
+      item.profileClusterKey === command.profileClusterKey && item.status === 'confirmed'
+    )))
+    .map(contact => contact.id))].sort()
+  if (confirmedContactIds.length > 1) return { status: 'conflict', contactIds: confirmedContactIds }
+  if (confirmedContactIds.length === 1) {
+    return { status: 'link', contactId: confirmedContactIds[0], basis: 'operator_confirmation' }
+  }
 
-  const normalizedPhones = [...new Set(command.profiles.flatMap(profile => profile.phones))].sort()
+  const normalizedPhones = [...new Set(command.profiles
+    .filter(profile => profile.sourceFreshness === 'fresh')
+    .flatMap(profile => profile.phones))].sort()
   if (normalizedPhones.length === 0) return { status: 'unlinked' }
-  const owners = await prisma.contactPhone.findMany({
+  const owners = await client.contactPhone.findMany({
     where: {
       phone: { in: normalizedPhones },
       isActive: true,
@@ -207,16 +230,79 @@ export async function reconcileDriverClusterContactV1(
   })
   const contactIds = [...new Set(eligibleOwners.map(owner => owner.contactId))].sort()
   if (contactIds.length === 0) return { status: 'unlinked' }
-  if (contactIds.length > 1) {
+  if (contactIds.length > 1) return { status: 'conflict', contactIds }
+  return { status: 'link', contactId: contactIds[0], basis: 'unique_phone' }
+}
+
+export async function reconcileDriverClusterContactV1(
+  command: ReconcileDriverClusterCommandV1,
+): Promise<ReconcileDriverClusterResultV1> {
+  const result = await reconcileDriverClusterContactWithClientV1(prisma, command)
+  if (result.status === 'conflict') {
     await persistDriverClusterContradictionV1({
       profileClusterKey: command.profileClusterKey,
-      contactIds,
+      contactIds: result.contactIds,
       driverIds: command.profiles.map(profile => profile.driverId),
       evidenceRoot: command.profileClusterKey,
     })
-    return { status: 'conflict', contactIds }
   }
-  return { status: 'link', contactId: contactIds[0], basis: 'unique_phone' }
+  return result
+}
+
+export type DriverClusterContactOwnershipCapabilityV1 = {
+  reconcile(command: ReconcileDriverClusterCommandV1): Promise<ReconcileDriverClusterResultV1>
+  persistContradiction(input: {
+    profileClusterKey: string
+    contactIds: string[]
+    driverIds: string[]
+    evidenceRoot: string
+  }): Promise<void>
+}
+
+export const DRIVER_CLUSTER_CONTACT_OWNERSHIP_TIMEOUT_MS_V1 = 30_000
+
+/** Holds CNT1 while a Fleet owner re-reads and mutates one Driver cluster. */
+export async function runDriverClusterContactOwnershipV1<T>(
+  work: (capability: DriverClusterContactOwnershipCapabilityV1) => Promise<T>,
+): Promise<T> {
+  return runContactOwnershipTransaction(async transaction => work({
+    reconcile: command => reconcileDriverClusterContactWithClientV1(transaction, command),
+    persistContradiction: async input => {
+      const contactIds = [...new Set(input.contactIds)].sort()
+      for (const contactId of contactIds) {
+        const contact = await transaction.contact.findUnique({
+          where: { id: contactId },
+          select: { customFields: true },
+        })
+        if (!contact) continue
+        const contactFields = fields(contact.customFields)
+        await transaction.contact.update({
+          where: { id: contactId },
+          data: {
+            customFields: appendConflict(contactFields, {
+              id: randomUUID(),
+              otherContactId: contactIds.find(candidate => candidate !== contactId) ?? null,
+              conflictType: 'fleet_authoritative_person_contradiction',
+              source: 'fleet-reconciliation',
+              evidenceRoot: input.evidenceRoot,
+              details: {
+                profileClusterKey: input.profileClusterKey,
+                driverIds: input.driverIds,
+                contactIds,
+              },
+              detectedAt: new Date().toISOString(),
+              status: 'open',
+            }),
+          },
+        })
+      }
+    },
+  }), {
+    // The nested Fleet unit has maxWait 2s + timeout 15s. Keep CNT1 for the
+    // full inner budget plus a 13s cancellation/rollback margin.
+    transactionTimeoutMs: DRIVER_CLUSTER_CONTACT_OWNERSHIP_TIMEOUT_MS_V1,
+    maxWaitMs: 2_000,
+  })
 }
 
 export async function persistDriverClusterContradictionV1(input: {
