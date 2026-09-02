@@ -4,11 +4,11 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 702,
+    "total_entries": 710,
     "test": 35,
     "dead_historical": 92,
     "migration_only": 80,
-    "active_operational": 490,
+    "active_operational": 498,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
   "surfaces": [
@@ -814,6 +814,78 @@
       "classification_artifact": "ACTIVE_MAINTENANCE_CAPABILITY_REVIEW_20260813.json",
       "functional_owner": "platform_engineering",
       "source_sha256": "ccb0f96fa3cf53a5d17bd2a4b4e57a1c657d1cc60d480c1b6c52ffe943ee435d"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/packaging/build-package.sh",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Deterministic package builder for the exact Runtime 2.0.0-15 coordinated Gravity and MAX profile. It writes only bounded local staging, DEB, seal, and bootstrap artifacts and grants no installation, deployment, database, credential, provider, or arbitrary-image authority.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/packaging/capture-production-snapshot.py",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Finite read-only predecessor snapshot capture for the exact coordinated release. It invokes only the installed Runtime's fixed observation operations, emits bounded secret-safe evidence, and grants no installation, activation, database write, credential, or provider authority.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/packaging/seal-release.py",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Finite source-release sealer for one exact application, Stage A artifact, predecessor snapshot, and v14 rollback authority. It writes only bounded local package artifacts and grants no installation, activation, database write, credential, provider, or arbitrary-path authority.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/packaging/verify-sealed-inputs.py",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Read-only verifier for the exact Runtime 2.0.0-15 package, release seal, bootstrap, coordinated Stage A artifact, and rollback identities. It grants no installation, activation, database, credential, provider, or arbitrary-path authority.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Tracked compound-suffix source template rendered only by the content-specific sealer into the finite coordinated activation profile. Its fixed operations remain subject to the reviewed Runtime ABI and exact pair state machine; lifecycle classification grants no additional deployment, database, credential, provider, or arbitrary-input authority.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/install.sh.in",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Content-specific Owner installer template for the exact sealed Runtime successor. It accepts no arguments, admits only fixed checksum-bound artifacts, preserves exact v14 rollback, and gains no generic package, path, Docker, database, credential, or provider authority from classification.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/postinst.in",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Deterministically rendered Debian package-hook template for the exact Runtime successor. It installs only sealed fixed profile/runtime material and gains no deployment, database, credential, provider, or arbitrary-command authority from classification.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/yoko-privileged-runtime.in",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Deterministically rendered zero-argument Runtime wrapper template. It remains constrained by the finite packaged ABI and fixed profile and gains no shell, arbitrary path, image, service, database, credential, or provider authority from classification.",
+      "classification_artifact": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
     },
     {
       "path": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-external-rereview-source-only-v10/bundle/payload/install.sh",
