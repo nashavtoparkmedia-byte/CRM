@@ -93,6 +93,7 @@ export const DOMAINS: NavigationDomain[] = [
         icon: Phone,
         items: [
             { label: 'Лента', href: '/calls', icon: Phone, sectionKey: 'calls_feed' },
+            { label: 'AI-кампании', href: '/calls/campaigns', icon: Sparkles, sectionKey: 'ai_call_campaigns' },
             { label: 'Аналитика', href: '/calls/stats', icon: BarChart3, sectionKey: 'calls_stats' },
         ]
     },

@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
         const managerId = searchParams.get('managerId')
         const limit = Math.min(Number(searchParams.get('limit') ?? 50), 200)
 
-        const where: Record<string, unknown> = {}
+        const where: Record<string, unknown> = { isSimulation: false }
         if (driverId) where.driverId = driverId
         if (contactId) {
             const lineage = await resolveContactLineageV1(contactId)

@@ -1,3 +1,4 @@
+import type { AiCallCampaignJson } from './ai-call-campaign'
 import { aiCallCampaignPrismaPort } from '../internal/ai-calls/ai-call-campaign-prisma-adapter'
 
 export interface AiCallCampaignDialRequest {
@@ -8,11 +9,15 @@ export interface AiCallCampaignDialRequest {
     targetRef: string
     phoneE164: string
     scenarioRef: string
+    scenarioFingerprint: string
+    scenarioSnapshot: Record<string, AiCallCampaignJson>
     attemptNumber: number
 }
 
 export interface AiCallCampaignDialResult {
     effectRef: string
+    /** Calling-owned Call row created by production-shaped adapters. */
+    callId?: string
     terminal: {
         eventId: string
         kind: 'success' | 'retryable_failure' | 'permanent_failure'
@@ -22,7 +27,10 @@ export interface AiCallCampaignDialResult {
 }
 
 export interface AiCallCampaignDialPort {
-    dial(request: AiCallCampaignDialRequest): Promise<AiCallCampaignDialResult>
+    /** Starts the first provider effect for a durably authorized launch. */
+    dispatch(request: AiCallCampaignDialRequest): Promise<AiCallCampaignDialResult>
+    /** Read-only/provider-idempotent reconciliation; it must never initiate a first effect. */
+    reconcile(request: AiCallCampaignDialRequest): Promise<AiCallCampaignDialResult | null>
 }
 
 export type AiCallCampaignWorkerCycleResult =
@@ -36,6 +44,11 @@ export type AiCallCampaignWorkerCycleResult =
         campaignState: string
         startedCampaigns: readonly string[]
     }
+
+function reconciliationRetryAt(now: Date, dialExecutionCount: number): Date {
+    const exponent = Math.min(6, Math.max(0, dialExecutionCount - 1))
+    return new Date(now.getTime() + Math.min(30_000, 250 * (2 ** exponent)))
+}
 
 export function createAiCallCampaignWorkerRuntime(input: {
     dial: AiCallCampaignDialPort
@@ -82,10 +95,40 @@ export function createAiCallCampaignWorkerRuntime(input: {
             }
         }
 
-        // The adapter must bind the provider effect to launchId. If this process
-        // exits after the provider accepts the request, the same attempt and
-        // launchId are reclaimed after lease expiry and converge at the adapter.
-        const dialResult = await input.dial.dial({
+        await aiCallCampaignPrismaPort.markAttemptRunning({
+            attemptId: claim.attemptId,
+            claimFence: claim.claimFence,
+            leaseFence: admission.grant.leaseFence,
+            now: clock(),
+        })
+        const execution = await aiCallCampaignPrismaPort.beginDialExecution({
+            attemptId: claim.attemptId,
+            claimFence: claim.claimFence,
+            leaseFence: admission.grant.leaseFence,
+            now: clock(),
+        })
+
+        if (execution.kind === 'cancelled_before_dispatch') {
+            return {
+                kind: 'completed',
+                attemptId: claim.attemptId,
+                launchId: claim.launchId,
+                memberState: 'cancelled',
+                campaignState: execution.campaignState,
+                startedCampaigns,
+            }
+        }
+        if (execution.kind === 'deferred_before_dispatch') {
+            return {
+                kind: 'blocked',
+                attemptId: claim.attemptId,
+                reason: 'campaign_not_running',
+                retryAt: execution.retryAt,
+                startedCampaigns,
+            }
+        }
+
+        const dialRequest: AiCallCampaignDialRequest = {
             launchId: claim.launchId,
             campaignId: claim.campaignId,
             memberId: claim.memberId,
@@ -93,8 +136,89 @@ export function createAiCallCampaignWorkerRuntime(input: {
             targetRef: claim.targetRef,
             phoneE164: claim.phoneE164,
             scenarioRef: claim.scenarioRef,
+            scenarioFingerprint: claim.scenarioFingerprint,
+            scenarioSnapshot: claim.scenarioSnapshot,
             attemptNumber: claim.attemptNumber,
-        })
+        }
+
+        // The adapter must bind the provider effect to launchId. If this process
+        // exits after the provider accepts the request, the same attempt and
+        // launchId are reclaimed after lease expiry and converge at the adapter.
+        let renewal: Promise<void> | null = null
+        let renewalFailure: unknown = null
+        const heartbeatMs = Math.max(25, Math.floor(Math.min(claimLeaseMs, admissionLeaseMs) / 3))
+        const heartbeat = setInterval(() => {
+            if (renewal) return
+            renewal = aiCallCampaignPrismaPort.renewExecution({
+                attemptId: claim.attemptId,
+                claimFence: claim.claimFence,
+                leaseFence: admission.grant.leaseFence,
+                now: clock(),
+                claimLeaseMs,
+                admissionLeaseMs,
+            }).then(() => undefined).catch((error: unknown) => {
+                renewalFailure = error
+            }).finally(() => { renewal = null })
+        }, heartbeatMs)
+        heartbeat.unref()
+        let dialResult: AiCallCampaignDialResult | null
+        let providerAccepted = true
+        const deferLinkedCallReconciliation = async (
+            reason: 'adapter_error' | 'missing_reconciliation_result',
+        ): Promise<AiCallCampaignWorkerCycleResult> => {
+            const now = clock()
+            const retryAt = reconciliationRetryAt(now, execution.dialExecutionCount)
+            await aiCallCampaignPrismaPort.deferLinkedCallReconciliation({
+                attemptId: claim.attemptId,
+                claimFence: claim.claimFence,
+                leaseFence: admission.grant.leaseFence,
+                retryAt,
+                reason,
+                now,
+            })
+            return {
+                kind: 'blocked',
+                attemptId: claim.attemptId,
+                reason: 'dial_reconciliation_deferred',
+                retryAt,
+                startedCampaigns,
+            }
+        }
+        try {
+            dialResult = execution.kind === 'initial_dispatch_authorized'
+                ? await input.dial.dispatch(dialRequest)
+                : await input.dial.reconcile(dialRequest)
+        } catch (error) {
+            clearInterval(heartbeat)
+            if (renewal) await renewal
+            if (renewalFailure) throw renewalFailure
+            if (execution.dialExecutionCount < 3) throw error
+            if (execution.callId) return deferLinkedCallReconciliation('adapter_error')
+            providerAccepted = false
+            dialResult = {
+                effectRef: `acceptance-unresolved:${claim.launchId}`,
+                terminal: {
+                    eventId: `acceptance-unresolved-terminal:${claim.launchId}`,
+                    kind: 'permanent_failure',
+                    failureCode: 'dial_acceptance_unresolved',
+                },
+            }
+        }
+        clearInterval(heartbeat)
+        if (renewal) await renewal
+        if (renewalFailure) throw renewalFailure
+        if (dialResult === null) {
+            if (execution.callId) return deferLinkedCallReconciliation('missing_reconciliation_result')
+            providerAccepted = false
+            dialResult = {
+                effectRef: `not-accepted:${claim.launchId}`,
+                terminal: {
+                    eventId: `not-accepted-terminal:${claim.launchId}`,
+                    kind: 'permanent_failure',
+                    failureCode: 'dial_not_accepted_before_recovery',
+                },
+            }
+        }
         const terminal = await aiCallCampaignPrismaPort.recordAttemptResult({
             attemptId: claim.attemptId,
             resultEventId: dialResult.terminal.eventId,
@@ -104,6 +228,8 @@ export function createAiCallCampaignWorkerRuntime(input: {
             claimFence: claim.claimFence,
             leaseFence: admission.grant.leaseFence,
             dialEffectRef: dialResult.effectRef,
+            callId: dialResult.callId,
+            providerAccepted,
             now: clock(),
         })
         if (terminal.status !== 'applied') {

@@ -822,11 +822,11 @@
       "semantic_state": "CONTROLLED_MIGRATION_WRITE"
     },
     {
-      "record_id": "36c9b52b2b9c7b0d7ec8bec4120e6772b5421558fb0f591ed1ef2f9306aadce7",
-      "site_signature": "36c9b52b2b9c7b0d7ec8bec4120e6772b5421558fb0f591ed1ef2f9306aadce7",
-      "source_sha256": "296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
+      "record_id": "42c9a964786f29fa8e6708acab43325249eba279ca89559fe07c03e7809bc9af",
+      "site_signature": "42c9a964786f29fa8e6708acab43325249eba279ca89559fe07c03e7809bc9af",
+      "source_sha256": "3cfc03c251f42df418c708b0d5fc33470174ed9aa36c62a8550474e66528d751",
       "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
-      "line": 113,
+      "line": 115,
       "column": 13,
       "kind": "raw",
       "method": "$queryRaw",
@@ -852,8 +852,8 @@
         "avg",
         "count"
       ],
-      "sql_sha256": "5ed8d5190a2642e6abc8815901d892527a2de281163341ef3ce8822167721640",
-      "sql_provenance_sha256": "7f7a5519d909448dd62a9c78d70053f411763eaacda276c9946cadf034abdbcc",
+      "sql_sha256": "0cc20abe983d4232a3b801371d7de7fe7a2ea825cf5c7dca4385bb843fdd26f7",
+      "sql_provenance_sha256": "e874091c6833aab827d1ad65609201704daa90b52a867af6263af92d1c12d18f",
       "source_context": "calling",
       "source_technical_module": "calls",
       "owner_contexts": [],
@@ -877,11 +877,11 @@
       "semantic_state": "RESOLVED_NON_WRITE"
     },
     {
-      "record_id": "bd5f029e6d7e1ae7767d85e524d2a69134bd87aef53352ebeb7caf364aa54825",
-      "site_signature": "bd5f029e6d7e1ae7767d85e524d2a69134bd87aef53352ebeb7caf364aa54825",
-      "source_sha256": "296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
+      "record_id": "911920e9f7911a89f60e8af508209e1388ff6dbab92c3d2c133f2ec33d4d6a3f",
+      "site_signature": "911920e9f7911a89f60e8af508209e1388ff6dbab92c3d2c133f2ec33d4d6a3f",
+      "source_sha256": "3cfc03c251f42df418c708b0d5fc33470174ed9aa36c62a8550474e66528d751",
       "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
-      "line": 125,
+      "line": 127,
       "column": 13,
       "kind": "raw",
       "method": "$queryRaw",
@@ -907,8 +907,8 @@
         "avg",
         "count"
       ],
-      "sql_sha256": "4f397d25bbaff390caeaba2124f7400cf2176692d9b13444ca8829e4f0ccbafd",
-      "sql_provenance_sha256": "37c91001c05280782aad08271f22043c9bc737d861cd83639c5c5610c9b9f028",
+      "sql_sha256": "3b507a306c322261f04178cfe8b38006d082d61d357cb5b55728d0ed3c8a9fee",
+      "sql_provenance_sha256": "fcabba8b017209d673f971267059029aebf2c0f95faebe37a573df8a9255f131",
       "source_context": "calling",
       "source_technical_module": "calls",
       "owner_contexts": [],
@@ -934,9 +934,9 @@
     {
       "record_id": "3331c0d6e52e665c9f373dfa9a50f8b351bfffe7678db5d300bf2c01c46996bc",
       "site_signature": "3331c0d6e52e665c9f373dfa9a50f8b351bfffe7678db5d300bf2c01c46996bc",
-      "source_sha256": "296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
+      "source_sha256": "3cfc03c251f42df418c708b0d5fc33470174ed9aa36c62a8550474e66528d751",
       "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
-      "line": 139,
+      "line": 141,
       "column": 13,
       "kind": "raw",
       "method": "$queryRaw",
@@ -959,8 +959,8 @@
         "count",
         "date_trunc"
       ],
-      "sql_sha256": "29ad10fdca5c2278ec20e732282543bc63572ac10255b7ef59667c34690f469c",
-      "sql_provenance_sha256": "dd2946ce99b813f4649ef493a31d50f8f8664bcefc6b79ff755feeee86cb26d8",
+      "sql_sha256": "48b479ef0bed7753bdbecb55e03a0ce6f4508ec8f2df6b9f3e9941e2d02d33c5",
+      "sql_provenance_sha256": "58588b0eb66ed15e0558ab360d757c0bffefcbf3d6c6505d8a7207d080200233",
       "source_context": "calling",
       "source_technical_module": "calls",
       "owner_contexts": [],
@@ -986,9 +986,9 @@
     {
       "record_id": "037b459fcefcde89d3f50f66e7cb3d69cf7788f5451ec7ebe9cee41e94291b91",
       "site_signature": "037b459fcefcde89d3f50f66e7cb3d69cf7788f5451ec7ebe9cee41e94291b91",
-      "source_sha256": "296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
+      "source_sha256": "3cfc03c251f42df418c708b0d5fc33470174ed9aa36c62a8550474e66528d751",
       "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
-      "line": 149,
+      "line": 151,
       "column": 13,
       "kind": "raw",
       "method": "$queryRaw",
@@ -1012,8 +1012,8 @@
         "count",
         "extract"
       ],
-      "sql_sha256": "0050b295197b256982ccafe530b5f6464327259940f4303f93d071e89e5bea41",
-      "sql_provenance_sha256": "d4f116886005715f3c20ff111e8d4f67c436271d855b691740ff805baeb88279",
+      "sql_sha256": "987247e7a10818c3baaafabef513f736d4fd9232e7f44c8418f919e610115483",
+      "sql_provenance_sha256": "0f402d56b7e1d29efbe2daea6e6244ba514f3fc78ccbbc2af28e382285c43d1a",
       "source_context": "calling",
       "source_technical_module": "calls",
       "owner_contexts": [],
@@ -1039,9 +1039,9 @@
     {
       "record_id": "d7b60d9168005c4268cd46df849f684067e5994e79744e430f76ccc5b14f08bb",
       "site_signature": "d7b60d9168005c4268cd46df849f684067e5994e79744e430f76ccc5b14f08bb",
-      "source_sha256": "296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
+      "source_sha256": "3cfc03c251f42df418c708b0d5fc33470174ed9aa36c62a8550474e66528d751",
       "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
-      "line": 161,
+      "line": 163,
       "column": 13,
       "kind": "raw",
       "method": "$queryRaw",
@@ -1059,14 +1059,15 @@
         "aiAnalysis",
         "flag",
         "int",
+        "isSimulation",
         "startedAt"
       ],
       "called_functions": [
         "count",
         "jsonb_array_elements_text"
       ],
-      "sql_sha256": "5daa65f02a7ab827006663bbcd1506e150beb7e7e6566c3960d5178de3ccfdb8",
-      "sql_provenance_sha256": "3cd1bd2f45bde0bbfc4916677757de55ca11fd97506a33e000a3891c74816aab",
+      "sql_sha256": "4adbde1fb066d9517d30ea694c47682944734d373ebd66d46c091d6c45633bcf",
+      "sql_provenance_sha256": "b143793e91dc0a7c3255fc342e551b31b7ab705dfac37fc8ab3c2ec4e760e8e6",
       "source_context": "calling",
       "source_technical_module": "calls",
       "owner_contexts": [],
@@ -1092,9 +1093,9 @@
     {
       "record_id": "dd15e3ca3b8b8470797072b94d9ee74c5a0d4f66aba7c7104f566faa790e6590",
       "site_signature": "dd15e3ca3b8b8470797072b94d9ee74c5a0d4f66aba7c7104f566faa790e6590",
-      "source_sha256": "296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
+      "source_sha256": "3cfc03c251f42df418c708b0d5fc33470174ed9aa36c62a8550474e66528d751",
       "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
-      "line": 171,
+      "line": 173,
       "column": 13,
       "kind": "raw",
       "method": "$queryRaw",
@@ -1114,8 +1115,8 @@
       "called_functions": [
         "avg"
       ],
-      "sql_sha256": "41f720ec5e9447d852547c79d216a4e324e6608a947aeded21e8bd7d494842a1",
-      "sql_provenance_sha256": "5e1278eb8909c287bc7f5b6cb2a6b61a1dd7e3774156171c0f2fe7e583887c07",
+      "sql_sha256": "3350ced7efd239789cbf164501fde47f5145afa916ee9c40b24a5524dceb3346",
+      "sql_provenance_sha256": "9f7599fdcd2f316188d2fb80e5a13fdc1fcc825a82ef098871193e257c00d1e1",
       "source_context": "calling",
       "source_technical_module": "calls",
       "owner_contexts": [],
@@ -1189,7 +1190,7 @@
     {
       "record_id": "b2c3ae6fc6828d9d51e85f6f01d3dff86df72a5ced9f863516a2d0276c1c61e3",
       "site_signature": "b2c3ae6fc6828d9d51e85f6f01d3dff86df72a5ced9f863516a2d0276c1c61e3",
-      "source_sha256": "e2c7efc7239249ca5e410fe5239263722dc06376563a5213638bb4cbeb5132ab",
+      "source_sha256": "c2cb47a639915e68cceba4408ff79eecbee7cc6b3d4a71d891a2521b35834003",
       "file": "gravity-mvp/src/app/settings/ai/actions.ts",
       "line": 1707,
       "column": 28,
@@ -1229,7 +1230,7 @@
         "now"
       ],
       "sql_sha256": "6167a7563da84abc493ecee58c8ae8e3a12053448ae23bc234c428b54d28c89e",
-      "sql_provenance_sha256": "7bd7f7b3cb44c7e555ed099ce77295af534d594374860899efa798584fbaa8d8",
+      "sql_provenance_sha256": "a45cc6579ab5acb024a5e1ddb3741d5a75ce7657f20003629e755cbf8ec054f7",
       "source_context": "configuration",
       "source_technical_module": "settings",
       "owner_contexts": [],
@@ -1255,9 +1256,9 @@
     {
       "record_id": "e8319859102636b4b4915c12f4c1dccaac2f97309e2fe5853109ef441b95bae6",
       "site_signature": "e8319859102636b4b4915c12f4c1dccaac2f97309e2fe5853109ef441b95bae6",
-      "source_sha256": "e2c7efc7239249ca5e410fe5239263722dc06376563a5213638bb4cbeb5132ab",
+      "source_sha256": "c2cb47a639915e68cceba4408ff79eecbee7cc6b3d4a71d891a2521b35834003",
       "file": "gravity-mvp/src/app/settings/ai/actions.ts",
-      "line": 2253,
+      "line": 2256,
       "column": 32,
       "kind": "raw",
       "method": "$queryRaw",
@@ -1291,7 +1292,7 @@
       ],
       "called_functions": [],
       "sql_sha256": "20e05031e18965a3c164c760790395bbeaa42c75ad4fe9a4ea79ca85c2a063d3",
-      "sql_provenance_sha256": "ec9ca759febe7d209ae59a1215872f392dfa926700246f3e7fc008b096a52777",
+      "sql_provenance_sha256": "47bedda891abd393ee1d2083e0151db9b73a83920c034b6a2a208ab84b6c8cf8",
       "source_context": "configuration",
       "source_technical_module": "settings",
       "owner_contexts": [],
@@ -1317,9 +1318,9 @@
     {
       "record_id": "69ae5095adc3a7847274305f5f6a963d449606b60094335bb37a22a0423b4f9c",
       "site_signature": "69ae5095adc3a7847274305f5f6a963d449606b60094335bb37a22a0423b4f9c",
-      "source_sha256": "e2c7efc7239249ca5e410fe5239263722dc06376563a5213638bb4cbeb5132ab",
+      "source_sha256": "c2cb47a639915e68cceba4408ff79eecbee7cc6b3d4a71d891a2521b35834003",
       "file": "gravity-mvp/src/app/settings/ai/actions.ts",
-      "line": 2272,
+      "line": 2275,
       "column": 41,
       "kind": "raw",
       "method": "$queryRaw",
@@ -1339,7 +1340,7 @@
         "count"
       ],
       "sql_sha256": "a12465741c5b62ecffc57a4bb7e3dd89b0d1acac32ae68d50664be12437afab2",
-      "sql_provenance_sha256": "072eb4449e85ffc98f7c15a34bbc5daa583e5f636d08af8446e4667af83fa65c",
+      "sql_provenance_sha256": "b6f25b5b39e2da7e0f9488bf1821615500121041f35b49c400964d3e4ca6e3d2",
       "source_context": "configuration",
       "source_technical_module": "settings",
       "owner_contexts": [],
@@ -1513,9 +1514,9 @@
       "semantic_state": "RESOLVED_NON_WRITE"
     },
     {
-      "record_id": "e1c81095a11532a1ba56e2629b9316a15d42ad5062aa52dfa190283adb26f5e1",
-      "site_signature": "e1c81095a11532a1ba56e2629b9316a15d42ad5062aa52dfa190283adb26f5e1",
-      "source_sha256": "f59aa128a3bdbdd79890c8af1fb6f704fe9d0a29b012939cd6bf8bc40f5b2b1f",
+      "record_id": "2bd8011eca9a0188606fa41066e222d13e39e9fbdd930e6d6320422bb6842415",
+      "site_signature": "2bd8011eca9a0188606fa41066e222d13e39e9fbdd930e6d6320422bb6842415",
+      "source_sha256": "b9a54cdbd39274c58ed8b61d954ba0f823a4a94abdc0c1a9c9337aaa37845aeb",
       "file": "gravity-mvp/src/lib/ai/knowledge/callTranscriptBuilder.ts",
       "line": 82,
       "column": 24,
@@ -1538,8 +1539,8 @@
       "called_functions": [
         "length"
       ],
-      "sql_sha256": "7c5ed7da00c072677c23d6d9ad2453ed19cfa513e516d03f526699dd786ca7ac",
-      "sql_provenance_sha256": "01a27bd5035001e8a47fee832a7058c2a4fc7a54ed89029fc6d5e6d816526739",
+      "sql_sha256": "1f0e3f49edbfc0a2d0984d96d5fd2de88b3ecc840feafced1bbc9fc1b7514d10",
+      "sql_provenance_sha256": "81788864461d462aacf2a34d8729c1d13bbef011537ecd29a94d5dd1fb77059f",
       "source_context": "ai_knowledge",
       "source_technical_module": "ai_knowledge",
       "owner_contexts": [],
@@ -2297,7 +2298,7 @@
   "current_exact_review": {
     "ambiguous_denominator": 41,
     "review_key": "site_signature",
-    "sorted_site_signatures_sha256": "e54fe78c32e77b4cae8611d964ba39f9e99076dae37f9bc44b63f868f28611b4",
+    "sorted_site_signatures_sha256": "d933630fae2905a16fb7ea1144414fe8737982ea3d44e8343932cacec7f3caf2",
     "policy": "Every current ambiguous analyzer signature requires one independent disposition and every resolved non-write requires one exact proof; the historical raw baseline grants no authorization."
   },
   "non_write_proofs": [
@@ -2764,15 +2765,15 @@
       ]
     },
     {
-      "site_signature": "36c9b52b2b9c7b0d7ec8bec4120e6772b5421558fb0f591ed1ef2f9306aadce7",
+      "site_signature": "42c9a964786f29fa8e6708acab43325249eba279ca89559fe07c03e7809bc9af",
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
         "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
-        "line": 113,
+        "line": 115,
         "column": 13,
         "method": "$queryRaw",
-        "source_sha256": "296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
-        "sql_provenance_sha256": "7f7a5519d909448dd62a9c78d70053f411763eaacda276c9946cadf034abdbcc"
+        "source_sha256": "3cfc03c251f42df418c708b0d5fc33470174ed9aa36c62a8550474e66528d751",
+        "sql_provenance_sha256": "e874091c6833aab827d1ad65609201704daa90b52a867af6263af92d1c12d18f"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -2788,31 +2789,31 @@
           "float",
           "status"
         ],
-        "sql_sha256": "5ed8d5190a2642e6abc8815901d892527a2de281163341ef3ce8822167721640",
+        "sql_sha256": "0cc20abe983d4232a3b801371d7de7fe7a2ea825cf5c7dca4385bb843fdd26f7",
         "reviewed_read_only_functions": [
           "avg",
           "count"
         ]
       },
       "evidence": [
-        "gravity-mvp/src/app/api/calls/stats/route.ts:113:13",
-        "analysis_site_signature:36c9b52b2b9c7b0d7ec8bec4120e6772b5421558fb0f591ed1ef2f9306aadce7",
-        "sql_sha256:5ed8d5190a2642e6abc8815901d892527a2de281163341ef3ce8822167721640",
+        "gravity-mvp/src/app/api/calls/stats/route.ts:115:13",
+        "analysis_site_signature:42c9a964786f29fa8e6708acab43325249eba279ca89559fe07c03e7809bc9af",
+        "sql_sha256:0cc20abe983d4232a3b801371d7de7fe7a2ea825cf5c7dca4385bb843fdd26f7",
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
-        "source_sha256:296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
-        "sql_provenance_sha256:7f7a5519d909448dd62a9c78d70053f411763eaacda276c9946cadf034abdbcc"
+        "source_sha256:3cfc03c251f42df418c708b0d5fc33470174ed9aa36c62a8550474e66528d751",
+        "sql_provenance_sha256:e874091c6833aab827d1ad65609201704daa90b52a867af6263af92d1c12d18f"
       ]
     },
     {
-      "site_signature": "bd5f029e6d7e1ae7767d85e524d2a69134bd87aef53352ebeb7caf364aa54825",
+      "site_signature": "911920e9f7911a89f60e8af508209e1388ff6dbab92c3d2c133f2ec33d4d6a3f",
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
         "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
-        "line": 125,
+        "line": 127,
         "column": 13,
         "method": "$queryRaw",
-        "source_sha256": "296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
-        "sql_provenance_sha256": "37c91001c05280782aad08271f22043c9bc737d861cd83639c5c5610c9b9f028"
+        "source_sha256": "3cfc03c251f42df418c708b0d5fc33470174ed9aa36c62a8550474e66528d751",
+        "sql_provenance_sha256": "fcabba8b017209d673f971267059029aebf2c0f95faebe37a573df8a9255f131"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -2828,19 +2829,19 @@
           "managerId",
           "status"
         ],
-        "sql_sha256": "4f397d25bbaff390caeaba2124f7400cf2176692d9b13444ca8829e4f0ccbafd",
+        "sql_sha256": "3b507a306c322261f04178cfe8b38006d082d61d357cb5b55728d0ed3c8a9fee",
         "reviewed_read_only_functions": [
           "avg",
           "count"
         ]
       },
       "evidence": [
-        "gravity-mvp/src/app/api/calls/stats/route.ts:125:13",
-        "analysis_site_signature:bd5f029e6d7e1ae7767d85e524d2a69134bd87aef53352ebeb7caf364aa54825",
-        "sql_sha256:4f397d25bbaff390caeaba2124f7400cf2176692d9b13444ca8829e4f0ccbafd",
+        "gravity-mvp/src/app/api/calls/stats/route.ts:127:13",
+        "analysis_site_signature:911920e9f7911a89f60e8af508209e1388ff6dbab92c3d2c133f2ec33d4d6a3f",
+        "sql_sha256:3b507a306c322261f04178cfe8b38006d082d61d357cb5b55728d0ed3c8a9fee",
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
-        "source_sha256:296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
-        "sql_provenance_sha256:37c91001c05280782aad08271f22043c9bc737d861cd83639c5c5610c9b9f028"
+        "source_sha256:3cfc03c251f42df418c708b0d5fc33470174ed9aa36c62a8550474e66528d751",
+        "sql_provenance_sha256:fcabba8b017209d673f971267059029aebf2c0f95faebe37a573df8a9255f131"
       ]
     },
     {
@@ -2848,11 +2849,11 @@
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
         "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
-        "line": 139,
+        "line": 141,
         "column": 13,
         "method": "$queryRaw",
-        "source_sha256": "296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
-        "sql_provenance_sha256": "dd2946ce99b813f4649ef493a31d50f8f8664bcefc6b79ff755feeee86cb26d8"
+        "source_sha256": "3cfc03c251f42df418c708b0d5fc33470174ed9aa36c62a8550474e66528d751",
+        "sql_provenance_sha256": "58588b0eb66ed15e0558ab360d757c0bffefcbf3d6c6505d8a7207d080200233"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -2865,19 +2866,19 @@
           "answeredAt",
           "date"
         ],
-        "sql_sha256": "29ad10fdca5c2278ec20e732282543bc63572ac10255b7ef59667c34690f469c",
+        "sql_sha256": "48b479ef0bed7753bdbecb55e03a0ce6f4508ec8f2df6b9f3e9941e2d02d33c5",
         "reviewed_read_only_functions": [
           "count",
           "date_trunc"
         ]
       },
       "evidence": [
-        "gravity-mvp/src/app/api/calls/stats/route.ts:139:13",
+        "gravity-mvp/src/app/api/calls/stats/route.ts:141:13",
         "analysis_site_signature:3331c0d6e52e665c9f373dfa9a50f8b351bfffe7678db5d300bf2c01c46996bc",
-        "sql_sha256:29ad10fdca5c2278ec20e732282543bc63572ac10255b7ef59667c34690f469c",
+        "sql_sha256:48b479ef0bed7753bdbecb55e03a0ce6f4508ec8f2df6b9f3e9941e2d02d33c5",
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
-        "source_sha256:296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
-        "sql_provenance_sha256:dd2946ce99b813f4649ef493a31d50f8f8664bcefc6b79ff755feeee86cb26d8"
+        "source_sha256:3cfc03c251f42df418c708b0d5fc33470174ed9aa36c62a8550474e66528d751",
+        "sql_provenance_sha256:58588b0eb66ed15e0558ab360d757c0bffefcbf3d6c6505d8a7207d080200233"
       ]
     },
     {
@@ -2885,11 +2886,11 @@
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
         "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
-        "line": 149,
+        "line": 151,
         "column": 13,
         "method": "$queryRaw",
-        "source_sha256": "296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
-        "sql_provenance_sha256": "d4f116886005715f3c20ff111e8d4f67c436271d855b691740ff805baeb88279"
+        "source_sha256": "3cfc03c251f42df418c708b0d5fc33470174ed9aa36c62a8550474e66528d751",
+        "sql_provenance_sha256": "0f402d56b7e1d29efbe2daea6e6244ba514f3fc78ccbbc2af28e382285c43d1a"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -2903,19 +2904,19 @@
           "answeredAt",
           "int"
         ],
-        "sql_sha256": "0050b295197b256982ccafe530b5f6464327259940f4303f93d071e89e5bea41",
+        "sql_sha256": "987247e7a10818c3baaafabef513f736d4fd9232e7f44c8418f919e610115483",
         "reviewed_read_only_functions": [
           "count",
           "extract"
         ]
       },
       "evidence": [
-        "gravity-mvp/src/app/api/calls/stats/route.ts:149:13",
+        "gravity-mvp/src/app/api/calls/stats/route.ts:151:13",
         "analysis_site_signature:037b459fcefcde89d3f50f66e7cb3d69cf7788f5451ec7ebe9cee41e94291b91",
-        "sql_sha256:0050b295197b256982ccafe530b5f6464327259940f4303f93d071e89e5bea41",
+        "sql_sha256:987247e7a10818c3baaafabef513f736d4fd9232e7f44c8418f919e610115483",
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
-        "source_sha256:296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
-        "sql_provenance_sha256:d4f116886005715f3c20ff111e8d4f67c436271d855b691740ff805baeb88279"
+        "source_sha256:3cfc03c251f42df418c708b0d5fc33470174ed9aa36c62a8550474e66528d751",
+        "sql_provenance_sha256:0f402d56b7e1d29efbe2daea6e6244ba514f3fc78ccbbc2af28e382285c43d1a"
       ]
     },
     {
@@ -2923,11 +2924,11 @@
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
         "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
-        "line": 161,
+        "line": 163,
         "column": 13,
         "method": "$queryRaw",
-        "source_sha256": "296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
-        "sql_provenance_sha256": "3cd1bd2f45bde0bbfc4916677757de55ca11fd97506a33e000a3891c74816aab"
+        "source_sha256": "3cfc03c251f42df418c708b0d5fc33470174ed9aa36c62a8550474e66528d751",
+        "sql_provenance_sha256": "b143793e91dc0a7c3255fc342e551b31b7ab705dfac37fc8ab3c2ec4e760e8e6"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -2939,21 +2940,22 @@
           "aiAnalysis",
           "flag",
           "int",
+          "isSimulation",
           "startedAt"
         ],
-        "sql_sha256": "5daa65f02a7ab827006663bbcd1506e150beb7e7e6566c3960d5178de3ccfdb8",
+        "sql_sha256": "4adbde1fb066d9517d30ea694c47682944734d373ebd66d46c091d6c45633bcf",
         "reviewed_read_only_functions": [
           "count",
           "jsonb_array_elements_text"
         ]
       },
       "evidence": [
-        "gravity-mvp/src/app/api/calls/stats/route.ts:161:13",
+        "gravity-mvp/src/app/api/calls/stats/route.ts:163:13",
         "analysis_site_signature:d7b60d9168005c4268cd46df849f684067e5994e79744e430f76ccc5b14f08bb",
-        "sql_sha256:5daa65f02a7ab827006663bbcd1506e150beb7e7e6566c3960d5178de3ccfdb8",
+        "sql_sha256:4adbde1fb066d9517d30ea694c47682944734d373ebd66d46c091d6c45633bcf",
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
-        "source_sha256:296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
-        "sql_provenance_sha256:3cd1bd2f45bde0bbfc4916677757de55ca11fd97506a33e000a3891c74816aab"
+        "source_sha256:3cfc03c251f42df418c708b0d5fc33470174ed9aa36c62a8550474e66528d751",
+        "sql_provenance_sha256:b143793e91dc0a7c3255fc342e551b31b7ab705dfac37fc8ab3c2ec4e760e8e6"
       ]
     },
     {
@@ -2961,11 +2963,11 @@
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
         "file": "gravity-mvp/src/app/api/calls/stats/route.ts",
-        "line": 171,
+        "line": 173,
         "column": 13,
         "method": "$queryRaw",
-        "source_sha256": "296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
-        "sql_provenance_sha256": "5e1278eb8909c287bc7f5b6cb2a6b61a1dd7e3774156171c0f2fe7e583887c07"
+        "source_sha256": "3cfc03c251f42df418c708b0d5fc33470174ed9aa36c62a8550474e66528d751",
+        "sql_provenance_sha256": "9f7599fdcd2f316188d2fb80e5a13fdc1fcc825a82ef098871193e257c00d1e1"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -2976,18 +2978,18 @@
           "float",
           "int"
         ],
-        "sql_sha256": "41f720ec5e9447d852547c79d216a4e324e6608a947aeded21e8bd7d494842a1",
+        "sql_sha256": "3350ced7efd239789cbf164501fde47f5145afa916ee9c40b24a5524dceb3346",
         "reviewed_read_only_functions": [
           "avg"
         ]
       },
       "evidence": [
-        "gravity-mvp/src/app/api/calls/stats/route.ts:171:13",
+        "gravity-mvp/src/app/api/calls/stats/route.ts:173:13",
         "analysis_site_signature:dd15e3ca3b8b8470797072b94d9ee74c5a0d4f66aba7c7104f566faa790e6590",
-        "sql_sha256:41f720ec5e9447d852547c79d216a4e324e6608a947aeded21e8bd7d494842a1",
+        "sql_sha256:3350ced7efd239789cbf164501fde47f5145afa916ee9c40b24a5524dceb3346",
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
-        "source_sha256:296181ae5bfc7395e8d16c215ffe121a89a235cb50bdcad347e2c9b6237c5072",
-        "sql_provenance_sha256:5e1278eb8909c287bc7f5b6cb2a6b61a1dd7e3774156171c0f2fe7e583887c07"
+        "source_sha256:3cfc03c251f42df418c708b0d5fc33470174ed9aa36c62a8550474e66528d751",
+        "sql_provenance_sha256:9f7599fdcd2f316188d2fb80e5a13fdc1fcc825a82ef098871193e257c00d1e1"
       ]
     },
     {
@@ -3031,8 +3033,8 @@
         "line": 1707,
         "column": 28,
         "method": "$queryRaw",
-        "source_sha256": "e2c7efc7239249ca5e410fe5239263722dc06376563a5213638bb4cbeb5132ab",
-        "sql_provenance_sha256": "7bd7f7b3cb44c7e555ed099ce77295af534d594374860899efa798584fbaa8d8"
+        "source_sha256": "c2cb47a639915e68cceba4408ff79eecbee7cc6b3d4a71d891a2521b35834003",
+        "sql_provenance_sha256": "a45cc6579ab5acb024a5e1ddb3741d5a75ce7657f20003629e755cbf8ec054f7"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -3070,8 +3072,8 @@
         "analysis_site_signature:b2c3ae6fc6828d9d51e85f6f01d3dff86df72a5ced9f863516a2d0276c1c61e3",
         "sql_sha256:6167a7563da84abc493ecee58c8ae8e3a12053448ae23bc234c428b54d28c89e",
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
-        "source_sha256:e2c7efc7239249ca5e410fe5239263722dc06376563a5213638bb4cbeb5132ab",
-        "sql_provenance_sha256:7bd7f7b3cb44c7e555ed099ce77295af534d594374860899efa798584fbaa8d8"
+        "source_sha256:c2cb47a639915e68cceba4408ff79eecbee7cc6b3d4a71d891a2521b35834003",
+        "sql_provenance_sha256:a45cc6579ab5acb024a5e1ddb3741d5a75ce7657f20003629e755cbf8ec054f7"
       ]
     },
     {
@@ -3079,11 +3081,11 @@
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
         "file": "gravity-mvp/src/app/settings/ai/actions.ts",
-        "line": 2253,
+        "line": 2256,
         "column": 32,
         "method": "$queryRaw",
-        "source_sha256": "e2c7efc7239249ca5e410fe5239263722dc06376563a5213638bb4cbeb5132ab",
-        "sql_provenance_sha256": "ec9ca759febe7d209ae59a1215872f392dfa926700246f3e7fc008b096a52777"
+        "source_sha256": "c2cb47a639915e68cceba4408ff79eecbee7cc6b3d4a71d891a2521b35834003",
+        "sql_provenance_sha256": "47bedda891abd393ee1d2083e0151db9b73a83920c034b6a2a208ab84b6c8cf8"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -3113,12 +3115,12 @@
         "reviewed_read_only_functions": []
       },
       "evidence": [
-        "gravity-mvp/src/app/settings/ai/actions.ts:2253:32",
+        "gravity-mvp/src/app/settings/ai/actions.ts:2256:32",
         "analysis_site_signature:e8319859102636b4b4915c12f4c1dccaac2f97309e2fe5853109ef441b95bae6",
         "sql_sha256:20e05031e18965a3c164c760790395bbeaa42c75ad4fe9a4ea79ca85c2a063d3",
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
-        "source_sha256:e2c7efc7239249ca5e410fe5239263722dc06376563a5213638bb4cbeb5132ab",
-        "sql_provenance_sha256:ec9ca759febe7d209ae59a1215872f392dfa926700246f3e7fc008b096a52777"
+        "source_sha256:c2cb47a639915e68cceba4408ff79eecbee7cc6b3d4a71d891a2521b35834003",
+        "sql_provenance_sha256:47bedda891abd393ee1d2083e0151db9b73a83920c034b6a2a208ab84b6c8cf8"
       ]
     },
     {
@@ -3126,11 +3128,11 @@
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
         "file": "gravity-mvp/src/app/settings/ai/actions.ts",
-        "line": 2272,
+        "line": 2275,
         "column": 41,
         "method": "$queryRaw",
-        "source_sha256": "e2c7efc7239249ca5e410fe5239263722dc06376563a5213638bb4cbeb5132ab",
-        "sql_provenance_sha256": "072eb4449e85ffc98f7c15a34bbc5daa583e5f636d08af8446e4667af83fa65c"
+        "source_sha256": "c2cb47a639915e68cceba4408ff79eecbee7cc6b3d4a71d891a2521b35834003",
+        "sql_provenance_sha256": "b6f25b5b39e2da7e0f9488bf1821615500121041f35b49c400964d3e4ca6e3d2"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -3146,12 +3148,12 @@
         ]
       },
       "evidence": [
-        "gravity-mvp/src/app/settings/ai/actions.ts:2272:41",
+        "gravity-mvp/src/app/settings/ai/actions.ts:2275:41",
         "analysis_site_signature:69ae5095adc3a7847274305f5f6a963d449606b60094335bb37a22a0423b4f9c",
         "sql_sha256:a12465741c5b62ecffc57a4bb7e3dd89b0d1acac32ae68d50664be12437afab2",
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
-        "source_sha256:e2c7efc7239249ca5e410fe5239263722dc06376563a5213638bb4cbeb5132ab",
-        "sql_provenance_sha256:072eb4449e85ffc98f7c15a34bbc5daa583e5f636d08af8446e4667af83fa65c"
+        "source_sha256:c2cb47a639915e68cceba4408ff79eecbee7cc6b3d4a71d891a2521b35834003",
+        "sql_provenance_sha256:b6f25b5b39e2da7e0f9488bf1821615500121041f35b49c400964d3e4ca6e3d2"
       ]
     },
     {
@@ -3260,15 +3262,15 @@
       ]
     },
     {
-      "site_signature": "e1c81095a11532a1ba56e2629b9316a15d42ad5062aa52dfa190283adb26f5e1",
+      "site_signature": "2bd8011eca9a0188606fa41066e222d13e39e9fbdd930e6d6320422bb6842415",
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
         "file": "gravity-mvp/src/lib/ai/knowledge/callTranscriptBuilder.ts",
         "line": 82,
         "column": 24,
         "method": "$queryRaw",
-        "source_sha256": "f59aa128a3bdbdd79890c8af1fb6f704fe9d0a29b012939cd6bf8bc40f5b2b1f",
-        "sql_provenance_sha256": "01a27bd5035001e8a47fee832a7058c2a4fc7a54ed89029fc6d5e6d816526739"
+        "source_sha256": "b9a54cdbd39274c58ed8b61d954ba0f823a4a94abdc0c1a9c9337aaa37845aeb",
+        "sql_provenance_sha256": "81788864461d462aacf2a34d8729c1d13bbef011537ecd29a94d5dd1fb77059f"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -3280,18 +3282,18 @@
           "startedAt",
           "transcript"
         ],
-        "sql_sha256": "7c5ed7da00c072677c23d6d9ad2453ed19cfa513e516d03f526699dd786ca7ac",
+        "sql_sha256": "1f0e3f49edbfc0a2d0984d96d5fd2de88b3ecc840feafced1bbc9fc1b7514d10",
         "reviewed_read_only_functions": [
           "length"
         ]
       },
       "evidence": [
         "gravity-mvp/src/lib/ai/knowledge/callTranscriptBuilder.ts:82:24",
-        "analysis_site_signature:e1c81095a11532a1ba56e2629b9316a15d42ad5062aa52dfa190283adb26f5e1",
-        "sql_sha256:7c5ed7da00c072677c23d6d9ad2453ed19cfa513e516d03f526699dd786ca7ac",
+        "analysis_site_signature:2bd8011eca9a0188606fa41066e222d13e39e9fbdd930e6d6320422bb6842415",
+        "sql_sha256:1f0e3f49edbfc0a2d0984d96d5fd2de88b3ecc840feafced1bbc9fc1b7514d10",
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
-        "source_sha256:f59aa128a3bdbdd79890c8af1fb6f704fe9d0a29b012939cd6bf8bc40f5b2b1f",
-        "sql_provenance_sha256:01a27bd5035001e8a47fee832a7058c2a4fc7a54ed89029fc6d5e6d816526739"
+        "source_sha256:b9a54cdbd39274c58ed8b61d954ba0f823a4a94abdc0c1a9c9337aaa37845aeb",
+        "sql_provenance_sha256:81788864461d462aacf2a34d8729c1d13bbef011537ecd29a94d5dd1fb77059f"
       ]
     },
     {

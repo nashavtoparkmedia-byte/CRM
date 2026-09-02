@@ -178,6 +178,7 @@ export async function reconcileStaleCalls(): Promise<number> {
     try {
         const candidates = await prisma.call.findMany({
             where: {
+                isSimulation: false,
                 status: { in: ['ringing', 'active'] },
                 fsUuid: { not: null },
                 startedAt: { lt: new Date(Date.now() - STALE_CALL_GRACE_MS) },

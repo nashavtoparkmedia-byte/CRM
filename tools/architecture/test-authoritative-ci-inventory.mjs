@@ -201,6 +201,7 @@ for (const required of [
   'production-migration-default-clean-checkout',
   'production-migration-runtime-semantics',
   'source-only-runtime-v10-contract',
+  'hosted-coordinated-gravity-max-stage-a',
   'production-migration-committed-runtime-inventory',
   'production-migration-canonical-replay',
   'production-migration-predecessor-recovery-replay',
@@ -243,16 +244,16 @@ for (const required of [
 ]) assert(ids.has(required), `missing authoritative CI control: ${required}`)
 
 assert.equal(ids.size, targetedControls.length + fullScanControls.length, 'duplicate CI control id')
-assert.equal(ids.size, 52, 'authoritative CI control catalog changed without an explicit inventory review')
+assert.equal(ids.size, 53, 'authoritative CI control catalog changed without an explicit inventory review')
 const normalizedCatalog = normalizedControlCatalog()
-assert.equal(normalizedCatalog.length, 52, 'normalized authoritative catalog must cover every control')
+assert.equal(normalizedCatalog.length, 53, 'normalized authoritative catalog must cover every control')
 assert.equal(
   catalogDigest(normalizedCatalog),
-  '24ad32ba5a97e617e34bd19a3bcb2109807bf946636737d02b12fd7607185483',
+  '57f6843147042cd851fe18ead45bda7c4b1e243d7f0a2c0e1d66ed2f2d410a8c',
   'authoritative CI command/order/argument/cwd catalog changed without an explicit full-catalog review',
 )
-assert.equal(semanticControlCatalogSha256(), '24ad32ba5a97e617e34bd19a3bcb2109807bf946636737d02b12fd7607185483')
-assert.equal(controlIdCatalogSha256(), '7268cb0b049390bee10aebf53277c1f771b04670ed5c59ae022db0e9ff317680')
+assert.equal(semanticControlCatalogSha256(), '57f6843147042cd851fe18ead45bda7c4b1e243d7f0a2c0e1d66ed2f2d410a8c')
+assert.equal(controlIdCatalogSha256(), 'f6271d9cba771e818913ad769be982420880dafe353e2ec9ff59682ebc281dc0')
 const passingExecutions = normalizedCatalog.map(({ id }) => ({ id, status: 'PASS' }))
 const proof = buildExecutionProof(passingExecutions, {
   commit: 'a'.repeat(40),
@@ -263,14 +264,14 @@ const proof = buildExecutionProof(passingExecutions, {
 })
 assert.equal(proof.outcome, 'PASS')
 assert.deepEqual(proof.runtime, { node: '20.20.2', blast_base: 'HEAD^', blast_base_commit: 'e'.repeat(40) })
-assert.equal(proof.controls.count, 52)
-assert.equal(proof.controls.catalog_sha256, '7268cb0b049390bee10aebf53277c1f771b04670ed5c59ae022db0e9ff317680')
-assert.equal(proof.controls.semantic_catalog_sha256, '24ad32ba5a97e617e34bd19a3bcb2109807bf946636737d02b12fd7607185483')
+assert.equal(proof.controls.count, 53)
+assert.equal(proof.controls.catalog_sha256, 'f6271d9cba771e818913ad769be982420880dafe353e2ec9ff59682ebc281dc0')
+assert.equal(proof.controls.semantic_catalog_sha256, '57f6843147042cd851fe18ead45bda7c4b1e243d7f0a2c0e1d66ed2f2d410a8c')
 for (const invalidExecutions of [
   passingExecutions.slice(1),
   [passingExecutions[1], passingExecutions[0], ...passingExecutions.slice(2)],
   passingExecutions.map((execution, index) => index === 20 ? { ...execution, status: 'FAIL' } : execution),
-]) assert.throws(() => buildExecutionProof(invalidExecutions, proof.source), /all 52 ordered PASS controls/u)
+]) assert.throws(() => buildExecutionProof(invalidExecutions, proof.source), /all 53 ordered PASS controls/u)
 const catalogMutations = [
   normalizedCatalog.slice(1),
   [normalizedCatalog[1], normalizedCatalog[0], ...normalizedCatalog.slice(2)],
@@ -281,7 +282,7 @@ const catalogMutations = [
 for (const mutation of catalogMutations) {
   assert.notEqual(
     catalogDigest(mutation),
-    '24ad32ba5a97e617e34bd19a3bcb2109807bf946636737d02b12fd7607185483',
+    '57f6843147042cd851fe18ead45bda7c4b1e243d7f0a2c0e1d66ed2f2d410a8c',
     'removed, reordered, replaced, argument-weakened, or cwd-mutated controls must invalidate the reviewed catalog',
   )
 }
@@ -357,6 +358,7 @@ assert.notEqual(
 )
 assert.deepEqual(workflowJobStepNames(workflow, 'architecture'), [
   'Check out exact revision',
+  'Fetch exact Stage A authorities',
   'Run targeted Runtime TG base-reference contract',
   'Fetch exact Runtime v10 predecessor',
   'Set up exact Node.js',
@@ -415,6 +417,38 @@ assert.match(workflow, /ref: \$\{\{ github\.event\.pull_request\.head\.sha \|\| 
 assert.match(workflow, /fetch-depth: 2/u, 'hosted blast-radius analysis needs the accepted source parent without full-history dependence')
 assert.match(
   workflow,
+  /STAGE_A_APPLICATION_COMMIT: 6e3f094bf4b42c1400c705843ab107dacd6d1cf8[\s\S]*git fetch --no-tags --depth=1 origin \\\n+\s+"\$STAGE_A_APPLICATION_COMMIT:refs\/heads\/stage-a-accepted-application"[\s\S]*git rev-parse 'refs\/heads\/stage-a-accepted-application\^\{commit\}'/u,
+  'hosted Stage A contract must fetch the exact accepted application authority into a clone-visible ref and verify its commit identity',
+)
+for (const stageAApplicationFetchMutation of [
+  workflow.replace('6e3f094bf4b42c1400c705843ab107dacd6d1cf8', '0'.repeat(40)),
+  workflow.replace(':refs/heads/stage-a-accepted-application', ''),
+  workflow.replace("git rev-parse 'refs/heads/stage-a-accepted-application^{commit}'", 'true'),
+]) {
+  assert.doesNotMatch(
+    stageAApplicationFetchMutation,
+    /STAGE_A_APPLICATION_COMMIT: 6e3f094bf4b42c1400c705843ab107dacd6d1cf8[\s\S]*git fetch --no-tags --depth=1 origin \\\n+\s+"\$STAGE_A_APPLICATION_COMMIT:refs\/heads\/stage-a-accepted-application"[\s\S]*git rev-parse 'refs\/heads\/stage-a-accepted-application\^\{commit\}'/u,
+    'wrong, unreachable, or unverified Stage A application fetch must fail the workflow contract',
+  )
+}
+assert.match(
+  workflow,
+  /STAGE_A_CHANGE_BASE_COMMIT: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.before \}\}[\s\S]*grep -Eq '\^\[0-9a-f\]\{40\}\$'[\s\S]*STAGE_A_CHANGE_BASE_COMMIT:refs\/heads\/stage-a-change-base[\s\S]*git rev-parse 'refs\/heads\/stage-a-change-base\^\{commit\}'/u,
+  'hosted Stage A scope must fetch the exact event base into a clone-visible ref and verify its commit identity',
+)
+for (const stageAChangeBaseFetchMutation of [
+  workflow.replace('${{ github.event.pull_request.base.sha || github.event.before }}', '${{ github.sha }}'),
+  workflow.replace(':refs/heads/stage-a-change-base', ''),
+  workflow.replace("git rev-parse 'refs/heads/stage-a-change-base^{commit}'", 'true'),
+]) {
+  assert.doesNotMatch(
+    stageAChangeBaseFetchMutation,
+    /STAGE_A_CHANGE_BASE_COMMIT: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.before \}\}[\s\S]*STAGE_A_CHANGE_BASE_COMMIT:refs\/heads\/stage-a-change-base[\s\S]*git rev-parse 'refs\/heads\/stage-a-change-base\^\{commit\}'/u,
+    'wrong, unreachable, or unverified Stage A change-base fetch must fail the workflow contract',
+  )
+}
+assert.match(
+  workflow,
   /RUNTIME_V10_PREDECESSOR_COMMIT: 7aea2823efe50e13a156540993d424594025e403[\s\S]*git fetch --no-tags --depth=1 origin \\\n\s+"\$RUNTIME_V10_PREDECESSOR_COMMIT:refs\/heads\/yoko-runtime-v10-predecessor"[\s\S]*git rev-parse 'refs\/heads\/yoko-runtime-v10-predecessor\^\{commit\}'/u,
   'hosted Runtime v10 contract must fetch the exact predecessor into a clone-visible ref and verify its commit identity',
 )
@@ -437,6 +471,22 @@ assert.match(
 assert.match(workflow, /node-version: 20\.20\.2/u, 'hosted CI must install the exact locally reviewed Node.js release')
 assert.match(workflow, /process\.versions\.node !== '20\.20\.2'/u, 'hosted CI must fail closed if the exact Node.js release was not activated')
 assert.match(workflow, /YOKO_BLAST_BASE: HEAD\^/u, 'hosted blast-radius analysis must use the exact accepted commit parent available in the shallow checkout')
+const stageARunnerBaseContract = /YOKO_STAGE_A_CHANGE_BASE: refs\/heads\/stage-a-change-base\n\s+YOKO_STAGE_A_CHANGE_BASE_COMMIT: \$\{\{ github\.event\.pull_request\.base\.sha \|\| github\.event\.before \}\}/u
+assert.match(
+  workflow,
+  stageARunnerBaseContract,
+  'hosted Stage A scope checks must use the separately fetched event-base ref bound to its exact commit identity',
+)
+for (const stageARunnerBaseMutation of [
+  workflow.replace('YOKO_STAGE_A_CHANGE_BASE: refs/heads/stage-a-change-base', 'YOKO_STAGE_A_CHANGE_BASE: HEAD'),
+  workflow.replace('YOKO_STAGE_A_CHANGE_BASE_COMMIT: ${{ github.event.pull_request.base.sha || github.event.before }}', 'YOKO_STAGE_A_CHANGE_BASE_COMMIT: ${{ github.sha }}'),
+]) {
+  assert.doesNotMatch(
+    stageARunnerBaseMutation,
+    stageARunnerBaseContract,
+    'self or identity-unbound Stage A runner base must fail the workflow contract',
+  )
+}
 assert.doesNotMatch(workflow, /YOKO_BLAST_BASE:.*pull_request\.base\.sha/u, 'hosted CI must not select an unfetched PR base as its change-set authority')
 assert.match(workflow, /DATABASE_URL: postgresql:\/\/postgres:postgres@localhost:5432\/postgres\?schema=yoko_migration_authority_replay_ci/u)
 assert.match(workflow, /YOKO_POSTGRES_CLIENT_CONTAINER: \$\{\{ job\.services\.postgres\.id \}\}/u)
@@ -509,4 +559,4 @@ assert.equal(
   'architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json',
 )
 
-process.stdout.write(`authoritative CI inventory: PASS (${ids.size} controls; semantic catalog sha256=24ad32ba5a97e617e34bd19a3bcb2109807bf946636737d02b12fd7607185483; fail-fast fresh credential and write scans enabled)\n`)
+process.stdout.write(`authoritative CI inventory: PASS (${ids.size} controls; semantic catalog sha256=57f6843147042cd851fe18ead45bda7c4b1e243d7f0a2c0e1d66ed2f2d410a8c; fail-fast fresh credential and write scans enabled)\n`)

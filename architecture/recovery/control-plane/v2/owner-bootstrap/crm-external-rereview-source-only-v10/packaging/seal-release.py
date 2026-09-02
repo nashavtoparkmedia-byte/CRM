@@ -49,6 +49,9 @@ GITHUB_REPOSITORY = "nashavtoparkmedia-byte/CRM"
 AUTHORITATIVE_WORKFLOW_PATH = ".github/workflows/architecture-enforcement.yml"
 AUTHORITATIVE_RUNNER_PATH = "tools/architecture/run-authoritative-ci.mjs"
 MIGRATION_AUTHORITY_PATH = "architecture/migrations/v1/production-migration-authority.json"
+MIGRATION_TREE_PATH = "gravity-mvp/prisma/migrations"
+PRODUCTION_SCHEMA_PATH = "gravity-mvp/prisma/schema.prisma"
+PRODUCTION_SCHEMA_SHA256 = "287d39d324cd0a2b616eb7127cd520ea8ee5ce9d517620aafc5b07240cdf0b48"
 AUTHORITATIVE_CHECK_NAME = "architecture"
 GRAVITY_JOB_NAME = "gravity-artifact"
 GRAVITY_ARTIFACT_ATTESTATION = "gravity-image-attestation.json"
@@ -1047,6 +1050,54 @@ def exact_accepted_commit_input(
     return supplied
 
 
+def assert_migration_tree_unchanged(repo: Path, commit: str) -> None:
+    """Require the source-only candidate to preserve the sealed migration tree."""
+    result = subprocess.run(
+        [
+            "/usr/bin/git", "-C", str(repo), "diff", "--quiet",
+            PREDECESSOR_COMMIT, commit, "--", MIGRATION_TREE_PATH,
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        timeout=60,
+    )
+    if result.returncode == 0:
+        return
+    if result.returncode == 1:
+        raise SystemExit(
+            "source-only candidate migration tree differs from the sealed 7aea predecessor",
+        )
+    raise SystemExit("unable to verify source-only candidate migration-tree identity")
+
+
+def assert_source_schema_matches_authority(
+    repo: Path,
+    commit: str,
+    authority: object,
+) -> str:
+    """Bind the source-only candidate schema to the exact production authority."""
+    document = exact_object(authority, {
+        "schema", "version", "provenance_evidence", "predecessor_runtime",
+        "current_target", "current_schema", "migrations", "inventory_digest",
+    }, "production migration authority")
+    current_schema = exact_object(document["current_schema"], {
+        "path", "sha256", "expected_replay_parity", "derivation",
+    }, "production schema authority")
+    if (
+        current_schema["path"] != PRODUCTION_SCHEMA_PATH
+        or current_schema["sha256"] != PRODUCTION_SCHEMA_SHA256
+        or current_schema["expected_replay_parity"] != "ZERO_PRISMA_DATAMODEL_DIFF"
+    ):
+        raise SystemExit("canonical production schema authority invalid")
+    try:
+        source_schema = git_blob(repo, commit, PRODUCTION_SCHEMA_PATH)
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise SystemExit("accepted source commit lacks canonical production schema") from exc
+    if sha(source_schema) != PRODUCTION_SCHEMA_SHA256:
+        raise SystemExit("accepted source schema differs from canonical production authority")
+    return PRODUCTION_SCHEMA_SHA256
+
+
 def copy_exact_external_input(source: Path, destination: Path, expected_sha256: str) -> dict[str, object]:
     try:
         descriptor = os.open(source, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
@@ -1433,7 +1484,7 @@ def main() -> None:
         accepted_raw, commit, tree, workflow_bytes, runner_bytes,
         github_run=live_run, github_jobs=live_jobs, github_artifact=live_artifact,
     )
-    subprocess.run(["/usr/bin/git", "-C", str(repo), "diff", "--quiet", PREDECESSOR_COMMIT, commit, "--", "gravity-mvp/prisma/migrations"], check=True, timeout=60)
+    assert_migration_tree_unchanged(repo, commit)
 
     capture_verifier = production_capture_module()
     try:
@@ -1533,6 +1584,7 @@ def main() -> None:
     attestation = strict_json_bytes(attestation_bytes, "predecessor migration attestation")
     if authority.get("schema") != "yoko.crm.production-migration-authority.v1" or authority.get("version") != 1 or len(authority.get("migrations", [])) != 62 or authority.get("current_target") != {"name": "20260809140000_add_domain_outbox", "sha256": "433b0d503f054ed6a8161a059e2650d5e401829dabe8c9d992a1d1763eef0016"}:
         raise SystemExit("canonical production migration authority invalid")
+    accepted_schema_sha256 = assert_source_schema_matches_authority(repo, commit, authority)
     if sha(attestation_bytes) != "f08319ddfb0feb53a43b45c9e9865707d91c3a827c77cece6b42b8928e1b9a16" or attestation.get("schema") != "yoko.crm.predecessor-runtime-migration-inventory.v1" or attestation.get("version") != 1 or attestation.get("inventory_sha256") != "f07ca981e8acb53b48aacee882bce19473e0f33dafd07f716780ec192dd84c01" or attestation.get("provenance", {}).get("source_artifact_sha256") != "88b20e7a6ce3dfca3df6488f42331a5957494af3825265bb27b63c785d212bb3" or len(attestation.get("rows", [])) != 62:
         raise SystemExit("independent predecessor inventory identity invalid")
     attestation_rows = attestation["rows"]
@@ -1600,7 +1652,7 @@ def main() -> None:
     )
     profile["profile_id"] = profile_id
     source = profile["accepted_source"]
-    source.update({"commit": commit, "tree": tree, "archive_sha256": sha(first), "archive_entries": inventory["entries"], "archive_regular_files": inventory["regular_files"], "archive_directories": inventory["directories"], "archive_prefix": prefix, "archive_uncompressed_bytes": inventory["uncompressed_bytes"], "dockerfile_sha256": sha(dockerfile_bytes), "package_lock_sha256": sha(package_lock_bytes), "prisma_schema_sha256": sha(git_blob(repo, commit, "gravity-mvp/prisma/schema.prisma")), "tg_bot_patch_sha256": sha(tg_patch), "tg_bot_patch_size": len(tg_patch), "tg_bot_patch_recipe_sha256": sha(recipe), "gravity_image_artifact": gravity_artifact})
+    source.update({"commit": commit, "tree": tree, "archive_sha256": sha(first), "archive_entries": inventory["entries"], "archive_regular_files": inventory["regular_files"], "archive_directories": inventory["directories"], "archive_prefix": prefix, "archive_uncompressed_bytes": inventory["uncompressed_bytes"], "dockerfile_sha256": sha(dockerfile_bytes), "package_lock_sha256": sha(package_lock_bytes), "prisma_schema_sha256": accepted_schema_sha256, "tg_bot_patch_sha256": sha(tg_patch), "tg_bot_patch_size": len(tg_patch), "tg_bot_patch_recipe_sha256": sha(recipe), "gravity_image_artifact": gravity_artifact})
     migration = profile["migration"]
     canonical = {row["name"]: row["sha256"] for row in authority_rows}
     if canonical.pop(migration["name"], None) != migration["sha256"]:

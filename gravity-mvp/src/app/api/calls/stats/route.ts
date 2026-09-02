@@ -98,13 +98,15 @@ export async function GET(req: NextRequest) {
     try {
         // Reused filter snippet — Postgres parameters get unrolled by Prisma.sql.
         const filter = Prisma.sql`
-            "startedAt" >= ${from}
+            "isSimulation" = false
+            AND "startedAt" >= ${from}
             AND "startedAt" <= ${to}
             ${managerId ? Prisma.sql`AND "managerId" = ${managerId}` : Prisma.empty}
         `
         // Same filter but for inside a subquery that already joined "Call" alias 'c'
         const filterC = Prisma.sql`
-            c."startedAt" >= ${from}
+            c."isSimulation" = false
+            AND c."startedAt" >= ${from}
             AND c."startedAt" <= ${to}
             ${managerId ? Prisma.sql`AND c."managerId" = ${managerId}` : Prisma.empty}
         `
@@ -117,8 +119,8 @@ export async function GET(req: NextRequest) {
                     COUNT(*) FILTER (WHERE "answeredAt" IS NOT NULL)         AS answered,
                     COUNT(*) FILTER (WHERE "status" = 'missed')              AS missed,
                     COUNT(*)                                                 AS total,
-                    AVG("durationSec")::float FILTER (WHERE "answeredAt" IS NOT NULL) AS "avgDurationSec",
-                    AVG("aiScore")::float FILTER (WHERE "aiScore" IS NOT NULL)        AS "avgAiScore"
+                    (AVG("durationSec") FILTER (WHERE "answeredAt" IS NOT NULL))::float AS "avgDurationSec",
+                    (AVG("aiScore") FILTER (WHERE "aiScore" IS NOT NULL))::float        AS "avgAiScore"
                 FROM "Call"
                 WHERE ${filter}
             `,
@@ -128,8 +130,8 @@ export async function GET(req: NextRequest) {
                     COUNT(*)                                                 AS count,
                     COUNT(*) FILTER (WHERE "answeredAt" IS NOT NULL)         AS answered,
                     COUNT(*) FILTER (WHERE "status" = 'missed')              AS missed,
-                    AVG("durationSec")::float FILTER (WHERE "answeredAt" IS NOT NULL) AS "avgDuration",
-                    AVG("aiScore")::float FILTER (WHERE "aiScore" IS NOT NULL)        AS "avgAiScore"
+                    (AVG("durationSec") FILTER (WHERE "answeredAt" IS NOT NULL))::float AS "avgDuration",
+                    (AVG("aiScore") FILTER (WHERE "aiScore" IS NOT NULL))::float        AS "avgAiScore"
                 FROM "Call"
                 WHERE ${filter}
                   AND "managerId" IS NOT NULL

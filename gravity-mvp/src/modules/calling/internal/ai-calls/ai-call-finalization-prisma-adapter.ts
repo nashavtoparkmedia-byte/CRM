@@ -25,6 +25,10 @@ import {
     createAiCallTranscriptJournal,
     readAiCallTranscriptJournal,
 } from '../../application/ai-call-transcript'
+import {
+    aiCallCampaignSha256,
+    type AiCallCampaignJson,
+} from '../../application/ai-call-campaign'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -107,7 +111,7 @@ function clearLease(journal: AiCallFinalizationJournalV1): AiCallFinalizationJou
 
 export const aiCallFinalizationPrismaPort: AiCallFinalizationPersistencePort = {
     async findCall(callId) {
-        return (prisma as any).call.findUnique({
+        const call = await (prisma as any).call.findUnique({
             where: { id: callId },
             select: {
                 id: true,
@@ -123,8 +127,38 @@ export const aiCallFinalizationPrismaPort: AiCallFinalizationPersistencePort = {
                 transcript: true,
                 metadata: true,
                 aiScenario: { select: { outcomeSchema: true } },
+                campaignAttempt: {
+                    select: {
+                        campaign: {
+                            select: {
+                                scenarioRef: true,
+                                scenarioSnapshot: true,
+                                scenarioFingerprint: true,
+                            },
+                        },
+                    },
+                },
             },
         })
+        if (!call) return null
+        const campaign = call.campaignAttempt?.campaign
+        if (!campaign) {
+            const { campaignAttempt: _campaignAttempt, ...ordinaryCall } = call
+            return ordinaryCall
+        }
+        if (!isRecord(campaign.scenarioSnapshot)
+            || campaign.scenarioSnapshot.scenarioId !== campaign.scenarioRef
+            || campaign.scenarioRef !== call.aiScenarioId
+            || aiCallCampaignSha256(campaign.scenarioSnapshot as AiCallCampaignJson)
+                !== campaign.scenarioFingerprint
+            || !Object.prototype.hasOwnProperty.call(campaign.scenarioSnapshot, 'outcomeSchema')) {
+            throw new Error('AI call campaign frozen scenario snapshot is missing or corrupt')
+        }
+        const { campaignAttempt: _campaignAttempt, ...campaignCall } = call
+        return {
+            ...campaignCall,
+            frozenOutcomeSchema: campaign.scenarioSnapshot.outcomeSchema,
+        }
     },
 
     async accept(input) {

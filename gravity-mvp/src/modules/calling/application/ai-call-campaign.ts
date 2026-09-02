@@ -36,8 +36,12 @@ export type AiCallCampaignJson = JsonPrimitive | AiCallCampaignJson[] | { [key: 
 export interface AiCallCampaignDraftInput {
     campaignId: string
     identityKey: string
+    /** Optional complete-command fingerprint supplied by a product application service. */
+    commandFingerprint?: string
     name: string
     scenarioRef: string
+    scenarioSnapshot: Record<string, AiCallCampaignJson>
+    scenarioFingerprint: string
     concurrentLimit: number
     ratePerMinute: number
     maxAttempts: number
@@ -124,6 +128,28 @@ function isJson(value: unknown, depth = 0): value is AiCallCampaignJson {
         && Object.values(value as Record<string, unknown>).every((item) => isJson(item, depth + 1))
 }
 
+export function freezeAiCallCampaignScenarioSnapshot(
+    scenarioRefInput: string,
+    snapshotInput: unknown,
+): { scenarioRef: string; scenarioSnapshot: Record<string, AiCallCampaignJson>; scenarioFingerprint: string } {
+    const scenarioRef = exact(scenarioRefInput, 'scenarioRef')
+    if (!isJson(snapshotInput) || snapshotInput === null || Array.isArray(snapshotInput)) {
+        invalid('scenarioSnapshot must be a JSON object')
+    }
+    const scenarioSnapshot = structuredClone(snapshotInput) as Record<string, AiCallCampaignJson>
+    if (new TextEncoder().encode(canonicalJson(scenarioSnapshot)).length > 65_536) {
+        invalid('scenarioSnapshot exceeds 65536 bytes')
+    }
+    if (scenarioSnapshot.scenarioId !== scenarioRef || scenarioSnapshot.version !== 1) {
+        invalid('scenarioSnapshot identity is invalid')
+    }
+    return {
+        scenarioRef,
+        scenarioSnapshot,
+        scenarioFingerprint: aiCallCampaignSha256(scenarioSnapshot),
+    }
+}
+
 function canonicalJson(value: AiCallCampaignJson): string {
     if (value === null || typeof value !== 'object') return JSON.stringify(value)
     if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
@@ -139,11 +165,15 @@ export function aiCallCampaignSha256(value: AiCallCampaignJson): string {
 export function normalizeAiCallCampaignDraft(input: AiCallCampaignDraftInput): AiCallCampaignDraftInput & {
     payloadFingerprint: string
 } {
+    const scenario = freezeAiCallCampaignScenarioSnapshot(input?.scenarioRef, input?.scenarioSnapshot)
+    if (input?.scenarioFingerprint !== scenario.scenarioFingerprint) {
+        invalid('scenarioFingerprint must match scenarioSnapshot')
+    }
     const normalized: AiCallCampaignDraftInput = {
         campaignId: exact(input?.campaignId, 'campaignId'),
         identityKey: exact(input?.identityKey, 'identityKey'),
         name: exact(input?.name, 'name', 200),
-        scenarioRef: exact(input?.scenarioRef, 'scenarioRef'),
+        ...scenario,
         concurrentLimit: positiveInteger(input?.concurrentLimit, 'concurrentLimit', 10_000),
         ratePerMinute: positiveInteger(input?.ratePerMinute, 'ratePerMinute', 60_000),
         maxAttempts: positiveInteger(input?.maxAttempts, 'maxAttempts', 20),
@@ -151,9 +181,15 @@ export function normalizeAiCallCampaignDraft(input: AiCallCampaignDraftInput): A
         retryMaxMs: positiveInteger(input?.retryMaxMs, 'retryMaxMs', 604_800_000),
     }
     if (normalized.retryMaxMs < normalized.retryBaseMs) invalid('retryMaxMs must be at least retryBaseMs')
+    const commandFingerprint = input.commandFingerprint
+    if (commandFingerprint !== undefined && !/^[0-9a-f]{64}$/.test(commandFingerprint)) {
+        invalid('commandFingerprint must be a lowercase SHA-256 digest')
+    }
     return {
         ...normalized,
-        payloadFingerprint: aiCallCampaignSha256(normalized as unknown as AiCallCampaignJson),
+        ...(commandFingerprint === undefined ? {} : { commandFingerprint }),
+        payloadFingerprint: commandFingerprint
+            ?? aiCallCampaignSha256(normalized as unknown as AiCallCampaignJson),
     }
 }
 

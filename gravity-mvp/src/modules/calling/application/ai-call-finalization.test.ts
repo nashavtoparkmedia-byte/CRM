@@ -255,6 +255,19 @@ function harness(taskCreate?: (command: { idempotencyKey: string; data: unknown 
 }
 
 describe('Calling durable single-call finalization', () => {
+    it('uses a campaign-frozen outcome schema instead of the mutable scenario relation', async () => {
+        const h = harness()
+        h.persistence.call.aiScenario = {
+            outcomeSchema: { fields: [{ key: 'mutableOnly', type: 'string', required: true }] },
+        }
+        h.persistence.call.frozenOutcomeSchema = {
+            fields: [{ key: 'experienceYears', type: 'integer', required: true, min: 0, max: 60 }],
+        }
+        await expect(h.operation('call-1', FOLLOW_UP_BODY)).resolves.toMatchObject({ kind: 'success' })
+        expect(h.persistence.terminal?.leadDataStructured).toEqual({ experienceYears: 5 })
+        expect(h.persistence.terminal?.aiOutcomeReason).not.toContain('validation_issues=')
+    })
+
     it('accepts the first valid terminal result and completes one follow-up', async () => {
         const h = harness()
         await expect(h.operation('call-1', FOLLOW_UP_BODY)).resolves.toMatchObject({
