@@ -154,6 +154,7 @@ class StageAContractTests(unittest.TestCase):
             "architecture/contexts/v1/executable-path-ownership-coverage.json",
             "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json",
             "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
+            "architecture/recovery/whole-project-dod/v2/credential-unknown-access-resolution.json",
         }
         authority_prefix = "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/"
         unexpected = [name for name in names if name not in allowed_exact and not name.startswith(authority_prefix)]
