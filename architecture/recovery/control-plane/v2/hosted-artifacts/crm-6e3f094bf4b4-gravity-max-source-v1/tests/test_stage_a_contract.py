@@ -16,6 +16,7 @@ AUTHORITY = Path(__file__).resolve().parents[1]
 APPLICATION_COMMIT = "6e3f094bf4b42c1400c705843ab107dacd6d1cf8"
 PROFILE = "crm-6e3f094bf4b4-gravity-max-source-v1"
 COMMIT_SHA = re.compile(r"^[0-9a-f]{40}$")
+HOSTED_CHANGE_BASE_REF = "refs/heads/stage-a-change-base"
 
 
 def git_commit(root: Path, revision: str) -> str:
@@ -35,6 +36,8 @@ def resolve_change_base(
     configured = environment.get("YOKO_STAGE_A_CHANGE_BASE")
     expected = environment.get("YOKO_STAGE_A_CHANGE_BASE_COMMIT")
     if configured:
+        if configured != HOSTED_CHANGE_BASE_REF:
+            raise RuntimeError("explicit Stage A change base must use the trusted hosted ref")
         if not expected or not COMMIT_SHA.fullmatch(expected) or expected == "0" * 40:
             raise RuntimeError("explicit Stage A change base requires an exact nonzero commit identity")
         change_base = git_commit(root, configured)
@@ -48,13 +51,14 @@ def resolve_change_base(
     head = git_commit(root, "HEAD")
     if change_base == head:
         raise RuntimeError("Stage A change base must differ from HEAD")
-    ancestor = subprocess.run(
-        ["git", "-C", str(root), "merge-base", "--is-ancestor", change_base, head],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    if ancestor.returncode != 0:
-        raise RuntimeError("Stage A change base must be an ancestor of HEAD")
+    if not configured:
+        ancestor = subprocess.run(
+            ["git", "-C", str(root), "merge-base", "--is-ancestor", change_base, head],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if ancestor.returncode != 0:
+            raise RuntimeError("local Stage A change base must be an ancestor of HEAD")
     return change_base
 
 
@@ -63,27 +67,50 @@ CHANGE_BASE = resolve_change_base()
 
 class StageAContractTests(unittest.TestCase):
     def test_explicit_change_base_requires_exact_nonself_identity(self) -> None:
-        head = git_commit(ROOT, "HEAD")
-        with self.assertRaisesRegex(RuntimeError, "exact nonzero commit identity"):
+        with self.assertRaisesRegex(RuntimeError, "trusted hosted ref"):
             resolve_change_base(root=ROOT, environment={"YOKO_STAGE_A_CHANGE_BASE": "HEAD"})
-        with self.assertRaisesRegex(RuntimeError, "must differ from HEAD"):
-            resolve_change_base(
-                root=ROOT,
-                environment={
-                    "YOKO_STAGE_A_CHANGE_BASE": "HEAD",
-                    "YOKO_STAGE_A_CHANGE_BASE_COMMIT": head,
-                },
-            )
 
-    def test_explicit_change_base_rejects_identity_mismatch(self) -> None:
-        with self.assertRaisesRegex(RuntimeError, "does not match"):
-            resolve_change_base(
-                root=ROOT,
-                environment={
-                    "YOKO_STAGE_A_CHANGE_BASE": CHANGE_BASE,
-                    "YOKO_STAGE_A_CHANGE_BASE_COMMIT": git_commit(ROOT, "HEAD"),
-                },
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            subprocess.run(["git", "-C", str(root), "init", "--quiet"], check=True)
+            subprocess.run(["git", "-C", str(root), "config", "user.name", "Stage A test"], check=True)
+            subprocess.run(["git", "-C", str(root), "config", "user.email", "stage-a@example.invalid"], check=True)
+            (root / "fixture").write_text("base\n")
+            subprocess.run(["git", "-C", str(root), "add", "fixture"], check=True)
+            subprocess.run(["git", "-C", str(root), "commit", "--quiet", "-m", "base"], check=True)
+            base = git_commit(root, "HEAD")
+            subprocess.run(["git", "-C", str(root), "update-ref", HOSTED_CHANGE_BASE_REF, base], check=True)
+            (root / "fixture").write_text("head\n")
+            subprocess.run(["git", "-C", str(root), "commit", "--quiet", "-am", "head"], check=True)
+            head = git_commit(root, "HEAD")
+
+            self.assertEqual(
+                resolve_change_base(
+                    root=root,
+                    environment={
+                        "YOKO_STAGE_A_CHANGE_BASE": HOSTED_CHANGE_BASE_REF,
+                        "YOKO_STAGE_A_CHANGE_BASE_COMMIT": base,
+                    },
+                ),
+                base,
             )
+            with self.assertRaisesRegex(RuntimeError, "does not match"):
+                resolve_change_base(
+                    root=root,
+                    environment={
+                        "YOKO_STAGE_A_CHANGE_BASE": HOSTED_CHANGE_BASE_REF,
+                        "YOKO_STAGE_A_CHANGE_BASE_COMMIT": head,
+                    },
+                )
+            subprocess.run(["git", "-C", str(root), "update-ref", HOSTED_CHANGE_BASE_REF, head], check=True)
+            with self.assertRaisesRegex(RuntimeError, "must differ from HEAD"):
+                resolve_change_base(
+                    root=root,
+                    environment={
+                        "YOKO_STAGE_A_CHANGE_BASE": HOSTED_CHANGE_BASE_REF,
+                        "YOKO_STAGE_A_CHANGE_BASE_COMMIT": head,
+                    },
+                )
 
     def test_missing_origin_main_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
