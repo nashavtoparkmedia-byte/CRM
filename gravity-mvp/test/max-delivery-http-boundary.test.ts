@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
     messageFindFirst: vi.fn(),
     messageCreate: vi.fn(),
     messageUpdate: vi.fn(),
+    messageUpdateMany: vi.fn(),
     onOutboundMessage: vi.fn(),
 }))
 
@@ -16,6 +17,7 @@ vi.mock('@/lib/prisma', () => ({
             findFirst: mocks.messageFindFirst,
             create: mocks.messageCreate,
             update: mocks.messageUpdate,
+            updateMany: mocks.messageUpdateMany,
         },
     },
 }))
@@ -96,6 +98,7 @@ describe('MAX HTTP 2xx delivery boundary', () => {
         vi.unstubAllGlobals()
         mocks.messageFindFirst.mockResolvedValue(null)
         mocks.messageUpdate.mockResolvedValue({ id: 'message-http-retry' })
+        mocks.messageUpdateMany.mockResolvedValue({ count: 1 })
         mocks.onOutboundMessage.mockResolvedValue(undefined)
         registerMaxMessagingDeliveryCapabilityV1()
         unregisterOutboundPreparer = registerOutboundConversationPreparerV1(async () => ({
@@ -149,6 +152,7 @@ describe('MAX HTTP 2xx delivery boundary', () => {
             content: 'Retry through real boundary',
             clientMessageId: 'cmid-http-retry',
             status: 'failed',
+            updatedAt: new Date('2026-09-01T00:00:00.000Z'),
             metadata: {
                 retryable: true,
                 retryAttempt: 0,
@@ -177,8 +181,8 @@ describe('MAX HTTP 2xx delivery boundary', () => {
         })
 
         expect(mocks.messageCreate).not.toHaveBeenCalled()
-        expect(mocks.messageUpdate.mock.calls.at(-1)?.[0]).toMatchObject({
-            where: { id: 'message-http-retry' },
+        expect(mocks.messageUpdateMany.mock.calls.at(-1)?.[0]).toMatchObject({
+            where: expect.objectContaining({ id: 'message-http-retry', status: 'sent' }),
             data: {
                 status: 'failed',
                 externalId: undefined,

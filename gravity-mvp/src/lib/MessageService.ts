@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { randomUUID } from 'node:crypto'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { ChatChannel, MessageStatus } from '@prisma/client'
@@ -774,7 +775,7 @@ export class MessageService {
         if (deliveryStatus === 'delivered') {
             try {
                 const { contactReachabilityV1 } = await import('@/modules/contacts/public/v1/contact-reachability')
-                await contactReachabilityV1.recordExactProviderReachability({
+                const reachabilityResult = await contactReachabilityV1.recordExactProviderReachability({
                     identityId: outboundBinding.contactIdentityId,
                     contactId: outboundBinding.contactId,
                     channel: outboundBinding.channel,
@@ -782,6 +783,15 @@ export class MessageService {
                     providerTargetId: outboundBinding.identityTarget,
                     status: 'confirmed',
                 })
+                if (reachabilityResult.outcome === 'rejected') {
+                    opsLog('warn', 'message_reachability_rejected', {
+                        operation: 'send',
+                        messageId,
+                        chatId: currentChatId,
+                        channel,
+                        reason: reachabilityResult.reason,
+                    })
+                }
             } catch (reachErr: any) {
                 // Non-critical — delivery already completed at the provider.
                 console.error(`[MessageService] Reachability update failed: ${reachErr.message}`)
@@ -834,6 +844,15 @@ export class MessageService {
                 error: error instanceof Error ? error.message : 'Conversation identity binding is invalid',
             }
         }
+        if (
+            outboundBinding.chatId !== message.chatId
+            || outboundBinding.channel !== message.channel
+        ) {
+            return { success: false, error: 'CONTACT_CONVERSATION_MESSAGE_BINDING_MISMATCH' }
+        }
+        if (!(message.updatedAt instanceof Date)) {
+            return { success: false, error: 'MESSAGE_RETRY_VERSION_UNAVAILABLE' }
+        }
 
         const retryMaxBinding = message.channel === 'max'
             ? {
@@ -847,11 +866,33 @@ export class MessageService {
             messageId, chatId: message.chatId, channel: message.channel, retryAttempt: attempt,
         })
 
-        // Reset to 'sent' for delivery attempt
-        await (prisma.message as any).update({
-            where: { id: messageId },
-            data: { status: 'sent', metadata: { ...meta, retryAttempt: attempt } },
+        // Atomically lease this exact failed row version. Concurrent workers may
+        // all read it, but only one can change the failed+updatedAt snapshot.
+        // Refresh sentAt at the same time so recovery cannot immediately reclaim
+        // an active retry using the timestamp from its original send attempt.
+        const retryLeaseId = randomUUID()
+        const retryStartedAt = new Date()
+        const claimedMetadata = {
+            ...meta,
+            retryAttempt: attempt,
+            retryLeaseId,
+            retryStartedAt: retryStartedAt.toISOString(),
+        }
+        const retryClaim = await (prisma.message as any).updateMany({
+            where: {
+                id: messageId,
+                status: 'failed',
+                updatedAt: message.updatedAt,
+            },
+            data: {
+                status: 'sent',
+                sentAt: retryStartedAt,
+                metadata: claimedMetadata,
+            },
         })
+        if (retryClaim.count !== 1) {
+            return { success: false, error: 'Retry already claimed' }
+        }
 
         // Re-dispatch through channel
         let deliveryStatus = 'failed'
@@ -959,7 +1000,7 @@ export class MessageService {
         }
 
         // Update final status
-        const retryMeta: any = { ...meta, retryAttempt: attempt, lastFailedAt: new Date().toISOString() }
+        const retryMeta: any = { ...claimedMetadata, lastFailedAt: new Date().toISOString() }
         if (retryMaxDeliveryMetadata) {
             retryMeta.maxDelivery = retryMaxDeliveryMetadata
         }
@@ -971,14 +1012,28 @@ export class MessageService {
             opsLog('info', 'message_retry_success', { messageId, channel: message.channel, retryAttempt: attempt })
         }
 
-        await (prisma.message as any).update({
-            where: { id: messageId },
+        const retryFinalization = await (prisma.message as any).updateMany({
+            where: {
+                id: messageId,
+                status: 'sent',
+                sentAt: retryStartedAt,
+                metadata: { path: ['retryLeaseId'], equals: retryLeaseId },
+            },
             data: {
                 status: deliveryStatus,
                 externalId: deliveryExternalId || undefined,
                 metadata: retryMeta,
             },
         })
+        if (retryFinalization.count !== 1) {
+            opsLog('warn', 'message_retry_lease_lost', {
+                messageId,
+                chatId: message.chatId,
+                channel: message.channel,
+                retryAttempt: attempt,
+            })
+            return { success: false, error: 'Retry delivery lease lost' }
+        }
 
         if (deliveryStatus !== 'failed') {
             await ConversationWorkflowService.onOutboundMessage(message.chatId, new Date())
@@ -987,7 +1042,7 @@ export class MessageService {
         if (deliveryStatus === 'delivered') {
             try {
                 const { contactReachabilityV1 } = await import('@/modules/contacts/public/v1/contact-reachability')
-                await contactReachabilityV1.recordExactProviderReachability({
+                const reachabilityResult = await contactReachabilityV1.recordExactProviderReachability({
                     identityId: outboundBinding.contactIdentityId,
                     contactId: outboundBinding.contactId,
                     channel: outboundBinding.channel,
@@ -995,6 +1050,15 @@ export class MessageService {
                     providerTargetId: outboundBinding.identityTarget,
                     status: 'confirmed',
                 })
+                if (reachabilityResult.outcome === 'rejected') {
+                    opsLog('warn', 'message_reachability_rejected', {
+                        operation: 'retry',
+                        messageId,
+                        chatId: message.chatId,
+                        channel: message.channel,
+                        reason: reachabilityResult.reason,
+                    })
+                }
             } catch (reachErr: any) {
                 console.error(`[MessageService] Reachability update failed: ${reachErr.message}`)
             }

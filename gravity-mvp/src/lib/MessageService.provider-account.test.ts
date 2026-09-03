@@ -144,6 +144,7 @@ function failedMessage(channel: 'telegram' | 'whatsapp' | 'max') {
         content: 'retry me',
         clientMessageId: 'client-message-1',
         status: 'failed',
+        updatedAt: new Date('2026-09-01T00:00:00.000Z'),
         metadata: {
             retryable: true,
             retryAttempt: 0,
@@ -165,6 +166,7 @@ describe('MessageService conversation transport routing', () => {
         ))
         mocks.messageCreate.mockResolvedValue({ id: 'message-created' })
         mocks.messageUpdate.mockResolvedValue({})
+        mocks.messageUpdateMany.mockResolvedValue({ count: 1 })
         mocks.chatUpdate.mockResolvedValue({})
         mocks.telegramSendText.mockResolvedValue({ externalId: 'telegram-message-1' })
         mocks.whatsAppSendText.mockResolvedValue({ externalId: 'whatsapp-message-1' })
@@ -412,6 +414,132 @@ describe('MessageService conversation transport routing', () => {
         },
     )
 
+    test('atomically admits only one concurrent retry for the same failed row version', async () => {
+        const retry = failedMessage('max')
+        mocks.messageFindUnique.mockResolvedValue(retry)
+        let claimed = false
+        mocks.messageUpdateMany.mockImplementation(async ({ where }: any) => {
+            if (where.status === 'failed') {
+                if (claimed) return { count: 0 }
+                claimed = true
+                return { count: 1 }
+            }
+            return { count: 1 }
+        })
+
+        const results = await Promise.all([
+            MessageService.retrySend('message-1'),
+            MessageService.retrySend('message-1'),
+        ])
+
+        expect(results).toContainEqual({ success: true, error: undefined })
+        expect(results).toContainEqual({ success: false, error: 'Retry already claimed' })
+        expect(mocks.maxSendText).toHaveBeenCalledTimes(1)
+        const claim = mocks.messageUpdateMany.mock.calls
+            .map(([input]) => input)
+            .find(input => input.where.status === 'failed')
+        expect(claim).toMatchObject({
+            where: {
+                id: 'message-1',
+                status: 'failed',
+                updatedAt: retry.updatedAt,
+            },
+            data: {
+                status: 'sent',
+                sentAt: expect.any(Date),
+                metadata: expect.objectContaining({
+                    retryAttempt: 1,
+                    retryLeaseId: expect.any(String),
+                    retryStartedAt: expect.any(String),
+                }),
+            },
+        })
+    })
+
+    test('fences retry finalization when recovery or another owner has taken the lease', async () => {
+        mocks.messageFindUnique.mockResolvedValue(failedMessage('max'))
+        mocks.messageUpdateMany
+            .mockResolvedValueOnce({ count: 1 })
+            .mockResolvedValueOnce({ count: 0 })
+
+        await expect(MessageService.retrySend('message-1')).resolves.toEqual({
+            success: false,
+            error: 'Retry delivery lease lost',
+        })
+
+        expect(mocks.maxSendText).toHaveBeenCalledTimes(1)
+        expect(mocks.outboundWorkflow).not.toHaveBeenCalled()
+        expect(mocks.recordReachability).not.toHaveBeenCalled()
+        expect(mocks.opsLog).toHaveBeenCalledWith(
+            'warn',
+            'message_retry_lease_lost',
+            expect.objectContaining({ messageId: 'message-1', retryAttempt: 1 }),
+        )
+    })
+
+    test('rejects Message-to-Chat channel drift before claiming or delivering a retry', async () => {
+        const retry = failedMessage('telegram')
+        retry.channel = 'max'
+        mocks.messageFindUnique.mockResolvedValue(retry)
+
+        await expect(MessageService.retrySend('message-1')).resolves.toEqual({
+            success: false,
+            error: 'CONTACT_CONVERSATION_MESSAGE_BINDING_MISMATCH',
+        })
+
+        expect(mocks.messageUpdateMany).not.toHaveBeenCalled()
+        expect(mocks.telegramSendText).not.toHaveBeenCalled()
+        expect(mocks.maxSendText).not.toHaveBeenCalled()
+    })
+
+    test('keeps provider delivery successful but logs a returned reachability rejection', async () => {
+        mocks.chatFindUnique.mockResolvedValue(chat('telegram'))
+        mocks.recordReachability.mockResolvedValue({
+            outcome: 'rejected',
+            reason: 'identity_inactive',
+        })
+
+        await expect(MessageService.send('chat-1', 'hello', 'telegram')).resolves.toMatchObject({
+            success: true,
+            status: 'delivered',
+        })
+
+        expect(mocks.opsLog).toHaveBeenCalledWith(
+            'warn',
+            'message_reachability_rejected',
+            expect.objectContaining({
+                operation: 'send',
+                chatId: 'chat-1',
+                channel: 'telegram',
+                reason: 'identity_inactive',
+            }),
+        )
+    })
+
+    test('keeps a retry delivery successful but logs a returned reachability rejection', async () => {
+        mocks.messageFindUnique.mockResolvedValue(failedMessage('telegram'))
+        mocks.recordReachability.mockResolvedValue({
+            outcome: 'rejected',
+            reason: 'provider_target_mismatch',
+        })
+
+        await expect(MessageService.retrySend('message-1')).resolves.toEqual({
+            success: true,
+            error: undefined,
+        })
+
+        expect(mocks.opsLog).toHaveBeenCalledWith(
+            'warn',
+            'message_reachability_rejected',
+            expect.objectContaining({
+                operation: 'retry',
+                messageId: 'message-1',
+                channel: 'telegram',
+                reason: 'provider_target_mismatch',
+            }),
+        )
+    })
+
     test('uses a live-shaped MAX scraper conversation target without treating providerAccountId as a connection', async () => {
         mocks.chatFindUnique.mockResolvedValue({
             ...chat('max', {
@@ -444,6 +572,9 @@ describe('MessageService conversation transport routing', () => {
             connectionId: 'max_scraper',
             isPersonal: true,
         })
+        expect(mocks.recordReachability).toHaveBeenCalledWith(expect.objectContaining({
+            providerTargetId: 'max-sender-42',
+        }))
     })
 
     test('rejects an unproven MAX account-to-transport mapping before creating a message', async () => {
