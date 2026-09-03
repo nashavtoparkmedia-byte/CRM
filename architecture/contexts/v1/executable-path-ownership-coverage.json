@@ -108,8 +108,8 @@
     }
   ],
   "source": {
-    "tracked_executable_surfaces": 2292,
-    "tracked_inventory_sha256": "644b6c36e754a4ed62a19abf9b5022d2c8370b49c5fb4251bb3f4e413e506d2a"
+    "tracked_executable_surfaces": 2306,
+    "tracked_inventory_sha256": "3d3b98c385cc0f3831c9cd9f8ffaa6748864f23e59579e09c7c0266585370193"
   },
   "governed_exclusions": [
     {
@@ -147,8 +147,8 @@
       "rationale": "Recovery evidence and control-plane payloads are governed outside bounded-context runtime ownership.",
       "review_artifact": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
       "exact_runtime_inventory": {
-        "path_count": 16,
-        "path_sha256": "8733f45135acd16ec0f0c4dd1665385e61f3e976218c2ddb0ee4e3bb40da7319"
+        "path_count": 18,
+        "path_sha256": "bd77264e19abd027d4bce20075c40450fba275738f696ec4ff13feab610df97a"
       }
     },
     {
@@ -281,19 +281,19 @@
       "review_artifact": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json"
     }
   ],
-  "coverage_sha256": "f8507a18c315939bfad1c0c1a9c1b9c585d1c76de77bc5db9e7af2abfb3c5c2a",
+  "coverage_sha256": "bcce942c8c769f28699e5bd6907a55a51d7bd7276337473651ffc9d6f3c988cb",
   "summary": {
-    "tracked_executable_surfaces": 2292,
+    "tracked_executable_surfaces": 2306,
     "context_owned_paths": 1150,
-    "governed_exclusion_paths": 1142
+    "governed_exclusion_paths": 1156
   },
   "reviewed_exact_inventory_materialization": {
     "decision_registry_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json",
-    "decision_registry_sha256": "cdc08902f6a290ff923c0ce2b5da3add6e7f6bfb7a51d9d880e2955a12d3a829",
+    "decision_registry_sha256": "244f461226a36b4f5ec072cd456fc45f04bac3eea4e749be6fbf39d4af568cf8",
     "baseline_coverage_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_COVERAGE_BASELINE_2108.json",
     "baseline_coverage_sha256": "bd7df022d08734ec500336907c4c1dadc6c6ac3c7f3df23c1df0d307a4cdfb29",
-    "tracked_inventory_sha256": "644b6c36e754a4ed62a19abf9b5022d2c8370b49c5fb4251bb3f4e413e506d2a",
+    "tracked_inventory_sha256": "3d3b98c385cc0f3831c9cd9f8ffaa6748864f23e59579e09c7c0266585370193",
     "exact_inventory_change_count": 3,
-    "reviewed_assignment_count": 45
+    "reviewed_assignment_count": 47
   }
 }
