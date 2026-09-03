@@ -42,18 +42,54 @@ jobs:
       - name: Fetch exact Stage A authorities
         env:
           STAGE_A_APPLICATION_COMMIT: 6e3f094bf4b42c1400c705843ab107dacd6d1cf8
-          STAGE_A_CHANGE_BASE_COMMIT: ${{ github.event.pull_request.base.sha || github.event.before }}
+          STAGE_A_BUILDER_COMMIT: 80b17fbf143c3d67d786b26cae7e2b09829e52f7
+          STAGE_A_BUILDER_BASE_COMMIT: ba94bb493cef9938b07f187faf86bc81724cc9c0
         run: |
           set -Eeuo pipefail
-          printf '%s\n' "$STAGE_A_CHANGE_BASE_COMMIT" | grep -Eq '^[0-9a-f]{40}$'
-          test "$STAGE_A_CHANGE_BASE_COMMIT" != 0000000000000000000000000000000000000000
+          printf '%s\n' \
+            "$STAGE_A_APPLICATION_COMMIT" \
+            "$STAGE_A_BUILDER_COMMIT" \
+            "$STAGE_A_BUILDER_BASE_COMMIT" | grep -Eq '^[0-9a-f]{40}$'
           git fetch --no-tags --depth=1 origin \
             "$STAGE_A_APPLICATION_COMMIT:refs/heads/stage-a-accepted-application" \
-            "$STAGE_A_CHANGE_BASE_COMMIT:refs/heads/stage-a-change-base"
+            "$STAGE_A_BUILDER_COMMIT:refs/heads/stage-a-builder" \
+            "$STAGE_A_BUILDER_BASE_COMMIT:refs/heads/stage-a-builder-base"
           test "$(git rev-parse 'refs/heads/stage-a-accepted-application^{commit}')" = \
             "$STAGE_A_APPLICATION_COMMIT"
-          test "$(git rev-parse 'refs/heads/stage-a-change-base^{commit}')" = \
-            "$STAGE_A_CHANGE_BASE_COMMIT"
+          test "$(git rev-parse 'refs/heads/stage-a-builder^{commit}')" = \
+            "$STAGE_A_BUILDER_COMMIT"
+          test "$(git rev-parse 'refs/heads/stage-a-builder-base^{commit}')" = \
+            "$STAGE_A_BUILDER_BASE_COMMIT"
+
+      - name: Fetch exact architecture candidate base
+        id: architecture_candidate_base
+        env:
+          EVENT_BASE_COMMIT: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -Eeuo pipefail
+          printf '%s\n' "$EVENT_BASE_COMMIT" | grep -Eq '^[0-9a-f]{40}$'
+          printf '%s\n' "$HEAD_COMMIT" | grep -Eq '^[0-9a-f]{40}$'
+          test "$(git rev-parse 'HEAD^{commit}')" = "$HEAD_COMMIT"
+          candidate_base="$EVENT_BASE_COMMIT"
+          if test "$candidate_base" = 0000000000000000000000000000000000000000; then
+            candidate_base=$(git rev-parse 'HEAD^^{commit}')
+            git update-ref refs/heads/yoko-architecture-candidate-base "$candidate_base"
+          else
+            git fetch --no-tags --depth=1 origin \
+              "$candidate_base:refs/heads/yoko-architecture-candidate-base"
+          fi
+          test "$(git rev-parse 'refs/heads/yoko-architecture-candidate-base^{commit}')" = \
+            "$candidate_base"
+          for deepen_by in 32 64 128 256 512 1024 2048; do
+            if git merge-base refs/heads/yoko-architecture-candidate-base HEAD >/dev/null; then
+              break
+            fi
+            git fetch --no-tags --deepen="$deepen_by" origin "$HEAD_COMMIT" "$candidate_base"
+          done
+          merge_base=$(git merge-base refs/heads/yoko-architecture-candidate-base HEAD)
+          printf '%s\n' "$merge_base" | grep -Eq '^[0-9a-f]{40}$'
+          printf 'commit=%s\n' "$candidate_base" >> "$GITHUB_OUTPUT"
 
       - name: Run targeted Runtime TG base-reference contract
         env:
@@ -103,13 +139,14 @@ jobs:
 
       - name: Run authoritative architecture controls
         env:
-          # The accepted remediation is one exact source commit. The exact-head
-          # checkout above deliberately carries its parent, so this remains
-          # reproducible even when the hosted PR base is hundreds of commits
-          # behind and is not present in the shallow checkout.
-          YOKO_BLAST_BASE: HEAD^
-          YOKO_STAGE_A_CHANGE_BASE: refs/heads/stage-a-change-base
-          YOKO_STAGE_A_CHANGE_BASE_COMMIT: ${{ github.event.pull_request.base.sha || github.event.before }}
+          # Bind the whole pull-request delta or multi-commit push delta to the
+          # exact event base fetched and verified above.
+          YOKO_BLAST_BASE: refs/heads/yoko-architecture-candidate-base
+          YOKO_BLAST_BASE_COMMIT: ${{ steps.architecture_candidate_base.outputs.commit }}
+          YOKO_STAGE_A_BUILDER: refs/heads/stage-a-builder
+          YOKO_STAGE_A_BUILDER_COMMIT: 80b17fbf143c3d67d786b26cae7e2b09829e52f7
+          YOKO_STAGE_A_BUILDER_BASE: refs/heads/stage-a-builder-base
+          YOKO_STAGE_A_BUILDER_BASE_COMMIT: ba94bb493cef9938b07f187faf86bc81724cc9c0
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres?schema=yoko_migration_authority_replay_ci
           YOKO_POSTGRES_CLIENT_CONTAINER: ${{ job.services.postgres.id }}
           YOKO_CI_ATTESTATION_OUTPUT: authoritative-ci-execution.json

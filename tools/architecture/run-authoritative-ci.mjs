@@ -17,6 +17,8 @@ import { fileURLToPath } from 'node:url'
 const root = process.cwd()
 export const AUTHORITATIVE_NODE_VERSION = '20.20.2'
 export const AUTHORITATIVE_BLAST_BASE = 'HEAD^'
+export const HOSTED_AUTHORITATIVE_BLAST_BASE = 'refs/heads/yoko-architecture-candidate-base'
+const COMMIT_SHA = /^[0-9a-f]{40}$/u
 
 export const targetedControls = [
   ['authoritative-ci-inventory', 'node', ['tools/architecture/test-authoritative-ci-inventory.mjs']],
@@ -140,8 +142,18 @@ export function assertAuthoritativeRuntimeContract(
   if (nodeVersion !== AUTHORITATIVE_NODE_VERSION) {
     throw new Error(`authoritative CI requires Node.js ${AUTHORITATIVE_NODE_VERSION}; received ${nodeVersion}`)
   }
-  if (environment.YOKO_BLAST_BASE !== AUTHORITATIVE_BLAST_BASE) {
-    throw new Error(`authoritative CI requires YOKO_BLAST_BASE=${AUTHORITATIVE_BLAST_BASE}`)
+  const blastBase = environment.YOKO_BLAST_BASE
+  if (![AUTHORITATIVE_BLAST_BASE, HOSTED_AUTHORITATIVE_BLAST_BASE].includes(blastBase)) {
+    throw new Error(
+      `authoritative CI requires YOKO_BLAST_BASE=${AUTHORITATIVE_BLAST_BASE} or ${HOSTED_AUTHORITATIVE_BLAST_BASE}`,
+    )
+  }
+  const expectedCommit = environment.YOKO_BLAST_BASE_COMMIT
+  if (blastBase === HOSTED_AUTHORITATIVE_BLAST_BASE && !COMMIT_SHA.test(expectedCommit ?? '')) {
+    throw new Error('hosted authoritative CI requires an exact YOKO_BLAST_BASE_COMMIT')
+  }
+  if (blastBase === AUTHORITATIVE_BLAST_BASE && expectedCommit !== undefined) {
+    throw new Error('local authoritative CI must derive the HEAD^ blast-base identity directly')
   }
 }
 
@@ -186,8 +198,8 @@ export function buildExecutionProof(executions, identity) {
     },
     runtime: {
       node: process.versions.node,
-      blast_base: AUTHORITATIVE_BLAST_BASE,
-      blast_base_commit: identity.parent,
+      blast_base: identity.blast_base ?? AUTHORITATIVE_BLAST_BASE,
+      blast_base_commit: identity.blast_base_commit ?? identity.parent,
     },
     controls: {
       count: ids.length,
@@ -198,19 +210,34 @@ export function buildExecutionProof(executions, identity) {
   }
 }
 
-export function captureExecutionProofIdentity(repository = root) {
+export function captureExecutionProofIdentity(repository = root, environment = process.env) {
+  const blastBase = environment.YOKO_BLAST_BASE ?? AUTHORITATIVE_BLAST_BASE
+  const blastBaseCommit = gitIdentity(`${blastBase}^{commit}`, repository)
+  const expectedCommit = environment.YOKO_BLAST_BASE_COMMIT
+  if (expectedCommit !== undefined && expectedCommit !== blastBaseCommit) {
+    throw new Error('authoritative CI blast-base ref does not match YOKO_BLAST_BASE_COMMIT')
+  }
   return {
     commit: gitIdentity('HEAD^{commit}', repository),
     tree: gitIdentity('HEAD^{tree}', repository),
     parent: gitIdentity('HEAD^', repository),
+    blast_base: blastBase,
+    blast_base_commit: blastBaseCommit,
     workflow_sha256: sha256File('.github/workflows/architecture-enforcement.yml', repository),
     runner_sha256: sha256File('tools/architecture/run-authoritative-ci.mjs', repository),
   }
 }
 
-export function assertExecutionProofIdentity(identity, repository = root, stage = 'before authoritative control') {
-  const current = captureExecutionProofIdentity(repository)
-  for (const key of ['commit', 'tree', 'parent', 'workflow_sha256', 'runner_sha256']) {
+export function assertExecutionProofIdentity(
+  identity,
+  repository = root,
+  stage = 'before authoritative control',
+  environment = process.env,
+) {
+  const current = captureExecutionProofIdentity(repository, environment)
+  for (const key of [
+    'commit', 'tree', 'parent', 'blast_base', 'blast_base_commit', 'workflow_sha256', 'runner_sha256',
+  ]) {
     if (current[key] !== identity[key]) {
       throw new Error(`authoritative CI source identity drift ${stage}: ${key}`)
     }
