@@ -126,7 +126,7 @@ export const controlledRealAiCallPrismaPort: ControlledRealAiCallPersistencePort
 
     async recordDispatch(input) {
         await prisma.$transaction(async (tx) => {
-            await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "Call" WHERE "id" = ${input.callId} FOR UPDATE`)
+            await tx.$queryRaw`SELECT "id" FROM "Call" WHERE "id" = ${input.callId} FOR UPDATE`
             const call = await tx.call.findUnique({
                 where: { id: input.callId },
                 select: { metadata: true },
@@ -134,16 +134,22 @@ export const controlledRealAiCallPrismaPort: ControlledRealAiCallPersistencePort
             if (!call || storedFingerprint(call.metadata) !== input.requestFingerprint) {
                 throw new Error('controlled real call dispatch identity mismatch')
             }
-            await tx.call.update({
-                where: { id: input.callId },
-                data: {
-                    metadata: withDispatchState(call.metadata, input),
-                    ...(input.state === 'rejected' ? {
+            const metadata = withDispatchState(call.metadata, input)
+            if (input.state === 'rejected') {
+                await tx.call.update({
+                    where: { id: input.callId },
+                    data: {
+                        metadata,
                         endedAt: input.recordedAt,
                         hangupCause: 'PROVIDER_ORIGINATE_FAILED',
-                    } : {}),
-                },
-            })
+                    },
+                })
+            } else {
+                await tx.call.update({
+                    where: { id: input.callId },
+                    data: { metadata },
+                })
+            }
         })
     },
 }

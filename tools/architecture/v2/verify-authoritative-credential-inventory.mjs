@@ -412,6 +412,7 @@ export const RUNTIME_BOUNDARY_REVIEW_POLICIES = [
     ],
     consumer_edges: [
       runtimeEdge('gravity-mvp/src/lib/ai-call/provider-settings.ts', 'getStatus', 'gravity-mvp/src/lib/ai-call/keys-status.ts', 'MASKED_STATUS_PROJECTION'),
+      runtimeEdge('gravity-mvp/src/lib/ai-call/keys-status.ts', 'getAiCallKeysStatus', 'gravity-mvp/src/modules/calling/application/controlled-real-ai-call-runtime.ts', 'CONTROLLED_REAL_CALL_READINESS_MASKED_STATUS'),
       runtimeEdge('gravity-mvp/src/lib/ai-call/keys-status.ts', 'getAiCallKeysStatus', 'gravity-mvp/src/modules/calling/public/v1/ai-call-provider-status.ts', 'MASKED_STATUS_REEXPORT', 'getAiCallProviderStatusV1', 'export'),
       runtimeEdge('gravity-mvp/src/modules/calling/public/v1/ai-call-provider-status.ts', 'getAiCallProviderStatusV1', 'gravity-mvp/src/app/api/settings/ai-call-keys/route.ts', 'ADMIN_AUTHORIZED_MASKED_STATUS_RESPONSE'),
       runtimeEdge('gravity-mvp/src/modules/calling/public/v1/ai-call-provider-status.ts', 'getAiCallProviderStatusV1', 'gravity-mvp/src/app/settings/integrations/ai-call-scenarios/page.tsx', 'SERVER_RENDERED_MASKED_STATUS_ONLY'),

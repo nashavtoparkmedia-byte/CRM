@@ -1,5 +1,4 @@
 import { getAiCallKeysStatus } from '@/lib/ai-call/keys-status'
-import { getAllPlaintext } from '@/lib/ai-call/provider-settings'
 import { isBridgeMachineTokenWellFormed } from '../internal/ai-calls/bridge-machine-auth'
 import { controlledRealAiCallPrismaPort } from '../internal/ai-calls/controlled-real-ai-call-prisma-adapter'
 import { freeswitchControlledRealAiCallProvider } from '../internal/ai-calls/freeswitch-controlled-real-ai-call-adapter'
@@ -88,8 +87,7 @@ async function probeAudioBridgeHealth(): Promise<boolean> {
 }
 
 async function resolveControlledRealCallReadiness(): Promise<ControlledRealCallReadiness> {
-    const [credentials, statuses, telephony, audioBridgeReachable] = await Promise.all([
-        getAllPlaintext(),
+    const [statuses, telephony, audioBridgeReachable] = await Promise.all([
         getAiCallKeysStatus(),
         boundedTelephonyHealth(),
         probeAudioBridgeHealth(),
@@ -97,10 +95,10 @@ async function resolveControlledRealCallReadiness(): Promise<ControlledRealCallR
     return inspectControlledRealCallReadiness({
         env: process.env,
         credentials: {
-            openaiConfigured: Boolean(credentials.openaiApiKey),
+            openaiConfigured: statuses.openai.configured,
             openaiVerified: recentlyVerified(statuses.openai),
-            yandexConfigured: Boolean(credentials.yandexApiKey),
-            yandexFolderConfigured: Boolean(credentials.yandexFolderId),
+            yandexConfigured: statuses.yandexSpeechkit.configured,
+            yandexFolderConfigured: statuses.yandexFolderId.configured,
             yandexVerified: recentlyVerified(statuses.yandexSpeechkit),
         },
         telephony,
