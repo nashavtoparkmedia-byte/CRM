@@ -4,6 +4,10 @@ import { RECONCILE_YANDEX_FLEET_COMMAND_V1 } from '@/contracts/fleet-operations/
 import {
   searchYandexParksByDriverQueryV1,
 } from '@/modules/fleet-operations/public/v1'
+import {
+  getIntegrationAdminPrincipal,
+  isExactSameOriginMutationRequest,
+} from '@/modules/identity-access/public/v1'
 import { reconcileYandexFleetWithAutomaticMergeV1 } from '@/modules/platform-shell/public/v1'
 
 export async function GET(req: NextRequest) {
@@ -16,6 +20,12 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  if (!isExactSameOriginMutationRequest(req)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  if (!await getIntegrationAdminPrincipal()) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   const body = await req.json() as { query?: string }
   const query = body.query?.trim() || ''
   if (query.length < 3) {
