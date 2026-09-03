@@ -477,7 +477,7 @@ export async function assertContactOwnershipPostconditions(
           OR EXISTS (SELECT 1 FROM "ContactPhone" AS phone WHERE phone."contactId" = contact.id)
           OR EXISTS (SELECT 1 FROM "ContactIdentity" AS identity WHERE identity."contactId" = contact.id)
           OR EXISTS (SELECT 1 FROM "Chat" AS chat WHERE chat."contactId" = contact.id)
-          OR EXISTS (SELECT 1 FROM "Task" AS task WHERE task."contactId" = contact.id)
+          OR EXISTS (SELECT 1 FROM "tasks" AS task WHERE task."contactId" = contact.id)
           OR EXISTS (SELECT 1 FROM "Call" AS call WHERE call."contactId" = contact.id)
           OR EXISTS (SELECT 1 FROM "Driver" AS driver WHERE driver."contactId" = contact.id)
         )

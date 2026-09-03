@@ -107,6 +107,14 @@ async function within<T>(task: Promise<T>, description: string, timeoutMs = 10_0
 async function createContact(id: string, displayName = id, extra: Record<string, unknown> = {}) {
   await prisma.contact.create({ data: { id, displayName, ...extra } })
 }
+async function createPinnedContact(id: string) {
+  await createContact(id, id, {
+    customFields: {
+      canonicalPinnedAt: '2026-09-01T00:00:00.000Z',
+      canonicalPinnedBy: 'contact-ownership-lock-order-test',
+    },
+  })
+}
 async function createPhone(
   id: string,
   contactId: string,
@@ -120,11 +128,35 @@ async function createPhone(
       phone,
       source: ContactPhoneSource.manual,
       isPrimary: true,
+      verifiedAt: new Date('2026-09-01T00:00:00.000Z'),
       ...extra,
     },
   })
   if (created.isPrimary && created.isActive) {
-    await prisma.contact.update({ where: { id: contactId }, data: { primaryPhoneId: id } })
+    await prisma.contact.update({
+      where: { id: contactId },
+      data: {
+        primaryPhoneId: id,
+        customFields: {
+          phoneEvidenceByPhoneId: {
+            [id]: {
+              rawPhone: phone,
+              lifecycle: 'current',
+              trust: 'manually_verified',
+              freshness: 'fresh',
+              resolutionState: 'unique',
+              verifiedBy: 'contact-ownership-lock-order-test',
+              verificationBasis: 'manual_verified',
+              observedAt: '2026-09-01T00:00:00.000Z',
+              lastSeenAt: '2026-09-01T00:00:00.000Z',
+              lifecycleUpdatedAt: '2026-09-01T00:00:00.000Z',
+              evidenceRoot: `test:contact-phone:${id}`,
+              auditTrail: [],
+            },
+          },
+        },
+      },
+    })
   }
   return created
 }
@@ -433,7 +465,7 @@ describeWithDatabase.sequential('Contact ownership coordinator real PostgreSQL m
   })
 
   test('resolver → merge and merge → resolver both serialize', async () => {
-    await createContact('matrix-gated-source'); await createContact('target')
+    await createContact('matrix-gated-source'); await createPinnedContact('target')
     await createPhone('phone-source', 'matrix-gated-source')
     await runSerializedPair(
       'resolver/merge',
@@ -443,7 +475,7 @@ describeWithDatabase.sequential('Contact ownership coordinator real PostgreSQL m
     await prisma.$executeRawUnsafe(
       'TRUNCATE TABLE "ContactIdentity", "ContactPhone", "ContactMerge", "Contact" CASCADE',
     )
-    await createContact('matrix-gated-source'); await createContact('target')
+    await createContact('matrix-gated-source'); await createPinnedContact('target')
     await createPhone('phone-source', 'matrix-gated-source')
     await runSerializedPair(
       'merge/resolver',
@@ -515,7 +547,7 @@ describeWithDatabase.sequential('Contact ownership coordinator real PostgreSQL m
   })
 
   test('attach/merge and phone-writer/merge serialize', async () => {
-    await createContact('matrix-gated-source'); await createContact('target')
+    await createContact('matrix-gated-source'); await createPinnedContact('target')
     await createPhone('matrix-gated-phone', 'matrix-gated-source')
     await createIdentity('matrix-gated-identity', 'matrix-gated-source')
     await runSerializedPair(
@@ -526,7 +558,7 @@ describeWithDatabase.sequential('Contact ownership coordinator real PostgreSQL m
     await prisma.$executeRawUnsafe(
       'TRUNCATE TABLE "ContactIdentity", "ContactPhone", "ContactMerge", "Contact" CASCADE',
     )
-    await createContact('matrix-gated-source'); await createContact('target')
+    await createContact('matrix-gated-source'); await createPinnedContact('target')
     await createPhone('matrix-gated-phone', 'matrix-gated-source')
     await runSerializedPair(
       'phone/merge',
@@ -536,7 +568,7 @@ describeWithDatabase.sequential('Contact ownership coordinator real PostgreSQL m
   })
 
   test('merge/merge serializes into one survivor', async () => {
-    await createContact('matrix-gated-source-a'); await createContact('source-c'); await createContact('target')
+    await createContact('matrix-gated-source-a'); await createContact('source-c'); await createPinnedContact('target')
     await createPhone('phone-a', 'matrix-gated-source-a', PHONE)
     await createPhone('phone-c', 'source-c', OTHER_PHONE)
     await runSerializedPair(

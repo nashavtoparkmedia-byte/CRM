@@ -178,6 +178,21 @@ const primaryScope = {
 }
 
 describe('Contacts primary pointer/flag postcondition', () => {
+  test('uses physical mapped table names for archived foreign-reference checks', async () => {
+    const query = vi.fn(async (statement: readonly string[] | { strings: readonly string[] }) => {
+      void statement
+      return []
+    })
+    const transaction = { $queryRaw: query } as unknown as Prisma.TransactionClient
+    await admitContactOwnershipTransaction(transaction)
+    await assertContactOwnershipPostconditions(transaction, primaryScope)
+    const sql = query.mock.calls.map(([statement]) => (
+      'strings' in statement ? statement.strings : statement
+    ).join(' ')).join('\n')
+    expect(sql).toContain('FROM "tasks" AS task')
+    expect(sql).not.toContain('FROM "Task" AS task')
+  })
+
   test('allows a Contact with neither a primary pointer nor an active primary flag', async () => {
     const transaction = primaryFixtureTransaction('valid-empty')
     await admitContactOwnershipTransaction(transaction)
