@@ -529,6 +529,13 @@ describe('AI-call recipient source boundary', () => {
         expect(readSource('src/app/api/calls/route.ts')).toContain('isSimulation: false')
     })
 
+    it('exposes controlled provider identity and definitive failure to the operator', () => {
+        const detail = readSource('src/app/calls/[id]/CallDetailClient.tsx')
+        expect(detail).toContain('FreeSWITCH execution ID:')
+        expect(detail).toContain("controlledDispatchState === 'rejected'")
+        expect(detail).toContain('controlledDispatchFailureCode')
+    })
+
     it('uses only the Contacts public surface and exact versioned phone query', () => {
         const source = readSource('src/modules/calling/application/ai-call-recipient.ts')
         expect(source).toContain("from '@/modules/contacts/public/v1'")

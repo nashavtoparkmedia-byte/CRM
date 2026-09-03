@@ -40,6 +40,7 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
     // Serialise to plain JSON so it can cross the server→client boundary.
     const initial: CallDetail = {
         id: call.id,
+        fsUuid: call.fsUuid,
         direction: call.direction,
         status: call.status,
         fromNumber: call.fromNumber,

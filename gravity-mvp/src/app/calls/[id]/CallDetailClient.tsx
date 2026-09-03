@@ -21,6 +21,7 @@ export interface CallAnalysisShape {
 
 export interface CallDetail {
     id: string
+    fsUuid: string | null
     direction: 'inbound' | 'outbound'
     status: string
     fromNumber: string
@@ -107,6 +108,16 @@ export default function CallDetailClient({ initial }: { initial: CallDetail }) {
                     </span>
                 </div>
             )}
+            {call.controlledDispatchState === 'rejected' && (
+                <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-4 text-[13px] text-destructive">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>
+                        Provider не принял единственную попытку.
+                        {' '}
+                        Код: {call.controlledDispatchFailureCode ?? 'PROVIDER_ORIGINATE_FAILED'}.
+                    </span>
+                </div>
+            )}
             {call.controlledDispatchState === 'claimed' && (
                 <div className="flex items-start gap-2 rounded-md border border-border bg-surface p-4 text-[13px] text-muted-foreground">
                     <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
@@ -163,10 +174,18 @@ function CallHeader({ call, peerName, peerNumber }: { call: CallDetail; peerName
                     {call.durationSec !== null && (
                         <span>· Длительность {formatDuration(call.durationSec)}</span>
                     )}
+                    {call.endedAt && (
+                        <span>· Завершён {new Date(call.endedAt).toLocaleString('ru-RU')}</span>
+                    )}
                     {call.managerName && (
                         <span>· Менеджер: {call.managerName}</span>
                     )}
                 </div>
+                {call.controlledDispatchState && call.fsUuid && (
+                    <div className="mt-1 truncate font-mono text-[11px] text-muted-foreground">
+                        FreeSWITCH execution ID: {call.fsUuid}
+                    </div>
+                )}
             </div>
             <StatusBadge status={call.status} direction={call.direction} />
         </div>
