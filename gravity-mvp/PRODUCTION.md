@@ -7,6 +7,8 @@
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:pass@host:5432/db?schema=public` |
+| `MAX_SCRAPER_WEBHOOK_SECRET` | Shared secret used by max-web-scraper to authenticate MAX webhook ingress | Generate with `openssl rand -base64 32` |
+| `TG_BOT_API_URL` | Internal tg-bot transport used for exact Bot API delivery | `http://tg-bot:3001` |
 
 ### Recommended
 

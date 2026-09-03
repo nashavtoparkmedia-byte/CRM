@@ -29,7 +29,7 @@ import { normalizePhoneE164 } from '@/modules/contacts/public/v1/phone-identity'
 import { broadcastCall } from '@/modules/calling/internal/call-stream'
 import { getSipExtensionForUser, getUserIdForSipExtension } from '@/lib/sip/extensions'
 import { processRecording } from '@/lib/freeswitch/recordingProcessor'
-import { resolveContactByPhoneV1 } from '@/modules/contacts/public/v1'
+import { isResolvedChannelContactResultV1, resolveContactByPhoneV1 } from '@/modules/contacts/public/v1'
 import { mapHangupCauseToStatus, callStatusLabel, type CallDirection } from '@/lib/calls/status'
 import { projectCompletedCallTimelineV1 } from '@/modules/calling/public/v1/completed-call-timeline-projection'
 
@@ -339,44 +339,23 @@ async function handleChannelCreate(evt: any): Promise<void> {
     let contactId: string | null = null
     let displayName: string | null = null
     if (e164) {
-        const phone = await prisma.contactPhone.findFirst({
-            where: { phone: e164 },
-            include: { contact: { include: { driver: true } } },
-        })
-        if (phone) {
-            contactId = phone.contactId
-            displayName = phone.contact.displayName
-            driverId = phone.contact.driver?.id ?? null
-        }
-        if (!driverId) {
-            const driver = await prisma.driver.findFirst({
-                where: { phone: e164 },
-                select: { id: true, fullName: true },
+        const resolved = await resolveContactByPhoneV1(e164, displayName)
+        if (isResolvedChannelContactResultV1(resolved)) {
+            contactId = resolved.contact.id
+            displayName = resolved.contact.displayName
+            // A Driver may only follow the exact canonical Contact selected by
+            // Contacts. There is no independent phone/name fallback here.
+            const canonical = await prisma.contact.findUnique({
+                where: { id: contactId },
+                select: { driver: { select: { id: true } } },
             })
-            if (driver) {
-                driverId = driver.id
-                displayName = displayName ?? driver.fullName
-            }
-        }
-
-        // Auto-create Contact if neither phone-lookup nor driver-lookup found one.
-        // This is the merge anchor for the chat-channel resolver: once a Contact
-        // with this phone exists, any subsequent MAX/TG/WA message from the same
-        // person will land on resolveContact()'s "phone match" branch and attach
-        // a fresh ContactIdentity to this Contact. The history (call ↔ chat)
-        // unifies under one card automatically.
-        if (!contactId) {
-            try {
-                const resolved = await resolveContactByPhoneV1(e164, displayName)
-                if (resolved) {
-                    contactId = resolved.contact.id
-                    displayName = displayName ?? resolved.contact.displayName
-                }
-            } catch (err: any) {
-                // Don't block call processing on contact-create failure — the
-                // Call row still lands with contactId=null and the journal works.
-                opsLog('error', 'contact_auto_create_failed', { operation: 'call', error: err.message, phone: e164 })
-            }
+            driverId = canonical?.driver?.id ?? null
+        } else {
+            opsLog('warn', 'contact_resolution_blocked', {
+                operation: 'call',
+                status: resolved.status,
+                candidateCount: resolved.status === 'ambiguous' ? resolved.candidateCount : undefined,
+            })
         }
     }
 

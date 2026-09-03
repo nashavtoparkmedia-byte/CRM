@@ -11,8 +11,8 @@ export interface WhatsAppChannelDeliveryV1 {
 
 export interface TelegramChannelDeliveryV1 {
     sendText(input: { target: string, content: string, connectionId?: string, metadata?: { messageId?: string, chatId?: string, driverId?: string, quotedMsgId?: string } }): Promise<unknown>
-    sendMedia(input: { target: string, base64: string, filename: string, mimeType: string, caption?: string, connectionId?: string }): Promise<{ success: boolean, externalId?: string }>
-    sendReaction(input: { connectionId?: string, chatId: string, messageId: string, emoji: string, remove: boolean }): Promise<void>
+    sendMedia(input: { target: string, internalChatId: string, providerAccountId: string, identityTarget: string, base64: string, filename: string, mimeType: string, caption?: string, connectionId: string }): Promise<{ success: boolean, externalId?: string }>
+    sendReaction(input: { connectionId: string, internalChatId: string, providerAccountId: string, identityTarget: string, chatId: string, messageId: string, emoji: string, remove: boolean }): Promise<void>
 }
 
 export interface MaxTextDeliveryResultV1 {
@@ -21,13 +21,21 @@ export interface MaxTextDeliveryResultV1 {
     resolvedChatId: string | null
 }
 
+export interface MaxTransportBindingV1 {
+    providerAccountId: string
+    connectionId?: string
+    isPersonal: boolean
+}
+
 export interface MaxChannelDeliveryV1 {
-    sendText(input: { target: string, content: string, options?: { name?: string, connectionId?: string, isPersonal?: boolean, quotedMsgId?: string, quotedText?: string, quotedSentAt?: string, quotedDirection?: string, uiChatId?: string, clientMessageId?: string } }): Promise<MaxTextDeliveryResultV1>
-    sendMedia(input: { chatId: number, base64: string, filename: string, mimeType: string, caption: string, mediaType: string, uiChatId?: string, phone?: string }): Promise<{ externalId?: string }>
-    sendReaction(input: { chatId: string, messageId: string, emoji: string, remove: boolean }): Promise<{
+    assertTransportBinding(input: MaxTransportBindingV1): void
+    sendText(input: { target: string, content: string, options: { providerAccountId: string, name?: string, connectionId?: string, isPersonal?: boolean, quotedMsgId?: string, quotedText?: string, quotedSentAt?: string, quotedDirection?: string, uiChatId?: string, clientMessageId?: string } }): Promise<MaxTextDeliveryResultV1>
+    sendMedia(input: MaxTransportBindingV1 & { chatId: string, base64: string, filename: string, mimeType: string, caption: string, mediaType: string }): Promise<{ externalId?: string }>
+    sendReaction(input: MaxTransportBindingV1 & { chatId: string, messageId: string, emoji: string, remove: boolean }): Promise<{
         reactionConfirmed: boolean
         status?: string
     }>
+    deleteMessage(input: MaxTransportBindingV1 & { chatId: string, messageId: string }): Promise<void>
 }
 
 let whatsappDelivery: WhatsAppChannelDeliveryV1 | null = null

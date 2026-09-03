@@ -16,5 +16,9 @@ export {
 } from './integration-admin-auth'
 export type { IntegrationAdminPrincipalV1 } from './integration-admin-auth'
 export {
+    isExactSameOriginMutationRequest,
+    isJsonMutationRequest,
+} from './mutation-request-boundary'
+export {
     normalizeIntegrationAdminReturnTo,
 } from './integration-admin-credentials'

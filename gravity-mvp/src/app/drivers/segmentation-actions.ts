@@ -61,8 +61,8 @@ export async function triggerRecalculation(): Promise<{ count: number; syncError
     // 1. First sync recent data from Yandex based on analysis period (e.g. 45 days)
     try {
         await YandexFleetService.syncTrips(thresholds.analysis_period)
-    } catch (e: any) {
-        syncError = e?.message || String(e)
+    } catch (e: unknown) {
+        syncError = e instanceof Error ? e.message : String(e)
         console.error('[triggerRecalculation] Sync failed, continuing with local data:', e)
     }
 
@@ -85,7 +85,7 @@ export async function getYandexSyncStatus(): Promise<SyncStatusView> {
 
 export interface ManualSyncResult {
     ok: boolean
-    reason?: 'already_running' | 'cooldown' | 'error'
+    reason?: 'already_running' | 'cooldown' | 'error' | 'lease_lost'
     cooldownRemainingMs?: number
     errorMessage?: string
     driversUpdated?: number

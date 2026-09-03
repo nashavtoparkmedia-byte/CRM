@@ -2,6 +2,7 @@ const { Scenes, Markup } = require('telegraf');
 const https = require('https');
 const http = require('http');
 const logger = require('../utils/logger');
+const { exactTelegramActionBinding } = require('../services/exactTelegramActionBinding');
 
 // IMPORTANT: this scene uses ACTION-based webhook /api/webhooks/bot,
 // NOT the per-message webhook /api/webhook/telegram. They are two different
@@ -96,7 +97,10 @@ const carManagementScene = new Scenes.WizardScene(
     async (ctx) => {
         await ctx.reply('⏳ Проверяю ваш профиль...', Markup.removeKeyboard());
 
-        const result = await callCRM('check_link', { telegramId: String(ctx.from.id) });
+        const result = await callCRM('check_link', {
+            telegramId: String(ctx.from.id),
+            ...exactTelegramActionBinding(ctx)
+        });
 
         // CRM unreachable (status 0 = connection refused, 504 = timeout)
         if (result.status === 0 || result.status === 504) {
@@ -344,7 +348,8 @@ const carManagementScene = new Scenes.WizardScene(
 
         const result = await callCRM('update_driver_car', {
             telegramId: String(ctx.from.id),
-            carId: car.id
+            carId: car.id,
+            ...exactTelegramActionBinding(ctx)
         });
 
         if (result.ok && result.data.success) {

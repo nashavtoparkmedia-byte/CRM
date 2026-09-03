@@ -464,7 +464,11 @@ function validateReviewedExactInventoryDecisions(coverage, derived, decisions, o
       && new Set(decisionChange.previous_paths).size === decisionChange.previous_paths.length
       && decisionChange.previous_paths.every((entry) => typeof entry === 'string' && entry.length > 0)
       && decisionChange.previous_paths.length === expectedChange.previous_inventory.path_count
-      && digest([...decisionChange.previous_paths].sort()) === expectedChange.previous_inventory.path_sha256, `reviewed previous exact path inventory mismatch: ${key}`)
+      // Keep prior-path evidence in the same locale-aware canonical order used
+      // by the live ownership record derivation above. Default UTF-16 sorting
+      // diverges for route segments such as `[id]` and makes a valid reviewed
+      // transition impossible to reproduce.
+      && digest([...decisionChange.previous_paths].sort((left, right) => left.localeCompare(right))) === expectedChange.previous_inventory.path_sha256, `reviewed previous exact path inventory mismatch: ${key}`)
   }
   assert(Array.isArray(decisions.assignments), 'reviewed exact inventory assignments missing')
 

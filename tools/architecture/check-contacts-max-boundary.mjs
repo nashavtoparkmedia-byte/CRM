@@ -15,7 +15,8 @@ const contract = read('gravity-mvp/src/contracts/contacts/v1/resolve-contact-com
 const handler = read('gravity-mvp/src/modules/contacts/public/v1/resolve-contact-handler.ts')
 const policy = read('gravity-mvp/src/modules/contacts/public/v1/legacy-contact-name-policy.ts')
 const adapter = read('gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-adapter.ts')
-const consumer = read('gravity-mvp/src/app/api/webhook/max/sync-names/route.ts')
+const consumer = read('gravity-mvp/src/app/api/webhooks/max/route.ts')
+const retiredNameSync = read('gravity-mvp/src/app/api/webhook/max/sync-names/route.ts')
 const contactsManifest = JSON.parse(read('architecture/contexts/v1/manifests/contacts.json'))
 const maxManifest = JSON.parse(read('architecture/contexts/v1/manifests/max_channel.json'))
 
@@ -35,20 +36,23 @@ assertCheck(
     adapter.includes("from '@/lib/prisma'")
         && adapter.includes('prisma.contact.findUnique')
         && adapter.includes('prisma.contact.update')
-        && !/prisma\.contact\.(?:create|update|upsert|delete|updateMany)\s*\(/.test(consumer),
+        && !/prisma\.contact\.(?:create|update|upsert|delete|updateMany)\s*\(/.test(consumer)
+        && !/prisma\.contact\.(?:create|update|upsert|delete|updateMany)\s*\(/.test(retiredNameSync),
     'MAX consumer retains a direct Contact mutation',
 )
 assertCheck(
-    'MAX consumer invokes ResolveContactCommand.v1',
-    consumer.includes("from '@/contracts/contacts/v1'")
-        && consumer.includes("from '@/modules/contacts/public/v1'")
-        && consumer.includes('RESOLVE_CONTACT_COMMAND_V1')
-        && consumer.includes('resolveContactV1({'),
+    'canonical MAX consumer invokes the Contacts public resolution capability',
+    consumer.includes("from '@/modules/contacts/public/v1'")
+        && consumer.includes("resolveChannelContactOperationV1(")
+        && consumer.includes("'max',")
+        && consumer.includes('providerAccountId: maxProviderAccountId'),
     'MAX consumer bypasses the Contacts public v1 surface',
 )
 assertCheck(
     'candidate name crosses without provider implementation data',
-    consumer.includes('candidateDisplayName: newName')
+    consumer.includes('peerSenderName,')
+        && consumer.includes("phoneEvidence: effectivePeerSenderPhone")
+        && consumer.includes("source: 'unknown', trustedForAutomaticResolution: false")
         && !/(token|cookie|session|credential)/i.test(contract),
     'public contract includes credential or provider implementation state',
 )
@@ -71,11 +75,21 @@ assertCheck(
     'placeholder policy drifted',
 )
 assertCheck(
-    'adjacent Chat mutation uses the accepted Messaging owner route',
+    'adjacent Chat mutation uses accepted Messaging owner capabilities',
     !consumer.includes('prisma.chat.update')
+        && !consumer.includes('prisma.chat.create')
         && consumer.includes('PATCH_EXTERNAL_CONVERSATION_COMMAND_V1')
-        && consumer.includes('patchExternalConversationV1({'),
+        && consumer.includes('patchExternalConversationV1({')
+        && consumer.includes('CREATE_EXTERNAL_CONVERSATION_COMMAND_V1')
+        && consumer.includes('createExternalConversationV1({'),
     'MAX Chat mutation bypasses the accepted Messaging owner route',
+)
+assertCheck(
+    'mutable MAX name-sync ingress is statically retired',
+    retiredNameSync.includes('MAX_NAME_SYNC_RETIRED')
+        && !retiredNameSync.includes('await req.json')
+        && !retiredNameSync.includes('prisma.'),
+    'retired MAX name-sync can still parse or mutate',
 )
 assertCheck(
     'Contacts manifest declares ResolveContactCommand.v1',

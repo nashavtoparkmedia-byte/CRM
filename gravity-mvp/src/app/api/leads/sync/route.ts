@@ -57,6 +57,7 @@ export async function POST(request: Request) {
       try {
         const result = await ingestLead({
           source: 'avito',
+          providerAccountId: String(row.account_id),
           sourceExternalId: row.external_id,
           candidateName: row.candidate_name,
           phone: row.phone,
@@ -87,6 +88,7 @@ export async function POST(request: Request) {
           try {
             await updateLeadPhone({
               source: 'avito',
+              providerAccountId: String(row.account_id),
               sourceExternalId: row.external_id,
               contactId: result.contactId,
               phone: row.phone,

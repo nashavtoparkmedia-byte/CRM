@@ -76,6 +76,7 @@ age -d -i ~/age-key.txt .env.production.age > .env.production
 | `TELEGRAM_WEBHOOK_SECRET` | проверка заголовка `X-Telegram-Bot-Api-Secret-Token` для Telegram webhook | **C** |
 | `ADMIN_IDS` (список Telegram ID админов) | tg-bot | M — это не секрет, но не публикуем |
 | `BOT_CRM_SECRET` | tg-bot ↔ gravity-mvp (межсервисная авторизация) | **C** |
+| `CRM_TELEGRAM_CONNECTION_ID` | стабильная общая привязка рабочего Bot API транспорта в tg-bot и gravity-mvp | M |
 
 ### 2.3 WhatsApp
 
@@ -92,6 +93,7 @@ age -d -i ~/age-key.txt .env.production.age > .env.production
 | Секрет | Где используется | Уровень |
 |--------|------------------|---------|
 | `MAX_SCRAPER_PHONE` | gravity-mvp + max-web-scraper | M — это номер, не секрет; но в репо не пихаем |
+| `MAX_SCRAPER_WEBHOOK_SECRET` | max-web-scraper → gravity-mvp | **C** — обязательный shared secret для MAX webhook-ов; без него ingress fail-closed |
 | Сессионные cookies web.max.ru | max-web-scraper (профиль Playwright) | **C** — доступ к рабочему аккаунту |
 
 ### 2.5 Yandex Fleet (скрапер парка)

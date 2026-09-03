@@ -1,14 +1,20 @@
 import { prisma } from '@/lib/prisma'
+import { randomUUID } from 'node:crypto'
 import { ConversationWorkflowService } from '@/lib/ConversationWorkflowService'
 import { operationalLogV1 as opsLog } from '@/infrastructure/operations/operational-log'
 import { ChatChannel, MessageStatus } from '@prisma/client'
 import { buildCanonicalContactSummary } from '@/modules/contacts/public/v1/contact-display-policy'
 import { getMaxChannelDeliveryV1, getTelegramChannelDeliveryV1, getWhatsAppChannelDeliveryV1 } from '@/modules/messaging/public/v1/channel-delivery-runtime'
+import { prepareOutboundConversationV1 } from '@/modules/messaging/public/v1/outbound-conversation-identity-runtime'
 
 function serialize(obj: any): any {
     return JSON.parse(JSON.stringify(obj, (key, value) =>
         typeof value === 'bigint' ? value.toString() : value
     ));
+}
+
+function nonEmptyString(value: unknown): string | null {
+    return typeof value === 'string' && value.trim() !== '' ? value : null
 }
 
 export class MessageService {
@@ -474,6 +480,8 @@ export class MessageService {
                 channel: true, 
                 externalChatId: true,
                 metadata: true,
+                contactId: true,
+                contactIdentityId: true,
                 driver: {
                     select: {
                         id: true,
@@ -489,94 +497,31 @@ export class MessageService {
             throw new Error(`Chat with ID ${chatId} not found`)
         }
 
-        let targetChatId = chatId
-        let targetChat = chat
+        const targetChatId = chatId
+        const targetChat = chat
 
-        // If channel is overridden and differs from the current chat channel, we need to switch or create a chat
+        // A channel switch is a distinct identity selection, not a formatting
+        // option on an existing conversation. The caller must first open the
+        // exact persisted ContactIdentity through the contact-conversation
+        // orchestrator; never synthesize another provider peer from Driver
+        // phone/telegram fields here.
         if (channelOverride && channelOverride !== chat.channel) {
-            console.log(`[MessageService] Channel mismatch: requested ${channelOverride}, chat has ${chat.channel}. Switching context...`)
-            
-            const rawDigits = chat.externalChatId?.replace(/\D/g, '') || ''
-            // Normalize Russian mobile: 8XXXXXXXXXX / 9XXXXXXXXXX → 7XXXXXXXXXX
-            // Applied to all channels so TG/MAX match WA behaviour.
-            const normPhone = (p?: string | null): string => {
-                const d = (p || '').replace(/\D/g, '')
-                return d.length >= 10 ? '7' + d.slice(-10) : d
-            }
-            const finalRawId = channelOverride === 'telegram' && chat.driver?.id
-                ? (await prisma.$queryRaw<{telegramId: bigint}[]>`SELECT "telegramId" FROM "DriverTelegram" WHERE "driverId" = ${chat.driver.id} LIMIT 1`)[0]?.telegramId.toString() || normPhone(chat.driver.phone) || ''
-                : (normPhone(chat.driver?.phone) || rawDigits)
-
-            // Standardize ID format: always prefix with channel
-            const prefixedId = channelOverride === 'whatsapp' 
-                ? `whatsapp:${finalRawId}`
-                : `${channelOverride}:${finalRawId}`
-
-            const searchSuffix = finalRawId.length >= 10 ? finalRawId.slice(-10) : finalRawId
-            const existingChat = await (prisma.chat as any).findFirst({
-                where: { 
-                    channel: channelOverride,
-                    OR: [
-                        { externalChatId: prefixedId },
-                        { externalChatId: { endsWith: searchSuffix } },
-                        ...(chat.driver?.id ? [{ driverId: chat.driver.id }] : [])
-                    ]
-                },
-                select: { id: true, channel: true, externalChatId: true, metadata: true },
-                orderBy: { driverId: 'desc' }
-            })
-
-            if (existingChat) {
-                console.log(`[MessageService] Found existing chat for ${channelOverride}: ${existingChat.id}`)
-                targetChatId = existingChat.id
-                targetChat = { ...chat, ...existingChat, driver: chat.driver }
-            } else {
-                console.log(`[MessageService] No chat found for ${channelOverride}. Creating new one...`)
-                const newChatId = `chat_${Date.now()}`
-
-                try {
-                    // Check again if one was created between our two lookups
-                    const raceChat = await (prisma.chat as any).findFirst({
-                        where: { externalChatId: prefixedId }
-                    })
-                    if (raceChat) {
-                        targetChatId = raceChat.id
-                        targetChat = { ...chat, ...raceChat, driver: chat.driver }
-                    } else {
-                        const createdChat = await (prisma.chat as any).create({
-                            data: {
-                                id: newChatId,
-                                name: chat.driver?.fullName || 'Chat',
-                                channel: channelOverride,
-                                driverId: chat.driver?.id || null,
-                                externalChatId: prefixedId,
-                                lastMessageAt: new Date(),
-                                unreadCount: 0,
-                                status: 'new'
-                            }
-                        })
-                        targetChatId = createdChat.id
-                        targetChat = { ...chat, ...createdChat, driver: chat.driver }
-                        console.log(`[MessageService] New chat created for ${channelOverride}: ${newChatId} (external: ${prefixedId})`)
-                    }
-                } catch (createErr: any) {
-                    console.error(`[MessageService] Failed to create new chat for ${channelOverride}:`, createErr)
-                    throw new Error(`Не удалось инициализировать чат для ${channelOverride}: ${createErr.message}`)
-                }
-            }
+            throw new Error('CONTACT_CONVERSATION_CHANNEL_MISMATCH')
         }
 
         const channel = targetChat.channel
         const currentChatId = targetChatId
-        const getRawId = (id: string) => id.includes(':') ? id.split(':').slice(1).join(':') : id
-        const rawExternalChatId = getRawId(targetChat.externalChatId)
-        let providerQuotedMsgId = quotedMsgId
+        const outboundBinding = await prepareOutboundConversationV1(targetChat, profileId)
+        const routedConnectionId = outboundBinding.connectionId
+        const rawExternalChatId = outboundBinding.target
+        let providerQuotedMsgId = channel === 'max' ? undefined : quotedMsgId
         let providerQuotedText: string | undefined
         let providerQuotedSentAt: string | undefined
         let providerQuotedDirection: string | undefined
         if (quotedMsgId && channel === 'max') {
             const quotedMessage = await (prisma.message as any).findFirst({
                 where: {
+                    chatId: currentChatId,
                     OR: [
                         { id: quotedMsgId },
                         { externalId: quotedMsgId },
@@ -613,6 +558,14 @@ export class MessageService {
                 return { success: existing.status !== 'failed', chatId: existing.chatId, id: existing.id, error: null, duplicate: true }
             }
         }
+
+        const maxBinding = targetChat.channel === 'max'
+            ? {
+                capability: getMaxChannelDeliveryV1(),
+                isPersonal: outboundBinding.isMaxPersonal,
+                providerAccountId: outboundBinding.providerAccountId,
+            }
+            : null
 
         // 2. Save message to DB first (Optimistic)
         // Use currentChatId (= targetChatId after channel switch) so that TG/WA messages
@@ -651,10 +604,9 @@ export class MessageService {
         try {
             switch (channel) {
                 case 'whatsapp':
-                    const connId = profileId || (targetChat.metadata as any)?.connectionId
-                    console.log(`[MessageService] WA Send: connId=${connId}, target=${rawExternalChatId}`)
+                    console.log(`[MessageService] WA Send: connId=${routedConnectionId}, target=${rawExternalChatId}`)
                     await getWhatsAppChannelDeliveryV1().sendText({
-                        connectionId: connId,
+                        connectionId: routedConnectionId,
                         chatId: rawExternalChatId,
                         content,
                         quotedMessageId: quotedMsgId,
@@ -663,15 +615,17 @@ export class MessageService {
                     break
                 
                 case 'max':
-                    const isPersonal = profileId === 'scraper' || !profileId
+                    if (!maxBinding) throw new Error('CONTACT_CONVERSATION_PROVIDER_ACCOUNT_UNPROVEN')
+                    const isPersonal = maxBinding.isPersonal
                     const maxMetadata = (targetChat.metadata || {}) as any
-                    console.log(`[MessageService] MAX Send: isPersonal=${isPersonal}, profileId=${profileId}, target=${rawExternalChatId}`)
-                    const maxRes = await getMaxChannelDeliveryV1().sendText({
+                    console.log(`[MessageService] MAX Send: isPersonal=${isPersonal}, profileId=${routedConnectionId}, target=${rawExternalChatId}`)
+                    const maxRes = await maxBinding.capability.sendText({
                         target: rawExternalChatId,
                         content,
                         options: {
+                            providerAccountId: maxBinding.providerAccountId,
                             isPersonal,
-                            connectionId: isPersonal ? undefined : profileId,
+                            connectionId: isPersonal ? undefined : routedConnectionId,
                             name: chat.driver?.fullName,
                             quotedMsgId: providerQuotedMsgId,
                             quotedText: providerQuotedText,
@@ -710,76 +664,49 @@ export class MessageService {
                     // merge by moving messages from old phone-based chat into it.
                     const resolvedMaxId = maxRes.resolvedChatId
                     if (resolvedMaxId && resolvedMaxId !== rawExternalChatId) {
-                        try {
-                            const conflictChat = await (prisma.chat as any).findFirst({
-                                where: { externalChatId: resolvedMaxId }
-                            })
-                            if (conflictChat && conflictChat.id !== currentChatId) {
-                                // Merge: move our messages into the "real" chat, delete the phone-based duplicate
-                                await (prisma.message as any).updateMany({
-                                    where: { chatId: currentChatId },
-                                    data:  { chatId: conflictChat.id }
+                        if (nonEmptyString(targetChat.contactIdentityId)) {
+                            // The provider response alone cannot rebind an identity-owned
+                            // conversation. Preserve the delivery result, but leave all
+                            // Chat/Message ownership and target state unchanged.
+                            console.warn(
+                                `[MessageService] MAX resolvedChatId drift ignored for identity-backed chat ${currentChatId}`,
+                            )
+                        } else {
+                            try {
+                                const conflictChat = await (prisma.chat as any).findFirst({
+                                    where: { externalChatId: resolvedMaxId }
                                 })
-                                await (prisma.chat as any).delete({ where: { id: currentChatId } })
-                                console.log(`[MessageService] MAX chat merged: ${currentChatId} (${rawExternalChatId}) → ${conflictChat.id} (${resolvedMaxId})`)
-                            } else {
-                                await (prisma.chat as any).update({
-                                    where: { id: currentChatId },
-                                    data:  { externalChatId: resolvedMaxId }
-                                })
-                                console.log(`[MessageService] MAX externalChatId updated: ${rawExternalChatId} → ${resolvedMaxId}`)
+                                if (conflictChat && conflictChat.id !== currentChatId) {
+                                    // Merge: move our messages into the "real" chat, delete the phone-based duplicate
+                                    await (prisma.message as any).updateMany({
+                                        where: { chatId: currentChatId },
+                                        data:  { chatId: conflictChat.id }
+                                    })
+                                    await (prisma.chat as any).delete({ where: { id: currentChatId } })
+                                    console.log(`[MessageService] MAX chat merged: ${currentChatId} (${rawExternalChatId}) → ${conflictChat.id} (${resolvedMaxId})`)
+                                } else {
+                                    await (prisma.chat as any).update({
+                                        where: { id: currentChatId },
+                                        data:  { externalChatId: resolvedMaxId }
+                                    })
+                                    console.log(`[MessageService] MAX externalChatId updated: ${rawExternalChatId} → ${resolvedMaxId}`)
+                                }
+                            } catch (mergeErr: any) {
+                                console.warn(`[MessageService] MAX externalChatId update skipped: ${mergeErr.message}`)
                             }
-                        } catch (mergeErr: any) {
-                            console.warn(`[MessageService] MAX externalChatId update skipped: ${mergeErr.message}`)
                         }
                     }
                     break
 
                 case 'telegram':
                     try {
-                        const isPhone = rawExternalChatId?.length >= 10 && (rawExternalChatId.startsWith('7') || rawExternalChatId.startsWith('+') || rawExternalChatId.startsWith('8'));
-                        
-                        // Refined lookup: ALWAYS prefer a TelegramConnection (user profile) if available
-                        let activeProfileId = profileId;
-                        if (!activeProfileId) {
-                            const defaultConns: any[] = await prisma.$queryRaw`SELECT id FROM "TelegramConnection" WHERE "isActive" = true ORDER BY "isDefault" DESC LIMIT 1`;
-                            if (defaultConns.length > 0) {
-                                activeProfileId = defaultConns[0].id;
-                                console.log(`[MessageService] Auto-selected TG profile ${activeProfileId} for target ${rawExternalChatId}`);
-                            }
-                        }
-
-                        if (activeProfileId) {
-                            const target = rawExternalChatId || chat.driver?.phone?.replace(/\D/g, '')
-                            if (!target) throw new Error('No target for TG')
-                            
-                            try {
-                                const res: any = await getTelegramChannelDeliveryV1().sendText({
-                                    target,
-                                    content,
-                                    connectionId: activeProfileId,
-                                    metadata: { messageId, chatId: targetChat.id, driverId: chat.driver?.id, quotedMsgId },
-                                })
-                                if (res.externalId) deliveryExternalId = res.externalId
-                                deliveryStatus = 'delivered'
-                                break // Success with personal profile
-                            } catch (gramErr: any) {
-                                console.warn(`[MessageService] GramJS delivery failed, falling back to bot if target is NOT a phone: ${gramErr.message}`)
-                                if (isPhone) throw gramErr; // Phone targets MUST use GramJS
-                                // Proceed to bot fallback below
-                            }
-                        }
-
-                        // Webhook/Bot Fallback (only for non-phone targets, e.g. bot chats)
-                        if (isPhone) throw new Error('Telegram Bot cannot send to phone numbers. Please connect a Telegram Profile.');
-                        
-                        const tgBotUrl = process.env.TELEGRAM_BOT_URL || 'http://localhost:3001'
-                        const tgRes = await fetch(`${tgBotUrl}/api/bot/send-message`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ chatId: rawExternalChatId, text: content })
+                        const res: any = await getTelegramChannelDeliveryV1().sendText({
+                            target: rawExternalChatId,
+                            content,
+                            connectionId: routedConnectionId,
+                            metadata: { messageId, chatId: targetChat.id, quotedMsgId },
                         })
-                        if (!tgRes.ok) throw new Error(`TG Bot Error: ${tgRes.status}`)
+                        if (res.externalId) deliveryExternalId = String(res.externalId)
                         deliveryStatus = 'delivered'
                     } catch (tgErr: any) {
                         deliveryStatus = 'failed'
@@ -843,17 +770,32 @@ export class MessageService {
             opsLog('error', 'message_status_update_failed', { operation: 'send', chatId, error: (updErr as any)?.message })
         }
 
-        // 4. Update reachability status based on delivery outcome
-        try {
-            const { contactReachabilityV1 } = await import('@/modules/contacts/public/v1/contact-reachability')
-            if (deliveryStatus === 'failed') {
-                await contactReachabilityV1.updateReachabilityByChatId(currentChatId, 'unreachable')
-            } else if (deliveryStatus === 'delivered') {
-                await contactReachabilityV1.updateReachabilityByChatId(currentChatId, 'confirmed')
+        // Only a successful exact provider delivery is reachability evidence.
+        // Generic transport failures must not mark a person unreachable.
+        if (deliveryStatus === 'delivered') {
+            try {
+                const { contactReachabilityV1 } = await import('@/modules/contacts/public/v1/contact-reachability')
+                const reachabilityResult = await contactReachabilityV1.recordExactProviderReachability({
+                    identityId: outboundBinding.contactIdentityId,
+                    contactId: outboundBinding.contactId,
+                    channel: outboundBinding.channel,
+                    providerAccountId: outboundBinding.providerAccountId,
+                    providerTargetId: outboundBinding.identityTarget,
+                    status: 'confirmed',
+                })
+                if (reachabilityResult.outcome === 'rejected') {
+                    opsLog('warn', 'message_reachability_rejected', {
+                        operation: 'send',
+                        messageId,
+                        chatId: currentChatId,
+                        channel,
+                        reason: reachabilityResult.reason,
+                    })
+                }
+            } catch (reachErr: any) {
+                // Non-critical — delivery already completed at the provider.
+                console.error(`[MessageService] Reachability update failed: ${reachErr.message}`)
             }
-        } catch (reachErr: any) {
-            // Non-critical — don't break send flow
-            console.error(`[MessageService] Reachability update failed: ${reachErr.message}`)
         }
 
         return {
@@ -893,15 +835,64 @@ export class MessageService {
             return { success: false, error: 'Backoff not elapsed' }
         }
 
+        let outboundBinding: Awaited<ReturnType<typeof prepareOutboundConversationV1>>
+        try {
+            outboundBinding = await prepareOutboundConversationV1(message.chat)
+        } catch (error: unknown) {
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Conversation identity binding is invalid',
+            }
+        }
+        if (
+            outboundBinding.chatId !== message.chatId
+            || outboundBinding.channel !== message.channel
+        ) {
+            return { success: false, error: 'CONTACT_CONVERSATION_MESSAGE_BINDING_MISMATCH' }
+        }
+        if (!(message.updatedAt instanceof Date)) {
+            return { success: false, error: 'MESSAGE_RETRY_VERSION_UNAVAILABLE' }
+        }
+
+        const retryMaxBinding = message.channel === 'max'
+            ? {
+                capability: getMaxChannelDeliveryV1(),
+                isPersonal: outboundBinding.isMaxPersonal,
+                providerAccountId: outboundBinding.providerAccountId,
+            }
+            : null
+
         opsLog('info', 'message_retry_attempt', {
             messageId, chatId: message.chatId, channel: message.channel, retryAttempt: attempt,
         })
 
-        // Reset to 'sent' for delivery attempt
-        await (prisma.message as any).update({
-            where: { id: messageId },
-            data: { status: 'sent', metadata: { ...meta, retryAttempt: attempt } },
+        // Atomically lease this exact failed row version. Concurrent workers may
+        // all read it, but only one can change the failed+updatedAt snapshot.
+        // Refresh sentAt at the same time so recovery cannot immediately reclaim
+        // an active retry using the timestamp from its original send attempt.
+        const retryLeaseId = randomUUID()
+        const retryStartedAt = new Date()
+        const claimedMetadata = {
+            ...meta,
+            retryAttempt: attempt,
+            retryLeaseId,
+            retryStartedAt: retryStartedAt.toISOString(),
+        }
+        const retryClaim = await (prisma.message as any).updateMany({
+            where: {
+                id: messageId,
+                status: 'failed',
+                updatedAt: message.updatedAt,
+            },
+            data: {
+                status: 'sent',
+                sentAt: retryStartedAt,
+                metadata: claimedMetadata,
+            },
         })
+        if (retryClaim.count !== 1) {
+            return { success: false, error: 'Retry already claimed' }
+        }
 
         // Re-dispatch through channel
         let deliveryStatus = 'failed'
@@ -911,8 +902,8 @@ export class MessageService {
 
         try {
             const chat = message.chat
-            const rawExternalId = chat.externalChatId?.split(':').slice(1).join(':') || chat.externalChatId
-            const connId = (chat.metadata as any)?.connectionId
+            const rawExternalId = outboundBinding.target
+            const connId = outboundBinding.connectionId
 
             switch (message.channel) {
                 case 'whatsapp': {
@@ -925,17 +916,19 @@ export class MessageService {
                     break
                 }
                 case 'max': {
+                    if (!retryMaxBinding) throw new Error('CONTACT_CONVERSATION_PROVIDER_ACCOUNT_UNPROVEN')
                     const maxMetadata = (chat.metadata || {}) as any
-                    let retryQuotedMsgId = meta.quotedMsgId
+                    let retryQuotedMsgId: string | undefined
                     let retryQuotedText: string | undefined
                     let retryQuotedSentAt: string | undefined
                     let retryQuotedDirection: string | undefined
-                    if (retryQuotedMsgId) {
+                    if (meta.quotedMsgId) {
                         const quotedMessage = await (prisma.message as any).findFirst({
                             where: {
+                                chatId: message.chatId,
                                 OR: [
-                                    { id: retryQuotedMsgId },
-                                    { externalId: retryQuotedMsgId },
+                                    { id: meta.quotedMsgId },
+                                    { externalId: meta.quotedMsgId },
                                 ],
                             },
                             select: { externalId: true, content: true, sentAt: true, direction: true },
@@ -949,11 +942,13 @@ export class MessageService {
                             retryQuotedDirection = quotedMessage.direction || undefined
                         }
                     }
-                    const retryMaxRes = await getMaxChannelDeliveryV1().sendText({
+                    const retryMaxRes = await retryMaxBinding.capability.sendText({
                         target: rawExternalId,
                         content: message.content,
                         options: {
-                            isPersonal: true,
+                            providerAccountId: retryMaxBinding.providerAccountId,
+                            isPersonal: retryMaxBinding.isPersonal,
+                            connectionId: retryMaxBinding.isPersonal ? undefined : connId,
                             name: chat.driver?.fullName,
                             quotedMsgId: retryQuotedMsgId,
                             quotedText: retryQuotedText,
@@ -989,12 +984,12 @@ export class MessageService {
                     break
                 }
                 case 'telegram': {
-                    const target = rawExternalId || chat.driver?.phone?.replace(/\D/g, '')
-                    if (!target) throw new Error('No target for TG')
-                    const defaultConns: any[] = await prisma.$queryRaw`SELECT id FROM "TelegramConnection" WHERE "isActive" = true ORDER BY "isDefault" DESC LIMIT 1`
-                    const profileId = defaultConns[0]?.id
-                    if (!profileId) throw new Error('No active TG connection')
-                    const res: any = await getTelegramChannelDeliveryV1().sendText({ target, content: message.content, connectionId: profileId })
+                    const res: any = await getTelegramChannelDeliveryV1().sendText({
+                        target: rawExternalId,
+                        content: message.content,
+                        connectionId: connId,
+                        metadata: { messageId, chatId: message.chatId },
+                    })
                     if (res.externalId) deliveryExternalId = res.externalId
                     deliveryStatus = 'delivered'
                     break
@@ -1005,7 +1000,7 @@ export class MessageService {
         }
 
         // Update final status
-        const retryMeta: any = { ...meta, retryAttempt: attempt, lastFailedAt: new Date().toISOString() }
+        const retryMeta: any = { ...claimedMetadata, lastFailedAt: new Date().toISOString() }
         if (retryMaxDeliveryMetadata) {
             retryMeta.maxDelivery = retryMaxDeliveryMetadata
         }
@@ -1017,17 +1012,56 @@ export class MessageService {
             opsLog('info', 'message_retry_success', { messageId, channel: message.channel, retryAttempt: attempt })
         }
 
-        await (prisma.message as any).update({
-            where: { id: messageId },
+        const retryFinalization = await (prisma.message as any).updateMany({
+            where: {
+                id: messageId,
+                status: 'sent',
+                sentAt: retryStartedAt,
+                metadata: { path: ['retryLeaseId'], equals: retryLeaseId },
+            },
             data: {
                 status: deliveryStatus,
                 externalId: deliveryExternalId || undefined,
                 metadata: retryMeta,
             },
         })
+        if (retryFinalization.count !== 1) {
+            opsLog('warn', 'message_retry_lease_lost', {
+                messageId,
+                chatId: message.chatId,
+                channel: message.channel,
+                retryAttempt: attempt,
+            })
+            return { success: false, error: 'Retry delivery lease lost' }
+        }
 
         if (deliveryStatus !== 'failed') {
             await ConversationWorkflowService.onOutboundMessage(message.chatId, new Date())
+        }
+
+        if (deliveryStatus === 'delivered') {
+            try {
+                const { contactReachabilityV1 } = await import('@/modules/contacts/public/v1/contact-reachability')
+                const reachabilityResult = await contactReachabilityV1.recordExactProviderReachability({
+                    identityId: outboundBinding.contactIdentityId,
+                    contactId: outboundBinding.contactId,
+                    channel: outboundBinding.channel,
+                    providerAccountId: outboundBinding.providerAccountId,
+                    providerTargetId: outboundBinding.identityTarget,
+                    status: 'confirmed',
+                })
+                if (reachabilityResult.outcome === 'rejected') {
+                    opsLog('warn', 'message_reachability_rejected', {
+                        operation: 'retry',
+                        messageId,
+                        chatId: message.chatId,
+                        channel: message.channel,
+                        reason: reachabilityResult.reason,
+                    })
+                }
+            } catch (reachErr: any) {
+                console.error(`[MessageService] Reachability update failed: ${reachErr.message}`)
+            }
         }
 
         return { success: deliveryStatus !== 'failed', error: errorMessage || undefined }

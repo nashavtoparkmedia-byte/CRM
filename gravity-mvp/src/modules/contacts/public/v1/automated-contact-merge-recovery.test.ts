@@ -1,0 +1,155 @@
+import { describe, expect, test, vi } from 'vitest'
+
+import { RECOVER_AUTOMATED_CONTACT_MERGE_COMMAND_V1 } from '@/contracts/contacts/v1'
+import {
+  createRecoverAutomatedContactMergeHandlerV1,
+  type AutomatedMergeRecoveryPlanV1,
+  type AutomatedMergeRecoveryRepositoriesV1,
+} from './automated-contact-merge-recovery'
+
+const plan: AutomatedMergeRecoveryPlanV1 = {
+  mergeId: 'merge-1',
+  mergedId: 'loser',
+  survivorId: 'survivor',
+  identityIds: ['identity-1'],
+  phoneIds: ['phone-1'],
+  chatIds: ['chat-1'],
+  taskIds: ['task-1'],
+  callIds: ['call-1'],
+  driverProfileIds: ['driver-1'],
+}
+
+function harness(blockedOwner?: keyof Pick<
+  AutomatedMergeRecoveryRepositoriesV1,
+  'messaging' | 'work' | 'calling' | 'fleet'
+>) {
+  const calls: string[] = []
+  const owner = (name: string) => ({
+    canRestore: vi.fn(async () => {
+      calls.push(`${name}.canRestore`)
+      return name !== blockedOwner
+    }),
+    restore: vi.fn(async () => { calls.push(`${name}.restore`) }),
+  })
+  const repositories: AutomatedMergeRecoveryRepositoriesV1 = {
+    contacts: {
+      admitOwnershipMutation: vi.fn(async () => { calls.push('contacts.admit') }),
+      discoverPair: vi.fn(async () => {
+        calls.push('contacts.discover')
+        return { mergedId: plan.mergedId, survivorId: plan.survivorId }
+      }),
+      lockPair: vi.fn(async () => { calls.push('contacts.lock') }),
+      inspect: vi.fn(async () => {
+        calls.push('contacts.inspect')
+        return { status: 'eligible' as const, plan }
+      }),
+      restore: vi.fn(async () => { calls.push('contacts.restore') }),
+      markManualReconciliation: vi.fn(async () => { calls.push('contacts.manual') }),
+      markRecovered: vi.fn(async () => { calls.push('contacts.recovered') }),
+      verifyPostconditions: vi.fn(async () => { calls.push('contacts.verify') }),
+    },
+    messaging: owner('messaging'),
+    work: owner('work'),
+    calling: owner('calling'),
+    fleet: owner('fleet'),
+  }
+  const handler = createRecoverAutomatedContactMergeHandlerV1({
+    run: operation => operation(repositories),
+  })
+  const command = {
+    contract: RECOVER_AUTOMATED_CONTACT_MERGE_COMMAND_V1,
+    mergeId: plan.mergeId,
+    requestedBy: 'operator-1',
+    basis: 'incorrect automated merge',
+  }
+  return { calls, command, handler, repositories }
+}
+
+describe('bounded automated Contact merge recovery', () => {
+  test('restores through every current owner only after admission, locking and strict checks', async () => {
+    const testHarness = harness()
+    await expect(testHarness.handler(testHarness.command)).resolves.toMatchObject({
+      status: 'recovered', mergeId: 'merge-1',
+    })
+    expect(testHarness.calls).toEqual([
+      'contacts.admit', 'contacts.discover', 'contacts.lock', 'contacts.inspect',
+      'messaging.canRestore', 'work.canRestore', 'calling.canRestore', 'fleet.canRestore',
+      'messaging.restore', 'work.restore', 'calling.restore', 'fleet.restore',
+      'contacts.restore', 'contacts.recovered', 'contacts.verify',
+    ])
+  })
+
+  test('persists manual reconciliation without partial reversal when any owner changed', async () => {
+    const testHarness = harness('work')
+    await expect(testHarness.handler(testHarness.command)).resolves.toMatchObject({
+      status: 'manual_reconciliation', reason: 'work_state_changed',
+    })
+    expect(testHarness.calls).toEqual([
+      'contacts.admit', 'contacts.discover', 'contacts.lock', 'contacts.inspect',
+      'messaging.canRestore', 'work.canRestore', 'contacts.manual',
+    ])
+    expect(testHarness.repositories.messaging.restore).not.toHaveBeenCalled()
+    expect(testHarness.repositories.contacts.restore).not.toHaveBeenCalled()
+  })
+
+  test('durably marks a Messaging identity/chat binding conflict before any restore', async () => {
+    const testHarness = harness('messaging')
+    await expect(testHarness.handler(testHarness.command)).resolves.toMatchObject({
+      status: 'manual_reconciliation', reason: 'messaging_state_changed',
+    })
+    expect(testHarness.calls).toEqual([
+      'contacts.admit', 'contacts.discover', 'contacts.lock', 'contacts.inspect',
+      'messaging.canRestore', 'contacts.manual',
+    ])
+    expect(testHarness.repositories.contacts.restore).not.toHaveBeenCalled()
+  })
+
+  test.each([
+    'dependent_merge_lineage_redirect_changed',
+    'phone_lifecycle_state_changed',
+    'identity_phone_link_changed',
+  ])('durably marks an eligible inspection blocker before any restore: %s', async reason => {
+    const testHarness = harness()
+    vi.mocked(testHarness.repositories.contacts.inspect).mockImplementationOnce(async () => {
+      testHarness.calls.push('contacts.inspect')
+      return { status: 'blocked', reason, eligibleAttempt: true }
+    })
+
+    await expect(testHarness.handler(testHarness.command)).resolves.toMatchObject({
+      status: 'manual_reconciliation',
+      reason,
+    })
+    expect(testHarness.calls).toEqual([
+      'contacts.admit', 'contacts.discover', 'contacts.lock', 'contacts.inspect', 'contacts.manual',
+    ])
+    expect(testHarness.repositories.contacts.restore).not.toHaveBeenCalled()
+    expect(testHarness.repositories.contacts.markRecovered).not.toHaveBeenCalled()
+  })
+
+  test('replay after recovery is idempotent and does not overwrite terminal state', async () => {
+    const testHarness = harness()
+    vi.mocked(testHarness.repositories.contacts.inspect).mockImplementationOnce(async () => {
+      testHarness.calls.push('contacts.inspect')
+      return { status: 'already_recovered' }
+    })
+    await expect(testHarness.handler(testHarness.command)).resolves.toMatchObject({
+      status: 'already_recovered', mergeId: 'merge-1',
+    })
+    expect(testHarness.calls).toEqual([
+      'contacts.admit', 'contacts.discover', 'contacts.lock', 'contacts.inspect',
+    ])
+    expect(testHarness.repositories.contacts.markManualReconciliation).not.toHaveBeenCalled()
+  })
+
+  test('manual merges are rejected without mutating recovery metadata', async () => {
+    const testHarness = harness()
+    vi.mocked(testHarness.repositories.contacts.inspect).mockImplementationOnce(async () => {
+      testHarness.calls.push('contacts.inspect')
+      return { status: 'not_recoverable', reason: 'manual_merge' }
+    })
+    await expect(testHarness.handler(testHarness.command)).resolves.toMatchObject({
+      status: 'not_recoverable', reason: 'manual_merge',
+    })
+    expect(testHarness.repositories.contacts.markManualReconciliation).not.toHaveBeenCalled()
+  })
+})

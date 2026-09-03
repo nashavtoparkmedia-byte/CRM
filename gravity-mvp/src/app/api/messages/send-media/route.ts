@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { broadcastChatMessage } from '@/lib/messageStreamBus'
 import { getMaxChannelDeliveryV1, getTelegramChannelDeliveryV1, getWhatsAppChannelDeliveryV1 } from '@/modules/messaging/public/v1/channel-delivery-runtime'
+import { prepareOutboundConversationV1 } from '@/modules/messaging/public/v1/outbound-conversation-identity-runtime'
 
 /**
  * Detect media type from MIME.
@@ -37,31 +38,32 @@ export async function POST(req: NextRequest) {
             )
         }
 
-        // Get chat to determine channel.
-        // telegramId живёт в отдельной модели DriverTelegram, не на Driver —
-        // raw query чтобы достать его одним запросом без рисков сломать schema.
+        // Resolve the exact ContactIdentity/account/transport tuple before any
+        // provider or database mutation. Provider targets must never be
+        // reconstructed from Driver phone/Telegram fields.
         const chat = await prisma.chat.findUnique({
             where: { id: chatId },
-            select: { channel: true, externalChatId: true, metadata: true, driver: { select: { phone: true, id: true } } }
-        }) as any
-        // Подтягиваем telegramId опционально через raw query (избегаем падения если relation отсутствует)
-        if (chat?.driver?.id) {
-            try {
-                const rows = await prisma.$queryRaw<Array<{ telegramId: bigint }>>`
-                    SELECT "telegramId" FROM "DriverTelegram" WHERE "driverId" = ${chat.driver.id} LIMIT 1
-                `
-                if (rows[0]?.telegramId != null) {
-                    chat.driver.telegramId = rows[0].telegramId.toString()
-                }
-            } catch {}
-        }
+            select: {
+                id: true,
+                contactId: true,
+                contactIdentityId: true,
+                channel: true,
+                externalChatId: true,
+                chatType: true,
+                metadata: true,
+            },
+        })
 
         if (!chat) {
             return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
         }
+        const outbound = await prepareOutboundConversationV1(chat, profileId)
+        if (!outbound.chatId || outbound.chatId !== chatId) {
+            throw new Error('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
+        }
 
         const mediaType = detectMediaType(mimeType)
-        const channel = chat.channel
+        const channel = outbound.channel
         const unifiedType = mediaType === 'voice' ? 'voice' : mediaType === 'audio' ? 'audio' :
                            mediaType === 'video' ? 'video' : mediaType === 'image' ? 'image' : 'document'
 
@@ -72,19 +74,17 @@ export async function POST(req: NextRequest) {
 
         // Route to appropriate channel backend
         if (channel === 'max') {
-            const maxMetadata = (chat.metadata || {}) as any
-            const maxUiChatId = maxMetadata.oldExternalChatId || maxMetadata.uiChatId || null
-            const maxPhone = chat.driver?.phone || maxMetadata.phone || null
             try {
                 const result = await getMaxChannelDeliveryV1().sendMedia({
-                    chatId: Number(chat.externalChatId),
+                    chatId: outbound.target,
                     base64,
                     filename,
                     mimeType,
                     caption: caption || '',
                     mediaType,
-                    uiChatId: maxUiChatId ? String(maxUiChatId) : undefined,
-                    phone: maxPhone ? String(maxPhone) : undefined,
+                    providerAccountId: outbound.providerAccountId,
+                    connectionId: outbound.connectionId,
+                    isPersonal: outbound.isMaxPersonal,
                 })
                 externalId = result.externalId || null
             } catch (error: any) {
@@ -92,17 +92,17 @@ export async function POST(req: NextRequest) {
                 console.error('[send-media] MAX error (saving as failed):', sendError)
             }
         } else if (channel === 'whatsapp') {
-            const waChatId = chat.driver?.phone || chat.externalChatId?.replace('whatsapp:', '') || ''
             let result
             try {
                 result = await getWhatsAppChannelDeliveryV1().sendMedia({
-                    chatId: waChatId,
+                    chatId: outbound.target,
                     base64,
                     filename,
                     mimeType,
                     caption,
                     sendAsVoice: mediaType === 'voice',
                     sendAsDocument: mediaType === 'document',
+                    connectionId: outbound.connectionId,
                 })
             } catch (error: any) {
                 if (error?.message === 'No ready WhatsApp connection') {
@@ -112,16 +112,16 @@ export async function POST(req: NextRequest) {
             }
             externalId = result.externalId
         } else if (channel === 'telegram') {
-            const target = chat.driver?.telegramId?.toString() ||
-                           chat.driver?.phone ||
-                           chat.externalChatId?.replace('telegram:', '') || ''
             const result = await getTelegramChannelDeliveryV1().sendMedia({
-                target,
+                target: outbound.target,
+                internalChatId: outbound.chatId,
+                providerAccountId: outbound.providerAccountId,
+                identityTarget: outbound.identityTarget,
                 base64,
                 filename,
                 mimeType,
                 caption,
-                connectionId: profileId,
+                connectionId: outbound.connectionId,
             })
             // PR-Щ hotfix: TG может вернуть BigInt — приводим к string явно
             externalId = result.externalId != null ? String(result.externalId) : null
@@ -145,7 +145,7 @@ export async function POST(req: NextRequest) {
         try {
             message = await prisma.message.create({
                 data: {
-                    chatId,
+                    chatId: outbound.chatId,
                     direction: 'outbound',
                     type: unifiedType as any,
                     content: contentFallback(mediaType, caption),
@@ -195,12 +195,12 @@ export async function POST(req: NextRequest) {
                     }
                 }
             })
-            if (fullMsg) broadcastChatMessage(chatId, fullMsg)
+            if (fullMsg) broadcastChatMessage(outbound.chatId, fullMsg)
         } catch {}
 
         try {
             await prisma.chat.update({
-                where: { id: chatId },
+                where: { id: outbound.chatId },
                 data: { lastMessageAt: new Date() },
             })
         } catch {}

@@ -89,6 +89,7 @@ export async function POST(request: Request) {
         }
         const result = await ingestLead({
           source: 'avito',
+          providerAccountId: String(row.account_id),
           sourceExternalId: row.external_id,
           candidateName: row.candidate_name,
           phone: row.phone,
@@ -139,6 +140,7 @@ export async function POST(request: Request) {
         if (!contactId) {
           const ingested = await ingestLead({
             source: 'avito',
+            providerAccountId: String(row.account_id),
             sourceExternalId: row.external_id,
             candidateName: row.candidate_name,
             phone: row.phone ?? phone,
@@ -163,6 +165,7 @@ export async function POST(request: Request) {
         }
         const result = await updateLeadPhone({
           source: 'avito',
+          providerAccountId: String(row.account_id),
           sourceExternalId: row.external_id,
           contactId,
           phone,

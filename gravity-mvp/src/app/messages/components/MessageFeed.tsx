@@ -580,43 +580,26 @@ export default function MessageFeed({
                         {(() => {
                             const fwd = msg.metadata?.forwardedFrom as { id?: string; name?: string; phone?: string } | undefined
                             const metaLabel = fwd ? (fwd.name || fwd.phone || fwd.id || '?') : null
-                            const fwdIdFromMeta = fwd?.id || null
 
                             // Fallback: parse [↩ ID:Name] (новый формат) или [↩ Name] (старый) из content
                             const contentMatch = !metaLabel ? (msg.content || '').match(/^\[↩ ([^\]]+)\]/) : null
-                            let contentId: string | null = null
                             let contentLabel: string | null = null
                             if (contentMatch) {
                                 const inner = contentMatch[1]
                                 const colonIdx = inner.indexOf(':')
                                 if (colonIdx > 0 && /^\d+$/.test(inner.slice(0, colonIdx))) {
-                                    contentId    = inner.slice(0, colonIdx)
                                     contentLabel = inner.slice(colonIdx + 1)
                                 } else {
                                     contentLabel = inner
                                 }
                             }
 
-                            const fwdId = fwdIdFromMeta || contentId
                             const label = metaLabel || contentLabel
                             if (!label) return null
                             const color = isOutbound ? 'text-[#2a7a3e]/70' : 'text-[#8E24AA]/80'
-                            const handleOpenContact = fwdId ? async (e: React.MouseEvent) => {
-                                e.stopPropagation()
-                                try {
-                                    const params = new URLSearchParams({ externalChatId: fwdId })
-                                    if (label) params.set('name', label)
-                                    const res  = await fetch(`/api/chats/find-max?${params}`)
-                                    const data = await res.json()
-                                    if (data.chatId) {
-                                        router.push(`/messages?id=${data.chatId}&channel=max`)
-                                    }
-                                } catch {}
-                            } : undefined
                             return (
                                 <div
-                                    className={`mb-1.5 flex items-center gap-1 text-[11px] ${color} ${handleOpenContact ? 'cursor-pointer hover:underline' : ''}`}
-                                    onClick={handleOpenContact}
+                                    className={`mb-1.5 flex items-center gap-1 text-[11px] ${color}`}
                                 >
                                     <svg className="w-3 h-3 flex-shrink-0" viewBox="0 0 16 16" fill="currentColor">
                                         <path d="M9 3L14 8L9 13V10C5.686 10 3.286 11.286 2 14C2 10 3.5 6 9 5V3Z"/>

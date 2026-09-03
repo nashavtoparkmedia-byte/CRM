@@ -16,8 +16,8 @@
     "GENUINELY_DYNAMIC_UNRESOLVED"
   ],
   "summary": {
-    "RAW_BASELINE_AMBIGUOUS": 41,
-    "CONFIRMED_WRITE_OWNER_RESOLVED": 7,
+    "RAW_BASELINE_AMBIGUOUS": 55,
+    "CONFIRMED_WRITE_OWNER_RESOLVED": 21,
     "CONFIRMED_WRITE_OWNER_UNRESOLVED": 0,
     "DYNAMIC_DELEGATE_UNRESOLVED": 0,
     "DYNAMIC_SQL_UNRESOLVED": 0,
@@ -26,10 +26,10 @@
     "CONFIRMED_NON_WRITE": 34,
     "GENUINELY_DYNAMIC_UNRESOLVED": 0,
     "RESOLVED_NON_WRITE": 34,
-    "OWNER_VALID_WRITE": 3,
+    "OWNER_VALID_WRITE": 17,
     "CONTROLLED_MIGRATION_WRITE": 4,
     "MATERIAL_UNRESOLVED_WRITE_RISK": 0,
-    "RECONCILIATION_TOTAL": 41,
+    "RECONCILIATION_TOTAL": 55,
     "RECONCILIATION_EXACT": true
   },
   "records": [
@@ -1465,9 +1465,9 @@
     {
       "record_id": "0c81e542c6ee55171cb049c0570617f3fa9ea12402305bfe8014d2c953c51caa",
       "site_signature": "0c81e542c6ee55171cb049c0570617f3fa9ea12402305bfe8014d2c953c51caa",
-      "source_sha256": "e266804bb3456fd2b906dd42a27339f29f8cd5d4ec1762f0c149953cafa81354",
+      "source_sha256": "767c3a1fe387e9d58193b515e14b77ef35e8a7e427f3193d148410f2d818406c",
       "file": "gravity-mvp/src/app/tg-actions.ts",
-      "line": 1603,
+      "line": 1875,
       "column": 32,
       "kind": "raw",
       "method": "$queryRaw",
@@ -1490,7 +1490,7 @@
         "min"
       ],
       "sql_sha256": "bdef2e15fc02f10219bec9dde14ee6bbfbfa414b85c47686a830d3d15f2f6b53",
-      "sql_provenance_sha256": "4f2d1eeb5ec49f7c6be92958707ff276bd1743c7a6e0fcfec2338bbb03cdc61f",
+      "sql_provenance_sha256": "7b9d2df57655e0b840bd2f231dac96915bf69b52ebd86d4536702a47cf0cb4ea",
       "source_context": "telegram_channel",
       "source_technical_module": "telegram_provider",
       "owner_contexts": [],
@@ -1911,9 +1911,9 @@
     {
       "record_id": "6c84c5974dc29a3cd814144d007c6669c061d6217ca8837671847aaf97206891",
       "site_signature": "6c84c5974dc29a3cd814144d007c6669c061d6217ca8837671847aaf97206891",
-      "source_sha256": "60fd0e9ffbace3c48290b5970d22f618ee96845eab7c2f0721cab49974d1e74a",
+      "source_sha256": "a17ed9492a9e77ad77d29869af2cb06fd1d4c7cc5b29dae19e366d632327ea57",
       "file": "gravity-mvp/src/lib/MessageService.ts",
-      "line": 96,
+      "line": 101,
       "column": 65,
       "kind": "raw",
       "method": "$queryRaw",
@@ -1935,7 +1935,7 @@
       ],
       "called_functions": [],
       "sql_sha256": "c1e0c276a397686626aac8475ae4d795c72f1185d46ec33c50fd74a99bdd7df0",
-      "sql_provenance_sha256": "272736d8ad1a959215eed5bd10f7b375035551d94aba0e943e488bb9b8d52636",
+      "sql_provenance_sha256": "304b67e492ac4b0e74171a2d55abb934b38a1b7eb50d5a883c6fb6ab303b29c4",
       "source_context": "messaging",
       "source_technical_module": "messages",
       "owner_contexts": [],
@@ -2016,9 +2016,9 @@
     {
       "record_id": "490105b516a84ebfd5c94ad7544581e9628ae1f95dffee0c0940ba8b0bfa9dad",
       "site_signature": "490105b516a84ebfd5c94ad7544581e9628ae1f95dffee0c0940ba8b0bfa9dad",
-      "source_sha256": "967d048235b0449643962b3e34252b72c42449c9a861c4d31329269aba821cc8",
+      "source_sha256": "74fdf90ff4c82bcd21c61071058f73c403ce6b64c2b95918194ce06570c1a5c5",
       "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-      "line": 2388,
+      "line": 2586,
       "column": 32,
       "kind": "raw",
       "method": "$queryRaw",
@@ -2045,7 +2045,7 @@
         "min"
       ],
       "sql_sha256": "50f65e4b92c17e5d333eca535f6635c31d087056d23a2114ff4fb38f516b3927",
-      "sql_provenance_sha256": "ed89bb46f9301814602e9dd35f125ea97822ab0372122442add1cb86d045b6b5",
+      "sql_provenance_sha256": "b578ca84d2a559a2ecd16c06806aed206c07fc518aed46e321452886418567e9",
       "source_context": "whatsapp_channel",
       "source_technical_module": "whatsapp_provider",
       "owner_contexts": [],
@@ -2069,12 +2069,205 @@
       "semantic_state": "RESOLVED_NON_WRITE"
     },
     {
-      "record_id": "b00356e49038391b1ecb1efbefd7c929b2e1e15f2cc6580a32df27a68f04c982",
-      "site_signature": "b00356e49038391b1ecb1efbefd7c929b2e1e15f2cc6580a32df27a68f04c982",
-      "source_sha256": "013c8d9494def2be0782244423b39994dfa92ea3e79df851a0e12115f05d0292",
-      "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
-      "line": 43,
-      "column": 35,
+      "record_id": "c07dfc3bed1350a52ef31d97f73d18c09f81f104519a4c4268849ec1800eae21",
+      "site_signature": "c07dfc3bed1350a52ef31d97f73d18c09f81f104519a4c4268849ec1800eae21",
+      "source_sha256": "a4c1a13dbc95adbe9588939cbd0b216239dd68ca1286ca9c215a50ea6ab0e3a3",
+      "file": "gravity-mvp/src/modules/contacts/internal/contact-ownership-coordinator.ts",
+      "line": 133,
+      "column": 11,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [],
+      "selected_columns": [
+        "IS"
+      ],
+      "called_functions": [
+        "cast",
+        "materialized",
+        "octet_length",
+        "pg_advisory_xact_lock",
+        "set_config"
+      ],
+      "sql_sha256": "15e160c466631fd3d4946038ec47763f44a63bb8e3b09b833f11cc689cc268ff",
+      "sql_provenance_sha256": "1cd620fd34a0e53a35e45deb67b6bb0eda2b311f34d73f1c108a948ab909ddcd",
+      "source_context": "contacts",
+      "source_technical_module": "contacts.module",
+      "owner_contexts": [],
+      "receiver_origin": "transaction-callback:import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_intent_unresolved",
+        "select_function_side_effect_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "a41cc5d01ac2e6699c6b86dcd306a933a2f5b0cb954d2bcf8668fe3dc81afcb5",
+      "site_signature": "a41cc5d01ac2e6699c6b86dcd306a933a2f5b0cb954d2bcf8668fe3dc81afcb5",
+      "source_sha256": "6682aebe2beae58148df81d18c21cc8413d311b6116d34c688ca939a461e0835",
+      "file": "gravity-mvp/src/modules/contacts/internal/contact-ownership-maintenance-runtime.js",
+      "line": 78,
+      "column": 11,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "Contact"
+      ],
+      "selected_columns": [
+        "FOR",
+        "SELECT",
+        "id"
+      ],
+      "called_functions": [],
+      "sql_sha256": "ba73cd4aa5c2398b6e1f4c6bf60b8c2abbb6197b093c46834769470073177cef",
+      "sql_provenance_sha256": "b94da8f67216f41aad64ebbaa4bf6c834be22926fa4e3d66847afddd55e3298d",
+      "source_context": "contacts",
+      "source_technical_module": "contacts.module",
+      "owner_contexts": [],
+      "receiver_origin": "transaction-callback:new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "e902f9c46033a4363ccbe77b17ec468df4052eff323e009d8934906763c7ff7a",
+      "site_signature": "e902f9c46033a4363ccbe77b17ec468df4052eff323e009d8934906763c7ff7a",
+      "source_sha256": "6682aebe2beae58148df81d18c21cc8413d311b6116d34c688ca939a461e0835",
+      "file": "gravity-mvp/src/modules/contacts/internal/contact-ownership-maintenance-runtime.js",
+      "line": 87,
+      "column": 32,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "ContactPhone"
+      ],
+      "selected_columns": [
+        "FOR",
+        "SELECT",
+        "id"
+      ],
+      "called_functions": [],
+      "sql_sha256": "559845eb0a0f60e725ed3625ceb33b1eda292d9214e6c8279e3853effaa8c791",
+      "sql_provenance_sha256": "0db7ba9105ce9c7e50c524d1ac63ebc145833e4e48120fe84586f2650c9df038",
+      "source_context": "contacts",
+      "source_technical_module": "contacts.module",
+      "owner_contexts": [],
+      "receiver_origin": "transaction-callback:new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "cf582460b117a919402f002cc2e6d46c86c2705456e676e4bb8eb416712dcdd4",
+      "site_signature": "cf582460b117a919402f002cc2e6d46c86c2705456e676e4bb8eb416712dcdd4",
+      "source_sha256": "6682aebe2beae58148df81d18c21cc8413d311b6116d34c688ca939a461e0835",
+      "file": "gravity-mvp/src/modules/contacts/internal/contact-ownership-maintenance-runtime.js",
+      "line": 102,
+      "column": 36,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "ContactIdentity"
+      ],
+      "selected_columns": [
+        "FOR",
+        "SELECT",
+        "id"
+      ],
+      "called_functions": [],
+      "sql_sha256": "e91d48bb537f861525320fd58229090950ee08b1c6103d314a20c0b85c1ca0c1",
+      "sql_provenance_sha256": "5852a5b307a5cc0ce186bf956859c557d32d7b1f13a3b9e3af13f500abe1e35b",
+      "source_context": "contacts",
+      "source_technical_module": "contacts.module",
+      "owner_contexts": [],
+      "receiver_origin": "transaction-callback:new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "e54be07b8050d4ff83e4f53490c748987cfc4b96708d9a237291e20a5cbdb240",
+      "site_signature": "e54be07b8050d4ff83e4f53490c748987cfc4b96708d9a237291e20a5cbdb240",
+      "source_sha256": "6682aebe2beae58148df81d18c21cc8413d311b6116d34c688ca939a461e0835",
+      "file": "gravity-mvp/src/modules/contacts/internal/contact-ownership-maintenance-runtime.js",
+      "line": 112,
+      "column": 32,
       "kind": "raw",
       "method": "$queryRaw",
       "fragment_source": null,
@@ -2087,15 +2280,67 @@
         "ContactMerge"
       ],
       "selected_columns": [
-        "id"
+        "FOR",
+        "SELECT",
+        "id",
+        "mergedId",
+        "survivorId"
       ],
       "called_functions": [],
-      "sql_sha256": "6c7936b5cfa45134e549041f280f40369d6dfaee8970d4f8ff3c03d7b35b66d2",
-      "sql_provenance_sha256": "45524e0a307e7fe0a938bc8c792ac23b3dfbde857fd4920e8eb7697a111c5587",
+      "sql_sha256": "dd4faa8e9796e5dcf2771d9f359e9aec89afe921ced1839c91b576a4e838b75f",
+      "sql_provenance_sha256": "10df2c4d8a3f8f3f0c0e9000cd4862c316d644907872f74bfa996d90a130d749",
       "source_context": "contacts",
       "source_technical_module": "contacts.module",
       "owner_contexts": [],
-      "receiver_origin": "import:@/lib/prisma",
+      "receiver_origin": "transaction-callback:new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "dynamic_sql_fragment",
+        "dynamic_sql_marker",
+        "query_raw_dynamic_intent_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "533bbfc7fcb9eefd891434ec44f0bea3b96e58247c11e3633616c7911584d6c5",
+      "site_signature": "533bbfc7fcb9eefd891434ec44f0bea3b96e58247c11e3633616c7911584d6c5",
+      "source_sha256": "6682aebe2beae58148df81d18c21cc8413d311b6116d34c688ca939a461e0835",
+      "file": "gravity-mvp/src/modules/contacts/internal/contact-ownership-maintenance-runtime.js",
+      "line": 134,
+      "column": 13,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [
+        "ContactPhone"
+      ],
+      "selected_columns": [
+        "contactId"
+      ],
+      "called_functions": [
+        "count"
+      ],
+      "sql_sha256": "4cde96ad25144e8161d11dc93908b78a9847cf233d640a3370a4077f901e4d85",
+      "sql_provenance_sha256": "ef8a9fb74d088e33f7fbc93f683008f8d26198dbd118669255f047925fe197d0",
+      "source_context": "contacts",
+      "source_technical_module": "contacts.module",
+      "owner_contexts": [],
+      "receiver_origin": "transaction-callback:new:module:@prisma/client:PrismaClient",
       "surface": {
         "disposition": null,
         "lifecycle": "APPLICATION_RUNTIME",
@@ -2115,12 +2360,12 @@
       "semantic_state": "RESOLVED_NON_WRITE"
     },
     {
-      "record_id": "d0c82d56b1ebc1290af28a4c3add0047a2da0f9ab7cf0643ae9ac5ccd3920fc9",
-      "site_signature": "d0c82d56b1ebc1290af28a4c3add0047a2da0f9ab7cf0643ae9ac5ccd3920fc9",
-      "source_sha256": "013c8d9494def2be0782244423b39994dfa92ea3e79df851a0e12115f05d0292",
-      "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
-      "line": 74,
-      "column": 15,
+      "record_id": "4866ecccc1c91eac5a9ae495bb91005ba88c8549537913e1a3953e3b355e3659",
+      "site_signature": "4866ecccc1c91eac5a9ae495bb91005ba88c8549537913e1a3953e3b355e3659",
+      "source_sha256": "6682aebe2beae58148df81d18c21cc8413d311b6116d34c688ca939a461e0835",
+      "file": "gravity-mvp/src/modules/contacts/internal/contact-ownership-maintenance-runtime.js",
+      "line": 149,
+      "column": 13,
       "kind": "raw",
       "method": "$queryRaw",
       "fragment_source": null,
@@ -2130,20 +2375,23 @@
       "tables": [],
       "operations": [],
       "read_tables": [
-        "Contact"
+        "Contact",
+        "ContactPhone"
       ],
       "selected_columns": [
-        "FOR",
-        "SELECT",
-        "id"
+        "contactId",
+        "id",
+        "isActive",
+        "isPrimary",
+        "primaryPhoneId"
       ],
       "called_functions": [],
-      "sql_sha256": "89d1cf16e02c6989c59518c3ff4492759d7b3b33359b6060898e8a64a5fbe15c",
-      "sql_provenance_sha256": "67174ad2b78080a45043268871cb52572383c2aa0f77796086c8df1d1d010134",
+      "sql_sha256": "fca841ec419418b7c6faad98be71542c8804ecf52d52ba48230a58978bc6c9a7",
+      "sql_provenance_sha256": "11251250867157ff9bf94c35b6590d59970ce93ad68e80e339002c7b89f8e345",
       "source_context": "contacts",
       "source_technical_module": "contacts.module",
       "owner_contexts": [],
-      "receiver_origin": "typed-parameter:transaction",
+      "receiver_origin": "transaction-callback:new:module:@prisma/client:PrismaClient",
       "surface": {
         "disposition": null,
         "lifecycle": "APPLICATION_RUNTIME",
@@ -2161,6 +2409,384 @@
       "ownership_classification": null,
       "final_ownership_classification": null,
       "semantic_state": "RESOLVED_NON_WRITE"
+    },
+    {
+      "record_id": "1155e3e8871948983914b57936052d47582d93288599be197d0e087b543f9fe1",
+      "site_signature": "1155e3e8871948983914b57936052d47582d93288599be197d0e087b543f9fe1",
+      "source_sha256": "6682aebe2beae58148df81d18c21cc8413d311b6116d34c688ca939a461e0835",
+      "file": "gravity-mvp/src/modules/contacts/internal/contact-ownership-maintenance-runtime.js",
+      "line": 202,
+      "column": 13,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [],
+      "selected_columns": [
+        "IS",
+        "SELECT"
+      ],
+      "called_functions": [
+        "cast",
+        "materialized",
+        "octet_length",
+        "pg_advisory_xact_lock",
+        "set_config"
+      ],
+      "sql_sha256": "4a0e5ad9d6858fc8543d573cec6f0f17c581f579b7d46ef42fbb981e156b1b1c",
+      "sql_provenance_sha256": "ea5e91ae6e0d3516fbb1fbd6282cb2774e889bb2a3de82100b4d7fcc4f645e8a",
+      "source_context": "contacts",
+      "source_technical_module": "contacts.module",
+      "owner_contexts": [],
+      "receiver_origin": "transaction-callback:new:module:@prisma/client:PrismaClient",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "query_raw_intent_unresolved",
+        "select_function_side_effect_unresolved"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "4725bd8e337bd59adcedfd797a456722a31f900ddabc83ebeb64a6d990850978",
+      "site_signature": "4725bd8e337bd59adcedfd797a456722a31f900ddabc83ebeb64a6d990850978",
+      "source_sha256": "03267a5bbef848433521bcbcfc7d425321658a392f355319c0c37353692186b7",
+      "file": "gravity-mvp/src/modules/fleet-operations/public/v1/legacy-prisma-contact-merge-adapter.ts",
+      "line": 15,
+      "column": 9,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [],
+      "selected_columns": [],
+      "called_functions": [],
+      "sql_sha256": null,
+      "sql_provenance_sha256": null,
+      "source_context": "fleet_operations",
+      "source_technical_module": "fleet_operations.module",
+      "owner_contexts": [],
+      "receiver_origin": "typed-parameter:transaction",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "query_raw_intent_unresolved",
+        "sql_not_statically_available"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "4290848e7cb22a18b0ea2ae7e44a4e922a951d64d94e613357a08e51e3f77993",
+      "site_signature": "4290848e7cb22a18b0ea2ae7e44a4e922a951d64d94e613357a08e51e3f77993",
+      "source_sha256": "c6b82031199b2bbb01611476625101cc31815029cd21a6c3020e47ebb55046b3",
+      "file": "gravity-mvp/src/modules/messaging/public/v1/conversation-identity-collision.ts",
+      "line": 69,
+      "column": 24,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [],
+      "selected_columns": [],
+      "called_functions": [],
+      "sql_sha256": null,
+      "sql_provenance_sha256": null,
+      "source_context": "messaging",
+      "source_technical_module": "messaging.module",
+      "owner_contexts": [],
+      "receiver_origin": "transaction-callback:import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "query_raw_intent_unresolved",
+        "sql_not_statically_available"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "6e7331a679f00f5453dcda4a4b0b66f9a0fbe81b250152f4b9cc138eb1c6e567",
+      "site_signature": "6e7331a679f00f5453dcda4a4b0b66f9a0fbe81b250152f4b9cc138eb1c6e567",
+      "source_sha256": "48617babbf2d901136dad4145c26a0cb80ee10afbfda6eae174b1dbee4c6c5ed",
+      "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-conversation-contact-link-adapter.ts",
+      "line": 27,
+      "column": 13,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [],
+      "selected_columns": [],
+      "called_functions": [],
+      "sql_sha256": null,
+      "sql_provenance_sha256": null,
+      "source_context": "messaging",
+      "source_technical_module": "messaging.module",
+      "owner_contexts": [],
+      "receiver_origin": "transaction-callback:import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "query_raw_intent_unresolved",
+        "sql_not_statically_available"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "8094e623e03dce25fee65e3d52acb95d4829fce9229d77976ac54b6f31fa19a7",
+      "site_signature": "8094e623e03dce25fee65e3d52acb95d4829fce9229d77976ac54b6f31fa19a7",
+      "source_sha256": "198a83b0216a2af5f4833edfb2323a80ac4173e5e5a533ef649cd515f3059938",
+      "file": "gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-matched-driver-conversation-link-adapter.ts",
+      "line": 30,
+      "column": 19,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [],
+      "selected_columns": [],
+      "called_functions": [],
+      "sql_sha256": null,
+      "sql_provenance_sha256": null,
+      "source_context": "messaging",
+      "source_technical_module": "messaging.module",
+      "owner_contexts": [],
+      "receiver_origin": "transaction-callback:import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "query_raw_intent_unresolved",
+        "sql_not_statically_available"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "14602442299bcce66d1f52e21acc108ae4718e87affc4e4bbd69823cc68011ce",
+      "site_signature": "14602442299bcce66d1f52e21acc108ae4718e87affc4e4bbd69823cc68011ce",
+      "source_sha256": "ef86bbfec61a135bbd03589748e7c394c45c7957e34f73f4f7c625f95c015620",
+      "file": "gravity-mvp/src/modules/telegram-channel/public/v1/legacy-prisma-manual-driver-telegram-link-adapter.ts",
+      "line": 37,
+      "column": 19,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [],
+      "selected_columns": [],
+      "called_functions": [],
+      "sql_sha256": null,
+      "sql_provenance_sha256": null,
+      "source_context": "telegram_channel",
+      "source_technical_module": "telegram_channel.module",
+      "owner_contexts": [],
+      "receiver_origin": "transaction-callback:import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "query_raw_intent_unresolved",
+        "sql_not_statically_available"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "368bd8ff0ab5fddba71b1faced7c709383a4f40c610f7a248fa47c720e0ea874",
+      "site_signature": "368bd8ff0ab5fddba71b1faced7c709383a4f40c610f7a248fa47c720e0ea874",
+      "source_sha256": "ef86bbfec61a135bbd03589748e7c394c45c7957e34f73f4f7c625f95c015620",
+      "file": "gravity-mvp/src/modules/telegram-channel/public/v1/legacy-prisma-manual-driver-telegram-link-adapter.ts",
+      "line": 53,
+      "column": 19,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [],
+      "selected_columns": [],
+      "called_functions": [],
+      "sql_sha256": null,
+      "sql_provenance_sha256": null,
+      "source_context": "telegram_channel",
+      "source_technical_module": "telegram_channel.module",
+      "owner_contexts": [],
+      "receiver_origin": "transaction-callback:import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "query_raw_intent_unresolved",
+        "sql_not_statically_available"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "2d9fe65392a642c52a7f3fc0ee35856583113275a12526a71afc486579742fe4",
+      "site_signature": "2d9fe65392a642c52a7f3fc0ee35856583113275a12526a71afc486579742fe4",
+      "source_sha256": "ef86bbfec61a135bbd03589748e7c394c45c7957e34f73f4f7c625f95c015620",
+      "file": "gravity-mvp/src/modules/telegram-channel/public/v1/legacy-prisma-manual-driver-telegram-link-adapter.ts",
+      "line": 58,
+      "column": 19,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [],
+      "selected_columns": [],
+      "called_functions": [],
+      "sql_sha256": null,
+      "sql_provenance_sha256": null,
+      "source_context": "telegram_channel",
+      "source_technical_module": "telegram_channel.module",
+      "owner_contexts": [],
+      "receiver_origin": "transaction-callback:import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "query_raw_intent_unresolved",
+        "sql_not_statically_available"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
+    },
+    {
+      "record_id": "269fe8d0c425f83ce1d07f1c25c6da409d023629a7f328ecaf387b99865e0485",
+      "site_signature": "269fe8d0c425f83ce1d07f1c25c6da409d023629a7f328ecaf387b99865e0485",
+      "source_sha256": "ef86bbfec61a135bbd03589748e7c394c45c7957e34f73f4f7c625f95c015620",
+      "file": "gravity-mvp/src/modules/telegram-channel/public/v1/legacy-prisma-manual-driver-telegram-link-adapter.ts",
+      "line": 63,
+      "column": 19,
+      "kind": "raw",
+      "method": "$queryRaw",
+      "fragment_source": null,
+      "database_command_intent": null,
+      "model": null,
+      "candidate_models": [],
+      "tables": [],
+      "operations": [],
+      "read_tables": [],
+      "selected_columns": [],
+      "called_functions": [],
+      "sql_sha256": null,
+      "sql_provenance_sha256": null,
+      "source_context": "telegram_channel",
+      "source_technical_module": "telegram_channel.module",
+      "owner_contexts": [],
+      "receiver_origin": "transaction-callback:import:@/lib/prisma",
+      "surface": {
+        "disposition": null,
+        "lifecycle": "APPLICATION_RUNTIME",
+        "production_capability": "POSSIBLE",
+        "registry_classified": false
+      },
+      "ambiguity_reasons": [
+        "query_raw_intent_unresolved",
+        "sql_not_statically_available"
+      ],
+      "unresolved_targets": [],
+      "disposition": "CONFIRMED_WRITE_OWNER_RESOLVED",
+      "rationale": "Focused architecture/source review resolved writer and target ownership against current decisions.",
+      "ownership_classification": "OWNER_VALID",
+      "final_ownership_classification": "OWNER_VALID",
+      "semantic_state": "OWNER_VALID_WRITE"
     },
     {
       "record_id": "8ab08160d1b248fd01499e5a9a1c10aed80a83a90444baf0bd46e7c85e2877dd",
@@ -2296,10 +2922,74 @@
     }
   ],
   "current_exact_review": {
-    "ambiguous_denominator": 41,
+    "ambiguous_denominator": 55,
     "review_key": "site_signature",
-    "sorted_site_signatures_sha256": "d933630fae2905a16fb7ea1144414fe8737982ea3d44e8343932cacec7f3caf2",
+    "sorted_site_signatures_sha256": "8066cfa3fbe4273544368dbfdd4cd9e78b03e847b3259c6959adfac87d5f5243",
     "policy": "Every current ambiguous analyzer signature requires one independent disposition and every resolved non-write requires one exact proof; the historical raw baseline grants no authorization."
+  },
+  "pr81_conflict_repair_write_ambiguity_review": {
+    "status": "PASS_WITH_FINDINGS",
+    "reviewed_at": "2026-09-02T21:56:18Z",
+    "reviewed_by": "CODEX_INDEPENDENT_WRITE_DELTA_REVIEW_20260902",
+    "reviewer_role": "INDEPENDENT_HIGH_RISK_ARCHITECTURE_REVIEWER",
+    "independence": "NOT_THE_EXECUTOR_AND_NOT_THE_REVIEW_ARTIFACT_AUTHOR",
+    "authorization": "GOAL_BOUNDED_HIGH_RISK_REVIEW_AND_HOSTED_PR_REPAIR",
+    "reviewed_candidate": {
+      "commit": "fc8a730f4e0631fc5041bf803aca4fea1433fb14",
+      "tree": "cd582580cf660ca50d03959cb825fa238ba90450"
+    },
+    "fresh_analysis": {
+      "path": "/tmp/codex-pr81-write-analysis-fc8a730f-r2.json",
+      "file_sha256": "9f8b27b4e51ab54e77a15ccf1a74685288c6c37a365a886a25f6e24e064c5548",
+      "analysis_sha256": "25015b8de943fd68d7e4c85a3223876be7986f73cc2538f32c5caaab47fa92e4",
+      "tracked_executable_surfaces": 2427,
+      "discovered_write_sites": 2052,
+      "current_ambiguous": 55,
+      "foreign_writes": 0,
+      "worker_failures": 0,
+      "worker_timeouts": 0
+    },
+    "decisions": {
+      "retired_owner_sync_sites": 1,
+      "added_owner_valid_sync_writes": 7,
+      "retained_projection_rebindings": 5,
+      "material_unresolved_write_risk": 0
+    },
+    "reviewed_invariants": [
+      "Fleet lock order remains FLT1 before Contacts-owned CNT1 coordination.",
+      "Messaging owns Chat row locks and consumes Contacts coordination only through the public owner contract.",
+      "Telegram manual-link persistence locks CNT1, Contact, ContactIdentity, then Chat before exact authority revalidation and DriverTelegram creation.",
+      "No synchronization side effect was reclassified as a non-write."
+    ],
+    "targeted_verification": {
+      "vitest_passed": 110,
+      "vitest_skipped_database_gated": 7,
+      "vitest_failed": 0,
+      "architecture_checks_passed": 40
+    }
+  },
+  "pr81_retention_source_write_rebinding_review": {
+    "status": "PASS",
+    "reviewed_at": "2026-09-03T03:20:22Z",
+    "reviewed_by": "CODEX_INDEPENDENT_RETENTION_CREDENTIAL_REVIEWER_20260903",
+    "reviewer_role": "INDEPENDENT_SOURCE_AND_WRITE_BOUNDARY_REVIEWER",
+    "independence": "NOT_THE_EXECUTOR_AND_NOT_THE_REVIEW_ARTIFACT_AUTHOR",
+    "authorization": "GOAL_BOUNDED_PR81_HOSTED_REPAIR_EXACT_BINDING_RECONCILIATION",
+    "site_signature": "c07dfc3bed1350a52ef31d97f73d18c09f81f104519a4c4268849ec1800eae21",
+    "previous_source_sha256": "4cacd9e441084001fd8cf65c5ca47e131183d3265dff994136009ed5e1726538",
+    "current_source_sha256": "a4c1a13dbc95adbe9588939cbd0b216239dd68ca1286ca9c215a50ea6ab0e3a3",
+    "previous_sql_provenance_sha256": "babcab2ea2616d4cc025fe80c8d42343c1bf47728010bf26578eda4f36c513e7",
+    "current_sql_provenance_sha256": "1cd620fd34a0e53a35e45deb67b6bb0eda2b311f34d73f1c108a948ab909ddcd",
+    "sql_sha256": "15e160c466631fd3d4946038ec47763f44a63bb8e3b09b833f11cc689cc268ff",
+    "source_context_equivalence": {
+      "admission_function_bytes_identical": true,
+      "admission_function_sha256": "1739d2dc5366b03eecefb7aba888d7802c777470875a9279c13f03bc8b155897",
+      "only_whole_file_change": "Archived-contact dirty-reference query physical table correction from Task to tasks",
+      "write_semantics_changed": false,
+      "ownership_changed": false,
+      "credential_or_secret_access_changed": false
+    },
+    "disposition": "APPROVED_SOURCE_AND_PROVENANCE_HASH_ONLY_REBIND"
   },
   "non_write_proofs": [
     {
@@ -3230,11 +3920,11 @@
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
         "file": "gravity-mvp/src/app/tg-actions.ts",
-        "line": 1603,
+        "line": 1875,
         "column": 32,
         "method": "$queryRaw",
-        "source_sha256": "e266804bb3456fd2b906dd42a27339f29f8cd5d4ec1762f0c149953cafa81354",
-        "sql_provenance_sha256": "4f2d1eeb5ec49f7c6be92958707ff276bd1743c7a6e0fcfec2338bbb03cdc61f"
+        "source_sha256": "767c3a1fe387e9d58193b515e14b77ef35e8a7e427f3193d148410f2d818406c",
+        "sql_provenance_sha256": "7b9d2df57655e0b840bd2f231dac96915bf69b52ebd86d4536702a47cf0cb4ea"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -3253,12 +3943,12 @@
         ]
       },
       "evidence": [
-        "gravity-mvp/src/app/tg-actions.ts:1603:32",
+        "gravity-mvp/src/app/tg-actions.ts:1875:32",
         "analysis_site_signature:0c81e542c6ee55171cb049c0570617f3fa9ea12402305bfe8014d2c953c51caa",
         "sql_sha256:bdef2e15fc02f10219bec9dde14ee6bbfbfa414b85c47686a830d3d15f2f6b53",
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
-        "source_sha256:e266804bb3456fd2b906dd42a27339f29f8cd5d4ec1762f0c149953cafa81354",
-        "sql_provenance_sha256:4f2d1eeb5ec49f7c6be92958707ff276bd1743c7a6e0fcfec2338bbb03cdc61f"
+        "source_sha256:767c3a1fe387e9d58193b515e14b77ef35e8a7e427f3193d148410f2d818406c",
+        "sql_provenance_sha256:7b9d2df57655e0b840bd2f231dac96915bf69b52ebd86d4536702a47cf0cb4ea"
       ]
     },
     {
@@ -3555,11 +4245,11 @@
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
         "file": "gravity-mvp/src/lib/MessageService.ts",
-        "line": 96,
+        "line": 101,
         "column": 65,
         "method": "$queryRaw",
-        "source_sha256": "60fd0e9ffbace3c48290b5970d22f618ee96845eab7c2f0721cab49974d1e74a",
-        "sql_provenance_sha256": "272736d8ad1a959215eed5bd10f7b375035551d94aba0e943e488bb9b8d52636"
+        "source_sha256": "a17ed9492a9e77ad77d29869af2cb06fd1d4c7cc5b29dae19e366d632327ea57",
+        "sql_provenance_sha256": "304b67e492ac4b0e74171a2d55abb934b38a1b7eb50d5a883c6fb6ab303b29c4"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -3577,12 +4267,12 @@
         "reviewed_read_only_functions": []
       },
       "evidence": [
-        "gravity-mvp/src/lib/MessageService.ts:96:65",
+        "gravity-mvp/src/lib/MessageService.ts:101:65",
         "analysis_site_signature:6c84c5974dc29a3cd814144d007c6669c061d6217ca8837671847aaf97206891",
         "sql_sha256:c1e0c276a397686626aac8475ae4d795c72f1185d46ec33c50fd74a99bdd7df0",
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
-        "source_sha256:60fd0e9ffbace3c48290b5970d22f618ee96845eab7c2f0721cab49974d1e74a",
-        "sql_provenance_sha256:272736d8ad1a959215eed5bd10f7b375035551d94aba0e943e488bb9b8d52636"
+        "source_sha256:a17ed9492a9e77ad77d29869af2cb06fd1d4c7cc5b29dae19e366d632327ea57",
+        "sql_provenance_sha256:304b67e492ac4b0e74171a2d55abb934b38a1b7eb50d5a883c6fb6ab303b29c4"
       ]
     },
     {
@@ -3630,11 +4320,11 @@
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
         "file": "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts",
-        "line": 2388,
+        "line": 2586,
         "column": 32,
         "method": "$queryRaw",
-        "source_sha256": "967d048235b0449643962b3e34252b72c42449c9a861c4d31329269aba821cc8",
-        "sql_provenance_sha256": "ed89bb46f9301814602e9dd35f125ea97822ab0372122442add1cb86d045b6b5"
+        "source_sha256": "74fdf90ff4c82bcd21c61071058f73c403ce6b64c2b95918194ce06570c1a5c5",
+        "sql_provenance_sha256": "b578ca84d2a559a2ecd16c06806aed206c07fc518aed46e321452886418567e9"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
@@ -3657,76 +4347,81 @@
         ]
       },
       "evidence": [
-        "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts:2388:32",
+        "gravity-mvp/src/lib/whatsapp/WhatsAppService.ts:2586:32",
         "analysis_site_signature:490105b516a84ebfd5c94ad7544581e9628ae1f95dffee0c0940ba8b0bfa9dad",
         "sql_sha256:50f65e4b92c17e5d333eca535f6635c31d087056d23a2114ff4fb38f516b3927",
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
-        "source_sha256:967d048235b0449643962b3e34252b72c42449c9a861c4d31329269aba821cc8",
-        "sql_provenance_sha256:ed89bb46f9301814602e9dd35f125ea97822ab0372122442add1cb86d045b6b5"
+        "source_sha256:74fdf90ff4c82bcd21c61071058f73c403ce6b64c2b95918194ce06570c1a5c5",
+        "sql_provenance_sha256:b578ca84d2a559a2ecd16c06806aed206c07fc518aed46e321452886418567e9"
       ]
     },
     {
-      "site_signature": "b00356e49038391b1ecb1efbefd7c929b2e1e15f2cc6580a32df27a68f04c982",
+      "site_signature": "533bbfc7fcb9eefd891434ec44f0bea3b96e58247c11e3633616c7911584d6c5",
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
-        "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
-        "line": 43,
-        "column": 35,
+        "file": "gravity-mvp/src/modules/contacts/internal/contact-ownership-maintenance-runtime.js",
+        "line": 134,
+        "column": 13,
         "method": "$queryRaw",
-        "source_sha256": "013c8d9494def2be0782244423b39994dfa92ea3e79df851a0e12115f05d0292",
-        "sql_provenance_sha256": "45524e0a307e7fe0a938bc8c792ac23b3dfbde857fd4920e8eb7697a111c5587"
+        "source_sha256": "6682aebe2beae58148df81d18c21cc8413d311b6116d34c688ca939a461e0835",
+        "sql_provenance_sha256": "ef8a9fb74d088e33f7fbc93f683008f8d26198dbd118669255f047925fe197d0"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
         "read_tables": [
-          "ContactMerge"
+          "ContactPhone"
         ],
         "selected_columns": [
-          "id"
+          "contactId"
         ],
-        "sql_sha256": "6c7936b5cfa45134e549041f280f40369d6dfaee8970d4f8ff3c03d7b35b66d2",
-        "reviewed_read_only_functions": []
+        "sql_sha256": "4cde96ad25144e8161d11dc93908b78a9847cf233d640a3370a4077f901e4d85",
+        "reviewed_read_only_functions": [
+          "count"
+        ]
       },
       "evidence": [
-        "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts:43:35",
-        "analysis_site_signature:b00356e49038391b1ecb1efbefd7c929b2e1e15f2cc6580a32df27a68f04c982",
-        "sql_sha256:6c7936b5cfa45134e549041f280f40369d6dfaee8970d4f8ff3c03d7b35b66d2",
+        "gravity-mvp/src/modules/contacts/internal/contact-ownership-maintenance-runtime.js:134:13",
+        "analysis_site_signature:533bbfc7fcb9eefd891434ec44f0bea3b96e58247c11e3633616c7911584d6c5",
+        "sql_sha256:4cde96ad25144e8161d11dc93908b78a9847cf233d640a3370a4077f901e4d85",
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
-        "source_sha256:013c8d9494def2be0782244423b39994dfa92ea3e79df851a0e12115f05d0292",
-        "sql_provenance_sha256:45524e0a307e7fe0a938bc8c792ac23b3dfbde857fd4920e8eb7697a111c5587"
+        "source_sha256:6682aebe2beae58148df81d18c21cc8413d311b6116d34c688ca939a461e0835",
+        "sql_provenance_sha256:ef8a9fb74d088e33f7fbc93f683008f8d26198dbd118669255f047925fe197d0"
       ]
     },
     {
-      "site_signature": "d0c82d56b1ebc1290af28a4c3add0047a2da0f9ab7cf0643ae9ac5ccd3920fc9",
+      "site_signature": "4866ecccc1c91eac5a9ae495bb91005ba88c8549537913e1a3953e3b355e3659",
       "classification": "READ_ONLY_SQL_PROJECTION",
       "source": {
-        "file": "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts",
-        "line": 74,
-        "column": 15,
+        "file": "gravity-mvp/src/modules/contacts/internal/contact-ownership-maintenance-runtime.js",
+        "line": 149,
+        "column": 13,
         "method": "$queryRaw",
-        "source_sha256": "013c8d9494def2be0782244423b39994dfa92ea3e79df851a0e12115f05d0292",
-        "sql_provenance_sha256": "67174ad2b78080a45043268871cb52572383c2aa0f77796086c8df1d1d010134"
+        "source_sha256": "6682aebe2beae58148df81d18c21cc8413d311b6116d34c688ca939a461e0835",
+        "sql_provenance_sha256": "11251250867157ff9bf94c35b6590d59970ce93ad68e80e339002c7b89f8e345"
       },
       "resolved_target": {
         "kind": "SQL_READ_PROJECTION",
         "read_tables": [
-          "Contact"
+          "Contact",
+          "ContactPhone"
         ],
         "selected_columns": [
-          "FOR",
-          "SELECT",
-          "id"
+          "contactId",
+          "id",
+          "isActive",
+          "isPrimary",
+          "primaryPhoneId"
         ],
-        "sql_sha256": "89d1cf16e02c6989c59518c3ff4492759d7b3b33359b6060898e8a64a5fbe15c",
+        "sql_sha256": "fca841ec419418b7c6faad98be71542c8804ecf52d52ba48230a58978bc6c9a7",
         "reviewed_read_only_functions": []
       },
       "evidence": [
-        "gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-merge-adapter.ts:74:15",
-        "analysis_site_signature:d0c82d56b1ebc1290af28a4c3add0047a2da0f9ab7cf0643ae9ac5ccd3920fc9",
-        "sql_sha256:89d1cf16e02c6989c59518c3ff4492759d7b3b33359b6060898e8a64a5fbe15c",
+        "gravity-mvp/src/modules/contacts/internal/contact-ownership-maintenance-runtime.js:149:13",
+        "analysis_site_signature:4866ecccc1c91eac5a9ae495bb91005ba88c8549537913e1a3953e3b355e3659",
+        "sql_sha256:fca841ec419418b7c6faad98be71542c8804ecf52d52ba48230a58978bc6c9a7",
         "Exact query projection and transitive SQL provenance contain no analyzed mutation operation.",
-        "source_sha256:013c8d9494def2be0782244423b39994dfa92ea3e79df851a0e12115f05d0292",
-        "sql_provenance_sha256:67174ad2b78080a45043268871cb52572383c2aa0f77796086c8df1d1d010134"
+        "source_sha256:6682aebe2beae58148df81d18c21cc8413d311b6116d34c688ca939a461e0835",
+        "sql_provenance_sha256:11251250867157ff9bf94c35b6590d59970ce93ad68e80e339002c7b89f8e345"
       ]
     }
   ]

@@ -5,6 +5,7 @@ import {
     removeDriverTelegramLink,
     saveDriverTelegramLink,
 } from '@/modules/platform-shell/internal/driver-telegram-link-orchestrator'
+import { getIntegrationAdminPrincipal } from '@/modules/identity-access/public/v1'
 
 import { DELETE, POST, isSameOriginMutationRequest } from './route'
 
@@ -12,9 +13,14 @@ vi.mock('@/modules/platform-shell/internal/driver-telegram-link-orchestrator', (
     saveDriverTelegramLink: vi.fn(),
     removeDriverTelegramLink: vi.fn(),
 }))
+vi.mock('@/modules/identity-access/public/v1', async importOriginal => ({
+    ...await importOriginal<typeof import('@/modules/identity-access/public/v1')>(),
+    getIntegrationAdminPrincipal: vi.fn(),
+}))
 
 const save = vi.mocked(saveDriverTelegramLink)
 const remove = vi.mocked(removeDriverTelegramLink)
+const adminPrincipal = vi.mocked(getIntegrationAdminPrincipal)
 const context = { params: Promise.resolve({ id: 'driver/1' }) }
 
 function request(method: 'POST' | 'DELETE', options: {
@@ -40,6 +46,10 @@ function request(method: 'POST' | 'DELETE', options: {
 
 beforeEach(() => {
     vi.clearAllMocks()
+    adminPrincipal.mockResolvedValue({
+        id: 'identity-access:integration-admin-session',
+        kind: 'integration_admin_session',
+    })
 })
 
 describe('driver Telegram link route security and mapping', () => {
@@ -53,6 +63,8 @@ describe('driver Telegram link route security and mapping', () => {
         for (const candidate of [
             request('DELETE', { host: 'crm.example' }),
             request('DELETE', { origin: 'not a URL', host: 'crm.example' }),
+            request('DELETE', { origin: 'https://crm.example/path', host: 'crm.example' }),
+            request('DELETE', { origin: 'https://attacker@crm.example', host: 'crm.example' }),
             request('DELETE', { origin: 'https://evil.example', host: 'crm.example' }),
             request('DELETE', {
                 origin: 'https://crm.example',
@@ -80,7 +92,30 @@ describe('driver Telegram link route security and mapping', () => {
         expect(response.status).toBe(403)
         await expect(response.json()).resolves.toEqual({ success: false, error: 'Forbidden' })
         expect(remove).not.toHaveBeenCalled()
+        expect(adminPrincipal).not.toHaveBeenCalled()
     })
+
+    it.each(['POST', 'DELETE'] as const)(
+        'rejects an unauthenticated %s with zero orchestration',
+        async method => {
+            adminPrincipal.mockResolvedValue(null)
+            const req = request(method, {
+                origin: 'https://crm.example',
+                host: 'crm.example',
+                ...(method === 'POST' ? {
+                    contentType: 'application/json',
+                    body: JSON.stringify({ telegramId: '42' }),
+                } : {}),
+            })
+
+            const response = method === 'POST'
+                ? await POST(req, context)
+                : await DELETE(req, context)
+            expect(response.status).toBe(403)
+            expect(save).not.toHaveBeenCalled()
+            expect(remove).not.toHaveBeenCalled()
+        },
+    )
 
     it('requires JSON for POST before orchestration', async () => {
         const response = await POST(request('POST', {

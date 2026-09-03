@@ -1,7 +1,6 @@
 import {
     GET_PREFERRED_ACTIVE_CONTACT_PHONE_QUERY_V1,
     PREPARE_CONTACT_CONVERSATION_IDENTITY_COMMAND_V1,
-    RESOLVE_CHANNEL_CONTACT_COMMAND_V1,
     type ContactConversationChannelV1,
     type GetPreferredActiveContactPhoneQueryV1,
     type GetPreferredActiveContactPhoneResultV1,
@@ -34,6 +33,7 @@ import {
     findAndBackfillContactConversationV1,
     openFallbackContactConversationV1,
 } from '@/modules/messaging/public/v1'
+import { canonicalWhatsAppConversationTargetV1 } from '@/modules/whatsapp-channel/public/v1/identity-canonicalization'
 
 export type PlatformContactConversationChannelV1 = ContactConversationChannelV1
 
@@ -61,11 +61,15 @@ export interface StartContactConversationByPhoneInputV1 {
 
 export interface ReadyContactConversationV1 {
     contact: ResolveChannelContactResultV1['contact']
-    identity: ResolveChannelContactResultV1['identity']
+    identity: Extract<PrepareContactConversationIdentityResultV1, { status: 'ready' }>['identity']
     conversation: ContactConversationV1
     isNewContact: boolean
     isNewConversation: boolean
 }
+
+export type StartContactConversationByPhoneResultV1 =
+    | ({ status: 'ready' } & ReadyContactConversationV1)
+    | { status: 'provider_identity_required' }
 
 export interface OpenContactConversationForContactInputV1 {
     contactId: string
@@ -75,7 +79,20 @@ export interface OpenContactConversationForContactInputV1 {
 }
 
 export type OpenContactConversationForContactResultV1 =
-    | { status: 'contact_not_found' | 'identity_not_found' | 'phone_not_found' | 'no_identity' }
+    | {
+        status:
+            | 'contact_not_found'
+            | 'identity_not_found'
+            | 'identity_ambiguous'
+            | 'identity_conflicted'
+            | 'identity_unreachable'
+            | 'identity_reachability_unknown'
+            | 'phone_not_found'
+            | 'no_identity'
+            | 'provider_account_unproven'
+            | 'transport_unbound'
+            | 'conversation_target_unproven'
+    }
     | ({ status: 'ready' } & ReadyContactConversationV1)
 
 const defaultOwnerApisV1: ContactConversationOwnerApisV1 = {
@@ -87,56 +104,70 @@ const defaultOwnerApisV1: ContactConversationOwnerApisV1 = {
     openFallbackContactConversationV1,
 }
 
+function assertExactConversationBinding(
+    conversation: ContactConversationV1,
+    expected: {
+        contactId: string
+        contactIdentityId: string
+        channel: PlatformContactConversationChannelV1
+        providerAccountId: string | null
+    },
+): void {
+    if (
+        conversation.contactId !== expected.contactId
+        || conversation.contactIdentityId !== expected.contactIdentityId
+        || conversation.channel !== expected.channel
+        || (
+            expected.providerAccountId !== null
+            && conversation.providerAccountId !== expected.providerAccountId
+        )
+        || conversation.providerAccountId.trim() === ''
+        || conversation.providerAccountId === 'legacy'
+    ) {
+        throw new Error('CONTACT_CONVERSATION_BINDING_MISMATCH')
+    }
+}
+
+function assertPreparedIdentityBinding(
+    input: OpenContactConversationForContactInputV1,
+    prepared: Extract<PrepareContactConversationIdentityResultV1, { status: 'ready' }>,
+): void {
+    if (
+        prepared.contact.id !== input.contactId
+        || prepared.identity.channel !== input.channel
+        || (input.identityId !== null && prepared.identity.id !== input.identityId)
+        || prepared.identity.externalId.trim() === ''
+        || (
+            prepared.identity.providerAccountId !== null
+            && (
+                prepared.identity.providerAccountId.trim() === ''
+                || prepared.identity.providerAccountId === 'legacy'
+            )
+        )
+    ) {
+        throw new Error('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
+    }
+}
+
+function exactExternalChatIds(
+    identity: Extract<PrepareContactConversationIdentityResultV1, { status: 'ready' }>['identity'],
+): string[] {
+    if (identity.channel === 'max') return []
+    if (identity.channel === 'telegram') return [`telegram:${identity.externalId}`]
+    return [...new Set([identity.externalId, ...(identity.providerAliasValues ?? [])]
+        .map(canonicalWhatsAppConversationTargetV1)
+        .filter((value): value is string => value !== null))].sort()
+}
+
 export function createContactConversationOrchestratorV1(owners: ContactConversationOwnerApisV1) {
     async function startContactConversationByPhoneV1(
         input: StartContactConversationByPhoneInputV1,
-    ): Promise<ReadyContactConversationV1> {
-        const externalId = input.normalizedPhone.replace('+', '')
-        const resolved = await owners.resolveChannelContactV1({
-            contract: RESOLVE_CHANNEL_CONTACT_COMMAND_V1,
-            channel: input.channel,
-            externalId,
-            phone: input.normalizedPhone,
-            displayName: null,
-        })
-
-        const linked = await owners.findAndBackfillContactConversationV1({
-            contract: FIND_AND_BACKFILL_CONTACT_CONVERSATION_COMMAND_V1,
-            contactId: resolved.contact.id,
-            contactIdentityId: resolved.identity.id,
-            channel: input.channel,
-            allowContactFallback: true,
-        })
-        if (linked.conversation) {
-            return {
-                contact: resolved.contact,
-                identity: resolved.identity,
-                conversation: linked.conversation,
-                isNewContact: resolved.isNew,
-                isNewConversation: false,
-            }
-        }
-
-        const driver = await owners.findDriverByExactPhoneV1({
-            contract: FIND_DRIVER_BY_EXACT_PHONE_QUERY_V1,
-            phone: input.normalizedPhone,
-        })
-        const opened = await owners.openFallbackContactConversationV1({
-            contract: OPEN_FALLBACK_CONTACT_CONVERSATION_COMMAND_V1,
-            legacyDriverId: driver.driverId,
-            channel: input.channel,
-            externalChatId: `${input.channel}:${externalId}`,
-            name: resolved.contact.displayName,
-            contactId: resolved.contact.id,
-            contactIdentityId: resolved.identity.id,
-        })
-        return {
-            contact: resolved.contact,
-            identity: resolved.identity,
-            conversation: opened.conversation,
-            isNewContact: resolved.isNew,
-            isNewConversation: opened.isNew,
-        }
+    ): Promise<StartContactConversationByPhoneResultV1> {
+        void input
+        // A phone number is evidence about a person, not an opaque provider
+        // identifier. Existing Contacts must be opened through their persisted
+        // channel identity; a phone-only request cannot create one safely.
+        return { status: 'provider_identity_required' }
     }
 
     async function openContactConversationForContactV1(
@@ -150,15 +181,35 @@ export function createContactConversationOrchestratorV1(owners: ContactConversat
             phoneId: input.phoneId,
         })
         if (prepared.status !== 'ready') return { status: prepared.status }
+        assertPreparedIdentityBinding(input, prepared)
+
+        // Messaging owns the provider conversation target. In particular, a
+        // MAX identity externalId is a sender id, not the Chat externalChatId.
+        // Contacts supplies ownership/account evidence; Messaging may reuse a
+        // channel-proven target and transport, but neither may be fabricated.
+        const allowContactFallback = true
+        const allowLegacyDriverFallback = input.identityId === null && input.phoneId === null
 
         const linked = await owners.findAndBackfillContactConversationV1({
             contract: FIND_AND_BACKFILL_CONTACT_CONVERSATION_COMMAND_V1,
             contactId: input.contactId,
             contactIdentityId: prepared.identity.id,
             channel: input.channel,
-            allowContactFallback: input.phoneId === null,
+            identityExternalId: prepared.identity.externalId,
+            exactExternalChatIds: exactExternalChatIds(prepared.identity),
+            providerAccountId: prepared.identity.providerAccountId,
+            allowContactFallback,
         })
         if (linked.conversation) {
+            assertExactConversationBinding(linked.conversation, {
+                contactId: input.contactId,
+                contactIdentityId: prepared.identity.id,
+                channel: input.channel,
+                providerAccountId: prepared.identity.providerAccountId,
+            })
+            if (!linked.conversation.transportConnectionId) {
+                return { status: 'transport_unbound' }
+            }
             return {
                 status: 'ready',
                 contact: prepared.contact,
@@ -169,29 +220,43 @@ export function createContactConversationOrchestratorV1(owners: ContactConversat
             }
         }
 
-        const phone = await owners.getPreferredActiveContactPhoneV1({
-            contract: GET_PREFERRED_ACTIVE_CONTACT_PHONE_QUERY_V1,
-            contactId: input.contactId,
-            phoneId: input.phoneId,
-        })
         let legacyDriverId: string | null = null
-        if (phone.phone) {
-            const driver = await owners.findDriverByExactPhoneV1({
-                contract: FIND_DRIVER_BY_EXACT_PHONE_QUERY_V1,
-                phone: phone.phone,
+        if (allowLegacyDriverFallback) {
+            const phone = await owners.getPreferredActiveContactPhoneV1({
+                contract: GET_PREFERRED_ACTIVE_CONTACT_PHONE_QUERY_V1,
+                contactId: input.contactId,
+                phoneId: null,
             })
-            legacyDriverId = driver.driverId
+            if (phone.phone) {
+                const driver = await owners.findDriverByExactPhoneV1({
+                    contract: FIND_DRIVER_BY_EXACT_PHONE_QUERY_V1,
+                    phone: phone.phone,
+                })
+                legacyDriverId = driver.driverId
+            }
         }
 
         const opened = await owners.openFallbackContactConversationV1({
             contract: OPEN_FALLBACK_CONTACT_CONVERSATION_COMMAND_V1,
-            legacyDriverId: input.phoneId === null ? legacyDriverId : null,
+            legacyDriverId,
             channel: input.channel,
-            externalChatId: `${input.channel}:${prepared.identity.externalId}`,
+            identityExternalId: prepared.identity.externalId,
+            exactExternalChatIds: exactExternalChatIds(prepared.identity),
             name: prepared.contact.displayName,
             contactId: input.contactId,
             contactIdentityId: prepared.identity.id,
+            providerAccountId: prepared.identity.providerAccountId,
         })
+        if (opened.status !== 'ready') return { status: opened.status }
+        assertExactConversationBinding(opened.conversation, {
+            contactId: input.contactId,
+            contactIdentityId: prepared.identity.id,
+            channel: input.channel,
+            providerAccountId: prepared.identity.providerAccountId,
+        })
+        if (!opened.conversation.transportConnectionId) {
+            return { status: 'transport_unbound' }
+        }
         return {
             status: 'ready',
             contact: prepared.contact,

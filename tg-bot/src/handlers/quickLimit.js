@@ -15,6 +15,7 @@ const { Scenes, Markup } = require('telegraf');
 const https = require('https');
 const http = require('http');
 const logger = require('../utils/logger');
+const { exactTelegramActionBinding } = require('../services/exactTelegramActionBinding');
 
 const CRM_URL = () => {
     if (process.env.BOT_ACTIONS_URL) return process.env.BOT_ACTIONS_URL;
@@ -95,7 +96,8 @@ const quickLimitScene = new Scenes.WizardScene(
         await ctx.reply('⏳ Меняю режим оплаты…', Markup.removeKeyboard());
         const result = await callCRM('change_limit', {
             telegramId: String(ctx.from.id),
-            limitValue: targetLimit
+            limitValue: targetLimit,
+            ...exactTelegramActionBinding(ctx)
         });
 
         if (result.status === 0 || result.status === 504) {
