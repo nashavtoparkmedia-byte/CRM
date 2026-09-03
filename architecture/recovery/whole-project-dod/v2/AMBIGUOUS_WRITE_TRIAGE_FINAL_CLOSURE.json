@@ -2071,7 +2071,7 @@
     {
       "record_id": "c07dfc3bed1350a52ef31d97f73d18c09f81f104519a4c4268849ec1800eae21",
       "site_signature": "c07dfc3bed1350a52ef31d97f73d18c09f81f104519a4c4268849ec1800eae21",
-      "source_sha256": "4cacd9e441084001fd8cf65c5ca47e131183d3265dff994136009ed5e1726538",
+      "source_sha256": "a4c1a13dbc95adbe9588939cbd0b216239dd68ca1286ca9c215a50ea6ab0e3a3",
       "file": "gravity-mvp/src/modules/contacts/internal/contact-ownership-coordinator.ts",
       "line": 133,
       "column": 11,
@@ -2095,7 +2095,7 @@
         "set_config"
       ],
       "sql_sha256": "15e160c466631fd3d4946038ec47763f44a63bb8e3b09b833f11cc689cc268ff",
-      "sql_provenance_sha256": "babcab2ea2616d4cc025fe80c8d42343c1bf47728010bf26578eda4f36c513e7",
+      "sql_provenance_sha256": "1cd620fd34a0e53a35e45deb67b6bb0eda2b311f34d73f1c108a948ab909ddcd",
       "source_context": "contacts",
       "source_technical_module": "contacts.module",
       "owner_contexts": [],
@@ -2967,6 +2967,29 @@
       "vitest_failed": 0,
       "architecture_checks_passed": 40
     }
+  },
+  "pr81_retention_source_write_rebinding_review": {
+    "status": "PASS",
+    "reviewed_at": "2026-09-03T03:20:22Z",
+    "reviewed_by": "CODEX_INDEPENDENT_RETENTION_CREDENTIAL_REVIEWER_20260903",
+    "reviewer_role": "INDEPENDENT_SOURCE_AND_WRITE_BOUNDARY_REVIEWER",
+    "independence": "NOT_THE_EXECUTOR_AND_NOT_THE_REVIEW_ARTIFACT_AUTHOR",
+    "authorization": "GOAL_BOUNDED_PR81_HOSTED_REPAIR_EXACT_BINDING_RECONCILIATION",
+    "site_signature": "c07dfc3bed1350a52ef31d97f73d18c09f81f104519a4c4268849ec1800eae21",
+    "previous_source_sha256": "4cacd9e441084001fd8cf65c5ca47e131183d3265dff994136009ed5e1726538",
+    "current_source_sha256": "a4c1a13dbc95adbe9588939cbd0b216239dd68ca1286ca9c215a50ea6ab0e3a3",
+    "previous_sql_provenance_sha256": "babcab2ea2616d4cc025fe80c8d42343c1bf47728010bf26578eda4f36c513e7",
+    "current_sql_provenance_sha256": "1cd620fd34a0e53a35e45deb67b6bb0eda2b311f34d73f1c108a948ab909ddcd",
+    "sql_sha256": "15e160c466631fd3d4946038ec47763f44a63bb8e3b09b833f11cc689cc268ff",
+    "source_context_equivalence": {
+      "admission_function_bytes_identical": true,
+      "admission_function_sha256": "1739d2dc5366b03eecefb7aba888d7802c777470875a9279c13f03bc8b155897",
+      "only_whole_file_change": "Archived-contact dirty-reference query physical table correction from Task to tasks",
+      "write_semantics_changed": false,
+      "ownership_changed": false,
+      "credential_or_secret_access_changed": false
+    },
+    "disposition": "APPROVED_SOURCE_AND_PROVENANCE_HASH_ONLY_REBIND"
   },
   "non_write_proofs": [
     {
