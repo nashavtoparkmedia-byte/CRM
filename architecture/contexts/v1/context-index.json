@@ -18,7 +18,7 @@
     {
       "context": "calling",
       "path": "architecture/contexts/v1/manifests/calling.json",
-      "sha256": "664f93d9c684711aad6d73b4588ded49065b5d960354e6ad4801f76dcfc00bfa"
+      "sha256": "4d02e5f3c81b5d9a650a064b1ee176335305b45ae5451b9933ce9d0b1f1f5de9"
     },
     {
       "context": "configuration",
@@ -167,11 +167,11 @@
     },
     "final_dependency_current": {
       "path": "architecture/contexts/v1/final-dependency-current.json",
-      "sha256": "f2989b3e41b57afff83acf5cb7ffccf161d51c82e1e7f915235e000ba5488cf9"
+      "sha256": "6d9e47dc325f649545f7fdc858070ec8b990bd4ce05d359a3ca51f8ff75b25e7"
     },
     "final_dependency_source": {
       "path": "architecture/contexts/v1/final-dependency-source.json",
-      "sha256": "adc0e7779113e72116c851c6db7dfb2de407796e4fc6431c3c7488d8d8a2f1f1"
+      "sha256": "25da684d697d43e4cbef4802b0be5714f94fbc04de489fb8da8e006cbdf50d18"
     },
     "foreign_write_migration_plan": {
       "path": "architecture/contexts/v1/foreign-write-migration-plan.json",

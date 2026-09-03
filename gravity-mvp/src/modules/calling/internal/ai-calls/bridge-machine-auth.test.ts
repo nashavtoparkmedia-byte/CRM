@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { isBridgeMachineRequestAuthenticated } from './bridge-machine-auth'
 
-const VALID_TOKEN = 'A'.repeat(32)
+const VALID_TOKEN = 'AbCdEfGhIjKlMnOpQrStUvWxYz012345'
 
 function requestHeaders(token?: string): Headers {
     const headers = new Headers()

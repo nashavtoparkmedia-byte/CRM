@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { listUserIdentitiesV1 as getUsers } from '@/modules/identity-access/public/v1/user-directory'
 import CallDetailClient, { type CallDetail } from '@/app/calls/[id]/CallDetailClient'
+import { readControlledRealCallDispatchObservation } from '@/modules/calling/application/controlled-real-ai-call'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,14 +17,18 @@ export const dynamic = 'force-dynamic'
  */
 export default async function CallDetailPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
-    const call = await prisma.call.findFirst({
-        where: { id, isSimulation: false },
+    // Direct detail is also the authorized inspection surface for a known
+    // simulation result. Simulation rows remain excluded from ordinary call
+    // lists, analytics, recordings and learning paths.
+    const call = await prisma.call.findUnique({
+        where: { id },
         include: {
             driver: { select: { id: true, fullName: true, phone: true } },
             contact: { select: { id: true, displayName: true } },
         },
     })
     if (!call) notFound()
+    const dispatch = readControlledRealCallDispatchObservation(call.metadata)
 
     let managerName: string | null = null
     if (call.managerId) {
@@ -35,6 +40,7 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
     // Serialise to plain JSON so it can cross the server→client boundary.
     const initial: CallDetail = {
         id: call.id,
+        fsUuid: call.fsUuid,
         direction: call.direction,
         status: call.status,
         fromNumber: call.fromNumber,
@@ -48,7 +54,9 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
         transcript: call.transcript,
         aiScore: call.aiScore,
         aiSummary: call.aiSummary,
-        aiAnalysis: (call.aiAnalysis as any) ?? null,
+        aiAnalysis: (call.aiAnalysis as unknown as CallDetail['aiAnalysis']) ?? null,
+        controlledDispatchState: dispatch.state,
+        controlledDispatchFailureCode: dispatch.failureCode,
         managerId: call.managerId,
         managerName,
         driver: call.driver,

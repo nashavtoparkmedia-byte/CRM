@@ -66,7 +66,7 @@ import { POST as appendTranscriptItem } from '@/app/api/ai-calls/sessions/[id]/t
 import { GET as resolveCall } from '@/app/api/ai-calls/sessions/by-fs-uuid/[fsUuid]/route'
 import { GET as getAiCallKeys } from '@/app/api/internal/ai-call-keys/route'
 
-const VALID_TOKEN = 'A'.repeat(32)
+const VALID_TOKEN = 'AbCdEfGhIjKlMnOpQrStUvWxYz012345'
 const WRONG_TOKEN = 'B'.repeat(32)
 const callContext = { params: Promise.resolve({ id: 'call-1' }) }
 const resolveContext = { params: Promise.resolve({ fsUuid: 'fs-1' }) }
