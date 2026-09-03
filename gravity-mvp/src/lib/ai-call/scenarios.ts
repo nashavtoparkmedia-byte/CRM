@@ -182,6 +182,15 @@ export async function getScenario(id: string): Promise<AiCallScenarioWithProject
     return row ? rowToConfig(row) : null
 }
 
+/** Strict live-call lookup: archived scenarios are never eligible. */
+export async function getActiveScenario(id: string): Promise<AiCallScenarioWithProject | null> {
+    const row = await db.aiCallScenario.findFirst({
+        where: { id, isActive: true },
+        include: { project: { select: { name: true } } },
+    })
+    return row ? rowToConfig(row) : null
+}
+
 export async function createScenario(input: {
     name: string
     description?: string

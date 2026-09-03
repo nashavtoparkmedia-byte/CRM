@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import {
-    Phone, PhoneIncoming, PhoneOutgoing, PhoneMissed, PhoneOff,
-    Play, Pause, Loader2, ArrowLeft, Sparkles, Headphones, FileText, AlertTriangle,
+    PhoneIncoming, PhoneOutgoing, PhoneMissed, PhoneOff,
+    Loader2, ArrowLeft, Sparkles, Headphones, FileText, AlertTriangle,
 } from "lucide-react"
 
 export interface CallAnalysisShape {
@@ -35,6 +35,8 @@ export interface CallDetail {
     aiScore: number | null
     aiSummary: string | null
     aiAnalysis: CallAnalysisShape | null
+    controlledDispatchState: 'claimed' | 'accepted' | 'rejected' | 'outcome_unknown' | null
+    controlledDispatchFailureCode: string | null
     managerId: string | null
     managerName: string | null
     driver: { id: string; fullName: string; phone: string | null } | null
@@ -96,6 +98,22 @@ export default function CallDetailClient({ initial }: { initial: CallDetail }) {
 
             <CallHeader call={call} peerName={peerName} peerNumber={peerNumber} />
 
+            {call.controlledDispatchState === 'outcome_unknown' && (
+                <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-4 text-[13px] text-amber-900 dark:text-amber-200">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>
+                        FreeSWITCH получил команду, но подтверждение потеряно. Повторный звонок запрещён:
+                        сначала проверьте этот Call, канал FreeSWITCH и кабинет провайдера.
+                    </span>
+                </div>
+            )}
+            {call.controlledDispatchState === 'claimed' && (
+                <div className="flex items-start gap-2 rounded-md border border-border bg-surface p-4 text-[13px] text-muted-foreground">
+                    <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
+                    <span>Ожидается подтверждение единственной provider-попытки. Не запускайте повторный запрос.</span>
+                </div>
+            )}
+
             <div className="rounded-md border border-border bg-card">
                 <Tabs active={activeTab} onChange={setActiveTab} call={call} />
                 <div className="p-6">
@@ -115,11 +133,10 @@ function initialTabFor(c: CallDetail): TabKey {
 }
 
 function CallHeader({ call, peerName, peerNumber }: { call: CallDetail; peerName: string | null; peerNumber: string }) {
-    const Icon = iconFor(call)
     return (
         <div className="flex items-center gap-[4px] rounded-md border border-border bg-card p-5">
             <div className={`flex h-12 w-12 items-center justify-center rounded-full ${bgFor(call)}`}>
-                <Icon className={`h-5 w-5 ${colorFor(call)}`} />
+                <CallIcon call={call} />
             </div>
             <div className="min-w-0 flex-1">
                 <div className="truncate text-[17px] font-semibold text-foreground">
@@ -367,16 +384,19 @@ function EmptyState({ icon: Icon, title, hint }: { icon: typeof Sparkles; title:
     )
 }
 
-function iconFor(c: CallDetail) {
+function CallIcon({ call }: { call: CallDetail }) {
     // Inbound that wasn't answered (missed / no_answer / rejected / busy /
     // cancelled) = missed-style icon. Outbound failures keep the "outgoing"
     // arrow — direction + color tells the user "you called and it didn't go
     // through". Failed (technical) gets PhoneOff.
-    const s = c.status
-    if (s === 'failed') return PhoneOff as unknown as typeof PhoneOutgoing
-    if (c.direction === 'inbound' && s !== 'completed' && s !== 'active' && s !== 'ringing') return PhoneMissed
-    if (c.direction === 'inbound') return PhoneIncoming
-    return PhoneOutgoing
+    const iconClassName = `h-5 w-5 ${colorFor(call)}`
+    const status = call.status
+    if (status === 'failed') return <PhoneOff className={iconClassName} />
+    if (call.direction === 'inbound' && status !== 'completed' && status !== 'active' && status !== 'ringing') {
+        return <PhoneMissed className={iconClassName} />
+    }
+    if (call.direction === 'inbound') return <PhoneIncoming className={iconClassName} />
+    return <PhoneOutgoing className={iconClassName} />
 }
 
 function colorFor(c: CallDetail): string {

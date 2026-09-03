@@ -205,6 +205,8 @@ services:
       - ../.env.production
     environment:
       AUDIO_BRIDGE_PORT: 3030
+      # FreeSWITCH runs on the host and reaches this loopback-published port.
+      BRIDGE_LAN_IP: 127.0.0.1
       # ESL — bridge подключается к FreeSWITCH по ESL для подписки на события
       # FS runs host-network — use host.docker.internal to reach it from bridge containers.
       FS_ESL_HOST: host.docker.internal
@@ -212,6 +214,8 @@ services:
       ESL_PASSWORD: ${ESL_PASSWORD:-ClueCon}
       # CRM webhook — для finalize POST после окончания звонка
       CRM_BASE_URL: http://gravity-mvp:3002
+    ports:
+      - "127.0.0.1:3030:3030"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -350,6 +354,10 @@ services:
       # FreeSWITCH ESL — host.docker.internal перекрывает FS_ESL_HOST=freeswitch из .env.production
       # (freeswitch не резолвится из bridge-контейнера, FS в host network mode)
       FS_ESL_HOST: host.docker.internal
+      FS_ESL_PORT: 8021
+      FS_ESL_PASSWORD: ${ESL_PASSWORD}
+      AUDIO_BRIDGE_HEALTH_URL: http://audio-bridge:3030/health
+      RECORDINGS_HOST_PATH: /app/freeswitch-recordings
       # whatsapp-web.js LocalAuth dir → persistent volume (see below). Без этого
       # сессия писалась в node_modules/.wwebjs_auth внутри образа и стиралась при
       # каждом редеплое → WA-подключение слетало. Должен совпадать с mount ниже.
