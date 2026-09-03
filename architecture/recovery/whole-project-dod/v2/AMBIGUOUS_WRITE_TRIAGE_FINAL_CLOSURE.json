@@ -68,7 +68,7 @@
     {
       "record_id": "ba082d04940220ce32fe01b08b2f1ba3228bb7cddf3a009077edd1f2268491d5",
       "site_signature": "ba082d04940220ce32fe01b08b2f1ba3228bb7cddf3a009077edd1f2268491d5",
-      "source_sha256": "6c1d2aca60d285de6891039ee51164908c4cac4fcc46608943d81f8e8668677e",
+      "source_sha256": "dc4c604724692843a248ab345b94483ed60647739fd36595f648616b134cdb88",
       "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
       "line": 433,
       "column": 12,
@@ -118,7 +118,7 @@
     {
       "record_id": "0e6dc117f9fa9bcc96add3f1e71c964eb0dace3b89122ba373acf6891626a8d2",
       "site_signature": "0e6dc117f9fa9bcc96add3f1e71c964eb0dace3b89122ba373acf6891626a8d2",
-      "source_sha256": "6c1d2aca60d285de6891039ee51164908c4cac4fcc46608943d81f8e8668677e",
+      "source_sha256": "dc4c604724692843a248ab345b94483ed60647739fd36595f648616b134cdb88",
       "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
       "line": 462,
       "column": 14,
@@ -175,7 +175,7 @@
     {
       "record_id": "0efd57ebede126929875fd34e1b7f587b5d6a2404e58679067cf5fcc67fafa90",
       "site_signature": "0efd57ebede126929875fd34e1b7f587b5d6a2404e58679067cf5fcc67fafa90",
-      "source_sha256": "6c1d2aca60d285de6891039ee51164908c4cac4fcc46608943d81f8e8668677e",
+      "source_sha256": "dc4c604724692843a248ab345b94483ed60647739fd36595f648616b134cdb88",
       "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
       "line": 462,
       "column": 14,
@@ -2508,7 +2508,7 @@
         "line": 433,
         "column": 12,
         "method": "mixed-script-sql",
-        "source_sha256": "6c1d2aca60d285de6891039ee51164908c4cac4fcc46608943d81f8e8668677e",
+        "source_sha256": "dc4c604724692843a248ab345b94483ed60647739fd36595f648616b134cdb88",
         "sql_provenance_sha256": "4b3f81bcc65face03bca93b9d17c0efac82671e71e93fe9114c4009b6e139f00"
       },
       "resolved_target": {
@@ -2533,7 +2533,7 @@
         "analysis_site_signature:ba082d04940220ce32fe01b08b2f1ba3228bb7cddf3a009077edd1f2268491d5",
         "sql_sha256:1f4094522bade4b4b67314cab42cc3847f506365a4af368ed704b2ed09c25882",
         "Exact SELECT projection and independently enumerated read-only functions contain no analyzed mutation operation.",
-        "source_sha256:6c1d2aca60d285de6891039ee51164908c4cac4fcc46608943d81f8e8668677e",
+        "source_sha256:dc4c604724692843a248ab345b94483ed60647739fd36595f648616b134cdb88",
         "sql_provenance_sha256:4b3f81bcc65face03bca93b9d17c0efac82671e71e93fe9114c4009b6e139f00"
       ]
     },
@@ -2545,7 +2545,7 @@
         "line": 462,
         "column": 14,
         "method": "mixed-script-sql",
-        "source_sha256": "6c1d2aca60d285de6891039ee51164908c4cac4fcc46608943d81f8e8668677e",
+        "source_sha256": "dc4c604724692843a248ab345b94483ed60647739fd36595f648616b134cdb88",
         "sql_provenance_sha256": "5c1d6b44606d064fdaf189c69275f6ddf35d5ec6be0eb62d91ee2ce824ef238a"
       },
       "resolved_target": {
@@ -2577,7 +2577,7 @@
         "analysis_site_signature:0e6dc117f9fa9bcc96add3f1e71c964eb0dace3b89122ba373acf6891626a8d2",
         "sql_sha256:8c50d6b45e37bf522c8130b62c9cf3f18196f4a5dc45fc4a34e54eaab534bfd7",
         "Exact SELECT projection and independently enumerated read-only functions contain no analyzed mutation operation.",
-        "source_sha256:6c1d2aca60d285de6891039ee51164908c4cac4fcc46608943d81f8e8668677e",
+        "source_sha256:dc4c604724692843a248ab345b94483ed60647739fd36595f648616b134cdb88",
         "sql_provenance_sha256:5c1d6b44606d064fdaf189c69275f6ddf35d5ec6be0eb62d91ee2ce824ef238a"
       ]
     },
@@ -2589,7 +2589,7 @@
         "line": 462,
         "column": 14,
         "method": "mixed-script-sql",
-        "source_sha256": "6c1d2aca60d285de6891039ee51164908c4cac4fcc46608943d81f8e8668677e",
+        "source_sha256": "dc4c604724692843a248ab345b94483ed60647739fd36595f648616b134cdb88",
         "sql_provenance_sha256": "774b689157e71706a71eb1ff12b6a48299a04afcfe610f91aad247b2f2702f0a"
       },
       "resolved_target": {
@@ -2623,7 +2623,7 @@
         "analysis_site_signature:0efd57ebede126929875fd34e1b7f587b5d6a2404e58679067cf5fcc67fafa90",
         "sql_sha256:372611314a8810c813c990b019a5defa24cd97404800d3c37c05b3a9ca1362fc",
         "Exact SELECT projection and independently enumerated read-only functions contain no analyzed mutation operation.",
-        "source_sha256:6c1d2aca60d285de6891039ee51164908c4cac4fcc46608943d81f8e8668677e",
+        "source_sha256:dc4c604724692843a248ab345b94483ed60647739fd36595f648616b134cdb88",
         "sql_provenance_sha256:774b689157e71706a71eb1ff12b6a48299a04afcfe610f91aad247b2f2702f0a"
       ]
     },
