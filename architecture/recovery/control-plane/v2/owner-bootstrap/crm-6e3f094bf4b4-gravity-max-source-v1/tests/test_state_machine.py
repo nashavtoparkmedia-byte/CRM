@@ -118,6 +118,37 @@ class StateMachineTests(unittest.TestCase):
         self.assertFalse(result["production_mutated"])
         compose.assert_not_called()
 
+    def test_target_recovery_postcheck_and_rollback_failure_is_terminal_and_retry_fenced(self) -> None:
+        state = {"phase": "ACTIVATION_INTENT"}
+        writes: list[dict[str, object]] = []
+        with (
+            mock.patch.object(self.runtime, "_lock", return_value=nullcontext()),
+            mock.patch.object(self.runtime, "_read_state", return_value=state),
+            mock.patch.object(self.runtime, "_pair", return_value=self.pair("new-g", "new-m")),
+            mock.patch.object(self.runtime, "_postcheck", side_effect=RuntimeFault("TARGET_POSTCHECK_FAILED", 74)),
+            mock.patch.object(self.runtime, "_rollback_pair", side_effect=RuntimeFault("ROLLBACK_POSTCHECK_FAILED", 74)),
+            mock.patch.object(self.runtime, "_write_state", side_effect=lambda _core, value: writes.append(value)),
+            mock.patch.object(self.runtime, "_audit") as audit,
+        ):
+            with self.assertRaises(RuntimeFault) as raised:
+                self.runtime._release_activate(self.core, {}, self.profile, self.invocation)
+        self.assertEqual(raised.exception.code, "ACTIVATION_AND_AUTOMATIC_ROLLBACK_FAILED")
+        self.assertEqual([value["phase"] for value in writes], ["ACTIVATION_FAILED", "ROLLBACK_FAILED"])
+        self.assertEqual(audit.call_args_list[0].args[3], "target_postcheck_failed")
+        self.assertEqual(audit.call_args_list[1].args[3], "target_postcheck_and_rollback_failed")
+
+        with (
+            mock.patch.object(self.runtime, "_lock", return_value=nullcontext()),
+            mock.patch.object(self.runtime, "_read_state", return_value=writes[-1]),
+            mock.patch.object(self.runtime, "_pair") as pair,
+            mock.patch.object(self.runtime, "_compose_up") as compose,
+        ):
+            with self.assertRaises(RuntimeFault) as retry:
+                self.runtime._release_activate(self.core, {}, self.profile, self.invocation)
+        self.assertEqual(retry.exception.code, "RELEASE_PREFLIGHT_REQUIRED")
+        pair.assert_not_called()
+        compose.assert_not_called()
+
     def test_activation_failure_rolls_back_pair_and_reports_failure(self) -> None:
         state = {"phase": "PREFLIGHTED"}
         with (

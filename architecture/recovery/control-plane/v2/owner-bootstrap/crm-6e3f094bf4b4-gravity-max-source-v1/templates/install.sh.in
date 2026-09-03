@@ -10,6 +10,8 @@ ARTIFACT_PARENT='/var/lib/yoko-privileged-runtime/coordinated-artifacts'
 ARTIFACT_STORE="$ARTIFACT_PARENT/721c56b5800a4b2b4855cd5f9dff323c27057e3c8368f155e72c6cd01558f3ea"
 BOOTSTRAP_STORE='/var/lib/yoko-privileged-runtime/activation-bootstraps'
 BOOTSTRAP_GUARD='/var/lib/yoko-privileged-runtime/activation-bootstrap-installing.v1'
+BOOTSTRAP_LOCK_DIR='/run/lock/yoko-privileged-runtime'
+BOOTSTRAP_LOCK="$BOOTSTRAP_LOCK_DIR/coordinated-bootstrap.lock"
 NEW_DEB='yoko-privileged-runtime_2.0.0-15_all.deb'
 NEW_DEB_SHA='@NEW_DEB_SHA256@'
 NEW_DEB_STORE="$BOOTSTRAP_STORE/$NEW_DEB_SHA"
@@ -21,6 +23,8 @@ EXPECTED_AUDIT_RECORDS='@AUDIT_RECORD_COUNT@'
 EXPECTED_AUDIT_DIGEST='@AUDIT_LAST_DIGEST@'
 MINIMUM_FREE_BYTES=8589934592
 guard_owned=0
+guard_identity=''
+recovered_guard=0
 new_attempted=0
 
 runtime_json() {
@@ -58,9 +62,24 @@ clear_guard() {
     if [ "$guard_owned" -eq 1 ]; then
         test -f "$BOOTSTRAP_GUARD" && test ! -L "$BOOTSTRAP_GUARD"
         test "$(/usr/bin/stat -c '%u:%g:%a:%h:%s' "$BOOTSTRAP_GUARD")" = '0:0:400:1:0'
+        test "$(/usr/bin/stat -c '%d:%i' "$BOOTSTRAP_GUARD")" = "$guard_identity"
         /usr/bin/unlink "$BOOTSTRAP_GUARD"
         guard_owned=0
+        guard_identity=''
     fi
+}
+
+create_guard() {
+    test "$guard_owned" -eq 0
+    guard_identity=$(/usr/bin/python3 -I -c 'import os,sys
+path=sys.argv[1]
+fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_CLOEXEC|os.O_NOFOLLOW,0o400)
+try:
+ os.fchown(fd,0,0); os.fchmod(fd,0o400); os.fsync(fd); value=os.fstat(fd)
+finally: os.close(fd)
+print(f"{value.st_dev}:{value.st_ino}")' "$BOOTSTRAP_GUARD")
+    [[ "$guard_identity" =~ ^[0-9]+:[0-9]+$ ]]
+    guard_owned=1
 }
 
 rollback_previous() {
@@ -87,6 +106,28 @@ test "$(/usr/bin/id -ru)" = '0'
 [[ "$EXPECTED_DIR" =~ ^/root/yoko-coordinated-runtime-2\.0\.0-15\.[A-Za-z0-9]{6,}/payload$ ]]
 test "$(/usr/bin/readlink -f -- "$0")" = "$EXPECTED_DIR/install.sh"
 test "$(/bin/hostname)" = "$EXPECTED_HOST"
+
+# BEGIN INSTALL LIFETIME LOCK
+if [ ! -e "$BOOTSTRAP_LOCK_DIR" ]; then
+    /usr/bin/mkdir -m 0700 "$BOOTSTRAP_LOCK_DIR"
+fi
+test -d "$BOOTSTRAP_LOCK_DIR" && test ! -L "$BOOTSTRAP_LOCK_DIR"
+test "$(/usr/bin/stat -c '%u:%g:%a' "$BOOTSTRAP_LOCK_DIR")" = '0:0:700'
+exec {bootstrap_lock_fd}>"$BOOTSTRAP_LOCK"
+test -f "$BOOTSTRAP_LOCK" && test ! -L "$BOOTSTRAP_LOCK"
+test "$(/usr/bin/stat -c '%u:%g:%a:%h' "$BOOTSTRAP_LOCK")" = '0:0:600:1'
+/usr/bin/flock -x "$bootstrap_lock_fd"
+test "$(/usr/bin/stat -c '%u:%g:%a:%h' "$BOOTSTRAP_LOCK")" = '0:0:600:1'
+# END INSTALL LIFETIME LOCK
+
+if [ -e "$BOOTSTRAP_GUARD" ]; then
+    test -f "$BOOTSTRAP_GUARD" && test ! -L "$BOOTSTRAP_GUARD"
+    test "$(/usr/bin/stat -c '%u:%g:%a:%h:%s' "$BOOTSTRAP_GUARD")" = '0:0:400:1:0'
+    guard_identity=$(/usr/bin/stat -c '%d:%i' "$BOOTSTRAP_GUARD")
+    [[ "$guard_identity" =~ ^[0-9]+:[0-9]+$ ]]
+    guard_owned=1
+    recovered_guard=1
+fi
 
 /usr/bin/python3 -I - "$EXPECTED_DIR" <<'PY'
 import hashlib,json,pathlib,stat,sys
@@ -126,19 +167,13 @@ test "$(/usr/bin/sha256sum "$EXPECTED_DIR/artifact-admission.v1.json" | /usr/bin
 test "$(/usr/bin/sha256sum "$EXPECTED_DIR/runtime-v14-SEALED_RELEASE.json" | /usr/bin/cut -d ' ' -f 1)" = '8a7e28a3ad49ab6fb3be27e9bfa42d75aff6755b41a1d40119ce806026adb5ad'
 stored_deb_exact "$OLD_DEB_STORE" "$OLD_DEB" "$OLD_DEB_SHA"
 
-if [ -e "$BOOTSTRAP_GUARD" ]; then
-    test -f "$BOOTSTRAP_GUARD" && test ! -L "$BOOTSTRAP_GUARD"
-    test "$(/usr/bin/stat -c '%u:%g:%a:%h:%s' "$BOOTSTRAP_GUARD")" = '0:0:400:1:0'
-    guard_owned=1
-fi
-
 available=$(/usr/bin/df --output=avail -B1 /var/lib/yoko-privileged-runtime | /usr/bin/tail -1 | /usr/bin/tr -d ' ')
 [[ "$available" =~ ^[0-9]+$ ]]
 test "$available" -ge "$MINIMUM_FREE_BYTES"
 
 installed_version=$(/usr/bin/dpkg-query -W -f='${Version}' yoko-privileged-runtime 2>/dev/null || true)
 if [ "$installed_version" = '2.0.0-15' ]; then
-    if [ "$guard_owned" -eq 1 ]; then
+    if [ "$recovered_guard" -eq 1 ]; then
         new_attempted=1
     fi
     new_identity
@@ -166,82 +201,144 @@ audit_exact
 
 /usr/bin/install -d -o root -g root -m 0700 /var/lib/yoko-privileged-runtime "$ARTIFACT_PARENT" "$BOOTSTRAP_STORE"
 
-/usr/bin/python3 -I - "$HANDOFF" "$ARTIFACT_PARENT" "$ARTIFACT_STORE" "$EXPECTED_DIR/artifact-admission.v1.json" <<'PY'
+/usr/bin/python3 -I - "$HANDOFF" "$ARTIFACT_PARENT" "$ARTIFACT_STORE" "$EXPECTED_DIR/artifact-admission.v1.json" 998 998 <<'PY'
 import hashlib,json,os,pathlib,stat,sys
 source=pathlib.Path(sys.argv[1]); parent=pathlib.Path(sys.argv[2]); final=pathlib.Path(sys.argv[3]); receipt_source=pathlib.Path(sys.argv[4])
-receipt=json.loads(receipt_source.read_text(encoding='ascii'))
+source_owner=(int(sys.argv[5]),int(sys.argv[6])); store_owner=(os.geteuid(),os.getegid())
+receipt_raw=receipt_source.read_bytes(); receipt=json.loads(receipt_raw.decode('ascii'))
 names=set(receipt['files']); incoming=parent/('.incoming-'+final.name)
-def sha(path):
- h=hashlib.sha256(); fd=os.open(path,os.O_RDONLY|os.O_CLOEXEC|os.O_NOFOLLOW)
- try:
-  while True:
-   chunk=os.read(fd,1024*1024)
-   if not chunk: break
-   h.update(chunk)
+if any(not isinstance(name,str) or not name or name in {'.','..'} or '/' in name for name in names): raise SystemExit('unsafe artifact name')
+def identity(value):
+ return (value.st_dev,value.st_ino,value.st_mode,value.st_uid,value.st_gid,value.st_nlink,value.st_size,value.st_mtime_ns,value.st_ctime_ns)
+def hash_fd(fd):
+ os.lseek(fd,0,os.SEEK_SET); h=hashlib.sha256(); total=0
+ while True:
+  chunk=os.read(fd,1024*1024)
+  if not chunk: break
+  total+=len(chunk); h.update(chunk)
+ return h.hexdigest(),total
+def exact_file(fd,row,owner,mode,message):
+ value=os.fstat(fd)
+ if not stat.S_ISREG(value.st_mode) or (value.st_uid,value.st_gid)!=owner or stat.S_IMODE(value.st_mode)!=mode or value.st_nlink!=1 or value.st_size!=row['bytes']: raise SystemExit(message)
+ digest,total=hash_fd(fd)
+ if total!=row['bytes'] or digest!=row['sha256']: raise SystemExit(message)
+def open_exact_at(directory,name,row):
+ fd=os.open(name,os.O_RDONLY|os.O_CLOEXEC|os.O_NOFOLLOW,dir_fd=directory)
+ try: exact_file(fd,row,store_owner,0o400,'admitted artifact mismatch')
  finally: os.close(fd)
- return h.hexdigest()
 def exact_store(root):
- s=root.lstat()
- if root.is_symlink() or not stat.S_ISDIR(s.st_mode) or (s.st_uid,s.st_gid)!=(0,0) or stat.S_IMODE(s.st_mode)!=0o700: raise SystemExit('unsafe artifact store')
- if {p.name for p in root.iterdir()} != names|{'artifact-admission.v1.json'}: raise SystemExit('artifact store allowlist')
- for name,row in receipt['files'].items():
-  p=root/name; v=p.lstat()
-  if p.is_symlink() or not stat.S_ISREG(v.st_mode) or (v.st_uid,v.st_gid)!=(0,0) or stat.S_IMODE(v.st_mode)!=0o400 or v.st_nlink!=1 or v.st_size!=row['bytes'] or sha(p)!=row['sha256']: raise SystemExit('admitted artifact mismatch')
- r=root/'artifact-admission.v1.json'; v=r.lstat()
- if r.is_symlink() or not stat.S_ISREG(v.st_mode) or (v.st_uid,v.st_gid)!=(0,0) or stat.S_IMODE(v.st_mode)!=0o400 or v.st_nlink!=1 or r.read_bytes()!=receipt_source.read_bytes(): raise SystemExit('admission receipt mismatch')
-if final.exists():
- if source.exists() or incoming.exists(): raise SystemExit('duplicate artifact admission state')
- exact_store(final); raise SystemExit(0)
-if source.exists() and incoming.exists(): raise SystemExit('ambiguous artifact admission state')
-if not incoming.exists():
- v=source.lstat()
- if source.is_symlink() or not stat.S_ISDIR(v.st_mode) or (v.st_uid,v.st_gid)!=(998,998) or stat.S_IMODE(v.st_mode)!=0o700: raise SystemExit('unsafe handoff directory')
- if {p.name for p in source.iterdir()} != names: raise SystemExit('handoff member allowlist')
- for name,row in receipt['files'].items():
-  p=source/name; s=p.lstat()
-  if p.is_symlink() or not stat.S_ISREG(s.st_mode) or (s.st_uid,s.st_gid)!=(998,998) or stat.S_IMODE(s.st_mode)!=0o444 or s.st_nlink!=1 or s.st_size!=row['bytes']: raise SystemExit('unsafe handoff artifact')
- source_identity=(v.st_dev,v.st_ino); os.rename(source,incoming)
- if (incoming.stat().st_dev,incoming.stat().st_ino)!=source_identity: raise SystemExit('handoff rename race')
-else:
- if source.exists(): raise SystemExit('ambiguous artifact admission state')
- v=incoming.lstat()
- if incoming.is_symlink() or not stat.S_ISDIR(v.st_mode) or (v.st_uid,v.st_gid) not in {(998,998),(0,0)} or stat.S_IMODE(v.st_mode)!=0o700: raise SystemExit('unsafe interrupted artifact admission')
- if frozenset(p.name for p in incoming.iterdir()) not in {frozenset(names),frozenset(names|{'artifact-admission.v1.json'})}: raise SystemExit('interrupted artifact allowlist')
-for name,row in receipt['files'].items():
- p=incoming/name; s=p.lstat()
- if p.is_symlink() or not stat.S_ISREG(s.st_mode) or ((s.st_uid,s.st_gid),stat.S_IMODE(s.st_mode)) not in {((998,998),0o444),((0,0),0o400)} or s.st_nlink!=1 or s.st_size!=row['bytes'] or sha(p)!=row['sha256']: raise SystemExit('interrupted artifact mismatch')
-os.chown(incoming,0,0); os.chmod(incoming,0o700)
-for name in receipt['files']:
- p=incoming/name; fd=os.open(p,os.O_RDONLY|os.O_CLOEXEC|os.O_NOFOLLOW)
- try: os.fchown(fd,0,0); os.fchmod(fd,0o400); os.fsync(fd)
- finally: os.close(fd)
-target=incoming/'artifact-admission.v1.json'; raw=receipt_source.read_bytes()
-if target.exists():
- s=target.lstat()
- if target.is_symlink() or not stat.S_ISREG(s.st_mode) or (s.st_uid,s.st_gid)!=(0,0) or stat.S_IMODE(s.st_mode)!=0o400 or s.st_nlink!=1 or target.read_bytes()!=raw: raise SystemExit('unsafe interrupted receipt')
-else:
- fd=os.open(target,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_CLOEXEC|os.O_NOFOLLOW,0o400)
+ value=root.lstat()
+ if root.is_symlink() or not stat.S_ISDIR(value.st_mode) or (value.st_uid,value.st_gid)!=store_owner or stat.S_IMODE(value.st_mode)!=0o700: raise SystemExit('unsafe artifact store')
+ directory=os.open(root,os.O_RDONLY|os.O_DIRECTORY|os.O_CLOEXEC|os.O_NOFOLLOW)
  try:
-  view=memoryview(raw)
-  while view:
-   written=os.write(fd,view)
-   if written<=0: raise OSError('short write')
-   view=view[written:]
-  os.fchown(fd,0,0); os.fchmod(fd,0o400); os.fsync(fd)
- finally: os.close(fd)
-directory=os.open(incoming,os.O_RDONLY|os.O_DIRECTORY|os.O_CLOEXEC)
-try: os.fsync(directory)
-finally: os.close(directory)
+  if set(os.listdir(directory)) != names|{'artifact-admission.v1.json'}: raise SystemExit('artifact store allowlist')
+  for name,row in receipt['files'].items(): open_exact_at(directory,name,row)
+  fd=os.open('artifact-admission.v1.json',os.O_RDONLY|os.O_CLOEXEC|os.O_NOFOLLOW,dir_fd=directory)
+  try:
+   value=os.fstat(fd); raw=b''
+   while True:
+    chunk=os.read(fd,1024*1024)
+    if not chunk: break
+    raw+=chunk
+   if not stat.S_ISREG(value.st_mode) or (value.st_uid,value.st_gid)!=store_owner or stat.S_IMODE(value.st_mode)!=0o400 or value.st_nlink!=1 or raw!=receipt_raw: raise SystemExit('admission receipt mismatch')
+  finally: os.close(fd)
+ finally: os.close(directory)
+parent_value=parent.lstat()
+if parent.is_symlink() or not stat.S_ISDIR(parent_value.st_mode) or (parent_value.st_uid,parent_value.st_gid)!=store_owner or stat.S_IMODE(parent_value.st_mode)!=0o700: raise SystemExit('unsafe artifact parent')
+if os.path.lexists(final):
+ if os.path.lexists(incoming): raise SystemExit('duplicate artifact admission state')
+ exact_store(final); raise SystemExit(0)
+source_directory=os.open(source,os.O_RDONLY|os.O_DIRECTORY|os.O_CLOEXEC|os.O_NOFOLLOW)
+try:
+ source_value=os.fstat(source_directory)
+ if not stat.S_ISDIR(source_value.st_mode) or (source_value.st_uid,source_value.st_gid)!=source_owner or stat.S_IMODE(source_value.st_mode)!=0o700: raise SystemExit('unsafe handoff directory')
+ if set(os.listdir(source_directory))!=names: raise SystemExit('handoff member allowlist')
+ if not os.path.lexists(incoming): os.mkdir(incoming,mode=0o700)
+ incoming_value=incoming.lstat()
+ if incoming.is_symlink() or not stat.S_ISDIR(incoming_value.st_mode) or (incoming_value.st_uid,incoming_value.st_gid)!=store_owner or stat.S_IMODE(incoming_value.st_mode)!=0o700: raise SystemExit('unsafe artifact staging')
+ directory=os.open(incoming,os.O_RDONLY|os.O_DIRECTORY|os.O_CLOEXEC|os.O_NOFOLLOW)
+ try:
+  if not set(os.listdir(directory)).issubset(names|{name+'.new' for name in names}|{'artifact-admission.v1.json','artifact-admission.v1.json.new'}): raise SystemExit('artifact staging allowlist')
+  for name,row in sorted(receipt['files'].items()):
+   try:
+    open_exact_at(directory,name,row)
+    continue
+   except FileNotFoundError:
+    pass
+   pending=name+'.new'
+   try:
+    value=os.stat(pending,dir_fd=directory,follow_symlinks=False)
+   except FileNotFoundError:
+    pass
+   else:
+    if not stat.S_ISREG(value.st_mode) or (value.st_uid,value.st_gid)!=store_owner or stat.S_IMODE(value.st_mode)!=0o400 or value.st_nlink!=1: raise SystemExit('unsafe interrupted artifact copy')
+    os.unlink(pending,dir_fd=directory)
+   source_fd=os.open(name,os.O_RDONLY|os.O_CLOEXEC|os.O_NOFOLLOW,dir_fd=source_directory)
+   output_fd=os.open(pending,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_CLOEXEC|os.O_NOFOLLOW,0o400,dir_fd=directory)
+   try:
+    before=os.fstat(source_fd)
+    if not stat.S_ISREG(before.st_mode) or (before.st_uid,before.st_gid)!=source_owner or stat.S_IMODE(before.st_mode)!=0o444 or before.st_nlink!=1 or before.st_size!=row['bytes']: raise SystemExit('unsafe handoff artifact')
+    digest=hashlib.sha256(); total=0
+    while True:
+     chunk=os.read(source_fd,1024*1024)
+     if not chunk: break
+     total+=len(chunk); digest.update(chunk); view=memoryview(chunk)
+     while view:
+      written=os.write(output_fd,view)
+      if written<=0: raise OSError('short write')
+      view=view[written:]
+    after=os.fstat(source_fd)
+    if identity(before)!=identity(after) or total!=row['bytes'] or digest.hexdigest()!=row['sha256']: raise SystemExit('handoff artifact changed during copy')
+    os.fchown(output_fd,*store_owner); os.fchmod(output_fd,0o400); os.fsync(output_fd)
+    output_value=os.fstat(output_fd)
+    if not stat.S_ISREG(output_value.st_mode) or (output_value.st_uid,output_value.st_gid)!=store_owner or stat.S_IMODE(output_value.st_mode)!=0o400 or output_value.st_nlink!=1 or output_value.st_size!=row['bytes']: raise SystemExit('unsafe admitted artifact')
+   finally:
+    os.close(source_fd); os.close(output_fd)
+   os.rename(pending,name,src_dir_fd=directory,dst_dir_fd=directory)
+   os.fsync(directory); open_exact_at(directory,name,row)
+  receipt_name='artifact-admission.v1.json'; receipt_pending=receipt_name+'.new'
+  try:
+   fd=os.open(receipt_name,os.O_RDONLY|os.O_CLOEXEC|os.O_NOFOLLOW,dir_fd=directory)
+  except FileNotFoundError:
+   try:
+    value=os.stat(receipt_pending,dir_fd=directory,follow_symlinks=False)
+   except FileNotFoundError:
+    pass
+   else:
+    if not stat.S_ISREG(value.st_mode) or (value.st_uid,value.st_gid)!=store_owner or stat.S_IMODE(value.st_mode)!=0o400 or value.st_nlink!=1: raise SystemExit('unsafe interrupted receipt')
+    os.unlink(receipt_pending,dir_fd=directory)
+   fd=os.open(receipt_pending,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_CLOEXEC|os.O_NOFOLLOW,0o400,dir_fd=directory)
+   try:
+    view=memoryview(receipt_raw)
+    while view:
+     written=os.write(fd,view)
+     if written<=0: raise OSError('short write')
+     view=view[written:]
+    os.fchown(fd,*store_owner); os.fchmod(fd,0o400); os.fsync(fd)
+   finally: os.close(fd)
+   os.rename(receipt_pending,receipt_name,src_dir_fd=directory,dst_dir_fd=directory)
+  else:
+   try:
+    value=os.fstat(fd); raw=b''
+    while True:
+     chunk=os.read(fd,1024*1024)
+     if not chunk: break
+     raw+=chunk
+    if not stat.S_ISREG(value.st_mode) or (value.st_uid,value.st_gid)!=store_owner or stat.S_IMODE(value.st_mode)!=0o400 or value.st_nlink!=1 or raw!=receipt_raw: raise SystemExit('unsafe interrupted receipt')
+   finally: os.close(fd)
+  os.fsync(directory)
+ finally: os.close(directory)
+finally: os.close(source_directory)
+exact_store(incoming)
 os.rename(incoming,final)
-directory=os.open(parent,os.O_RDONLY|os.O_DIRECTORY|os.O_CLOEXEC)
+directory=os.open(parent,os.O_RDONLY|os.O_DIRECTORY|os.O_CLOEXEC|os.O_NOFOLLOW)
 try: os.fsync(directory)
 finally: os.close(directory)
 exact_store(final)
 PY
 
 if [ "$guard_owned" -eq 0 ]; then
-    /usr/bin/install -o root -g root -m 0400 /dev/null "$BOOTSTRAP_GUARD"
-    guard_owned=1
+    create_guard
 fi
 
 if [ -e "$NEW_DEB_STORE" ]; then

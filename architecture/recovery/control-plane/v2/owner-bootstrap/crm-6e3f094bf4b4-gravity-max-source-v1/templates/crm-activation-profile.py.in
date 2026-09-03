@@ -967,10 +967,34 @@ def _release_activate(core: Any, policy: dict[str, Any], profile: dict[str, Any]
                 post = _postcheck(core, policy, profile, state, "TARGET_PAIR")
             except Exception as failure:
                 activation = _activation_failure(core, failure)
-                rollback, mutated = _rollback_pair(core, policy, profile, state)
-                next_state = {**state, "phase": "ROLLED_BACK", "activation_failure": activation, "rollback_at": core.now()}
+                failed_state = {
+                    **state,
+                    "phase": "ACTIVATION_FAILED",
+                    "activation_failure": activation,
+                    "activation_failed_at": core.now(),
+                }
+                _write_state(core, failed_state)
+                _audit(core, invocation, state, "target_postcheck_failed", failed_state)
+                try:
+                    rollback, mutated = _rollback_pair(core, policy, profile, failed_state)
+                except Exception as rollback_failure:
+                    rollback_identity = _activation_failure(core, rollback_failure)
+                    terminal = {
+                        **failed_state,
+                        "phase": "ROLLBACK_FAILED",
+                        "rollback_failure": rollback_identity,
+                        "rollback_failed_at": core.now(),
+                    }
+                    _write_state(core, terminal)
+                    _audit(core, invocation, failed_state, "target_postcheck_and_rollback_failed", terminal)
+                    raise core.RuntimeFault(
+                        "ACTIVATION_AND_AUTOMATIC_ROLLBACK_FAILED",
+                        74,
+                        {"activation_failure": activation, "rollback_failure": rollback_identity},
+                    )
+                next_state = {**failed_state, "phase": "ROLLED_BACK", "rollback_at": core.now()}
                 _write_state(core, next_state)
-                _audit(core, invocation, state, "target_postcheck_failed_rolled_back", next_state)
+                _audit(core, invocation, failed_state, "target_postcheck_failed_rolled_back", next_state)
                 raise core.RuntimeFault("ACTIVATION_FAILED_AUTOMATIC_ROLLBACK_OK", 74, {"activation_failure": activation, "rollback": rollback, "production_mutated": mutated})
             next_state = {**state, "phase": "ACTIVATED", "activation_completed_at": core.now()}
             _write_state(core, next_state)
@@ -1003,7 +1027,12 @@ def _release_activate(core: Any, policy: dict[str, Any], profile: dict[str, Any]
             activation = _activation_failure(core, failure)
             current_gravity, current_max = _pair(core, policy, profile)
             current_kind, current_vector = _classify(profile, current_gravity, current_max)
-            failed_state = {**state, "activation_failure": activation, "activation_failed_at": core.now()}
+            failed_state = {
+                **state,
+                "phase": "ACTIVATION_FAILED",
+                "activation_failure": activation,
+                "activation_failed_at": core.now(),
+            }
             _write_state(core, failed_state)
             if current_kind == "UNKNOWN":
                 _audit(core, invocation, state, "failed_unknown_fail_closed", failed_state)
