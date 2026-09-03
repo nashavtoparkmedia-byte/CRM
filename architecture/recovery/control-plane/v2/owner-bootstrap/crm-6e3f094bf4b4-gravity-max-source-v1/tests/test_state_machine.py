@@ -133,9 +133,10 @@ class StateMachineTests(unittest.TestCase):
             with self.assertRaises(RuntimeFault) as raised:
                 self.runtime._release_activate(self.core, {}, self.profile, self.invocation)
         self.assertEqual(raised.exception.code, "ACTIVATION_AND_AUTOMATIC_ROLLBACK_FAILED")
-        self.assertEqual([value["phase"] for value in writes], ["ACTIVATION_FAILED", "ROLLBACK_FAILED"])
+        self.assertEqual([value["phase"] for value in writes], ["ACTIVATION_FAILED", "ROLLBACK_INTENT", "ROLLBACK_FAILED"])
         self.assertEqual(audit.call_args_list[0].args[3], "target_postcheck_failed")
-        self.assertEqual(audit.call_args_list[1].args[3], "target_postcheck_and_rollback_failed")
+        self.assertEqual(audit.call_args_list[1].args[3], "target_rollback_intent")
+        self.assertEqual(audit.call_args_list[2].args[3], "target_postcheck_and_rollback_failed")
 
         with (
             mock.patch.object(self.runtime, "_lock", return_value=nullcontext()),
@@ -148,6 +149,96 @@ class StateMachineTests(unittest.TestCase):
         self.assertEqual(retry.exception.code, "RELEASE_PREFLIGHT_REQUIRED")
         pair.assert_not_called()
         compose.assert_not_called()
+
+    def test_mixed_recovery_postcheck_failure_fences_both_vectors_and_callers(self) -> None:
+        cases = (
+            ("preflight", self.runtime._release_preflight, {"phase": "PREFLIGHTED"}),
+            ("activate", self.runtime._release_activate, {"phase": "ACTIVATION_INTENT"}),
+        )
+        for caller, operation, state in cases:
+            for observed in (self.pair("new-g", "old-m"), self.pair("old-g", "new-m")):
+                with self.subTest(caller=caller, observed=observed):
+                    writes: list[dict[str, object]] = []
+                    invocation = SimpleNamespace(primitive=f"release-{caller}", resource=None, relative_path=None)
+                    with (
+                        mock.patch.object(self.runtime, "_lock", return_value=nullcontext()),
+                        mock.patch.object(self.runtime, "_read_state", return_value=state),
+                        mock.patch.object(self.runtime, "_pair", side_effect=[observed, observed]),
+                        mock.patch.object(self.runtime, "_compose_up") as compose,
+                        mock.patch.object(self.runtime, "_postcheck", side_effect=RuntimeFault("ROLLBACK_POSTCHECK_FAILED", 74)),
+                        mock.patch.object(self.runtime, "_write_state", side_effect=lambda _core, value: writes.append(value)),
+                        mock.patch.object(self.runtime, "_audit") as audit,
+                    ):
+                        compose.side_effect = lambda *_args, **_kwargs: self.assertEqual(writes[-1]["phase"], "ROLLBACK_INTENT")
+                        with self.assertRaises(RuntimeFault) as raised:
+                            operation(self.core, {}, self.profile, invocation)
+                    self.assertEqual(raised.exception.code, "ROLLBACK_POSTCHECK_FAILED")
+                    self.assertEqual([value["phase"] for value in writes], ["ROLLBACK_INTENT", "ROLLBACK_FAILED"])
+                    self.assertEqual([call.args[3] for call in audit.call_args_list], ["mixed_rollback_intent", "mixed_rollback_failed"])
+                    compose.assert_called_once()
+                    self.assertFalse(compose.call_args.kwargs["activate"])
+
+                    with (
+                        mock.patch.object(self.runtime, "_lock", return_value=nullcontext()),
+                        mock.patch.object(self.runtime, "_read_state", return_value=writes[-1]),
+                        mock.patch.object(self.runtime, "_pair") as pair,
+                        mock.patch.object(self.runtime, "_compose_up") as retry_compose,
+                    ):
+                        with self.assertRaises(RuntimeFault) as retry:
+                            self.runtime._release_activate(self.core, {}, self.profile, self.invocation)
+                    self.assertEqual(retry.exception.code, "RELEASE_PREFLIGHT_REQUIRED")
+                    pair.assert_not_called()
+                    retry_compose.assert_not_called()
+
+    def test_explicit_rollback_postcheck_failure_is_terminal_and_retry_fenced(self) -> None:
+        state = {"phase": "ACTIVATED"}
+        target_pair = self.pair("new-g", "new-m")
+        writes: list[dict[str, object]] = []
+        invocation = SimpleNamespace(primitive="rollback", resource=None, relative_path=None)
+        with (
+            mock.patch.object(self.runtime, "_lock", return_value=nullcontext()),
+            mock.patch.object(self.runtime, "_read_state", return_value=state),
+            mock.patch.object(self.runtime, "_pair", side_effect=[target_pair, target_pair]),
+            mock.patch.object(self.runtime, "_compose_up") as compose,
+            mock.patch.object(self.runtime, "_postcheck", side_effect=RuntimeFault("ROLLBACK_POSTCHECK_FAILED", 74)),
+            mock.patch.object(self.runtime, "_write_state", side_effect=lambda _core, value: writes.append(value)),
+            mock.patch.object(self.runtime, "_audit") as audit,
+        ):
+            compose.side_effect = lambda *_args, **_kwargs: self.assertEqual(writes[-1]["phase"], "ROLLBACK_INTENT")
+            with self.assertRaises(RuntimeFault) as raised:
+                self.runtime._rollback(self.core, {}, self.profile, invocation)
+        self.assertEqual(raised.exception.code, "ROLLBACK_POSTCHECK_FAILED")
+        self.assertEqual([value["phase"] for value in writes], ["ROLLBACK_INTENT", "ROLLBACK_FAILED"])
+        self.assertEqual([call.args[3] for call in audit.call_args_list], ["rollback_intent", "rollback_failed"])
+        compose.assert_called_once()
+        self.assertFalse(compose.call_args.kwargs["activate"])
+
+        with (
+            mock.patch.object(self.runtime, "_lock", return_value=nullcontext()),
+            mock.patch.object(self.runtime, "_read_state", return_value=writes[-1]),
+            mock.patch.object(self.runtime, "_pair") as pair,
+            mock.patch.object(self.runtime, "_compose_up") as retry_compose,
+        ):
+            with self.assertRaises(RuntimeFault) as retry:
+                self.runtime._release_activate(self.core, {}, self.profile, self.invocation)
+        self.assertEqual(retry.exception.code, "RELEASE_PREFLIGHT_REQUIRED")
+        pair.assert_not_called()
+        retry_compose.assert_not_called()
+
+    def test_release_activate_fences_incomplete_or_failed_rollback_before_pair_inspection(self) -> None:
+        for phase in ("ROLLBACK_INTENT", "ROLLBACK_FAILED"):
+            with self.subTest(phase=phase):
+                with (
+                    mock.patch.object(self.runtime, "_lock", return_value=nullcontext()),
+                    mock.patch.object(self.runtime, "_read_state", return_value={"phase": phase}),
+                    mock.patch.object(self.runtime, "_pair") as pair,
+                    mock.patch.object(self.runtime, "_compose_up") as compose,
+                ):
+                    with self.assertRaises(RuntimeFault) as raised:
+                        self.runtime._release_activate(self.core, {}, self.profile, self.invocation)
+                self.assertEqual(raised.exception.code, "RELEASE_PREFLIGHT_REQUIRED")
+                pair.assert_not_called()
+                compose.assert_not_called()
 
     def test_activation_failure_rolls_back_pair_and_reports_failure(self) -> None:
         state = {"phase": "PREFLIGHTED"}
