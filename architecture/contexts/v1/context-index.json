@@ -48,7 +48,7 @@
     {
       "context": "max_channel",
       "path": "architecture/contexts/v1/manifests/max_channel.json",
-      "sha256": "1ca09259a166e9c04fdc92fcf9a922490e3bb6bbd39696f5396fa331935c4f04"
+      "sha256": "3bc82cbee62905688ebb8cac98e9b38ebfe67d1740f15e35acd3efd683745d23"
     },
     {
       "context": "messaging",
@@ -112,7 +112,7 @@
     },
     "executable_path_ownership_validator": {
       "path": "tools/architecture/validate-executable-path-ownership.mjs",
-      "sha256": "3b7e51f6fac05fe296f9af85d52c956dabf8c2aaf72dfc7d0e3e84ce3ab29481"
+      "sha256": "9643df17f47eb550440ade4b68535cc7c65aef12ae28183227e6ff65e3a009b8"
     },
     "final_dependency_source_deriver": {
       "path": "tools/architecture/derive-final-dependency-source.mjs",
@@ -159,7 +159,7 @@
     },
     "executable_path_ownership_coverage": {
       "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
-      "sha256": "bb0659461e333dc1866d1fbaf4f3b99883d3f422058c64ed58f1be6cb08a37ab"
+      "sha256": "7ebaab95db3893bc59dcdaa14e8dee932d337249443be0be6dce4c2806336906"
     },
     "executable_path_ownership_current_dependencies": {
       "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json",
@@ -167,11 +167,11 @@
     },
     "final_dependency_current": {
       "path": "architecture/contexts/v1/final-dependency-current.json",
-      "sha256": "bdbe4785742d28e31d6e699b2b4b2db9f3ef8bb2233cd601b78acf8c5aee7bee"
+      "sha256": "f2989b3e41b57afff83acf5cb7ffccf161d51c82e1e7f915235e000ba5488cf9"
     },
     "final_dependency_source": {
       "path": "architecture/contexts/v1/final-dependency-source.json",
-      "sha256": "58574772f70ec055c5df4c2504c8a5f836af5faf523cb6151c9abd5d5efcdd34"
+      "sha256": "adc0e7779113e72116c851c6db7dfb2de407796e4fc6431c3c7488d8d8a2f1f1"
     },
     "foreign_write_migration_plan": {
       "path": "architecture/contexts/v1/foreign-write-migration-plan.json",

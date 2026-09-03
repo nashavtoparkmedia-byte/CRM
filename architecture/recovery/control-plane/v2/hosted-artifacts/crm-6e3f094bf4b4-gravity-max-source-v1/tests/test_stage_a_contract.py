@@ -14,12 +14,32 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[7]
 AUTHORITY = Path(__file__).resolve().parents[1]
 APPLICATION_COMMIT = "6e3f094bf4b42c1400c705843ab107dacd6d1cf8"
-STAGE_A_SCOPE_BASE_COMMIT = "ba94bb493cef9938b07f187faf86bc81724cc9c0"
-STAGE_A_ACCEPTED_CHANGE_COMMIT = "e8ea2ab5cbd88b5dccf993eb2da5f1947afc7b65"
+BUILDER_COMMIT = "80b17fbf143c3d67d786b26cae7e2b09829e52f7"
+BUILDER_BASE_COMMIT = "ba94bb493cef9938b07f187faf86bc81724cc9c0"
 PROFILE = "crm-6e3f094bf4b4-gravity-max-source-v1"
 COMMIT_SHA = re.compile(r"^[0-9a-f]{40}$")
-HOSTED_SCOPE_BASE_REF = "refs/heads/stage-a-scope-base"
-HOSTED_ACCEPTED_CHANGE_REF = "refs/heads/stage-a-accepted-change"
+HOSTED_BUILDER_REF = "refs/heads/stage-a-builder"
+HOSTED_BUILDER_BASE_REF = "refs/heads/stage-a-builder-base"
+ALLOWED_STAGE_A_PATHS = {
+    ".github/workflows/architecture-enforcement.yml",
+    ".github/workflows/coordinated-gravity-max-6e3f094b.yml",
+    "tools/architecture/run-authoritative-ci.mjs",
+    "tools/architecture/test-authoritative-ci-inventory.mjs",
+    "tools/architecture/test-executable-path-ownership.mjs",
+    "tools/architecture/test-hosted-coordinated-gravity-max-stage-a.mjs",
+    "tools/architecture/v2/test-original-dod-canonical-mapping.mjs",
+    "tools/architecture/v2/verify-final-rereview-closure.mjs",
+    "architecture/contexts/v1/SHA256SUMS",
+    "architecture/contexts/v1/context-index.json",
+    "architecture/contexts/v1/executable-path-ownership-coverage.json",
+    "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json",
+    "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
+    "architecture/recovery/whole-project-dod/v2/credential-unknown-access-resolution.json",
+}
+STAGE_A_AUTHORITY_PREFIX = (
+    "architecture/recovery/control-plane/v2/hosted-artifacts/"
+    "crm-6e3f094bf4b4-gravity-max-source-v1/"
+)
 
 
 def git_commit(root: Path, revision: str) -> str:
@@ -30,66 +50,84 @@ def git_commit(root: Path, revision: str) -> str:
             text=True,
         ).strip()
     except subprocess.CalledProcessError as error:
-        raise RuntimeError(f"unavailable Stage A change-base authority: {revision}") from error
+        raise RuntimeError(f"unavailable Stage A git authority: {revision}") from error
 
 
-def resolve_fixed_authority(
+def resolve_builder_authorities(
     *,
     root: Path = ROOT,
     environment: Mapping[str, str] = os.environ,
-    ref_variable: str,
-    commit_variable: str,
-    trusted_ref: str,
-    authority_commit: str,
-) -> str:
-    configured = environment.get(ref_variable)
-    expected = environment.get(commit_variable)
-    if configured:
-        if configured != trusted_ref:
-            raise RuntimeError("explicit Stage A authority must use its trusted hosted ref")
-        if not expected or not COMMIT_SHA.fullmatch(expected):
-            raise RuntimeError("explicit Stage A authority requires an exact commit identity")
-        if expected != authority_commit:
-            raise RuntimeError("explicit Stage A authority does not match the frozen commit identity")
-        resolved = git_commit(root, configured)
-        if resolved != expected:
-            raise RuntimeError("Stage A authority ref does not match its expected commit identity")
+    builder_commit: str = BUILDER_COMMIT,
+    builder_base_commit: str = BUILDER_BASE_COMMIT,
+) -> tuple[str, str]:
+    configured_builder = environment.get("YOKO_STAGE_A_BUILDER")
+    expected_builder = environment.get("YOKO_STAGE_A_BUILDER_COMMIT")
+    configured_base = environment.get("YOKO_STAGE_A_BUILDER_BASE")
+    expected_base = environment.get("YOKO_STAGE_A_BUILDER_BASE_COMMIT")
+    configured = (configured_builder, expected_builder, configured_base, expected_base)
+    if any(configured) and not all(configured):
+        raise RuntimeError("explicit Stage A builder authority requires both complete ref/commit pairs")
+
+    if all(configured):
+        if configured_builder != HOSTED_BUILDER_REF or configured_base != HOSTED_BUILDER_BASE_REF:
+            raise RuntimeError("explicit Stage A builder authority must use the trusted hosted refs")
+        if expected_builder != builder_commit or expected_base != builder_base_commit:
+            raise RuntimeError("explicit Stage A builder authority must match the fixed commit identities")
+        builder = git_commit(root, configured_builder)
+        builder_base = git_commit(root, configured_base)
+        if builder != expected_builder or builder_base != expected_base:
+            raise RuntimeError("Stage A builder refs do not match their expected commit identities")
     else:
-        if expected:
-            raise RuntimeError("Stage A authority identity cannot be supplied without its ref")
-        resolved = git_commit(root, authority_commit)
-    if resolved != authority_commit:
-        raise RuntimeError("Stage A authority does not resolve to the frozen commit identity")
-    return resolved
+        builder = git_commit(root, builder_commit)
+        builder_base = git_commit(root, builder_base_commit)
+
+    if builder == builder_base:
+        raise RuntimeError("Stage A builder and base authorities must differ")
+    return builder_base, builder
 
 
-SCOPE_BASE = resolve_fixed_authority(
-    ref_variable="YOKO_STAGE_A_SCOPE_BASE",
-    commit_variable="YOKO_STAGE_A_SCOPE_BASE_COMMIT",
-    trusted_ref=HOSTED_SCOPE_BASE_REF,
-    authority_commit=STAGE_A_SCOPE_BASE_COMMIT,
-)
-ACCEPTED_CHANGE = resolve_fixed_authority(
-    ref_variable="YOKO_STAGE_A_ACCEPTED_CHANGE",
-    commit_variable="YOKO_STAGE_A_ACCEPTED_CHANGE_COMMIT",
-    trusted_ref=HOSTED_ACCEPTED_CHANGE_REF,
-    authority_commit=STAGE_A_ACCEPTED_CHANGE_COMMIT,
-)
+def changed_paths(root: Path, base: str, head: str) -> list[str]:
+    return subprocess.check_output(
+        ["git", "-C", str(root), "diff", "--name-only", base, head], text=True,
+    ).splitlines()
+
+
+def unexpected_stage_a_paths(root: Path, base: str, builder: str) -> list[str]:
+    return [
+        name for name in changed_paths(root, base, builder)
+        if name not in ALLOWED_STAGE_A_PATHS and not name.startswith(STAGE_A_AUTHORITY_PREFIX)
+    ]
+
+
+BUILDER_BASE, BUILDER = resolve_builder_authorities()
 
 
 class StageAContractTests(unittest.TestCase):
-    def test_explicit_authority_requires_exact_frozen_identity(self) -> None:
-        arguments = {
-            "ref_variable": "YOKO_TEST_REF",
-            "commit_variable": "YOKO_TEST_COMMIT",
-            "trusted_ref": HOSTED_SCOPE_BASE_REF,
-        }
+    def test_explicit_builder_authorities_require_fixed_complete_identity(self) -> None:
         with self.assertRaisesRegex(RuntimeError, "trusted hosted ref"):
-            resolve_fixed_authority(
+            resolve_builder_authorities(
                 root=ROOT,
-                environment={"YOKO_TEST_REF": "HEAD"},
-                authority_commit=STAGE_A_SCOPE_BASE_COMMIT,
-                **arguments,
+                environment={
+                    "YOKO_STAGE_A_BUILDER": "HEAD",
+                    "YOKO_STAGE_A_BUILDER_COMMIT": BUILDER_COMMIT,
+                    "YOKO_STAGE_A_BUILDER_BASE": HOSTED_BUILDER_BASE_REF,
+                    "YOKO_STAGE_A_BUILDER_BASE_COMMIT": BUILDER_BASE_COMMIT,
+                },
+            )
+        with self.assertRaisesRegex(RuntimeError, "both complete"):
+            resolve_builder_authorities(
+                root=ROOT,
+                environment={"YOKO_STAGE_A_BUILDER": HOSTED_BUILDER_REF},
+            )
+        with self.assertRaisesRegex(RuntimeError, "fixed commit identities"):
+            resolve_builder_authorities(
+                root=ROOT,
+                environment={
+                    "YOKO_STAGE_A_BUILDER": HOSTED_BUILDER_REF,
+                    "YOKO_STAGE_A_BUILDER_COMMIT": "f" * 40,
+                    "YOKO_STAGE_A_BUILDER_BASE": HOSTED_BUILDER_BASE_REF,
+                    "YOKO_STAGE_A_BUILDER_BASE_COMMIT": BUILDER_BASE_COMMIT,
+                },
             )
 
         with tempfile.TemporaryDirectory() as temporary:
@@ -101,45 +139,26 @@ class StageAContractTests(unittest.TestCase):
             subprocess.run(["git", "-C", str(root), "add", "fixture"], check=True)
             subprocess.run(["git", "-C", str(root), "commit", "--quiet", "-m", "base"], check=True)
             base = git_commit(root, "HEAD")
-            subprocess.run(["git", "-C", str(root), "update-ref", HOSTED_SCOPE_BASE_REF, base], check=True)
             (root / "fixture").write_text("head\n")
             subprocess.run(["git", "-C", str(root), "commit", "--quiet", "-am", "head"], check=True)
             head = git_commit(root, "HEAD")
+            subprocess.run(["git", "-C", str(root), "update-ref", HOSTED_BUILDER_REF, base], check=True)
+            subprocess.run(["git", "-C", str(root), "update-ref", HOSTED_BUILDER_BASE_REF, base], check=True)
 
-            self.assertEqual(
-                resolve_fixed_authority(
+            with self.assertRaisesRegex(RuntimeError, "do not match"):
+                resolve_builder_authorities(
                     root=root,
                     environment={
-                        "YOKO_TEST_REF": HOSTED_SCOPE_BASE_REF,
-                        "YOKO_TEST_COMMIT": base,
+                        "YOKO_STAGE_A_BUILDER": HOSTED_BUILDER_REF,
+                        "YOKO_STAGE_A_BUILDER_COMMIT": head,
+                        "YOKO_STAGE_A_BUILDER_BASE": HOSTED_BUILDER_BASE_REF,
+                        "YOKO_STAGE_A_BUILDER_BASE_COMMIT": base,
                     },
-                    authority_commit=base,
-                    **arguments,
-                ),
-                base,
-            )
-            with self.assertRaisesRegex(RuntimeError, "frozen commit"):
-                resolve_fixed_authority(
-                    root=root,
-                    environment={
-                        "YOKO_TEST_REF": HOSTED_SCOPE_BASE_REF,
-                        "YOKO_TEST_COMMIT": head,
-                    },
-                    authority_commit=base,
-                    **arguments,
-                )
-            with self.assertRaisesRegex(RuntimeError, "does not match its expected"):
-                resolve_fixed_authority(
-                    root=root,
-                    environment={
-                        "YOKO_TEST_REF": HOSTED_SCOPE_BASE_REF,
-                        "YOKO_TEST_COMMIT": head,
-                    },
-                    authority_commit=head,
-                    **arguments,
+                    builder_commit=head,
+                    builder_base_commit=base,
                 )
 
-    def test_missing_frozen_authority_fails_closed(self) -> None:
+    def test_missing_fixed_builder_authority_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             subprocess.run(["git", "-C", str(root), "init", "--quiet"], check=True)
@@ -148,52 +167,55 @@ class StageAContractTests(unittest.TestCase):
             (root / "fixture").write_text("fixture\n")
             subprocess.run(["git", "-C", str(root), "add", "fixture"], check=True)
             subprocess.run(["git", "-C", str(root), "commit", "--quiet", "-m", "fixture"], check=True)
-            with self.assertRaisesRegex(RuntimeError, "unavailable Stage A change-base authority"):
-                resolve_fixed_authority(
-                    root=root,
-                    environment={},
-                    ref_variable="YOKO_TEST_REF",
-                    commit_variable="YOKO_TEST_COMMIT",
-                    trusted_ref=HOSTED_SCOPE_BASE_REF,
-                    authority_commit=STAGE_A_SCOPE_BASE_COMMIT,
-                )
+            with self.assertRaisesRegex(RuntimeError, "unavailable Stage A git authority"):
+                resolve_builder_authorities(root=root, environment={})
 
-    def test_accepted_application_and_runtime_surfaces_are_byte_identical(self) -> None:
+    def test_stage_a_builder_does_not_modify_application_or_runtime_surfaces(self) -> None:
         protected = [
             "gravity-mvp",
             "max-web-scraper",
             "deploy/docker-compose.production.yml",
         ]
         result = subprocess.run(
-            ["git", "-C", str(ROOT), "diff", "--exit-code", SCOPE_BASE, ACCEPTED_CHANGE, "--", *protected],
+            ["git", "-C", str(ROOT), "diff", "--exit-code", BUILDER_BASE, BUILDER, "--", *protected],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
         self.assertEqual(result.returncode, 0, result.stdout.decode() + result.stderr.decode())
 
-    def test_change_set_is_stage_a_control_plane_only(self) -> None:
-        names = subprocess.check_output(
-            ["git", "-C", str(ROOT), "diff", "--name-only", SCOPE_BASE, ACCEPTED_CHANGE], text=True,
-        ).splitlines()
-        allowed_exact = {
-            ".github/workflows/architecture-enforcement.yml",
-            ".github/workflows/coordinated-gravity-max-6e3f094b.yml",
-            "tools/architecture/run-authoritative-ci.mjs",
-            "tools/architecture/test-authoritative-ci-inventory.mjs",
-            "tools/architecture/test-executable-path-ownership.mjs",
-            "tools/architecture/test-hosted-coordinated-gravity-max-stage-a.mjs",
-            "tools/architecture/v2/test-original-dod-canonical-mapping.mjs",
-            "tools/architecture/v2/verify-final-rereview-closure.mjs",
-            "architecture/contexts/v1/SHA256SUMS",
-            "architecture/contexts/v1/context-index.json",
-            "architecture/contexts/v1/executable-path-ownership-coverage.json",
-            "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json",
-            "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
-            "architecture/recovery/whole-project-dod/v2/credential-unknown-access-resolution.json",
-        }
-        authority_prefix = "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/"
-        unexpected = [name for name in names if name not in allowed_exact and not name.startswith(authority_prefix)]
-        self.assertEqual(unexpected, [])
+    def test_fixed_builder_change_set_is_stage_a_control_plane_only(self) -> None:
+        names = changed_paths(ROOT, BUILDER_BASE, BUILDER)
+        self.assertEqual(unexpected_stage_a_paths(ROOT, BUILDER_BASE, BUILDER), [])
         self.assertFalse(any("2.0.0-15" in name or "runtime-v15" in name.lower() for name in names))
+
+    def test_later_application_changes_do_not_redefine_fixed_builder_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            subprocess.run(["git", "-C", str(root), "init", "--quiet"], check=True)
+            subprocess.run(["git", "-C", str(root), "config", "user.name", "Stage A test"], check=True)
+            subprocess.run(["git", "-C", str(root), "config", "user.email", "stage-a@example.invalid"], check=True)
+            (root / "fixture").write_text("base\n")
+            subprocess.run(["git", "-C", str(root), "add", "fixture"], check=True)
+            subprocess.run(["git", "-C", str(root), "commit", "--quiet", "-m", "base"], check=True)
+            base = git_commit(root, "HEAD")
+
+            workflow = root / ".github/workflows/architecture-enforcement.yml"
+            workflow.parent.mkdir(parents=True)
+            workflow.write_text("fixed Stage A builder\n")
+            subprocess.run(["git", "-C", str(root), "add", str(workflow.relative_to(root))], check=True)
+            subprocess.run(["git", "-C", str(root), "commit", "--quiet", "-m", "builder"], check=True)
+            builder = git_commit(root, "HEAD")
+
+            application = root / "gravity-mvp/src/future-fix.ts"
+            application.parent.mkdir(parents=True)
+            application.write_text("export const fixed = true\n")
+            subprocess.run(["git", "-C", str(root), "add", str(application.relative_to(root))], check=True)
+            subprocess.run(["git", "-C", str(root), "commit", "--quiet", "-m", "future application fix"], check=True)
+
+            self.assertEqual(unexpected_stage_a_paths(root, base, builder), [])
+            self.assertEqual(
+                unexpected_stage_a_paths(root, base, git_commit(root, "HEAD")),
+                ["gravity-mvp/src/future-fix.ts"],
+            )
 
     def test_workflow_is_content_specific_and_has_minimal_permissions(self) -> None:
         workflow = (ROOT / ".github/workflows/coordinated-gravity-max-6e3f094b.yml").read_text()

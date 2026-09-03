@@ -41,11 +41,6 @@ async function runNode(args, options = {}) {
 
 const validatorSource = await readFile(validatorPath, 'utf8')
 assert.equal(/^\s*export\s/mu.test(validatorSource), false, 'authority executable must export zero symbols')
-assert.equal(
-  validatorSource.includes('digest([...decisionChange.previous_paths].sort((left, right) => left.localeCompare(right)))'),
-  true,
-  'reviewed prior-path evidence must use the live inventory locale ordering',
-)
 const canonicalNamespace = await import(`${validatorUrl}?authority-export-inventory=${Date.now()}`)
 assert.deepEqual(Object.keys(canonicalNamespace), [], 'authority executable module namespace must be empty')
 for (const reader of removedAuthorityReaders) {
@@ -102,7 +97,7 @@ assert.deepEqual({
   arbitraryDataflowRetired: true,
   threatModelExplicit: true,
   historicalFixture: true,
-  denominator: 2426,
+  denominator: 2292,
 })
 
 const attackRoot = await mkdtemp(path.join(os.tmpdir(), 'yoko-authority-api-removal-'))

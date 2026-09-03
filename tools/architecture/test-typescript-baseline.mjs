@@ -1,12 +1,23 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 
 import {
   TYPESCRIPT_BASELINE_MAXIMUM,
   authoritativeTypeScriptMaximum,
   evaluateTypeScriptBaseline,
 } from './check-typescript-baseline.mjs'
+import { gitChangedPaths } from './git-change-set.mjs'
+
+function git(directory, args) {
+  const result = spawnSync('git', args, { cwd: directory, encoding: 'utf8' })
+  assert.equal(result.status, 0, result.stderr || result.error?.message || `git ${args.join(' ')} failed`)
+  return result.stdout.trim()
+}
 
 const inherited = [
   'src/legacy.ts(1,1): error TS1000: inherited',
@@ -61,4 +72,44 @@ assert.throws(
   () => evaluateTypeScriptBaseline(inherited, [], 30, { status: 0, signal: null, error: null }),
   /reported diagnostics with a successful exit status/,
 )
-process.stdout.write('TypeScript inherited-baseline gate: PASS (11 negative properties)\n')
+
+const candidateDeltaFixture = mkdtempSync(path.join(os.tmpdir(), 'yoko-typescript-candidate-delta-'))
+try {
+  git(candidateDeltaFixture, ['init', '--quiet'])
+  git(candidateDeltaFixture, ['config', 'user.email', 'typescript-baseline@example.invalid'])
+  git(candidateDeltaFixture, ['config', 'user.name', 'TypeScript Baseline'])
+  writeFileSync(path.join(candidateDeltaFixture, 'README.md'), 'candidate baseline\n')
+  git(candidateDeltaFixture, ['add', 'README.md'])
+  git(candidateDeltaFixture, ['commit', '--quiet', '-m', 'candidate baseline'])
+  const candidateBase = git(candidateDeltaFixture, ['rev-parse', 'HEAD'])
+
+  mkdirSync(path.join(candidateDeltaFixture, 'gravity-mvp/src'), { recursive: true })
+  writeFileSync(path.join(candidateDeltaFixture, 'gravity-mvp/src/earlier-diagnostic.ts'), 'const value: null = "diagnostic"\n')
+  git(candidateDeltaFixture, ['add', 'gravity-mvp/src/earlier-diagnostic.ts'])
+  git(candidateDeltaFixture, ['commit', '--quiet', '-m', 'introduce earlier candidate diagnostic'])
+
+  writeFileSync(path.join(candidateDeltaFixture, 'later-fixup.txt'), 'unrelated later commit\n')
+  git(candidateDeltaFixture, ['add', 'later-fixup.txt'])
+  git(candidateDeltaFixture, ['commit', '--quiet', '-m', 'later unrelated fixup'])
+
+  const diagnostic = 'src/earlier-diagnostic.ts(1,7): error TS2322: candidate diagnostic'
+  const fullCandidatePaths = gitChangedPaths(candidateDeltaFixture, candidateBase)
+  assert(fullCandidatePaths.includes('gravity-mvp/src/earlier-diagnostic.ts'))
+  assert.throws(
+    () => evaluateTypeScriptBaseline(diagnostic, fullCandidatePaths, 30),
+    /changed path/,
+    'a diagnostic introduced before the final candidate commit must remain governed',
+  )
+
+  const finalCommitOnlyPaths = gitChangedPaths(candidateDeltaFixture, 'HEAD^')
+  assert.equal(finalCommitOnlyPaths.includes('gravity-mvp/src/earlier-diagnostic.ts'), false)
+  assert.equal(
+    evaluateTypeScriptBaseline(diagnostic, finalCommitOnlyPaths, 30).status,
+    'PASS',
+    'the historical parent-only base must reproduce the earlier-commit blind spot',
+  )
+} finally {
+  rmSync(candidateDeltaFixture, { recursive: true, force: true })
+}
+
+process.stdout.write('TypeScript inherited-baseline gate: PASS (12 negative properties; full candidate delta enforced)\n')
