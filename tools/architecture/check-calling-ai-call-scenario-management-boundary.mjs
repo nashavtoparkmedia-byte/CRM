@@ -30,7 +30,7 @@ for (const operation of ['createScenario', 'deleteScenario', 'getScenario', 'lis
 }
 
 const implementation = read('gravity-mvp/src/lib/ai-call/scenarios.ts')
-assert.equal(sha256(implementation), '21421c56862d725fca27fc10e3b4da82634539bd7d4c1de4ff50b748e370695b')
+assert.equal(sha256(implementation), '0c78c36477ab18912d27859e003c7153a2c238244f84d8ee11476f71c2a927da')
 assert.match(implementation, /await db\.aiCallScenario\.create\(/)
 assert.match(implementation, /await db\.aiCallScenario\.update\(/)
 assert.match(implementation, /data: \{ isActive: false \}/)
