@@ -877,6 +877,13 @@ def _predecessor_identity(
     return {
         "gravity_semantic": gravity["semantic"],
         "max_semantic": maximum["semantic"],
+        # The ephemeral instance this preflight just validated against the full immutable identity.
+        # Carrying it in state keeps a rolled-back release retryable without depending on which
+        # earlier phase happened to record it.
+        "predecessor_instance": {
+            "gravity": _container_instance(gravity),
+            "max_scraper": _container_instance(maximum),
+        },
         "environment_sha256": _sha_file(environment, 4 * 1024 * 1024),
         "unrelated_semantic_fingerprint_sha256": unrelated,
         "database": database,
@@ -913,6 +920,9 @@ def _compose_up(core: Any, profile: dict[str, Any], state: dict[str, Any], overl
     log = core.mapped(_compose_log_path(activate))
     fd = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600)
     try:
+        # The open mode applies only on creation; reassert it so a reused transcript file cannot
+        # keep a wider mode, matching _lock and _write_state.
+        os.fchmod(fd, 0o600)
         deployment = profile["deployment"]
         _run(
             core,
@@ -1104,6 +1114,8 @@ def _release_preflight(core: Any, policy: dict[str, Any], profile: dict[str, Any
             "migration_rows_sha256": identity["database"]["migration_rows_sha256"],
             "target_gravity_image_id": target_gravity["Id"],
             "target_max_image_id": target_max["Id"],
+            "predecessor_instance": identity["predecessor_instance"],
+            "predecessor_instance_at": core.now(),
             **domains,
         }
         _write_state(core, next_state)

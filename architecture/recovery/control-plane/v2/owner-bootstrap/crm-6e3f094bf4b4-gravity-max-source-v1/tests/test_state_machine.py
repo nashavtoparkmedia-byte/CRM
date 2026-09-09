@@ -293,6 +293,10 @@ class StateMachineTests(unittest.TestCase):
             "max_semantic": {"service": "max"},
             "unrelated_semantic_fingerprint_sha256": "u" * 64,
             "database": {"database_identity_sha256": "d" * 64, "migration_rows_sha256": "m" * 64},
+            "predecessor_instance": {
+                "gravity": {"container_id": "cg0", "compose_config_hash": "hg0"},
+                "max_scraper": {"container_id": "cm0", "compose_config_hash": "hm0"},
+            },
         }
         receipt = {"files": {"one": {}, "two": {}}}
         with (
@@ -322,6 +326,10 @@ class StateMachineTests(unittest.TestCase):
         self.assertFalse(result["production_mutated"])
         self.assertEqual(artifact_path.call_count, 2)
         self.assertEqual(write_state.call_args.args[1]["phase"], "PREFLIGHTED")
+        self.assertEqual(
+            write_state.call_args.args[1]["predecessor_instance"], identity["predecessor_instance"],
+            "preflight must persist the validated ephemeral instance or a rolled-back release is one-shot",
+        )
         compose.assert_not_called()
 
     def test_preflight_and_rollback_are_idempotent_in_terminal_pair_states(self) -> None:
@@ -731,6 +739,58 @@ class PredecessorRetryTests(unittest.TestCase):
                 intent_result="rollback_intent", failure_result="rollback_failed",
             )
         self.assertEqual(recorded["predecessor_instance"], earlier)
+
+    def test_preflight_carries_the_validated_instance_so_a_no_op_rollback_stays_retryable(self) -> None:
+        """rollback -> preflight -> non-mutating rollback -> preflight must not deadlock.
+
+        Regression for the sequence both re-reviewers used: preflight rebuilds its state from a
+        fresh literal, so if it dropped the validated ephemeral instance a later no-op rollback
+        left nothing for the next preflight to accept, and the release became one-shot again.
+        """
+        live_gravity = self.container("old-g", "cg2", "hg2")
+        live_max = self.container("old-m", "cm2", "hm2")
+
+        # STEP 1 — a mutating rollback records the instance it created.
+        with (
+            mock.patch.object(self.runtime, "_rollback_pair", return_value=({
+                "pair_state": "PREDECESSOR_PAIR",
+                "gravity_container_id": "cg2", "gravity_compose_config_hash": "hg2",
+                "max_container_id": "cm2", "max_compose_config_hash": "hm2",
+            }, True)),
+            mock.patch.object(self.runtime, "_write_state"),
+            mock.patch.object(self.runtime, "_audit"),
+            mock.patch.object(self.runtime, "_log_evidence", return_value={"path": "/r.log"}),
+        ):
+            _, _, rolled_back = self.runtime._rollback_with_fencing(
+                self.core, {}, self.profile, SimpleNamespace(primitive="rollback"),
+                {"phase": "ACTIVATION_FAILED"},
+                intent_result="activation_rollback_intent", failure_result="activation_and_rollback_failed",
+            )
+        rolled_back = {**rolled_back, "phase": "ROLLED_BACK"}
+
+        # STEP 2 — a fresh preflight succeeds and must preserve that instance in its new state.
+        identity = self.identity(live_gravity, live_max, rolled_back)
+        self.assertEqual(identity["predecessor_instance"], {
+            "gravity": {"container_id": "cg2", "compose_config_hash": "hg2"},
+            "max_scraper": {"container_id": "cm2", "compose_config_hash": "hm2"},
+        })
+        preflighted = {"phase": "PREFLIGHTED", "predecessor_instance": identity["predecessor_instance"]}
+
+        # STEP 3 — an explicit rollback that mutates nothing records no new instance.
+        with (
+            mock.patch.object(self.runtime, "_rollback_pair", return_value=({"pair_state": "PREDECESSOR_PAIR"}, False)),
+            mock.patch.object(self.runtime, "_write_state"),
+            mock.patch.object(self.runtime, "_audit"),
+        ):
+            _, mutated, carried = self.runtime._rollback_with_fencing(
+                self.core, {}, self.profile, SimpleNamespace(primitive="rollback"), preflighted,
+                intent_result="rollback_intent", failure_result="rollback_failed",
+            )
+        self.assertFalse(mutated)
+
+        # STEP 4 — the next preflight still accepts the live pair: no deadlock.
+        again = self.identity(live_gravity, live_max, {**carried, "phase": "ROLLED_BACK"})
+        self.assertEqual(again["database"]["state"], "EXACT")
 
     def test_rollback_records_the_instance_it_created_so_the_next_preflight_can_bind(self) -> None:
         rollback = {
