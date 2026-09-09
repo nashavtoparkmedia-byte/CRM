@@ -655,17 +655,87 @@ class PredecessorRetryTests(unittest.TestCase):
             )
         self.assertEqual(raised.exception.code, "GRAVITY_PREDECESSOR_IDENTITY_DRIFT")
 
-    def test_recorded_instance_is_not_honoured_outside_the_rolled_back_phase(self) -> None:
-        state = {
-            "phase": "PREFLIGHTED",
-            "predecessor_instance": {
-                "gravity": {"container_id": "cg1", "compose_config_hash": "hg1"},
-                "max_scraper": {"container_id": "cm1", "compose_config_hash": "hm1"},
-            },
+    def test_recorded_instance_is_honoured_in_every_phase_that_can_follow_a_rollback(self) -> None:
+        """Gating on one phase is what made a rolled-back release one-shot; the record is durable."""
+        recorded = {
+            "gravity": {"container_id": "cg1", "compose_config_hash": "hg1"},
+            "max_scraper": {"container_id": "cm1", "compose_config_hash": "hm1"},
         }
-        with self.assertRaises(RuntimeFault) as raised:
-            self.identity(self.container("old-g", "cg1", "hg1"), self.container("old-m", "cm1", "hm1"), state)
-        self.assertEqual(raised.exception.code, "GRAVITY_PREDECESSOR_IDENTITY_DRIFT")
+        for phase in ("ROLLED_BACK", "ROLLBACK_FAILED", "PREFLIGHTED", "ACTIVATION_FAILED"):
+            with self.subTest(phase=phase):
+                result = self.identity(
+                    self.container("old-g", "cg1", "hg1"), self.container("old-m", "cm1", "hm1"),
+                    {"phase": phase, "predecessor_instance": recorded},
+                )
+                self.assertEqual(result["predecessor_instance"], recorded)
+
+    def test_malformed_or_absent_records_are_ignored(self) -> None:
+        for label, recorded in {
+            "absent": None,
+            "not a dict": "cg1",
+            "empty strings": {"gravity": {"container_id": "", "compose_config_hash": ""},
+                              "max_scraper": {"container_id": "", "compose_config_hash": ""}},
+            "missing fields": {"gravity": {"container_id": "cg1"}, "max_scraper": {}},
+            "non-string": {"gravity": {"container_id": 1, "compose_config_hash": 2},
+                           "max_scraper": {"container_id": 3, "compose_config_hash": 4}},
+        }.items():
+            with self.subTest(label=label):
+                state = {"phase": "ROLLED_BACK"}
+                if recorded is not None:
+                    state["predecessor_instance"] = recorded
+                with self.assertRaises(RuntimeFault) as raised:
+                    self.identity(
+                        self.container("old-g", "cg1", "hg1"), self.container("old-m", "cm1", "hm1"), state
+                    )
+                self.assertEqual(raised.exception.code, "GRAVITY_PREDECESSOR_IDENTITY_DRIFT")
+
+    def test_rollback_that_recreated_the_pair_records_it_even_when_the_postcheck_fails(self) -> None:
+        """R3-01: compose succeeded, postcheck failed -- the sealed instance is already obsolete."""
+        live_gravity = self.container("old-g", "cg3", "hg3")
+        live_max = self.container("old-m", "cm3", "hm3")
+        writes: list[dict[str, object]] = []
+        with (
+            mock.patch.object(self.runtime, "_rollback_pair", side_effect=RuntimeFault("ROLLBACK_POSTCHECK_FAILED", 74)),
+            mock.patch.object(self.runtime, "_pair", return_value=(live_gravity, live_max)),
+            mock.patch.object(self.runtime, "_write_state", side_effect=lambda _c, value: writes.append(value)),
+            mock.patch.object(self.runtime, "_audit"),
+            mock.patch.object(self.runtime, "_log_evidence", return_value={"path": "/r.log"}),
+        ):
+            with self.assertRaises(RuntimeFault):
+                self.runtime._rollback_with_fencing(
+                    self.core, {}, self.profile, SimpleNamespace(primitive="rollback"),
+                    {"phase": "ACTIVATION_FAILED"},
+                    intent_result="activation_rollback_intent", failure_result="activation_and_rollback_failed",
+                )
+        failed = writes[-1]
+        self.assertEqual(failed["phase"], "ROLLBACK_FAILED")
+        self.assertEqual(failed["predecessor_instance"], {
+            "gravity": {"container_id": "cg3", "compose_config_hash": "hg3"},
+            "max_scraper": {"container_id": "cm3", "compose_config_hash": "hm3"},
+        })
+        # ...and a fresh preflight can now bind against the containers that are actually live.
+        self.assertEqual(self.identity(live_gravity, live_max, failed)["database"]["state"], "EXACT")
+
+    def test_failed_rollback_records_nothing_when_the_pair_is_not_the_predecessor(self) -> None:
+        writes: list[dict[str, object]] = []
+        with (
+            mock.patch.object(self.runtime, "_rollback_pair", side_effect=RuntimeFault("ROLLBACK_POSTCHECK_FAILED", 74)),
+            mock.patch.object(self.runtime, "_pair", return_value=(
+                self.container("new-g", "cg4", "hg4"), self.container("old-m", "cm4", "hm4"))),
+            mock.patch.object(self.runtime, "_write_state", side_effect=lambda _c, value: writes.append(value)),
+            mock.patch.object(self.runtime, "_audit"),
+            mock.patch.object(self.runtime, "_log_evidence", return_value={"path": "/r.log"}),
+        ):
+            with self.assertRaises(RuntimeFault):
+                self.runtime._rollback_with_fencing(
+                    self.core, {}, self.profile, SimpleNamespace(primitive="rollback"), {"phase": "ACTIVATED"},
+                    intent_result="rollback_intent", failure_result="rollback_failed",
+                )
+        self.assertNotIn("predecessor_instance", writes[-1])
+
+    def test_observed_instance_never_raises_inside_a_fencing_write(self) -> None:
+        with mock.patch.object(self.runtime, "_pair", side_effect=RuntimeFault("CONTAINER_NOT_FOUND", 74)):
+            self.assertIsNone(self.runtime._observed_instance(self.core, {}, self.profile))
 
     def test_immutable_identity_is_not_weakened_by_the_ephemeral_allowance(self) -> None:
         state = {

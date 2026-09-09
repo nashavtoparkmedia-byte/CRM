@@ -817,10 +817,15 @@ def _container_instance(current: dict[str, Any]) -> dict[str, Any]:
 def _accepted_instances(profile: dict[str, Any], state: dict[str, Any], key: str) -> list[dict[str, Any]]:
     """Ephemeral container identities this runtime is allowed to observe for the predecessor pair.
 
-    The sealed snapshot is always accepted. A rollback this runtime performed itself recreates
-    the containers, so the instance it durably recorded at that fenced rollback is accepted too.
-    Nothing else is: the immutable predecessor identity (image, volume, semantics, database,
-    unrelated services) is still checked strictly against the sealed profile by the caller.
+    The sealed snapshot is always accepted. So is the single instance this runtime durably
+    recorded for itself, which it only ever writes after validating the pair: at preflight, or
+    after a rollback it performed. It is honoured in whatever phase the state is in, because the
+    containers it names are the ones that are live -- gating it on one phase is what previously
+    made a rolled-back or postcheck-failed release permanently one-shot.
+
+    This widens nothing else. The immutable predecessor identity -- image, volume, semantics,
+    database, unrelated services, running, healthy, never restarted -- is still checked strictly
+    against the sealed profile by the caller, and a malformed or absent record is ignored.
     """
     sealed = profile["predecessor"][key]
     accepted = [
@@ -830,20 +835,40 @@ def _accepted_instances(profile: dict[str, Any], state: dict[str, Any], key: str
         }
     ]
     recorded = state.get("predecessor_instance")
-    if state.get("phase") == "ROLLED_BACK" and isinstance(recorded, dict):
-        entry = recorded.get(key)
-        if (
-            isinstance(entry, dict)
-            and isinstance(entry.get("container_id"), str)
-            and isinstance(entry.get("compose_config_hash"), str)
-        ):
-            accepted.append(
-                {
-                    "container_id": entry["container_id"],
-                    "compose_config_hash": entry["compose_config_hash"],
-                }
-            )
+    entry = recorded.get(key) if isinstance(recorded, dict) else None
+    if (
+        isinstance(entry, dict)
+        and isinstance(entry.get("container_id"), str)
+        and entry["container_id"]
+        and isinstance(entry.get("compose_config_hash"), str)
+        and entry["compose_config_hash"]
+    ):
+        accepted.append(
+            {
+                "container_id": entry["container_id"],
+                "compose_config_hash": entry["compose_config_hash"],
+            }
+        )
     return accepted
+
+
+def _observed_instance(core: Any, policy: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any] | None:
+    """Best-effort record of the live pair, used on the rollback failure path.
+
+    A rollback whose Compose transaction succeeded but whose postcheck then failed has already
+    recreated the containers, so the sealed instance no longer describes anything. Recording what
+    is actually live keeps a later preflight able to re-establish. Returns None unless the live
+    pair is still the authorised predecessor pair by image id, and never raises: this runs inside
+    a durable fencing write.
+    """
+    try:
+        gravity, maximum = _pair(core, policy, profile)
+        kind, _ = _classify(profile, gravity, maximum)
+        if kind != "PREDECESSOR_PAIR":
+            return None
+        return {"gravity": _container_instance(gravity), "max_scraper": _container_instance(maximum)}
+    except Exception:
+        return None
 
 
 def _predecessor_identity(
@@ -1167,6 +1192,12 @@ def _rollback_with_fencing(
             "rollback_failed_at": core.now(),
             "rollback_diagnostics": _log_evidence(core, ROLLBACK_COMPOSE_LOG, core.now()),
         }
+        # The Compose transaction may already have recreated the pair before the postcheck failed,
+        # in which case the sealed instance no longer describes anything that is running.
+        observed = _observed_instance(core, policy, profile)
+        if observed is not None:
+            failed_state["predecessor_instance"] = observed
+            failed_state["predecessor_instance_at"] = core.now()
         _write_state(core, failed_state)
         _audit(core, invocation, intent_state, failure_result, failed_state)
         raise
