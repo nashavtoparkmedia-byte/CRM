@@ -1201,22 +1201,29 @@ def _rollback_with_fencing(
         _write_state(core, failed_state)
         _audit(core, invocation, intent_state, failure_result, failed_state)
         raise
+    # Record on both paths, not only when this call recreated the containers. A rollback whose
+    # Compose transaction completed but whose process died before the terminal state write leaves
+    # recreated containers with nothing recorded; the operator's next rollback then finds the pair
+    # already correct, mutates nothing, and must still be able to register what is live or the
+    # release stays one-shot. This is safe because _rollback_pair only returns after _postcheck
+    # validated the pair against the sealed profile, so the value recorded is an observation the
+    # runtime just proved, not one it merely found.
     recorded_state = {**intent_state}
-    if mutated:
-        # Only a rollback that actually recreated the containers may widen the accepted ephemeral
-        # identity, and only to the instance this runtime just observed. A no-op rollback records
-        # nothing and carries forward whatever instance an earlier fenced rollback registered.
-        recorded_state["predecessor_instance"] = {
-            "gravity": {
-                "container_id": rollback.get("gravity_container_id"),
-                "compose_config_hash": rollback.get("gravity_compose_config_hash"),
-            },
-            "max_scraper": {
-                "container_id": rollback.get("max_container_id"),
-                "compose_config_hash": rollback.get("max_compose_config_hash"),
-            },
-        }
+    observed = {
+        "gravity": {
+            "container_id": rollback.get("gravity_container_id"),
+            "compose_config_hash": rollback.get("gravity_compose_config_hash"),
+        },
+        "max_scraper": {
+            "container_id": rollback.get("max_container_id"),
+            "compose_config_hash": rollback.get("max_compose_config_hash"),
+        },
+    }
+    # An incomplete observation must never displace a record that is already usable.
+    if all(isinstance(value, str) and value for side in observed.values() for value in side.values()):
+        recorded_state["predecessor_instance"] = observed
         recorded_state["predecessor_instance_at"] = core.now()
+    if mutated:
         recorded_state["rollback_diagnostics"] = _log_evidence(core, ROLLBACK_COMPOSE_LOG, core.now())
     return rollback, mutated, recorded_state
 

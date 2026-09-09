@@ -13,12 +13,12 @@
     "source": {
       "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
       "predecessor_source_sha256": "dc4c604724692843a248ab345b94483ed60647739fd36595f648616b134cdb88",
-      "source_sha256": "a98bef7319e14ddba39e59422b6e939766da53dd261895d8266deb92b9bf7837"
+      "source_sha256": "5648419a4830e0ae5bd1b47e90920923c8aaf6799c3bf3ad9f52fb497cc077c8"
     },
     "fresh_analysis": {
       "path": "(transient whole-repository write scan; bound by sha256)",
-      "sha256": "018ba00f0730adb929fe5dea0726f943575010ec81ecaa232e5f9ef8b3742158",
-      "analysis_sha256": "279eae4f7a576c68f3c0609969c7d9d7524eb665c596611d150a2c637f70410a",
+      "sha256": "93d4672b46b5e0dac4d0021049ea4fb8238abf51f8343e2f01632ba7084b0261",
+      "analysis_sha256": "bc3bfd73fc851644acccc074573d1a3fb442e5f54df6f3e66f8f7b6afd204946",
       "ambiguous_denominator": 44
     },
     "source_context_equivalence": {
@@ -68,7 +68,7 @@
     {
       "record_id": "ba082d04940220ce32fe01b08b2f1ba3228bb7cddf3a009077edd1f2268491d5",
       "site_signature": "ba082d04940220ce32fe01b08b2f1ba3228bb7cddf3a009077edd1f2268491d5",
-      "source_sha256": "a98bef7319e14ddba39e59422b6e939766da53dd261895d8266deb92b9bf7837",
+      "source_sha256": "5648419a4830e0ae5bd1b47e90920923c8aaf6799c3bf3ad9f52fb497cc077c8",
       "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
       "line": 451,
       "column": 12,
@@ -93,7 +93,7 @@
         "pg_control_system"
       ],
       "sql_sha256": "1f4094522bade4b4b67314cab42cc3847f506365a4af368ed704b2ed09c25882",
-      "sql_provenance_sha256": "efd5c68618cc3c82fd651599d568c1af5e3302eadb8f9a8a77fb4bf9cd8862ef",
+      "sql_provenance_sha256": "3952cbc099bc53fc755780ab849c864ab2a6461ef5cc43ddd3a65cdfcb2c4d0d",
       "source_context": null,
       "source_technical_module": null,
       "owner_contexts": [],
@@ -118,7 +118,7 @@
     {
       "record_id": "0e6dc117f9fa9bcc96add3f1e71c964eb0dace3b89122ba373acf6891626a8d2",
       "site_signature": "0e6dc117f9fa9bcc96add3f1e71c964eb0dace3b89122ba373acf6891626a8d2",
-      "source_sha256": "a98bef7319e14ddba39e59422b6e939766da53dd261895d8266deb92b9bf7837",
+      "source_sha256": "5648419a4830e0ae5bd1b47e90920923c8aaf6799c3bf3ad9f52fb497cc077c8",
       "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
       "line": 480,
       "column": 14,
@@ -150,7 +150,7 @@
         "to_char"
       ],
       "sql_sha256": "8c50d6b45e37bf522c8130b62c9cf3f18196f4a5dc45fc4a34e54eaab534bfd7",
-      "sql_provenance_sha256": "a2d9f780986a9e42490a52eb96f4527e7d201e98f4abab40d7a65821f21c23aa",
+      "sql_provenance_sha256": "38cbba345bcaaf5ddc3c3955025b9594de3bdc8c9aeecc4644ec1598b5e748a0",
       "source_context": null,
       "source_technical_module": null,
       "owner_contexts": [],
@@ -175,7 +175,7 @@
     {
       "record_id": "0efd57ebede126929875fd34e1b7f587b5d6a2404e58679067cf5fcc67fafa90",
       "site_signature": "0efd57ebede126929875fd34e1b7f587b5d6a2404e58679067cf5fcc67fafa90",
-      "source_sha256": "a98bef7319e14ddba39e59422b6e939766da53dd261895d8266deb92b9bf7837",
+      "source_sha256": "5648419a4830e0ae5bd1b47e90920923c8aaf6799c3bf3ad9f52fb497cc077c8",
       "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
       "line": 480,
       "column": 14,
@@ -209,7 +209,7 @@
         "to_char"
       ],
       "sql_sha256": "372611314a8810c813c990b019a5defa24cd97404800d3c37c05b3a9ca1362fc",
-      "sql_provenance_sha256": "da9ac9c0c4404157fd0057c2628afd579b7f1b9eea29b04490a5c36b62fadde2",
+      "sql_provenance_sha256": "099189ca3bd5851546c513e18f816bf388b2bdfd382e0e38be4475ff46d7e651",
       "source_context": null,
       "source_technical_module": null,
       "owner_contexts": [],
@@ -2508,8 +2508,8 @@
         "line": 451,
         "column": 12,
         "method": "mixed-script-sql",
-        "source_sha256": "a98bef7319e14ddba39e59422b6e939766da53dd261895d8266deb92b9bf7837",
-        "sql_provenance_sha256": "efd5c68618cc3c82fd651599d568c1af5e3302eadb8f9a8a77fb4bf9cd8862ef"
+        "source_sha256": "5648419a4830e0ae5bd1b47e90920923c8aaf6799c3bf3ad9f52fb497cc077c8",
+        "sql_provenance_sha256": "3952cbc099bc53fc755780ab849c864ab2a6461ef5cc43ddd3a65cdfcb2c4d0d"
       },
       "resolved_target": {
         "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
@@ -2533,8 +2533,8 @@
         "analysis_site_signature:ba082d04940220ce32fe01b08b2f1ba3228bb7cddf3a009077edd1f2268491d5",
         "sql_sha256:1f4094522bade4b4b67314cab42cc3847f506365a4af368ed704b2ed09c25882",
         "Exact SELECT projection and independently enumerated read-only functions contain no analyzed mutation operation.",
-        "source_sha256:a98bef7319e14ddba39e59422b6e939766da53dd261895d8266deb92b9bf7837",
-        "sql_provenance_sha256:efd5c68618cc3c82fd651599d568c1af5e3302eadb8f9a8a77fb4bf9cd8862ef"
+        "source_sha256:5648419a4830e0ae5bd1b47e90920923c8aaf6799c3bf3ad9f52fb497cc077c8",
+        "sql_provenance_sha256:3952cbc099bc53fc755780ab849c864ab2a6461ef5cc43ddd3a65cdfcb2c4d0d"
       ]
     },
     {
@@ -2545,8 +2545,8 @@
         "line": 480,
         "column": 14,
         "method": "mixed-script-sql",
-        "source_sha256": "a98bef7319e14ddba39e59422b6e939766da53dd261895d8266deb92b9bf7837",
-        "sql_provenance_sha256": "a2d9f780986a9e42490a52eb96f4527e7d201e98f4abab40d7a65821f21c23aa"
+        "source_sha256": "5648419a4830e0ae5bd1b47e90920923c8aaf6799c3bf3ad9f52fb497cc077c8",
+        "sql_provenance_sha256": "38cbba345bcaaf5ddc3c3955025b9594de3bdc8c9aeecc4644ec1598b5e748a0"
       },
       "resolved_target": {
         "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
@@ -2577,8 +2577,8 @@
         "analysis_site_signature:0e6dc117f9fa9bcc96add3f1e71c964eb0dace3b89122ba373acf6891626a8d2",
         "sql_sha256:8c50d6b45e37bf522c8130b62c9cf3f18196f4a5dc45fc4a34e54eaab534bfd7",
         "Exact SELECT projection and independently enumerated read-only functions contain no analyzed mutation operation.",
-        "source_sha256:a98bef7319e14ddba39e59422b6e939766da53dd261895d8266deb92b9bf7837",
-        "sql_provenance_sha256:a2d9f780986a9e42490a52eb96f4527e7d201e98f4abab40d7a65821f21c23aa"
+        "source_sha256:5648419a4830e0ae5bd1b47e90920923c8aaf6799c3bf3ad9f52fb497cc077c8",
+        "sql_provenance_sha256:38cbba345bcaaf5ddc3c3955025b9594de3bdc8c9aeecc4644ec1598b5e748a0"
       ]
     },
     {
@@ -2589,8 +2589,8 @@
         "line": 480,
         "column": 14,
         "method": "mixed-script-sql",
-        "source_sha256": "a98bef7319e14ddba39e59422b6e939766da53dd261895d8266deb92b9bf7837",
-        "sql_provenance_sha256": "da9ac9c0c4404157fd0057c2628afd579b7f1b9eea29b04490a5c36b62fadde2"
+        "source_sha256": "5648419a4830e0ae5bd1b47e90920923c8aaf6799c3bf3ad9f52fb497cc077c8",
+        "sql_provenance_sha256": "099189ca3bd5851546c513e18f816bf388b2bdfd382e0e38be4475ff46d7e651"
       },
       "resolved_target": {
         "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
@@ -2623,8 +2623,8 @@
         "analysis_site_signature:0efd57ebede126929875fd34e1b7f587b5d6a2404e58679067cf5fcc67fafa90",
         "sql_sha256:372611314a8810c813c990b019a5defa24cd97404800d3c37c05b3a9ca1362fc",
         "Exact SELECT projection and independently enumerated read-only functions contain no analyzed mutation operation.",
-        "source_sha256:a98bef7319e14ddba39e59422b6e939766da53dd261895d8266deb92b9bf7837",
-        "sql_provenance_sha256:da9ac9c0c4404157fd0057c2628afd579b7f1b9eea29b04490a5c36b62fadde2"
+        "source_sha256:5648419a4830e0ae5bd1b47e90920923c8aaf6799c3bf3ad9f52fb497cc077c8",
+        "sql_provenance_sha256:099189ca3bd5851546c513e18f816bf388b2bdfd382e0e38be4475ff46d7e651"
       ]
     },
     {

@@ -462,6 +462,25 @@ class ReleaseCapacityTests(unittest.TestCase):
         self.assertEqual(raised.exception.details["required_bytes"], 1300)
         self.assertEqual(len(loaded), 1)
 
+    def test_first_load_guard_reserves_room_for_the_archives_still_to_come(self) -> None:
+        """R4-03: the first re-measurement must charge for both archives, not just its own."""
+        with (
+            mock.patch.object(self.runtime, "_image_inspect", return_value=None),
+            mock.patch.object(self.runtime, "_artifact_path") as artifact_path,
+            mock.patch.object(self.runtime, "_run") as run,
+            self.statvfs(3299),
+        ):
+            with self.assertRaises(RuntimeFault) as raised:
+                self.runtime._load_target(
+                    self.core, self.profile, "gravity", "gravity-image.docker.tar", "ref-g",
+                    remaining_bytes=[400],
+                )
+        # (1000 + 400) * 2 + 500 = 3300, not the 2500 the gravity archive alone would need.
+        self.assertEqual(raised.exception.details["required_bytes"], 3300)
+        self.assertEqual(raised.exception.details["pending_archive_bytes"], 1400)
+        artifact_path.assert_not_called()
+        run.assert_not_called()
+
     def test_reserve_floor_is_enforced_even_when_both_target_images_are_already_loaded(self) -> None:
         """A re-preflight that loads nothing must still be refused on a full filesystem."""
         core = SimpleNamespace(
@@ -769,29 +788,39 @@ class PredecessorRetryTests(unittest.TestCase):
                     self.identity(gravity, maximum, state)
                 self.assertEqual(raised.exception.code, expected)
 
-    def test_no_op_rollback_does_not_widen_the_accepted_instance_set(self) -> None:
-        rollback = {
+    def test_rollback_interrupted_before_its_terminal_write_can_still_be_recovered(self) -> None:
+        """R4-01: Compose recreated the pair, then the process died before the ROLLED_BACK write.
+
+        The operator's next rollback finds the pair already correct and mutates nothing. It must
+        still register what is live, or the release stays one-shot forever. The value is safe to
+        record because _rollback_pair only returns after _postcheck validated the pair.
+        """
+        recreated = {
             "pair_state": "PREDECESSOR_PAIR",
-            "gravity_container_id": "cg9", "gravity_compose_config_hash": "hg9",
-            "max_container_id": "cm9", "max_compose_config_hash": "hm9",
+            "gravity_container_id": "cg5", "gravity_compose_config_hash": "hg5",
+            "max_container_id": "cm5", "max_compose_config_hash": "hm5",
         }
         with (
-            mock.patch.object(self.runtime, "_rollback_pair", return_value=(rollback, False)),
+            mock.patch.object(self.runtime, "_rollback_pair", return_value=(recreated, False)),
             mock.patch.object(self.runtime, "_write_state"),
             mock.patch.object(self.runtime, "_audit"),
         ):
             _, mutated, recorded = self.runtime._rollback_with_fencing(
-                self.core, {}, self.profile, SimpleNamespace(primitive="rollback"), {"phase": "ACTIVATED"},
+                self.core, {}, self.profile, SimpleNamespace(primitive="rollback"),
+                {"phase": "ROLLBACK_INTENT"},
                 intent_result="rollback_intent", failure_result="rollback_failed",
             )
         self.assertFalse(mutated)
-        self.assertNotIn("predecessor_instance", recorded)
-        with self.assertRaises(RuntimeFault) as raised:
-            self.identity(
-                self.container("old-g", "cg9", "hg9"), self.container("old-m", "cm9", "hm9"),
-                {**recorded, "phase": "ROLLED_BACK"},
-            )
-        self.assertEqual(raised.exception.code, "GRAVITY_PREDECESSOR_IDENTITY_DRIFT")
+        self.assertEqual(recorded["predecessor_instance"]["gravity"],
+                         {"container_id": "cg5", "compose_config_hash": "hg5"})
+        # A non-mutating rollback records no rollback transcript, because none was written.
+        self.assertNotIn("rollback_diagnostics", recorded)
+        # And the next preflight binds against the containers that are actually live.
+        result = self.identity(
+            self.container("old-g", "cg5", "hg5"), self.container("old-m", "cm5", "hm5"),
+            {**recorded, "phase": "ROLLED_BACK"},
+        )
+        self.assertEqual(result["database"]["state"], "EXACT")
 
     def test_no_op_rollback_carries_forward_an_earlier_recorded_instance(self) -> None:
         earlier = {
@@ -808,6 +837,7 @@ class PredecessorRetryTests(unittest.TestCase):
                 {"phase": "ROLLED_BACK", "predecessor_instance": earlier},
                 intent_result="rollback_intent", failure_result="rollback_failed",
             )
+        # An incomplete observation never displaces a usable record.
         self.assertEqual(recorded["predecessor_instance"], earlier)
 
     def test_preflight_carries_the_validated_instance_so_a_no_op_rollback_stays_retryable(self) -> None:
