@@ -304,7 +304,7 @@ class StateMachineTests(unittest.TestCase):
             mock.patch.object(self.runtime, "_artifact_path") as artifact_path,
             mock.patch.object(self.runtime, "_image_inspect", return_value=None),
             mock.patch.object(self.runtime, "_archive_bytes", return_value=1024),
-            mock.patch.object(self.runtime, "_storage_projection", return_value={"available_bytes": 9, "required_bytes": 8}),
+            mock.patch.object(self.runtime, "_storage_guard", return_value={"available_bytes": 9, "required_bytes": 8, "shortfall_bytes": 0}),
             mock.patch.object(self.runtime, "_load_target", side_effect=[{"Id": "new-g"}, {"Id": "new-m"}]),
             mock.patch.object(self.runtime, "_seal_rollback_reference"),
             mock.patch.object(self.runtime, "_derive_compose_domains", return_value={
@@ -454,6 +454,85 @@ class ReleaseCapacityTests(unittest.TestCase):
         self.assertEqual(raised.exception.details["required_bytes"], 1300)
         self.assertEqual(len(loaded), 1)
 
+    def test_reserve_floor_is_enforced_even_when_both_target_images_are_already_loaded(self) -> None:
+        """A re-preflight that loads nothing must still be refused on a full filesystem."""
+        core = SimpleNamespace(
+            RuntimeFault=RuntimeFault,
+            audit_status=lambda: {"state": "VALID"},
+            now=lambda: "2026-09-09T00:00:00Z",
+            mapped=lambda value: Path(value),
+        )
+        profile = {
+            **self.profile,
+            "predecessor": {"gravity": {"image_id": "old-g"}, "max_scraper": {"image_id": "old-m"}},
+        }
+        profile["artifact_admission"]["receipt_sha256"] = "r" * 64
+        writes: list[dict[str, object]] = []
+        with (
+            mock.patch.object(self.runtime, "_lock", return_value=nullcontext()),
+            mock.patch.object(self.runtime, "_read_state", return_value={"phase": "ROLLED_BACK"}),
+            mock.patch.object(self.runtime, "_pair", return_value=({"image_id": "old-g"}, {"image_id": "old-m"})),
+            mock.patch.object(self.runtime, "_predecessor_identity", return_value={}),
+            mock.patch.object(self.runtime, "_artifact_receipt", return_value={"files": {}}),
+            # Both target images already present -> nothing to load, so nothing is pending.
+            mock.patch.object(self.runtime, "_image_inspect", return_value={"Id": "present"}),
+            mock.patch.object(self.runtime, "_load_target") as load_target,
+            mock.patch.object(self.runtime, "_seal_rollback_reference") as seal,
+            mock.patch.object(self.runtime, "_compose_up") as compose,
+            mock.patch.object(self.runtime, "_write_state", side_effect=lambda _c, value: writes.append(value)),
+            mock.patch.object(self.runtime, "_audit"),
+            self.statvfs(499),
+        ):
+            with self.assertRaises(RuntimeFault) as raised:
+                self.runtime._release_preflight(core, {}, profile, SimpleNamespace(
+                    primitive="release-preflight", resource=None, relative_path=None))
+        self.assertEqual(raised.exception.code, "INSUFFICIENT_RELEASE_STORAGE")
+        # required == the bare reserve when no archive is pending
+        self.assertEqual(raised.exception.details["required_bytes"], 500)
+        self.assertEqual(raised.exception.details["stage"], "preflight")
+        load_target.assert_not_called()
+        seal.assert_not_called()
+        compose.assert_not_called()
+        self.assertEqual(writes, [])
+
+    def test_post_load_reserve_is_enforced_not_merely_reported(self) -> None:
+        """Preflight must never return PREFLIGHTED while carrying a nonzero shortfall."""
+        core = SimpleNamespace(
+            RuntimeFault=RuntimeFault,
+            audit_status=lambda: {"state": "VALID"},
+            now=lambda: "2026-09-09T00:00:00Z",
+            mapped=lambda value: Path(value),
+        )
+        profile = {
+            **self.profile,
+            "predecessor": {"gravity": {"image_id": "old-g"}, "max_scraper": {"image_id": "old-m"}},
+        }
+        profile["artifact_admission"]["receipt_sha256"] = "r" * 64
+        writes: list[dict[str, object]] = []
+        with (
+            mock.patch.object(self.runtime, "_lock", return_value=nullcontext()),
+            mock.patch.object(self.runtime, "_read_state", return_value={"phase": "UNINITIALIZED"}),
+            mock.patch.object(self.runtime, "_pair", return_value=({"image_id": "old-g"}, {"image_id": "old-m"})),
+            mock.patch.object(self.runtime, "_predecessor_identity", return_value={}),
+            mock.patch.object(self.runtime, "_artifact_receipt", return_value={"files": {}}),
+            mock.patch.object(self.runtime, "_image_inspect", return_value=None),
+            mock.patch.object(self.runtime, "_load_target", side_effect=[{"Id": "new-g"}, {"Id": "new-m"}]),
+            mock.patch.object(self.runtime, "_seal_rollback_reference") as seal,
+            mock.patch.object(self.runtime, "_compose_up") as compose,
+            mock.patch.object(self.runtime, "_write_state", side_effect=lambda _c, value: writes.append(value)),
+            mock.patch.object(self.runtime, "_audit"),
+            # first guard admits (needs 3300), post-load measurement falls under the reserve
+            self.statvfs(3300, 499),
+        ):
+            with self.assertRaises(RuntimeFault) as raised:
+                self.runtime._release_preflight(core, {}, profile, SimpleNamespace(
+                    primitive="release-preflight", resource=None, relative_path=None))
+        self.assertEqual(raised.exception.code, "INSUFFICIENT_RELEASE_STORAGE")
+        self.assertEqual(raised.exception.details["stage"], "post_load")
+        seal.assert_not_called()
+        compose.assert_not_called()
+        self.assertEqual(writes, [])
+
     def test_capacity_failure_during_preflight_performs_no_compose_activation(self) -> None:
         writes: list[dict[str, object]] = []
         core = SimpleNamespace(
@@ -483,6 +562,7 @@ class ReleaseCapacityTests(unittest.TestCase):
             mock.patch.object(self.runtime, "_compose_up") as compose,
             mock.patch.object(self.runtime, "_write_state", side_effect=lambda _c, value: writes.append(value)),
             mock.patch.object(self.runtime, "_audit"),
+            self.statvfs(10_000_000),
         ):
             with self.assertRaises(RuntimeFault) as raised:
                 self.runtime._release_preflight(core, {}, profile, SimpleNamespace(
@@ -610,6 +690,47 @@ class PredecessorRetryTests(unittest.TestCase):
                 with self.assertRaises(RuntimeFault) as raised:
                     self.identity(gravity, maximum, state)
                 self.assertEqual(raised.exception.code, expected)
+
+    def test_no_op_rollback_does_not_widen_the_accepted_instance_set(self) -> None:
+        rollback = {
+            "pair_state": "PREDECESSOR_PAIR",
+            "gravity_container_id": "cg9", "gravity_compose_config_hash": "hg9",
+            "max_container_id": "cm9", "max_compose_config_hash": "hm9",
+        }
+        with (
+            mock.patch.object(self.runtime, "_rollback_pair", return_value=(rollback, False)),
+            mock.patch.object(self.runtime, "_write_state"),
+            mock.patch.object(self.runtime, "_audit"),
+        ):
+            _, mutated, recorded = self.runtime._rollback_with_fencing(
+                self.core, {}, self.profile, SimpleNamespace(primitive="rollback"), {"phase": "ACTIVATED"},
+                intent_result="rollback_intent", failure_result="rollback_failed",
+            )
+        self.assertFalse(mutated)
+        self.assertNotIn("predecessor_instance", recorded)
+        with self.assertRaises(RuntimeFault) as raised:
+            self.identity(
+                self.container("old-g", "cg9", "hg9"), self.container("old-m", "cm9", "hm9"),
+                {**recorded, "phase": "ROLLED_BACK"},
+            )
+        self.assertEqual(raised.exception.code, "GRAVITY_PREDECESSOR_IDENTITY_DRIFT")
+
+    def test_no_op_rollback_carries_forward_an_earlier_recorded_instance(self) -> None:
+        earlier = {
+            "gravity": {"container_id": "cg1", "compose_config_hash": "hg1"},
+            "max_scraper": {"container_id": "cm1", "compose_config_hash": "hm1"},
+        }
+        with (
+            mock.patch.object(self.runtime, "_rollback_pair", return_value=({"pair_state": "PREDECESSOR_PAIR"}, False)),
+            mock.patch.object(self.runtime, "_write_state"),
+            mock.patch.object(self.runtime, "_audit"),
+        ):
+            _, _, recorded = self.runtime._rollback_with_fencing(
+                self.core, {}, self.profile, SimpleNamespace(primitive="rollback"),
+                {"phase": "ROLLED_BACK", "predecessor_instance": earlier},
+                intent_result="rollback_intent", failure_result="rollback_failed",
+            )
+        self.assertEqual(recorded["predecessor_instance"], earlier)
 
     def test_rollback_records_the_instance_it_created_so_the_next_preflight_can_bind(self) -> None:
         rollback = {

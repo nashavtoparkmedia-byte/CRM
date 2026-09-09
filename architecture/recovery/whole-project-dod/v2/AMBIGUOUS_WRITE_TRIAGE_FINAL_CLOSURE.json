@@ -12,13 +12,13 @@
     "authorization": "AUTONOMOUS_PRODUCTION_ACCEPTANCE_GOAL_STAGE_C_FINDING_REPAIR",
     "source": {
       "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
-      "predecessor_source_sha256": "6c1d2aca60d285de6891039ee51164908c4cac4fcc46608943d81f8e8668677e",
-      "source_sha256": "03bdd3a282584da8dfaffb93f2277ed9aabf0b4ccfe2922f6bd34d67747392ef"
+      "predecessor_source_sha256": "dc4c604724692843a248ab345b94483ed60647739fd36595f648616b134cdb88",
+      "source_sha256": "f92dea61399f775d68e8a0493bbcf7cfa6937e28f3d7876d48ffb6515ae6492c"
     },
     "fresh_analysis": {
-      "path": "/tmp/claude-0/-opt-codex-work/7a66bf17-fc23-40f6-a204-169602fa4be9/scratchpad/wa/write-analysis.json",
-      "sha256": "a255b2c77bd7e9bf5d9938efca820153b493e7a36b2ee5869e284a80e40cc006",
-      "analysis_sha256": "442ea00fe3252031cff55119344f0c2e661bfa1fa8cd7734b7e9835921cc44c5",
+      "path": "/tmp/claude-0/-opt-codex-work/7a66bf17-fc23-40f6-a204-169602fa4be9/scratchpad/wa2/write-analysis.json",
+      "sha256": "eabc5bce16e525412f0598a3e1c486cf36c3f5b4751223bc3f5c72e964a9dca8",
+      "analysis_sha256": "d0f7bafa6b9e00d2c85730a4a2ec47ce9a17101226779ffe07b1a6d0637d921e",
       "ambiguous_denominator": 44
     },
     "source_context_equivalence": {
@@ -68,7 +68,7 @@
     {
       "record_id": "ba082d04940220ce32fe01b08b2f1ba3228bb7cddf3a009077edd1f2268491d5",
       "site_signature": "ba082d04940220ce32fe01b08b2f1ba3228bb7cddf3a009077edd1f2268491d5",
-      "source_sha256": "03bdd3a282584da8dfaffb93f2277ed9aabf0b4ccfe2922f6bd34d67747392ef",
+      "source_sha256": "f92dea61399f775d68e8a0493bbcf7cfa6937e28f3d7876d48ffb6515ae6492c",
       "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
       "line": 451,
       "column": 12,
@@ -93,7 +93,7 @@
         "pg_control_system"
       ],
       "sql_sha256": "1f4094522bade4b4b67314cab42cc3847f506365a4af368ed704b2ed09c25882",
-      "sql_provenance_sha256": "4fa9a4616d7f29c0363dfea590667851c3326cf7af6640b5c6e8abd0642d1610",
+      "sql_provenance_sha256": "36c08eb5bd11ed7b4422fe82e7ef1c2fc77afeccf463393d09546856f25ed66b",
       "source_context": null,
       "source_technical_module": null,
       "owner_contexts": [],
@@ -118,7 +118,7 @@
     {
       "record_id": "0e6dc117f9fa9bcc96add3f1e71c964eb0dace3b89122ba373acf6891626a8d2",
       "site_signature": "0e6dc117f9fa9bcc96add3f1e71c964eb0dace3b89122ba373acf6891626a8d2",
-      "source_sha256": "03bdd3a282584da8dfaffb93f2277ed9aabf0b4ccfe2922f6bd34d67747392ef",
+      "source_sha256": "f92dea61399f775d68e8a0493bbcf7cfa6937e28f3d7876d48ffb6515ae6492c",
       "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
       "line": 480,
       "column": 14,
@@ -150,7 +150,7 @@
         "to_char"
       ],
       "sql_sha256": "8c50d6b45e37bf522c8130b62c9cf3f18196f4a5dc45fc4a34e54eaab534bfd7",
-      "sql_provenance_sha256": "4231ddf433ffe35b19bc594f124c91c0dc43eeec9c55a16cb185e606bbcd1dff",
+      "sql_provenance_sha256": "abcefffef3c54ed758252047d5eef983b1db3454bfc764db2eacd690d6de71a9",
       "source_context": null,
       "source_technical_module": null,
       "owner_contexts": [],
@@ -175,7 +175,7 @@
     {
       "record_id": "0efd57ebede126929875fd34e1b7f587b5d6a2404e58679067cf5fcc67fafa90",
       "site_signature": "0efd57ebede126929875fd34e1b7f587b5d6a2404e58679067cf5fcc67fafa90",
-      "source_sha256": "03bdd3a282584da8dfaffb93f2277ed9aabf0b4ccfe2922f6bd34d67747392ef",
+      "source_sha256": "f92dea61399f775d68e8a0493bbcf7cfa6937e28f3d7876d48ffb6515ae6492c",
       "file": "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1/templates/crm-activation-profile.py.in",
       "line": 480,
       "column": 14,
@@ -209,7 +209,7 @@
         "to_char"
       ],
       "sql_sha256": "372611314a8810c813c990b019a5defa24cd97404800d3c37c05b3a9ca1362fc",
-      "sql_provenance_sha256": "9af4e07a64d48b3a4d6049e2155fc6bb99c68aab9c53574824c733194bf677b7",
+      "sql_provenance_sha256": "399d8c27dafa8b5c9edcc6fd3fe2b3d241f7215e192d2a777dbac0344b4a8d85",
       "source_context": null,
       "source_technical_module": null,
       "owner_contexts": [],
@@ -2508,8 +2508,8 @@
         "line": 451,
         "column": 12,
         "method": "mixed-script-sql",
-        "source_sha256": "03bdd3a282584da8dfaffb93f2277ed9aabf0b4ccfe2922f6bd34d67747392ef",
-        "sql_provenance_sha256": "4fa9a4616d7f29c0363dfea590667851c3326cf7af6640b5c6e8abd0642d1610"
+        "source_sha256": "f92dea61399f775d68e8a0493bbcf7cfa6937e28f3d7876d48ffb6515ae6492c",
+        "sql_provenance_sha256": "36c08eb5bd11ed7b4422fe82e7ef1c2fc77afeccf463393d09546856f25ed66b"
       },
       "resolved_target": {
         "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
@@ -2533,8 +2533,8 @@
         "analysis_site_signature:ba082d04940220ce32fe01b08b2f1ba3228bb7cddf3a009077edd1f2268491d5",
         "sql_sha256:1f4094522bade4b4b67314cab42cc3847f506365a4af368ed704b2ed09c25882",
         "Exact SELECT projection and independently enumerated read-only functions contain no analyzed mutation operation.",
-        "source_sha256:03bdd3a282584da8dfaffb93f2277ed9aabf0b4ccfe2922f6bd34d67747392ef",
-        "sql_provenance_sha256:4fa9a4616d7f29c0363dfea590667851c3326cf7af6640b5c6e8abd0642d1610"
+        "source_sha256:f92dea61399f775d68e8a0493bbcf7cfa6937e28f3d7876d48ffb6515ae6492c",
+        "sql_provenance_sha256:36c08eb5bd11ed7b4422fe82e7ef1c2fc77afeccf463393d09546856f25ed66b"
       ]
     },
     {
@@ -2545,8 +2545,8 @@
         "line": 480,
         "column": 14,
         "method": "mixed-script-sql",
-        "source_sha256": "03bdd3a282584da8dfaffb93f2277ed9aabf0b4ccfe2922f6bd34d67747392ef",
-        "sql_provenance_sha256": "4231ddf433ffe35b19bc594f124c91c0dc43eeec9c55a16cb185e606bbcd1dff"
+        "source_sha256": "f92dea61399f775d68e8a0493bbcf7cfa6937e28f3d7876d48ffb6515ae6492c",
+        "sql_provenance_sha256": "abcefffef3c54ed758252047d5eef983b1db3454bfc764db2eacd690d6de71a9"
       },
       "resolved_target": {
         "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
@@ -2577,8 +2577,8 @@
         "analysis_site_signature:0e6dc117f9fa9bcc96add3f1e71c964eb0dace3b89122ba373acf6891626a8d2",
         "sql_sha256:8c50d6b45e37bf522c8130b62c9cf3f18196f4a5dc45fc4a34e54eaab534bfd7",
         "Exact SELECT projection and independently enumerated read-only functions contain no analyzed mutation operation.",
-        "source_sha256:03bdd3a282584da8dfaffb93f2277ed9aabf0b4ccfe2922f6bd34d67747392ef",
-        "sql_provenance_sha256:4231ddf433ffe35b19bc594f124c91c0dc43eeec9c55a16cb185e606bbcd1dff"
+        "source_sha256:f92dea61399f775d68e8a0493bbcf7cfa6937e28f3d7876d48ffb6515ae6492c",
+        "sql_provenance_sha256:abcefffef3c54ed758252047d5eef983b1db3454bfc764db2eacd690d6de71a9"
       ]
     },
     {
@@ -2589,8 +2589,8 @@
         "line": 480,
         "column": 14,
         "method": "mixed-script-sql",
-        "source_sha256": "03bdd3a282584da8dfaffb93f2277ed9aabf0b4ccfe2922f6bd34d67747392ef",
-        "sql_provenance_sha256": "9af4e07a64d48b3a4d6049e2155fc6bb99c68aab9c53574824c733194bf677b7"
+        "source_sha256": "f92dea61399f775d68e8a0493bbcf7cfa6937e28f3d7876d48ffb6515ae6492c",
+        "sql_provenance_sha256": "399d8c27dafa8b5c9edcc6fd3fe2b3d241f7215e192d2a777dbac0344b4a8d85"
       },
       "resolved_target": {
         "kind": "STATIC_MIXED_SCRIPT_SQL_READ",
@@ -2623,8 +2623,8 @@
         "analysis_site_signature:0efd57ebede126929875fd34e1b7f587b5d6a2404e58679067cf5fcc67fafa90",
         "sql_sha256:372611314a8810c813c990b019a5defa24cd97404800d3c37c05b3a9ca1362fc",
         "Exact SELECT projection and independently enumerated read-only functions contain no analyzed mutation operation.",
-        "source_sha256:03bdd3a282584da8dfaffb93f2277ed9aabf0b4ccfe2922f6bd34d67747392ef",
-        "sql_provenance_sha256:9af4e07a64d48b3a4d6049e2155fc6bb99c68aab9c53574824c733194bf677b7"
+        "source_sha256:f92dea61399f775d68e8a0493bbcf7cfa6937e28f3d7876d48ffb6515ae6492c",
+        "sql_provenance_sha256:399d8c27dafa8b5c9edcc6fd3fe2b3d241f7215e192d2a777dbac0344b4a8d85"
       ]
     },
     {

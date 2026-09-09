@@ -1073,11 +1073,21 @@ def _release_preflight(core: Any, policy: dict[str, Any], profile: dict[str, Any
             if _image_inspect(core, TARGET_MAX, required=False) is None
             else []
         )
+        gravity_pending = (
+            [_archive_bytes(core, profile, gravity_archive)]
+            if _image_inspect(core, TARGET_GRAVITY, required=False) is None
+            else []
+        )
+        # The reserve is a floor on the release as a whole, not only on the loads: activation still
+        # creates containers, writes layers and logs, and may have to run a rollback transaction.
+        # Guard unconditionally here so a preflight that loads nothing is still refused on a full
+        # filesystem, then again per load, then once more against the observed post-load state.
+        _storage_guard(core, profile, [*gravity_pending, *max_pending], "preflight")
         target_gravity = _load_target(
             core, profile, "gravity", gravity_archive, TARGET_GRAVITY, remaining_bytes=max_pending
         )
         target_max = _load_target(core, profile, "max", max_archive, TARGET_MAX)
-        storage = _storage_projection(core, profile, [])
+        storage = _storage_guard(core, profile, [], "post_load")
         _seal_rollback_reference(core, profile["predecessor"]["gravity"]["image_id"], ROLLBACK_GRAVITY, "gravity")
         _seal_rollback_reference(core, profile["predecessor"]["max_scraper"]["image_id"], ROLLBACK_MAX, "max")
         domains = _derive_compose_domains(core, profile)
@@ -1148,11 +1158,12 @@ def _rollback_with_fencing(
         _write_state(core, failed_state)
         _audit(core, invocation, intent_state, failure_result, failed_state)
         raise
-    recorded_state = {
-        **intent_state,
-        # The rollback recreated the predecessor containers. Record the ephemeral identity it
-        # produced so a fresh preflight can re-establish against the same authorised pair.
-        "predecessor_instance": {
+    recorded_state = {**intent_state}
+    if mutated:
+        # Only a rollback that actually recreated the containers may widen the accepted ephemeral
+        # identity, and only to the instance this runtime just observed. A no-op rollback records
+        # nothing and carries forward whatever instance an earlier fenced rollback registered.
+        recorded_state["predecessor_instance"] = {
             "gravity": {
                 "container_id": rollback.get("gravity_container_id"),
                 "compose_config_hash": rollback.get("gravity_compose_config_hash"),
@@ -1161,10 +1172,8 @@ def _rollback_with_fencing(
                 "container_id": rollback.get("max_container_id"),
                 "compose_config_hash": rollback.get("max_compose_config_hash"),
             },
-        },
-        "predecessor_instance_at": core.now(),
-    }
-    if mutated:
+        }
+        recorded_state["predecessor_instance_at"] = core.now()
         recorded_state["rollback_diagnostics"] = _log_evidence(core, ROLLBACK_COMPOSE_LOG, core.now())
     return rollback, mutated, recorded_state
 
