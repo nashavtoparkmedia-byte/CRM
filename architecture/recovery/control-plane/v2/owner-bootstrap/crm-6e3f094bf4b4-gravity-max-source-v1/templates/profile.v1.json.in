@@ -82,6 +82,7 @@
   },
   "limits": {
     "minimum_free_bytes": 8589934592,
+    "image_load_expansion_permille": 2400,
     "image_load_timeout_seconds": 3600,
     "activation_timeout_seconds": 300,
     "health_timeout_seconds": 180

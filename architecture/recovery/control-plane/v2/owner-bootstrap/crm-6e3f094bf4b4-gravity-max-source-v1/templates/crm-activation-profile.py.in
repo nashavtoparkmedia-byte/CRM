@@ -24,7 +24,9 @@ STATE_PATH = STATE_DIR + "/state.v1.json"
 LOCK_PATH = STATE_DIR + "/operation.lock"
 ACTIVATE_OVERLAY = STATE_DIR + "/activate.compose.yml"
 ROLLBACK_OVERLAY = STATE_DIR + "/rollback.compose.yml"
-COMPOSE_LOG = STATE_DIR + "/compose.log"
+ACTIVATE_COMPOSE_LOG = STATE_DIR + "/activate.compose.log"
+ROLLBACK_COMPOSE_LOG = STATE_DIR + "/rollback.compose.log"
+COMPOSE_LOG_MAXIMUM = 4 * 1024 * 1024
 DOCKER = "/usr/bin/docker"
 SHA256 = re.compile(r"[0-9a-f]{64}")
 IMAGE_ID = re.compile(r"sha256:[0-9a-f]{64}")
@@ -356,11 +358,27 @@ def _validate_target_image(core: Any, record: dict[str, Any], reference: str, co
     return image
 
 
-def _load_target(core: Any, profile: dict[str, Any], component: str, archive_name: str, reference: str) -> dict[str, Any]:
+def _load_target(
+    core: Any,
+    profile: dict[str, Any],
+    component: str,
+    archive_name: str,
+    reference: str,
+    *,
+    remaining_bytes: list[int] | None = None,
+) -> dict[str, Any]:
     target_record = profile["target"]["gravity" if component == "gravity" else "max_scraper"]
     existing = _image_inspect(core, reference, required=False)
     if existing is not None:
         return _validate_target_image(core, target_record, reference, component)
+    # Re-measure immediately before every load so an intervening consumer of the shared
+    # filesystem cannot invalidate an earlier check, and refuse before the load starts.
+    _storage_guard(
+        core,
+        profile,
+        [_archive_bytes(core, profile, archive_name), *(remaining_bytes or [])],
+        f"{component}_image_load",
+    )
     archive = _artifact_path(core, profile, archive_name, hash_content=True)
     fd = os.open(archive, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
     try:
@@ -745,32 +763,107 @@ def _derive_compose_domains(core: Any, profile: dict[str, Any]) -> dict[str, str
     }
 
 
-def _storage_guard(core: Any, profile: dict[str, Any]) -> dict[str, int]:
+def _archive_bytes(core: Any, profile: dict[str, Any], name: str) -> int:
+    files = profile["artifact_admission"].get("files")
+    record = files.get(name) if isinstance(files, dict) else None
+    size = record.get("bytes") if isinstance(record, dict) else None
+    if isinstance(size, bool) or not isinstance(size, int) or size <= 0:
+        raise core.RuntimeFault("ARTIFACT_PROFILE_INVALID", 78)
+    return size
+
+
+def _storage_projection(core: Any, profile: dict[str, Any], pending: list[int]) -> dict[str, int]:
+    limits = profile["limits"]
+    permille = limits.get("image_load_expansion_permille")
+    reserve = limits.get("minimum_free_bytes")
+    if isinstance(permille, bool) or not isinstance(permille, int) or permille < 1000:
+        raise core.RuntimeFault("STORAGE_LIMITS_INVALID", 78)
+    if isinstance(reserve, bool) or not isinstance(reserve, int) or reserve < 0:
+        raise core.RuntimeFault("STORAGE_LIMITS_INVALID", 78)
+    archive_bytes = sum(pending)
+    # A `docker image load` on a containerd snapshotter writes every new layer twice:
+    # once as a content-store blob and once as an unpacked snapshot. The permille factor
+    # converts admitted archive bytes into that on-disk cost plus filesystem overhead.
+    projected = (archive_bytes * permille + 999) // 1000
     filesystem = os.statvfs(core.mapped("/var/lib/yoko-privileged-runtime"))
     available = filesystem.f_bavail * filesystem.f_frsize
-    minimum = int(profile["limits"]["minimum_free_bytes"])
-    if available < minimum:
-        raise core.RuntimeFault("INSUFFICIENT_RELEASE_STORAGE", 75, {"available_bytes": available, "minimum_free_bytes": minimum})
-    return {"available_bytes": available, "minimum_free_bytes": minimum}
+    required = projected + reserve
+    return {
+        "available_bytes": available,
+        "pending_archive_bytes": archive_bytes,
+        "image_load_expansion_permille": permille,
+        "projected_load_bytes": projected,
+        "storage_reserve_bytes": reserve,
+        "required_bytes": required,
+        "projected_free_bytes": available - projected,
+        "shortfall_bytes": max(0, required - available),
+    }
 
 
-def _predecessor_identity(core: Any, policy: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any]:
+def _storage_guard(core: Any, profile: dict[str, Any], pending: list[int], stage: str) -> dict[str, int]:
+    projection = {**_storage_projection(core, profile, pending), "stage": stage}
+    if projection["shortfall_bytes"] > 0:
+        raise core.RuntimeFault("INSUFFICIENT_RELEASE_STORAGE", 75, projection)
+    return projection
+
+
+def _container_instance(current: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "container_id": current.get("container_id"),
+        "compose_config_hash": current.get("compose_labels", {}).get("com.docker.compose.config-hash"),
+    }
+
+
+def _accepted_instances(profile: dict[str, Any], state: dict[str, Any], key: str) -> list[dict[str, Any]]:
+    """Ephemeral container identities this runtime is allowed to observe for the predecessor pair.
+
+    The sealed snapshot is always accepted. A rollback this runtime performed itself recreates
+    the containers, so the instance it durably recorded at that fenced rollback is accepted too.
+    Nothing else is: the immutable predecessor identity (image, volume, semantics, database,
+    unrelated services) is still checked strictly against the sealed profile by the caller.
+    """
+    sealed = profile["predecessor"][key]
+    accepted = [
+        {
+            "container_id": sealed.get("container_id"),
+            "compose_config_hash": sealed.get("compose_config_hash"),
+        }
+    ]
+    recorded = state.get("predecessor_instance")
+    if state.get("phase") == "ROLLED_BACK" and isinstance(recorded, dict):
+        entry = recorded.get(key)
+        if (
+            isinstance(entry, dict)
+            and isinstance(entry.get("container_id"), str)
+            and isinstance(entry.get("compose_config_hash"), str)
+        ):
+            accepted.append(
+                {
+                    "container_id": entry["container_id"],
+                    "compose_config_hash": entry["compose_config_hash"],
+                }
+            )
+    return accepted
+
+
+def _predecessor_identity(
+    core: Any, policy: dict[str, Any], profile: dict[str, Any], state: dict[str, Any]
+) -> dict[str, Any]:
     gravity, maximum = _pair(core, policy, profile)
     kind, vector = _classify(profile, gravity, maximum)
     predecessor = profile["predecessor"]
     if kind != "PREDECESSOR_PAIR":
         raise core.RuntimeFault("PREDECESSOR_PAIR_REQUIRED", 74, {"pair_state": kind, "vector": list(vector)})
-    for current, expected, name in (
-        (gravity, predecessor["gravity"], "GRAVITY"),
-        (maximum, predecessor["max_scraper"], "MAX"),
+    for current, expected, name, key in (
+        (gravity, predecessor["gravity"], "GRAVITY", "gravity"),
+        (maximum, predecessor["max_scraper"], "MAX", "max_scraper"),
     ):
         if (
-            current.get("container_id") != expected.get("container_id")
-            or current.get("image_id") != expected.get("image_id")
-            or current.get("compose_labels", {}).get("com.docker.compose.config-hash") != expected.get("compose_config_hash")
+            current.get("image_id") != expected.get("image_id")
             or current.get("running") is not True
             or current.get("health") != "healthy"
             or current.get("restart_count") != 0
+            or _container_instance(current) not in _accepted_instances(profile, state, key)
         ):
             raise core.RuntimeFault(f"{name}_PREDECESSOR_IDENTITY_DRIFT", 74)
     _max_volume_exact(core, profile, maximum)
@@ -790,10 +883,34 @@ def _predecessor_identity(core: Any, policy: dict[str, Any], profile: dict[str, 
     }
 
 
+def _compose_log_path(activate: bool) -> str:
+    return ACTIVATE_COMPOSE_LOG if activate else ROLLBACK_COMPOSE_LOG
+
+
+def _log_evidence(core: Any, path: str, captured_at: str) -> dict[str, Any]:
+    """Bounded, secret-free descriptor of one Compose transaction log.
+
+    Only the path, byte length and digest are recorded in state; the Compose output itself
+    stays in its own fixed 0600 file. Activation and rollback use separate files, so an
+    automatic rollback can no longer overwrite the evidence of the activation that failed.
+    """
+    evidence: dict[str, Any] = {"path": path, "captured_at": captured_at}
+    try:
+        target = core.mapped(path)
+        evidence["bytes"] = os.stat(target).st_size
+        evidence["sha256"] = _sha_file(target, COMPOSE_LOG_MAXIMUM)
+    except Exception:
+        # Diagnostics are best-effort by construction: capturing evidence must never be able
+        # to abort a durable fencing write or mask the fault that is being recorded.
+        evidence["bytes"] = None
+        evidence["sha256"] = None
+    return evidence
+
+
 def _compose_up(core: Any, profile: dict[str, Any], state: dict[str, Any], overlay: str, *, activate: bool) -> None:
     _validate_compose_inputs(core, profile, state)
     _validate_projection(core, profile, overlay, activate=activate)
-    log = core.mapped(COMPOSE_LOG)
+    log = core.mapped(_compose_log_path(activate))
     fd = os.open(log, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600)
     try:
         deployment = profile["deployment"]
@@ -862,13 +979,45 @@ def _postcheck(core: Any, policy: dict[str, Any], profile: dict[str, Any], state
         "vector": list(vector),
         "gravity_container_id": gravity["container_id"],
         "gravity_image_id": gravity["image_id"],
+        "gravity_compose_config_hash": actual_hashes[0],
         "max_container_id": maximum["container_id"],
         "max_image_id": maximum["image_id"],
+        "max_compose_config_hash": actual_hashes[1],
         "max_volume_preserved": True,
         "database": database,
         "unrelated_services_unchanged": True,
         "healthy": True,
     }
+
+
+def _validate_rollback_reference(core: Any, profile: dict[str, Any], component: str, reference: str) -> dict[str, Any]:
+    """Resolve the operational rollback tag and bind it to the authorised predecessor image id.
+
+    The tag is mutable and prunable, so it is never trusted on its own: it is resolved and
+    compared to the sealed predecessor image id immediately before the rollback transaction.
+    A missing, pruned or drifted reference fails closed before any Compose mutation, and no
+    registry fallback is introduced -- `--pull never` semantics are unchanged.
+    """
+    record = profile["predecessor"]["gravity" if component == "gravity" else "max_scraper"]
+    expected = record.get("image_id")
+    if not isinstance(expected, str) or not expected:
+        raise core.RuntimeFault("ROLLBACK_PREDECESSOR_PROFILE_INVALID", 78)
+    image = _image_inspect(core, reference, required=False)
+    if image is None:
+        raise core.RuntimeFault(
+            f"{component.upper()}_ROLLBACK_IMAGE_MISSING", 74, {"reference": reference, "expected_image_id": expected}
+        )
+    if image.get("Id") != expected:
+        raise core.RuntimeFault(
+            f"{component.upper()}_ROLLBACK_REFERENCE_DRIFT", 74, {"reference": reference, "expected_image_id": expected}
+        )
+    return image
+
+
+def _assert_rollback_material(core: Any, profile: dict[str, Any]) -> dict[str, str]:
+    gravity = _validate_rollback_reference(core, profile, "gravity", ROLLBACK_GRAVITY)
+    maximum = _validate_rollback_reference(core, profile, "max", ROLLBACK_MAX)
+    return {"gravity_image_id": gravity["Id"], "max_image_id": maximum["Id"]}
 
 
 def _rollback_pair(core: Any, policy: dict[str, Any], profile: dict[str, Any], state: dict[str, Any]) -> tuple[dict[str, Any], bool]:
@@ -878,6 +1027,7 @@ def _rollback_pair(core: Any, policy: dict[str, Any], profile: dict[str, Any], s
         raise core.RuntimeFault("UNKNOWN_PAIR_FAIL_CLOSED", 74, {"vector": list(vector)})
     mutated = kind != "PREDECESSOR_PAIR"
     if mutated:
+        _assert_rollback_material(core, profile)
         _compose_up(core, profile, state, ROLLBACK_OVERLAY, activate=False)
     return _postcheck(core, policy, profile, state, "PREDECESSOR_PAIR"), mutated
 
@@ -912,13 +1062,22 @@ def _release_preflight(core: Any, policy: dict[str, Any], profile: dict[str, Any
             return {"profile_id": PROFILE_ID, "status": "MIXED_STATE_ROLLED_BACK", "rollback": rollback, "production_mutated": mutated}
         if pair_state != "PREDECESSOR_PAIR":
             raise core.RuntimeFault("PREDECESSOR_PAIR_REQUIRED", 74)
-        identity = _predecessor_identity(core, policy, profile)
+        identity = _predecessor_identity(core, policy, profile, state)
         receipt = _artifact_receipt(core, profile)
         for name in sorted(receipt["files"]):
             _artifact_path(core, profile, name, hash_content=True)
-        storage = _storage_guard(core, profile)
-        target_gravity = _load_target(core, profile, "gravity", "gravity-image.docker.tar", TARGET_GRAVITY)
-        target_max = _load_target(core, profile, "max", "max-scraper-image.docker.tar", TARGET_MAX)
+        gravity_archive = "gravity-image.docker.tar"
+        max_archive = "max-scraper-image.docker.tar"
+        max_pending = (
+            [_archive_bytes(core, profile, max_archive)]
+            if _image_inspect(core, TARGET_MAX, required=False) is None
+            else []
+        )
+        target_gravity = _load_target(
+            core, profile, "gravity", gravity_archive, TARGET_GRAVITY, remaining_bytes=max_pending
+        )
+        target_max = _load_target(core, profile, "max", max_archive, TARGET_MAX)
+        storage = _storage_projection(core, profile, [])
         _seal_rollback_reference(core, profile["predecessor"]["gravity"]["image_id"], ROLLBACK_GRAVITY, "gravity")
         _seal_rollback_reference(core, profile["predecessor"]["max_scraper"]["image_id"], ROLLBACK_MAX, "max")
         domains = _derive_compose_domains(core, profile)
@@ -984,11 +1143,30 @@ def _rollback_with_fencing(
             "phase": "ROLLBACK_FAILED",
             "rollback_failure": _activation_failure(core, failure),
             "rollback_failed_at": core.now(),
+            "rollback_diagnostics": _log_evidence(core, ROLLBACK_COMPOSE_LOG, core.now()),
         }
         _write_state(core, failed_state)
         _audit(core, invocation, intent_state, failure_result, failed_state)
         raise
-    return rollback, mutated, intent_state
+    recorded_state = {
+        **intent_state,
+        # The rollback recreated the predecessor containers. Record the ephemeral identity it
+        # produced so a fresh preflight can re-establish against the same authorised pair.
+        "predecessor_instance": {
+            "gravity": {
+                "container_id": rollback.get("gravity_container_id"),
+                "compose_config_hash": rollback.get("gravity_compose_config_hash"),
+            },
+            "max_scraper": {
+                "container_id": rollback.get("max_container_id"),
+                "compose_config_hash": rollback.get("max_compose_config_hash"),
+            },
+        },
+        "predecessor_instance_at": core.now(),
+    }
+    if mutated:
+        recorded_state["rollback_diagnostics"] = _log_evidence(core, ROLLBACK_COMPOSE_LOG, core.now())
+    return rollback, mutated, recorded_state
 
 
 def _release_activate(core: Any, policy: dict[str, Any], profile: dict[str, Any], invocation: Any) -> dict[str, Any]:
@@ -1073,6 +1251,9 @@ def _release_activate(core: Any, policy: dict[str, Any], profile: dict[str, Any]
             return {"profile_id": PROFILE_ID, "status": "ACTIVATED", "postcheck": post, "production_mutated": True, "automatic_rollback": False}
         except Exception as failure:
             activation = _activation_failure(core, failure)
+            # Captured before any rollback runs: the rollback writes its own separate log, so
+            # the activation transcript that explains this failure survives the recovery.
+            activation_diagnostics = _log_evidence(core, ACTIVATE_COMPOSE_LOG, core.now())
             current_gravity, current_max = _pair(core, policy, profile)
             current_kind, current_vector = _classify(profile, current_gravity, current_max)
             failed_state = {
@@ -1080,6 +1261,7 @@ def _release_activate(core: Any, policy: dict[str, Any], profile: dict[str, Any]
                 "phase": "ACTIVATION_FAILED",
                 "activation_failure": activation,
                 "activation_failed_at": core.now(),
+                "activation_diagnostics": activation_diagnostics,
             }
             _write_state(core, failed_state)
             if current_kind == "UNKNOWN":
