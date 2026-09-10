@@ -229,7 +229,7 @@ class IndependentReviewBindingTests(unittest.TestCase):
         value = {
             "schema": "yoko.crm.coordinated-runtime-independent-review.v1",
             "profile_id": "crm-6e3f094bf4b4-gravity-max-source-v1",
-            "package_version": "2.0.0-15",
+            "package_version": "2.0.0-16",
             "candidate_commit": self.COMMIT,
             "candidate_tree": self.TREE,
             "reviews": [

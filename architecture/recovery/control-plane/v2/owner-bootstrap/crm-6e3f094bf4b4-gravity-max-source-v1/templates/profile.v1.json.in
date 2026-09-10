@@ -3,7 +3,7 @@
   "profile_id": "crm-6e3f094bf4b4-gravity-max-source-v1",
   "host": "jvxthcorvm",
   "runtime_abi": "2.0.0",
-  "package_version": "2.0.0-15",
+  "package_version": "2.0.0-16",
   "accepted_application": {
     "commit": "6e3f094bf4b42c1400c705843ab107dacd6d1cf8",
     "tree": "8d3e507cda69a2862db946b2e34c5ea329c425ac",

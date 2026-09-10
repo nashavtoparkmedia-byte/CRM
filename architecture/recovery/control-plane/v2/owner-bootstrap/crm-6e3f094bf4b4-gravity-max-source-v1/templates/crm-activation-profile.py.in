@@ -38,6 +38,16 @@ TARGET_GRAVITY = "yoko/crm-gravity-mvp:6e3f094bf4b4-64f3f529e5e31368c55a40a91157
 TARGET_MAX = "yoko/crm-max-scraper:6e3f094bf4b4-64f3f529e5e31368c55a40a91157db7e740e5ed1-coordinated-v1"
 ROLLBACK_GRAVITY = "yoko/crm-gravity-mvp:rollback-5531c67e99b572356f897246b8c845ab4f9b232d"
 ROLLBACK_MAX = "yoko/crm-max-scraper:rollback-87835969ed6335a99d50e1cc2eaf70aa33fdbaf9"
+# Manifest-level descriptor media types. Docker's containerd image store reports the digest of
+# the manifest or index it stored as the image id and echoes that same digest back in Descriptor;
+# the classic graph driver reports the config blob digest and emits no Descriptor at all. This set
+# only recognises the shape of that descriptor. It never widens which identity is accepted.
+MANIFEST_MEDIA_TYPES = frozenset({
+    "application/vnd.oci.image.index.v1+json",
+    "application/vnd.oci.image.manifest.v1+json",
+    "application/vnd.docker.distribution.manifest.list.v2+json",
+    "application/vnd.docker.distribution.manifest.v2+json",
+})
 
 
 def _canonical(value: Any) -> bytes:
@@ -96,7 +106,7 @@ def _load_profile(core: Any) -> dict[str, Any]:
         or profile["profile_id"] != PROFILE_ID
         or profile["host"] != "jvxthcorvm"
         or profile["runtime_abi"] != "2.0.0"
-        or profile["package_version"] != "2.0.0-15"
+        or profile["package_version"] != "2.0.0-16"
         or profile["accepted_application"] != {
             "commit": "6e3f094bf4b42c1400c705843ab107dacd6d1cf8",
             "tree": "8d3e507cda69a2862db946b2e34c5ea329c425ac",
@@ -330,12 +340,51 @@ def _artifact_path(core: Any, profile: dict[str, Any], name: str, *, hash_conten
     return target
 
 
+def _sealed_image_identity(core: Any, image: dict[str, Any], record: dict[str, Any], component: str) -> str:
+    """Return the single sealed identity this engine's image store is expected to report.
+
+    One image artifact has two exact content addresses: the digest of its config blob, which the
+    classic graph driver reports as the image id, and the digest of the OCI manifest or index that
+    holds it, which Docker's containerd image store reports instead. The manifest commits to the
+    config, which commits to the layers, so both name the same bytes and neither is a mutable tag
+    or a registry lookup. This profile seals both for each component, so the engine's own
+    descriptor decides which one applies rather than the caller.
+
+    Exactly one identity is ever returned. The containerd form is chosen only when the engine
+    itself corroborates it, by echoing a manifest-level descriptor whose digest is the image id it
+    just reported. Anything else falls back to the config digest, which is the stricter original
+    behaviour, so an absent, malformed or self-contradictory descriptor cannot widen what passes.
+    A component whose profile does not seal both identities is refused outright.
+    """
+    classic = record.get("image_id")
+    containerd = record.get("containerd_image_id")
+    if (
+        not isinstance(classic, str)
+        or not isinstance(containerd, str)
+        or IMAGE_ID.fullmatch(classic) is None
+        or IMAGE_ID.fullmatch(containerd) is None
+        or classic == containerd
+    ):
+        raise core.RuntimeFault(f"{component.upper()}_TARGET_IMAGE_IDENTITY_UNSEALED", 74)
+    descriptor = image.get("Descriptor")
+    observed = image.get("Id")
+    if (
+        isinstance(descriptor, dict)
+        and descriptor.get("mediaType") in MANIFEST_MEDIA_TYPES
+        and isinstance(descriptor.get("digest"), str)
+        and IMAGE_ID.fullmatch(descriptor["digest"]) is not None
+        and descriptor["digest"] == observed
+    ):
+        return containerd
+    return classic
+
+
 def _validate_target_image(core: Any, record: dict[str, Any], reference: str, component: str) -> dict[str, Any]:
     image = _image_inspect(core, reference)
     config = image.get("Config") if isinstance(image, dict) else None
     labels = config.get("Labels") if isinstance(config, dict) else None
     if (
-        image.get("Id") != record.get("image_id")
+        image.get("Id") != _sealed_image_identity(core, image, record, component)
         or image.get("Os") != "linux"
         or image.get("Architecture") != "amd64"
         or not isinstance(labels, dict)

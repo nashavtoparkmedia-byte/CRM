@@ -1,6 +1,6 @@
 # Pre-seal status
 
-Runtime `2.0.0-15` coordinated Gravity + MAX builder is source-only and does
+Runtime `2.0.0-16` coordinated Gravity + MAX builder is source-only and does
 not itself authorize installation or production activation.
 
 Required before installation:

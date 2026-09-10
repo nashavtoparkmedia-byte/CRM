@@ -1,4 +1,4 @@
-# Runtime 2.0.0-15 coordinated Gravity + MAX release builder
+# Runtime 2.0.0-16 coordinated Gravity + MAX release builder
 
 This directory is the content-specific Stage B authority for exactly one
 coordinated application pair:
