@@ -54,6 +54,16 @@ export type YandexTripSyncResultV1 = {
 
 type ParkConnection = { clid: string; apiKey: string; parkId: string; name?: string | null }
 
+/**
+ * Only the order fields this service reads. The Fleet API returns many more;
+ * every one here is optional because the payload is not validated.
+ */
+type YandexOrderV1 = {
+    status?: string
+    driver_profile?: { id?: string }
+    booked_at?: string
+}
+
 export class YandexFleetService {
     /**
      * Fetch completed-and-cancelled orders for one park connection over the window.
@@ -64,7 +74,7 @@ export class YandexFleetService {
         connection: ParkConnection,
         startDate: Date,
         endDate: Date,
-    ): Promise<{ orders: any[]; truncated: boolean }> {
+    ): Promise<{ orders: YandexOrderV1[]; truncated: boolean }> {
         const allOrders: any[] = []
         let cursor: string | undefined
         let iter = 0
@@ -191,7 +201,7 @@ export class YandexFleetService {
         const truncatedParks: YandexTripSyncFailureV1[] = []
 
         for (const connection of connections) {
-            let parkOrders: any[]
+            let parkOrders: YandexOrderV1[]
             try {
                 const fetched = await this.fetchParkOrders(connection, startDate, endDate)
                 parkOrders = fetched.orders
@@ -202,8 +212,8 @@ export class YandexFleetService {
                         message: `window truncated at the ${MAX_PAGES_PER_CONNECTION}-page bound after ${fetched.orders.length} orders`,
                     })
                 }
-            } catch (err: any) {
-                const message = err?.message || String(err)
+            } catch (err) {
+                const message = (err as { message?: string } | undefined)?.message || String(err)
                 console.error(`[YandexFleetService] Park ${connection.parkId} failed, continuing with remaining parks:`, message)
                 failures.push({ parkId: connection.parkId, name: connection.name ?? null, message })
                 continue
