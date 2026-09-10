@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { listUserIdentitiesV1 as getUsers } from '@/modules/identity-access/public/v1/user-directory'
+import { readControlledRealCallDispatchObservation } from '@/modules/calling/application/controlled-real-ai-call'
 
 /**
  * GET /api/calls/[id]
@@ -14,8 +15,10 @@ import { listUserIdentitiesV1 as getUsers } from '@/modules/identity-access/publ
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
     try {
-        const call = await prisma.call.findFirst({
-            where: { id, isSimulation: false },
+        // A known simulation id may be inspected by the detail client, while
+        // collection/statistics surfaces continue to exclude simulations.
+        const call = await prisma.call.findUnique({
+            where: { id },
             include: {
                 driver: { select: { id: true, fullName: true, phone: true } },
                 contact: { select: { id: true, displayName: true } },
@@ -31,8 +34,17 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
             if (u) managerName = `${u.firstName} ${u.lastName}`.trim()
         }
 
-        return NextResponse.json({ call: { ...call, managerName } })
-    } catch (err: any) {
-        return NextResponse.json({ error: err.message }, { status: 500 })
+        const dispatch = readControlledRealCallDispatchObservation(call.metadata)
+        return NextResponse.json({
+            call: {
+                ...call,
+                managerName,
+                controlledDispatchState: dispatch.state,
+                controlledDispatchFailureCode: dispatch.failureCode,
+            },
+        })
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'call_lookup_failed'
+        return NextResponse.json({ error: message }, { status: 500 })
     }
 }

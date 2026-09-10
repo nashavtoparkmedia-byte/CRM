@@ -25,7 +25,7 @@ import { POST as finalizeCall } from '@/app/api/ai-calls/sessions/[id]/finalize/
 
 const postgresProof = process.env.YOKO_AI_CALL_POSTGRES_PROOF === '1' ? describe : describe.skip
 const PREFIX = 'ai-call-runtime-proof-v1'
-const BRIDGE_TOKEN = 'R'.repeat(32)
+const BRIDGE_TOKEN = 'QrStUvWxYzAbCdEfGhIjKlMnOp012345'
 // Keep the test clock ahead of database CURRENT_TIMESTAMP so freshly inserted
 // outbox rows are deterministically due even when this proof runs much later.
 const BASE = new Date(Date.now() + 5_000)

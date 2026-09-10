@@ -13,11 +13,15 @@
 
 import net from 'node:net'
 
-const FS_ESL_HOST = process.env.FS_ESL_HOST ?? '127.0.0.1'
-const FS_ESL_PORT = Number(process.env.FS_ESL_PORT ?? 8021)
-const FS_ESL_PASSWORD = process.env.FS_ESL_PASSWORD ?? 'ClueCon'
+interface EslConnectionOptions {
+    host: string
+    port: number
+    password: string
+}
 
 interface OriginateOpts {
+    /** Explicit, pre-validated connection settings. Live calls have no defaults. */
+    connection: EslConnectionOptions
     /** Pre-allocated UUID for the new channel; bridge resolves the call by this. */
     fsUuid: string
     /** Dial string, e.g. "user/103" or "sofia/external/+79193654871@gateway" */
@@ -32,7 +36,37 @@ interface OriginateOpts {
     timeoutMs?: number
 }
 
+export class EslOriginateRejectedError extends Error {
+    constructor() {
+        super('FreeSWITCH rejected the originate command')
+        this.name = 'EslOriginateRejectedError'
+    }
+}
+
+export class EslOriginateUnavailableError extends Error {
+    constructor(message: string) {
+        super(message)
+        this.name = 'EslOriginateUnavailableError'
+    }
+}
+
+export class EslOriginateOutcomeUnknownError extends Error {
+    constructor(message: string) {
+        super(message)
+        this.name = 'EslOriginateOutcomeUnknownError'
+    }
+}
+
+export function requireSuccessfulOriginateResponse(body: string): string {
+    const response = body.trim()
+    if (!response.startsWith('+OK')) {
+        throw new EslOriginateRejectedError()
+    }
+    return response
+}
+
 export async function originateAiCall({
+    connection,
     fsUuid,
     dialString,
     extension = '9999',
@@ -41,14 +75,18 @@ export async function originateAiCall({
     timeoutMs = 10_000,
 }: OriginateOpts): Promise<string> {
     return new Promise<string>((resolve, reject) => {
-        const sock = net.connect(FS_ESL_PORT, FS_ESL_HOST)
+        const sock = net.connect(connection.port, connection.host)
         sock.setEncoding('utf8')
         let buf = ''
-        let stage = 'connecting'
+        let stage: 'connecting' | 'authenticating' | 'awaiting_response' | 'done' = 'connecting'
+
+        const transportError = (message: string): Error => stage === 'awaiting_response'
+            ? new EslOriginateOutcomeUnknownError(message)
+            : new EslOriginateUnavailableError(message)
 
         const timer = setTimeout(() => {
             sock.destroy()
-            reject(new Error(`ESL timeout after ${timeoutMs}ms (stage=${stage})`))
+            reject(transportError(`ESL timeout after ${timeoutMs}ms (stage=${stage})`))
         }, timeoutMs)
 
         sock.on('data', chunk => {
@@ -57,13 +95,13 @@ export async function originateAiCall({
             if (stage === 'connecting' && buf.includes('Content-Type: auth/request')) {
                 stage = 'authenticating'
                 buf = ''
-                sock.write(`auth ${FS_ESL_PASSWORD}\n\n`)
+                sock.write(`auth ${connection.password}\n\n`)
                 return
             }
 
             if (stage === 'authenticating') {
                 if (buf.includes('+OK accepted')) {
-                    stage = 'sending'
+                    stage = 'awaiting_response'
                     buf = ''
                     // Assemble channel variables. origination_uuid is required —
                     // it lets the bridge resolve the Call row by UUID later.
@@ -79,12 +117,12 @@ export async function originateAiCall({
                 if (buf.includes('-ERR')) {
                     clearTimeout(timer)
                     sock.destroy()
-                    reject(new Error(`ESL auth failed: ${buf.split('\n').find(l => l.includes('-ERR'))}`))
+                    reject(new EslOriginateUnavailableError('ESL authentication failed'))
                     return
                 }
             }
 
-            if (stage === 'sending') {
+            if (stage === 'awaiting_response') {
                 const respIdx = buf.indexOf('Content-Type: api/response')
                 if (respIdx === -1) return
                 const respBuf = buf.substring(respIdx)
@@ -97,7 +135,11 @@ export async function originateAiCall({
                         stage = 'done'
                         sock.removeAllListeners('data')
                         sock.end()
-                        resolve(body.trim())
+                        try {
+                            resolve(requireSuccessfulOriginateResponse(body))
+                        } catch (error) {
+                            reject(error)
+                        }
                     }
                 }
             }
@@ -105,7 +147,7 @@ export async function originateAiCall({
 
         sock.on('error', err => {
             clearTimeout(timer)
-            reject(err)
+            reject(transportError(err.message))
         })
     })
 }
