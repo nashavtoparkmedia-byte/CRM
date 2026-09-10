@@ -262,4 +262,3 @@ const runtime = createBotRuntime();
 module.exports = runtime;
 module.exports.createBotRuntime = createBotRuntime;
 module.exports.deriveWebhookSecret = deriveWebhookSecret;
-
