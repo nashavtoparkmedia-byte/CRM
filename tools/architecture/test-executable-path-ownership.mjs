@@ -2,6 +2,7 @@
 
 import assert from 'node:assert/strict'
 import { execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -148,6 +149,70 @@ assert.equal(validatorSource.includes('validateAcceptanceSourceLanguage'), false
 assert.equal(validatorSource.includes('discoverExecutablePathOwnershipConsumers'), false)
 assert.equal(validatorSource.includes('createRequire'), false)
 assert.equal(validatorSource.includes('pathToFileURL'), false)
+
+// Exact executable path inventories are compared by digest, and digest()
+// preserves array order because stable() sorts object keys only. Coverage
+// derivation and the reviewed-decision check therefore have to order the same
+// path set identically; when they did not, an unchanged set hashed to two
+// different values and no reviewed decision could ever be accepted. Both sides
+// now go through one canonical comparator, and these assertions keep them tied
+// together. The validator exports nothing by contract, so the ordering is
+// reproduced here rather than imported.
+{
+  const stable = (value) => {
+    if (Array.isArray(value)) return value.map(stable)
+    if (!value || typeof value !== 'object') return value
+    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stable(value[key])]))
+  }
+  const digest = (value) => createHash('sha256').update(JSON.stringify(stable(value))).digest('hex')
+  const canonical = (paths) => [...paths].sort((left, right) => left.localeCompare(right))
+
+  // Real mixed-case paths from the gravity_runtime_remainder inventory.
+  const mixedCase = [
+    'gravity-mvp/src/app/inbox/InboxClient.tsx',
+    'gravity-mvp/src/app/inbox/actions.ts',
+    'gravity-mvp/src/app/messages/components/ChatList.tsx',
+  ]
+  assert.notDeepEqual(
+    canonical(mixedCase),
+    [...mixedCase].sort(),
+    'mixed-case fixture must actually distinguish the two orderings',
+  )
+  assert.notEqual(
+    digest(canonical(mixedCase)),
+    digest([...mixedCase].sort()),
+    'ordering must be observable in the digest, otherwise this test proves nothing',
+  )
+
+  // One canonical order for one path set, whatever order the reviewer wrote.
+  assert.equal(
+    digest(canonical([...mixedCase].reverse())),
+    digest(canonical(mixedCase)),
+    'canonical ordering must make the digest independent of input order',
+  )
+
+  // A genuinely different path set must still produce a different digest.
+  assert.notEqual(
+    digest(canonical([...mixedCase, 'gravity-mvp/src/app/inbox/extra.ts'])),
+    digest(canonical(mixedCase)),
+    'canonical ordering must not mask a changed path set',
+  )
+
+  // Both digest sites in the authority must use the shared comparator.
+  assert.match(validatorSource, /const comparePaths = \(left, right\) => left\.localeCompare\(right\)/u)
+  assert.match(validatorSource, /const canonicalPathOrder = \(paths\) => \[\.\.\.paths\]\.sort\(comparePaths\)/u)
+  assert.match(validatorSource, /\.sort\(\(left, right\) => comparePaths\(left\.path, right\.path\)\)/u)
+  assert.match(validatorSource, /digest\(canonicalPathOrder\(decisionChange\.previous_paths\)\)/u)
+  assert.equal(
+    validatorSource.includes('digest([...decisionChange.previous_paths].sort())'),
+    false,
+    'reviewed previous paths must not be re-sorted with a comparator the coverage derivation does not use',
+  )
+
+  // The duplicate and count invariants around that comparison stay in force.
+  assert.match(validatorSource, /new Set\(decisionChange\.previous_paths\)\.size === decisionChange\.previous_paths\.length/u)
+  assert.match(validatorSource, /decisionChange\.previous_paths\.length === expectedChange\.previous_inventory\.path_count/u)
+}
 
 process.stdout.write(`${JSON.stringify({
   status: 'PASS',
