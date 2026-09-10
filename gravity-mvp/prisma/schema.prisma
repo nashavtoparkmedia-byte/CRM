@@ -3292,3 +3292,251 @@ enum AiOutcome {
   dropped_no_input
   error
 }
+
+/// ---------------------------------------------------------------------------
+/// Fleet Operations — YOKO cash compensation monetary core.
+///
+/// Every amount is an integer number of kopecks. Business days and budget
+/// months are Asia/Yekaterinburg calendar units, resolved by the owning module
+/// and stored as explicit keys rather than re-derived from a timestamp.
+///
+/// Partial unique indexes and CHECK constraints carry most of the monetary
+/// correctness and live in the migration, because Prisma cannot express them.
+/// ---------------------------------------------------------------------------
+
+/// One global YOKO pool per calendar month. Selected by the ORDER's month, not
+/// by the submission clock, so August and September legitimately accept work at
+/// the same time during the first days of September.
+model CompensationBudgetPeriod {
+  id                 String    @id
+  periodKey          String    @unique(map: "CompensationBudgetPeriod_period_key") @db.VarChar(7)
+  periodStartsAt     DateTime  @db.Timestamptz(3)
+  periodEndsAt       DateTime  @db.Timestamptz(3)
+  submissionClosesAt DateTime  @db.Timestamptz(3)
+  limitKopecks       Int
+  reservedKopecks    Int       @default(0)
+  settledKopecks     Int       @default(0)
+  state              String    @default("open") @db.VarChar(16)
+  openedAt           DateTime  @db.Timestamptz(3)
+  closedAt           DateTime? @db.Timestamptz(3)
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+  applications       CompensationApplication[]
+  settlements        CompensationSettlement[]
+
+  @@index([state, submissionClosesAt], map: "CompensationBudgetPeriod_state_closes_idx")
+}
+
+/// Stable owner-local monetary identity. Never a Contact, a Driver, a Telegram
+/// id or a phone number.
+model CompensationPerson {
+  id             String   @id
+  state          String   @default("active") @db.VarChar(32)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+  bindings       CompensationPersonBinding[]
+  applications   CompensationApplication[]
+  authorizations CompensationPayoutAuthorization[]
+  settlements    CompensationSettlement[]
+
+  @@index([state], map: "CompensationPerson_state_idx")
+}
+
+/// Owner-local alias from a Contacts contact id to a monetary person. A binding
+/// is only ever added, never re-pointed, which is what keeps a contact merge
+/// from creating a new monetary identity. `contactId` deliberately carries no
+/// foreign key: Contacts owns that table.
+model CompensationPersonBinding {
+  id                   String             @id
+  compensationPersonId String
+  contactId            String             @unique(map: "CompensationPersonBinding_contact_key")
+  lineageDigest        String             @db.VarChar(128)
+  boundVia             String             @db.VarChar(64)
+  boundAt              DateTime           @db.Timestamptz(3)
+  person               CompensationPerson @relation(fields: [compensationPersonId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "CompensationPersonBinding_person_fkey")
+
+  @@index([compensationPersonId], map: "CompensationPersonBinding_person_idx")
+}
+
+/// Immutable snapshot of a cash order already verified against the provider.
+/// Append-only: an application references the exact snapshot it was priced from.
+/// `externalParkId` comes from the connection the order was fetched through,
+/// because the provider's order payload carries no park identifier.
+model CompensationVerifiedOrder {
+  id                  String   @id
+  provider            String   @db.VarChar(32)
+  externalParkId      String   @db.VarChar(64)
+  externalOrderId     String   @db.VarChar(64)
+  shortOrderIdDisplay String?  @db.VarChar(32)
+  rawPrice            String   @db.VarChar(32)
+  amountKopecks       Int
+  endedAt             DateTime @db.Timestamptz(3)
+  verifiedAt          DateTime @db.Timestamptz(3)
+  payloadDigest       String   @db.Char(64)
+  createdAt           DateTime @default(now()) @db.Timestamptz(3)
+  applications        CompensationApplication[]
+
+  @@index([provider, externalParkId, externalOrderId, verifiedAt], map: "CompensationVerifiedOrder_order_verified_idx")
+}
+
+/// One row per logical external order. The key is park-scoped because the
+/// provider's short order number is a per-park counter and its long id, while
+/// 128-bit random, has no proven global uniqueness guarantee.
+model CompensationOrderClaim {
+  id                   String                   @id
+  provider             String                   @db.VarChar(32)
+  externalParkId       String                   @db.VarChar(64)
+  externalOrderId      String                   @db.VarChar(64)
+  attemptCount         Int                      @default(0)
+  settledApplicationId String?                  @unique(map: "CompensationOrderClaim_settled_key")
+  submissionDeadline   DateTime                 @db.Timestamptz(3)
+  deadlineBasis        String                   @db.VarChar(32)
+  budgetPeriodKey      String                   @db.VarChar(7)
+  orderEndedAt         DateTime                 @db.Timestamptz(3)
+  createdAt            DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                 @default(now()) @updatedAt @db.Timestamptz(3)
+  applications         CompensationApplication[]
+  settlement           CompensationSettlement?
+
+  @@unique([provider, externalParkId, externalOrderId], map: "CompensationOrderClaim_order_key")
+}
+
+/// The driver's claim. Exactly three statuses; the payout lifecycle is a
+/// separate entity and never widens this state machine.
+model CompensationApplication {
+  id                   String                            @id
+  idempotencyKey       String                            @unique(map: "CompensationApplication_idempotency_key") @db.VarChar(64)
+  payloadFingerprint   String                            @db.Char(64)
+  compensationPersonId String
+  orderClaimId         String
+  verifiedOrderId      String
+  budgetPeriodId       String
+  attemptNo            Int
+  claimedKopecks       Int
+  amountKopecks        Int
+  status               String                            @default("PENDING") @db.VarChar(16)
+  version              Int                               @default(0)
+  submittedAt          DateTime                          @db.Timestamptz(3)
+  paidAt               DateTime?                         @db.Timestamptz(3)
+  rejectedAt           DateTime?                         @db.Timestamptz(3)
+  rejectionKey         String?                           @db.VarChar(64)
+  rejectionReason      String?                           @db.VarChar(500)
+  createdAt            DateTime                          @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                          @default(now()) @updatedAt @db.Timestamptz(3)
+  person               CompensationPerson                @relation(fields: [compensationPersonId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "CompensationApplication_person_fkey")
+  claim                CompensationOrderClaim            @relation(fields: [orderClaimId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "CompensationApplication_claim_fkey")
+  verifiedOrder        CompensationVerifiedOrder         @relation(fields: [verifiedOrderId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "CompensationApplication_verified_order_fkey")
+  budgetPeriod         CompensationBudgetPeriod          @relation(fields: [budgetPeriodId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "CompensationApplication_period_fkey")
+  authorizations       CompensationPayoutAuthorization[]
+  settlement           CompensationSettlement?
+
+  @@unique([orderClaimId, attemptNo], map: "CompensationApplication_claim_attempt_key")
+  @@index([compensationPersonId, status], map: "CompensationApplication_person_status_idx")
+  @@index([budgetPeriodId, status], map: "CompensationApplication_period_status_idx")
+}
+
+/// Exclusive right to pay one application, held from "start payout" until the
+/// operator says what happened. There is no stored `stale` state: staleness is
+/// derived from `expiresAt` for the operator's benefit and releases nothing,
+/// because the CRM cannot know whether money left the external dispatcher.
+model CompensationPayoutAuthorization {
+  id                   String                           @id
+  applicationId        String
+  compensationPersonId String
+  intendedBusinessDay  String                           @db.VarChar(10)
+  amountKopecks        Int
+  state                String                           @default("active") @db.VarChar(32)
+  authorizationFence   String                           @db.Char(64)
+  openedAt             DateTime                         @db.Timestamptz(3)
+  expiresAt            DateTime                         @db.Timestamptz(3)
+  closedAt             DateTime?                        @db.Timestamptz(3)
+  closureReason        String?                          @db.VarChar(200)
+  settlementId         String?                          @db.VarChar(255)
+  openedByPrincipal    String                           @db.VarChar(255)
+  openedByLabel        String?                          @db.VarChar(255)
+  closedByPrincipal    String?                          @db.VarChar(255)
+  closedByLabel        String?                          @db.VarChar(255)
+  createdAt            DateTime                         @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                         @default(now()) @updatedAt @db.Timestamptz(3)
+  application          CompensationApplication          @relation(fields: [applicationId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "CompensationPayoutAuthorization_application_fkey")
+  person               CompensationPerson               @relation(fields: [compensationPersonId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "CompensationPayoutAuthorization_person_fkey")
+  settlement           CompensationSettlement?
+  reconciliationTasks  CompensationReconciliationTask[]
+
+  @@index([applicationId, state], map: "CompensationPayoutAuthorization_application_state_idx")
+  @@index([compensationPersonId, intendedBusinessDay, state], map: "CompensationPayoutAuthorization_person_day_idx")
+  @@index([state, expiresAt], map: "CompensationPayoutAuthorization_state_expires_idx")
+}
+
+/// Authoritative record that money was paid. The only source of public
+/// statistics, and unique on all three of its axes.
+model CompensationSettlement {
+  id                    String                          @id
+  applicationId         String                          @unique(map: "CompensationSettlement_application_key")
+  payoutAuthorizationId String                          @unique(map: "CompensationSettlement_authorization_key")
+  orderClaimId          String                          @unique(map: "CompensationSettlement_claim_key")
+  budgetPeriodId        String
+  compensationPersonId  String
+  amountKopecks         Int
+  businessDay           String                          @db.VarChar(10)
+  settledAt             DateTime                        @db.Timestamptz(3)
+  settledByPrincipal    String                          @db.VarChar(255)
+  settledByLabel        String?                         @db.VarChar(255)
+  createdAt             DateTime                        @default(now()) @db.Timestamptz(3)
+  application           CompensationApplication         @relation(fields: [applicationId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "CompensationSettlement_application_fkey")
+  authorization         CompensationPayoutAuthorization @relation(fields: [payoutAuthorizationId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "CompensationSettlement_authorization_fkey")
+  claim                 CompensationOrderClaim          @relation(fields: [orderClaimId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "CompensationSettlement_claim_fkey")
+  budgetPeriod          CompensationBudgetPeriod        @relation(fields: [budgetPeriodId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "CompensationSettlement_period_fkey")
+  person                CompensationPerson              @relation(fields: [compensationPersonId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "CompensationSettlement_person_fkey")
+
+  @@index([budgetPeriodId, settledAt], map: "CompensationSettlement_period_settled_idx")
+  @@index([compensationPersonId, businessDay], map: "CompensationSettlement_person_day_idx")
+}
+
+/// Opened when the operator does not know whether the external payout
+/// succeeded. Not an application status; the application stays PENDING and its
+/// reservation stays reserved while this is open.
+model CompensationReconciliationTask {
+  id                    String                          @id
+  payoutAuthorizationId String
+  reason                String                          @db.VarChar(200)
+  state                 String                          @default("open") @db.VarChar(16)
+  openedAt              DateTime                        @db.Timestamptz(3)
+  resolvedAt            DateTime?                       @db.Timestamptz(3)
+  resolution            String?                         @db.VarChar(32)
+  resolutionEvidence    String?                         @db.VarChar(1000)
+  openedByPrincipal     String                          @db.VarChar(255)
+  resolvedByPrincipal   String?                         @db.VarChar(255)
+  createdAt             DateTime                        @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime                        @default(now()) @updatedAt @db.Timestamptz(3)
+  authorization         CompensationPayoutAuthorization @relation(fields: [payoutAuthorizationId], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "CompensationReconciliationTask_authorization_fkey")
+
+  @@index([state, openedAt], map: "CompensationReconciliationTask_state_opened_idx")
+  @@index([payoutAuthorizationId], map: "CompensationReconciliationTask_authorization_idx")
+}
+
+/// Append-only monetary audit. Written inside the same transaction as the state
+/// change it describes; `id` is deterministic so a retried operation appends the
+/// same row once. `principalId` is an opaque operator identifier, not a foreign
+/// key: CRM operators are not rows in this database.
+model CompensationAuditEvent {
+  id                    String   @id
+  occurredAt            DateTime @db.Timestamptz(3)
+  action                String   @db.VarChar(64)
+  subjectType           String   @db.VarChar(64)
+  subjectId             String   @db.VarChar(255)
+  compensationPersonId  String?  @db.VarChar(255)
+  principalId           String   @db.VarChar(255)
+  principalKind         String   @db.VarChar(32)
+  operatorLabel         String?  @db.VarChar(255)
+  previousState         String?  @db.VarChar(32)
+  nextState             String?  @db.VarChar(32)
+  amountKopecks         Int?
+  reason                String?  @db.VarChar(1000)
+  payoutAuthorizationId String?  @db.VarChar(255)
+  correlationId         String   @db.VarChar(255)
+  createdAt             DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([subjectType, subjectId, occurredAt, id], map: "CompensationAuditEvent_subject_idx")
+  @@index([action, occurredAt], map: "CompensationAuditEvent_action_idx")
+}
