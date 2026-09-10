@@ -7,7 +7,13 @@ import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { resolveReviewedOwnershipExtension } from './reviewed-ownership-amendments.mjs'
+import {
+  AMENDMENT_COMPOSITION_DECISION,
+  AMENDMENT_MERGE_COMPOSITION_KIND,
+  COMPOSITION_ANCHOR_AUTHORITY,
+  COMPOSITION_MERGED_AUTHORITY,
+  resolveReviewedOwnershipExtension,
+} from './reviewed-ownership-amendments.mjs'
 
 const execFileAsync = promisify(execFile)
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
@@ -104,7 +110,7 @@ assert.deepEqual({
   arbitraryDataflowRetired: true,
   threatModelExplicit: true,
   historicalFixture: true,
-  denominator: 2429,
+  denominator: 2441,
 })
 
 const attackRoot = await mkdtemp(path.join(os.tmpdir(), 'yoko-authority-api-removal-'))
@@ -262,6 +268,182 @@ rejects(chainOf({ ...baseAmendment(), reason: 'too short' }), /lacks an explicit
 rejects({ ...chainOf(baseAmendment()), amendments: [] }, /amendment chain is empty/u, 'empty amendment chain must fail')
 amendmentProbes.cannot_bypass_ownership_coverage = 'REJECTED'
 
+// ---------------------------------------------------------------------------
+// Accepted-authority merge composition.
+//
+// Integrating one accepted ownership authority into another is not a
+// per-surface review. These probes pin that a composition must name both
+// accepted inputs, bind the upstream input to the chain anchor, carry the
+// merged input's already accepted amendment verbatim, state its exact
+// arithmetic in both directions, and declare in machine-checked form that it
+// performs no primary per-surface review.
+// ---------------------------------------------------------------------------
+const compositionProbes = {}
+const upstreamCurrent = { ...historicalDecisions.current }
+const mergedAuthorityCurrent = { tracked_executable_surfaces: 140, tracked_inventory_sha256: hash('a8'), coverage_sha256: hash('b9') }
+const compositionCurrent = { tracked_executable_surfaces: 152, tracked_inventory_sha256: hash('ca'), coverage_sha256: hash('db') }
+const acceptedAmendment = () => ({
+  amendment_id: 'probe-accepted-amendment',
+  reviewed_at: '2026-09-09T00:00:00Z',
+  reviewed_by: 'OWNER_AUTHORIZED_OWNERSHIP_REVIEW_20260909',
+  role: 'PRODUCT_OWNER_AUTHORIZED_REVIEW',
+  authorization: 'PRODUCT_OWNER_AUTHORIZED_EXECUTABLE_OWNERSHIP_REVIEW_EXTENSION',
+  reason: rationale,
+  predecessor: { tracked_executable_surfaces: 138, tracked_inventory_sha256: hash('ec'), coverage_sha256: hash('fd') },
+  current: { ...mergedAuthorityCurrent },
+  unassigned_tracked_surfaces: [{ path: 'identity/route.test.ts', lifecycle: 'TEST', review_decision: 'APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT', review_rationale: rationale }],
+  source_hash_rebinds: [{ path: 'identity/route.ts', previous_source_sha256: hash('1e'), current_source_sha256: hash('2f'), review_decision: 'APPROVED_MECHANICAL_SOURCE_HASH_REBIND', review_rationale: rationale }],
+})
+const upstreamInput = () => ({
+  authority: COMPOSITION_ANCHOR_AUTHORITY,
+  commit: '0'.repeat(39) + '1',
+  accepted_evidence_path: REGISTRY_PATH,
+  accepted_evidence_sha256: hash('3a'),
+  current: { ...upstreamCurrent },
+})
+const mergedInput = () => ({
+  authority: COMPOSITION_MERGED_AUTHORITY,
+  commit: '0'.repeat(39) + '2',
+  accepted_evidence_path: 'architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json',
+  accepted_evidence_sha256: hash('4b'),
+  current: { ...mergedAuthorityCurrent },
+  accepted_amendment: acceptedAmendment(),
+})
+const composition = (overrides = {}) => ({
+  amendment_id: 'probe-composition',
+  amendment_kind: AMENDMENT_MERGE_COMPOSITION_KIND,
+  reviewed_at: '2026-09-10T00:00:00Z',
+  reviewed_by: 'OWNER_AUTHORIZED_OWNERSHIP_REVIEW_20260910',
+  role: 'PRODUCT_OWNER_AUTHORIZED_REVIEW',
+  authorization: 'PRODUCT_OWNER_AUTHORIZED_MAIN_INTEGRATION_OWNERSHIP_AUTHORITY_COMPOSITION',
+  reason: rationale,
+  predecessor: { ...upstreamCurrent },
+  current: { ...compositionCurrent },
+  authority_composition: {
+    review_decision: AMENDMENT_COMPOSITION_DECISION,
+    claims_primary_surface_review: false,
+    composition_scope: rationale,
+    accepted_authority_inputs: [upstreamInput(), mergedInput()],
+    merge_delta: {
+      surfaces_added_by_upstream_main_relative_to_identity_current: 12,
+      surfaces_added_by_identity_relative_to_upstream_main_current: 52,
+    },
+    ...overrides,
+  },
+  source_hash_rebinds: [{ path: 'upstream/route.ts', previous_source_sha256: hash('5c'), current_source_sha256: hash('6d'), review_decision: 'APPROVED_MECHANICAL_SOURCE_HASH_REBIND', review_rationale: rationale }],
+})
+
+// 16. A valid composition advances the denominator and carries BOTH accepted
+// authorities' decisions forward instead of restating either of them.
+const composed = resolveProbe(chainOf(composition()))
+assert.deepEqual(composed.current, compositionCurrent, 'valid composition must resolve to the merged denominator')
+assert.equal(composed.compositions, 1)
+assert.equal(composed.rebinds.get('identity/route.ts')?.current_source_sha256, hash('2f'), 'merged authority rebind must survive composition')
+assert.equal(composed.rebinds.get('upstream/route.ts')?.current_source_sha256, hash('6d'), 'composition rebind must be applied')
+assert.equal(composed.unassigned.get('identity/route.test.ts')?.lifecycle, 'TEST', 'merged authority unassigned surface must survive composition')
+compositionProbes.both_accepted_authorities_survive = 'PRESERVED'
+
+// 17. A composition may never present itself as a primary per-surface review.
+for (const claim of [true, undefined, 'false']) {
+  rejects(
+    chainOf(composition({ claims_primary_surface_review: claim })),
+    /must state that it performs no primary per-surface review/u,
+    'composition must not claim a primary per-surface review',
+  )
+}
+rejects(chainOf(composition({ review_decision: 'APPROVED_CURRENT_ASSIGNMENT' })), /lacks its explicit decision/u, 'composition must carry its explicit decision')
+rejects(chainOf(composition({ composition_scope: 'too short' })), /lacks an explicit scope statement/u, 'composition must carry an explicit scope statement')
+compositionProbes.cannot_claim_primary_surface_review = 'REJECTED'
+
+// 18. Dropping either accepted authority input fails closed.
+rejects(chainOf(composition({ accepted_authority_inputs: [upstreamInput()] })), /requires exactly two accepted authority inputs/u, 'dropping the merged authority must fail')
+rejects(chainOf(composition({ accepted_authority_inputs: [mergedInput()] })), /requires exactly two accepted authority inputs/u, 'dropping the upstream authority must fail')
+rejects(chainOf(composition({ accepted_authority_inputs: [upstreamInput(), upstreamInput()] })), /duplicate accepted authority input/u, 'restating one authority twice must fail')
+rejects(chainOf(composition({ accepted_authority_inputs: [] })), /requires exactly two accepted authority inputs/u, 'an empty authority input set must fail')
+compositionProbes.neither_authority_can_be_dropped = 'REJECTED'
+
+// 19. Editing either accepted authority invalidates the composition proof.
+rejects(
+  chainOf(composition({ accepted_authority_inputs: [{ ...upstreamInput(), current: { ...upstreamCurrent, tracked_executable_surfaces: 99 } }, mergedInput()] })),
+  /does not bind the upstream authority to its exact predecessor/u,
+  'editing the upstream authority denominator must fail',
+)
+rejects(
+  chainOf(composition({ accepted_authority_inputs: [upstreamInput(), { ...mergedInput(), current: { ...mergedAuthorityCurrent, coverage_sha256: hash('99') } }] })),
+  /does not produce the declared merged authority denominator/u,
+  'editing the merged authority denominator must fail',
+)
+rejects(
+  chainOf(composition({ accepted_authority_inputs: [upstreamInput(), { ...mergedInput(), accepted_amendment: { ...acceptedAmendment(), current: { ...mergedAuthorityCurrent, tracked_inventory_sha256: hash('99') } } }] })),
+  /does not produce the declared merged authority denominator/u,
+  'editing the carried accepted amendment must fail',
+)
+for (const field of ['commit', 'accepted_evidence_sha256']) {
+  rejects(
+    chainOf(composition({ accepted_authority_inputs: [{ ...upstreamInput(), [field]: undefined }, mergedInput()] })),
+    /lacks its exact commit|lacks its accepted evidence digest/u,
+    `composition must pin the upstream ${field}`,
+  )
+}
+rejects(
+  chainOf(composition({ accepted_authority_inputs: [upstreamInput(), { ...mergedInput(), accepted_amendment: undefined }] })),
+  /lacks its accepted amendment evidence/u,
+  'the merged authority must carry its accepted amendment',
+)
+compositionProbes.both_authority_inputs_are_bound = 'ENFORCED'
+
+// 20. The declared merge arithmetic must be exact in both directions, so
+// neither input's contribution can be silently reattributed to the other.
+rejects(
+  chainOf(composition({ merge_delta: { surfaces_added_by_upstream_main_relative_to_identity_current: 11, surfaces_added_by_identity_relative_to_upstream_main_current: 52 } })),
+  /upstream delta is not the exact merged arithmetic/u,
+  'a false upstream delta must fail',
+)
+rejects(
+  chainOf(composition({ merge_delta: { surfaces_added_by_upstream_main_relative_to_identity_current: 12, surfaces_added_by_identity_relative_to_upstream_main_current: 137 } })),
+  /identity delta is not the exact merged arithmetic/u,
+  'a false identity delta must fail',
+)
+rejects(chainOf(composition({ merge_delta: undefined })), /lacks its declared delta/u, 'composition must declare its delta')
+compositionProbes.merge_delta_is_exact_arithmetic = 'ENFORCED'
+
+// 21. A carried accepted amendment is still an amendment: it cannot nest another
+// composition and it cannot restate the historical reviewer.
+rejects(
+  chainOf(composition({ accepted_authority_inputs: [upstreamInput(), { ...mergedInput(), accepted_amendment: { ...acceptedAmendment(), amendment_kind: AMENDMENT_MERGE_COMPOSITION_KIND } }] })),
+  /may not itself be a merge composition/u,
+  'a carried accepted amendment must not nest a composition',
+)
+rejects(
+  chainOf(composition({ accepted_authority_inputs: [upstreamInput(), { ...mergedInput(), accepted_amendment: { ...acceptedAmendment(), reviewed_by: HISTORICAL_REVIEWER } }] })),
+  /may not restate the historical reviewer/u,
+  'a carried accepted amendment must not restate the historical reviewer',
+)
+rejects(
+  chainOf(composition({ accepted_authority_inputs: [upstreamInput(), { ...mergedInput(), accepted_amendment: { ...acceptedAmendment(), assignments: [{ path: 'a/route.ts' }] } }] })),
+  /may not carry reviewed ownership semantics/u,
+  'a carried accepted amendment must not carry reviewed ownership semantics',
+)
+rejects(
+  chainOf(composition({ accepted_authority_inputs: [upstreamInput(), { ...mergedInput(), accepted_amendment: { ...acceptedAmendment(), amendment_id: 'probe-composition' } }] })),
+  /duplicate reviewed executable ownership amendment/u,
+  'a carried accepted amendment must not reuse the composition identity',
+)
+compositionProbes.carried_amendment_keeps_amendment_rules = 'ENFORCED'
+
+// 22. Ordinary linear amendments stay valid and may never declare authority
+// inputs, and an unrecognised amendment kind fails closed.
+const stillLinear = resolveProbe(chainOf(baseAmendment()))
+assert.equal(stillLinear.compositions, 0, 'a linear amendment must not register as a composition')
+rejects(
+  chainOf({ ...baseAmendment(), authority_composition: composition().authority_composition }),
+  /only an accepted authority merge composition may declare authority inputs/u,
+  'a linear amendment must not declare authority inputs',
+)
+rejects(chainOf({ ...baseAmendment(), amendment_kind: 'SOMETHING_ELSE' }), /amendment kind is not recognised/u, 'an unrecognised amendment kind must fail')
+rejects(chainOf({ ...composition(), authority_composition: undefined }), /accepted authority merge composition is missing/u, 'a composition without its authority block must fail')
+compositionProbes.linear_amendments_unchanged = 'PRESERVED'
+
 assert.equal(validatorSource.includes('directRequireLoaderNames'), false)
 assert.equal(validatorSource.includes('trackedModuleSpecifierIdentity'), false)
 assert.equal(validatorSource.includes('validateAcceptanceSourceLanguage'), false)
@@ -284,4 +466,5 @@ process.stdout.write(`${JSON.stringify({
     aliased_commonjs_create_require: 'CAPABILITY_ABSENT',
   },
   reviewed_ownership_amendments: amendmentProbes,
+  accepted_authority_merge_composition: compositionProbes,
 })}\n`)

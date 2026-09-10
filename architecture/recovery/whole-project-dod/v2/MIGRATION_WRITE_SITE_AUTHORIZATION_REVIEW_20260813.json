@@ -8,7 +8,7 @@
   },
   "noncanonical_review": {
     "path": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-    "source_sha256": "5c4a7b5812f523cab7144eb0ae432dfc9fe937d9a8b4a93bb847179fd0224447",
+    "source_sha256": "6fbe4d2bae18470868feec2d4e2e0773da98cb5a2242dc0db1398c7257b398df",
     "reviewed_path_count": 18,
     "policy": "Noncanonical sites are materialized only from exact committed source-specific decisions; absent sites fail materialization."
   },
@@ -20,7 +20,7 @@
   },
   "denominator": {
     "non_test_migration_only_sites": 829,
-    "sorted_site_signatures_sha256": "d709860f66846945bffcb0590fc52547169c791700c6e072a572c62d8211f31d"
+    "sorted_site_signatures_sha256": "7fa11ae739b5ba2b1824350e02b20a1eb0a674a29072a2749b8230c21509e315"
   },
   "authorizations": [
     {
@@ -270,46 +270,6 @@
         "canonical_ordinal": 1,
         "artifact_sha256": "b4f1ff9935ecd0ce65f0f167051cbae1b949a0f30bc651754c77aa09a1c7dc4b",
         "repository_capture": "gravity-mvp/prisma/migrations/0_init/migration.sql"
-      }
-    },
-    {
-      "capability_id": "mmc.migration-site.v1.fleet_operations.00c96dc7c8cb5eb0",
-      "site_signature": "00c96dc7c8cb5eb013f0eec0427d677a1ecfc39d1e8c91343927830d014823a1",
-      "status": "APPROVED",
-      "approved": true,
-      "source": {
-        "path": "deploy/docker-compose.production.yml",
-        "source_sha256": "ff4a96e97c586d8dc26cf36170defc3eb2da5a1bac9f62a6fc31aeb208e44013",
-        "line": 452,
-        "column": 54,
-        "method": "mixed-script-command:prisma db push"
-      },
-      "lifecycle": "MIGRATION",
-      "invocation": {
-        "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT"
-      },
-      "functional_owner": "fleet_operations",
-      "target": {
-        "data_owner": "fleet_operations",
-        "writes": [
-          {
-            "kind": "SCHEMA",
-            "exact_name": "yandex-fleet-scraper/prisma/schema.prisma",
-            "operation": "mixed-script-command:prisma db push"
-          }
-        ]
-      },
-      "binding": {
-        "kind": "INDEPENDENT_EXACT_CAPABILITY",
-        "rationale": "The committed reviewed maintenance capability and exact source bytes jointly authorize only this site tuple.",
-        "evidence": [
-          "source_sha256:ff4a96e97c586d8dc26cf36170defc3eb2da5a1bac9f62a6fc31aeb208e44013",
-          "site_signature:00c96dc7c8cb5eb013f0eec0427d677a1ecfc39d1e8c91343927830d014823a1",
-          "source_coordinate:deploy/docker-compose.production.yml:452:54",
-          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-          "lifecycle_evidence_status:REVIEWED_DEPLOYMENT_SCHEMA_COMMAND"
-        ],
-        "existing_capability_id": "mmc.reviewed.v1.fleet_operations.yandex_schema_db_push"
       }
     },
     {
@@ -27441,6 +27401,46 @@
         "canonical_ordinal": 41,
         "artifact_sha256": "f9c8c99b36018c99db922be2da05f50c3939f0646640d6c67aac0eb25bfd2a82",
         "repository_capture": "gravity-mvp/prisma/migrations/20260612000000_sync_schema_drift/migration.sql"
+      }
+    },
+    {
+      "capability_id": "mmc.migration-site.v1.fleet_operations.ee393ed91c551dde",
+      "site_signature": "ee393ed91c551dde411c3cad82e70b78593fa616f4fff387fc9b36205254c441",
+      "status": "APPROVED",
+      "approved": true,
+      "source": {
+        "path": "deploy/docker-compose.production.yml",
+        "source_sha256": "adff3d08e63dc4ef9a86a1605d7c117253217eb080e0220c8200cdaafc65dd9b",
+        "line": 460,
+        "column": 54,
+        "method": "mixed-script-command:prisma db push"
+      },
+      "lifecycle": "MIGRATION",
+      "invocation": {
+        "production_reachability": "CONFIRMED_AUTOMATIC_DEPLOYMENT"
+      },
+      "functional_owner": "fleet_operations",
+      "target": {
+        "data_owner": "fleet_operations",
+        "writes": [
+          {
+            "kind": "SCHEMA",
+            "exact_name": "yandex-fleet-scraper/prisma/schema.prisma",
+            "operation": "mixed-script-command:prisma db push"
+          }
+        ]
+      },
+      "binding": {
+        "kind": "INDEPENDENT_EXACT_CAPABILITY",
+        "rationale": "The committed reviewed maintenance capability and exact source bytes jointly authorize only this site tuple.",
+        "evidence": [
+          "source_sha256:adff3d08e63dc4ef9a86a1605d7c117253217eb080e0220c8200cdaafc65dd9b",
+          "site_signature:ee393ed91c551dde411c3cad82e70b78593fa616f4fff387fc9b36205254c441",
+          "source_coordinate:deploy/docker-compose.production.yml:460:54",
+          "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+          "lifecycle_evidence_status:REVIEWED_DEPLOYMENT_SCHEMA_COMMAND"
+        ],
+        "existing_capability_id": "mmc.reviewed.v1.fleet_operations.yandex_schema_db_push"
       }
     },
     {

@@ -18,7 +18,7 @@
     {
       "context": "calling",
       "path": "architecture/contexts/v1/manifests/calling.json",
-      "sha256": "664f93d9c684711aad6d73b4588ded49065b5d960354e6ad4801f76dcfc00bfa"
+      "sha256": "4d02e5f3c81b5d9a650a064b1ee176335305b45ae5451b9933ce9d0b1f1f5de9"
     },
     {
       "context": "configuration",
@@ -124,7 +124,7 @@
     },
     "lifecycle_surface_registry": {
       "path": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
-      "sha256": "ad43965d044821ad517e1b39dabe5f6aea76f443e418111b30df4e3edcf69b4e"
+      "sha256": "6aee1e955cd0854bfa5962f07a21d6247e59e2983b2170697d030fd7b3a200b8"
     },
     "module_inventory": {
       "path": "architecture/evidence/v1/module-inventory.json",

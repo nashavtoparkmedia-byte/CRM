@@ -169,6 +169,7 @@ export async function POST(req: NextRequest) {
                 // AI-call specific fields (Prisma generated client; cast to any
                 // in case the local node_modules generator is one regen behind)
                 isAi: true,
+                isSimulation: true,
                 aiScenarioId: resolvedScenarioId,
                 aiSessionStatus: mock.aiSessionStatus as any,
                 metadata: metadata as any,
