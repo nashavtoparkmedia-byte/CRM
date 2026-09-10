@@ -137,9 +137,8 @@ export class YandexFleetService {
      * does not stop the remaining parks. Upserts data into DriverDaySummary.
      */
     static async syncTrips(days: number = 7): Promise<YandexTripSyncResultV1> {
-        // fleet_operations owns ApiConnection, so this stays an owner-internal
-        // read. It is the same reviewed credential site as before, widened from
-        // one connection to all of them.
+        // Each connection supplies the credentials and park identifier used
+        // for that park's API calls below.
         const connections = await prisma.apiConnection.findMany({
             orderBy: { createdAt: 'asc' },
             select: { clid: true, apiKey: true, parkId: true, name: true },
