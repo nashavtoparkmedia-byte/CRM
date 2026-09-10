@@ -174,14 +174,26 @@ export async function runYandexSync(
             console.error('[runYandexSync] archived drivers sync failed (non-fatal):', e)
         }
 
-        // 3. Trips for the analysis period
+        // 3. Trips for the analysis period, across every configured park connection
         const trips = await YandexFleetService.syncTrips(thresholds.analysis_period)
         ordersProcessed = trips.ordersProcessed
+
+        // A park connection that failed must stay visible: the run still counts
+        // as a success because the other parks synced, but the status carries
+        // which parks were skipped so a partial sync is never silent.
+        const partialParkNotes: string[] = []
+        if (trips.failures.length) {
+            partialParkNotes.push(`${trips.connectionsSucceeded}/${trips.connectionsTotal} park connections synced; failed: ${trips.failures.map(f => `${f.name || f.parkId}: ${f.message}`).join('; ')}`)
+        }
+        if (trips.truncated.length) {
+            partialParkNotes.push(`incomplete window: ${trips.truncated.map(f => `${f.name || f.parkId}: ${f.message}`).join('; ')}`)
+        }
+        const partialParkFailure = partialParkNotes.length ? partialParkNotes.join(' | ') : null
 
         // 4. Recalculate segments
         const recalc = await recalculateAllSegments()
 
-        await setStatus('success', { driversUpdated, ordersProcessed })
+        await setStatus('success', { driversUpdated, ordersProcessed, errorMessage: partialParkFailure })
 
         return {
             ok: true,
