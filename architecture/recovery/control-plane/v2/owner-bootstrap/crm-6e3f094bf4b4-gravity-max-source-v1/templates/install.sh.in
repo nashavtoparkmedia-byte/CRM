@@ -140,6 +140,9 @@ expected={
  "artifact-admission.v1.json":0o400,
  "runtime-v14-SEALED_RELEASE.json":0o400,
  "review/human-manifest.md":0o400,
+ "review/independent-review.v1.json":0o400,
+ "review/release-reliability-evidence":0o400,
+ "review/privileged-runtime-security-evidence":0o400,
 }
 observed={str(item.relative_to(root)) for item in root.rglob('*') if item.is_file()}
 directories={str(item.relative_to(root)) for item in root.rglob('*') if item.is_dir()}

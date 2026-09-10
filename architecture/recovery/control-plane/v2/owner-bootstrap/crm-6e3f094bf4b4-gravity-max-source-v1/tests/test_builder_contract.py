@@ -44,7 +44,7 @@ class BuilderContractTests(unittest.TestCase):
         sealer = (ROOT / "packaging/seal-release.py").read_text(encoding="ascii")
         create = sealer.index("review_directory.mkdir(parents=True, mode=0o700)")
         write = sealer.index('copy_exact(ROOT / "human-manifest.md", review_directory / "human-manifest.md", 0o400)')
-        evidence = sealer.index('copy_exact(item, review_directory / item.name, 0o400)')
+        evidence = sealer.index('review_directory / f"{entry[\'role\']}-evidence"')
         close = sealer.index("review_directory.chmod(0o500)")
         self.assertLess(create, write)
         self.assertLess(write, evidence)
@@ -393,21 +393,38 @@ class IndependentReviewBindingTests(unittest.TestCase):
         loader.exec_module(verifier)
 
         head, tree = "a" * 40, "b" * 40
+        stage = tempfile.TemporaryDirectory()
+        self.addCleanup(stage.cleanup)
+        packed = Path(stage.name) / "bundle/payload/review"
+        packed.mkdir(parents=True)
+        document_bytes = b"review document\n"
+        (packed / "independent-review.v1.json").write_bytes(document_bytes)
+        evidence_bytes = {}
+        for role in ("release-reliability", "privileged-runtime-security"):
+            raw = f"{role} transcript\n".encode()
+            (packed / f"{role}-evidence").write_bytes(raw)
+            evidence_bytes[role] = raw
+        verifier.GENERATED = Path(stage.name)
+        digest = lambda raw: hashlib.sha256(raw).hexdigest()
 
         def seal(**overrides):
             review = {
                 "status": "ACCEPTED",
                 "schema": "yoko.crm.coordinated-runtime-independent-review.v1",
-                "document": {"path": "independent-review.v1.json", "sha256": "c" * 64},
+                "document": {"path": "independent-review.v1.json", "sha256": digest(document_bytes)},
                 "candidate_commit": head, "candidate_tree": tree,
                 "reviews": [
                     {"role": "release-reliability", "reviewer": "R1", "verdict": "PASS_WITH_LOW_FINDINGS",
                      "reviewed_at": "2026-09-10T00:00:00Z",
-                     "evidence": {"path": "a.md", "sha256": "d" * 64, "bytes": 1},
+                     "evidence": {"path": "a.md", "packed": "release-reliability-evidence",
+                                  "sha256": digest(evidence_bytes["release-reliability"]),
+                                  "bytes": len(evidence_bytes["release-reliability"])},
                      "residual_findings": [{"id": "X", "severity": "LOW", "title": "residual"}]},
                     {"role": "privileged-runtime-security", "reviewer": "R2", "verdict": "PASS",
                      "reviewed_at": "2026-09-10T00:00:00Z",
-                     "evidence": {"path": "b.md", "sha256": "e" * 64, "bytes": 1},
+                     "evidence": {"path": "b.md", "packed": "privileged-runtime-security-evidence",
+                                  "sha256": digest(evidence_bytes["privileged-runtime-security"]),
+                                  "bytes": len(evidence_bytes["privileged-runtime-security"])},
                      "residual_findings": []},
                 ],
                 "residual_low_findings": 1, "blocking_findings": 0,
@@ -457,13 +474,69 @@ class IndependentReviewBindingTests(unittest.TestCase):
             verifier.validate_release_review(bad_severity, head, tree)
         self.assertIn("residual finding severity is not accepted", str(raised.exception))
 
+        for label, blocking in (("json false", False), ("json float", 0.0), ("string", "0")):
+            with self.subTest(label=label):
+                value = seal()
+                value["independent_review"]["blocking_findings"] = blocking
+                with self.assertRaises(ValueError) as raised:
+                    verifier.validate_release_review(value, head, tree)
+                self.assertIn("accepts a blocking review finding", str(raised.exception))
+
+        for label, findings in (("none", None), ("dict", {}), ("string", "LOW")):
+            with self.subTest(label=label):
+                value = seal()
+                value["independent_review"]["reviews"][1]["residual_findings"] = findings
+                with self.assertRaises(ValueError) as raised:
+                    verifier.validate_release_review(value, head, tree)
+                self.assertIn("explicit residual findings list", str(raised.exception))
+
+        swapped = seal()
+        swapped["independent_review"]["reviews"][0]["evidence"]["sha256"] = "f" * 64
+        with self.assertRaises(ValueError) as raised:
+            verifier.validate_release_review(swapped, head, tree)
+        self.assertIn("packed independent review evidence does not match", str(raised.exception))
+
+        forged = seal()
+        forged["independent_review"]["document"]["sha256"] = "f" * 64
+        with self.assertRaises(ValueError) as raised:
+            verifier.validate_release_review(forged, head, tree)
+        self.assertIn("packed independent review document does not match", str(raised.exception))
+
+        one_reviewer = seal()
+        one_reviewer["independent_review"]["reviews"][1]["reviewer"] = "R1"
+        with self.assertRaises(ValueError) as raised:
+            verifier.validate_release_review(one_reviewer, head, tree)
+        self.assertIn("distinct reviewers", str(raised.exception))
+
+    def test_compose_transcript_mode_is_pinned_to_0600(self) -> None:
+        profile = (ROOT / "templates/crm-activation-profile.py.in").read_text(encoding="ascii")
+        self.assertIn("os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600", profile)
+        # inspect the _compose_up body specifically: both the open mode and its reassertion are 0600
+        start = profile.index("def _compose_up(")
+        body = profile[start:profile.index("\ndef ", start + 1)]
+        self.assertIn("os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600", body)
+        self.assertIn("os.fchmod(fd, 0o600)", body)
+        self.assertNotIn("0o644", body)
+
+    def test_packed_review_material_matches_the_installer_allowlist(self) -> None:
+        """R7S-01: the bundle the sealer writes must be exactly what install.sh admits."""
+        sealer = (ROOT / "packaging/seal-release.py").read_text(encoding="ascii")
+        installer = (ROOT / "templates/install.sh.in").read_text(encoding="ascii")
+        self.assertIn('review_directory / f"{entry[\'role\']}-evidence"', sealer)
+        for name in ("review/human-manifest.md", "review/independent-review.v1.json",
+                     "review/release-reliability-evidence", "review/privileged-runtime-security-evidence"):
+            with self.subTest(name=name):
+                self.assertIn(f'"{name}":0o400', installer)
+
     def test_release_phase_runs_after_the_seal_is_written(self) -> None:
         verifier = (ROOT / "packaging/verify-sealed-inputs.py").read_text(encoding="ascii")
         self.assertIn('choices=("package", "package-output", "release")', verifier)
         sealer = (ROOT / "packaging/seal-release.py").read_text(encoding="ascii")
         written = sealer.index('write_json(dist / "SEALED_RELEASE.json", release_seal)')
+        packedreview = sealer.index('review_directory / f"{entry[\'role\']}-evidence"')
         checked = sealer.index('"--phase", "release"')
-        self.assertLess(written, checked)
+        self.assertLess(written, packedreview)
+        self.assertLess(packedreview, checked)
 
     def test_sealer_requires_the_review_input_and_emits_no_pending(self) -> None:
         source = (ROOT / "packaging/seal-release.py").read_text(encoding="ascii")

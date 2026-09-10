@@ -256,10 +256,13 @@ def validate_independent_review(path: Path, commit: str, tree: str) -> tuple[dic
             "reviewer": reviewer,
             "verdict": verdict,
             "reviewed_at": entry["reviewed_at"],
-            "evidence": {"path": name, "sha256": evidence["sha256"], "bytes": evidence["bytes"]},
+            "evidence": {"path": name, "packed": f"{role}-evidence",
+                         "sha256": evidence["sha256"], "bytes": evidence["bytes"]},
             "residual_findings": residual_findings,
         })
-    accepted.sort(key=lambda item: item["role"])
+    order = sorted(range(len(accepted)), key=lambda index: accepted[index]["role"])
+    accepted = [accepted[index] for index in order]
+    evidence_files = [evidence_files[index] for index in order]
     return {
         "status": "ACCEPTED",
         "schema": REVIEW_SCHEMA,
@@ -551,9 +554,6 @@ def main() -> None:
         "independent_review": review,
     }
     write_json(dist / "SEALED_RELEASE.json", release_seal)
-    # Re-check the acceptance independently, against the written seal rather than the value above.
-    command(["/usr/bin/python3", "-I", "-B", str(ROOT / "packaging/verify-sealed-inputs.py"), "--phase", "release"],
-            stdout=subprocess.DEVNULL)
     release_seal_sha = sha(dist / "SEALED_RELEASE.json")
 
     payload = generated / "bundle/payload"
@@ -581,8 +581,10 @@ def main() -> None:
     copy_exact(args.v14_seal, payload / "runtime-v14-SEALED_RELEASE.json", 0o400)
     copy_exact(ROOT / "human-manifest.md", review_directory / "human-manifest.md", 0o400)
     copy_exact(args.independent_review.resolve(strict=True), review_directory / "independent-review.v1.json", 0o400)
-    for item in review_evidence:
-        copy_exact(item, review_directory / item.name, 0o400)
+    # Packed under a deterministic per-role name, never the reviewer's own filename, so the Owner
+    # installer can keep an exact static allowlist and no supplied name reaches the bundle.
+    for entry, item in zip(review["reviews"], review_evidence):
+        copy_exact(item, review_directory / f"{entry['role']}-evidence", 0o400)
     review_directory.chmod(0o500)
     payload_files = {}
     for item in sorted(path for path in payload.rglob("*") if path.is_file()):
@@ -633,6 +635,10 @@ def main() -> None:
         "bootstrap": bootstrap_identity["bootstrap"],
         "production_mutated": False,
     })
+    # Re-check the acceptance independently, against the written seal and the packed bundle rather
+    # than the values assembled above. Runs last because it re-hashes what the bundle carries.
+    command(["/usr/bin/python3", "-I", "-B", str(ROOT / "packaging/verify-sealed-inputs.py"), "--phase", "release"],
+            stdout=subprocess.DEVNULL)
     sys.stdout.buffer.write(canonical({
         "status": "PASS", "builder_commit": builder_commit, "builder_tree": builder_tree,
         "package_sha256": package_sha, "release_seal_sha256": release_seal_sha,

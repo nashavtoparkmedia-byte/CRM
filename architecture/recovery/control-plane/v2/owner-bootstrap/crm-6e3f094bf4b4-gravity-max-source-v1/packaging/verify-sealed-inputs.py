@@ -59,9 +59,10 @@ def git(*args: str) -> bytes:
 def validate_release_review(seal: dict[str, Any], head: str, tree: str) -> int:
     """Independently re-check the acceptance the sealer derived, against the written seal.
 
-    Returns the residual LOW count it recomputed. Raises on any drift, so an inverted or
-    hand-edited seal cannot pass: this runs against dist/SEALED_RELEASE.json rather than the
-    sealer's own in-memory value.
+    Returns the residual LOW count it recomputed. This runs against dist/SEALED_RELEASE.json and
+    the packed bundle rather than the sealer's own in-memory value, and re-hashes the review
+    document and every per-role evidence file the seal names, so a hand-edited seal or a swapped
+    evidence file is caught here as well as at the input.
     """
     review = seal.get("independent_review")
     if not isinstance(review, dict):
@@ -70,7 +71,8 @@ def validate_release_review(seal: dict[str, Any], head: str, tree: str) -> int:
         raise ValueError("independent review acceptance contract mismatch")
     if review.get("candidate_commit") != head or review.get("candidate_tree") != tree:
         raise ValueError("independent review is not bound to the sealed candidate")
-    if review.get("blocking_findings") != 0:
+    blocking = review.get("blocking_findings")
+    if isinstance(blocking, bool) or not isinstance(blocking, int) or blocking != 0:
         raise ValueError("release seal accepts a blocking review finding")
     entries = review.get("reviews")
     if not isinstance(entries, list) or sorted(
@@ -92,6 +94,19 @@ def validate_release_review(seal: dict[str, Any], head: str, tree: str) -> int:
     document = review.get("document")
     if not isinstance(document, dict) or set(document) != {"path", "sha256"}:
         raise ValueError("independent review document binding invalid")
+    packed = GENERATED / "bundle/payload/review"
+    if sha(packed / "independent-review.v1.json") != document["sha256"]:
+        raise ValueError("packed independent review document does not match the seal")
+    for entry in entries:
+        evidence = entry.get("evidence")
+        if not isinstance(evidence, dict) or not isinstance(evidence.get("sha256"), str):
+            raise ValueError("independent review entry lacks an exact evidence binding")
+        name = f"{entry['role']}-evidence"
+        if sha(packed / name) != evidence["sha256"] or (packed / name).stat().st_size != evidence.get("bytes"):
+            raise ValueError("packed independent review evidence does not match the seal")
+    reviewers = [entry.get("reviewer") for entry in entries]
+    if len(set(reviewers)) != len(reviewers) or any(not isinstance(item, str) or not item.strip() for item in reviewers):
+        raise ValueError("independent review roles are not held by distinct reviewers")
     return residual
 
 
