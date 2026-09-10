@@ -8,6 +8,7 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 import { fileURLToPath } from 'node:url'
 import { generateContextManifestsFromAuthority } from './generate-context-manifests.mjs'
+import { resolveReviewedOwnershipExtension } from './reviewed-ownership-amendments.mjs'
 import { classifyTrackedSurface, inventoryTrackedSurfaces } from './v2/tracked-surface-inventory.mjs'
 
 const execFileAsync = promisify(execFile)
@@ -22,6 +23,7 @@ const INTERNAL_REVIEW_ROLE = 'SOL_HIGH_INTERNAL_REVIEW'
 const REVIEWED_DECISION_PATH = 'architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json'
 const REVIEWED_BASELINE_PATH = 'architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_COVERAGE_BASELINE_2108.json'
 const REVIEWED_BASELINE_SHA256 = 'bd7df022d08734ec500336907c4c1dadc6c6ac3c7f3df23c1df0d307a4cdfb29'
+const REVIEWED_AMENDMENTS_PATH = 'architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json'
 const OWNERSHIP_VALIDATOR_PATH = 'tools/architecture/validate-executable-path-ownership.mjs'
 
 const SHA256 = /^[0-9a-f]{64}$/u
@@ -87,6 +89,27 @@ function readReviewedOwnershipDecisions(repositoryRoot) {
 
 function readHistoricalOwnershipBaseline(repositoryRoot) {
   return readJsonAuthority(repositoryRoot, REVIEWED_BASELINE_PATH, 'historical executable ownership baseline')
+}
+
+// The amendment chain is optional: a repository whose reviewed denominator has
+// never been extended carries no amendments document at all. A missing document
+// is the only tolerated absence; a malformed one still fails closed.
+async function readReviewedOwnershipAmendmentsIfPresent(repositoryRoot) {
+  try {
+    await readFile(path.join(repositoryRoot, REVIEWED_AMENDMENTS_PATH))
+  } catch {
+    return null
+  }
+  return readJsonAuthority(repositoryRoot, REVIEWED_AMENDMENTS_PATH, 'reviewed executable ownership amendments')
+}
+
+function reviewedOwnershipExtension(decisions, amendments, decisionRegistrySha256) {
+  return resolveReviewedOwnershipExtension(decisions, amendments, {
+    decisionRegistryPath: REVIEWED_DECISION_PATH,
+    decisionRegistrySha256,
+    historicalReviewer: INTERNAL_REVIEWER,
+    historicalReviewRole: INTERNAL_REVIEW_ROLE,
+  })
 }
 
 function gitObject(repositoryRoot, args, encoding = 'utf8') {
@@ -438,9 +461,10 @@ function validateReviewedExactInventoryDecisions(coverage, derived, decisions, o
   assert(typeof options.baselineCoveragePath === 'string' && options.baselineCoveragePath.length > 0, 'baseline executable ownership coverage path is required')
   assert(decisions.baseline?.coverage_path === options.baselineCoveragePath
     && decisions.baseline?.coverage_sha256 === options.baselineCoverageSha256, 'reviewed executable ownership decisions are stale for the baseline coverage')
-  assert(decisions.current?.tracked_inventory_sha256 === derived.tracked_inventory_sha256
-    && decisions.current?.tracked_executable_surfaces === derived.tracked_executable_surfaces
-    && decisions.current?.coverage_sha256 === derived.coverage_sha256, 'reviewed executable ownership decisions are stale for the current denominator')
+  const effectiveCurrent = options.extension?.current ?? decisions.current
+  assert(effectiveCurrent?.tracked_inventory_sha256 === derived.tracked_inventory_sha256
+    && effectiveCurrent?.tracked_executable_surfaces === derived.tracked_executable_surfaces
+    && effectiveCurrent?.coverage_sha256 === derived.coverage_sha256, 'reviewed executable ownership decisions are stale for the current denominator')
 
   const changes = exactInventoryDrift(coverage, derived)
   assert(Array.isArray(decisions.exact_inventory_changes) && decisions.exact_inventory_changes.length === changes.length, 'reviewed exact inventory change set is missing, mismatched, or stale')
@@ -501,8 +525,17 @@ function validateReviewedExactInventoryDecisions(coverage, derived, decisions, o
   for (const [assignmentPath, assignment] of actualByPath) {
     const expected = expectedByPath.get(assignmentPath)
     assert(expected, `stale reviewed exact inventory assignment: ${assignmentPath}`)
+    // An amendment may only move the exact source fingerprint of an already
+    // reviewed assignment, and only from the exact fingerprint that reviewer
+    // approved. Every semantic ownership field still has to match the reviewed
+    // decision itself.
+    const rebind = options.extension?.rebinds?.get(assignmentPath) ?? null
+    if (rebind) {
+      assert(rebind.previous_source_sha256 === assignment.source_sha256, `reviewed executable ownership amendment rebind does not extend the reviewed assignment: ${assignmentPath}`)
+    }
     for (const field of ['lifecycle', 'functional_owner', 'exclusion', 'inventory_kind', 'source_sha256']) {
-      assert(assignment[field] === expected[field], `reviewed exact inventory assignment ${field} mismatch: ${assignmentPath}`)
+      const reviewedValue = field === 'source_sha256' && rebind ? rebind.current_source_sha256 : assignment[field]
+      assert(reviewedValue === expected[field], `reviewed exact inventory assignment ${field} mismatch: ${assignmentPath}`)
     }
   }
   for (const expectedPath of expectedByPath.keys()) {
@@ -539,6 +572,13 @@ function materializeReviewedExecutablePathOwnershipCoverage(inventory, manifests
     tracked_inventory_sha256: derived.tracked_inventory_sha256,
     exact_inventory_change_count: review.changes.length,
     reviewed_assignment_count: review.reviewedAssignments,
+    ...(options.extension?.amendments
+      ? {
+          amendments_path: options.amendmentsPath,
+          amendments_sha256: options.amendmentsSha256,
+          amendment_count: options.extension.amendments,
+        }
+      : {}),
   }
   return refreshed
 }
@@ -588,12 +628,26 @@ async function validateExecutablePathOwnershipProvenance(repositoryRoot, coverag
   assert(byteDigest(baselineBytes) === provenance.baseline_coverage_sha256, 'reviewed executable ownership baseline hash drift')
   const baseline = JSON.parse(baselineBytes.toString('utf8'))
   assert(baseline.schema === REVIEWED_BASELINE_SCHEMA && baseline.version === 1, 'reviewed executable ownership baseline identity mismatch')
+  const amendmentsInput = await readReviewedOwnershipAmendmentsIfPresent(repositoryRoot)
+  const extension = reviewedOwnershipExtension(decisions, amendmentsInput?.value ?? null, provenance.decision_registry_sha256)
   assert(decisions.schema === REVIEWED_DECISION_SCHEMA && decisions.version === 1
     && decisions.baseline?.coverage_path === provenance.baseline_coverage_path
     && decisions.baseline?.coverage_sha256 === provenance.baseline_coverage_sha256
-    && decisions.current?.tracked_inventory_sha256 === provenance.tracked_inventory_sha256
+    && extension.current?.tracked_inventory_sha256 === provenance.tracked_inventory_sha256
     && decisions.assignments?.length === provenance.reviewed_assignment_count
     && decisions.exact_inventory_changes?.length === provenance.exact_inventory_change_count, 'reviewed executable ownership materialization provenance contradiction')
+  // Dropping the amendment from provenance must fail closed: coverage that was
+  // materialized under an extended denominator can never present itself as the
+  // unextended historical materialization.
+  if (extension.amendments > 0) {
+    assert(provenance.amendments_path === REVIEWED_AMENDMENTS_PATH
+      && provenance.amendments_sha256 === byteDigest(amendmentsInput.bytes)
+      && provenance.amendment_count === extension.amendments, 'reviewed executable ownership amendment provenance mismatch')
+  } else {
+    assert(provenance.amendments_path === undefined
+      && provenance.amendments_sha256 === undefined
+      && provenance.amendment_count === undefined, 'reviewed executable ownership amendment provenance is unexpected')
+  }
   assert(inventory?.schema === 'yoko.crm.tracked-executable-surface-inventory.v2' && Array.isArray(manifests), 'current executable ownership inventory/manifests are required for provenance validation')
   const provisional = deriveExecutablePathOwnershipCoverage(inventory, manifests, baseline, { allowExactInventoryRefresh: true })
   const changedPaths = exactInventoryDrift(baseline, provisional).flatMap((change) => change.records.map((record) => record.path))
@@ -604,6 +658,9 @@ async function validateExecutablePathOwnershipProvenance(repositoryRoot, coverag
     sourceSha256ByPath,
     decisionRegistryPath: provenance.decision_registry_path,
     decisionRegistrySha256: provenance.decision_registry_sha256,
+    extension,
+    amendmentsPath: extension.amendments > 0 ? REVIEWED_AMENDMENTS_PATH : undefined,
+    amendmentsSha256: extension.amendments > 0 ? byteDigest(amendmentsInput.bytes) : undefined,
   })
   assert(JSON.stringify(stable(coverage)) === JSON.stringify(stable(expectedCoverage)), 'current executable ownership coverage is not the exact reviewed mechanical materialization')
   return { decisions, baseline, expectedCoverage }
@@ -660,12 +717,17 @@ async function main() {
     const provisional = deriveExecutablePathOwnershipCoverage(inventory, manifests, baselineCoverage, { allowExactInventoryRefresh: true })
     const changedPaths = exactInventoryDrift(baselineCoverage, provisional).flatMap((change) => change.records.map((record) => record.path))
     const sourceSha256ByPath = new Map(await Promise.all(changedPaths.map(async (relativePath) => [relativePath, byteDigest(await readFile(path.join(root, relativePath)))])))
+    const amendmentsInput = await readReviewedOwnershipAmendmentsIfPresent(root)
+    const extension = reviewedOwnershipExtension(decisions, amendmentsInput?.value ?? null, byteDigest(decisionBytes))
     const refreshed = materializeReviewedExecutablePathOwnershipCoverage(inventory, manifests, baselineCoverage, decisions, {
       baselineCoveragePath,
       baselineCoverageSha256: byteDigest(baselineBytes),
       sourceSha256ByPath,
       decisionRegistryPath,
       decisionRegistrySha256: byteDigest(decisionBytes),
+      extension,
+      amendmentsPath: extension.amendments > 0 ? REVIEWED_AMENDMENTS_PATH : undefined,
+      amendmentsSha256: extension.amendments > 0 ? byteDigest(amendmentsInput.bytes) : undefined,
     })
     await assertCleanExactCandidateCheckout(root, candidateArgument)
     await writeFile(path.join(root, COVERAGE_PATH), `${JSON.stringify(refreshed, null, 2)}\n`)

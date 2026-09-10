@@ -1,0 +1,68 @@
+{
+  "schema": "yoko.crm.reviewed-executable-path-ownership-amendments.v1",
+  "version": 1,
+  "policy": "An amendment extends the reviewed executable ownership denominator forward without rewriting a dated historical review event. Each amendment pins the immutable predecessor it extends, carries its own current review identity, and may record only denominator movement, source-fingerprint rebinds whose semantic ownership fields are unchanged, and tracked surfaces that receive no explicit ownership assignment under established cohort precedent. An amendment can never create, alter or remove an ownership assignment, lifecycle, functional owner, governed exclusion, exact-inventory transition or reviewed rationale.",
+  "base": {
+    "decision_registry_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json",
+    "decision_registry_sha256": "7616ed66a5265849e37c929d5329037922c65763300262b480e78db453f8d846"
+  },
+  "amendments": [
+    {
+      "amendment_id": "pr81-stage0-fleet-check-admin-guard-20260909",
+      "reviewed_at": "2026-09-09T23:30:00Z",
+      "reviewed_by": "OWNER_AUTHORIZED_OWNERSHIP_REVIEW_20260909",
+      "role": "PRODUCT_OWNER_AUTHORIZED_REVIEW",
+      "authorization": "PRODUCT_OWNER_AUTHORIZED_EXECUTABLE_OWNERSHIP_REVIEW_EXTENSION",
+      "predecessor_review": {
+        "reviewed_by": "INTERNAL_EXECUTOR_REVIEW_20260813",
+        "role": "SOL_HIGH_INTERNAL_REVIEW",
+        "immutable": true,
+        "note": "The dated internal review of 2026-08-13 is preserved byte for byte and is not restated by this amendment. It did not and could not review any executable surface created after its own date."
+      },
+      "reason": "The accepted Stage 0 admin guard on the fleet-check confirmation follow-up added one negative-authorization test surface and changed the exact bytes of the route it guards, and this repair added one pure amendment-resolution helper. The reviewed denominator therefore moves forward by exactly two surfaces.",
+      "predecessor": {
+        "tracked_executable_surfaces": 2427,
+        "tracked_inventory_sha256": "84ba22dafc66e908d4ad42b2755725d5bc5d0cab83df21bc1d2f15481b4d4559",
+        "coverage_sha256": "0503150a7da81b86e91e6e757e26563ac97660259958a915ec416877e9a84f3e"
+      },
+      "current": {
+        "tracked_executable_surfaces": 2429,
+        "tracked_inventory_sha256": "3a4830b018fd0ea24b73c67eb8bf3993a35fe51ab68f58f4d39128ed64e17e00",
+        "coverage_sha256": "ff07837fef18f8f2eab01cf967b945465f951c26a3adee8ee7049db8875b9868"
+      },
+      "unassigned_tracked_surfaces": [
+        {
+          "path": "gravity-mvp/src/app/api/monitoring/fleet-check/driver-person/route.test.ts",
+          "lifecycle": "TEST",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "Route test files in this cohort are intentionally unassigned. All forty-one tracked test surfaces under gravity-mvp/src/app carry no ownership assignment, including the four closest homologous route and route-test pairs whose runtime halves are assigned to gravity_runtime_remainder. This surface classifies as lifecycle TEST with no functional owner and unknown production capability, identically to its already accepted peer at gravity-mvp/src/app/api/contacts/[id]/driver-person/route.test.ts, so it is covered by context ownership and must not enter an APPLICATION_RUNTIME governed exclusion path inventory."
+        },
+        {
+          "path": "tools/architecture/reviewed-ownership-amendments.mjs",
+          "lifecycle": "ARCHITECTURE_CONTROL",
+          "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
+          "review_rationale": "The pure amendment-resolution helper is architecture control tooling and follows the same treatment as its sibling IO-free helpers under tools/architecture, which carry no explicit ownership assignment. It performs no repository input or output, resolves the reviewed amendment chain only, and must not enter a governed exclusion path inventory."
+        }
+      ],
+      "source_hash_rebinds": [
+        {
+          "path": "gravity-mvp/src/app/api/monitoring/fleet-check/driver-person/route.ts",
+          "previous_source_sha256": "a88c5ce3df895330f9b30f1665727a0598aaf577d8c2cf5d99e6ceaf255ba403",
+          "current_source_sha256": "4341248793dccfd45123bd012cb638764e510d593e7735272c2fd1199126e6d7",
+          "review_decision": "APPROVED_MECHANICAL_SOURCE_HASH_REBIND",
+          "review_rationale": "The Stage 0 admin guard changed only the bytes of this already assigned runtime surface. Its lifecycle APPLICATION_RUNTIME, functional owner legacy_gravity_runtime, governed exclusion gravity_runtime_remainder, inventory kind exact_runtime_inventory, review decision and rationale are all carried forward from the predecessor review unchanged; only the exact source fingerprint moves."
+        }
+      ],
+      "invariants": {
+        "assignments_added": 0,
+        "assignments_removed": 0,
+        "assignments_semantically_changed": 0,
+        "exact_inventory_transitions_changed": 0,
+        "lifecycle_changes": 0,
+        "functional_owner_changes": 0,
+        "governed_exclusion_changes": 0,
+        "rationale_changes": 0
+      }
+    }
+  ]
+}
