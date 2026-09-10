@@ -101,6 +101,15 @@
   "owned_data": [
     {
       "current_writer_modules": [
+        "yfs"
+      ],
+      "id": "yandex-fleet-scraper/prisma/schema.prisma:Account",
+      "mapped_table": null,
+      "model": "Account",
+      "schema": "yandex-fleet-scraper/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
         "gravity_core"
       ],
       "id": "gravity-mvp/prisma/schema.prisma:ApiConnection",
@@ -118,12 +127,127 @@
       "schema": "gravity-mvp/prisma/schema.prisma"
     },
     {
+      "current_writer_modules": [],
+      "id": "yandex-fleet-scraper/prisma/schema.prisma:AuditLog",
+      "mapped_table": null,
+      "model": "AuditLog",
+      "schema": "yandex-fleet-scraper/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "yfs"
+      ],
+      "id": "yandex-fleet-scraper/prisma/schema.prisma:Check",
+      "mapped_table": null,
+      "model": "Check",
+      "schema": "yandex-fleet-scraper/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "yfs"
+      ],
+      "id": "yandex-fleet-scraper/prisma/schema.prisma:CheckResult",
+      "mapped_table": null,
+      "model": "CheckResult",
+      "schema": "yandex-fleet-scraper/prisma/schema.prisma"
+    },
+    {
       "current_writer_modules": [
         "drivers"
       ],
       "id": "gravity-mvp/prisma/schema.prisma:CommunicationEvent",
       "mapped_table": null,
       "model": "CommunicationEvent",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "fleet_operations"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:CompensationApplication",
+      "mapped_table": null,
+      "model": "CompensationApplication",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "fleet_operations"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:CompensationAuditEvent",
+      "mapped_table": null,
+      "model": "CompensationAuditEvent",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "fleet_operations"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:CompensationBudgetPeriod",
+      "mapped_table": null,
+      "model": "CompensationBudgetPeriod",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "fleet_operations"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:CompensationOrderClaim",
+      "mapped_table": null,
+      "model": "CompensationOrderClaim",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "fleet_operations"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:CompensationPayoutAuthorization",
+      "mapped_table": null,
+      "model": "CompensationPayoutAuthorization",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "fleet_operations"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:CompensationPerson",
+      "mapped_table": null,
+      "model": "CompensationPerson",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "fleet_operations"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:CompensationPersonBinding",
+      "mapped_table": null,
+      "model": "CompensationPersonBinding",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "fleet_operations"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:CompensationReconciliationTask",
+      "mapped_table": null,
+      "model": "CompensationReconciliationTask",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "fleet_operations"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:CompensationSettlement",
+      "mapped_table": null,
+      "model": "CompensationSettlement",
+      "schema": "gravity-mvp/prisma/schema.prisma"
+    },
+    {
+      "current_writer_modules": [
+        "fleet_operations"
+      ],
+      "id": "gravity-mvp/prisma/schema.prisma:CompensationVerifiedOrder",
+      "mapped_table": null,
+      "model": "CompensationVerifiedOrder",
       "schema": "gravity-mvp/prisma/schema.prisma"
     },
     {
@@ -202,40 +326,6 @@
       "mapped_table": null,
       "model": "SyncStatus",
       "schema": "gravity-mvp/prisma/schema.prisma"
-    },
-    {
-      "current_writer_modules": [
-        "yfs"
-      ],
-      "id": "yandex-fleet-scraper/prisma/schema.prisma:Account",
-      "mapped_table": null,
-      "model": "Account",
-      "schema": "yandex-fleet-scraper/prisma/schema.prisma"
-    },
-    {
-      "current_writer_modules": [],
-      "id": "yandex-fleet-scraper/prisma/schema.prisma:AuditLog",
-      "mapped_table": null,
-      "model": "AuditLog",
-      "schema": "yandex-fleet-scraper/prisma/schema.prisma"
-    },
-    {
-      "current_writer_modules": [
-        "yfs"
-      ],
-      "id": "yandex-fleet-scraper/prisma/schema.prisma:Check",
-      "mapped_table": null,
-      "model": "Check",
-      "schema": "yandex-fleet-scraper/prisma/schema.prisma"
-    },
-    {
-      "current_writer_modules": [
-        "yfs"
-      ],
-      "id": "yandex-fleet-scraper/prisma/schema.prisma:CheckResult",
-      "mapped_table": null,
-      "model": "CheckResult",
-      "schema": "yandex-fleet-scraper/prisma/schema.prisma"
     }
   ],
   "owned_paths": [
