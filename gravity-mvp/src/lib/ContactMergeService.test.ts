@@ -32,42 +32,13 @@ describe('ContactMergeService compatibility facade', () => {
     mocks.mergeContactsV1.mockReset()
   })
 
-  it('keeps the contact-to-driver signature, system default and unversioned result', async () => {
-    mocks.mergeContactsV1.mockResolvedValue({
-      contract: MERGE_CONTACTS_RESULT_V1,
-      status: 'merged',
-      survivorId: 'survivor',
-      mergedId: 'source',
-      driverId: 'driver-db-id',
-      mergeRecordId: 'merge-id',
-    })
-
-    await expect(ContactMergeService.mergeContactToDriver('source', 'driver-request-id')).resolves.toEqual({
-      status: 'merged',
-      survivorId: 'survivor',
-      mergedId: 'source',
-      driverId: 'driver-db-id',
-      mergeRecordId: 'merge-id',
-    })
-    expect(mocks.mergeContactsV1).toHaveBeenCalledWith({
-      contract: MERGE_CONTACTS_COMMAND_V1,
-      operation: 'contact_to_driver',
-      contactId: 'source',
-      driverId: 'driver-request-id',
-      mergedBy: 'system',
-    })
-  })
-
-  it('keeps empty mergedBy distinct from an omitted mergedBy', async () => {
-    mocks.mergeContactsV1.mockResolvedValue({
-      contract: MERGE_CONTACTS_RESULT_V1,
-      status: 'linked',
-      contactId: 'source',
-      driverId: 'driver-db-id',
-    })
-
-    await ContactMergeService.mergeContactToDriver('source', 'driver-request-id', '')
-    expect(mocks.mergeContactsV1).toHaveBeenCalledWith(expect.objectContaining({ mergedBy: '' }))
+  it('retires the legacy contact-to-driver facade before composition', async () => {
+    await expect(ContactMergeService.mergeContactToDriver('source', 'driver-request-id'))
+      .rejects.toMatchObject({
+        name: 'MergeError',
+        code: 'DRIVER_PERSON_CONFIRMATION_REQUIRED',
+      })
+    expect(mocks.mergeContactsV1).not.toHaveBeenCalled()
   })
 
   it('keeps the contact-to-contact signature and strips only the contract envelope', async () => {
@@ -92,7 +63,24 @@ describe('ContactMergeService compatibility facade', () => {
     })
   })
 
-  it('retains the MergeError runtime constructor expected by both routes', () => {
+  it('preserves a typed automatic-merge block through the compatibility facade', async () => {
+    mocks.mergeContactsV1.mockResolvedValue({
+      contract: MERGE_CONTACTS_RESULT_V1,
+      status: 'automatic_merge_blocked',
+      leftContactId: 'source',
+      rightContactId: 'target',
+      reason: 'business_state_collision',
+    })
+
+    await expect(ContactMergeService.mergeContactToContact('source', 'target')).resolves.toEqual({
+      status: 'automatic_merge_blocked',
+      leftContactId: 'source',
+      rightContactId: 'target',
+      reason: 'business_state_collision',
+    })
+  })
+
+  it('retains the MergeError runtime constructor expected by the contact merge route', () => {
     const error = new MergeError('CONTACT_NOT_FOUND', 'missing')
     expect(error).toMatchObject({ name: 'MergeError', code: 'CONTACT_NOT_FOUND', message: 'missing' })
     expect(error).toBeInstanceOf(MergeError)

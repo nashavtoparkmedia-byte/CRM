@@ -301,10 +301,6 @@ function GlobalSettingsModal({
     settings.notifyAccountDegraded,
   );
   const [savingTg, setSavingTg] = useState(false);
-  const [testingTg, setTestingTg] = useState(false);
-  const [tgTestResult, setTgTestResult] = useState<
-    { ok: boolean; message: string } | null
-  >(null);
 
   useEffect(() => setMinutes(initialMinutes), [initialMinutes]);
   useEffect(() => setReply(initialReply), [initialReply]);
@@ -361,7 +357,6 @@ function GlobalSettingsModal({
 
   async function saveTg() {
     setSavingTg(true);
-    setTgTestResult(null);
     try {
       const body: Record<string, unknown> = {
         telegramChatId: tgChatIdInput.trim() || null,
@@ -389,7 +384,6 @@ function GlobalSettingsModal({
   async function clearTgToken() {
     if (!confirm('Очистить bot_token? Уведомления отключатся.')) return;
     setSavingTg(true);
-    setTgTestResult(null);
     try {
       await api('/settings', {
         method: 'PATCH',
@@ -401,32 +395,6 @@ function GlobalSettingsModal({
       alert(e instanceof Error ? e.message : String(e));
     } finally {
       setSavingTg(false);
-    }
-  }
-
-  async function testTg() {
-    setTestingTg(true);
-    setTgTestResult(null);
-    try {
-      const res = await api<{ ok: boolean; error?: string }>(
-        '/settings/telegram/test',
-        { method: 'POST' },
-      );
-      if (res.ok) {
-        setTgTestResult({ ok: true, message: '✓ Сообщение отправлено' });
-      } else {
-        setTgTestResult({
-          ok: false,
-          message: res.error ?? 'Telegram отклонил сообщение',
-        });
-      }
-    } catch (e) {
-      setTgTestResult({
-        ok: false,
-        message: e instanceof Error ? e.message : String(e),
-      });
-    } finally {
-      setTestingTg(false);
     }
   }
 
@@ -718,32 +686,7 @@ function GlobalSettingsModal({
                   >
                     {savingTg ? '…' : 'Сохранить'}
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void testTg()}
-                    disabled={testingTg || !settings.telegramBotTokenSet}
-                    title={
-                      settings.telegramBotTokenSet
-                        ? 'Отправить тестовое сообщение'
-                        : 'Сначала сохраните bot_token'
-                    }
-                  >
-                    {testingTg ? '…' : 'Тест'}
-                  </Button>
                 </div>
-                {tgTestResult && (
-                  <div
-                    className={cn(
-                      'rounded-md border px-3 py-[2px] text-sm',
-                      tgTestResult.ok
-                        ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                        : 'bg-red-50 text-red-800 border-red-200',
-                    )}
-                  >
-                    {tgTestResult.message}
-                  </div>
-                )}
                 <div className="text-xs text-muted-foreground leading-relaxed">
                   <div className="font-semibold text-foreground">Как настроить:</div>
                   <ol className="list-decimal pl-5 space-y-0.5">
@@ -757,7 +700,7 @@ function GlobalSettingsModal({
                       Узнай свой <code className="rounded bg-slate-100 text-slate-800 px-1 font-mono">chat_id</code>:
                       напиши <code className="rounded bg-slate-100 text-slate-800 px-1 font-mono">@userinfobot</code>.
                     </li>
-                    <li>Вставь оба значения сюда, жми «Сохранить», потом «Тест».</li>
+                    <li>Вставь оба значения сюда и нажми «Сохранить».</li>
                   </ol>
                 </div>
               </div>

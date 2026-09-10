@@ -14,7 +14,6 @@ import {
     addMaxConnection,
     disconnectMax,
     updateMaxConnectionSettings,
-    sendMaxMessage,
     pauseMaxConnection,
     resumeMaxConnection,
     deleteMaxMessages
@@ -49,12 +48,6 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
     const [isScraperOnline, setIsScraperOnline] = useState(true)
     const [pollInterval, setPollInterval] = useState<NodeJS.Timeout|null>(null)
     
-    // Testing State
-    const [testPhone, setTestPhone] = useState('')
-    const [testName, setTestName] = useState('')
-    const [testMessage, setTestMessage] = useState('Привет! Это тестовое сообщение из Yoko CRM.')
-    const [testLoading, setTestLoading] = useState(false)
-
     // Check MAX Scraper status
     const checkPersonalStatus = async () => {
         try {
@@ -191,26 +184,6 @@ export default function MaxLoginClient({ initialConnections = [] }: { initialCon
     const startEditing = (connection: any) => {
         setEditingId(connection.id)
         setEditName(connection.name || '')
-    }
-
-    const handleSendTest = async (isPersonal: boolean, connId?: string) => {
-        if (!testPhone) {
-            alert("Введите номер телефона")
-            return
-        }
-        setTestLoading(true)
-        try {
-            await sendMaxMessage(testPhone, testMessage, { 
-                connectionId: connId, 
-                isPersonal,
-                name: testName 
-            })
-            alert("Сообщение отправлено!")
-        } catch (err: any) {
-            alert(err.message || "Ошибка при отправке")
-        } finally {
-            setTestLoading(false)
-        }
     }
 
     const saveEdit = async (connection: any) => {

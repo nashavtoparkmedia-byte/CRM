@@ -84,6 +84,12 @@ function errorCode(error: unknown): string | null {
     return typeof code === 'string' ? code : null
 }
 
+function isAuthorityFailure(error: unknown): boolean {
+    const message = errorRecord(error)?.message
+    return errorCode(error) === 'DRIVER_TELEGRAM_LINK_CONTRADICTION'
+        || (typeof message === 'string' && message.startsWith('DRIVER_TELEGRAM_'))
+}
+
 function errorTargetIncludes(error: unknown, expected: string): boolean {
     const meta = errorRecord(errorRecord(error)?.meta)
     const target = meta?.target
@@ -125,6 +131,12 @@ export function createDriverTelegramLinkOrchestratorV1(
             if (errorCode(error) === 'P2002' && errorTargetIncludes(error, 'telegramId')) {
                 return { success: false, error: 'Этот Telegram ID уже привязан к другому водителю' }
             }
+            if (isAuthorityFailure(error)) {
+                return {
+                    success: false,
+                    error: 'Нужны подтверждённые контакт, личный Telegram-чат и основной водитель',
+                }
+            }
             return { success: false, error: 'Ошибка базы данных' }
         }
     }
@@ -140,6 +152,12 @@ export function createDriverTelegramLinkOrchestratorV1(
         } catch (error: unknown) {
             if (errorCode(error) === 'P2025') return { success: true, mutated: false }
             delivery.logError('Failed to unlink telegram driver:', error)
+            if (isAuthorityFailure(error)) {
+                return {
+                    success: false,
+                    error: 'Нужны подтверждённые контакт, личный Telegram-чат и основной водитель',
+                }
+            }
             return { success: false, error: 'Ошибка базы данных' }
         }
     }

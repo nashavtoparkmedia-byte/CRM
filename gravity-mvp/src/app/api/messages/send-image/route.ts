@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-
-const MAX_SCRAPER_URL = process.env.MAX_SCRAPER_URL || 'http://localhost:3005'
+import { getMaxChannelDeliveryV1 } from '@/modules/messaging/public/v1/channel-delivery-runtime'
+import { prepareOutboundConversationV1 } from '@/modules/messaging/public/v1/outbound-conversation-identity-runtime'
 
 export async function POST(req: NextRequest) {
     try {
@@ -15,45 +15,52 @@ export async function POST(req: NextRequest) {
             )
         }
 
-        // Get the chat to find channel and externalChatId
+        // Prove the exact ContactIdentity/account/transport tuple before the
+        // provider call or any local message mutation.
         const chat = await prisma.chat.findUnique({
             where: { id: chatId },
-            select: { channel: true, externalChatId: true }
+            select: {
+                id: true,
+                contactId: true,
+                contactIdentityId: true,
+                channel: true,
+                externalChatId: true,
+                chatType: true,
+                metadata: true,
+            },
         })
 
         if (!chat) {
             return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
         }
 
-        if (chat.channel !== 'max') {
+        const outbound = await prepareOutboundConversationV1(chat)
+        if (!outbound.chatId || outbound.chatId !== chatId) {
+            throw new Error('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
+        }
+        if (outbound.channel !== 'max') {
             return NextResponse.json(
-                { error: `Image send not implemented for channel: ${chat.channel}` },
+                { error: `Image send not implemented for channel: ${outbound.channel}` },
                 { status: 400 }
             )
         }
 
-        // Forward to MAX scraper
-        const res = await fetch(`${MAX_SCRAPER_URL}/send-image`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                chatId:   Number(chat.externalChatId),
-                base64,
-                filename,
-                mimeType,
-                caption:  caption || '',
-            }),
+        await getMaxChannelDeliveryV1().sendMedia({
+            chatId: outbound.target,
+            base64,
+            filename,
+            mimeType,
+            caption: caption || '',
+            mediaType: 'image',
+            providerAccountId: outbound.providerAccountId,
+            connectionId: outbound.connectionId,
+            isPersonal: outbound.isMaxPersonal,
         })
-
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({ error: res.statusText }))
-            return NextResponse.json({ error: 'MAX scraper error', details: err }, { status: 502 })
-        }
 
         // Save outgoing image message to DB so it appears in CRM
         const message = await prisma.message.create({
             data: {
-                chatId:    chatId,
+                chatId:    outbound.chatId,
                 direction: 'outbound',
                 type:      'image',
                 content:   caption || '[Фото]',
@@ -65,7 +72,7 @@ export async function POST(req: NextRequest) {
         })
 
         await prisma.chat.update({
-            where: { id: chatId },
+            where: { id: outbound.chatId },
             data:  { lastMessageAt: new Date() },
         })
 

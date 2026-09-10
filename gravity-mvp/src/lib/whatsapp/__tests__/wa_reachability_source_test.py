@@ -23,10 +23,18 @@ def test_runtime_ready_client_is_preferred_over_db_status() -> None:
 
 
 def test_provider_result_still_comes_only_from_is_registered_user() -> None:
-    assert_match(r"client\.isRegisteredUser\(`\$\{digits\}@c\.us`\)")
-    assert_match(r"if \(result\) \{\s*return \{ reachable: true, confirmed: true \}")
-    assert_match(r"return \{ reachable: false, error: 'Номер не зарегистрирован в WhatsApp' \}")
-    assert_no_match(r"return \{ reachable: true, confirmed: true \}[\s\S]{0,300}no_ready_connection")
+    assert_match(r"const providerTargetId = canonicalWhatsAppIdentityExternalIdV1\(`\$\{digits\}@c\.us`\)")
+    assert_match(r"client\.isRegisteredUser\(providerTargetId\)")
+    assert_match(
+        r"if \(result\) \{\s*return \{\s*reachable: true,\s*confirmed: true,"
+        r"\s*providerAccountId: connId,\s*providerTargetId,"
+    )
+    assert_match(
+        r"reachable: false,\s*confirmed: false,"
+        r"\s*error: 'Номер не зарегистрирован в WhatsApp',"
+        r"\s*providerAccountId: connId,\s*providerTargetId,"
+    )
+    assert_no_match(r"reachable: true,[\s\S]{0,300}no_ready_connection")
 
 
 if __name__ == "__main__":

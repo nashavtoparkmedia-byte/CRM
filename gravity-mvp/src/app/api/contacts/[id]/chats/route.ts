@@ -3,6 +3,10 @@ import {
   openContactConversationForContactV1,
   type PlatformContactConversationChannelV1,
 } from '@/modules/platform-shell/internal/contact-conversation-orchestrator'
+import {
+  getIntegrationAdminPrincipal,
+  isExactSameOriginMutationRequest,
+} from '@/modules/identity-access/public/v1'
 
 /**
  * POST /api/contacts/:id/chats
@@ -20,6 +24,13 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!isExactSameOriginMutationRequest(req)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+  if (!await getIntegrationAdminPrincipal()) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const { id } = await params
     const body = await req.json()
@@ -51,10 +62,52 @@ export async function POST(
           { status: 404 }
         )
       }
+      if (result.status === 'identity_ambiguous') {
+        return NextResponse.json(
+          { error: 'IDENTITY_AMBIGUOUS', message: 'Select an exact channel identity before writing' },
+          { status: 409 },
+        )
+      }
+      if (result.status === 'identity_conflicted') {
+        return NextResponse.json(
+          { error: 'IDENTITY_CONFLICTED', message: 'Resolve the channel identity conflict before writing' },
+          { status: 409 },
+        )
+      }
       if (result.status === 'phone_not_found') {
         return NextResponse.json(
           { error: 'Phone not found or does not belong to contact' },
           { status: 404 },
+        )
+      }
+      if (result.status === 'identity_unreachable') {
+        return NextResponse.json(
+          { error: 'IDENTITY_UNREACHABLE', message: 'Channel identity is unavailable' },
+          { status: 409 },
+        )
+      }
+      if (result.status === 'identity_reachability_unknown') {
+        return NextResponse.json(
+          { error: 'IDENTITY_REACHABILITY_UNKNOWN', message: 'Channel reachability must be confirmed before writing' },
+          { status: 409 },
+        )
+      }
+      if (result.status === 'transport_unbound') {
+        return NextResponse.json(
+          { error: 'TRANSPORT_UNBOUND', message: 'No proven transport is bound to this conversation' },
+          { status: 409 },
+        )
+      }
+      if (result.status === 'provider_account_unproven') {
+        return NextResponse.json(
+          { error: 'PROVIDER_ACCOUNT_UNPROVEN', message: 'No exact provider-account scope is proven' },
+          { status: 409 },
+        )
+      }
+      if (result.status === 'conversation_target_unproven') {
+        return NextResponse.json(
+          { error: 'CONVERSATION_TARGET_UNPROVEN', message: 'No channel-proven conversation target exists' },
+          { status: 409 },
         )
       }
       return NextResponse.json(
@@ -74,8 +127,11 @@ export async function POST(
         isNew: result.isNewConversation,
       },
     })
-  } catch (err: any) {
-    console.error('[contacts/:id/chats] POST Error:', err.message)
+  } catch (err: unknown) {
+    console.error(
+      '[contacts/:id/chats] POST Error:',
+      err instanceof Error ? err.message : String(err),
+    )
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }

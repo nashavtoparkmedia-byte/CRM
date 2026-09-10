@@ -78,24 +78,33 @@ const findCommand = {
   contactId: 'contact-1',
   contactIdentityId: 'identity-1',
   channel: 'telegram',
+  identityExternalId: 'legacy-user',
+  exactExternalChatIds: ['telegram:legacy-user'],
+  providerAccountId: 'telegram-account-1',
   allowContactFallback: true,
 }
 const fallbackCommand = {
   contract: messagingContracts.OPEN_FALLBACK_CONTACT_CONVERSATION_COMMAND_V1,
   legacyDriverId: 'driver-1',
   channel: 'telegram',
-  externalChatId: 'telegram:79990001122',
+  identityExternalId: '79990001122',
+  exactExternalChatIds: ['telegram:79990001122'],
   name: 'Contact One',
   contactId: 'contact-1',
   contactIdentityId: 'identity-1',
+  providerAccountId: 'telegram-account-1',
 }
 const conversation = {
   id: 'chat-1',
   channel: 'telegram',
   externalChatId: 'telegram:legacy-user',
   status: 'open',
-  contactId: null,
-  contactIdentityId: null,
+  contactId: 'contact-1',
+  contactIdentityId: 'identity-1',
+  metadata: {
+    providerAccountId: 'telegram-account-1',
+    connectionId: 'telegram-connection-1',
+  },
 }
 const select = {
   id: true,
@@ -104,6 +113,7 @@ const select = {
   status: true,
   contactId: true,
   contactIdentityId: true,
+  metadata: true,
 }
 const orderBy = [{ lastMessageAt: 'desc' }, { createdAt: 'desc' }]
 
@@ -115,9 +125,9 @@ try {
     assert.deepEqual(messagingContracts.CONTACT_CONVERSATION_CHANNELS_V1, ['telegram', 'whatsapp', 'max'])
     const fleetIndex = readFileSync(path.join(root, 'gravity-mvp/src/modules/fleet-operations/public/v1/index.ts'), 'utf8')
     const messagingIndex = readFileSync(path.join(root, 'gravity-mvp/src/modules/messaging/public/v1/index.ts'), 'utf8')
-    assert.match(fleetIndex, /export const findDriverByExactPhoneV1=/)
-    assert.match(messagingIndex, /export const findAndBackfillContactConversationV1=/)
-    assert.match(messagingIndex, /export const openFallbackContactConversationV1=/)
+    assert.match(fleetIndex, /\bfindDriverByExactPhoneV1\b/)
+    assert.match(messagingIndex, /\bfindAndBackfillContactConversationV1\b/)
+    assert.match(messagingIndex, /\bopenFallbackContactConversationV1\b/)
   })
 
   check('strict parsers reject unknown fields, invalid values and later versions', () => {
@@ -129,7 +139,9 @@ try {
     assert.throws(() => fleetContracts.parseFindDriverByExactPhoneQueryV1({ ...fleet, phone: '' }))
     assert.throws(() => fleetContracts.parseFindDriverByExactPhoneQueryV1({ ...fleet, contract: 'fleet_operations.FindDriverByExactPhoneQuery.v2' }), (error) => error.code === 'UNSUPPORTED_CONTRACT_VERSION')
     assert.throws(() => messagingContracts.parseFindAndBackfillContactConversationCommandV1({ ...findCommand, channel: 'phone' }))
+    assert.throws(() => messagingContracts.parseFindAndBackfillContactConversationCommandV1({ ...findCommand, externalChatId: 'max:legacy-user' }))
     assert.throws(() => messagingContracts.parseOpenFallbackContactConversationCommandV1({ ...fallbackCommand, legacyDriverId: '' }))
+    assert.throws(() => messagingContracts.parseOpenFallbackContactConversationCommandV1({ ...fallbackCommand, externalChatId: 'whatsapp:79990001122' }))
     assert.throws(() => messagingContracts.parseOpenFallbackContactConversationCommandV1({ ...fallbackCommand, rawWhere: {} }))
     assert.throws(() => messagingContracts.parseOpenFallbackContactConversationCommandV1({ ...fallbackCommand, contract: 'messaging.OpenFallbackContactConversationCommand.v2' }), (error) => error.code === 'UNSUPPORTED_CONTRACT_VERSION')
   })
@@ -147,13 +159,13 @@ try {
     const calls = []
     const port = {
       async findAndBackfill(input) { calls.push(['find', input]); return conversation },
-      async openFallback(input) { calls.push(['fallback', input]); return { conversation, isNew: false } },
+      async openFallback(input) { calls.push(['fallback', input]); return { status: 'ready', conversation, isNew: false } },
     }
     assert.equal((await messagingHandlers.createFindAndBackfillContactConversationHandlerV1(port)(findCommand)).conversation.id, 'chat-1')
     assert.equal((await messagingHandlers.createOpenFallbackContactConversationHandlerV1(port)(fallbackCommand)).isNew, false)
     assert.deepEqual(calls, [
-      ['find', { contactId: 'contact-1', contactIdentityId: 'identity-1', channel: 'telegram', allowContactFallback: true }],
-      ['fallback', { legacyDriverId: 'driver-1', channel: 'telegram', externalChatId: 'telegram:79990001122', name: 'Contact One', contactId: 'contact-1', contactIdentityId: 'identity-1' }],
+      ['find', { contactId: 'contact-1', contactIdentityId: 'identity-1', channel: 'telegram', identityExternalId: 'legacy-user', exactExternalChatIds: ['telegram:legacy-user'], providerAccountId: 'telegram-account-1', allowContactFallback: true }],
+      ['fallback', { legacyDriverId: 'driver-1', channel: 'telegram', identityExternalId: '79990001122', exactExternalChatIds: ['telegram:79990001122'], name: 'Contact One', contactId: 'contact-1', contactIdentityId: 'identity-1', providerAccountId: 'telegram-account-1' }],
     ])
     await assert.rejects(messagingHandlers.createFindAndBackfillContactConversationHandlerV1({
       async findAndBackfill() { throw new Error('owner failed') },
@@ -169,54 +181,78 @@ try {
     assert.deepEqual(plain(calls), [{ where: { phone: '+79990001122' }, select: { id: true } }])
   })
 
-  await checkAsync('contact lookup uses exact latest ordering and backfills only the missing identity', async () => {
+  await checkAsync('exact identity lookup is bounded, owner exact and read-only', async () => {
     const calls = []
     const prisma = { chat: {
-      async findFirst(input) { calls.push(['findFirst', input]); return { ...conversation, contactId: 'contact-1' } },
-      async update(input) { calls.push(['update', input]); return {} },
+      async findMany(input) { calls.push(['findMany', input]); return [conversation] },
+      async updateMany(input) { calls.push(['updateMany', input]); throw new Error('unexpected update') },
     } }
     const port = loadAdapter(messagingAdapterOutput, 'legacyPrismaContactConversationPortV1', prisma)
-    assert.deepEqual(plain(await port.findAndBackfill({ contactId: 'contact-1', contactIdentityId: 'identity-1', channel: 'telegram', allowContactFallback: true })), {
-      ...conversation, contactId: 'contact-1', contactIdentityId: 'identity-1',
+    assert.deepEqual(plain(await port.findAndBackfill({ ...findCommand, contract: undefined })), {
+      id: 'chat-1',
+      channel: 'telegram',
+      externalChatId: 'telegram:legacy-user',
+      status: 'open',
+      contactId: 'contact-1',
+      contactIdentityId: 'identity-1',
+      providerAccountId: 'telegram-account-1',
+      transportConnectionId: 'telegram-connection-1',
     })
-    assert.deepEqual(plain(calls), [
-      ['findFirst', { where: { contactIdentityId: 'identity-1', channel: 'telegram' }, orderBy, select }],
-      ['update', { where: { id: 'chat-1' }, data: { contactIdentityId: 'identity-1' } }],
-    ])
+    assert.deepEqual(plain(calls), [[
+      'findMany',
+      {
+        where: { contactIdentityId: 'identity-1', channel: 'telegram' },
+        orderBy,
+        take: 2,
+        select,
+      },
+    ]])
   })
 
-  await checkAsync('fallback tries legacy driver then unique external id and preserves existing links', async () => {
+  await checkAsync('incomplete legacy ownership is never backfilled across the owner boundary', async () => {
     const calls = []
-    const existing = { ...conversation, contactId: 'existing-contact', contactIdentityId: 'existing-identity' }
     const prisma = { chat: {
-      async findFirst(input) { calls.push(['findFirst', input]); return null },
-      async findUnique(input) { calls.push(['findUnique', input]); return existing },
-      async update(input) { calls.push(['update', input]); return {} },
+      async findMany(input) { calls.push(['findMany', input]); return [{ ...conversation, contactIdentityId: null }] },
+      async updateMany(input) { calls.push(['updateMany', input]); throw new Error('unexpected update') },
+    } }
+    const port = loadAdapter(messagingAdapterOutput, 'legacyPrismaContactConversationPortV1', prisma)
+    assert.equal(await port.findAndBackfill({ ...findCommand, contract: undefined, allowContactFallback: false }), null)
+    assert.equal(calls.some(([operation]) => operation === 'updateMany'), false)
+  })
+
+  await checkAsync('fallback reuses only an exact owner pair with a proven transport', async () => {
+    const calls = []
+    const existing = { ...conversation, externalChatId: 'telegram:79990001122' }
+    const prisma = { chat: {
+      async findMany(input) { calls.push(['findMany', input]); return [existing] },
     } }
     const port = loadAdapter(messagingAdapterOutput, 'legacyPrismaContactConversationPortV1', prisma)
     const result = await port.openFallback({ ...fallbackCommand, contract: undefined })
+    assert.equal(result.status, 'ready')
     assert.equal(result.isNew, false)
-    assert.deepEqual(plain(result.conversation), existing)
-    assert.deepEqual(plain(calls), [
-      ['findFirst', { where: { driverId: 'driver-1', channel: 'telegram' }, orderBy, select }],
-      ['findUnique', { where: { externalChatId: 'telegram:79990001122' }, select }],
-    ])
+    assert.equal(result.conversation.externalChatId, 'telegram:79990001122')
+    assert.deepEqual(plain(calls), [[
+      'findMany',
+      {
+        where: { channel: 'telegram', externalChatId: { in: ['telegram:79990001122'] } },
+        orderBy,
+        take: 2,
+        select,
+      },
+    ]])
   })
 
-  await checkAsync('missing fallback creates exactly one new linked conversation', async () => {
+  await checkAsync('missing provider conversation target fails closed without creation', async () => {
     const calls = []
-    const created = { ...conversation, externalChatId: 'telegram:79990001122', status: 'new', contactId: 'contact-1', contactIdentityId: 'identity-1' }
     const prisma = { chat: {
-      async findUnique(input) { calls.push(['findUnique', input]); return null },
-      async create(input) { calls.push(['create', input]); return created },
+      async findMany(input) { calls.push(['findMany', input]); return [] },
+      async create(input) { calls.push(['create', input]); throw new Error('unexpected create') },
     } }
     const port = loadAdapter(messagingAdapterOutput, 'legacyPrismaContactConversationPortV1', prisma)
-    const result = await port.openFallback({ ...fallbackCommand, contract: undefined, legacyDriverId: null })
-    assert.equal(result.isNew, true)
-    assert.deepEqual(plain(calls), [
-      ['findUnique', { where: { externalChatId: 'telegram:79990001122' }, select }],
-      ['create', { data: { channel: 'telegram', externalChatId: 'telegram:79990001122', name: 'Contact One', status: 'new', contactId: 'contact-1', contactIdentityId: 'identity-1' }, select }],
-    ])
+    assert.deepEqual(plain(await port.openFallback({ ...fallbackCommand, contract: undefined })), {
+      status: 'transport_unbound',
+    })
+    assert.equal(calls.some(([operation]) => operation === 'create'), false)
   })
 } finally {
   rmSync(out, { recursive: true, force: true })

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { REPLACE_DRIVER_TELEGRAM_LINK_COMMAND_V1, UPSERT_DRIVER_TELEGRAM_LINK_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
+import { SAVE_MANUAL_DRIVER_TELEGRAM_LINK_COMMAND_V1 } from '@/contracts/telegram-channel/v1'
 import { hasIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
 import {
   canonicalDriverNameKeyV1,
@@ -8,9 +8,8 @@ import {
   normalizeDriverSearchQueryV1,
   searchLocalDriversV1,
   searchYandexParksByDriverQueryV1,
-  upsertParkMatchedDriverV1,
 } from '@/modules/fleet-operations/public/v1'
-import { replaceDriverTelegramLinkV1, upsertDriverTelegramLinkV1 } from '@/modules/telegram-channel/public/v1'
+import { saveManualDriverTelegramLinkV1 } from '@/modules/telegram-channel/public/v1'
 
 type DriverSearchRow = {
   id: string
@@ -61,6 +60,21 @@ function normalizedTelegramId(value: unknown): string | null {
   return TELEGRAM_ID_PATTERN.test(normalized) && BigInt(normalized) <= TELEGRAM_ID_MAX
     ? normalized
     : null
+}
+
+async function saveConfirmedTelegramLink(driverId: string, telegramId: string) {
+  try {
+    await saveManualDriverTelegramLinkV1({
+      contract: SAVE_MANUAL_DRIVER_TELEGRAM_LINK_COMMAND_V1,
+      driverId,
+      telegramId: BigInt(telegramId),
+    })
+    return null
+  } catch {
+    return NextResponse.json({
+      error: 'An admitted private Telegram chat and confirmed main driver are required',
+    }, { status: 409 })
+  }
 }
 
 // GET /api/bot-link?telegramId=316425068
@@ -147,7 +161,7 @@ export async function POST(req: NextRequest) {
         namePhoneKeys.forEach(key => seenYandexNamePhoneKeys.add(key))
         const local = localByYandexId.get(profile.id)
         drivers.push({
-          id: local?.id || `yandex:${park.parkId}:${profile.id}`,
+          id: profile.driverId || local?.id || `yandex:${park.parkId}:${profile.id}`,
           yandexDriverId: profile.id,
           fullName: profile.fullName,
           phone: profile.phones[0] || local?.phone || null,
@@ -192,13 +206,12 @@ export async function POST(req: NextRequest) {
     const yandexDriverId = typeof body.yandexDriverId === 'string' ? body.yandexDriverId.trim() : ''
     const parkId = typeof body.parkId === 'string' ? body.parkId.trim() : ''
     const driverName = typeof body.driverName === 'string' ? body.driverName.trim() : ''
-    const usernameValue = typeof body.username === 'string' ? body.username.trim() : ''
-    const username = usernameValue || null
+    const username = typeof body.username === 'string' ? body.username.trim() : ''
     if (
       yandexDriverId.length > DRIVER_ID_MAX_LENGTH
       || parkId.length > DRIVER_ID_MAX_LENGTH
       || (body.username !== undefined && body.username !== null && typeof body.username !== 'string')
-      || (username !== null && !TELEGRAM_USERNAME_PATTERN.test(username))
+      || (username.length > 0 && !TELEGRAM_USERNAME_PATTERN.test(username))
       || ((!yandexDriverId || !parkId || !driverName) && driverId.startsWith('yandex:'))
     ) return NextResponse.json({ error: 'Invalid driver identity' }, { status: 400 })
 
@@ -214,18 +227,25 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Yandex driver could not be verified in the selected park' }, { status: 404 })
       }
 
-      const driver = await upsertParkMatchedDriverV1({
-        yandexDriverId: profile.id,
-        fullName: profile.fullName,
-        phone: profile.phones[0] || null,
+      // A provider search result is not a Contact-owned person decision. Only
+      // an already-existing local Driver can match Contact.mainDriverId; do not
+      // create a Driver merely to make a manual Telegram link possible.
+      const driver = await prisma.driver.findUnique({
+        where: { id: driverId },
+        select: { id: true, fullName: true, yandexDriverId: true },
       })
-      await upsertDriverTelegramLinkV1({
-        contract: UPSERT_DRIVER_TELEGRAM_LINK_COMMAND_V1,
-        driverId: driver.id,
-        telegramId: BigInt(telegramId),
-        username,
-        activeParkId: parkId,
-      })
+      if (
+        !profile.driverId
+        || profile.driverId !== driverId
+        || !driver
+        || driver.yandexDriverId !== profile.id
+      ) {
+        return NextResponse.json({
+          error: 'Confirm the driver person on an existing CRM Driver before linking Telegram',
+        }, { status: 409 })
+      }
+      const rejected = await saveConfirmedTelegramLink(driver.id, telegramId)
+      if (rejected) return rejected
       return NextResponse.json({ success: true, driverName: profile.fullName, parkName: park?.parkName || parkId })
     }
 
@@ -235,7 +255,8 @@ export async function POST(req: NextRequest) {
     })
     if (!driver) return NextResponse.json({ error: 'Driver not found' }, { status: 404 })
 
-    await replaceDriverTelegramLinkV1({ contract: REPLACE_DRIVER_TELEGRAM_LINK_COMMAND_V1, driverId, telegramId: BigInt(telegramId) })
+    const rejected = await saveConfirmedTelegramLink(driver.id, telegramId)
+    if (rejected) return rejected
 
     return NextResponse.json({ success: true, driverName: driver.fullName })
   }

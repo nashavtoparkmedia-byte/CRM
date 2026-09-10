@@ -81,6 +81,28 @@ function loadAdapter(prisma, contactService, consoleOverride = console) {
     require(specifier) {
       if (specifier === '@/lib/prisma') return { prisma }
       if (specifier === '@/lib/ContactService') return { ContactService: contactService }
+      if (specifier === '@/lib/contacts/SafeContactResolutionExecutor') {
+        return { isSafeContactResolutionSuccess: (result) => result?.contact && result?.identity }
+      }
+      if (specifier === '@/modules/contacts/internal/contact-ownership-coordinator') {
+        return {
+          runContactOwnershipTransaction: (work) => work(prisma),
+          lockContactOwnershipRows: async () => ({}),
+        }
+      }
+      if (specifier === './contact-evidence-state') {
+        const jsonRecord = (value) => value && typeof value === 'object' && !Array.isArray(value)
+          ? value
+          : {}
+        return {
+          jsonRecord,
+          identityEvidenceState: (metadata) => ({
+            conflictState: typeof jsonRecord(metadata).conflictState === 'string'
+              ? jsonRecord(metadata).conflictState
+              : 'clear',
+          }),
+        }
+      }
       throw new Error(`unexpected adapter import: ${specifier}`)
     },
   })
@@ -88,14 +110,9 @@ function loadAdapter(prisma, contactService, consoleOverride = console) {
 }
 
 function makePrisma({
-  contact = { id: 'contact-1', displayName: 'Contact One', isArchived: false },
+  contact = { id: 'contact-1', displayName: 'Contact One', isArchived: false, customFields: {} },
   identities = [],
   phones = [],
-  createdIdentity = {
-    id: 'identity-created',
-    channel: 'telegram',
-    externalId: '79991234567',
-  },
 } = {}) {
   const calls = []
   let identityRead = 0
@@ -112,9 +129,9 @@ function makePrisma({
         calls.push(['contactIdentity.findFirst', input])
         return identities[identityRead++] ?? null
       },
-      async create(input) {
-        calls.push(['contactIdentity.create', input])
-        return createdIdentity
+      async findMany(input) {
+        calls.push(['contactIdentity.findMany', input])
+        return identities.slice(0, 2)
       },
     },
     contactPhone: {
@@ -322,7 +339,16 @@ try {
   })
 
   await checkAsync('prepare handler exposes each expected non-ready status without synthetic fields', async () => {
-    for (const status of ['contact_not_found', 'identity_not_found', 'phone_not_found', 'no_identity']) {
+    for (const status of [
+      'contact_not_found',
+      'identity_not_found',
+      'identity_ambiguous',
+      'identity_conflicted',
+      'identity_unreachable',
+      'identity_reachability_unknown',
+      'phone_not_found',
+      'no_identity',
+    ]) {
       const port = {
         async resolveChannelContact() { throw new Error('unexpected resolve') },
         async prepareContactConversationIdentity() { return { status } },
@@ -402,7 +428,10 @@ try {
   })
 
   await checkAsync('explicit active identity is contact and channel scoped and short-circuits fallback', async () => {
-    const identity = { id: 'identity-explicit', channel: 'telegram', externalId: 'tg-42' }
+    const identity = {
+      id: 'identity-explicit', channel: 'telegram', externalId: 'tg-42',
+      reachabilityStatus: 'confirmed',
+    }
     const { prisma, calls } = makePrisma({ identities: [identity] })
     assert.deepEqual(
       plain(await loadAdapter(prisma, unexpectedContactService)
@@ -412,7 +441,7 @@ try {
       {
         status: 'ready',
         contact: { id: 'contact-1', displayName: 'Contact One' },
-        identity,
+        identity: { id: 'identity-explicit', channel: 'telegram', externalId: 'tg-42' },
       },
     )
     assert.deepEqual(plain(calls), [
@@ -450,8 +479,11 @@ try {
     ])
   })
 
-  await checkAsync('implicit identity resolution selects the earliest active identity', async () => {
-    const identity = { id: 'identity-earliest', channel: 'max', externalId: 'max-7' }
+  await checkAsync('implicit identity resolution accepts exactly one active identity', async () => {
+    const identity = {
+      id: 'identity-earliest', channel: 'max', externalId: 'max-7',
+      reachabilityStatus: 'confirmed',
+    }
     const { prisma, calls } = makePrisma({ identities: [identity] })
     assert.equal(
       (await loadAdapter(prisma, unexpectedContactService).prepareContactConversationIdentity({
@@ -461,11 +493,28 @@ try {
     )
     assert.deepEqual(plain(calls), [
       ['contact.findUnique', { where: { id: 'contact-1' } }],
-      ['contactIdentity.findFirst', {
+      ['contactIdentity.findMany', {
         where: { contactId: 'contact-1', channel: 'max', isActive: true },
         orderBy: { createdAt: 'asc' },
+        take: 2,
       }],
     ])
+  })
+
+  await checkAsync('implicit identity resolution fails closed when the channel has multiple identities', async () => {
+    const { prisma } = makePrisma({
+      identities: [
+        { id: 'identity-1', channel: 'max', externalId: 'max-1', reachabilityStatus: 'confirmed' },
+        { id: 'identity-2', channel: 'max', externalId: 'max-2', reachabilityStatus: 'confirmed' },
+      ],
+    })
+    assert.deepEqual(
+      plain(await loadAdapter(prisma, unexpectedContactService)
+        .prepareContactConversationIdentity({
+          contactId: 'contact-1', channel: 'max', identityId: null,
+        })),
+      { status: 'identity_ambiguous' },
+    )
   })
 
   await checkAsync('identity fallback returns no_identity when no active phone exists', async () => {
@@ -479,9 +528,10 @@ try {
     )
     assert.deepEqual(plain(calls), [
       ['contact.findUnique', { where: { id: 'contact-1' } }],
-      ['contactIdentity.findFirst', {
+      ['contactIdentity.findMany', {
         where: { contactId: 'contact-1', channel: 'telegram', isActive: true },
         orderBy: { createdAt: 'asc' },
+        take: 2,
       }],
       ['contactPhone.findFirst', {
         where: { contactId: 'contact-1', isActive: true },
@@ -501,9 +551,10 @@ try {
     )
     assert.deepEqual(plain(calls), [
       ['contact.findUnique', { where: { id: 'contact-1' } }],
-      ['contactIdentity.findFirst', {
+      ['contactIdentity.findMany', {
         where: { contactId: 'contact-1', channel: 'telegram', isActive: true, phoneId: 'phone-missing' },
         orderBy: { createdAt: 'asc' },
+        take: 2,
       }],
       ['contactPhone.findFirst', {
         where: { contactId: 'contact-1', isActive: true, id: 'phone-missing' },
@@ -512,48 +563,75 @@ try {
     ])
   })
 
-  await checkAsync('identity fallback uses the preferred active phone and exact manual identity write', async () => {
-    const createdIdentity = {
-      id: 'identity-created',
-      channel: 'whatsapp',
-      externalId: '79990001122',
-    }
+  await checkAsync('identity fallback never promotes phone digits into a provider identity', async () => {
     const { prisma, calls } = makePrisma({
       phones: [{ id: 'phone-primary', phone: '+79990001122' }],
-      createdIdentity,
     })
     assert.deepEqual(
       plain(await loadAdapter(prisma, unexpectedContactService)
         .prepareContactConversationIdentity({
           contactId: 'contact-1', channel: 'whatsapp', identityId: null,
         })),
-      {
-        status: 'ready',
-        contact: { id: 'contact-1', displayName: 'Contact One' },
-        identity: createdIdentity,
-      },
+      { status: 'no_identity' },
     )
     assert.deepEqual(plain(calls), [
       ['contact.findUnique', { where: { id: 'contact-1' } }],
-      ['contactIdentity.findFirst', {
+      ['contactIdentity.findMany', {
         where: { contactId: 'contact-1', channel: 'whatsapp', isActive: true },
         orderBy: { createdAt: 'asc' },
+        take: 2,
       }],
       ['contactPhone.findFirst', {
         where: { contactId: 'contact-1', isActive: true },
         orderBy: { isPrimary: 'desc' },
       }],
-      ['contactIdentity.create', {
-        data: {
-          contactId: 'contact-1',
-          channel: 'whatsapp',
-          externalId: '79990001122',
-          phoneId: 'phone-primary',
-          source: 'manual',
-          confidence: 1,
-        },
-      }],
     ])
+  })
+
+  await checkAsync('unconfirmed reachability cannot authorize an outbound identity', async () => {
+    for (const [reachabilityStatus, status] of [
+      ['unreachable', 'identity_unreachable'],
+      ['unknown', 'identity_reachability_unknown'],
+    ]) {
+      const { prisma } = makePrisma({
+        identities: [{
+          id: 'identity-1', channel: 'telegram', externalId: 'opaque-provider-id',
+          reachabilityStatus,
+        }],
+      })
+      assert.deepEqual(plain(await loadAdapter(prisma, unexpectedContactService)
+        .prepareContactConversationIdentity({
+          contactId: 'contact-1', channel: 'telegram', identityId: 'identity-1',
+        })), { status })
+    }
+  })
+
+  await checkAsync('identity conflict evidence cannot authorize an outbound identity', async () => {
+    for (const input of [
+      {
+        contact: { id: 'contact-1', displayName: 'Contact One', isArchived: false, customFields: {} },
+        identity: {
+          id: 'identity-1', channel: 'telegram', externalId: 'opaque-provider-id',
+          reachabilityStatus: 'confirmed', metadata: { conflictState: 'conflicted' },
+        },
+      },
+      {
+        contact: {
+          id: 'contact-1', displayName: 'Contact One', isArchived: false,
+          customFields: { identityConflicts: [{ identityId: 'identity-1', status: 'open' }] },
+        },
+        identity: {
+          id: 'identity-1', channel: 'telegram', externalId: 'opaque-provider-id',
+          reachabilityStatus: 'confirmed', metadata: { conflictState: 'clear' },
+        },
+      },
+    ]) {
+      const { prisma } = makePrisma({ contact: input.contact, identities: [input.identity] })
+      assert.deepEqual(plain(await loadAdapter(prisma, unexpectedContactService)
+        .prepareContactConversationIdentity({
+          contactId: 'contact-1', channel: 'telegram', identityId: 'identity-1',
+        })), { status: 'identity_conflicted' })
+    }
   })
 
   await checkAsync('preferred phone query remains an independent ordered read and returns string or null', async () => {
@@ -602,9 +680,8 @@ try {
 
     for (const failingStage of [
       'contact.findUnique',
-      'contactIdentity.findFirst',
+      'contactIdentity.findMany',
       'contactPhone.findFirst',
-      'contactIdentity.create',
     ]) {
       const calls = []
       const invoke = async (stage, result) => {
@@ -620,9 +697,7 @@ try {
         },
         contactIdentity: {
           findFirst: () => invoke('contactIdentity.findFirst', null),
-          create: () => invoke('contactIdentity.create', {
-            id: 'identity-created', channel: 'telegram', externalId: '79991234567',
-          }),
+          findMany: () => invoke('contactIdentity.findMany', []),
         },
         contactPhone: {
           findFirst: () => invoke('contactPhone.findFirst', {
@@ -648,10 +723,11 @@ try {
     assert.doesNotMatch(adapterSource, /\$transaction|console\.|\bcatch\b|\bretry\b/i)
     assert.doesNotMatch(adapterSource, /\$(?:query|execute)Raw|Unsafe|\bany\b/)
     assert.equal((adapterSource.match(/ContactService\.resolveContact/g) ?? []).length, 1)
-    assert.equal((adapterSource.match(/prisma\.contact\.findUnique/g) ?? []).length, 1)
-    assert.equal((adapterSource.match(/prisma\.contactIdentity\.findFirst/g) ?? []).length, 2)
-    assert.equal((adapterSource.match(/prisma\.contactPhone\.findFirst/g) ?? []).length, 2)
-    assert.equal((adapterSource.match(/prisma\.contactIdentity\.create/g) ?? []).length, 1)
+    assert.equal((adapterSource.match(/transaction\.contact\.findUnique/g) ?? []).length, 1)
+    assert.equal((adapterSource.match(/transaction\.contactIdentity\.findFirst/g) ?? []).length, 1)
+    assert.equal((adapterSource.match(/transaction\.contactIdentity\.findMany/g) ?? []).length, 1)
+    assert.equal((adapterSource.match(/contactPhone\.findFirst/g) ?? []).length, 2)
+    assert.equal((adapterSource.match(/contactIdentity\.create/g) ?? []).length, 0)
   })
 } finally {
   rmSync(out, { recursive: true, force: true })

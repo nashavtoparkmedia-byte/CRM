@@ -879,7 +879,7 @@ const runtimeContext = {
 }
 assert.equal(
   verifyRuntimeBoundaryReviews(runtimeBoundaryReview, runtimeBoundaryReview.records, runtimeContext).runtime_boundary_accesses,
-  6,
+  7,
 )
 const runtimeFixtureFiles = [...new Set(runtimeBoundaryReview.runtime_boundary_reviews.flatMap((review) => [
   ...review.source_modules.map((module) => module.path),
@@ -925,4 +925,4 @@ assert.throws(() => {
   verifyRuntimeBoundaryReviews(changed, changed.records, runtimeFixtureContext)
 }, /missing or extra/, 'a missing runtime boundary review must fail closed')
 
-process.stdout.write('authoritative credential inventory gate: PASS (76 negative properties; 2 synthetic production-secret paths; 6 exact runtime-boundary accesses)\n')
+process.stdout.write('authoritative credential inventory gate: PASS (76 negative properties; 2 synthetic production-secret paths; 7 exact runtime-boundary accesses)\n')

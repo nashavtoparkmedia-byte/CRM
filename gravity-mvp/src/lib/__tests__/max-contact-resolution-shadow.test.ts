@@ -38,7 +38,9 @@ function plan(
       return { status, contactIds: ['contact-A', 'contact-B'], warnings: [...warnings] }
     case 'create_required':
     case 'skipped_group':
+    case 'unknown_kind_limited':
     case 'untrusted_phone':
+    case 'ineligible_phone':
     case 'invalid_input':
       return { status, warnings: [...warnings] }
   }

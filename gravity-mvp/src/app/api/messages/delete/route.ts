@@ -1,53 +1,74 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { broadcastChatMessage } from '@/lib/messageStreamBus'
-
-const MAX_SCRAPER_URL = process.env.MAX_SCRAPER_URL || 'http://localhost:3005'
+import { getMaxChannelDeliveryV1 } from '@/modules/messaging/public/v1/channel-delivery-runtime'
+import { prepareOutboundConversationV1 } from '@/modules/messaging/public/v1/outbound-conversation-identity-runtime'
 
 export async function POST(req: NextRequest) {
-    const body = await req.json().catch(() => ({}))
-    const { messageId, deleteForEveryone } = body
-
-    if (!messageId) {
-        return NextResponse.json({ error: 'messageId required' }, { status: 400 })
-    }
-
-    const message = await prisma.message.findUnique({
-        where: { id: messageId },
-        select: { id: true, chatId: true, channel: true, externalId: true },
-    })
-
-    if (!message) {
-        return NextResponse.json({ error: 'not found' }, { status: 404 })
-    }
-
-    // Best-effort channel delete (non-blocking, don't wait)
-    if (deleteForEveryone && message.externalId) {
-        if (message.channel === 'max') {
-            const chat = await prisma.chat.findUnique({
-                where: { id: message.chatId },
-                select: { externalChatId: true },
-            })
-            if (chat?.externalChatId) {
-                fetch(`${MAX_SCRAPER_URL}/delete-message`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        chatId: Number(chat.externalChatId),
-                        messageId: message.externalId,
-                    }),
-                }).catch(() => {})
-            }
-        }
-    }
-
-    // Delete from DB (cascades to MessageAttachment via Prisma schema)
-    await prisma.message.delete({ where: { id: messageId } })
-
-    // Broadcast deletion to SSE subscribers so open tabs update instantly
     try {
-        broadcastChatMessage(message.chatId, { id: messageId, chatId: message.chatId, deleted: true })
-    } catch {}
+        const body = await req.json().catch(() => ({}))
+        const { messageId, deleteForEveryone } = body
+        if (!messageId) {
+            return NextResponse.json({ error: 'messageId required' }, { status: 400 })
+        }
 
-    return NextResponse.json({ success: true })
+        const message = await prisma.message.findUnique({
+            where: { id: messageId },
+            select: {
+                id: true,
+                chatId: true,
+                channel: true,
+                externalId: true,
+                chat: {
+                    select: {
+                        id: true,
+                        contactId: true,
+                        contactIdentityId: true,
+                        channel: true,
+                        externalChatId: true,
+                        chatType: true,
+                        metadata: true,
+                    },
+                },
+            },
+        })
+        if (!message) {
+            return NextResponse.json({ error: 'not found' }, { status: 404 })
+        }
+
+        if (deleteForEveryone) {
+            if (message.channel !== 'max' || !message.externalId) {
+                return NextResponse.json({
+                    error: 'Provider deletion is unavailable for this message',
+                }, { status: 409 })
+            }
+            const outbound = await prepareOutboundConversationV1(message.chat)
+            if (outbound.chatId !== message.chatId || outbound.channel !== message.channel) {
+                throw new Error('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
+            }
+            await getMaxChannelDeliveryV1().deleteMessage({
+                chatId: outbound.target,
+                messageId: message.externalId,
+                providerAccountId: outbound.providerAccountId,
+                connectionId: outbound.connectionId,
+                isPersonal: outbound.isMaxPersonal,
+            })
+        }
+
+        // A requested provider deletion must succeed under exact identity proof
+        // before the local row is removed.
+        await prisma.message.delete({ where: { id: messageId } })
+        try {
+            broadcastChatMessage(message.chatId, {
+                id: messageId,
+                chatId: message.chatId,
+                deleted: true,
+            })
+        } catch {}
+        return NextResponse.json({ success: true })
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Internal Server Error'
+        console.error('[API/messages/delete] Error:', message)
+        return NextResponse.json({ error: message }, { status: 500 })
+    }
 }

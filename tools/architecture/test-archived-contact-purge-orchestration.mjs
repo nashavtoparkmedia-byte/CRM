@@ -18,6 +18,7 @@ const plain = value => JSON.parse(JSON.stringify(value))
 
 const constants = {
   contacts: {
+    CONTACT_RETENTION_ELIGIBILITY_CHANGED_V1: 'CONTACT_RETENTION_ELIGIBILITY_CHANGED',
     DELETE_CONTACT_FOR_RETENTION_COMMAND_V1: 'contacts.DeleteContactForRetentionCommand.v1',
   },
   fleet: {
@@ -35,7 +36,13 @@ const constants = {
   },
 }
 
-function loadCleanup({ candidates, dependencies, failStage = null, failContactId = null }) {
+function loadCleanup({
+  candidates,
+  dependencies,
+  failStage = null,
+  failContactId = null,
+  ineligibleContactId = null,
+}) {
   const reads = []
   const ownerCalls = []
   const logs = []
@@ -63,6 +70,11 @@ function loadCleanup({ candidates, dependencies, failStage = null, failContactId
     async deleteContactForRetentionV1(command) {
       ownerCalls.push(['contacts', command.contactId, command.contract])
       maybeFail('contacts', command.contactId)
+      if (command.contactId === ineligibleContactId) {
+        const error = new Error('retention eligibility changed')
+        error.code = constants.contacts.CONTACT_RETENTION_ELIGIBILITY_CHANGED_V1
+        throw error
+      }
       return { contract: 'contacts.DeleteContactForRetentionResult.v1', completed: true }
     },
   }
@@ -185,6 +197,27 @@ await checkAsync('each owner failure is visible and prevents subsequent owner ca
     )
     assert.deepEqual(fixture.ownerCalls.map(([owner]) => owner), expected[stage])
   }
+})
+
+await checkAsync('Contacts eligibility drift is skipped while unexpected owner failures remain visible', async () => {
+  const fixture = loadCleanup({
+    candidates: ['stale-contact', 'still-eligible'],
+    dependencies: [
+      { activeChats: 0, recentMessages: 0, merges: 0 },
+      { activeChats: 0, recentMessages: 0, merges: 0 },
+    ],
+    ineligibleContactId: 'stale-contact',
+  })
+  const result = await fixture.RetentionCleanup._cleanupArchivedContacts(365, 50, false)
+  assert.deepEqual(plain(result), { deleted: 1, skipped: 1 })
+  assert.deepEqual(fixture.ownerCalls, [
+    ['messaging', 'stale-contact', constants.messaging.DETACH_CONTACT_CONVERSATIONS_COMMAND_V1],
+    ['work', 'stale-contact', constants.work.DETACH_CONTACT_TASKS_COMMAND_V1],
+    ['contacts', 'stale-contact', constants.contacts.DELETE_CONTACT_FOR_RETENTION_COMMAND_V1],
+    ['messaging', 'still-eligible', constants.messaging.DETACH_CONTACT_CONVERSATIONS_COMMAND_V1],
+    ['work', 'still-eligible', constants.work.DETACH_CONTACT_TASKS_COMMAND_V1],
+    ['contacts', 'still-eligible', constants.contacts.DELETE_CONTACT_FOR_RETENTION_COMMAND_V1],
+  ])
 })
 
 await checkAsync('outer run keeps contact counts zero when a later candidate fails after prior mutation', async () => {

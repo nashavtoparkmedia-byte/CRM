@@ -85,6 +85,7 @@ try {
       v2: 'contacts.DeleteContactForRetentionCommand.v2',
       handler: createDeleteContactForRetentionHandlerV1,
       portMethod: 'deleteContactForRetention',
+      successOutcome: 'deleted',
     },
     {
       name: 'messaging',
@@ -134,7 +135,7 @@ try {
   await checkAsync('handlers map exactly and return explicit success', async () => {
     for (const entry of cases) {
       const calls = []
-      const port = { async [entry.portMethod](id) { calls.push(id) } }
+      const port = { async [entry.portMethod](id) { calls.push(id); return entry.successOutcome } }
       const result = await entry.handler(port)(entry.command)
       assert.deepEqual(calls, [contactId])
       assert.deepEqual(result, { contract: entry.resultId, completed: true })
@@ -178,24 +179,25 @@ try {
       ['UPDATE "tasks" SET "contactId" = NULL WHERE "contactId" = $1', contactId],
     ])
   })
-  await checkAsync('Contacts typed deleteMany treats zero rows as successful completion', async () => {
+  await checkAsync('Contacts handler preserves missing success and exposes eligibility drift', async () => {
+    const outcomes = ['missing', 'ineligible']
     const calls = []
-    const prisma = {
-      contact: {
-        async deleteMany(input) { calls.push(input); return { count: 0 } },
+    const port = {
+      async deleteContactForRetention(id) {
+        calls.push(id)
+        return outcomes.shift()
       },
     }
-    const adapter = loadAdapter(
-      'gravity-mvp/src/modules/contacts/public/v1/legacy-prisma-contact-retention-adapter.ts',
-      prisma,
-    ).legacyPrismaContactRetentionPortV1
-    const result = await createDeleteContactForRetentionHandlerV1(adapter)(contactCommand)
-    assert.equal(calls.length, 1)
-    assert.equal(calls[0].where.id, contactId)
+    const handler = createDeleteContactForRetentionHandlerV1(port)
+    const result = await handler(contactCommand)
+    assert.deepEqual(calls, [contactId])
     assert.deepEqual(result, {
       contract: contacts.DELETE_CONTACT_FOR_RETENTION_RESULT_V1,
       completed: true,
     })
+    await assert.rejects(handler(contactCommand), error =>
+      error.code === contacts.CONTACT_RETENTION_ELIGIBILITY_CHANGED_V1)
+    assert.deepEqual(calls, [contactId, contactId])
   })
 } finally {
   rmSync(out, { recursive: true, force: true })

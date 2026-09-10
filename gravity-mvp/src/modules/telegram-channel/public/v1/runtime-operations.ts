@@ -5,7 +5,6 @@ import {
   getTelegramConnections,
   importTelegramHistory,
   initTelegramListeners,
-  sendTelegramMessage,
   stopTelegramHealthCheck,
 } from '@/app/tg-actions'
 
@@ -14,6 +13,7 @@ import type { TelegramConnectionPublicMetadata } from './telegram-connection-pub
 export type TelegramReachabilityResultV1 = {
   reachable: boolean
   telegramId?: string
+  providerAccountId?: string
   error?: string
 }
 
@@ -29,11 +29,11 @@ export async function stopTelegramRuntimeV1(): Promise<void> {
 
 /** Send only a plain Telegram text message; provider metadata stays owner-local. */
 export async function sendTelegramTextV1(
-  phone: string,
-  message: string,
-  connectionId?: string,
+  _phone: string,
+  _message: string,
+  _connectionId?: string,
 ): Promise<unknown> {
-  return sendTelegramMessage(phone, message, connectionId)
+  throw new Error('CONTACT_CONVERSATION_IDENTITY_REQUIRED')
 }
 
 export async function importTelegramHistoryV1(
@@ -47,9 +47,9 @@ export async function importTelegramHistoryV1(
 
 export async function checkTelegramReachabilityV1(
   phone: string,
-  connectionId?: string,
+  requestedProviderAccountId?: string,
 ): Promise<TelegramReachabilityResultV1> {
-  return checkTelegramReachability(phone, connectionId)
+  return checkTelegramReachability(phone, requestedProviderAccountId)
 }
 
 /** Existing integration-admin authorization and credential-safe projection are preserved. */

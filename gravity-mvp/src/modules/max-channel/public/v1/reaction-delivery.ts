@@ -9,7 +9,13 @@ export function isRealMaxMessageIdV1(value: unknown): value is string {
 
 /** Send one exact MAX reaction operation and preserve provider confirmation truth. */
 export async function sendMaxReactionDeliveryV1(
-    input: { chatId: string; messageId: string; emoji: string; remove: boolean },
+    input: {
+        chatId: string
+        messageId: string
+        emoji: string
+        remove: boolean
+        providerAccountId: string
+    },
     options: {
         endpoint?: string
         fetchImpl?: typeof fetch
@@ -28,6 +34,9 @@ export async function sendMaxReactionDeliveryV1(
     })
     const payload = await response.json().catch(() => ({})) as Record<string, unknown>
     if (!response.ok) throw new Error(String(payload.error || `MAX request failed: ${response.status}`))
+    if (payload.providerAccountId !== input.providerAccountId) {
+        throw new Error('MAX_PROVIDER_ACCOUNT_PROOF_MISMATCH')
+    }
     return {
         reactionConfirmed: payload.reactionConfirmed === true,
         ...(typeof payload.status === 'string' ? { status: payload.status } : {}),

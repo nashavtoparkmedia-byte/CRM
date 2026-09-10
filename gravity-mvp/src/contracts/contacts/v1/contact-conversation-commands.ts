@@ -30,6 +30,12 @@ export interface ContactConversationIdentityV1 {
     externalId: string
 }
 
+export interface PreparedContactConversationIdentityV1 extends ContactConversationIdentityV1 {
+    providerAccountId: string | null
+    /** Exact provider aliases admitted by Contacts for the same account scope. */
+    providerAliasValues?: string[]
+}
+
 export interface ResolveChannelContactResultV1 {
     contract: typeof RESOLVE_CHANNEL_CONTACT_RESULT_V1
     contact: ContactConversationContactV1
@@ -49,6 +55,10 @@ export type PrepareContactConversationIdentityStatusV1 =
     | 'ready'
     | 'contact_not_found'
     | 'identity_not_found'
+    | 'identity_ambiguous'
+    | 'identity_conflicted'
+    | 'identity_unreachable'
+    | 'identity_reachability_unknown'
     | 'phone_not_found'
     | 'no_identity'
 
@@ -57,11 +67,19 @@ export type PrepareContactConversationIdentityResultV1 =
         contract: typeof PREPARE_CONTACT_CONVERSATION_IDENTITY_RESULT_V1
         status: 'ready'
         contact: ContactConversationContactV1
-        identity: ContactConversationIdentityV1
+        identity: PreparedContactConversationIdentityV1
     }
     | {
         contract: typeof PREPARE_CONTACT_CONVERSATION_IDENTITY_RESULT_V1
-        status: 'contact_not_found' | 'identity_not_found' | 'phone_not_found' | 'no_identity'
+        status:
+            | 'contact_not_found'
+            | 'identity_not_found'
+            | 'identity_ambiguous'
+            | 'identity_conflicted'
+            | 'identity_unreachable'
+            | 'identity_reachability_unknown'
+            | 'phone_not_found'
+            | 'no_identity'
     }
 
 export interface GetPreferredActiveContactPhoneQueryV1 {

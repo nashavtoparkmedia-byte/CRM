@@ -20,10 +20,10 @@ describe('driver MAX messaging composition', () => {
     expect(mocks.getMaxConnections).toHaveBeenCalledOnce()
   })
 
-  it('delegates only the manager-to-driver message shape', async () => {
-    mocks.sendMaxMessage.mockResolvedValue({ success: true })
+  it('retires manager-to-driver phone sends without an admitted Chat identity', async () => {
     const options = { connectionId: 'max-1', isPersonal: true, name: 'Driver One' }
-    await sendMaxDriverMessageV1('+79990000000', 'hello', options)
-    expect(mocks.sendMaxMessage).toHaveBeenCalledWith('+79990000000', 'hello', options)
+    await expect(sendMaxDriverMessageV1('+79990000000', 'hello', options))
+      .rejects.toThrow('CONTACT_CONVERSATION_IDENTITY_REQUIRED')
+    expect(mocks.sendMaxMessage).not.toHaveBeenCalled()
   })
 })

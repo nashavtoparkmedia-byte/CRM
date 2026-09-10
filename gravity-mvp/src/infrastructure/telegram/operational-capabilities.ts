@@ -5,7 +5,6 @@ import {
   importTelegramHistoryV1 as importOwnerTelegramHistoryV1,
   initializeTelegramRuntimeV1 as initializeOwnerTelegramRuntimeV1,
   listTelegramConnectionsV1 as listOwnerTelegramConnectionsV1,
-  sendTelegramTextV1 as sendOwnerTelegramTextV1,
   stopTelegramRuntimeV1 as stopOwnerTelegramRuntimeV1,
 } from '@/modules/telegram-channel/public/v1/runtime-operations'
 
@@ -19,11 +18,11 @@ export async function stopOperationalTelegramRuntimeV1(): Promise<void> {
 }
 
 export async function sendOperationalTelegramTextV1(
-  phone: string,
-  message: string,
-  connectionId?: string,
+  _phone: string,
+  _message: string,
+  _connectionId?: string,
 ) {
-  return sendOwnerTelegramTextV1(phone, message, connectionId)
+  throw new Error('CONTACT_CONVERSATION_IDENTITY_REQUIRED')
 }
 
 export async function importOperationalTelegramHistoryV1(
@@ -37,9 +36,9 @@ export async function importOperationalTelegramHistoryV1(
 
 export async function checkOperationalTelegramReachabilityV1(
   phone: string,
-  connectionId?: string,
+  requestedProviderAccountId?: string,
 ) {
-  return checkOwnerTelegramReachabilityV1(phone, connectionId)
+  return checkOwnerTelegramReachabilityV1(phone, requestedProviderAccountId)
 }
 
 export async function listOperationalTelegramConnectionsV1() {

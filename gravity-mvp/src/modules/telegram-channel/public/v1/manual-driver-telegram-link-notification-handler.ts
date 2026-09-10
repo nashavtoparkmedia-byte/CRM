@@ -16,7 +16,10 @@ export function createNotifyManualDriverTelegramLinkHandlerV1(
         command: NotifyManualDriverTelegramLinkCommandV1 | unknown,
     ): Promise<NotifyManualDriverTelegramLinkResultV1> {
         const parsed = parseNotifyManualDriverTelegramLinkCommandV1(command)
-        await port.notify({ telegramId: parsed.telegramId, driverName: parsed.driverName })
+        await port.notify({
+            telegramId: parsed.telegramId,
+            driverName: parsed.driverName,
+        })
         return { contract: NOTIFY_MANUAL_DRIVER_TELEGRAM_LINK_RESULT_V1, notified: true }
     }
 }

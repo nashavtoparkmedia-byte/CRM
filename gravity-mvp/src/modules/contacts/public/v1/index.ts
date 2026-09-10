@@ -12,6 +12,8 @@ export { createCreateFleetContactHandlerV1, createPatchFleetContactHandlerV1 } f
 export type { FleetContactPersistencePortV1 } from './fleet-contact-handler'
 export { createDeleteContactForRetentionHandlerV1 } from './contact-retention-handler'
 export type { ContactRetentionPersistencePortV1 } from './contact-retention-handler'
+export { createResolveContactLineageHandlerV1 } from './contact-lineage-handler'
+export type { ContactLineagePersistencePortV1, ContactLineageV1 } from './contact-lineage-handler'
 export {
     createGetPreferredActiveContactPhoneHandlerV1,
     createPrepareContactConversationIdentityHandlerV1,
@@ -58,6 +60,15 @@ export {
     markTemporaryContactPhoneV1,
     patchFleetContactV1,
     persistContactParkCheckResultV1,
+    manageContactPhoneEvidenceV1,
+    attachProviderIdentityAliasV1,
+    confirmDriverPersonV1,
+    getConfirmedContactForDriverClusterV1,
+    isContactConfirmedMainDriverV1,
+    reconcileDriverClusterContactV1,
+    persistDriverClusterContradictionV1,
+    runDriverClusterContactOwnershipV1,
+    resolveContactLineageV1,
     prepareContactConversationIdentityV1,
     resolveChannelContactOperationV1,
     resolveChannelContactV1,
@@ -71,3 +82,39 @@ export {
     type LegacyContactResolutionOutcome,
     type YandexDriverContactLinkResultV1,
 } from '../../application/contact-external-operations'
+export {
+    CONTACT_OWNERSHIP_BUSY_CODE_V1,
+    contactOwnershipBusyResultV1,
+    isResolvedChannelContactResultV1,
+    reconcileFleetContactOwnershipV1,
+    expireTemporaryContactPhonesV1,
+} from './contact-identity-maintenance'
+export {
+    CONTACT_OWNERSHIP_ADVISORY_CLASS_ID_V1,
+    CONTACT_OWNERSHIP_ADVISORY_OBJECT_ID_V1,
+} from './contact-ownership-lock-contract'
+export type {
+    ContactOwnershipBusyResultV1,
+    ResolveChannelContactPolicyV1,
+    ResolveChannelContactResultV1,
+    ResolveChannelContactSuccessV1,
+} from './contact-identity-maintenance'
+export * from './contact-automation-policy'
+export * from './automated-contact-merge-recovery'
+export {
+    markChannelIdentityConflictV1,
+    type MarkChannelIdentityConflictInputV1,
+} from './channel-identity-conflict'
+export type {
+    ManualPhoneEvidenceCommandV1,
+    ManualPhoneEvidenceResultV1,
+    ProviderIdentityAliasCommandV1,
+} from './contact-phone-evidence'
+export type {
+    ContactParkCheckSnapshotV1,
+    ContactParkCheckStatusV1,
+} from './contact-park-check'
+export type {
+    ConfirmDriverPersonResultV1,
+    ReconcileDriverClusterResultV1,
+} from './driver-person-confirmation'

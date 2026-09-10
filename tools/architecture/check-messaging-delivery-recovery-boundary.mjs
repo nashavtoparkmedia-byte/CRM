@@ -18,6 +18,7 @@ const publicAggregatorPath = 'gravity-mvp/src/modules/messaging/public/index.ts'
 const moduleIndexPath = 'gravity-mvp/src/modules/messaging/index.ts'
 const consumerPath = 'gravity-mvp/src/instrumentation.ts'
 const publicBarrelSpecifier = '@/modules/messaging/public/v1'
+const platformBarrelSpecifier = '@/modules/platform-shell/public/v1'
 const publicCapabilitySpecifier = './delivery-recovery-operations'
 const messageServiceSpecifier = '@/lib/MessageService'
 const exactFunctions = [
@@ -30,8 +31,11 @@ const exactConsumerImports = [
     'retryEligibleMessagingDeliveriesV1',
 ]
 const rawDeliveryMethods = new Set(['recoverStuckMessages', 'retrySend'])
-
-assert.equal(sha256(read(implementationPath)), '60fd0e9ffbace3c48290b5970d22f618ee96845eab7c2f0721cab49974d1e74a')
+const executableDigests = {
+    recoverStuckMessages: 'aae8c67e89f6e728c65e95a16f1a49493f19c0c99414f94e8e609926190e6ef2',
+    retrySend: 'c66293a93568e368b1d4e4d0c0a67bf6c6dc04eac35e6f2c8225927e473e87e5',
+    sendReachabilityBlock: 'cee5e85ebaf2c10f76453683d850e645755d9664489d4acbcb1af3b9ba99be76',
+}
 
 function hasModifier(node, kind) {
     return node.modifiers?.some((modifier) => modifier.kind === kind) ?? false
@@ -176,6 +180,36 @@ function primitiveConstant(expression, checker, seen = new Set()) {
     return UNKNOWN_CONSTANT
 }
 
+function statementAlwaysTerminates(statement, checker) {
+    if (ts.isReturnStatement(statement) || ts.isThrowStatement(statement)) return true
+    if (ts.isBlock(statement)) return statement.statements.some((child) => statementAlwaysTerminates(child, checker))
+    if (ts.isIfStatement(statement)) {
+        const condition = primitiveConstant(statement.expression, checker)
+        if (condition !== UNKNOWN_CONSTANT) {
+            return condition
+                ? statementAlwaysTerminates(statement.thenStatement, checker)
+                : Boolean(statement.elseStatement && statementAlwaysTerminates(statement.elseStatement, checker))
+        }
+        return Boolean(statement.elseStatement
+            && statementAlwaysTerminates(statement.thenStatement, checker)
+            && statementAlwaysTerminates(statement.elseStatement, checker))
+    }
+    return false
+}
+
+function followsUnconditionalTerminator(node, checker) {
+    for (let child = node, current = node.parent; current; child = current, current = current.parent) {
+        const statements = ts.isBlock(current) || ts.isSourceFile(current) ? current.statements : undefined
+        if (!statements) continue
+        const directChild = statements.find((statement) => statement === child || (
+            statement.pos <= child.pos && statement.end >= child.end
+        ))
+        const index = directChild ? statements.indexOf(directChild) : -1
+        if (index > 0 && statements.slice(0, index).some((statement) => statementAlwaysTerminates(statement, checker))) return true
+    }
+    return false
+}
+
 function isSyntacticallyDead(node, checker) {
     for (let child = node, current = node.parent; current; child = current, current = current.parent) {
         if (ts.isIfStatement(current)) {
@@ -185,8 +219,8 @@ function isSyntacticallyDead(node, checker) {
                 if (condition && child === current.elseStatement) return true
             }
         }
-        if (ts.isWhileStatement(current) || ts.isForStatement(current)) {
-            const conditionExpression = ts.isWhileStatement(current) ? current.expression : current.condition
+        if (ts.isWhileStatement(current) || ts.isForStatement(current) || ts.isDoStatement(current)) {
+            const conditionExpression = ts.isForStatement(current) ? current.condition : current.expression
             if (conditionExpression) {
                 const condition = primitiveConstant(conditionExpression, checker)
                 if (condition !== UNKNOWN_CONSTANT && !condition) return true
@@ -207,7 +241,7 @@ function isSyntacticallyDead(node, checker) {
             if (current.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken && left !== null && left !== undefined) return true
         }
     }
-    return false
+    return followsUnconditionalTerminator(node, checker)
 }
 
 function calleePath(expression) {
@@ -365,6 +399,74 @@ function consumerRuntimeModel(source) {
     }))
 }
 
+function assertMessagingNamespaceRegistration(source) {
+    const { sourceFile, checker } = checkedSource(consumerPath, source)
+    const declarations = []
+    visit(sourceFile, (node) => {
+        if (!ts.isVariableDeclaration(node)
+            || !ts.isArrayBindingPattern(node.name)
+            || node.name.elements.length !== 2
+            || !node.initializer) return
+        const [messagingElement, platformElement] = node.name.elements
+        if (!ts.isBindingElement(messagingElement)
+            || !ts.isIdentifier(messagingElement.name)
+            || messagingElement.name.text !== 'messaging') return
+        declarations.push({ node, messagingElement, platformElement })
+    })
+    assert.equal(declarations.length, 1, `${consumerPath}: exact Messaging/Platform composition namespace binding`)
+    const { node: declaration, messagingElement, platformElement } = declarations[0]
+    assert(ts.isBindingElement(platformElement)
+        && ts.isIdentifier(platformElement.name)
+        && platformElement.name.text === 'platform')
+    assert(ts.isVariableDeclarationList(declaration.parent)
+        && (declaration.parent.flags & ts.NodeFlags.Const), `${consumerPath}: composition namespaces must be immutable const`)
+    const awaited = unwrapTransparent(declaration.initializer)
+    assert(ts.isAwaitExpression(awaited))
+    const promiseAll = unwrapTransparent(awaited.expression)
+    assert(ts.isCallExpression(promiseAll)
+        && calleePath(promiseAll.expression) === 'Promise.all'
+        && promiseAll.arguments.length === 1
+        && ts.isArrayLiteralExpression(unwrapTransparent(promiseAll.arguments[0])))
+    const imports = unwrapTransparent(promiseAll.arguments[0])
+    assert.equal(imports.elements.length, 2)
+    const importSpecifiers = imports.elements.map((element) => {
+        const call = unwrapTransparent(element)
+        assert(ts.isCallExpression(call)
+            && call.expression.kind === ts.SyntaxKind.ImportKeyword
+            && call.arguments.length === 1)
+        return primitiveConstant(call.arguments[0], checker)
+    })
+    assert.deepEqual(importSpecifiers, [publicBarrelSpecifier, platformBarrelSpecifier])
+
+    const messagingSymbol = checker.getSymbolAtLocation(messagingElement.name)
+    const platformSymbol = checker.getSymbolAtLocation(platformElement.name)
+    assert(messagingSymbol && platformSymbol, `${consumerPath}: composition namespace symbols`)
+    const messagingUses = []
+    const platformUses = []
+    visit(sourceFile, (identifier) => {
+        if (!ts.isIdentifier(identifier)) return
+        const symbol = checker.getSymbolAtLocation(identifier)
+        if (symbol === messagingSymbol && identifier !== messagingElement.name) messagingUses.push(identifier)
+        if (symbol === platformSymbol && identifier !== platformElement.name) platformUses.push(identifier)
+    })
+    assert.equal(messagingUses.length, 1, `${consumerPath}: Messaging namespace use closure`)
+    assert.equal(platformUses.length, 1, `${consumerPath}: Platform namespace use closure`)
+    const messagingUse = messagingUses[0]
+    const platformUse = platformUses[0]
+    assert(ts.isPropertyAccessExpression(messagingUse.parent)
+        && messagingUse.parent.expression === messagingUse
+        && messagingUse.parent.name.text === 'registerOutboundConversationPreparerV1')
+    const registrationCall = messagingUse.parent.parent
+    assert(ts.isCallExpression(registrationCall)
+        && registrationCall.expression === messagingUse.parent
+        && registrationCall.arguments.length === 1)
+    assert.equal(isSyntacticallyDead(registrationCall, checker), false)
+    assert(ts.isPropertyAccessExpression(platformUse.parent)
+        && platformUse.parent.expression === platformUse
+        && platformUse.parent.name.text === 'prepareOutboundConversationV1'
+        && registrationCall.arguments[0] === platformUse.parent)
+}
+
 const withoutModuleSuffix = (value) => value.replace(/\.(?:[cm]?[jt]sx?)$/, '').replace(/\/index$/, '')
 function resolveModule(file, specifier) {
     if (specifier.startsWith('@/')) return withoutModuleSuffix(`gravity-mvp/src/${specifier.slice(2)}`)
@@ -518,6 +620,127 @@ function topLevelVariable(sourceFile, name) {
     ))
 }
 
+function messageServiceMethod(sourceFile, name) {
+    const classes = sourceFile.statements.filter((statement) => (
+        ts.isClassDeclaration(statement) && statement.name?.text === 'MessageService'
+    ))
+    assert.equal(classes.length, 1, `${implementationPath}: exact MessageService class`)
+    const methods = classes[0].members.filter((member) => (
+        ts.isMethodDeclaration(member)
+        && ((ts.isIdentifier(member.name) || ts.isStringLiteralLike(member.name)) && member.name.text === name)
+    ))
+    assert.equal(methods.length, 1, `${implementationPath}: exact ${name} method`)
+    const method = methods[0]
+    assert(hasModifier(method, ts.SyntaxKind.StaticKeyword), `${implementationPath}: ${name} must remain static`)
+    assert(hasModifier(method, ts.SyntaxKind.AsyncKeyword), `${implementationPath}: ${name} must remain async`)
+    assert(method.body, `${implementationPath}: ${name} body`)
+    return method
+}
+
+function assertExactNamedImport(sourceFile, specifier, imported) {
+    const matches = sourceFile.statements.flatMap((statement) => {
+        if (!ts.isImportDeclaration(statement)
+            || !ts.isStringLiteralLike(statement.moduleSpecifier)
+            || statement.moduleSpecifier.text !== specifier
+            || !statement.importClause
+            || statement.importClause.isTypeOnly
+            || !statement.importClause.namedBindings
+            || !ts.isNamedImports(statement.importClause.namedBindings)) return []
+        return statement.importClause.namedBindings.elements.filter((element) => (
+            !element.isTypeOnly
+            && (element.propertyName ?? element.name).text === imported
+            && element.name.text === imported
+        ))
+    })
+    assert.equal(matches.length, 1, `${implementationPath}: exact ${imported} import from ${specifier}`)
+}
+
+function exactReachabilityBlock(method, sourceFile) {
+    const blocks = []
+    visit(method, (node) => {
+        if (!ts.isIfStatement(node)
+            || node.expression.getText(sourceFile).replace(/\s+/g, '') !== "deliveryStatus==='delivered'"
+            || !node.thenStatement.getText(sourceFile).includes('recordExactProviderReachability')) return
+        blocks.push(node)
+    })
+    assert.equal(blocks.length, 1, `${implementationPath}: exact successful-delivery reachability block`)
+    return blocks[0]
+}
+
+function assertMessageServiceRecoveryImplementation(source) {
+    const sourceFile = parseSource(implementationPath, source)
+    assertExactNamedImport(sourceFile, '@/lib/prisma', 'prisma')
+    assertExactNamedImport(sourceFile, 'node:crypto', 'randomUUID')
+    assertExactNamedImport(
+        sourceFile,
+        '@/modules/messaging/public/v1/outbound-conversation-identity-runtime',
+        'prepareOutboundConversationV1',
+    )
+    const recover = messageServiceMethod(sourceFile, 'recoverStuckMessages')
+    assert.equal(
+        sha256(recover.getText(sourceFile)),
+        executableDigests.recoverStuckMessages,
+        `${implementationPath}: recoverStuckMessages executable subtree changed`,
+    )
+    const recoverBody = recover.body.getText(sourceFile)
+    for (const invariant of [
+        /direction:\s*['"]outbound['"]/,
+        /status:\s*['"]sent['"]/,
+        /externalId:\s*null/,
+        /sentAt:\s*\{\s*lt:\s*cutoff\s*\}/,
+        /type:\s*\{\s*not:\s*['"]call['"]\s*\}/,
+        /findMany\(\{[\s\S]*channel:\s*['"]max['"][\s\S]*select:\s*\{\s*id:\s*true,\s*metadata:\s*true\s*\}/,
+        /updateMany\(\{[\s\S]*OR:\s*\[\{\s*channel:\s*\{\s*not:\s*['"]max['"]\s*\}/,
+        /where:\s*\{\s*\.\.\.stuckWhere,\s*channel:\s*['"]max['"],\s*id:\s*message\.id\s*\}/,
+        /metadata:\s*\{[\s\S]*\.\.\.metadata,[\s\S]*errorCode:\s*['"]TIMEOUT['"],[\s\S]*retryable:\s*true/,
+        /return\s+recoveredCount/,
+    ]) assert.match(recoverBody, invariant, `${implementationPath}: recoverStuckMessages invariant ${invariant}`)
+    assert.doesNotMatch(recoverBody, /\.create\s*\(|\.delete(?:Many)?\s*\(|\$executeRaw|\$queryRawUnsafe/)
+
+    const retry = messageServiceMethod(sourceFile, 'retrySend')
+    assert.equal(
+        sha256(retry.getText(sourceFile)),
+        executableDigests.retrySend,
+        `${implementationPath}: retrySend executable subtree changed`,
+    )
+    const retryBody = retry.body.getText(sourceFile)
+    for (const invariant of [
+        /message\.status\s*!==\s*['"]failed['"]/,
+        /!meta\.retryable/,
+        /attempt\s*>\s*\(meta\.maxRetries\s*\|\|\s*3\)/,
+        /Date\.now\(\)\s*-\s*lastFailed\s*<\s*backoffMs/,
+        /outboundBinding\s*=\s*await\s+prepareOutboundConversationV1\(message\.chat\)/,
+        /catch\s*\(error:\s*unknown\)\s*\{[\s\S]*success:\s*false/,
+        /outboundBinding\.chatId\s*!==\s*message\.chatId[\s\S]*outboundBinding\.channel\s*!==\s*message\.channel/,
+        /message\.updatedAt\s+instanceof\s+Date/,
+        /const\s+retryLeaseId\s*=\s*randomUUID\(\)/,
+        /const\s+retryStartedAt\s*=\s*new\s+Date\(\)/,
+        /const\s+retryClaim\s*=\s*await\s+\(prisma\.message\s+as\s+any\)\.updateMany\(\{[\s\S]*status:\s*['"]failed['"][\s\S]*updatedAt:\s*message\.updatedAt[\s\S]*status:\s*['"]sent['"][\s\S]*sentAt:\s*retryStartedAt[\s\S]*retryLeaseId/,
+        /if\s*\(retryClaim\.count\s*!==\s*1\)[\s\S]*Retry already claimed/,
+        /const\s+rawExternalId\s*=\s*outboundBinding\.target/,
+        /const\s+connId\s*=\s*outboundBinding\.connectionId/,
+        /providerAccountId:\s*retryMaxBinding\.providerAccountId/,
+        /connectionId:\s*retryMaxBinding\.isPersonal\s*\?\s*undefined\s*:\s*connId/,
+        /getTelegramChannelDeliveryV1\(\)\.sendText\(\{[\s\S]*connectionId:\s*connId/,
+        /getWhatsAppChannelDeliveryV1\(\)\.sendText\(\{[\s\S]*connectionId:\s*connId/,
+        /const\s+retryFinalization\s*=\s*await\s+\(prisma\.message\s+as\s+any\)\.updateMany\(\{[\s\S]*status:\s*['"]sent['"][\s\S]*sentAt:\s*retryStartedAt[\s\S]*metadata:\s*\{\s*path:\s*\[['"]retryLeaseId['"]\],\s*equals:\s*retryLeaseId\s*\}[\s\S]*status:\s*deliveryStatus/,
+        /if\s*\(retryFinalization\.count\s*!==\s*1\)[\s\S]*Retry delivery lease lost/,
+        /if\s*\(deliveryStatus\s*===\s*['"]delivered['"]\)[\s\S]*const\s+reachabilityResult\s*=\s*await\s+contactReachabilityV1\.recordExactProviderReachability\(\{[\s\S]*identityId:\s*outboundBinding\.contactIdentityId[\s\S]*providerAccountId:\s*outboundBinding\.providerAccountId[\s\S]*providerTargetId:\s*outboundBinding\.identityTarget[\s\S]*reachabilityResult\.outcome\s*===\s*['"]rejected['"][\s\S]*message_reachability_rejected/,
+    ]) assert.match(retryBody, invariant, `${implementationPath}: retrySend invariant ${invariant}`)
+    assert.doesNotMatch(retryBody, /TelegramConnection|TELEGRAM_BOT_URL|chat\.driver\?\.phone|\.message\.create\s*\(|\.message\.delete(?:Many)?\s*\(/)
+
+    const send = messageServiceMethod(sourceFile, 'send')
+    const sendReachabilityBlock = exactReachabilityBlock(send, sourceFile)
+    assert.equal(
+        sha256(sendReachabilityBlock.getText(sourceFile)),
+        executableDigests.sendReachabilityBlock,
+        `${implementationPath}: send reachability evidence subtree changed`,
+    )
+    const sendReachabilitySource = sendReachabilityBlock.getText(sourceFile)
+    assert.match(sendReachabilitySource, /const\s+reachabilityResult\s*=\s*await\s+contactReachabilityV1\.recordExactProviderReachability/)
+    assert.match(sendReachabilitySource, /reachabilityResult\.outcome\s*===\s*['"]rejected['"][\s\S]*message_reachability_rejected/)
+}
+
 function assertExportedAsyncFunction(node, name) {
     assert(hasModifier(node, ts.SyntaxKind.ExportKeyword), `${publicPath}: ${name} must be exported`)
     assert(hasModifier(node, ts.SyntaxKind.AsyncKeyword), `${publicPath}: ${name} must be async`)
@@ -644,13 +867,22 @@ function assertPublicBarrelBoundary(source) {
     assert.doesNotMatch(source, /export\s+\*\s+from\s+['"]\.\/delivery-recovery-operations['"]/)
 }
 
-const expectedConsumerBindings = exactConsumerImports.map((name) => ({
-    file: consumerPath,
-    kind: 'dynamic-import',
-    specifier: publicBarrelSpecifier,
-    imported: name,
-    local: name,
-})).sort(bindingSort)
+const expectedConsumerBindings = [
+    ...exactConsumerImports.map((name) => ({
+        file: consumerPath,
+        kind: 'dynamic-import',
+        specifier: publicBarrelSpecifier,
+        imported: name,
+        local: name,
+    })),
+    {
+        file: consumerPath,
+        kind: 'dynamic-import',
+        specifier: publicBarrelSpecifier,
+        imported: '*',
+        local: '*',
+    },
+].sort(bindingSort)
 const registerContext = { functionDepth: 2, rootFunction: 'register', startupDelay: 5000, interval: null, job: null, namedHelpers: [] }
 const recoveryIntervalContext = { functionDepth: 3, rootFunction: 'register', startupDelay: 5000, interval: 'recoveryInterval', job: null, namedHelpers: [] }
 const recoveryJobContext = { functionDepth: 4, rootFunction: 'register', startupDelay: 5000, interval: 'recoveryInterval', job: 'recovery', namedHelpers: [] }
@@ -676,6 +908,20 @@ const expectedRuntimeModel = [
 function assertConsumerBoundary(source) {
     assert.deepEqual(moduleBindingRecords(consumerPath, source).sort(bindingSort), expectedConsumerBindings)
     assert.deepEqual(consumerRuntimeModel(source), expectedRuntimeModel)
+    assertMessagingNamespaceRegistration(source)
+    const sourceFile = parseSource(consumerPath, source)
+    const namespaceRecoveryReferences = []
+    visit(sourceFile, (node) => {
+        if (ts.isPropertyAccessExpression(node) && exactFunctions.includes(node.name.text)) {
+            namespaceRecoveryReferences.push(node.getText(sourceFile))
+        } else if (ts.isElementAccessExpression(node) && node.argumentExpression) {
+            const property = primitiveConstant(node.argumentExpression, null)
+            if (typeof property === 'string' && exactFunctions.includes(property)) {
+                namespaceRecoveryReferences.push(node.getText(sourceFile))
+            }
+        }
+    })
+    assert.deepEqual(namespaceRecoveryReferences, [], `${consumerPath}: recovery capabilities must not be reached through a namespace import`)
     assert.doesNotMatch(source, /@\/modules\/messaging\/public\/v1\/delivery-recovery-operations/)
     assert.doesNotMatch(source, /@\/modules\/messaging\/(?:application|internal)(?:\/|['"])/)
     assert.doesNotMatch(source, /@\/lib\/MessageService/)
@@ -701,6 +947,8 @@ function rejectProbe(source, changed, validate) {
 }
 
 const publicSource = read(publicPath)
+const implementationSource = read(implementationPath)
+assertMessageServiceRecoveryImplementation(implementationSource)
 assert.equal(hasExactCapabilitySurface(publicSource), true)
 assertPublicCapabilityImplementation(publicSource)
 assert.match(publicSource, /const STUCK_MESSAGE_AGE_MINUTES_V1 = 5/)
@@ -731,6 +979,12 @@ rejectProbe(
     ),
     assertPublicCapabilityImplementation,
 )
+for (const changed of [
+    implementationSource.replace('externalId: null', 'externalId: { not: null }'),
+    implementationSource.replace('prepareOutboundConversationV1(message.chat)', 'unsafePrepareOutboundConversation(message.chat)'),
+    implementationSource.replace('providerAccountId: retryMaxBinding.providerAccountId', 'providerAccountId: null'),
+    implementationSource.replaceAll("if (deliveryStatus === 'delivered')", "if (deliveryStatus !== 'failed')"),
+]) rejectProbe(implementationSource, changed, assertMessageServiceRecoveryImplementation)
 
 const consumerSource = read(consumerPath)
 const publicBarrelSource = read(publicBarrelPath)
@@ -785,6 +1039,14 @@ assert.deepEqual(runtimeConsumers, [consumerPath])
 rejectProbe(
     consumerSource,
     consumerSource.replace(publicBarrelSpecifier, `${publicBarrelSpecifier}/delivery-recovery-operations`),
+    assertConsumerBoundary,
+)
+rejectProbe(
+    consumerSource,
+    consumerSource.replace(
+        'messaging.registerOutboundConversationPreparerV1(',
+        'await messaging.recoverStuckMessagingDeliveriesV1()\n        messaging.registerOutboundConversationPreparerV1(',
+    ),
     assertConsumerBoundary,
 )
 
@@ -929,9 +1191,11 @@ process.stdout.write(`${JSON.stringify({
     capabilities: exactFunctions.length,
     negative_unrelated_write_probe: 'REJECTED',
     closed_original_bypass_categories: 7,
-    negative_boundary_bypass_probes: 17,
+    negative_boundary_bypass_probes: 18,
     negative_repository_denominator_probes: 2,
     negative_dead_condition_variants: 4,
+    negative_implementation_invariant_probes: 4,
+    implementation_enforcement: 'RECOVERY_RETRY_SEMANTIC_NO_WHOLE_FILE_DIGEST',
     public_entrypoint: publicBarrelSpecifier,
     current_findings: scan.findings.length,
 }, null, 2)}\n`)

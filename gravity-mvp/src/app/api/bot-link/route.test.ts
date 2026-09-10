@@ -6,8 +6,10 @@ import {
   normalizeDriverSearchQueryV1,
   searchLocalDriversV1,
   searchYandexParksByDriverQueryV1,
+  upsertParkMatchedDriverV1,
 } from '@/modules/fleet-operations/public/v1'
 import { hasIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
+import { saveManualDriverTelegramLinkV1 } from '@/modules/telegram-channel/public/v1'
 
 import { GET, POST } from './route'
 
@@ -39,8 +41,7 @@ vi.mock('@/modules/identity-access/public/v1', () => ({
   hasIntegrationAdminAccess: vi.fn(),
 }))
 vi.mock('@/modules/telegram-channel/public/v1', () => ({
-  replaceDriverTelegramLinkV1: vi.fn(),
-  upsertDriverTelegramLinkV1: vi.fn(),
+  saveManualDriverTelegramLinkV1: vi.fn(),
 }))
 
 const searchLocal = vi.mocked(searchLocalDriversV1)
@@ -49,6 +50,8 @@ const normalizeSearch = vi.mocked(normalizeDriverSearchQueryV1)
 const hasAdminAccess = vi.mocked(hasIntegrationAdminAccess)
 const findLink = vi.mocked(prisma.driverTelegram.findFirst)
 const findDriver = vi.mocked(prisma.driver.findUnique)
+const upsertParkDriver = vi.mocked(upsertParkMatchedDriverV1)
+const saveManualLink = vi.mocked(saveManualDriverTelegramLinkV1)
 
 function mutationHeaders(contentType = 'application/json', origin = 'https://crm.example') {
   return { 'content-type': contentType, host: 'crm.example', origin }
@@ -112,6 +115,10 @@ beforeEach(() => {
       : { status: 'invalid' as const, drivers: [] }
   ))
   searchYandex.mockResolvedValue({ checkedParks: 9, results: [], errors: [] })
+  saveManualLink.mockResolvedValue({
+    contract: 'telegram_channel.SaveManualDriverTelegramLinkResult.v1',
+    saved: true,
+  })
 })
 
 describe('manual Telegram driver search', () => {
@@ -389,5 +396,97 @@ describe('manual Telegram driver search', () => {
     expect(response.status).toBe(400)
     expect(findDriver).not.toHaveBeenCalled()
     expect(searchYandex).not.toHaveBeenCalled()
+  })
+
+  it('links a local Driver only through the authority-enforcing owner command', async () => {
+    findDriver.mockResolvedValue({ id: 'local-1', fullName: 'Иван Иванов' } as never)
+
+    const response = await POST(rawLinkRequest({ telegramId: '42', driverId: 'local-1' }))
+
+    expect(response.status).toBe(200)
+    expect(saveManualLink).toHaveBeenCalledWith({
+      contract: 'telegram_channel.SaveManualDriverTelegramLinkCommand.v1',
+      driverId: 'local-1',
+      telegramId: 42n,
+    })
+    await expect(response.json()).resolves.toEqual({ success: true, driverName: 'Иван Иванов' })
+  })
+
+  it('returns a conflict with no fallback mutation when owner authority is absent', async () => {
+    findDriver.mockResolvedValue({ id: 'local-1', fullName: 'Иван Иванов' } as never)
+    saveManualLink.mockRejectedValue(
+      new Error('DRIVER_TELEGRAM_CONFIRMED_MAIN_DRIVER_REQUIRED'),
+    )
+
+    const response = await POST(rawLinkRequest({ telegramId: '42', driverId: 'local-1' }))
+
+    expect(response.status).toBe(409)
+    expect(saveManualLink).toHaveBeenCalledOnce()
+    expect(upsertParkDriver).not.toHaveBeenCalled()
+  })
+
+  it('does not create a local Driver for a provider-only search candidate', async () => {
+    searchYandex.mockResolvedValue({
+      checkedParks: 9,
+      errors: [],
+      results: [{
+        parkId: 'park-1',
+        parkName: 'Парк 1',
+        profiles: [{
+          id: 'driver-1',
+          fullName: 'Иван Иванов',
+          phones: ['+79990000000'],
+          workStatus: 'working',
+          currentStatus: 'free',
+        }],
+      }],
+    })
+    findDriver.mockResolvedValue(null)
+
+    const response = await POST(linkRequest('Иван Иванов'))
+
+    expect(response.status).toBe(409)
+    expect(upsertParkDriver).not.toHaveBeenCalled()
+    expect(saveManualLink).not.toHaveBeenCalled()
+  })
+
+  it('links a provider-verified profile only when Fleet supplies the same existing local Driver', async () => {
+    searchYandex.mockResolvedValue({
+      checkedParks: 9,
+      errors: [],
+      results: [{
+        parkId: 'park-1',
+        parkName: 'Парк 1',
+        profiles: [{
+          id: 'yandex-driver-1',
+          driverId: 'local-1',
+          fullName: 'Иван Иванов',
+          phones: ['+79990000000'],
+          workStatus: 'working',
+          currentStatus: 'free',
+        }],
+      }],
+    })
+    findDriver.mockResolvedValue({
+      id: 'local-1',
+      fullName: 'Иван Иванов',
+      yandexDriverId: 'yandex-driver-1',
+    } as never)
+
+    const response = await POST(rawLinkRequest({
+      telegramId: '42',
+      driverId: 'local-1',
+      yandexDriverId: 'yandex-driver-1',
+      parkId: 'park-1',
+      driverName: 'Иван Иванов',
+    }))
+
+    expect(response.status).toBe(200)
+    expect(upsertParkDriver).not.toHaveBeenCalled()
+    expect(saveManualLink).toHaveBeenCalledWith({
+      contract: 'telegram_channel.SaveManualDriverTelegramLinkCommand.v1',
+      driverId: 'local-1',
+      telegramId: 42n,
+    })
   })
 })

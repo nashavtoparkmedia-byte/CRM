@@ -16,12 +16,6 @@ export type CanonicalContactSummary = {
   channelCount: number
 }
 
-const CHANNEL_CONTACT_LABEL: Record<string, string> = {
-  max: 'Контакт MAX',
-  telegram: 'Контакт Telegram',
-  whatsapp: 'Контакт WhatsApp',
-}
-
 export const SEGMENT_LABELS: Record<string, string> = {
   small: 'Малый',
   medium: 'Средний',
@@ -57,7 +51,8 @@ export function getSegmentLabel(segment?: string | null): string {
 function isTechnicalProviderName(value?: string | null): boolean {
   if (!value) return true
   const trimmed = value.trim()
-  return /^(MAX|TG|WA|Telegram|WhatsApp|Max)\s*[: ]\s*\d+$/i.test(trimmed)
+  return /^Контакт\s+(MAX|TG|WA|Telegram|WhatsApp)$/i.test(trimmed)
+    || /^(MAX|TG|WA|Telegram|WhatsApp|Max)\s*[: ]\s*\d+$/i.test(trimmed)
     || /^[a-z]+:\d+$/i.test(trimmed)
     || /^\d{8,}$/.test(trimmed)
     || /@(lid|c\.us|g\.us|s\.whatsapp\.net|broadcast)$/i.test(trimmed)
@@ -73,22 +68,42 @@ export function buildCanonicalContactSummary(input: {
   const phones = Array.isArray(contact?.phones) ? contact.phones : []
   const identities = Array.isArray(contact?.identities) ? contact.identities : []
   const primaryPhoneRaw =
-    phones.find((p: any) => p.id && p.id === contact?.primaryPhoneId)?.phone
-    || phones.find((p: any) => p.isPrimary)?.phone
-    || phones[0]?.phone
+    phones.find((p: any) => p.id === contact?.primaryPhoneId && p.lifecycle !== 'removed')?.phone
+    || (!contact?.primaryPhoneId
+      ? phones.find((p: any) => p.isActive !== false && !['removed', 'superseded'].includes(p.lifecycle))?.phone
+      : null)
     || driver?.phone
     || null
   const primaryPhone = formatContactPhone(primaryPhoneRaw)
   const activeDriver = driver && !driver.dismissedAt ? driver : driver
+  const hasConfirmedDriver = Boolean(
+    contact?.driverConfirmations?.some?.((confirmation: any) => confirmation.status === 'confirmed')
+      || activeDriver?.personResolutionStatus === 'confirmed'
+      || activeDriver?.personResolutionStatus === 'operator_confirmed',
+  )
   const providerName = identities
     .map((i: any) => i.displayName)
     .find((name: string | null | undefined) => name && !isTechnicalProviderName(name))
+  const manualCanonicalName = contact?.canonicalPinnedAt || contact?.displayNameSource === 'manual'
+    ? (!isTechnicalProviderName(contact?.displayName) ? contact.displayName : null)
+    : null
+  const confirmedFleetName = hasConfirmedDriver && !isTechnicalProviderName(activeDriver?.fullName)
+    ? activeDriver.fullName
+    : null
+  const normalContactName = !isTechnicalProviderName(contact?.displayName)
+    ? contact.displayName
+    : null
+  const stableProviderId = identities
+    .map((identity: any) => String(identity.externalId || '').trim())
+    .find(Boolean)
+    || null
   const displayName =
-    activeDriver?.fullName
-    || (!isTechnicalProviderName(contact?.displayName) ? contact?.displayName : null)
-    || providerName
+    manualCanonicalName
+    || confirmedFleetName
+    || normalContactName
     || primaryPhone
-    || CHANNEL_CONTACT_LABEL[input.currentChannel || '']
+    || providerName
+    || stableProviderId
     || 'Контакт'
   const displayTitle = primaryPhone && primaryPhone !== displayName
     ? `${displayName} · ${primaryPhone}`

@@ -25,7 +25,7 @@ check('nonblocking outer catch retained', consumer.includes("console.error('[not
 check('command amendment exact', amendment.amendments.length === 1 && amendment.amendments[0].context === 'messaging' && amendment.amendments[0].add_commands?.length === 1 && amendment.amendments[0].add_commands[0] === 'UpdateConversationCommand.v1', 'command amendment drifted')
 check('Platform Messaging dependency pre-approved', platform.allowed_dependencies.some((item) => item.context === 'messaging' && item.surface === 'messaging.public'), 'approved dependency absent')
 check('unrelated MAX shadow assertion recognizes accepted owner route', inventoryTest.includes("route.indexOf('await patchExternalConversationV1')") && inventoryTest.includes("route.indexOf('await createExternalConversationV1')") && inventoryTest.includes('src/app/api/webhooks/max/route.ts'), 'unrelated MAX shadow owner-route assertion drifted')
-check('secret references unchanged in kind', consumer.includes('process.env.BOT_CRM_SECRET') && consumer.includes('process.env.BOT_API_URL'), 'secret reference drifted')
+check('authenticated ingress secret retained without raw Bot API delivery', consumer.includes('process.env.BOT_CRM_SECRET') && !/BOT_API_URL|notifyDriverLinked/.test(consumer), 'secret or raw delivery boundary drifted')
 
 process.stdout.write(`${JSON.stringify({ status: failures.length ? 'FAIL' : 'PASS', checks, failures }, null, 2)}\n`)
 if (failures.length) process.exitCode = 1

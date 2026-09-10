@@ -62,13 +62,13 @@ assertCheck(
 
 const parkMergeOrchestrator = read('gravity-mvp/src/modules/platform-shell/internal/contact-park-merge-orchestrator.ts')
 assertCheck(
-    'park merge capability is exact and delegates the versioned Contacts command',
-    parkMergeOrchestrator.includes("from '@/contracts/contacts/v1'")
-        && parkMergeOrchestrator.includes("from '@/infrastructure/contact-merge-composition'")
-        && parkMergeOrchestrator.includes("operation: 'contact_to_driver'")
-        && parkMergeOrchestrator.includes("mergedBy: 'park_check'")
+    'park reconciliation delegates only an exact pair to the locked automatic merge composition',
+    parkMergeOrchestrator.includes("from '@/infrastructure/automatic-contact-merge'")
+        && parkMergeOrchestrator.includes('attemptAutomaticContactMergeFromPlatformV1')
+        && parkMergeOrchestrator.includes('executeAutomaticContactMergeV1({ leftContactId, rightContactId })')
+        && !parkMergeOrchestrator.includes("operation: 'contact_to_driver'")
         && !/@\/lib\/ContactMergeService|@\/lib\/prisma|\bprisma\s*\./.test(parkMergeOrchestrator),
-    'park merge composition is broad, unversioned, or bypasses the established transaction capability',
+    'park reconciliation is broad or bypasses the established locked automatic merge capability',
 )
 
 for (const route of routes.slice(0, 2)) {
@@ -105,6 +105,7 @@ assertCheck(
 )
 
 const orchestrator = read('gravity-mvp/src/modules/platform-shell/internal/contact-conversation-orchestrator.ts')
+const messagingAdapter = read('gravity-mvp/src/modules/messaging/public/v1/legacy-prisma-contact-conversation-adapter.ts')
 assertCheck(
     'Platform composes only versioned Contacts, Fleet and Messaging surfaces',
     orchestrator.includes("from '@/modules/contacts/public/v1'")
@@ -112,6 +113,36 @@ assertCheck(
         && orchestrator.includes("from '@/modules/messaging/public/v1'")
         && !/@\/lib\/prisma|\bContactService\b|\bprisma\s*\./.test(orchestrator),
     'owner implementation leaked into Platform orchestration',
+)
+assertCheck(
+    'exact identity fallback is account-scoped while driver-wide legacy fallback stays unscoped',
+    orchestrator.includes('input.identityId === null && input.phoneId === null')
+        && orchestrator.includes('const allowContactFallback = true')
+        && orchestrator.includes('const allowLegacyDriverFallback = input.identityId === null && input.phoneId === null')
+        && orchestrator.includes('allowContactFallback,')
+        && orchestrator.includes('if (allowLegacyDriverFallback)')
+        && orchestrator.includes('identityExternalId: prepared.identity.externalId')
+        && orchestrator.includes('providerAccountId: prepared.identity.providerAccountId')
+        && orchestrator.includes("if (opened.status !== 'ready') return { status: opened.status }")
+        && orchestrator.includes('CONTACT_CONVERSATION_IDENTITY_BINDING_MISMATCH')
+        && orchestrator.includes('CONTACT_CONVERSATION_BINDING_MISMATCH'),
+    'Platform can use a broad driver fallback or trust a mismatched Contact/provider binding',
+)
+assertCheck(
+    'Messaging backfill requires exact identity ownership, account scope, channel target proof and transport proof',
+    messagingAdapter.includes('assertExactConversationTarget(conversation, input)')
+        && messagingAdapter.includes('contactIdentityId: input.contactIdentityId, channel: input.channel')
+        && messagingAdapter.includes('{ contactIdentityId: null }')
+        && messagingAdapter.includes("metadataRecord(conversation.metadata).senderId")
+        && messagingAdapter.includes("metadataRecord(conversation.metadata).providerAccountId")
+        && messagingAdapter.includes("metadataRecord(conversation.metadata).connectionId")
+        && messagingAdapter.includes('CONTACT_CONVERSATION_PROVIDER_KEY_MISMATCH')
+        && messagingAdapter.includes('CONTACT_CONVERSATION_PROVIDER_ACCOUNT_MISMATCH')
+        && messagingAdapter.includes('CONTACT_CONVERSATION_OWNERSHIP_MISMATCH')
+        && messagingAdapter.includes("return { status: 'conversation_target_unproven' }")
+        && messagingAdapter.includes("return { status: 'transport_unbound' }")
+        && !messagingAdapter.includes('prisma.chat.create('),
+    'Messaging can claim or fabricate a conversation whose owner, account, target or transport differs',
 )
 assertCheck(
     'orchestration remains sequential and non-transactional',

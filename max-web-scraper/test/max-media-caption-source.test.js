@@ -102,17 +102,29 @@ test('MAX image captions are routed through UI media send instead of native imag
   )
 })
 
-test('CRM send-media forwards MAX routing context without logging caption text', () => {
+test('CRM send-media proves the exact MAX identity and transport without heuristic routing', () => {
   const route = read('gravity-mvp/src/app/api/messages/send-media/route.ts')
 
-  assert.match(route, /select: \{ channel: true, externalChatId: true, metadata: true, driver:/)
   assert.match(route, /captionLength=\$\{String\(caption \|\| ''\)\.trim\(\)\.length\}/)
   assert.doesNotMatch(route, /caption=\$\{caption\}/)
-  assert.match(route, /const maxMetadata = \(chat\.metadata \|\| \{\}\) as any/)
-  assert.match(route, /const maxUiChatId = maxMetadata\.oldExternalChatId \|\| maxMetadata\.uiChatId \|\| null/)
-  assert.match(route, /const maxPhone = chat\.driver\?\.phone \|\| maxMetadata\.phone \|\| null/)
-  assert.match(route, /uiChatId: maxUiChatId \? String\(maxUiChatId\) : undefined/)
-  assert.match(route, /phone: maxPhone \? String\(maxPhone\) : undefined/)
+  assert.match(route, /prepareOutboundConversationV1\(chat, profileId\)/)
+  assert.match(route, /chatId: outbound\.target/)
+  assert.match(route, /providerAccountId: outbound\.providerAccountId/)
+  assert.match(route, /connectionId: outbound\.connectionId/)
+  assert.match(route, /isPersonal: outbound\.isMaxPersonal/)
+  assert.doesNotMatch(route, /driver\?\.(?:phone|telegramId)|maxPhone|uiChatId:/)
+  assertBefore(
+    route,
+    'await prepareOutboundConversationV1(chat, profileId)',
+    'getMaxChannelDeliveryV1().sendMedia',
+    'identity/account/transport proof must precede MAX media delivery',
+  )
+  assertBefore(
+    route,
+    'await prepareOutboundConversationV1(chat, profileId)',
+    'prisma.message.create',
+    'identity/account/transport proof must precede local Message mutation',
+  )
 })
 
 

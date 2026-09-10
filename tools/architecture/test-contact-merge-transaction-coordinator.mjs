@@ -56,8 +56,10 @@ check('owner adapters retain exact write capabilities and Contacts has no foreig
   const work = read(paths.workAdapter)
   assert.match(contacts, /export function makeLegacyPrismaContactMergeRepositoriesV1/)
   assert.doesNotMatch(contacts, /messaging\/public|work-management\/public|\.chat\.|\.task\./)
-  assert.equal((messaging.match(/transaction\.chat\.updateMany\s*\(/g) || []).length, 4)
-  assert.equal((work.match(/transaction\.task\.updateMany\s*\(/g) || []).length, 1)
+  // Four forward merge mutations plus one exact, guarded recovery mutation.
+  assert.equal((messaging.match(/transaction\.chat\.updateMany\s*\(/g) || []).length, 5)
+  // One forward merge mutation plus one exact, guarded recovery mutation.
+  assert.equal((work.match(/transaction\.task\.updateMany\s*\(/g) || []).length, 2)
   assert.doesNotMatch(messaging, /\.message\.(?:create|update|updateMany|delete|deleteMany|upsert)\s*\(/i)
   assert.doesNotMatch(`${messaging}\n${work}`, /Promise\.all|\bcatch\b|\bretry\b|queueMicrotask|setTimeout|console\./)
 })
@@ -66,8 +68,12 @@ check('platform composition is the sole transaction boundary and uses only named
   const composition = read(paths.composition)
   assert.match(composition, /@\/modules\/messaging\/public\/v1\/legacy-prisma-contact-merge-adapter/)
   assert.match(composition, /@\/modules\/work-management\/public\/v1\/legacy-prisma-contact-merge-adapter/)
+  assert.match(composition, /@\/modules\/calling\/public\/v1\/legacy-prisma-contact-merge-adapter/)
+  assert.match(composition, /@\/modules\/fleet-operations\/public\/v1\/legacy-prisma-contact-merge-adapter/)
   assert.equal((composition.match(/prisma\.\$transaction\s*\(/g) || []).length, 2)
-  assert.match(composition, /\{ timeout: 15000 \}/)
+  assert.equal((composition.match(/timeout:\s*15_000/g) || []).length, 2)
+  assert.equal((composition.match(/isolationLevel:\s*'ReadCommitted'/g) || []).length, 2)
+  assert.equal((composition.match(/maxWait:\s*2_000/g) || []).length, 2)
   assert.doesNotMatch(composition, /transaction\.(?:contact|contactIdentity|contactPhone|driver|chat|task)\./)
   assert.doesNotMatch(composition, /@prisma\/client|TransactionClient|PrismaPromise|\$queryRaw|\$executeRaw/)
 })
@@ -89,47 +95,84 @@ await checkAsync('composition binds all owners to one sentinel transaction witho
       legacyPrismaContactMergeQueriesV1: { contacts: {}, fleet: {} },
       makeLegacyPrismaContactMergeRepositoriesV1(transaction) {
         assert.equal(transaction, sentinel)
-        return { contacts: { linkContactToDriver: async () => calls.push('contacts.link') }, fleet: {} }
+        return {
+          contacts: { linkContactToDriver: async () => calls.push('contacts.link') },
+          recoveryContacts: { owner: 'contacts.recovery' },
+        }
       },
     },
     '@/modules/messaging/public/v1/legacy-prisma-contact-merge-adapter': {
       makeMessagingContactMergeRepositories(transaction) {
         assert.equal(transaction, sentinel)
-        return { attachUnlinkedContactChatsToDriver: async () => calls.push('messaging.attach') }
+        return {
+          attachUnlinkedContactChatsToDriver: async () => calls.push('messaging.attach'),
+          recovery: { owner: 'messaging.recovery' },
+        }
       },
     },
     '@/modules/work-management/public/v1/legacy-prisma-contact-merge-adapter': {
       makeWorkContactMergeRepositories(transaction) {
         assert.equal(transaction, sentinel)
-        return { moveTasksToContact: async () => calls.push('work.move') }
+        return {
+          moveTasksToContact: async () => calls.push('work.move'),
+          recovery: { owner: 'work.recovery' },
+        }
+      },
+    },
+    '@/modules/calling/public/v1/legacy-prisma-contact-merge-adapter': {
+      makeCallingContactMergeRepositories(transaction) {
+        assert.equal(transaction, sentinel)
+        return {
+          moveCallsToContact: async () => calls.push('calling.move'),
+          recovery: { owner: 'calling.recovery' },
+        }
+      },
+    },
+    '@/modules/fleet-operations/public/v1/legacy-prisma-contact-merge-adapter': {
+      makeFleetContactMergeRepositories(transaction) {
+        assert.equal(transaction, sentinel)
+        return {
+          admitAutomaticMergeEvidenceRead: async () => calls.push('fleet.admit'),
+          recovery: { owner: 'fleet.recovery' },
+        }
       },
     },
   })
   assert.equal(typeof composition.mergeContactsV1, 'function')
   assert.ok(capturedDependencies)
-  await capturedDependencies.unitOfWork.runSimpleLink(async ({ contacts, messaging }) => {
-    assert.deepEqual(Object.keys(contacts), ['linkContactToDriver'])
-    assert.deepEqual(Object.keys(messaging), ['attachUnlinkedContactChatsToDriver'])
-    await contacts.linkContactToDriver()
-    await messaging.attachUnlinkedContactChatsToDriver()
-  })
-  await capturedDependencies.unitOfWork.runMerge(async (repositories) => {
-    assert.deepEqual(Object.keys(repositories).sort(), ['contacts', 'fleet', 'messaging', 'work'])
+  await capturedDependencies.unitOfWork.run(async (repositories) => {
+    assert.deepEqual(Object.keys(repositories).sort(), ['calling', 'contacts', 'fleet', 'messaging', 'work'])
+    await repositories.contacts.linkContactToDriver()
+    await repositories.messaging.attachUnlinkedContactChatsToDriver()
     await repositories.work.moveTasksToContact()
+    await repositories.calling.moveCallsToContact()
+    await repositories.fleet.admitAutomaticMergeEvidenceRead()
   })
-  assert.equal(transactions[0], undefined)
-  assert.deepEqual(JSON.parse(JSON.stringify(transactions[1])), { timeout: 15000 })
-  assert.deepEqual(calls, ['contacts.link', 'messaging.attach', 'work.move'])
+  await capturedDependencies.recoveryUnitOfWork.run(async (repositories) => {
+    assert.deepEqual(Object.keys(repositories).sort(), ['calling', 'contacts', 'fleet', 'messaging', 'work'])
+    assert.equal(repositories.contacts.owner, 'contacts.recovery')
+    assert.equal(repositories.messaging.owner, 'messaging.recovery')
+    assert.equal(repositories.work.owner, 'work.recovery')
+    assert.equal(repositories.calling.owner, 'calling.recovery')
+    assert.equal(repositories.fleet.owner, 'fleet.recovery')
+  })
+  assert.deepEqual(JSON.parse(JSON.stringify(transactions)), [
+    { isolationLevel: 'ReadCommitted', maxWait: 2_000, timeout: 15_000 },
+    { isolationLevel: 'ReadCommitted', maxWait: 2_000, timeout: 15_000 },
+  ])
+  assert.deepEqual(calls, ['contacts.link', 'messaging.attach', 'work.move', 'calling.move', 'fleet.admit'])
 })
 
-check('no exception is needed and legacy routes retain their Contacts compatibility facade', () => {
+check('no exception is needed, Contact merge retains its facade, and legacy Driver merge is retired', () => {
   const policy = JSON.parse(read(paths.policy))
   assert.equal(policy.approved_infrastructure_writers.some((entry) => entry.file === paths.contactsAdapter), false)
-  for (const route of [read(paths.driverRoute), read(paths.contactRoute)]) {
-    assert.match(route, /ContactMergeService/)
-    assert.match(route, /MergeError/)
-    assert.doesNotMatch(route, /contact-merge-composition/)
-  }
+  const driverRoute = read(paths.driverRoute)
+  assert.match(driverRoute, /DRIVER_PERSON_CONFIRMATION_REQUIRED/)
+  assert.doesNotMatch(driverRoute, /ContactMergeService|MergeError|mergeContactToDriver|contact-merge-composition/)
+  const contactRoute = read(paths.contactRoute)
+  assert.match(contactRoute, /ContactMergeService/)
+  assert.match(contactRoute, /MergeError/)
+  assert.doesNotMatch(contactRoute, /contact-merge-composition/)
 })
 
 process.stdout.write(`${JSON.stringify({ status: 'PASS', passed: checks.length, checks }, null, 2)}\n`)

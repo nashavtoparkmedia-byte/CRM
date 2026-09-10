@@ -15,6 +15,12 @@ export type MergeContactsCommandV1 =
       sourceId: string
       targetId: string
       mergedBy: string
+      automation?: {
+        trustedUniqueCurrentPhone: boolean
+        phoneEvidenceRoot: string | null
+        confirmedPersonEvidenceRoots: string[]
+        normalizedVuEvidenceRoots: string[]
+      }
     }
 
 export type MergeContactsResultV1 =
@@ -50,6 +56,13 @@ export type MergeContactsResultV1 =
       survivorId: string
       mergedId: string
       mergeRecordId: string
+    }
+  | {
+      contract: typeof MERGE_CONTACTS_RESULT_V1
+      status: 'automatic_merge_blocked'
+      leftContactId: string
+      rightContactId: string
+      reason: string
     }
 
 export class MergeContactsCommandValidationError extends Error {
@@ -99,12 +112,39 @@ export function parseMergeContactsCommandV1(input: unknown): MergeContactsComman
   }
 
   if (value.operation === 'contact_to_contact') {
-    const supported = ['contract', 'operation', 'sourceId', 'targetId', 'mergedBy']
+    const supported = ['contract', 'operation', 'sourceId', 'targetId', 'mergedBy', 'automation']
     const extra = Object.keys(value).filter((key) => !supported.includes(key))
     if (extra.length > 0) invalid(`unsupported field(s): ${extra.sort().join(', ')}`)
     requireString(value.sourceId, 'sourceId')
     requireString(value.targetId, 'targetId')
     requireString(value.mergedBy, 'mergedBy')
+    if (value.automation !== undefined) {
+      if (!value.automation || typeof value.automation !== 'object' || Array.isArray(value.automation)) {
+        invalid('automation must be an object')
+      }
+      const automation = value.automation as Record<string, unknown>
+      const supportedAutomation = [
+        'trustedUniqueCurrentPhone',
+        'phoneEvidenceRoot',
+        'confirmedPersonEvidenceRoots',
+        'normalizedVuEvidenceRoots',
+      ]
+      const automationExtra = Object.keys(automation).filter(key => !supportedAutomation.includes(key))
+      if (automationExtra.length > 0) invalid(`unsupported automation field(s): ${automationExtra.sort().join(', ')}`)
+      if (typeof automation.trustedUniqueCurrentPhone !== 'boolean') {
+        invalid('automation.trustedUniqueCurrentPhone must be a boolean')
+      }
+      if (automation.phoneEvidenceRoot !== null
+        && (typeof automation.phoneEvidenceRoot !== 'string' || !automation.phoneEvidenceRoot.trim())) {
+        invalid('automation.phoneEvidenceRoot must be null or a non-empty string')
+      }
+      for (const field of ['confirmedPersonEvidenceRoots', 'normalizedVuEvidenceRoots'] as const) {
+        if (!Array.isArray(automation[field])
+          || automation[field].some(root => typeof root !== 'string' || !root.trim())) {
+          invalid(`automation.${field} must be a string array`)
+        }
+      }
+    }
     return value as unknown as MergeContactsCommandV1
   }
 

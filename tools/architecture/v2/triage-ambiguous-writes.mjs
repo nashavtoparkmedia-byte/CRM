@@ -45,20 +45,42 @@ const focusedOwnershipDecisions = new Map([
   ['3496c5c9535bc1d5b0cce4adf17e8516310c3260b20407856d5fd5f2ff54c4ec', 'CONTROLLED_MIGRATION'],
   ['94c8e6d4c7d0f3203debaf993aaa75f5127d6629d76b607f94f380494c170fd5', 'CONTROLLED_MIGRATION'],
   ['32f1fd3e6b047202f79bf923c359b748a06f50010a4113a0ded9df2e26431d20', 'CONTROLLED_MIGRATION'],
+  // PR #81 adds Contacts-owned transaction/advisory locks around contact,
+  // phone, identity, and merge admission; Fleet-owned reconciliation
+  // locking; and a Messaging-side Contacts capability lock. Independent
+  // source/architecture review confirmed each synchronization write remains
+  // within its declared owner boundary.
+  ['c07dfc3bed1350a52ef31d97f73d18c09f81f104519a4c4268849ec1800eae21', 'OWNER_VALID'],
+  ['a41cc5d01ac2e6699c6b86dcd306a933a2f5b0cb954d2bcf8668fe3dc81afcb5', 'OWNER_VALID'],
+  ['e902f9c46033a4363ccbe77b17ec468df4052eff323e009d8934906763c7ff7a', 'OWNER_VALID'],
+  ['cf582460b117a919402f002cc2e6d46c86c2705456e676e4bb8eb416712dcdd4', 'OWNER_VALID'],
+  ['e54be07b8050d4ff83e4f53490c748987cfc4b96708d9a237291e20a5cbdb240', 'OWNER_VALID'],
+  ['1155e3e8871948983914b57936052d47582d93288599be197d0e087b543f9fe1', 'OWNER_VALID'],
+  ['6e7331a679f00f5453dcda4a4b0b66f9a0fbe81b250152f4b9cc138eb1c6e567', 'OWNER_VALID'],
+  // PR #81 conflict repair relocates the Fleet advisory lock to its public
+  // owner adapter and adds exact Messaging/Telegram transaction locks. The
+  // independent high-risk review confirmed all seven are synchronization
+  // side effects within their declared owner boundaries.
+  ['4725bd8e337bd59adcedfd797a456722a31f900ddabc83ebeb64a6d990850978', 'OWNER_VALID'],
+  ['4290848e7cb22a18b0ea2ae7e44a4e922a951d64d94e613357a08e51e3f77993', 'OWNER_VALID'],
+  ['8094e623e03dce25fee65e3d52acb95d4829fce9229d77976ac54b6f31fa19a7', 'OWNER_VALID'],
+  ['14602442299bcce66d1f52e21acc108ae4718e87affc4e4bbd69823cc68011ce', 'OWNER_VALID'],
+  ['368bd8ff0ab5fddba71b1faced7c709383a4f40c610f7a248fa47c720e0ea874', 'OWNER_VALID'],
+  ['2d9fe65392a642c52a7f3fc0ee35856583113275a12526a71afc486579742fe4', 'OWNER_VALID'],
+  ['269fe8d0c425f83ce1d07f1c25c6da409d023629a7f328ecaf387b99865e0485', 'OWNER_VALID'],
 ])
 
 const confirmedReadOnlyDecisions = new Set([
   '42c9a964786f29fa8e6708acab43325249eba279ca89559fe07c03e7809bc9af', '911920e9f7911a89f60e8af508209e1388ff6dbab92c3d2c133f2ec33d4d6a3f', '3331c0d6e52e665c9f373dfa9a50f8b351bfffe7678db5d300bf2c01c46996bc', '037b459fcefcde89d3f50f66e7cb3d69cf7788f5451ec7ebe9cee41e94291b91', 'd7b60d9168005c4268cd46df849f684067e5994e79744e430f76ccc5b14f08bb', 'dd15e3ca3b8b8470797072b94d9ee74c5a0d4f66aba7c7104f566faa790e6590',
   '8004a8dc8d8d1183024debb2be7bf79572b663ab596b6497a2e8058cb51b46fa', 'b2c3ae6fc6828d9d51e85f6f01d3dff86df72a5ced9f863516a2d0276c1c61e3', 'e8319859102636b4b4915c12f4c1dccaac2f97309e2fe5853109ef441b95bae6', '69ae5095adc3a7847274305f5f6a963d449606b60094335bb37a22a0423b4f9c', '5cff329cbbb30ad80f4a934dadf91c774bdf4c1c77907e08527b8159762e554a', '3ee3e1ff772ceba991f2e501083d76c3fad96f5b0fc9831a0f47c1a827f37df8', '0c81e542c6ee55171cb049c0570617f3fa9ea12402305bfe8014d2c953c51caa',
   '2bd8011eca9a0188606fa41066e222d13e39e9fbdd930e6d6320422bb6842415', '040c0d8f2319e57f6b22e2e2dbc3065fe5fbf10ad306e15ff687cf87f3604057', 'ea322bd576b8b6ee4240ed4611e602b63d1cdcb2befa71a84a886a55afb4ac4f', '3f0f0682204964ed2be82d5effe35517b5e8eaa97f73dbc4344cbc63d361907f', '31e7ff73ab8a69a2a5f72de16d08e899a46e9cc48004c42e034335d5e622637c', '6c84c5974dc29a3cd814144d007c6669c061d6217ca8837671847aaf97206891',
-  '6fe3c1e8c14600a70e17a2782784bf9dbe45318c0ca596bc87d4ebcd3a1837c4', '490105b516a84ebfd5c94ad7544581e9628ae1f95dffee0c0940ba8b0bfa9dad', 'b00356e49038391b1ecb1efbefd7c929b2e1e15f2cc6580a32df27a68f04c982', 'b340d44a632b98bc4560d64af31050bbc6c2c4d2c086bd2e88ad2afefe3baf42',
+  '6fe3c1e8c14600a70e17a2782784bf9dbe45318c0ca596bc87d4ebcd3a1837c4', '490105b516a84ebfd5c94ad7544581e9628ae1f95dffee0c0940ba8b0bfa9dad', 'b340d44a632b98bc4560d64af31050bbc6c2c4d2c086bd2e88ad2afefe3baf42',
   '2390d5d610646077ea1572b4ae278b721ceb44b14461dccf8e24817a7b68f541', '1ac9db07b55047f8f0e8b6708e294bf1e033a1e71f5348567b5fb6ee421a6858',
   '86f57b58a6d3409af7a6a18ca3a9fb36b4dbf11d247c8df8fabde9dddc6c674a',
-  // Contacts' transaction-scoped pair lock is the same fixed SELECT ... FOR
-  // UPDATE statement previously reviewed under b340d44... (identical
-  // sql_sha256 89d1cf16...).  The public adapter split changed only the
-  // containing scope, and therefore the site signature.
-  'd0c82d56b1ebc1290af28a4c3add0047a2da0f9ab7cf0643ae9ac5ccd3920fc9',
+  // PR #81's invariant probes are exact read-only projections. Their site,
+  // source, SQL, and transitive provenance hashes reopen review on drift.
+  '533bbfc7fcb9eefd891434ec44f0bea3b96e58247c11e3633616c7911584d6c5',
+  '4866ecccc1c91eac5a9ae495bb91005ba88c8549537913e1a3953e3b355e3659',
   // Runtime v10 keeps these exact SQL literals read-only: PostgreSQL identity,
   // migration-ledger observation, and outbox catalog projections in the
   // installed source plus its byte-identical package template. Their exact

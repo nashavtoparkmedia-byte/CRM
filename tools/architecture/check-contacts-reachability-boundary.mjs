@@ -13,16 +13,14 @@ const sha256 = (source) => createHash('sha256').update(source).digest('hex')
 const implementationPath = 'gravity-mvp/src/lib/ReachabilityService.ts'
 const publicPath = 'gravity-mvp/src/modules/contacts/public/v1/contact-reachability.ts'
 const routePath = 'gravity-mvp/src/app/api/channels/check-reachability/route.ts'
+const profileDrawerPath = 'gravity-mvp/src/app/messages/components/ContactProfileDrawer.tsx'
 const messageServicePath = 'gravity-mvp/src/lib/MessageService.ts'
 const consumers = [routePath, messageServicePath]
 const exactCapabilities = [
-    'findIdentityByPhoneAndChannel',
-    'isReachabilityConfirmed',
-    'updateReachability',
-    'updateReachabilityByChatId',
+    'recordExactProviderReachability',
 ]
 
-assert.equal(sha256(read(implementationPath)), 'a75d4de9cedae03d070b2a528ad43c698d4e1adb5c964f271062fec8e4e51bf8')
+assert.equal(sha256(read(implementationPath)), 'a02d1fda5a30a8a3d1daead9df62c8ca704afbb8c60aa885d25f344d54712edd')
 
 function capabilityKeys(source) {
     const body = source.match(/Object\.freeze\(\{([\s\S]*?)\}\)/)?.[1] ?? ''
@@ -31,10 +29,8 @@ function capabilityKeys(source) {
 
 const publicSource = read(publicPath)
 assert.deepEqual(capabilityKeys(publicSource), exactCapabilities)
-assert.match(publicSource, /findIdentityByPhoneAndChannel\(phone, channel\)/)
-assert.match(publicSource, /isReachabilityConfirmed\(identityId\)/)
-assert.match(publicSource, /updateReachability\(identityId, status\)/)
-assert.match(publicSource, /updateReachabilityByChatId\(chatId, status\)/)
+assert.match(publicSource, /recordExactProviderReachability\(command\)/)
+assert.doesNotMatch(publicSource, /updateReachabilityByChatId/)
 assert.doesNotMatch(publicSource, /delete|merge|create|deactivate|\bprisma\b|export \*/)
 const unrelatedWriteProbe = publicSource.replace(
     /\n\}\)\n$/,
@@ -44,15 +40,39 @@ assert.notDeepEqual(capabilityKeys(unrelatedWriteProbe), exactCapabilities)
 
 const routeSource = read(routePath)
 assert.match(routeSource, /@\/modules\/contacts\/public\/v1\/contact-reachability/)
-assert.match(routeSource, /contactReachabilityV1\.findIdentityByPhoneAndChannel\(normalized, channel\)/)
-assert.match(routeSource, /contactReachabilityV1\.isReachabilityConfirmed\(identityId\)/)
-assert.match(routeSource, /contactReachabilityV1\.updateReachability\(identityId, result\.status\)/)
+assert.match(routeSource, /contactReachabilityV1\.recordExactProviderReachability\(\{/)
+assert.match(routeSource, /identityId: exactBinding\.identityId/)
+assert.match(routeSource, /contactId: exactBinding\.contactId/)
+assert.match(routeSource, /providerAccountId: result\.providerAccountId/)
+assert.match(routeSource, /providerTargetId: result\.providerTargetId/)
+assert.doesNotMatch(routeSource, /findIdentityByPhoneAndChannel|findFirst\([^)]*phone/)
 assert.doesNotMatch(routeSource, /\bprisma\b|@\/lib\/prisma/)
+
+const implementationSource = read(implementationPath)
+assert.doesNotMatch(implementationSource, /findIdentityByPhoneAndChannel|contactIdentity\.findFirst/)
+assert.match(implementationSource, /where: \{ id: identityId \}/)
+assert.match(implementationSource, /identity\.contactId !== contactId/)
+assert.match(implementationSource, /storedProviderAccountId !== providerAccountId/)
+assert.match(implementationSource, /identityEvidence\.providerAliasValues/)
+assert.match(implementationSource, /exactProviderTargets\.has\(providerTargetId\)/)
+assert.doesNotMatch(implementationSource, /updateReachabilityByChatId/)
+
+const profileDrawerSource = read(profileDrawerPath)
+assert.match(profileDrawerSource, /identityId: identity\.id/)
+assert.match(profileDrawerSource, /contactId: contact\.id/)
+assert.match(profileDrawerSource, /providerAccountId,/)
+assert.match(profileDrawerSource, /item => item\.phoneId === phone\.id && item\.channel === channel/)
+assert.match(profileDrawerSource, /reachabilityKey\(identity\.phoneId, identity\.channel, identity\.id\)/)
+assert.match(profileDrawerSource, /body: JSON\.stringify\(\{ phone, channel, \.\.\.exactIdentityBinding \}\)/)
 
 const messageServiceSource = read(messageServicePath)
 assert.match(messageServiceSource, /@\/modules\/contacts\/public\/v1\/contact-reachability/)
-assert.match(messageServiceSource, /contactReachabilityV1\.updateReachabilityByChatId\(currentChatId, 'unreachable'\)/)
-assert.match(messageServiceSource, /contactReachabilityV1\.updateReachabilityByChatId\(currentChatId, 'confirmed'\)/)
+assert.match(messageServiceSource, /contactReachabilityV1\.recordExactProviderReachability\(\{/)
+assert.match(messageServiceSource, /identityId: outboundBinding\.contactIdentityId/)
+assert.match(messageServiceSource, /contactId: outboundBinding\.contactId/)
+assert.match(messageServiceSource, /providerAccountId: outboundBinding\.providerAccountId/)
+assert.match(messageServiceSource, /providerTargetId: outboundBinding\.identityTarget/)
+assert.doesNotMatch(messageServiceSource, /updateReachabilityByChatId/)
 
 for (const consumerPath of consumers) {
     assert.doesNotMatch(read(consumerPath), /@\/lib\/ReachabilityService/)

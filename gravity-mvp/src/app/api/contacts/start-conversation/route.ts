@@ -8,11 +8,8 @@ import {
 /**
  * POST /api/contacts/start-conversation
  *
- * Создать новый чат по номеру телефона.
- * Если Contact с таким номером существует — использовать его.
- * Если нет — создать Contact + Phone + Identity + Chat.
- *
- * Spec: unified-contact-spec.md v1.1 §12.2
+ * Phone-only provider starts fail closed. A Telegram/MAX/WhatsApp
+ * conversation must be opened through an already persisted opaque identity.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -45,6 +42,13 @@ export async function POST(req: NextRequest) {
       channel,
     })
 
+    if (result.status === 'provider_identity_required') {
+      return NextResponse.json({
+        error: 'PROVIDER_IDENTITY_REQUIRED',
+        message: 'Выберите контакт с сохранённым идентификатором этого канала.',
+      }, { status: 409 })
+    }
+
     return NextResponse.json({
       contact: {
         id: result.contact.id,
@@ -58,8 +62,8 @@ export async function POST(req: NextRequest) {
         isNew: result.isNewConversation,
       },
     })
-  } catch (err: any) {
-    console.error('[contacts/start-conversation] POST Error:', err.message)
+  } catch (err: unknown) {
+    console.error('[contacts/start-conversation] POST Error:', err instanceof Error ? err.message : err)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }

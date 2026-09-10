@@ -155,7 +155,7 @@ test('CRM message ordering is based on provider sentAt before createdAt fallback
   assertBefore(
     route,
     'sentAt = new Date(ts)',
-    'sentAt,   // validated above',
+    'sentAt, // validated above',
     'provider timestamp must be normalized before storing message sentAt',
   )
 })
@@ -364,10 +364,11 @@ test('MAX known-chat text send endpoint normalizes object send results before HT
 
 test('CRM MAX delivery path never writes non-string send-result object as message externalId', () => {
   const messageService = read('gravity-mvp/src/lib/MessageService.ts')
-  const maxActions = read('gravity-mvp/src/app/max-actions.ts')
+  const maxCapability = read('gravity-mvp/src/modules/max-channel/public/v1/messaging-delivery-capability.ts')
   const deliveryRuntime = read('gravity-mvp/src/modules/messaging/public/v1/channel-delivery-runtime.ts')
 
-  assert.match(maxActions, /const externalId = typeof data\.externalId === 'string'/)
+  assert.match(maxCapability, /const rawExternalId = optionalString\(raw\.externalId\) \|\| optionalString\(raw\.maxMessageId\)/)
+  assert.match(maxCapability, /const externalId = isRealMaxMessageId\(rawExternalId\) \? rawExternalId : null/)
   assert.match(deliveryRuntime, /externalId: string \| null/)
   assert.match(messageService, /const maxExternalId = maxRes\.externalId/)
   assert.match(messageService, /const maxExternalId = retryMaxRes\.externalId/)
@@ -377,7 +378,8 @@ test('CRM MAX delivery path never writes non-string send-result object as messag
 
 test('MAX outbound text passes stable clientMessageId through CRM and scraper retry path', () => {
   const scraper = read('max-web-scraper/index.js')
-  const maxActions = read('gravity-mvp/src/app/max-actions.ts')
+  const maxTransport = read('gravity-mvp/src/modules/max-channel/application/messaging-transport.ts')
+  const maxCapability = read('gravity-mvp/src/modules/max-channel/public/v1/messaging-delivery-capability.ts')
   const messageService = read('gravity-mvp/src/lib/MessageService.ts')
 
   assert.match(scraper, /function stableTextCid\(seed\)/)
@@ -387,8 +389,10 @@ test('MAX outbound text passes stable clientMessageId through CRM and scraper re
   assert.match(scraper, /let \{ chatId, message, phone, quotedMsgId, uiChatId, clientMessageId \} = req\.body/)
   assert.match(scraper, /sendText\(transport, Number\(chatId\), message, quotedMsgId, uiChatId, clientMessageId\)/)
 
-  assert.match(maxActions, /clientMessageId\?: string/)
-  assert.match(maxActions, /JSON\.stringify\(\{ chatId: cleanTarget, message, quotedMsgId, uiChatId, clientMessageId \}\)/)
+  assert.match(maxTransport, /clientMessageId\?: string/)
+  assert.match(maxTransport, /clientMessageId: input\.clientMessageId/)
+  assert.match(maxTransport, /providerAccountId,/)
+  assert.match(maxCapability, /clientMessageId: input\.options\.clientMessageId/)
   assert.match(messageService, /clientMessageId: clientMessageId \|\| messageId/)
   assert.match(messageService, /clientMessageId: message\.clientMessageId \|\| message\.id/)
 })

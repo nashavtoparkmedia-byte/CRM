@@ -16,7 +16,12 @@ export interface ContactConversationPersistencePortV1 {
   ): Promise<ContactConversationV1 | null>
   openFallback(
     input: Omit<OpenFallbackContactConversationCommandV1, 'contract'>,
-  ): Promise<{ conversation: ContactConversationV1; isNew: boolean }>
+  ): Promise<
+    | { status: 'ready'; conversation: ContactConversationV1; isNew: boolean }
+    | {
+        status: 'provider_account_unproven' | 'transport_unbound' | 'conversation_target_unproven'
+      }
+  >
 }
 
 export function createFindAndBackfillContactConversationHandlerV1(
@@ -30,6 +35,9 @@ export function createFindAndBackfillContactConversationHandlerV1(
       contactId: parsed.contactId,
       contactIdentityId: parsed.contactIdentityId,
       channel: parsed.channel,
+      identityExternalId: parsed.identityExternalId,
+      exactExternalChatIds: parsed.exactExternalChatIds,
+      providerAccountId: parsed.providerAccountId,
       allowContactFallback: parsed.allowContactFallback,
     })
     return {
@@ -49,13 +57,22 @@ export function createOpenFallbackContactConversationHandlerV1(
     const result = await port.openFallback({
       legacyDriverId: parsed.legacyDriverId,
       channel: parsed.channel,
-      externalChatId: parsed.externalChatId,
+      identityExternalId: parsed.identityExternalId,
+      exactExternalChatIds: parsed.exactExternalChatIds,
       name: parsed.name,
       contactId: parsed.contactId,
       contactIdentityId: parsed.contactIdentityId,
+      providerAccountId: parsed.providerAccountId,
     })
+    if (result.status !== 'ready') {
+      return {
+        contract: OPEN_FALLBACK_CONTACT_CONVERSATION_RESULT_V1,
+        status: result.status,
+      }
+    }
     return {
       contract: OPEN_FALLBACK_CONTACT_CONVERSATION_RESULT_V1,
+      status: 'ready',
       conversation: result.conversation,
       isNew: result.isNew,
     }

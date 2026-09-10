@@ -1,12 +1,29 @@
-import {
-    linkContactToBestDriver,
-    type LinkResult,
-} from '@/lib/contacts/yandex-link'
+export interface YandexDriverContactLinkResultV1 {
+  action: 'noop' | 'linked' | 'no_contact' | 'no_driver' | 'ambiguous'
+  contactId?: string
+  driverId?: string
+  previousDriverYandexId?: string | null
+  candidates?: Array<{
+    id: string
+    yandexDriverId: string
+    dismissedAt: Date | null
+    lastOrderAt: Date | null
+  }>
+  contactCandidates?: Array<{
+    contactId: string
+    contactPhoneId: string
+    yandexDriverId: string | null
+    isArchived: boolean
+  }>
+  reason?: string
+}
 
-export type YandexDriverContactLinkResultV1 = LinkResult
+export interface YandexDriverContactLinkPortV1 {
+  link(phone: string | null | undefined): Promise<YandexDriverContactLinkResultV1>
+}
 
-export const yandexDriverContactLinkV1 = Object.freeze({
-    linkContactToBestDriver: (phone: string | null | undefined): Promise<YandexDriverContactLinkResultV1> => (
-        linkContactToBestDriver(phone)
-    ),
-})
+export function createYandexDriverContactLinkHandlerV1(port: YandexDriverContactLinkPortV1) {
+  return (phone: string | null | undefined): Promise<YandexDriverContactLinkResultV1> => (
+    port.link(phone)
+  )
+}

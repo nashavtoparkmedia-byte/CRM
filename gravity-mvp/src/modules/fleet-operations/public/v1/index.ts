@@ -37,6 +37,7 @@ export type { RecordManagerDriverCommunicationPersistencePortV1 } from './record
 export { createRunCommunicationEventRetentionHandlerV1 } from './communication-event-retention-handler'
 export type { CommunicationEventRetentionPersistencePortV1 } from './communication-event-retention-handler'
 export type { ScheduledYandexSyncResultV1 } from './yandex-sync-runtime'
+export * from './yandex-fleet-reconciler'
 export type { ScheduledScraperCheckDispatchResultV1 } from './scheduled-scraper-check-dispatch'
 export {
     parkDriverMatchesQueryV1,
@@ -72,6 +73,7 @@ export {
     recordDriverActionV1,
     recordDriverDailyActivityV1,
     recordManagerDriverCommunicationV1,
+    reconcileYandexFleetV1,
     reconcileDriverProfileV1,
     resolveImportedDriverV1,
     runApiLogRetentionV1,

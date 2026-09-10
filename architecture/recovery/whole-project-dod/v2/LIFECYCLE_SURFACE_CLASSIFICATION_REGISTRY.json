@@ -5733,6 +5733,15 @@
       "functional_owner": "architecture_governance"
     },
     {
+      "path": "tools/architecture/reviewed-ownership-amendments.mjs",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "POSSIBLE",
+      "rationale": "Repository architecture-control surface owned by architecture_governance; pure IO-free resolver for additive reviewed executable ownership amendments. Lifecycle classification does not grant application-runtime writes and does not gain business-data ownership.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
+      "functional_owner": "architecture_governance"
+    },
+    {
       "path": "tools/architecture/run-authoritative-ci.mjs",
       "lifecycle": "OPERATIONAL_SCRIPT",
       "disposition": "ACTIVE",

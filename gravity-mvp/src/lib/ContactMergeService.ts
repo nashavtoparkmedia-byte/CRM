@@ -17,6 +17,7 @@ export type MergeResult =
   | { status: 'merged'; survivorId: string; mergedId: string; driverId: string; mergeRecordId: string }
   | { status: 'already_merged'; sourceId: string; targetId: string }
   | { status: 'contact_merged'; survivorId: string; mergedId: string; mergeRecordId: string }
+  | { status: 'automatic_merge_blocked'; leftContactId: string; rightContactId: string; reason: string }
 
 function stripContract(result: MergeContactsResultV1): MergeResult {
   switch (result.status) {
@@ -41,22 +42,26 @@ function stripContract(result: MergeContactsResultV1): MergeResult {
         mergedId: result.mergedId,
         mergeRecordId: result.mergeRecordId,
       }
+    case 'automatic_merge_blocked':
+      return {
+        status: result.status,
+        leftContactId: result.leftContactId,
+        rightContactId: result.rightContactId,
+        reason: result.reason,
+      }
   }
 }
 
 export class ContactMergeService {
   static async mergeContactToDriver(
-    contactId: string,
-    driverId: string,
-    mergedBy: string = 'system',
+    _contactId: string,
+    _driverId: string,
+    _mergedBy: string = 'system',
   ): Promise<MergeResult> {
-    return stripContract(await mergeContactsV1({
-      contract: MERGE_CONTACTS_COMMAND_V1,
-      operation: 'contact_to_driver',
-      contactId,
-      driverId,
-      mergedBy,
-    }))
+    throw new ContactMergeErrorV1(
+      'DRIVER_PERSON_CONFIRMATION_REQUIRED',
+      'Contact to Driver attachment requires canonical all-park person confirmation',
+    )
   }
 
   static async mergeContactToContact(

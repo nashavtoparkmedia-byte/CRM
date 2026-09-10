@@ -83,7 +83,20 @@ function envelope(
 }
 
 function requireDriverId(value: unknown): asserts value is string {
-    if (typeof value !== 'string' || value.trim() === '') invalid('driverId is required')
+    if (
+        typeof value !== 'string'
+        || value.length === 0
+        || value !== value.trim()
+        || value.length > 200
+    ) invalid('driverId is required')
+}
+
+function requireTelegramId(value: unknown): asserts value is bigint {
+    if (
+        typeof value !== 'bigint'
+        || value <= 0n
+        || value > 9_223_372_036_854_775_807n
+    ) invalid('telegramId must be a positive signed bigint')
 }
 
 export function parseSaveManualDriverTelegramLinkCommandV1(
@@ -96,7 +109,7 @@ export function parseSaveManualDriverTelegramLinkCommandV1(
         ['contract', 'driverId', 'telegramId'],
     )
     requireDriverId(value.driverId)
-    if (typeof value.telegramId !== 'bigint') invalid('telegramId must be a bigint')
+    requireTelegramId(value.telegramId)
     return value as unknown as SaveManualDriverTelegramLinkCommandV1
 }
 
@@ -122,7 +135,7 @@ export function parseNotifyManualDriverTelegramLinkCommandV1(
         'telegram_channel.NotifyManualDriverTelegramLinkCommand.',
         ['contract', 'telegramId', 'driverName'],
     )
-    if (typeof value.telegramId !== 'bigint') invalid('telegramId must be a bigint')
+    requireTelegramId(value.telegramId)
     if (typeof value.driverName !== 'string' || value.driverName.length === 0) {
         invalid('driverName is required')
     }

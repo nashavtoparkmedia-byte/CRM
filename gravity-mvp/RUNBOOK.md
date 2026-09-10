@@ -226,6 +226,8 @@ curl -s http://localhost:3002/api/health | jq '.retry.pendingRetryable'
 | Variable | Required | Default | Purpose |
 |----------|----------|---------|---------|
 | `DATABASE_URL` | Yes | — | PostgreSQL connection string |
+| `MAX_SCRAPER_WEBHOOK_SECRET` | Yes | — | Shared secret for max-web-scraper → Gravity MAX webhooks; must match in both services |
+| `TG_BOT_API_URL` | Yes | — | Internal tg-bot transport for exact Bot API delivery; production value is `http://tg-bot:3001` |
 | `TELEGRAM_BOT_URL` | No | `http://localhost:3001` | TG bot webhook base URL |
 | `MAX_SCRAPER_URL` | No | `http://localhost:3005` | MAX web scraper base URL |
 | `TG_PROXY_HOST` | No | — | SOCKS5 proxy host for Telegram |
