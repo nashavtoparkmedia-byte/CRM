@@ -42,11 +42,13 @@ class BuilderContractTests(unittest.TestCase):
 
     def test_review_directory_is_writable_only_during_staging(self) -> None:
         sealer = (ROOT / "packaging/seal-release.py").read_text(encoding="ascii")
-        create = sealer.index("review.mkdir(parents=True, mode=0o700)")
-        write = sealer.index('copy_exact(ROOT / "human-manifest.md", review / "human-manifest.md", 0o400)')
-        close = sealer.index("review.chmod(0o500)")
+        create = sealer.index("review_directory.mkdir(parents=True, mode=0o700)")
+        write = sealer.index('copy_exact(ROOT / "human-manifest.md", review_directory / "human-manifest.md", 0o400)')
+        evidence = sealer.index('copy_exact(item, review_directory / item.name, 0o400)')
+        close = sealer.index("review_directory.chmod(0o500)")
         self.assertLess(create, write)
-        self.assertLess(write, close)
+        self.assertLess(write, evidence)
+        self.assertLess(evidence, close)
 
     def test_profile_and_wrapper_expose_only_exact_zero_argument_mutations(self) -> None:
         profile = (ROOT / "templates/crm-activation-profile.py.in").read_text(encoding="ascii")
@@ -187,6 +189,171 @@ printf '%s\\n' \"$label:success\" >>\"$events\"
         self.assertEqual(set(value), {"schema", "started_at", "completed_at", "production_mutated", "secret_values_emitted", "commands", "sealing"})
         self.assertFalse(value["production_mutated"])
         self.assertFalse(value["secret_values_emitted"])
+
+
+def _load_sealer():
+    import importlib.machinery
+    import importlib.util
+
+    loader = importlib.machinery.SourceFileLoader(
+        "yoko_seal_release_review_tests", str(ROOT / "packaging/seal-release.py")
+    )
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[loader.name] = module
+    loader.exec_module(module)
+    return module
+
+
+class IndependentReviewBindingTests(unittest.TestCase):
+    """The seal must derive independent acceptance from real evidence, never assert it."""
+
+    COMMIT = "a" * 40
+    TREE = "b" * 40
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.sealer = _load_sealer()
+
+    def document(self, directory: Path, **overrides):
+        evidence = directory / "reliability.md"
+        evidence.write_text("reliability transcript\n", encoding="ascii")
+        security = directory / "security.md"
+        security.write_text("security transcript\n", encoding="ascii")
+
+        def binding(path: Path):
+            raw = path.read_bytes()
+            return {"path": path.name, "sha256": hashlib.sha256(raw).hexdigest(), "bytes": len(raw)}
+
+        value = {
+            "schema": "yoko.crm.coordinated-runtime-independent-review.v1",
+            "profile_id": "crm-6e3f094bf4b4-gravity-max-source-v1",
+            "package_version": "2.0.0-15",
+            "candidate_commit": self.COMMIT,
+            "candidate_tree": self.TREE,
+            "reviews": [
+                {
+                    "role": "release-reliability", "reviewer": "R1", "independent": True,
+                    "executor_assertion": False, "verdict": "PASS_WITH_LOW_FINDINGS",
+                    "reviewed_at": "2026-09-10T00:00:00Z", "evidence": binding(evidence),
+                    "findings": [{"id": "R5-01", "severity": "LOW", "title": "residual"}],
+                },
+                {
+                    "role": "privileged-runtime-security", "reviewer": "R2", "independent": True,
+                    "executor_assertion": False, "verdict": "PASS",
+                    "reviewed_at": "2026-09-10T00:00:00Z", "evidence": binding(security),
+                    "findings": [],
+                },
+            ],
+        }
+        value.update(overrides)
+        path = directory / "independent-review.v1.json"
+        path.write_text(json.dumps(value), encoding="ascii")
+        return path, value
+
+    def write(self, directory: Path, value) -> Path:
+        path = directory / "independent-review.v1.json"
+        path.write_text(json.dumps(value), encoding="ascii")
+        return path
+
+    def test_exact_two_role_review_binds_to_the_candidate(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            path, _ = self.document(Path(raw))
+            accepted, evidence = self.sealer.validate_independent_review(path, self.COMMIT, self.TREE)
+        self.assertEqual(accepted["status"], "ACCEPTED")
+        self.assertEqual(accepted["candidate_commit"], self.COMMIT)
+        self.assertEqual([item["role"] for item in accepted["reviews"]],
+                         ["privileged-runtime-security", "release-reliability"])
+        self.assertEqual(accepted["residual_low_findings"], 1)
+        self.assertEqual(accepted["blocking_findings"], 0)
+        self.assertEqual(len(evidence), 2)
+
+    def test_review_bound_to_another_candidate_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            path, _ = self.document(Path(raw))
+            with self.assertRaises(ValueError) as raised:
+                self.sealer.validate_independent_review(path, "c" * 40, self.TREE)
+        self.assertIn("exact sealing candidate", str(raised.exception))
+
+    def test_blocking_finding_refuses_the_seal(self) -> None:
+        for severity in ("CRITICAL", "HIGH", "MEDIUM"):
+            with self.subTest(severity=severity), tempfile.TemporaryDirectory() as raw:
+                directory = Path(raw)
+                _, value = self.document(directory)
+                value["reviews"][0]["findings"] = [{"id": "X", "severity": severity, "title": "blocking"}]
+                path = self.write(directory, value)
+                with self.assertRaises(ValueError) as raised:
+                    self.sealer.validate_independent_review(path, self.COMMIT, self.TREE)
+                self.assertIn("blocking finding", str(raised.exception))
+
+    def test_missing_role_or_duplicate_role_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            _, value = self.document(directory)
+            value["reviews"][1]["role"] = "release-reliability"
+            path = self.write(directory, value)
+            with self.assertRaises(ValueError) as raised:
+                self.sealer.validate_independent_review(path, self.COMMIT, self.TREE)
+        self.assertIn("exact required set", str(raised.exception))
+
+    def test_executor_self_certification_is_refused(self) -> None:
+        for field, bad in (("independent", False), ("executor_assertion", True)):
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as raw:
+                directory = Path(raw)
+                _, value = self.document(directory)
+                value["reviews"][0][field] = bad
+                path = self.write(directory, value)
+                with self.assertRaises(ValueError) as raised:
+                    self.sealer.validate_independent_review(path, self.COMMIT, self.TREE)
+                self.assertIn("independent reviewer outcome", str(raised.exception))
+
+    def test_evidence_digest_drift_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            path, _ = self.document(directory)
+            (directory / "reliability.md").write_text("tampered\n", encoding="ascii")
+            with self.assertRaises(ValueError) as raised:
+                self.sealer.validate_independent_review(path, self.COMMIT, self.TREE)
+        self.assertIn("evidence bytes drifted", str(raised.exception))
+
+    def test_verdict_and_findings_must_agree(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            _, value = self.document(directory)
+            value["reviews"][1]["verdict"] = "PASS_WITH_LOW_FINDINGS"
+            path = self.write(directory, value)
+            with self.assertRaises(ValueError) as raised:
+                self.sealer.validate_independent_review(path, self.COMMIT, self.TREE)
+            self.assertIn("lists none", str(raised.exception))
+            value["reviews"][0]["verdict"] = "PASS"
+            value["reviews"][1]["verdict"] = "PASS"
+            path = self.write(directory, value)
+            with self.assertRaises(ValueError) as raised:
+                self.sealer.validate_independent_review(path, self.COMMIT, self.TREE)
+            self.assertIn("cannot carry residual findings", str(raised.exception))
+
+    def test_unaccepted_verdict_is_refused(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            _, value = self.document(directory)
+            value["reviews"][0]["verdict"] = "REPAIR_REQUIRED"
+            path = self.write(directory, value)
+            with self.assertRaises(ValueError) as raised:
+                self.sealer.validate_independent_review(path, self.COMMIT, self.TREE)
+        self.assertIn("not an accepted outcome", str(raised.exception))
+
+    def test_acceptance_template_cannot_masquerade_as_review_evidence(self) -> None:
+        template = ROOT / "acceptance-record.template.json"
+        self.assertTrue(template.is_file())
+        with self.assertRaises(ValueError) as raised:
+            self.sealer.validate_independent_review(template, self.COMMIT, self.TREE)
+        self.assertIn("outside the builder tree", str(raised.exception))
+
+    def test_sealer_requires_the_review_input_and_emits_no_pending(self) -> None:
+        source = (ROOT / "packaging/seal-release.py").read_text(encoding="ascii")
+        self.assertIn('parser.add_argument("--independent-review", required=True', source)
+        self.assertNotIn('"independent_review": "PENDING"', source)
 
 
 if __name__ == "__main__":

@@ -38,6 +38,15 @@ ARTIFACT_FILES = {
 }
 
 
+REVIEW_SCHEMA = "yoko.crm.coordinated-runtime-independent-review.v1"
+REVIEW_ROLES = ("release-reliability", "privileged-runtime-security")
+REVIEW_VERDICTS = frozenset({"PASS", "PASS_WITH_LOW_FINDINGS"})
+RESIDUAL_SEVERITIES = frozenset({"LOW", "INFO"})
+BLOCKING_SEVERITIES = frozenset({"CRITICAL", "HIGH", "MEDIUM"})
+REVIEW_TIMESTAMP = "%Y-%m-%dT%H:%M:%SZ"
+REVIEW_MAXIMUM = 1024 * 1024
+
+
 def canonical(value: Any) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
 
@@ -158,6 +167,104 @@ def parse_time(value: Any) -> dt.datetime:
     if not isinstance(value, str) or not value.endswith("Z"):
         raise ValueError("timestamp invalid")
     return dt.datetime.fromisoformat(value[:-1] + "+00:00")
+
+
+def validate_independent_review(path: Path, commit: str, tree: str) -> tuple[dict[str, Any], list[Path]]:
+    """Bind two real independent review outcomes to this exact candidate, or refuse to seal.
+
+    The document is an input, never something this sealer can author: it must live outside the
+    builder tree, name both required roles, and carry for each one a reviewer, a verdict from the
+    accepted set, and the digest of that review's own evidence file, which is verified here and
+    copied into the Owner bundle. Any CRITICAL, HIGH or MEDIUM finding refuses the seal; residual
+    LOW findings are permitted only when the verdict says so and they are listed explicitly. The
+    acceptance template in this directory cannot satisfy any of that, which is the point.
+    """
+    resolved = path.resolve(strict=True)
+    if resolved.is_relative_to(ROOT.resolve()):
+        raise ValueError("independent review evidence must be supplied from outside the builder tree")
+    document = load(resolved)
+    if (
+        document.get("schema") != REVIEW_SCHEMA
+        or document.get("profile_id") != PROFILE_ID
+        or document.get("package_version") != "2.0.0-15"
+    ):
+        raise ValueError("independent review document contract mismatch")
+    if document.get("candidate_commit") != commit or document.get("candidate_tree") != tree:
+        raise ValueError("independent review is not bound to the exact sealing candidate")
+    reviews = document.get("reviews")
+    if not isinstance(reviews, list) or len(reviews) != len(REVIEW_ROLES):
+        raise ValueError("independent review must carry exactly one outcome per required role")
+    accepted: list[dict[str, Any]] = []
+    evidence_files: list[Path] = []
+    residual = 0
+    for entry in reviews:
+        if not isinstance(entry, dict):
+            raise ValueError("independent review entry invalid")
+        role = entry.get("role")
+        if role not in REVIEW_ROLES or any(item["role"] == role for item in accepted):
+            raise ValueError("independent review roles are not the exact required set")
+        reviewer = entry.get("reviewer")
+        if not isinstance(reviewer, str) or not reviewer.strip():
+            raise ValueError("independent review entry lacks a reviewer identity")
+        if entry.get("independent") is not True or entry.get("executor_assertion") is not False:
+            raise ValueError("independent review entry is not an independent reviewer outcome")
+        verdict = entry.get("verdict")
+        if verdict not in REVIEW_VERDICTS:
+            raise ValueError("independent review verdict is not an accepted outcome")
+        try:
+            dt.datetime.strptime(str(entry.get("reviewed_at")), REVIEW_TIMESTAMP)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("independent review entry lacks an exact review timestamp") from exc
+        evidence = entry.get("evidence")
+        if not isinstance(evidence, dict) or set(evidence) != {"path", "sha256", "bytes"}:
+            raise ValueError("independent review entry lacks an exact evidence binding")
+        name = evidence["path"]
+        if not isinstance(name, str) or "/" in name or name in {"", ".", ".."}:
+            raise ValueError("independent review evidence path is unsafe")
+        if not isinstance(evidence["sha256"], str) or len(evidence["sha256"]) != 64:
+            raise ValueError("independent review evidence digest is unsafe")
+        source = resolved.parent / name
+        if sha(source, REVIEW_MAXIMUM) != evidence["sha256"] or source.stat().st_size != evidence["bytes"]:
+            raise ValueError("independent review evidence bytes drifted")
+        findings = entry.get("findings")
+        if not isinstance(findings, list):
+            raise ValueError("independent review entry lacks an explicit findings list")
+        residual_findings = []
+        for finding in findings:
+            if not isinstance(finding, dict) or set(finding) != {"id", "severity", "title"}:
+                raise ValueError("independent review finding invalid")
+            severity = finding.get("severity")
+            if severity in BLOCKING_SEVERITIES:
+                raise ValueError("independent review carries a blocking finding; release material refused")
+            if severity not in RESIDUAL_SEVERITIES:
+                raise ValueError("independent review finding severity is not an accepted residual")
+            residual_findings.append(finding)
+        low = [finding for finding in residual_findings if finding["severity"] == "LOW"]
+        if verdict == "PASS" and residual_findings:
+            raise ValueError("independent review verdict PASS cannot carry residual findings")
+        if verdict == "PASS_WITH_LOW_FINDINGS" and not low:
+            raise ValueError("independent review verdict claims residual findings but lists none")
+        residual += len(low)
+        evidence_files.append(source)
+        accepted.append({
+            "role": role,
+            "reviewer": reviewer,
+            "verdict": verdict,
+            "reviewed_at": entry["reviewed_at"],
+            "evidence": {"path": name, "sha256": evidence["sha256"], "bytes": evidence["bytes"]},
+            "residual_findings": residual_findings,
+        })
+    accepted.sort(key=lambda item: item["role"])
+    return {
+        "status": "ACCEPTED",
+        "schema": REVIEW_SCHEMA,
+        "document": {"path": resolved.name, "sha256": sha(resolved, REVIEW_MAXIMUM)},
+        "candidate_commit": commit,
+        "candidate_tree": tree,
+        "reviews": accepted,
+        "residual_low_findings": residual,
+        "blocking_findings": 0,
+    }, evidence_files
 
 
 def validate_snapshot(path: Path) -> tuple[dict[str, Any], str]:
@@ -322,11 +429,13 @@ def main() -> None:
     parser.add_argument("--production-snapshot", required=True, type=Path)
     parser.add_argument("--v14-package", required=True, type=Path)
     parser.add_argument("--v14-seal", required=True, type=Path)
+    parser.add_argument("--independent-review", required=True, type=Path)
     args = parser.parse_args()
     repository = args.builder_repo.resolve(strict=True)
     if ROOT.resolve().is_relative_to(repository) is False:
         raise ValueError("builder directory is outside repository")
     inventory, builder_commit, builder_tree = builder_inventory(repository)
+    review, review_evidence = validate_independent_review(args.independent_review, builder_commit, builder_tree)
     assert_clean_identity(args.application_source, APPLICATION_COMMIT, APPLICATION_TREE, "accepted application")
     assert_clean_identity(args.stage_a_builder_source, STAGE_A_COMMIT, STAGE_A_TREE, "Stage A builder")
     snapshot, snapshot_sha = validate_snapshot(args.production_snapshot)
@@ -434,14 +543,14 @@ def main() -> None:
         "sealed_inputs_sha256": sha(generated / "sealed-inputs.v1.json"),
         "package": {"path": package.name, "sha256": package_sha, "bytes": package.stat().st_size, "architecture": "all"},
         "production_mutated": False,
-        "independent_review": "PENDING",
+        "independent_review": review,
     }
     write_json(dist / "SEALED_RELEASE.json", release_seal)
     release_seal_sha = sha(dist / "SEALED_RELEASE.json")
 
     payload = generated / "bundle/payload"
-    review = payload / "review"
-    review.mkdir(parents=True, mode=0o700)
+    review_directory = payload / "review"
+    review_directory.mkdir(parents=True, mode=0o700)
     payload.chmod(0o700)
     installer = (ROOT / "templates/install.sh.in").read_text(encoding="ascii")
     replacements = {
@@ -462,8 +571,11 @@ def main() -> None:
     copy_exact(dist / "SEALED_RELEASE.json", payload / "SEALED_RELEASE.json", 0o400)
     copy_exact(generated / "artifact-admission.v1.json", payload / "artifact-admission.v1.json", 0o400)
     copy_exact(args.v14_seal, payload / "runtime-v14-SEALED_RELEASE.json", 0o400)
-    copy_exact(ROOT / "human-manifest.md", review / "human-manifest.md", 0o400)
-    review.chmod(0o500)
+    copy_exact(ROOT / "human-manifest.md", review_directory / "human-manifest.md", 0o400)
+    copy_exact(args.independent_review.resolve(strict=True), review_directory / "independent-review.v1.json", 0o400)
+    for item in review_evidence:
+        copy_exact(item, review_directory / item.name, 0o400)
+    review_directory.chmod(0o500)
     payload_files = {}
     for item in sorted(path for path in payload.rglob("*") if path.is_file()):
         relative = str(item.relative_to(payload))
@@ -496,7 +608,10 @@ def main() -> None:
         "package_sha256": package_sha,
         "bootstrap": {"path": bundle_name, "sha256": sha(bootstrap), "bytes": bootstrap.stat().st_size},
         "direct_rollback_package_sha256": V14_SHA,
-        "independent_review": "PENDING",
+        "independent_review": {"status": review["status"], "document_sha256": review["document"]["sha256"],
+                               "candidate_commit": review["candidate_commit"],
+                               "residual_low_findings": review["residual_low_findings"],
+                               "blocking_findings": review["blocking_findings"]},
         "production_mutated": False,
     }
     write_json(dist / "BOOTSTRAP_IDENTITY.json", bootstrap_identity)

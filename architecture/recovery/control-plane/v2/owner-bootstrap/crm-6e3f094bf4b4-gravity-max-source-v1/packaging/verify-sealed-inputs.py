@@ -16,6 +16,10 @@ ROOT = Path(__file__).resolve().parent.parent
 GENERATED = ROOT / "generated"
 DIST = ROOT / "dist"
 PREFIX = "architecture/recovery/control-plane/v2/owner-bootstrap/crm-6e3f094bf4b4-gravity-max-source-v1"
+REVIEW_SCHEMA = "yoko.crm.coordinated-runtime-independent-review.v1"
+REVIEW_ROLES = ("release-reliability", "privileged-runtime-security")
+REVIEW_VERDICTS = frozenset({"PASS", "PASS_WITH_LOW_FINDINGS"})
+RESIDUAL_SEVERITIES = frozenset({"LOW", "INFO"})
 
 
 def duplicate_safe(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -107,6 +111,36 @@ def main() -> None:
     ):
         raise ValueError("generated profile contract mismatch")
     if args.phase == "package-output":
+        seal = load(DIST / "SEALED_RELEASE.json")
+        review = seal.get("independent_review")
+        if not isinstance(review, dict):
+            raise ValueError("release seal carries no independent review acceptance")
+        if review.get("status") != "ACCEPTED" or review.get("schema") != REVIEW_SCHEMA:
+            raise ValueError("independent review acceptance contract mismatch")
+        if review.get("candidate_commit") != head or review.get("candidate_tree") != tree:
+            raise ValueError("independent review is not bound to the sealed candidate")
+        if review.get("blocking_findings") != 0:
+            raise ValueError("release seal accepts a blocking review finding")
+        entries = review.get("reviews")
+        if not isinstance(entries, list) or sorted(
+            entry.get("role") for entry in entries if isinstance(entry, dict)
+        ) != sorted(REVIEW_ROLES):
+            raise ValueError("independent review does not cover the exact required roles")
+        residual = 0
+        for entry in entries:
+            if entry.get("verdict") not in REVIEW_VERDICTS:
+                raise ValueError("independent review verdict is not an accepted outcome")
+            findings = entry.get("residual_findings")
+            if not isinstance(findings, list):
+                raise ValueError("independent review entry lacks an explicit residual findings list")
+            if any(finding.get("severity") not in RESIDUAL_SEVERITIES for finding in findings):
+                raise ValueError("independent review residual finding severity is not accepted")
+            residual += sum(1 for finding in findings if finding.get("severity") == "LOW")
+        if review.get("residual_low_findings") != residual:
+            raise ValueError("independent review residual finding count is stale")
+        document = review.get("document")
+        if not isinstance(document, dict) or set(document) != {"path", "sha256"}:
+            raise ValueError("independent review document binding invalid")
         package = DIST / "yoko-privileged-runtime_2.0.0-15_all.deb"
         fields = []
         for field in ("Package", "Version", "Architecture"):
