@@ -14,9 +14,9 @@
     "coverage_sha256": "bd7df022d08734ec500336907c4c1dadc6c6ac3c7f3df23c1df0d307a4cdfb29"
   },
   "current": {
-    "tracked_inventory_sha256": "ad56f93977b2edbfaf187526cddd898f9d0c2f601ae3a9b4de15d70d3ed22c01",
-    "tracked_executable_surfaces": 2304,
-    "coverage_sha256": "38c844bae3a5b1c9d6e19b209cf92f31175cfb847b80b6cb2f1e464d5202ba2d"
+    "tracked_inventory_sha256": "6c76a0154da27c2c3e33aa0277c222d2ce5eee3428726ed3fc4a4bbed96c4c7d",
+    "tracked_executable_surfaces": 2305,
+    "coverage_sha256": "91edd7743cbdda2a42dd43406948bad54111263e95f6a759f7bdb7d73014b073"
   },
   "exact_inventory_changes": [
     {
