@@ -28,9 +28,20 @@
 // single reviewer who never examined it. A composition amendment therefore
 // declares both accepted inputs explicitly, carries the superseded accepted
 // amendment of the non-anchor input verbatim as its evidence, and states in
-// machine-checked form that it performs no primary per-surface review. The
-// upstream input is bound to the chain anchor by exact triple, so neither input
-// can be dropped, swapped or edited without failing closed.
+// machine-checked form that it performs no primary per-surface review.
+//
+// A declared authority input can never be self-attesting. A document that both
+// claims an accepted denominator and supplies the only evidence for it proves
+// nothing: a coherent co-edit of the input triple, the carried amendment and the
+// declared delta would restate history unchallenged. Every input is therefore
+// checked against a trusted anchor the caller supplies from reviewed source,
+// exactly as the historical coverage baseline is anchored by digest. The anchor
+// names the accepted commit, evidence path, evidence digest and exact
+// denominator triple of each authority the repository is willing to compose, so
+// an input that is dropped, added, swapped or edited fails closed however
+// consistently the surrounding document was rewritten.
+
+import { createHash } from 'node:crypto'
 
 export const REVIEWED_AMENDMENTS_SCHEMA = 'yoko.crm.reviewed-executable-path-ownership-amendments.v1'
 export const AMENDMENT_REBIND_DECISION = 'APPROVED_MECHANICAL_SOURCE_HASH_REBIND'
@@ -43,6 +54,16 @@ export const COMPOSITION_MERGED_AUTHORITY = 'IDENTITY_CANDIDATE'
 const SHA256 = /^[0-9a-f]{64}$/u
 const SHA1 = /^[0-9a-f]{40}$/u
 const assert = (value, message) => { if (!value) throw new Error(message) }
+
+// Canonical digest over carried evidence. Hashing is a pure computation, so the
+// module keeps its IO-free contract while gaining the ability to bind evidence
+// it is handed to a digest the caller anchors in reviewed source.
+const stable = (value) => {
+  if (Array.isArray(value)) return value.map(stable)
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stable(value[key])]))
+}
+const canonicalDigest = (value) => createHash('sha256').update(JSON.stringify(stable(value))).digest('hex')
 
 const isExactTriple = (triple) => Number.isInteger(triple?.tracked_executable_surfaces)
   && triple.tracked_executable_surfaces > 0
@@ -106,12 +127,17 @@ function collectAmendmentDecisions(amendment, id, rebinds, unassigned) {
 // exact merged output. Both inputs are mandatory and each is pinned by an exact
 // denominator triple, so dropping or editing either one cannot pass silently.
 function resolveAuthorityComposition(amendment, id, context, identities, rebinds, unassigned) {
-  const { historicalReviewer, historicalReviewRole } = context
+  const { historicalReviewer, historicalReviewRole, acceptedAuthorityAnchors } = context
   const composition = amendment.authority_composition
   assert(composition && typeof composition === 'object' && !Array.isArray(composition), `accepted authority merge composition is missing: ${id}`)
   assert(composition.review_decision === AMENDMENT_COMPOSITION_DECISION, `accepted authority merge composition lacks its explicit decision: ${id}`)
   assert(composition.claims_primary_surface_review === false, `accepted authority merge composition must state that it performs no primary per-surface review: ${id}`)
   assert(typeof composition.composition_scope === 'string' && composition.composition_scope.length >= 48, `accepted authority merge composition lacks an explicit scope statement: ${id}`)
+
+  // Trusted anchors come from reviewed source, never from the amendment
+  // document, so a self-consistent rewrite of the document cannot restate which
+  // authorities were accepted or what they had accepted.
+  assert(acceptedAuthorityAnchors instanceof Map && acceptedAuthorityAnchors.size > 0, `accepted authority merge composition requires trusted authority anchors from reviewed source: ${id}`)
 
   const inputs = composition.accepted_authority_inputs
   assert(Array.isArray(inputs) && inputs.length === 2, `accepted authority merge composition requires exactly two accepted authority inputs: ${id}`)
@@ -124,11 +150,21 @@ function resolveAuthorityComposition(amendment, id, context, identities, rebinds
     assert(typeof input.accepted_evidence_path === 'string' && input.accepted_evidence_path.length > 0, `accepted authority input lacks its accepted evidence path: ${id}.${input.authority}`)
     assert(SHA256.test(input.accepted_evidence_sha256 ?? ''), `accepted authority input lacks its accepted evidence digest: ${id}.${input.authority}`)
     assert(isExactTriple(input.current), `accepted authority input denominator is not an exact triple: ${id}.${input.authority}`)
-    byAuthority.set(input.authority, input)
+
+    const anchor = acceptedAuthorityAnchors.get(input.authority)
+    assert(anchor, `accepted authority input is not a trusted composition authority: ${id}.${input.authority}`)
+    assert(input.commit === anchor.commit, `accepted authority input commit does not match the trusted anchor: ${id}.${input.authority}`)
+    assert(input.accepted_evidence_path === anchor.accepted_evidence_path, `accepted authority input evidence path does not match the trusted anchor: ${id}.${input.authority}`)
+    assert(input.accepted_evidence_sha256 === anchor.accepted_evidence_sha256, `accepted authority input evidence digest does not match the trusted anchor: ${id}.${input.authority}`)
+    assert(sameTriple(input.current, anchor.current), `accepted authority input denominator does not match the trusted anchor: ${id}.${input.authority}`)
+
+    byAuthority.set(input.authority, { input, anchor })
   }
-  const anchor = byAuthority.get(COMPOSITION_ANCHOR_AUTHORITY)
-  const merged = byAuthority.get(COMPOSITION_MERGED_AUTHORITY)
-  assert(anchor && merged, `accepted authority merge composition must declare both the upstream and the merged authority: ${id}`)
+  const upstream = byAuthority.get(COMPOSITION_ANCHOR_AUTHORITY)
+  const mergedEntry = byAuthority.get(COMPOSITION_MERGED_AUTHORITY)
+  assert(upstream && mergedEntry, `accepted authority merge composition must declare both the upstream and the merged authority: ${id}`)
+  const anchor = upstream.input
+  const merged = mergedEntry.input
 
   // The upstream authority is the chain anchor. Binding it to the predecessor
   // triple means an edited or dropped upstream input breaks the chain itself.
@@ -151,16 +187,35 @@ function resolveAuthorityComposition(amendment, id, context, identities, rebinds
   assert(isExactTriple(accepted.current), `accepted amendment evidence current denominator invalid: ${acceptedId}`)
   assert(!sameTriple(accepted.current, accepted.predecessor), `accepted amendment evidence does not move the reviewed denominator: ${acceptedId}`)
   assert(sameTriple(accepted.current, merged.current), `accepted amendment evidence does not produce the declared merged authority denominator: ${acceptedId}`)
+  // The carried evidence is itself anchored. Without this the amendment could
+  // rewrite the reviewer, date, authorization, rationales and findings of the
+  // authority it claims to be carrying verbatim.
+  const anchoredCarriedDigest = mergedEntry.anchor.carried_amendment_sha256
+  assert(SHA256.test(anchoredCarriedDigest ?? ''), `trusted anchor lacks the carried amendment digest: ${COMPOSITION_MERGED_AUTHORITY}`)
+  assert(canonicalDigest(accepted) === anchoredCarriedDigest, `accepted amendment evidence does not match the trusted anchor digest: ${acceptedId}`)
   collectAmendmentDecisions(accepted, acceptedId, rebinds, unassigned)
 
   // The arithmetic is stated in both directions so neither input's contribution
-  // can be silently reattributed to the other.
+  // can be silently reattributed to the other. Both figures are NET denominator
+  // movement, which is not the same as a count of added surfaces whenever a
+  // retirement is also in flight, so each direction must additionally publish an
+  // addition and retirement count that reconciles to it. This resolver holds no
+  // tree and cannot confirm the true split; what it forbids is publishing a net
+  // figure with no accounting, or an accounting that does not reconcile.
   const delta = composition.merge_delta
   assert(delta && typeof delta === 'object' && !Array.isArray(delta), `accepted authority merge composition lacks its declared delta: ${id}`)
   const fromMerged = amendment.current.tracked_executable_surfaces - merged.current.tracked_executable_surfaces
   const fromAnchor = amendment.current.tracked_executable_surfaces - anchor.current.tracked_executable_surfaces
-  assert(delta.surfaces_added_by_upstream_main_relative_to_identity_current === fromMerged && fromMerged > 0, `accepted authority merge composition upstream delta is not the exact merged arithmetic: ${id}`)
-  assert(delta.surfaces_added_by_identity_relative_to_upstream_main_current === fromAnchor && fromAnchor > 0, `accepted authority merge composition identity delta is not the exact merged arithmetic: ${id}`)
+  assert(delta.net_surfaces_relative_to_identity_current === fromMerged && fromMerged > 0, `accepted authority merge composition upstream delta is not the exact merged arithmetic: ${id}`)
+  assert(delta.net_surfaces_relative_to_upstream_main_current === fromAnchor && fromAnchor > 0, `accepted authority merge composition identity delta is not the exact merged arithmetic: ${id}`)
+
+  for (const [field, net] of [['relative_to_identity_current', fromMerged], ['relative_to_upstream_main_current', fromAnchor]]) {
+    const movement = delta.surface_movement?.[field]
+    assert(movement && typeof movement === 'object' && !Array.isArray(movement), `accepted authority merge composition lacks its surface movement accounting: ${id}.${field}`)
+    assert(Number.isInteger(movement.added) && movement.added >= 0
+      && Number.isInteger(movement.retired) && movement.retired >= 0, `accepted authority merge composition surface movement is not an exact count: ${id}.${field}`)
+    assert(movement.added - movement.retired === net, `accepted authority merge composition surface movement does not account for its net denominator difference: ${id}.${field}`)
+  }
 }
 
 export function resolveReviewedOwnershipExtension(decisions, amendments, context = {}) {
@@ -169,6 +224,7 @@ export function resolveReviewedOwnershipExtension(decisions, amendments, context
     decisionRegistrySha256,
     historicalReviewer,
     historicalReviewRole,
+    acceptedAuthorityAnchors,
   } = context
   assert(typeof decisionRegistryPath === 'string' && decisionRegistryPath.length > 0, 'reviewed executable ownership amendment context requires the authoritative decision registry path')
   assert(SHA256.test(decisionRegistrySha256 ?? ''), 'reviewed executable ownership amendment context requires the exact decision registry digest')
@@ -191,6 +247,11 @@ export function resolveReviewedOwnershipExtension(decisions, amendments, context
   const identities = new Set()
   let previous = decisions.current
   let compositions = 0
+  // The historical registry's own denominator is an accepted upstream authority
+  // exactly when a trusted anchor says so. That fact, not the document, decides
+  // whether the chain is composing.
+  const upstreamAnchor = acceptedAuthorityAnchors instanceof Map ? acceptedAuthorityAnchors.get(COMPOSITION_ANCHOR_AUTHORITY) : null
+  const anchoredUpstream = Boolean(upstreamAnchor) && sameTriple(upstreamAnchor.current, decisions.current)
 
   for (const amendment of amendments.amendments) {
     const id = amendment?.amendment_id
@@ -205,9 +266,17 @@ export function resolveReviewedOwnershipExtension(decisions, amendments, context
     assert(!sameTriple(amendment.current, amendment.predecessor), `reviewed executable ownership amendment does not move the reviewed denominator: ${id}`)
 
     const isComposition = amendment.amendment_kind === AMENDMENT_MERGE_COMPOSITION_KIND
+    // Declaring a composition may never be optional. When the chain anchor is
+    // itself a trusted upstream authority, the chain is composing whether or not
+    // it says so, and an amendment that simply omitted amendment_kind would
+    // otherwise resolve the same movement as an ordinary linear extension with
+    // no authority declaration and no anchoring at all.
+    if (anchoredUpstream && previous === decisions.current) {
+      assert(isComposition, `an amendment extending an accepted upstream authority must be declared a merge composition: ${id}`)
+    }
     if (isComposition) {
       compositions += 1
-      resolveAuthorityComposition(amendment, id, { historicalReviewer, historicalReviewRole }, identities, rebinds, unassigned)
+      resolveAuthorityComposition(amendment, id, { historicalReviewer, historicalReviewRole, acceptedAuthorityAnchors }, identities, rebinds, unassigned)
     } else {
       assert(amendment.amendment_kind === undefined, `reviewed executable ownership amendment kind is not recognised: ${id}.${amendment.amendment_kind}`)
       assert(amendment.authority_composition === undefined, `only an accepted authority merge composition may declare authority inputs: ${id}`)

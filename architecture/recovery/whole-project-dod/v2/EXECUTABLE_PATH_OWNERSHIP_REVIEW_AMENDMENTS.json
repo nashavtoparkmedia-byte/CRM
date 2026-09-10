@@ -119,10 +119,21 @@
           }
         ],
         "merge_delta": {
-          "surfaces_added_by_upstream_main_relative_to_identity_current": 12,
-          "surfaces_added_by_identity_relative_to_upstream_main_current": 137,
-          "delta_note": "The twelve surfaces added relative to the accepted identity current state are the accepted main PR #83 controlled-real-provider-call gate surfaces. The one hundred and thirty-seven surfaces that separate the merged tree from the accepted main current state are the already accepted identity-branch work plus the Stage 0 surfaces recorded by the carried amendment above. This reviewer reviewed neither set surface by surface and does not claim to have done so."
-        }
+          "net_surfaces_relative_to_identity_current": 12,
+          "net_surfaces_relative_to_upstream_main_current": 137,
+          "surface_movement": {
+            "relative_to_identity_current": {
+              "added": 12,
+              "retired": 0
+            },
+            "relative_to_upstream_main_current": {
+              "added": 138,
+              "retired": 1
+            }
+          },
+          "delta_note": "Both figures are net denominator movement, not counts of added surfaces. Relative to the accepted identity current state the movement is twelve additions and no retirements, and those twelve are exactly the accepted main PR #83 controlled-real-provider-call gate surfaces. Relative to the accepted upstream main current state the net one hundred and thirty-seven is one hundred and thirty-eight additions less one retirement; the retired surface is the Contacts public legacy retention adapter that the identity branch itself retired, recorded in the merged decision registry under review.hosted_pr_repair_decision. This reviewer reviewed neither set surface by surface and does not claim to have done so."
+        },
+        "chain_anchor_note": "The historical decision registry's own current triple is the accepted upstream main denominator, because this composition anchors on accepted current main by owner decision. That triple is the chain anchor only. The reviewed assignments and the four exact-inventory transitions the registry carries belong to the identity authority line and describe the merged tree, not the upstream main tree; the effective denominator the ownership gate binds is this amendment's current triple, never the anchor."
       },
       "source_hash_rebinds": [
         {

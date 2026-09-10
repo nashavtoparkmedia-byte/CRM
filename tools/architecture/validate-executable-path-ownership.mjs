@@ -25,6 +25,37 @@ const REVIEWED_BASELINE_PATH = 'architecture/recovery/whole-project-dod/v2/EXECU
 const REVIEWED_BASELINE_SHA256 = 'bd7df022d08734ec500336907c4c1dadc6c6ac3c7f3df23c1df0d307a4cdfb29'
 const REVIEWED_AMENDMENTS_PATH = 'architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json'
 const OWNERSHIP_VALIDATOR_PATH = 'tools/architecture/validate-executable-path-ownership.mjs'
+// Trust anchors for accepted-authority merge composition, held here in reviewed
+// source for the same reason REVIEWED_BASELINE_SHA256 is: an amendment document
+// may not attest to its own inputs. Composing an authority that is not named
+// here fails closed, and so does any edit to a named one, however consistently
+// the amendment document was rewritten around it.
+const ACCEPTED_AUTHORITY_ANCHORS = new Map([
+  ['UPSTREAM_MAIN', {
+    commit: '69672fb5e8ec67efb27dfd62c685f1f4d59c5660',
+    accepted_evidence_path: REVIEWED_DECISION_PATH,
+    accepted_evidence_sha256: '30f563624148fe2cfe77e2e9807bd799f02121e4ba2c7396595370cf311d1d7f',
+    current: {
+      tracked_executable_surfaces: 2304,
+      tracked_inventory_sha256: 'ad56f93977b2edbfaf187526cddd898f9d0c2f601ae3a9b4de15d70d3ed22c01',
+      coverage_sha256: '38c844bae3a5b1c9d6e19b209cf92f31175cfb847b80b6cb2f1e464d5202ba2d',
+    },
+  }],
+  ['IDENTITY_CANDIDATE', {
+    commit: 'bb20e614a5a48fc69615376a151725120cb24703',
+    accepted_evidence_path: REVIEWED_AMENDMENTS_PATH,
+    accepted_evidence_sha256: '37d652bf5fdc3de3d4dc47e7bfe2734d49d9b474197f29d942e7fed80e17647f',
+    // Canonical digest of the accepted amendment this composition carries. The
+    // evidence digest above covers the whole published file, which is not what
+    // travels inside the composition, so the carried subtree is anchored too.
+    carried_amendment_sha256: '7843076e80906077a57996ddde93aaa0cc40474da4f0133c7b714ad099257f50',
+    current: {
+      tracked_executable_surfaces: 2429,
+      tracked_inventory_sha256: 'f0c03af0b23da239365d8cb178b57630e52c32579c7166b4c24b67420a1140ba',
+      coverage_sha256: 'ff07837fef18f8f2eab01cf967b945465f951c26a3adee8ee7049db8875b9868',
+    },
+  }],
+])
 
 const SHA256 = /^[0-9a-f]{64}$/u
 const SHA1 = /^[0-9a-f]{40}$/u
@@ -109,6 +140,7 @@ function reviewedOwnershipExtension(decisions, amendments, decisionRegistrySha25
     decisionRegistrySha256,
     historicalReviewer: INTERNAL_REVIEWER,
     historicalReviewRole: INTERNAL_REVIEW_ROLE,
+    acceptedAuthorityAnchors: ACCEPTED_AUTHORITY_ANCHORS,
   })
 }
 
