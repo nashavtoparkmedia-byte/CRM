@@ -7,8 +7,8 @@
   "observed": {
     "architecture_findings": 0,
     "cross_context_imports": 889,
-    "cross_context_imports_sha256": "c9823f8fbe8649baf8dc48b014b946e4bb0f66dd4e036b3c6f2c72a32b7749b4",
-    "scanned_files": 1516
+    "cross_context_imports_sha256": "95db56669c1a936d62f92661c650f3aa0d4df132b63857cfef82194a38dee0eb",
+    "scanned_files": 1528
   },
   "public_surface_migrations": [],
   "relationship_projection": {
