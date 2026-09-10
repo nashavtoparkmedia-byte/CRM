@@ -3,7 +3,7 @@ import {
     asciiFileNameFallback,
     encodeRFC5987Value,
     inlineContentDisposition,
-} from './contentDisposition'
+} from './content-disposition'
 
 describe('asciiFileNameFallback', () => {
     it('folds non-ASCII characters instead of dropping the name', () => {

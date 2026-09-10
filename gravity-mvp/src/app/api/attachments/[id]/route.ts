@@ -25,7 +25,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import sharp from 'sharp'
-import { inlineContentDisposition } from '@/lib/http/contentDisposition'
+import { inlineContentDisposition } from '@/modules/messaging/internal/content-disposition'
 
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365
 
