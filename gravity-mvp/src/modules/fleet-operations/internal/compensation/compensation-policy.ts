@@ -8,6 +8,98 @@
  * money left the external dispatcher.
  */
 
+/**
+ * The single total order for every owner-local monetary row lock.
+ *
+ * An operation skips entity types it does not need, but it may never acquire
+ * two of these in an order other than this one, and it may never lock a
+ * `Contact` row at all: contact merge already locks a pair of Contact rows
+ * inside a transaction that also writes Messaging and Work Management, so a
+ * monetary transaction holding a Contact lock would deadlock against it.
+ *
+ * Finalize is the operation that proves the order has to be total rather than
+ * per-command: it needs both the payout authorization and the order claim.
+ */
+export const COMPENSATION_LOCK_ORDER_V1 = [
+    'CompensationBudgetPeriod',
+    'CompensationPerson',
+    'CompensationApplication',
+    'CompensationPayoutAuthorization',
+    'CompensationOrderClaim',
+    'CompensationSettlement',
+    'CompensationReconciliationTask',
+] as const
+
+export type CompensationLockableEntityV1 = typeof COMPENSATION_LOCK_ORDER_V1[number]
+
+/** Entity types a monetary transaction must never row-lock. */
+export const COMPENSATION_FORBIDDEN_LOCK_ENTITIES_V1 = ['Contact', 'ContactPhone', 'ContactIdentity'] as const
+
+const LOCK_RANK = new Map<string, number>(
+    COMPENSATION_LOCK_ORDER_V1.map((entity, index) => [entity, index]),
+)
+
+export type CompensationLockOrderErrorCodeV1 =
+    | 'UNKNOWN_LOCK_ENTITY'
+    | 'FORBIDDEN_LOCK_ENTITY'
+    | 'LOCK_ORDER_VIOLATION'
+    | 'DUPLICATE_LOCK_ENTITY'
+
+export class CompensationLockOrderErrorV1 extends Error {
+    readonly code: CompensationLockOrderErrorCodeV1
+    constructor(code: CompensationLockOrderErrorCodeV1, message: string) {
+        super(message)
+        this.name = 'CompensationLockOrderErrorV1'
+        this.code = code
+    }
+}
+
+export function compensationLockRankV1(entity: string): number {
+    if ((COMPENSATION_FORBIDDEN_LOCK_ENTITIES_V1 as readonly string[]).includes(entity)) {
+        throw new CompensationLockOrderErrorV1(
+            'FORBIDDEN_LOCK_ENTITY',
+            `${entity} must never be row-locked by a compensation monetary transaction`,
+        )
+    }
+    const rank = LOCK_RANK.get(entity)
+    if (rank === undefined) {
+        throw new CompensationLockOrderErrorV1('UNKNOWN_LOCK_ENTITY', `${entity} is not a compensation lock target`)
+    }
+    return rank
+}
+
+/**
+ * Asserts an acquisition sequence obeys the frozen order. Each adapter records
+ * the entity types it locks, in order, and hands the sequence here, so the
+ * contract is enforced by a shared function rather than by review.
+ */
+export function assertCompensationLockOrderV1(sequence: readonly string[]): void {
+    const seen = new Set<string>()
+    let previous = -1
+    for (const entity of sequence) {
+        const rank = compensationLockRankV1(entity)
+        if (seen.has(entity)) {
+            throw new CompensationLockOrderErrorV1(
+                'DUPLICATE_LOCK_ENTITY',
+                `${entity} is locked twice in one transaction; lock all of its rows together in ascending id order`,
+            )
+        }
+        if (rank <= previous) {
+            throw new CompensationLockOrderErrorV1(
+                'LOCK_ORDER_VIOLATION',
+                `${entity} acquired after a lower-ranked lock; the frozen order is ${COMPENSATION_LOCK_ORDER_V1.join(' > ')}`,
+            )
+        }
+        seen.add(entity)
+        previous = rank
+    }
+}
+
+/** Several rows of one type are always locked in ascending id order. */
+export function compensationRowLockOrderV1(ids: readonly string[]): string[] {
+    return [...new Set(ids)].sort()
+}
+
 export const COMPENSATION_APPLICATION_STATUSES_V1 = ['PENDING', 'PAID', 'REJECTED'] as const
 export type CompensationApplicationStatusV1 = typeof COMPENSATION_APPLICATION_STATUSES_V1[number]
 

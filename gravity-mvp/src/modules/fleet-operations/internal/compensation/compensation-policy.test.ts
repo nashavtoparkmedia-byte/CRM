@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+    COMPENSATION_FORBIDDEN_LOCK_ENTITIES_V1,
+    COMPENSATION_LOCK_ORDER_V1,
+    CompensationLockOrderErrorV1,
+    assertCompensationLockOrderV1,
+    compensationLockRankV1,
+    compensationRowLockOrderV1,
     COMPENSATION_PAYOUT_AUTHORIZATION_STATES_V1,
     COMPENSATION_PAYOUT_FAST_FINALIZE_MAX_AGE_MS,
     COMPENSATION_PAYOUT_STALE_AFTER_MS,
@@ -26,6 +32,69 @@ function authorization(
         ...overrides,
     }
 }
+
+describe('monetary lock order', () => {
+    it('freezes one total order for every lockable entity', () => {
+        expect([...COMPENSATION_LOCK_ORDER_V1]).toEqual([
+            'CompensationBudgetPeriod',
+            'CompensationPerson',
+            'CompensationApplication',
+            'CompensationPayoutAuthorization',
+            'CompensationOrderClaim',
+            'CompensationSettlement',
+            'CompensationReconciliationTask',
+        ])
+    })
+
+    it('accepts the sequences the five monetary operations actually use', () => {
+        const submit = ['CompensationBudgetPeriod', 'CompensationPerson', 'CompensationApplication', 'CompensationOrderClaim']
+        const startPayout = ['CompensationBudgetPeriod', 'CompensationPerson', 'CompensationApplication', 'CompensationPayoutAuthorization']
+        // Finalize is why the order must be total: it needs both 4 and 5.
+        const finalize = [
+            'CompensationBudgetPeriod', 'CompensationPerson', 'CompensationApplication',
+            'CompensationPayoutAuthorization', 'CompensationOrderClaim',
+        ]
+        const release = ['CompensationBudgetPeriod', 'CompensationPerson', 'CompensationApplication', 'CompensationPayoutAuthorization']
+        const reject = ['CompensationBudgetPeriod', 'CompensationPerson', 'CompensationApplication', 'CompensationPayoutAuthorization']
+        const reconcile = [
+            'CompensationBudgetPeriod', 'CompensationPerson', 'CompensationApplication',
+            'CompensationPayoutAuthorization', 'CompensationOrderClaim', 'CompensationReconciliationTask',
+        ]
+        for (const sequence of [submit, startPayout, finalize, release, reject, reconcile]) {
+            expect(() => assertCompensationLockOrderV1(sequence)).not.toThrow()
+        }
+    })
+
+    it('rejects any reverse acquisition', () => {
+        expect(() => assertCompensationLockOrderV1(['CompensationOrderClaim', 'CompensationPayoutAuthorization']))
+            .toThrowError(CompensationLockOrderErrorV1)
+        expect(() => assertCompensationLockOrderV1(['CompensationPerson', 'CompensationBudgetPeriod']))
+            .toThrowError(CompensationLockOrderErrorV1)
+        expect(() => assertCompensationLockOrderV1(['CompensationApplication', 'CompensationPerson']))
+            .toThrowError(CompensationLockOrderErrorV1)
+    })
+
+    it('rejects locking one entity type twice instead of batching its rows', () => {
+        expect(() => assertCompensationLockOrderV1(['CompensationPerson', 'CompensationPerson']))
+            .toThrowError(CompensationLockOrderErrorV1)
+    })
+
+    it('refuses a Contact row lock outright', () => {
+        for (const entity of COMPENSATION_FORBIDDEN_LOCK_ENTITIES_V1) {
+            expect(() => compensationLockRankV1(entity)).toThrowError(CompensationLockOrderErrorV1)
+            expect(() => assertCompensationLockOrderV1(['CompensationPerson', entity]))
+                .toThrowError(CompensationLockOrderErrorV1)
+        }
+    })
+
+    it('refuses an entity that is not a declared lock target', () => {
+        expect(() => compensationLockRankV1('Driver')).toThrowError(CompensationLockOrderErrorV1)
+    })
+
+    it('orders several rows of one type by ascending id', () => {
+        expect(compensationRowLockOrderV1(['p2', 'p1', 'p2'])).toEqual(['p1', 'p2'])
+    })
+})
 
 describe('payout authorization states', () => {
     it('has no stored stale state', () => {
