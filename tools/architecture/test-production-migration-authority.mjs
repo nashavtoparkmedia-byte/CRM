@@ -15,7 +15,9 @@ import {
 const root = process.cwd()
 const authorityPath = 'architecture/migrations/v1/production-migration-authority.json'
 const pendingSourcePath = 'architecture/migrations/v1/pending-source-migrations.json'
+const contextIndexPath = 'architecture/contexts/v1/context-index.json'
 const authority = JSON.parse(await readFile(path.join(root, authorityPath), 'utf8'))
+const pendingSource = JSON.parse(await readFile(path.join(root, pendingSourcePath), 'utf8'))
 
 const [runtimeDockerfile, deployScript] = await Promise.all([
   readFile(path.join(root, 'gravity-mvp/Dockerfile'), 'utf8'),
@@ -90,6 +92,15 @@ try {
   await mkdir(path.join(fixture, 'architecture/migrations/v1'), { recursive: true })
   await cp(path.join(root, authorityPath), path.join(fixture, authorityPath), { recursive: true })
   await cp(path.join(root, pendingSourcePath), path.join(fixture, pendingSourcePath))
+  // Owner authorization is checked against the accepted context index, and each
+  // pending migration must point at a proof test that actually exists, so both
+  // have to be present in the fixture.
+  await mkdir(path.join(fixture, 'architecture/contexts/v1'), { recursive: true })
+  await cp(path.join(root, contextIndexPath), path.join(fixture, contextIndexPath))
+  for (const row of pendingSource.migrations) {
+    await mkdir(path.join(fixture, path.dirname(row.migration_test)), { recursive: true })
+    await cp(path.join(root, row.migration_test), path.join(fixture, row.migration_test))
+  }
   await cp(path.join(root, 'architecture/migrations/v1/provenance'), path.join(fixture, 'architecture/migrations/v1/provenance'), { recursive: true })
   await makeFixtureTreeWritable(path.join(fixture, 'architecture/migrations/v1/provenance'))
   await cp(
@@ -370,6 +381,88 @@ try {
   await writeFile(pendingPath, `${JSON.stringify(pending, null, 2)}\n`)
   await assert.rejects(() => validateProductionMigrationAuthority(fixture), /pending source migration rollback strategy mismatch/)
   await cp(path.join(root, pendingSourcePath), pendingPath)
+
+  // --- pending-migration owner authorization -------------------------------
+  // A migration owned by a context nobody authorized still fails, so replacing
+  // the historical hardcoded owner did not open the door to any owner.
+  const writePending = async (mutate) => {
+    const draft = JSON.parse(await readFile(path.join(root, pendingSourcePath), 'utf8'))
+    mutate(draft)
+    await writeFile(pendingPath, `${JSON.stringify(draft, null, 2)}\n`)
+  }
+  const restorePending = () => cp(path.join(root, pendingSourcePath), pendingPath)
+
+  await writePending((draft) => { draft.migrations[0].owner_context = 'fleet_operations' })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /pending source migration record mismatch/)
+
+  // An owner that is not a real bounded context cannot authorize itself.
+  await writePending((draft) => {
+    draft.authorized_owner_contexts = ['calling', 'not_a_real_context']
+    draft.migrations[0].owner_context = 'not_a_real_context'
+  })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /owner authorization names unknown context/)
+
+  await writePending((draft) => { draft.authorized_owner_contexts = [] })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /owner authorization is empty/)
+
+  await writePending((draft) => { draft.authorized_owner_contexts = ['fleet_operations', 'calling'] })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /owner authorization is not sorted and unique/)
+
+  // The old single-owner artifact shape is no longer accepted.
+  await writePending((draft) => { draft.schema = 'yoko.crm.pending-source-migrations.v1'; draft.version = 1 })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /pending source migration authority identity mismatch/)
+
+  // --- per-migration proof and created-object evidence ---------------------
+  await writePending((draft) => { delete draft.migrations[0].migration_test })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /proof test path invalid/)
+
+  await writePending((draft) => {
+    draft.migrations[0].migration_test = 'gravity-mvp/src/modules/calling/internal/ai-calls/never-written.postgres.test.ts'
+  })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /proof test is missing/)
+
+  await writePending((draft) => { delete draft.migrations[0].creates })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /creates declaration missing/)
+
+  await writePending((draft) => { delete draft.migrations[0].creates.forbidden_indexes })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /creates declaration shape mismatch/)
+
+  await writePending((draft) => { draft.migrations[0].creates.tables = [] })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /created tables invalid/)
+
+  await writePending((draft) => { draft.migrations[0].creates.tables.reverse() })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /created tables invalid/)
+
+  // Understating what the migration creates is rejected: the replay proof would
+  // otherwise verify rollback of only the declared subset.
+  await writePending((draft) => { draft.migrations[0].creates.tables = draft.migrations[0].creates.tables.slice(1) })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /creates undeclared table/)
+
+  // Overstating is rejected too, so the proof cannot demand objects that never appear.
+  await writePending((draft) => {
+    draft.migrations[0].creates.tables = [...draft.migrations[0].creates.tables, 'ZzTableThatIsNeverCreated'].sort()
+  })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /declares table\(s\) it does not create/)
+
+  await writePending((draft) => { draft.migrations[0].creates.columns = [{ table: 'Call', column: 'is Simulation' }] })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /created columns invalid/)
+
+  await writePending((draft) => { draft.migrations[0].creates.columns = [{ table: 'Call', column: 'isSimulation', extra: 1 }] })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /created columns invalid/)
+
+  await writePending((draft) => {
+    draft.migrations[0].creates.columns = [
+      { table: 'Call', column: 'isSimulation' },
+      { table: 'Call', column: 'isSimulation' },
+    ]
+  })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /created columns are not sorted and unique/)
+
+  // The shared proof block no longer carries a single migration's test path.
+  await writePending((draft) => { draft.proof.migration_test = 'gravity-mvp/src/anything.postgres.test.ts' })
+  await assert.rejects(() => validateProductionMigrationAuthority(fixture), /pending source migration proof boundary mismatch/)
+
+  await restorePending()
 
   // Rewriting an archived migration and every self-authored checksum is still
   // rejected by the independently captured raw predecessor runtime bytes.
