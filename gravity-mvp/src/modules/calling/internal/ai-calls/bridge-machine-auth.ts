@@ -1,16 +1,11 @@
-import { createHash, timingSafeEqual } from 'node:crypto'
+import { constantTimeSecretMatch, isStrongMachineSecret } from '../../application/strong-machine-secret'
 
 const BRIDGE_TOKEN_HEADER = 'x-bridge-token'
-const BRIDGE_TOKEN_PATTERN = /^[A-Za-z0-9_+/=-]{32,172}$/
 
 type HeaderReader = Pick<Headers, 'get'>
 
-function isWellFormedToken(value: string | null | undefined): value is string {
-    return typeof value === 'string' && BRIDGE_TOKEN_PATTERN.test(value)
-}
-
-function tokenDigest(value: string): Buffer {
-    return createHash('sha256').update(value, 'utf8').digest()
+export function isBridgeMachineTokenWellFormed(value: string | null | undefined): value is string {
+    return isStrongMachineSecret(value)
 }
 
 /**
@@ -24,10 +19,10 @@ export function isBridgeMachineRequestAuthenticated(
     headers: HeaderReader,
     configuredToken: string | undefined = process.env.BRIDGE_SHARED_TOKEN,
 ): boolean {
-    if (!isWellFormedToken(configuredToken)) return false
+    if (!isBridgeMachineTokenWellFormed(configuredToken)) return false
 
     const suppliedToken = headers.get(BRIDGE_TOKEN_HEADER)
-    if (!isWellFormedToken(suppliedToken)) return false
+    if (!isBridgeMachineTokenWellFormed(suppliedToken)) return false
 
-    return timingSafeEqual(tokenDigest(suppliedToken), tokenDigest(configuredToken))
+    return constantTimeSecretMatch(suppliedToken, configuredToken)
 }

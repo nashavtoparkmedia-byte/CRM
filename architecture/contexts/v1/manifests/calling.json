@@ -40,6 +40,10 @@
       "AI_CALL_CAMPAIGN_GLOBAL_RATE_PER_MINUTE",
       "AI_CALL_CAMPAIGN_INTERVAL_MS",
       "AI_CALL_CAMPAIGN_RUNTIME_MODE",
+      "AI_CALL_CONTROLLED_DESTINATION_E164",
+      "AI_CALL_CONTROLLED_OPERATOR_TOKEN",
+      "AI_CALL_CONTROLLED_REAL_CALL_ENABLED",
+      "AI_CALL_CONTROLLED_REQUEST_ID",
       "AI_CALL_DEV_SIMULATE_ENABLED",
       "AI_CALL_DIAL_STRING_TEMPLATE",
       "AI_CALL_ENC_KEY",
@@ -48,8 +52,10 @@
       "AI_CALL_MOCK_MODE",
       "AI_CALL_PARK_EXT",
       "AI_CALL_STT_PROVIDER",
+      "AI_CALL_TELEPHONY_PROVIDER",
       "AI_CALL_TTS_PROVIDER",
       "ANALYZE_CONCURRENCY",
+      "AUDIO_BRIDGE_HEALTH_URL",
       "AUDIO_BRIDGE_PORT",
       "AUTO_FORK_EXTENSIONS",
       "BRIDGE_ALLOWED_IPS",
@@ -276,7 +282,15 @@
         "audio_bridge"
       ],
       "name": "openai",
-      "role": "transcription/analysis provider"
+      "role": "dialog LLM, transcription, speech synthesis and analysis provider"
+    },
+    {
+      "adapter_modules": [
+        "ai_calls",
+        "audio_bridge"
+      ],
+      "name": "yandex",
+      "role": "speech recognition and speech synthesis provider"
     },
     {
       "adapter_modules": [
