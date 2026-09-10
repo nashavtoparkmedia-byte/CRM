@@ -378,27 +378,92 @@ class IndependentReviewBindingTests(unittest.TestCase):
                 self.sealer.validate_independent_review(path, self.COMMIT, self.TREE)
         self.assertIn("collides with sealed bundle content", str(raised.exception))
 
-    def test_package_output_verifier_gates_the_same_review_contract(self) -> None:
-        """R6-02: the gate that runs against the built package is itself pinned."""
+    def test_release_verifier_behaviourally_refuses_every_bad_seal(self) -> None:
+        """R6R1-01: exercise the gate, do not merely grep it. An inverted verifier fails here."""
+        import importlib.machinery
+        import importlib.util
+
+        loader = importlib.machinery.SourceFileLoader(
+            "yoko_verify_sealed_inputs_tests", str(ROOT / "packaging/verify-sealed-inputs.py")
+        )
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        assert spec is not None
+        verifier = importlib.util.module_from_spec(spec)
+        sys.modules[loader.name] = verifier
+        loader.exec_module(verifier)
+
+        head, tree = "a" * 40, "b" * 40
+
+        def seal(**overrides):
+            review = {
+                "status": "ACCEPTED",
+                "schema": "yoko.crm.coordinated-runtime-independent-review.v1",
+                "document": {"path": "independent-review.v1.json", "sha256": "c" * 64},
+                "candidate_commit": head, "candidate_tree": tree,
+                "reviews": [
+                    {"role": "release-reliability", "reviewer": "R1", "verdict": "PASS_WITH_LOW_FINDINGS",
+                     "reviewed_at": "2026-09-10T00:00:00Z",
+                     "evidence": {"path": "a.md", "sha256": "d" * 64, "bytes": 1},
+                     "residual_findings": [{"id": "X", "severity": "LOW", "title": "residual"}]},
+                    {"role": "privileged-runtime-security", "reviewer": "R2", "verdict": "PASS",
+                     "reviewed_at": "2026-09-10T00:00:00Z",
+                     "evidence": {"path": "b.md", "sha256": "e" * 64, "bytes": 1},
+                     "residual_findings": []},
+                ],
+                "residual_low_findings": 1, "blocking_findings": 0,
+            }
+            review.update(overrides)
+            return {"independent_review": review}
+
+        self.assertEqual(verifier.validate_release_review(seal(), head, tree), 1)
+
+        cases = {
+            "no acceptance": ({}, "carries no independent review acceptance"),
+            "status not accepted": ({"status": "PENDING"}, "acceptance contract mismatch"),
+            "wrong schema": ({"schema": "yoko.crm.coordinated-runtime-acceptance.v1"}, "acceptance contract mismatch"),
+            "other candidate": ({"candidate_commit": "f" * 40}, "not bound to the sealed candidate"),
+            "other tree": ({"candidate_tree": "f" * 40}, "not bound to the sealed candidate"),
+            "blocking accepted": ({"blocking_findings": 1}, "accepts a blocking review finding"),
+            "residual count stale": ({"residual_low_findings": 0}, "residual finding count is stale"),
+            "document binding": ({"document": {"path": "x"}}, "document binding invalid"),
+        }
+        for label, (override, message) in cases.items():
+            with self.subTest(label=label):
+                value = seal() if label != "no acceptance" else {"independent_review": None}
+                if label != "no acceptance":
+                    value["independent_review"].update(override)
+                with self.assertRaises(ValueError) as raised:
+                    verifier.validate_release_review(value, head, tree)
+                self.assertIn(message, str(raised.exception))
+
+        missing_role = seal()
+        missing_role["independent_review"]["reviews"] = missing_role["independent_review"]["reviews"][:1]
+        missing_role["independent_review"]["residual_low_findings"] = 1
+        with self.assertRaises(ValueError) as raised:
+            verifier.validate_release_review(missing_role, head, tree)
+        self.assertIn("exact required roles", str(raised.exception))
+
+        bad_verdict = seal()
+        bad_verdict["independent_review"]["reviews"][1]["verdict"] = "REPAIR_REQUIRED"
+        with self.assertRaises(ValueError) as raised:
+            verifier.validate_release_review(bad_verdict, head, tree)
+        self.assertIn("not an accepted outcome", str(raised.exception))
+
+        bad_severity = seal()
+        bad_severity["independent_review"]["reviews"][1]["residual_findings"] = [
+            {"id": "Y", "severity": "HIGH", "title": "blocking"}
+        ]
+        with self.assertRaises(ValueError) as raised:
+            verifier.validate_release_review(bad_severity, head, tree)
+        self.assertIn("residual finding severity is not accepted", str(raised.exception))
+
+    def test_release_phase_runs_after_the_seal_is_written(self) -> None:
         verifier = (ROOT / "packaging/verify-sealed-inputs.py").read_text(encoding="ascii")
-        for required in (
-            'REVIEW_SCHEMA = "yoko.crm.coordinated-runtime-independent-review.v1"',
-            'REVIEW_ROLES = ("release-reliability", "privileged-runtime-security")',
-            'release seal carries no independent review acceptance',
-            'independent review acceptance contract mismatch',
-            'independent review is not bound to the sealed candidate',
-            'release seal accepts a blocking review finding',
-            'independent review does not cover the exact required roles',
-            'independent review verdict is not an accepted outcome',
-            'independent review residual finding severity is not accepted',
-            'independent review residual finding count is stale',
-            'independent review document binding invalid',
-        ):
-            with self.subTest(required=required[:48]):
-                self.assertIn(required, verifier)
-        # the gate must sit on the package-output phase, not only on the sealer's own value
-        self.assertLess(verifier.index('args.phase == "package-output"'),
-                        verifier.index("release seal carries no independent review acceptance"))
+        self.assertIn('choices=("package", "package-output", "release")', verifier)
+        sealer = (ROOT / "packaging/seal-release.py").read_text(encoding="ascii")
+        written = sealer.index('write_json(dist / "SEALED_RELEASE.json", release_seal)')
+        checked = sealer.index('"--phase", "release"')
+        self.assertLess(written, checked)
 
     def test_sealer_requires_the_review_input_and_emits_no_pending(self) -> None:
         source = (ROOT / "packaging/seal-release.py").read_text(encoding="ascii")

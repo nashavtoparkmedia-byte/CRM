@@ -56,9 +56,48 @@ def git(*args: str) -> bytes:
     return completed.stdout
 
 
+def validate_release_review(seal: dict[str, Any], head: str, tree: str) -> int:
+    """Independently re-check the acceptance the sealer derived, against the written seal.
+
+    Returns the residual LOW count it recomputed. Raises on any drift, so an inverted or
+    hand-edited seal cannot pass: this runs against dist/SEALED_RELEASE.json rather than the
+    sealer's own in-memory value.
+    """
+    review = seal.get("independent_review")
+    if not isinstance(review, dict):
+        raise ValueError("release seal carries no independent review acceptance")
+    if review.get("status") != "ACCEPTED" or review.get("schema") != REVIEW_SCHEMA:
+        raise ValueError("independent review acceptance contract mismatch")
+    if review.get("candidate_commit") != head or review.get("candidate_tree") != tree:
+        raise ValueError("independent review is not bound to the sealed candidate")
+    if review.get("blocking_findings") != 0:
+        raise ValueError("release seal accepts a blocking review finding")
+    entries = review.get("reviews")
+    if not isinstance(entries, list) or sorted(
+        entry.get("role") for entry in entries if isinstance(entry, dict)
+    ) != sorted(REVIEW_ROLES):
+        raise ValueError("independent review does not cover the exact required roles")
+    residual = 0
+    for entry in entries:
+        if entry.get("verdict") not in REVIEW_VERDICTS:
+            raise ValueError("independent review verdict is not an accepted outcome")
+        findings = entry.get("residual_findings")
+        if not isinstance(findings, list):
+            raise ValueError("independent review entry lacks an explicit residual findings list")
+        if any(finding.get("severity") not in RESIDUAL_SEVERITIES for finding in findings):
+            raise ValueError("independent review residual finding severity is not accepted")
+        residual += sum(1 for finding in findings if finding.get("severity") == "LOW")
+    if review.get("residual_low_findings") != residual:
+        raise ValueError("independent review residual finding count is stale")
+    document = review.get("document")
+    if not isinstance(document, dict) or set(document) != {"path", "sha256"}:
+        raise ValueError("independent review document binding invalid")
+    return residual
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--phase", choices=("package", "package-output"), required=True)
+    parser.add_argument("--phase", choices=("package", "package-output", "release"), required=True)
     args = parser.parse_args()
     sealed = load(GENERATED / "sealed-inputs.v1.json")
     if sealed.get("schema") != "yoko.crm.coordinated-runtime-sealed-inputs.v1":
@@ -110,37 +149,7 @@ def main() -> None:
         or any(profile.get("negative_properties", {}).values())
     ):
         raise ValueError("generated profile contract mismatch")
-    if args.phase == "package-output":
-        seal = load(DIST / "SEALED_RELEASE.json")
-        review = seal.get("independent_review")
-        if not isinstance(review, dict):
-            raise ValueError("release seal carries no independent review acceptance")
-        if review.get("status") != "ACCEPTED" or review.get("schema") != REVIEW_SCHEMA:
-            raise ValueError("independent review acceptance contract mismatch")
-        if review.get("candidate_commit") != head or review.get("candidate_tree") != tree:
-            raise ValueError("independent review is not bound to the sealed candidate")
-        if review.get("blocking_findings") != 0:
-            raise ValueError("release seal accepts a blocking review finding")
-        entries = review.get("reviews")
-        if not isinstance(entries, list) or sorted(
-            entry.get("role") for entry in entries if isinstance(entry, dict)
-        ) != sorted(REVIEW_ROLES):
-            raise ValueError("independent review does not cover the exact required roles")
-        residual = 0
-        for entry in entries:
-            if entry.get("verdict") not in REVIEW_VERDICTS:
-                raise ValueError("independent review verdict is not an accepted outcome")
-            findings = entry.get("residual_findings")
-            if not isinstance(findings, list):
-                raise ValueError("independent review entry lacks an explicit residual findings list")
-            if any(finding.get("severity") not in RESIDUAL_SEVERITIES for finding in findings):
-                raise ValueError("independent review residual finding severity is not accepted")
-            residual += sum(1 for finding in findings if finding.get("severity") == "LOW")
-        if review.get("residual_low_findings") != residual:
-            raise ValueError("independent review residual finding count is stale")
-        document = review.get("document")
-        if not isinstance(document, dict) or set(document) != {"path", "sha256"}:
-            raise ValueError("independent review document binding invalid")
+    if args.phase in {"package-output", "release"}:
         package = DIST / "yoko-privileged-runtime_2.0.0-15_all.deb"
         fields = []
         for field in ("Package", "Version", "Architecture"):
@@ -153,7 +162,13 @@ def main() -> None:
             fields.append(completed.stdout.strip())
         if fields != ["yoko-privileged-runtime", "2.0.0-15", "all"]:
             raise ValueError("package metadata mismatch")
-    print(json.dumps({"status": "PASS", "phase": args.phase}, sort_keys=True))
+    residual = None
+    if args.phase == "release":
+        residual = validate_release_review(load(DIST / "SEALED_RELEASE.json"), head, tree)
+    result = {"status": "PASS", "phase": args.phase}
+    if residual is not None:
+        result["residual_low_findings"] = residual
+    print(json.dumps(result, sort_keys=True))
 
 
 if __name__ == "__main__":

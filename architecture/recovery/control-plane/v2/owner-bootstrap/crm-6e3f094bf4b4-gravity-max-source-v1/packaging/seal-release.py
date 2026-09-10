@@ -551,6 +551,9 @@ def main() -> None:
         "independent_review": review,
     }
     write_json(dist / "SEALED_RELEASE.json", release_seal)
+    # Re-check the acceptance independently, against the written seal rather than the value above.
+    command(["/usr/bin/python3", "-I", "-B", str(ROOT / "packaging/verify-sealed-inputs.py"), "--phase", "release"],
+            stdout=subprocess.DEVNULL)
     release_seal_sha = sha(dist / "SEALED_RELEASE.json")
 
     payload = generated / "bundle/payload"
