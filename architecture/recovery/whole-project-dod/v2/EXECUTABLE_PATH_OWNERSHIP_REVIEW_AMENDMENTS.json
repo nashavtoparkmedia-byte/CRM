@@ -27,7 +27,7 @@
       },
       "current": {
         "tracked_executable_surfaces": 2429,
-        "tracked_inventory_sha256": "3a4830b018fd0ea24b73c67eb8bf3993a35fe51ab68f58f4d39128ed64e17e00",
+        "tracked_inventory_sha256": "f0c03af0b23da239365d8cb178b57630e52c32579c7166b4c24b67420a1140ba",
         "coverage_sha256": "ff07837fef18f8f2eab01cf967b945465f951c26a3adee8ee7049db8875b9868"
       },
       "unassigned_tracked_surfaces": [
@@ -35,13 +35,13 @@
           "path": "gravity-mvp/src/app/api/monitoring/fleet-check/driver-person/route.test.ts",
           "lifecycle": "TEST",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "Route test files in this cohort are intentionally unassigned. All forty-one tracked test surfaces under gravity-mvp/src/app carry no ownership assignment, including the four closest homologous route and route-test pairs whose runtime halves are assigned to gravity_runtime_remainder. This surface classifies as lifecycle TEST with no functional owner and unknown production capability, identically to its already accepted peer at gravity-mvp/src/app/api/contacts/[id]/driver-person/route.test.ts, so it is covered by context ownership and must not enter an APPLICATION_RUNTIME governed exclusion path inventory."
+          "review_rationale": "Route test files in this cohort are intentionally unassigned. Every tracked TEST-lifecycle surface under gravity-mvp/src/app carries no ownership assignment in the reviewed decision registry, including the four closest homologous route and route-test pairs whose runtime halves are assigned to gravity_runtime_remainder. This surface classifies as lifecycle TEST with no functional owner and unknown production capability, identically to its already accepted peer at gravity-mvp/src/app/api/contacts/[id]/driver-person/route.test.ts, so it is covered by context ownership and must not enter an APPLICATION_RUNTIME governed exclusion path inventory."
         },
         {
           "path": "tools/architecture/reviewed-ownership-amendments.mjs",
-          "lifecycle": "ARCHITECTURE_CONTROL",
+          "lifecycle": "OPERATIONAL_SCRIPT",
           "review_decision": "APPROVED_NO_EXPLICIT_OWNERSHIP_ASSIGNMENT",
-          "review_rationale": "The pure amendment-resolution helper is architecture control tooling and follows the same treatment as its sibling IO-free helpers under tools/architecture, which carry no explicit ownership assignment. It performs no repository input or output, resolves the reviewed amendment chain only, and must not enter a governed exclusion path inventory."
+          "review_rationale": "The pure amendment-resolution helper is an architecture control-plane surface classified OPERATIONAL_SCRIPT in the lifecycle registry alongside its tools/architecture siblings, under functional owner architecture_governance. Like every other tracked surface under tools/architecture it carries no explicit executable ownership assignment in the reviewed decision registry, resolves into the architecture_controls governed exclusion, and that exclusion holds no exact path inventory, so no reviewed exact-inventory transition is created."
         }
       ],
       "source_hash_rebinds": [
