@@ -22,7 +22,7 @@ FROM node:20-bookworm-slim AS runner
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates openssl tini \
+    ca-certificates openssl tini gosu \
     && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
@@ -37,14 +37,20 @@ COPY --from=deps --chown=app:app /app/node_modules ./node_modules
 COPY --chown=app:app start.js package.json ./
 COPY --chown=app:app src ./src
 COPY --chown=app:app prisma ./prisma
+COPY --chown=root:root docker-entrypoint.sh /usr/local/bin/tg-bot-entrypoint
 
 # prisma generate — иначе @prisma/client не инициализирован при require.
 # Делаем до USER чтобы у root были права записать .prisma/client.
 # chown -R /app (не только подпапок!) — иначе app не может писать
 # в /app/bot-errors.log который создаёт log-interceptor.js.
-RUN npx prisma generate && chown -R app:app /app
-
-USER app
+# /app/data holds the bot-local SQLite file and is backed by a named volume in
+# production. A volume mount replaces the directory and hides the ownership
+# prepared here, so the entrypoint re-applies it at every start and only then
+# drops to the unprivileged account — which is why there is no `USER app` here.
+RUN npx prisma generate \
+    && chmod 0755 /usr/local/bin/tg-bot-entrypoint \
+    && mkdir -p /app/data \
+    && chown -R app:app /app
 
 # Healthcheck — проверяем что Node-процесс жив через файл-маркер,
 # Проверяем, что HTTP API бота (порт 3001, его проксирует tg-bot-frontend)
@@ -54,5 +60,5 @@ USER app
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD node -e "require('net').connect(3001,'127.0.0.1').on('connect',()=>process.exit(0)).on('error',()=>process.exit(1))" || exit 1
 
-ENTRYPOINT ["/usr/bin/tini", "--"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/tg-bot-entrypoint"]
 CMD ["node", "start.js"]
