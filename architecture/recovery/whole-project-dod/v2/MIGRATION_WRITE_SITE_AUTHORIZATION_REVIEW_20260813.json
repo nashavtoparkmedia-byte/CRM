@@ -8,7 +8,7 @@
   },
   "noncanonical_review": {
     "path": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-    "source_sha256": "4d2b737543e75f1fbe7e8b61975ab2c309630dd412ef715a57f0e6eb554888db",
+    "source_sha256": "79ffc25daca4aa6b865564dd06993cfaa45824abbcc4f485ef0068d4fc6239d7",
     "reviewed_path_count": 18,
     "policy": "Noncanonical sites are materialized only from exact committed source-specific decisions; absent sites fail materialization."
   },
@@ -20,7 +20,7 @@
   },
   "denominator": {
     "non_test_migration_only_sites": 829,
-    "sorted_site_signatures_sha256": "7fa11ae739b5ba2b1824350e02b20a1eb0a674a29072a2749b8230c21509e315"
+    "sorted_site_signatures_sha256": "7856bb1e010007a59fc577e690490f4f0c78a1bdda5b32208dfb52b20c4a33e9"
   },
   "authorizations": [
     {
@@ -6149,8 +6149,8 @@
       }
     },
     {
-      "capability_id": "mmc.migration-site.v1.production_migration_authority.2f63589b29d8ca9c",
-      "site_signature": "2f63589b29d8ca9c3fc9a2395a36c59204aaa960f4c9b4ffac26be8a7fcf778f",
+      "capability_id": "mmc.migration-site.v1.production_migration_authority.f22dde2540f0913d",
+      "site_signature": "f22dde2540f0913d791494702399cad8f917a81d77e03a911b5fdfc7537f18cf",
       "status": "APPROVED",
       "approved": true,
       "source": {
@@ -6180,7 +6180,7 @@
         "rationale": "The committed reviewed maintenance capability and exact source bytes jointly authorize only this site tuple.",
         "evidence": [
           "source_sha256:095ca3f026df3ad9a2cbb48af0110f7d461fb8404e8dd65e18b275433ab08d32",
-          "site_signature:2f63589b29d8ca9c3fc9a2395a36c59204aaa960f4c9b4ffac26be8a7fcf778f",
+          "site_signature:f22dde2540f0913d791494702399cad8f917a81d77e03a911b5fdfc7537f18cf",
           "source_coordinate:scripts/deploy.sh:91:41",
           "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
           "lifecycle_evidence_status:REVIEWED_OPERATOR_MIGRATE_DEPLOY_COMMAND"
@@ -27404,8 +27404,8 @@
       }
     },
     {
-      "capability_id": "mmc.migration-site.v1.fleet_operations.ee393ed91c551dde",
-      "site_signature": "ee393ed91c551dde411c3cad82e70b78593fa616f4fff387fc9b36205254c441",
+      "capability_id": "mmc.migration-site.v1.fleet_operations.71409502638773f9",
+      "site_signature": "71409502638773f9b0f86beaba866569821fc64e5f82c3d0f18c46b850871f6e",
       "status": "APPROVED",
       "approved": true,
       "source": {
@@ -27435,7 +27435,7 @@
         "rationale": "The committed reviewed maintenance capability and exact source bytes jointly authorize only this site tuple.",
         "evidence": [
           "source_sha256:1b60e1e610712bfbca42f00a28afdfb61703c1fdc8ff29c931d89f5558f7908e",
-          "site_signature:ee393ed91c551dde411c3cad82e70b78593fa616f4fff387fc9b36205254c441",
+          "site_signature:71409502638773f9b0f86beaba866569821fc64e5f82c3d0f18c46b850871f6e",
           "source_coordinate:deploy/docker-compose.production.yml:460:54",
           "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
           "lifecycle_evidence_status:REVIEWED_DEPLOYMENT_SCHEMA_COMMAND"
