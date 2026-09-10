@@ -45,6 +45,9 @@ RESIDUAL_SEVERITIES = frozenset({"LOW", "INFO"})
 BLOCKING_SEVERITIES = frozenset({"CRITICAL", "HIGH", "MEDIUM"})
 REVIEW_TIMESTAMP = "%Y-%m-%dT%H:%M:%SZ"
 REVIEW_MAXIMUM = 1024 * 1024
+# Names the sealer itself writes into the bundle review directory. Reviewer-supplied evidence
+# may not claim them, or a chosen filename would silently displace sealer-authored content.
+REVIEW_RESERVED_NAMES = frozenset({"human-manifest.md", "independent-review.v1.json"})
 
 
 def canonical(value: Any) -> bytes:
@@ -221,6 +224,8 @@ def validate_independent_review(path: Path, commit: str, tree: str) -> tuple[dic
         name = evidence["path"]
         if not isinstance(name, str) or "/" in name or name in {"", ".", ".."}:
             raise ValueError("independent review evidence path is unsafe")
+        if name in REVIEW_RESERVED_NAMES or any(item["evidence"]["path"] == name for item in accepted):
+            raise ValueError("independent review evidence path collides with sealed bundle content")
         if not isinstance(evidence["sha256"], str) or len(evidence["sha256"]) != 64:
             raise ValueError("independent review evidence digest is unsafe")
         source = resolved.parent / name

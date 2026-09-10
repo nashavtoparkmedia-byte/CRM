@@ -350,6 +350,56 @@ class IndependentReviewBindingTests(unittest.TestCase):
             self.sealer.validate_independent_review(template, self.COMMIT, self.TREE)
         self.assertIn("outside the builder tree", str(raised.exception))
 
+    def test_evidence_filename_cannot_displace_sealed_bundle_content(self) -> None:
+        for reserved in ("human-manifest.md", "independent-review.v1.json"):
+            with self.subTest(reserved=reserved), tempfile.TemporaryDirectory() as raw:
+                directory = Path(raw)
+                _, value = self.document(directory)
+                target = directory / reserved
+                target.write_text("displacing content\n", encoding="ascii")
+                raw_bytes = target.read_bytes()
+                value["reviews"][0]["evidence"] = {
+                    "path": reserved,
+                    "sha256": hashlib.sha256(raw_bytes).hexdigest(),
+                    "bytes": len(raw_bytes),
+                }
+                path = self.write(directory, value)
+                with self.assertRaises(ValueError) as raised:
+                    self.sealer.validate_independent_review(path, self.COMMIT, self.TREE)
+                self.assertIn("collides with sealed bundle content", str(raised.exception))
+
+    def test_two_reviews_cannot_share_one_evidence_filename(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            directory = Path(raw)
+            _, value = self.document(directory)
+            value["reviews"][1]["evidence"] = dict(value["reviews"][0]["evidence"])
+            path = self.write(directory, value)
+            with self.assertRaises(ValueError) as raised:
+                self.sealer.validate_independent_review(path, self.COMMIT, self.TREE)
+        self.assertIn("collides with sealed bundle content", str(raised.exception))
+
+    def test_package_output_verifier_gates_the_same_review_contract(self) -> None:
+        """R6-02: the gate that runs against the built package is itself pinned."""
+        verifier = (ROOT / "packaging/verify-sealed-inputs.py").read_text(encoding="ascii")
+        for required in (
+            'REVIEW_SCHEMA = "yoko.crm.coordinated-runtime-independent-review.v1"',
+            'REVIEW_ROLES = ("release-reliability", "privileged-runtime-security")',
+            'release seal carries no independent review acceptance',
+            'independent review acceptance contract mismatch',
+            'independent review is not bound to the sealed candidate',
+            'release seal accepts a blocking review finding',
+            'independent review does not cover the exact required roles',
+            'independent review verdict is not an accepted outcome',
+            'independent review residual finding severity is not accepted',
+            'independent review residual finding count is stale',
+            'independent review document binding invalid',
+        ):
+            with self.subTest(required=required[:48]):
+                self.assertIn(required, verifier)
+        # the gate must sit on the package-output phase, not only on the sealer's own value
+        self.assertLess(verifier.index('args.phase == "package-output"'),
+                        verifier.index("release seal carries no independent review acceptance"))
+
     def test_sealer_requires_the_review_input_and_emits_no_pending(self) -> None:
         source = (ROOT / "packaging/seal-release.py").read_text(encoding="ascii")
         self.assertIn('parser.add_argument("--independent-review", required=True', source)
