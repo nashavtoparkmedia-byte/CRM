@@ -8,7 +8,7 @@
   },
   "noncanonical_review": {
     "path": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-    "source_sha256": "6fbe4d2bae18470868feec2d4e2e0773da98cb5a2242dc0db1398c7257b398df",
+    "source_sha256": "4d2b737543e75f1fbe7e8b61975ab2c309630dd412ef715a57f0e6eb554888db",
     "reviewed_path_count": 18,
     "policy": "Noncanonical sites are materialized only from exact committed source-specific decisions; absent sites fail materialization."
   },
@@ -6155,8 +6155,8 @@
       "approved": true,
       "source": {
         "path": "scripts/deploy.sh",
-        "source_sha256": "9331e8157e11b4ab829cb1b75074ddcc0ad4ff19e467e62f72b30d4f9d86dad3",
-        "line": 91,
+        "source_sha256": "095ca3f026df3ad9a2cbb48af0110f7d461fb8404e8dd65e18b275433ab08d32",
+        "line": 115,
         "column": 41,
         "method": "mixed-script-command:prisma migrate deploy"
       },
@@ -6179,7 +6179,7 @@
         "kind": "INDEPENDENT_EXACT_CAPABILITY",
         "rationale": "The committed reviewed maintenance capability and exact source bytes jointly authorize only this site tuple.",
         "evidence": [
-          "source_sha256:9331e8157e11b4ab829cb1b75074ddcc0ad4ff19e467e62f72b30d4f9d86dad3",
+          "source_sha256:095ca3f026df3ad9a2cbb48af0110f7d461fb8404e8dd65e18b275433ab08d32",
           "site_signature:2f63589b29d8ca9c3fc9a2395a36c59204aaa960f4c9b4ffac26be8a7fcf778f",
           "source_coordinate:scripts/deploy.sh:91:41",
           "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
@@ -27410,8 +27410,8 @@
       "approved": true,
       "source": {
         "path": "deploy/docker-compose.production.yml",
-        "source_sha256": "adff3d08e63dc4ef9a86a1605d7c117253217eb080e0220c8200cdaafc65dd9b",
-        "line": 460,
+        "source_sha256": "1b60e1e610712bfbca42f00a28afdfb61703c1fdc8ff29c931d89f5558f7908e",
+        "line": 482,
         "column": 54,
         "method": "mixed-script-command:prisma db push"
       },
@@ -27434,7 +27434,7 @@
         "kind": "INDEPENDENT_EXACT_CAPABILITY",
         "rationale": "The committed reviewed maintenance capability and exact source bytes jointly authorize only this site tuple.",
         "evidence": [
-          "source_sha256:adff3d08e63dc4ef9a86a1605d7c117253217eb080e0220c8200cdaafc65dd9b",
+          "source_sha256:1b60e1e610712bfbca42f00a28afdfb61703c1fdc8ff29c931d89f5558f7908e",
           "site_signature:ee393ed91c551dde411c3cad82e70b78593fa616f4fff387fc9b36205254c441",
           "source_coordinate:deploy/docker-compose.production.yml:460:54",
           "review_decision:architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
