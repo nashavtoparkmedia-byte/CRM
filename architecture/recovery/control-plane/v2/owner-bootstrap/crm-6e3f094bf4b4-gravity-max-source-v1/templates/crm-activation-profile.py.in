@@ -615,16 +615,38 @@ def _pair(core: Any, policy: dict[str, Any], profile: dict[str, Any]) -> tuple[d
     )
 
 
+def _sealed_identities(record: dict[str, Any]) -> frozenset[str]:
+    """Every exact identity this profile seals for one image, as the engine may report it.
+
+    A running container names its image through `docker container inspect`, which offers no
+    descriptor to say which address space the id came from, so classification has to accept any
+    identity the profile already sealed for that component. Both forms are exact content addresses
+    of the same bytes, so either one names the image unambiguously; the set is per component, so a
+    Gravity identity can still never classify as MAX. A record that seals nothing usable yields an
+    empty set, which classifies as unknown rather than matching a missing value.
+    """
+    return frozenset(
+        value
+        for key in ("image_id", "containerd_image_id")
+        for value in (record.get(key),)
+        if isinstance(value, str) and value
+    )
+
+
 def _classify(profile: dict[str, Any], gravity: dict[str, Any], maximum: dict[str, Any]) -> tuple[str, tuple[str, str]]:
-    def component(actual: Any, predecessor: Any, target: Any) -> str:
-        if actual == predecessor:
+    def component(actual: Any, predecessor: dict[str, Any], target: dict[str, Any]) -> str:
+        predecessor_identities = _sealed_identities(predecessor)
+        target_identities = _sealed_identities(target)
+        if not isinstance(actual, str) or predecessor_identities & target_identities:
+            return "unknown"
+        if actual in predecessor_identities:
             return "predecessor"
-        if actual == target:
+        if actual in target_identities:
             return "target"
         return "unknown"
     vector = (
-        component(gravity.get("image_id"), profile["predecessor"]["gravity"]["image_id"], profile["target"]["gravity"]["image_id"]),
-        component(maximum.get("image_id"), profile["predecessor"]["max_scraper"]["image_id"], profile["target"]["max_scraper"]["image_id"]),
+        component(gravity.get("image_id"), profile["predecessor"]["gravity"], profile["target"]["gravity"]),
+        component(maximum.get("image_id"), profile["predecessor"]["max_scraper"], profile["target"]["max_scraper"]),
     )
     if vector == ("predecessor", "predecessor"):
         return "PREDECESSOR_PAIR", vector

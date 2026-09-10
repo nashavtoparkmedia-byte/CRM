@@ -1,5 +1,5 @@
 #!/usr/bin/python3 -I
-"""Capture one fresh secret-safe v14 production predecessor snapshot."""
+"""Capture one fresh secret-safe production predecessor snapshot from the installed runtime."""
 from __future__ import annotations
 
 import datetime as dt
@@ -78,29 +78,6 @@ def run(primitive: str, resource: str | None) -> dict[str, Any]:
     ):
         raise ValueError(f"Runtime response contract failed: {primitive}")
     return value
-
-
-def project_migration_rows(database: dict[str, Any]) -> list[dict[str, Any]]:
-    rows = database.get("canonical_live_rows")
-    if not isinstance(rows, list) or len(rows) != 62:
-        raise ValueError("unexpected migration row count")
-    output = []
-    for row in rows:
-        if not isinstance(row, dict) or row.get("status") != "FINISHED_ACTIVE":
-            raise ValueError("migration row is not active")
-        output.append({
-            "ordinal": row.get("observed_chronological_ordinal"),
-            "id": row.get("migration_id"),
-            "checksum": row.get("checksum"),
-            "migration_name": row.get("migration_name"),
-            "finished_at": row.get("finished_at"),
-            "rolled_back_at": row.get("rolled_back_at"),
-            "started_at": row.get("started_at"),
-            "applied_steps_count": row.get("applied_steps_count"),
-        })
-    if [row["ordinal"] for row in output] != list(range(1, 63)):
-        raise ValueError("migration chronology is invalid")
-    return output
 
 
 def main() -> None:

@@ -399,6 +399,73 @@ class TargetImageIdentityTests(unittest.TestCase):
         self.assertTrue(any(argv[1:3] == ["image", "rm"] for argv in calls), calls)
         compose.assert_not_called()
 
+    # ---- the pair classifier reads container ids, which carry no descriptor -----------------
+
+    def test_classifier_accepts_either_sealed_identity_for_the_target_pair(self) -> None:
+        """A-F1/F2: a running container names its image without any descriptor to disambiguate."""
+        profile = {
+            "predecessor": {"gravity": {"image_id": "sha256:" + "a" * 64},
+                            "max_scraper": {"image_id": "sha256:" + "b" * 64}},
+            "target": {"gravity": self.record("gravity"), "max_scraper": self.record("max")},
+        }
+        for gravity_id, max_id in ((GRAVITY_CONFIG, MAX_CONFIG), (GRAVITY_INDEX, MAX_INDEX),
+                                   (GRAVITY_CONFIG, MAX_INDEX), (GRAVITY_INDEX, MAX_CONFIG)):
+            with self.subTest(gravity=gravity_id[:14], max=max_id[:14]):
+                state, vector = self.runtime._classify(profile, {"image_id": gravity_id}, {"image_id": max_id})
+                self.assertEqual(state, "TARGET_PAIR")
+                self.assertEqual(vector, ("target", "target"))
+
+    def test_classifier_still_separates_predecessor_from_target(self) -> None:
+        profile = {
+            "predecessor": {"gravity": {"image_id": "sha256:" + "a" * 64},
+                            "max_scraper": {"image_id": "sha256:" + "b" * 64}},
+            "target": {"gravity": self.record("gravity"), "max_scraper": self.record("max")},
+        }
+        state, vector = self.runtime._classify(
+            profile, {"image_id": "sha256:" + "a" * 64}, {"image_id": "sha256:" + "b" * 64})
+        self.assertEqual((state, vector), ("PREDECESSOR_PAIR", ("predecessor", "predecessor")))
+        state, vector = self.runtime._classify(
+            profile, {"image_id": "sha256:" + "a" * 64}, {"image_id": MAX_INDEX})
+        self.assertEqual((state, vector), ("MIXED_KNOWN", ("predecessor", "target")))
+
+    def test_classifier_refuses_cross_component_and_unknown_identities(self) -> None:
+        profile = {
+            "predecessor": {"gravity": {"image_id": "sha256:" + "a" * 64},
+                            "max_scraper": {"image_id": "sha256:" + "b" * 64}},
+            "target": {"gravity": self.record("gravity"), "max_scraper": self.record("max")},
+        }
+        for gravity_id, max_id in ((MAX_CONFIG, MAX_CONFIG), (MAX_INDEX, MAX_INDEX),
+                                   (GRAVITY_CONFIG, GRAVITY_INDEX), ("sha256:" + "9" * 64, MAX_INDEX),
+                                   (None, MAX_INDEX), ("", MAX_INDEX)):
+            with self.subTest(gravity=str(gravity_id)[:14]):
+                state, _ = self.runtime._classify(profile, {"image_id": gravity_id}, {"image_id": max_id})
+                self.assertEqual(state, "UNKNOWN")
+
+    def test_classifier_refuses_when_predecessor_and_target_share_an_identity(self) -> None:
+        """An ambiguous profile must classify as unknown rather than silently pick one side."""
+        profile = {
+            "predecessor": {"gravity": {"image_id": GRAVITY_CONFIG},
+                            "max_scraper": {"image_id": MAX_CONFIG}},
+            "target": {"gravity": self.record("gravity"), "max_scraper": self.record("max")},
+        }
+        state, vector = self.runtime._classify(
+            profile, {"image_id": GRAVITY_CONFIG}, {"image_id": MAX_CONFIG})
+        self.assertEqual(state, "UNKNOWN")
+        self.assertEqual(vector, ("unknown", "unknown"))
+
+    def test_sealed_constants_in_these_tests_match_the_profile_template(self) -> None:
+        """F7: the digests asserted here must be the ones the profile actually seals."""
+        import json
+        import re
+        raw = (ROOT / "templates/profile.v1.json.in").read_text(encoding="utf-8")
+        rendered = raw.replace("@ARTIFACT_FILES_JSON@", "{}")
+        rendered = re.sub(r'"@[A-Z_]+@"', '"placeholder"', rendered)
+        target = json.loads(rendered)["target"]
+        self.assertEqual(target["gravity"]["image_id"], GRAVITY_CONFIG)
+        self.assertEqual(target["gravity"]["containerd_image_id"], GRAVITY_INDEX)
+        self.assertEqual(target["max_scraper"]["image_id"], MAX_CONFIG)
+        self.assertEqual(target["max_scraper"]["containerd_image_id"], MAX_INDEX)
+
 
 if __name__ == "__main__":
     unittest.main()

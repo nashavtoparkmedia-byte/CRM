@@ -1,5 +1,5 @@
 #!/usr/bin/python3 -I
-"""Fail-closed verifier for generated Runtime v15 package inputs."""
+"""Fail-closed verifier for generated coordinated Runtime package inputs."""
 from __future__ import annotations
 
 import argparse

@@ -1,5 +1,5 @@
 #!/usr/bin/python3 -I
-"""Seal deterministic Runtime v15 inputs, package, and Owner bootstrap."""
+"""Seal deterministic coordinated Runtime inputs, package, and Owner bootstrap."""
 from __future__ import annotations
 
 import argparse
@@ -304,6 +304,10 @@ def validate_snapshot(path: Path) -> tuple[dict[str, Any], str]:
         "max_volume_source_sha256": "fc08035e511fd21c704ef93e6de3948239f40b5f1a6fb6869aec247a3406f2a3",
         "postgres_image_id": "sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229",
         "database_identity_sha256": "ed88dfeaad2a3dc2e759590d295992cd06531d4403d896ded00b21ea667be1c9",
+        # The predecessor runtime reports this digest rather than the rows behind it, so the sealer
+        # can no longer re-derive it. Pinning the known predecessor value keeps an independent check
+        # here, instead of trusting whatever a hand-edited snapshot document happens to carry.
+        "migration_rows_sha256": "8eea7d25be2cc6b5fcee97bace2abf2ed1e15d183ea9f58d3c6f191d644fd9b6",
     }
     if any(sealing.get(key) != value for key, value in fixed.items()):
         raise ValueError("production predecessor drifted")
@@ -454,11 +458,11 @@ def main() -> None:
     assert_clean_identity(args.stage_a_builder_source, STAGE_A_COMMIT, STAGE_A_TREE, "Stage A builder")
     snapshot, snapshot_sha = validate_snapshot(args.production_snapshot)
     if sha(args.rollback_package) != ROLLBACK_SHA:
-        raise ValueError("Runtime v14 rollback package mismatch")
+        raise ValueError("direct control-plane rollback package mismatch")
     if deb_metadata(args.rollback_package) != ["yoko-privileged-runtime", ROLLBACK_VERSION, "all"]:
-        raise ValueError("Runtime v14 rollback metadata mismatch")
+        raise ValueError("direct control-plane rollback metadata mismatch")
     if sha(args.rollback_seal, 16 * 1024 * 1024) != ROLLBACK_SEAL_SHA:
-        raise ValueError("Runtime v14 rollback seal mismatch")
+        raise ValueError("direct control-plane rollback seal mismatch")
     artifact_result, files = validate_artifact(args.handoff_root, args.application_source, args.stage_a_builder_source, repository)
 
     generated = ROOT / "generated"
@@ -569,6 +573,7 @@ def main() -> None:
     installer = (ROOT / "templates/install.sh.in").read_text(encoding="ascii")
     replacements = {
         "@NEW_DEB_SHA256@": package_sha,
+        "@ROLLBACK_SEAL_SHA256@": ROLLBACK_SEAL_SHA,
         "@AUDIT_RECORD_COUNT@": str(snapshot["sealing"]["audit_record_count"]),
         "@AUDIT_LAST_DIGEST@": snapshot["sealing"]["audit_last_digest"],
         "@RELEASE_SEAL_SHA256@": release_seal_sha,

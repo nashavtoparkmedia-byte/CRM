@@ -543,6 +543,33 @@ class IndependentReviewBindingTests(unittest.TestCase):
         self.assertIn('parser.add_argument("--independent-review", required=True', source)
         self.assertNotIn('"independent_review": "PENDING"', source)
 
+    def test_installer_only_names_files_the_sealer_actually_packs(self) -> None:
+        """F1/F6: every $EXPECTED_DIR file the installer touches must exist in the payload.
+
+        The rollback seal was renamed in the sealer and the installer allowlist but not in the
+        installer's own digest check, which would have aborted every install path.
+        """
+        import re
+        installer = (ROOT / "templates/install.sh.in").read_text(encoding="utf-8")
+        sealer = (ROOT / "packaging/seal-release.py").read_text(encoding="utf-8")
+        allowlist = set(re.findall(r'^\s*"([^"]+)":0o[0-7]+,', re.search(
+            r"expected=\{(.*?)\n\}", installer, re.S).group(1), re.M))
+        referenced = set(re.findall(r'\$EXPECTED_DIR/([A-Za-z0-9._-]+)', installer))
+        self.assertTrue(referenced, "installer references no payload files")
+        unpacked = {name for name in referenced if name not in allowlist and name != "$NEW_DEB"}
+        self.assertEqual(unpacked, set(), f"installer names files absent from its own allowlist: {sorted(unpacked)}")
+        for name in sorted(allowlist):
+            if "/" in name or name == "payload-manifest.json":
+                continue
+            self.assertIn(name, sealer, f"sealer never writes payload member {name}")
+
+    def test_installer_rollback_seal_digest_is_rendered_not_hardcoded(self) -> None:
+        installer = (ROOT / "templates/install.sh.in").read_text(encoding="utf-8")
+        sealer = (ROOT / "packaging/seal-release.py").read_text(encoding="utf-8")
+        self.assertIn("@ROLLBACK_SEAL_SHA256@", installer)
+        self.assertIn('"@ROLLBACK_SEAL_SHA256@": ROLLBACK_SEAL_SHA', sealer)
+        self.assertNotIn("8a7e28a3ad49ab6fb3be27e9bfa42d75aff6755b41a1d40119ce806026adb5ad", installer)
+
 
 if __name__ == "__main__":
     unittest.main()

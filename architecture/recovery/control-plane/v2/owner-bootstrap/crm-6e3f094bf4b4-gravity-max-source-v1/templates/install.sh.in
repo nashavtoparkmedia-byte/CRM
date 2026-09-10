@@ -167,7 +167,7 @@ test "$(/usr/bin/dpkg-deb -f "$EXPECTED_DIR/$NEW_DEB" Version)" = '2.0.0-16'
 test "$(/usr/bin/dpkg-deb -f "$EXPECTED_DIR/$NEW_DEB" Architecture)" = 'all'
 test "$(/usr/bin/sha256sum "$EXPECTED_DIR/SEALED_RELEASE.json" | /usr/bin/cut -d ' ' -f 1)" = '@RELEASE_SEAL_SHA256@'
 test "$(/usr/bin/sha256sum "$EXPECTED_DIR/artifact-admission.v1.json" | /usr/bin/cut -d ' ' -f 1)" = '@ARTIFACT_RECEIPT_SHA256@'
-test "$(/usr/bin/sha256sum "$EXPECTED_DIR/runtime-v14-SEALED_RELEASE.json" | /usr/bin/cut -d ' ' -f 1)" = '8a7e28a3ad49ab6fb3be27e9bfa42d75aff6755b41a1d40119ce806026adb5ad'
+test "$(/usr/bin/sha256sum "$EXPECTED_DIR/runtime-rollback-SEALED_RELEASE.json" | /usr/bin/cut -d ' ' -f 1)" = '@ROLLBACK_SEAL_SHA256@'
 stored_deb_exact "$OLD_DEB_STORE" "$OLD_DEB" "$OLD_DEB_SHA"
 
 available=$(/usr/bin/df --output=avail -B1 /var/lib/yoko-privileged-runtime | /usr/bin/tail -1 | /usr/bin/tr -d ' ')
