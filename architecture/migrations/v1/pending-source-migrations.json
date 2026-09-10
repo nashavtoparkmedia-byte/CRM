@@ -9,12 +9,13 @@
   },
   "source_schema": {
     "path": "gravity-mvp/prisma/schema.prisma",
-    "sha256": "1d5dfa10628625e031c721eccaf4f470f19dba5c849be61a8900ceec926801d6",
-    "size": 143439,
+    "sha256": "9c2ce0f306d65272360765effae9ceaf44ef27207d359e74983658b4acb8b478",
+    "size": 158960,
     "expected_isolated_replay_parity": "ZERO_PRISMA_DATAMODEL_DIFF_AFTER_PENDING_SOURCE"
   },
   "authorized_owner_contexts": [
-    "calling"
+    "calling",
+    "fleet_operations"
   ],
   "migrations": [
     {
@@ -44,6 +45,32 @@
         "forbidden_indexes": [
           "Call_isSimulation_startedAt_idx"
         ]
+      }
+    },
+    {
+      "name": "20260910220000_add_compensation_monetary_core",
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e",
+      "size": 20228,
+      "owner_context": "fleet_operations",
+      "classification": "EXPAND_ONLY",
+      "production_application": false,
+      "migration_test": "gravity-mvp/src/modules/fleet-operations/internal/compensation/compensation-monetary-core.postgres.test.ts",
+      "creates": {
+        "tables": [
+          "CompensationApplication",
+          "CompensationAuditEvent",
+          "CompensationBudgetPeriod",
+          "CompensationOrderClaim",
+          "CompensationPayoutAuthorization",
+          "CompensationPerson",
+          "CompensationPersonBinding",
+          "CompensationReconciliationTask",
+          "CompensationSettlement",
+          "CompensationVerifiedOrder"
+        ],
+        "columns": [],
+        "forbidden_indexes": []
       }
     }
   ],
