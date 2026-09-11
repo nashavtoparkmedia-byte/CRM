@@ -117,31 +117,41 @@ if [ -z "${TARGET_SERVICES}" ] || echo "${TARGET_SERVICES}" | grep -q "gravity-m
 fi
 
 # ─── 4. Up ───────────────────────────────────────────────────────────────────
-# `--remove-orphans` exists to clean up containers whose service was deleted from
-# the compose file. It cannot distinguish that from a service this invocation
-# simply cannot see, so before using it we assert that every running container in
-# the project is defined by the compose files we are about to apply. If one is
-# not, the deploy stops instead of destroying a live service.
-log "Шаг 4/5: проверка orphan-безопасности"
-# Compose derives the project name from COMPOSE_PROJECT_NAME, else the base
-# directory name — mirror that here rather than shelling out to a JSON parser.
-PROJECT_NAME="${COMPOSE_PROJECT_NAME:-$(basename "${REPO_DIR}")}"
+# `--remove-orphans` deletes containers whose service is absent from the compose
+# files being applied. It cannot distinguish "service was deleted from the file"
+# from "service this invocation simply cannot see", so it is destructive by
+# default on any project that carries a service declared elsewhere. Deploying
+# does not require it, so it is opt-in: set DEPLOY_REMOVE_ORPHANS=true only when
+# you actually intend to prune deleted services.
+REMOVE_ORPHANS_FLAG=""
+if [ "${DEPLOY_REMOVE_ORPHANS:-false}" = "true" ]; then
+    # Requested — now prove it is safe. Every running container in the project
+    # must be defined by the compose files we are about to apply; if one is not,
+    # stop instead of destroying a live service.
+    log "Шаг 4/5: проверка orphan-безопасности (DEPLOY_REMOVE_ORPHANS=true)"
+    # Compose derives the project name from COMPOSE_PROJECT_NAME, else the base
+    # directory name — mirror that here rather than shelling out to a JSON parser.
+    PROJECT_NAME="${COMPOSE_PROJECT_NAME:-$(basename "${REPO_DIR}")}"
 
-DEFINED_SERVICES="$(${COMPOSE} config --services 2>/dev/null | sort -u)"
-RUNNING_SERVICES="$(docker ps --filter "label=com.docker.compose.project=${PROJECT_NAME}" -q \
-    | xargs -r docker inspect --format '{{index .Config.Labels "com.docker.compose.service"}}' 2>/dev/null \
-    | sort -u)"
-UNDECLARED="$(comm -13 <(printf '%s\n' "${DEFINED_SERVICES}") <(printf '%s\n' "${RUNNING_SERVICES}") | grep -v '^$' || true)"
+    DEFINED_SERVICES="$(${COMPOSE} config --services 2>/dev/null | sort -u)"
+    RUNNING_SERVICES="$(docker ps --filter "label=com.docker.compose.project=${PROJECT_NAME}" -q \
+        | xargs -r docker inspect --format '{{index .Config.Labels "com.docker.compose.service"}}' 2>/dev/null \
+        | sort -u)"
+    UNDECLARED="$(comm -13 <(printf '%s\n' "${DEFINED_SERVICES}") <(printf '%s\n' "${RUNNING_SERVICES}") | grep -v '^$' || true)"
 
-if [ -n "${UNDECLARED}" ]; then
-    log "[fail] в проекте ${PROJECT_NAME} работают сервисы, которых нет в применяемых compose-файлах:"
-    printf '  - %s\n' ${UNDECLARED} >&2
-    fail "добавьте их compose-файлы в COMPOSE_OVERLAY_FILES (.env.production), иначе --remove-orphans их уничтожит"
+    if [ -n "${UNDECLARED}" ]; then
+        log "[fail] в проекте ${PROJECT_NAME} работают сервисы, которых нет в применяемых compose-файлах:"
+        printf '  - %s\n' ${UNDECLARED} >&2
+        fail "добавьте их compose-файлы в COMPOSE_OVERLAY_FILES (.env.production) или снимите DEPLOY_REMOVE_ORPHANS, иначе --remove-orphans их уничтожит"
+    fi
+    REMOVE_ORPHANS_FLAG="--remove-orphans"
+else
+    log "Шаг 4/5: --remove-orphans отключён (DEPLOY_REMOVE_ORPHANS не равен true)"
 fi
 
 log "Шаг 4/5: docker compose up -d"
 # shellcheck disable=SC2086
-${COMPOSE} up -d --remove-orphans ${TARGET_SERVICES} || fail "up упал"
+${COMPOSE} up -d ${REMOVE_ORPHANS_FLAG} ${TARGET_SERVICES} || fail "up упал"
 
 # ─── 5. Ждём healthy ─────────────────────────────────────────────────────────
 log "Шаг 5/5: проверка healthcheck'ов (до 120 сек)"
