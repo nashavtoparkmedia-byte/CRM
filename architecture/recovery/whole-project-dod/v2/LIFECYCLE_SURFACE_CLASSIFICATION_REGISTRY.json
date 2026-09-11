@@ -4,10 +4,10 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 710,
+    "total_entries": 711,
     "test": 35,
     "dead_historical": 92,
-    "migration_only": 80,
+    "migration_only": 81,
     "active_operational": 498,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
@@ -2164,6 +2164,16 @@
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
       "functional_owner": "calling",
       "source_sha256": "ca87d5632938b28364bbd9b98834ef4cc7464aa5fe448f883319cb1601db077a"
+    },
+    {
+      "path": "gravity-mvp/prisma/migrations/20260910220000_add_compensation_monetary_core/migration.sql",
+      "lifecycle": "MIGRATION",
+      "disposition": "MIGRATION_ONLY",
+      "production_capability": "CONTROLLED_MIGRATION",
+      "rationale": "Byte-pinned source-only expand-only migration creates only Fleet Operations-owned cash compensation schema through controlled migration tooling; this review grants no application-runtime or production-application authority.",
+      "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
+      "functional_owner": "fleet_operations",
+      "source_sha256": "524d5969c460ec6031210d9ec2d6d7820cbb413f9a29ed8a01faa1354396da6e"
     },
     {
       "path": "gravity-mvp/query_driver.sql",
