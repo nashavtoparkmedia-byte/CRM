@@ -53,6 +53,20 @@ function isUsableMaxMessageHex(hex) {
   return clean.length >= 18 && clean.startsWith('d301')
 }
 
+function selectPendingLiveDomCandidates(candidates, pendingCount) {
+  const limit = Math.max(0, Math.floor(Number(pendingCount) || 0))
+  if (!limit || !Array.isArray(candidates)) return []
+
+  return candidates
+    .filter(candidate => {
+      if (!candidate?.text || candidate.attachments?.length) return false
+      if (candidate.isOutgoing) return false
+      if (candidate.viewportW && candidate.x > candidate.viewportW * 0.55) return false
+      return Number.isFinite(candidate.displayMinute)
+    })
+    .slice(-limit)
+}
+
 function walkMaxValue(value, visit, seen = new Set(), depth = 0) {
   if (value == null || depth > 8) return
   if (typeof value !== 'object') {
@@ -281,6 +295,59 @@ function maxMsgpackDecodeAll(buf) {
   return results
 }
 
+function findMsgpackFieldValue(buf, fieldName) {
+  if (!Buffer.isBuffer(buf) || !fieldName) return null
+  const key = Buffer.from(String(fieldName), 'utf8')
+  if (key.length === 0 || key.length >= 32) return null
+  const marker = Buffer.concat([Buffer.from([0xa0 | key.length]), key])
+  const index = buf.indexOf(marker)
+  if (index < 0) return null
+  const values = maxMsgpackDecodeAll(buf.slice(index + marker.length))
+  return values.length > 0 ? values[0] : null
+}
+
+function findMsgpackIdFieldValue(buf, fieldName) {
+  if (!Buffer.isBuffer(buf) || !fieldName) return null
+  const key = Buffer.from(String(fieldName), 'utf8')
+  if (key.length === 0 || key.length >= 32) return null
+  const fieldMarker = Buffer.concat([Buffer.from([0xa0 | key.length]), key])
+  const fieldIndex = buf.indexOf(fieldMarker)
+  if (fieldIndex < 0) return null
+  const valueOffset = fieldIndex + fieldMarker.length
+  if (valueOffset >= buf.length) return null
+
+  const canonicalInt64 = dataOffset => {
+    if (dataOffset < 0 || dataOffset + 8 > buf.length) return null
+    return {
+      __maxId: true,
+      hex: Buffer.concat([Buffer.from([0xd3]), buf.slice(dataOffset, dataOffset + 8)]).toString('hex'),
+    }
+  }
+
+  const marker = buf[valueOffset]
+  if (marker === 0xd3 || marker === 0xcf) {
+    return canonicalInt64(valueOffset + 1)
+  }
+
+  if (marker === 0xc7 && valueOffset + 3 <= buf.length) {
+    const length = buf[valueOffset + 1]
+    const type = buf.readInt8(valueOffset + 2)
+    const dataOffset = valueOffset + 3
+    if (type === 1 && length === 9 && (buf[dataOffset] === 0xd3 || buf[dataOffset] === 0xcf)) {
+      return canonicalInt64(dataOffset + 1)
+    }
+    if (type === 1 && length === 8) {
+      return canonicalInt64(dataOffset)
+    }
+  }
+
+  if (marker === 0xd7 && valueOffset + 10 <= buf.length && buf.readInt8(valueOffset + 1) === 1) {
+    return canonicalInt64(valueOffset + 2)
+  }
+
+  return findMsgpackFieldValue(buf, fieldName)
+}
+
 // ─── WS Init Script — инжектируется ДО навигации ─────────────────────────────
 // Перехватывает конструктор WebSocket, сохраняет ссылку на MAX WS,
 // и добавляет window.__maxWsSend(rawString) для отправки фреймов из Node.js
@@ -451,6 +518,7 @@ class TransportInterceptor {
     this._emittedMsgIds        = new Map() // messageId -> timestamp, cross-source dedup for op:53/op:71/op:128
     this._recentActiveChatIds  = new Map() // chatId → timestamp, обновляется из op:53
     this._lastMsgRawHex        = new Map() // chatId → raw hex bytes of lastMessage ID ext8 data
+    this._confirmedMessageAnchorAt = new Map() // chatId → runtime confirmation timestamp; persisted anchors are not live proof
     this._catchUpChatIds       = new Map() // chatId → retryCount; populated from op:48, cleared when op:71 responds
     this._pendingNewMsgIds     = []        // msgId hex values from bare op:128 before chatId is known
     this._pendingLiveMessageIds = new Map() // chatId -> [{pendingHex, ts}], not an op:71 anchor until confirmed
@@ -466,12 +534,16 @@ class TransportInterceptor {
     // This lets us catch up chats that op:48 doesn't include in its startup push.
     try {
       const saved = JSON.parse(fs.readFileSync(LAST_MSG_IDS_PATH, 'utf8'))
+      let skippedInvalid = 0
       for (const [cid, hex] of Object.entries(saved)) {
-        this._lastMsgRawHex.set(cid, hex)
-        this._lastSeenMsgId.set(cid, hex)  // mark as already seen — op:71 won't re-emit on catch-up
-        this._catchUpChatIds.set(cid, 0)
+        if (!this._rememberConfirmedMessageAnchor(cid, hex, { markSeen: true, confirmedAt: 0 })) {
+          skippedInvalid += 1
+        }
       }
-      console.log(`[Transport] Loaded ${this._lastMsgRawHex.size} persisted msg IDs from disk → scheduled catch-up`)
+      console.log(`[Transport] Loaded ${this._lastMsgRawHex.size} persisted msg IDs from disk for passive catch-up`)
+      if (skippedInvalid > 0) {
+        console.warn(`[Transport] Ignored ${skippedInvalid} invalid persisted message anchor(s)`)
+      }
     } catch {
       // File doesn't exist yet — first run
     }
@@ -565,13 +637,8 @@ class TransportInterceptor {
                       if ((Number(cid) >>> 0) === shortId) { chatIdStr = cid; break }
                     }
                   }
-                  console.log(`[op128mark→op71] browser marked shortId:0x${shortId.toString(16)} → chatId:${chatIdStr}`)
+                  console.log(`[op128mark] browser marked shortId:0x${shortId.toString(16)} → chatId:${chatIdStr}`)
                   this._rememberRecentOp128Chat(chatIdStr)
-                  // Add to catch-up set immediately so _fireWsReady() retries on reconnect
-                  // even if current retry loop gives up (WS was down too long)
-                  if (!this._catchUpChatIds.has(chatIdStr)) {
-                    this._catchUpChatIds.set(chatIdStr, 0)
-                  }
                   // If one or more bare op:128 notifications arrived before the
                   // browser mark frame exposed chatId, move all queued provider ids
                   // into the chat-specific pending queue in original order.
@@ -579,30 +646,27 @@ class TransportInterceptor {
                   if (registrations.length > 0) {
                     console.log(`[op128mark] registered ${registrations.length} pending live msg(s) for chatId:${chatIdStr} ids:${registrations.map(r => r.pendingHex.slice(0,16)).join(',')}`)
                   }
-                  const tryOp71 = (retries = 0) => {
-                    const anchorHex = this._op71AnchorForLiveNotification(chatIdStr)
-                    const hasPendingLive = (this._pendingLiveMessageIds.get(chatIdStr) || []).length > 0
-                    if (!anchorHex && !hasPendingLive) {
-                      console.warn(`[op128mark->op71] skipped chatId:${chatIdStr}: no usable d301 anchor`)
-                      return
-                    }
-                    if (!anchorHex && hasPendingLive) {
-                      console.warn(`[op128mark->op71] chatId:${chatIdStr}: no previous anchor; using protocol fallback, not pending live id`)
-                    }
-                    if (!this._wsConnected) {
-                      if (retries < 15) setTimeout(() => tryOp71(retries + 1), 600)
-                      else console.warn(`[op128mark?op71] gave up inline retries ? catch-up set will handle on reconnect`)
-                      return
-                    }
-                    this.sendBinaryOp71(chatIdStr, anchorHex).catch(e => {
-                      if (retries < 5) setTimeout(() => tryOp71(retries + 1), 800)
-                      else console.warn(`[op128mark?op71] ${e.message}`)
-                    })
-                  }
-                  setTimeout(() => tryOp71(), 300)
+                  console.log(`[op128mark] active op71 disabled; guarded DOM recovery will handle gaps for chatId:${chatIdStr}`)
                 }
               } catch (e) {
                 console.warn('[op128mark→op71] decode error:', e.message)
+              }
+            }
+            // A live video notification may not expose its d301 message id in
+            // op:128/op:180. MAX Web immediately follows it with a binary
+            // op:83 request containing {chatId, messageId, videoId}. Correlate
+            // that browser-owned request only while fresh loose media exists.
+            if (opcode === OP.RESOLVE_VIDEO && cmd === 0x01 && buf.length > 9) {
+              try {
+                const request = this._decodeBrowserVideoResolveRequest(buf)
+                const correlation = this._handleBrowserVideoResolveRequest(request)
+                if (correlation?.emitted) {
+                  console.log(`[op83live] provider media emitted chatId:${correlation.chatId} id:${correlation.messageId}`)
+                } else if (this.hasRecentLooseMediaForDomRecovery({ maxAgeMs: 5000 })) {
+                  console.warn(`[op83live] live media not correlated reason:${correlation?.reason || 'unknown'}`)
+                }
+              } catch (e) {
+                console.warn('[op83live] request correlation failed:', e.message)
               }
             }
             const maxHex  = opcode === 71 ? buf.length : 20
@@ -753,6 +817,110 @@ class TransportInterceptor {
       if (found != null) return found
     }
     return null
+  }
+
+  _findProtocolPayloadDeep(value, requiredKeys, depth = 0) {
+    if (value == null || depth > 10 || Buffer.isBuffer(value)) return null
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const found = this._findProtocolPayloadDeep(item, requiredKeys, depth + 1)
+        if (found) return found
+      }
+      return null
+    }
+    if (typeof value !== 'object') return null
+    if (requiredKeys.every(key => Object.prototype.hasOwnProperty.call(value, key))) return value
+    if (Array.isArray(value.__complexEntries)) {
+      for (const entry of value.__complexEntries) {
+        const found = this._findProtocolPayloadDeep(entry?.key, requiredKeys, depth + 1)
+          || this._findProtocolPayloadDeep(entry?.value, requiredKeys, depth + 1)
+        if (found) return found
+      }
+    }
+    for (const [key, item] of Object.entries(value)) {
+      if (key === '__complexEntries') continue
+      const found = this._findProtocolPayloadDeep(item, requiredKeys, depth + 1)
+      if (found) return found
+    }
+    return null
+  }
+
+  _decodeBrowserVideoResolveRequest(frame) {
+    if (!Buffer.isBuffer(frame) || frame.length <= 9) return null
+    const payload = frame.slice(9)
+    return {
+      videoId: findMsgpackFieldValue(payload, 'videoId'),
+      chatId: findMsgpackFieldValue(payload, 'chatId'),
+      messageId: findMsgpackIdFieldValue(payload, 'messageId'),
+    }
+  }
+
+  _resolveKnownChatId(rawChatId) {
+    const raw = maxIdToString(rawChatId)
+    if (!raw) return null
+    const shortId = Number(raw) >>> 0
+    for (const source of [this._recentOp128ChatIds, this._recentActiveChatIds, this._lastMsgRawHex]) {
+      for (const cid of source.keys()) {
+        if (String(cid) === raw || (Number(cid) >>> 0) === shortId) return String(cid)
+      }
+    }
+    return raw
+  }
+
+  _singleRecentOp128ChatId(maxAgeMs = 5000) {
+    const now = Date.now()
+    const recent = [...this._recentOp128ChatIds.entries()]
+      .filter(([, seenAt]) => seenAt && now - seenAt <= maxAgeMs)
+      .sort((a, b) => b[1] - a[1])
+    return recent.length === 1 ? String(recent[0][0]) : null
+  }
+
+  _handleBrowserVideoResolveRequest(decodedPayload, { maxAgeMs = 5000 } = {}) {
+    const request = this._findProtocolPayloadDeep(decodedPayload, ['videoId', 'messageId', 'chatId'])
+    if (!request) return { emitted: false, reason: 'request_payload_not_found' }
+
+    const messageId = maxIdToString(request.messageId)
+    if (!isUsableMaxMessageHex(messageId)) return { emitted: false, reason: 'invalid_provider_message_id' }
+
+    const now = Date.now()
+    let chatId = this._resolveKnownChatId(request.chatId)
+    const recentChatId = this._singleRecentOp128ChatId(maxAgeMs)
+    const seenAt = chatId ? this._recentOp128ChatIds.get(chatId) : 0
+    if ((!seenAt || now - seenAt > maxAgeMs) && recentChatId) chatId = recentChatId
+    const correlatedAt = chatId ? this._recentOp128ChatIds.get(chatId) : 0
+    if (!chatId || !correlatedAt || now - correlatedAt > maxAgeMs) {
+      return { emitted: false, reason: 'no_recent_live_op128' }
+    }
+    if (!this.hasRecentLooseMediaForDomRecovery({ maxAgeMs })) {
+      return { emitted: false, reason: 'no_recent_loose_media' }
+    }
+
+    const confirmedAnchor = this._lastMsgRawHex.get(chatId) || null
+    const confirmedAt = this._confirmedMessageAnchorAt.get(chatId) || 0
+    const matchesFreshConfirmedAnchor = isUsableMaxMessageHex(confirmedAnchor)
+      && compareMaxIdHex(messageId, confirmedAnchor) === 0
+      && confirmedAt >= correlatedAt
+      && now - confirmedAt <= maxAgeMs
+
+    const videoId = maxIdToString(request.videoId)
+    const recentLooseVideoIds = new Set()
+    for (const entry of this._pendingLooseMedia) {
+      if (!entry?.ts || now - entry.ts > maxAgeMs) continue
+      for (const item of entry.items || []) {
+        const pendingVideoId = maxIdToString(item?.videoId)
+        if (pendingVideoId) recentLooseVideoIds.add(pendingVideoId)
+      }
+    }
+    if (videoId && recentLooseVideoIds.size > 0 && !recentLooseVideoIds.has(videoId) && !matchesFreshConfirmedAnchor) {
+      return { emitted: false, reason: 'video_id_mismatch' }
+    }
+
+    return {
+      ...this.emitPendingLooseMediaMessage(chatId, messageId, { maxAgeMs }),
+      chatId,
+      messageId,
+      videoId,
+    }
   }
 
   _processDecodedFrame(data) {
@@ -957,13 +1125,9 @@ class TransportInterceptor {
           }
           if (lastMsg?.id?.__maxId) {
             const newHex   = lastMsg.id.hex
-            const existing = this._lastMsgRawHex.get(chatId)
             // Store the REAL lastMessage ID as anchor. Op:71 returns messages with ID >= anchor
             // (inclusive). The dedup in op:71 response skips the anchor itself via _lastSeenMsgId.
-            const isNewer  = !existing || newHex.slice(2) > existing.slice(2)
-            if (isNewer) {
-              this._lastMsgRawHex.set(chatId, newHex)
-              this._lastSeenMsgId.set(chatId, newHex)
+            if (this._rememberConfirmedMessageAnchor(chatId, newHex, { markSeen: true })) {
               console.log(`[op48] chatId:${chatId} anchor ${newHex.slice(0,16)} (lastMsg)`)
             }
           }
@@ -971,16 +1135,12 @@ class TransportInterceptor {
           if (Array.isArray(chat.__complexEntries)) {
             let bestHex = null
             for (const { key } of chat.__complexEntries) {
-              if (key?.__maxId) {
-                if (!bestHex || key.hex.slice(2) > bestHex.slice(2)) bestHex = key.hex
+              if (key?.__maxId && isUsableMaxMessageHex(key.hex)) {
+                if (!bestHex || compareMaxIdHex(key.hex, bestHex) > 0) bestHex = key.hex
               }
             }
             if (bestHex) {
-              const existing = this._lastMsgRawHex.get(chatId)
-              const isNewer  = !existing || bestHex.slice(2) > existing.slice(2)
-              if (isNewer) {
-                this._lastMsgRawHex.set(chatId, bestHex)
-                this._lastSeenMsgId.set(chatId, bestHex)
+              if (this._rememberConfirmedMessageAnchor(chatId, bestHex, { markSeen: true })) {
                 console.log(`[op48] chatId:${chatId} MAP KEY anchor ${bestHex.slice(0,16)}`)
               }
             }
@@ -996,22 +1156,9 @@ class TransportInterceptor {
               console.log(`[op48] persisted ${this._lastMsgRawHex.size} msg ID(s) to disk`)
             } catch (e) { console.warn('[Transport] Failed to persist msg IDs:', e.message) }
           }
-          // Register chats for catch-up only if we have a known lastMessage ID.
-          // Chats without a stored ID come from op:48 decoding false positives (non-chat
-          // objects that happen to have numeric IDs). Without a real msgId, op:71 with
-          // fallback ID=1 would fetch all history which the server may reject.
-          for (const cid of chatIds) {
-            if (this._lastMsgRawHex.has(cid) && !this._catchUpChatIds.has(cid)) {
-              this._catchUpChatIds.set(cid, 0)
-            }
-          }
-          // Also attempt immediately on the first connection (bonus early try)
-          setTimeout(() => {
-            for (const cid of chatIds) {
-              if (!this._catchUpChatIds.has(cid)) continue  // already resolved
-              this.sendBinaryOp71(cid).catch(e => console.warn(`[op48→op71] chatId:${cid}: ${e.message}`))
-            }
-          }, 3000)
+          // Active op:71 injection is intentionally disabled. MAX closes the
+          // browser socket for these synthetic frames; browser-driven op:49/op:71
+          // responses and guarded DOM recovery remain the passive catch-up paths.
         }
       }
     }
@@ -1115,7 +1262,7 @@ class TransportInterceptor {
           if (!msg || (!msg.text && !msg.attachments?.length)) continue
           const msgIdStr = msg.id || null
           const storedHex = this._lastMsgRawHex.get(chatIdStr)
-          if (msgIdStr && storedHex && compareMaxIdHex(msgIdStr, storedHex) <= 0) {
+          if (msgIdStr && isUsableMaxMessageHex(storedHex) && compareMaxIdHex(msgIdStr, storedHex) <= 0) {
             console.log(`[op49] skip stale msgId:${String(msgIdStr).slice(0,16)} anchor:${String(storedHex).slice(0,16)} text:"${String(msg.text || '').slice(0, 50)}"`)
             continue
           }
@@ -1151,10 +1298,8 @@ class TransportInterceptor {
         if (pl.message?.id?.__maxId && pl.chatId != null) {
           const cidStr = String(pl.chatId)
           const hex = pl.message.id.hex
-          this._lastSeenMsgId.set(cidStr, hex)
-          const stored = this._lastMsgRawHex.get(cidStr) || ''
-          if (!stored || hex.slice(2) > stored.slice(2)) {
-            this._lastMsgRawHex.set(cidStr, hex)
+          const stored = this._op71AnchorForLiveNotification(cidStr) || ''
+          if (this._rememberConfirmedMessageAnchor(cidStr, hex, { markSeen: true })) {
             try {
               fs.writeFileSync(LAST_MSG_IDS_PATH, JSON.stringify(Object.fromEntries(this._lastMsgRawHex)))
             } catch {}
@@ -1191,19 +1336,7 @@ class TransportInterceptor {
       const chatId = data.payload?.chatId != null ? String(data.payload.chatId) : null
       if (chatId && chatId !== '0') {
         console.log(`[op130] mark confirm chatId:${chatId}`)
-        const tryOp71 = (retries = 0) => {
-          const hex = this._lastMsgRawHex.get(chatId)
-          if (hex) {
-            console.log(`[op130→op71] triggering for chatId:${chatId} msgId:${hex.slice(0,16)}`)
-            this.sendBinaryOp71(chatId).catch(e => console.warn(`[op130→op71] ${e.message}`))
-          } else if (retries < 8) {
-            // IDs not loaded yet (early reconnect) — retry after op:48/53 have time to fire
-            setTimeout(() => tryOp71(retries + 1), 800)
-          } else {
-            console.log(`[op130] no stored msgId for chatId:${chatId} after retries`)
-          }
-        }
-        tryOp71()
+        this._rememberRecentOp128Chat(chatId)
       }
     }
   }
@@ -1396,7 +1529,18 @@ class TransportInterceptor {
     const hasPreview = !!value.previewData
     const hasMediaId = value.videoId != null || value.fileId != null || value.photoId != null || value.mediaId != null || value.attachmentId != null
     const filename = cleanMaxString(value.name || value.filename)
-    const directUrl = cleanMaxString(value.baseUrl || value.url)
+    // Live VIDEO notifications can carry a ready signed CDN URL as MP4_1080
+    // (and resolved payloads can expose lower-quality MP4_* variants). Keep it
+    // instead of falling through to the legacy JSON op:83 request, which is
+    // incompatible with MAX's current binary WebSocket transport.
+    const directVideoUrl = cleanMaxString(
+      value.MP4_480 ||
+      value.MP4_720 ||
+      value.MP4_360 ||
+      value.MP4_240 ||
+      value.MP4_1080
+    )
+    const directUrl = directVideoUrl || cleanMaxString(value.baseUrl || value.url)
     if (token || hasPreview || hasMediaId || directUrl || typeHint.includes('video') || typeHint.includes('file') || typeHint.includes('audio') || typeHint.includes('music') || /\.ogg\b|\.mp4\b/i.test(filename || '')) {
       out.push({
         _type: typeHint.includes('video') ? 'VIDEO' : (typeHint.includes('audio') || typeHint.includes('voice') || typeHint.includes('music') || /\.ogg\b/i.test(filename || '') ? 'AUDIO' : (typeHint.includes('photo') ? 'PHOTO' : 'FILE')),
@@ -1425,6 +1569,37 @@ class TransportInterceptor {
     this._pendingLooseMedia.push({ ts: Date.now(), items })
     this._pendingLooseMedia = this._pendingLooseMedia.filter(entry => Date.now() - entry.ts < 15_000).slice(-8)
     console.log(`[Transport] buffered loose media hints: ${items.length}`)
+  }
+
+  hasRecentLooseMediaForDomRecovery({ maxAgeMs = 15_000 } = {}) {
+    const now = Date.now()
+    return this._pendingLooseMedia.some(entry => entry?.ts && now - entry.ts < maxAgeMs && Array.isArray(entry.items) && entry.items.length > 0)
+  }
+
+  emitPendingLooseMediaMessage(chatId, messageHex, { maxAgeMs = 15_000 } = {}) {
+    const chatIdStr = String(chatId || '')
+    const idHex = String(messageHex || '')
+    if (!chatIdStr || !isUsableMaxMessageHex(idHex)) return { emitted: false, reason: 'invalid_identity' }
+    if (!this.hasRecentLooseMediaForDomRecovery({ maxAgeMs })) return { emitted: false, reason: 'no_recent_loose_media' }
+
+    const pseudo = {
+      chatId: chatIdStr,
+      message: {
+        id: { __maxId: true, hex: idHex },
+        sender: null,
+        time: Date.now(),
+        attaches: [],
+      },
+    }
+    this._consumeLooseMediaForMessage(pseudo)
+    const msg = this._normalizeMaxMsg(pseudo)
+    if (!msg || !msg.attachments?.length) return { emitted: false, reason: 'normalize_failed' }
+
+    this._rememberConfirmedMessageAnchor(chatIdStr, idHex, { markSeen: true })
+    this._persistLastMsgRawHex()
+    console.log(`[Transport] emitted loose media msg chat:${chatIdStr} id:${idHex.slice(0,16)} type:${msg.type}`)
+    this._emit(msg)
+    return { emitted: true, messageId: idHex, type: msg.type, attachmentCount: msg.attachments.length }
   }
 
   _consumeLooseMediaForMessage(pl) {
@@ -1488,6 +1663,28 @@ class TransportInterceptor {
     }
   }
 
+  _rememberConfirmedMessageAnchor(chatId, candidateHex, { markSeen = false, confirmedAt = Date.now() } = {}) {
+    const chatIdStr = String(chatId || '')
+    const confirmedHex = String(candidateHex || '')
+      .replace(/[^a-fA-F0-9]/g, '')
+      .toLowerCase()
+    if (!chatIdStr || !isUsableMaxMessageHex(confirmedHex)) return false
+
+    const previousHex = this._lastMsgRawHex.get(chatIdStr) || null
+    if (markSeen) this._lastSeenMsgId.set(chatIdStr, confirmedHex)
+    if (isUsableMaxMessageHex(previousHex) && compareMaxIdHex(confirmedHex, previousHex) < 0) {
+      return false
+    }
+
+    this._lastMsgRawHex.set(chatIdStr, confirmedHex)
+    if (Number.isFinite(confirmedAt) && confirmedAt > 0) {
+      this._confirmedMessageAnchorAt.set(chatIdStr, confirmedAt)
+    } else {
+      this._confirmedMessageAnchorAt.delete(chatIdStr)
+    }
+    return true
+  }
+
   _rememberPreChatPendingMessageId(pendingHex) {
     const pending = String(pendingHex || '')
     if (!isUsableMaxMessageHex(pending)) {
@@ -1533,7 +1730,7 @@ class TransportInterceptor {
 
     if (!chatIdStr) return { registered: false, reason: 'missing_chat_id', pendingHex: pending, previousHex, anchorHex }
     if (!isUsableMaxMessageHex(pending)) return { registered: false, reason: 'unsafe_pending_id', pendingHex: pending, previousHex, anchorHex }
-    if (previousHex && compareMaxIdHex(pending, previousHex) <= 0) {
+    if (isUsableMaxMessageHex(previousHex) && compareMaxIdHex(pending, previousHex) <= 0) {
       return { registered: false, reason: 'stale_pending_id', pendingHex: pending, previousHex, anchorHex }
     }
 
@@ -1556,10 +1753,7 @@ class TransportInterceptor {
     const confirmedHex = String(bestMsgHex || '')
     if (!chatIdStr || !isUsableMaxMessageHex(confirmedHex)) return false
 
-    const previousHex = this._lastMsgRawHex.get(chatIdStr)
-    if (previousHex && compareMaxIdHex(confirmedHex, previousHex) < 0) return false
-
-    this._lastMsgRawHex.set(chatIdStr, confirmedHex)
+    if (!this._rememberConfirmedMessageAnchor(chatIdStr, confirmedHex)) return false
     const remaining = this._pendingLiveList(chatIdStr)
       .filter(entry => compareMaxIdHex(entry.pendingHex, confirmedHex) > 0)
     if (remaining.length) this._pendingLiveMessageIds.set(chatIdStr, remaining)
@@ -1571,37 +1765,8 @@ class TransportInterceptor {
   _schedulePendingLiveDrain(chatId, delayMs = 350) {
     const chatIdStr = String(chatId || '')
     if (!chatIdStr || !this._pendingLiveList(chatIdStr).length) return false
-    if (this._pendingLiveDrainTimers.has(chatIdStr)) return true
-
-    const timer = setTimeout(async () => {
-      this._pendingLiveDrainTimers.delete(chatIdStr)
-      if (!this._pendingLiveList(chatIdStr).length) return
-      if (!this._wsConnected) {
-        this._schedulePendingLiveDrain(chatIdStr, 800)
-        return
-      }
-      const anchorHex = this._op71AnchorForLiveNotification(chatIdStr)
-      if (!anchorHex) {
-        console.warn(`[pendingLiveDrain] skipped chatId:${chatIdStr}: no confirmed anchor`)
-        return
-      }
-      const retries = this._catchUpChatIds.get(chatIdStr) || 0
-      if (retries >= 8) {
-        console.warn(`[pendingLiveDrain] gave up chatId:${chatIdStr} pending:${this._pendingLiveList(chatIdStr).length}`)
-        return
-      }
-      this._catchUpChatIds.set(chatIdStr, retries + 1)
-      try {
-        await this.sendBinaryOp71(chatIdStr, anchorHex)
-        console.log(`[pendingLiveDrain] sent op71 chatId:${chatIdStr} anchor:${anchorHex.slice(0,16)} pending:${this._pendingLiveList(chatIdStr).length}`)
-      } catch (e) {
-        console.warn(`[pendingLiveDrain] failed chatId:${chatIdStr}: ${e.message}`)
-        this._schedulePendingLiveDrain(chatIdStr, 800)
-      }
-    }, delayMs)
-
-    this._pendingLiveDrainTimers.set(chatIdStr, timer)
-    return true
+    console.log(`[pendingLiveDrain] active op71 disabled chatId:${chatIdStr} pending:${this._pendingLiveList(chatIdStr).length}; guarded DOM recovery retained`)
+    return false
   }
 
   _finalizeOp71CatchUpState(chatId, delayMs = 350) {
@@ -1620,6 +1785,14 @@ class TransportInterceptor {
     const shortId32str = ((Number(chatIdStr) >>> 0)).toString()
     if (shortId32str !== chatIdStr) this._catchUpChatIds.delete(shortId32str)
     return { pendingLiveCount: 0, scheduledDrain: false, catchUpRetained: false }
+  }
+
+  registerPendingLiveTextIdForDomRecovery(chatId, pendingHex) {
+    return this._registerPendingLiveMessageId(chatId, pendingHex)
+  }
+
+  pendingLiveTextCountForDomRecovery(chatId, { maxAgeMs = 15_000 } = {}) {
+    return this._pendingLiveList(String(chatId || ''), maxAgeMs).length
   }
 
   peekPendingLiveTextIdForDomRecovery(chatId, { maxAgeMs = 15_000 } = {}) {
@@ -1662,27 +1835,7 @@ class TransportInterceptor {
     const last = this._lastDirectBackfillAt.get(chatIdStr) || 0
     if (now - last < 250) return
     this._lastDirectBackfillAt.set(chatIdStr, now)
-    console.log(`[op128direct→op71] scheduled chatId:${chatIdStr} anchor:${String(anchorHex).slice(0,16)} new:${String(newHex).slice(0,16)}`)
-    this._sendDirectBackfillOp71(chatIdStr, anchorHex, newHex, 0)
-  }
-
-  _sendDirectBackfillOp71(chatIdStr, anchorHex, newHex, attempt = 0) {
-    const delayMs = attempt === 0 ? 250 : Math.min(5000, 500 * attempt)
-    setTimeout(async () => {
-      try {
-        await this.waitForStableWs(300, 6000)
-        await this.sendBinaryOp71(chatIdStr, anchorHex)
-        console.log(`[op128direct->op71] sent chatId:${chatIdStr} anchor:${String(anchorHex).slice(0,16)} new:${String(newHex).slice(0,16)} attempt:${attempt + 1}`)
-      } catch (e) {
-        const message = e?.message || String(e)
-        if (attempt < 8 && /WS not ready|send failed|No page/i.test(message)) {
-          console.warn(`[op128direct->op71] retry chatId:${chatIdStr} anchor:${String(anchorHex).slice(0,16)} attempt:${attempt + 1}: ${message}`)
-          this._sendDirectBackfillOp71(chatIdStr, anchorHex, newHex, attempt + 1)
-          return
-        }
-        console.warn(`[op128direct->op71] failed chatId:${chatIdStr} anchor:${String(anchorHex).slice(0,16)} new:${String(newHex).slice(0,16)} ${message}`)
-      }
-    }, delayMs)
+    console.log(`[op128direct] gap detected chatId:${chatIdStr} anchor:${String(anchorHex).slice(0,16)} new:${String(newHex).slice(0,16)}; using guarded DOM recovery`)
   }
 
   _detectMaxType(attaches) {
@@ -1736,8 +1889,8 @@ class TransportInterceptor {
 
       let type = (a._type || 'file').toLowerCase()
       if (rawType === 'MUSIC') type = 'audio'
+      if (rawType === 'PHOTO' || photoId || (a.baseUrl && rawType !== 'VIDEO' && !videoId)) type = 'photo'
       if (rawType === 'VIDEO' || videoId || a.thumbnail || /\.mp4\b/i.test(name || '')) type = 'video'
-      if (rawType === 'PHOTO' || photoId || a.baseUrl) type = 'photo'
       if ((rawType === 'AUDIO' || rawType === 'VOICE') && type === 'file') type = rawType.toLowerCase()
       if (/\.ogg\b/i.test(name || '') && type === 'file') type = 'audio'
 
@@ -1782,7 +1935,11 @@ class TransportInterceptor {
     // Browser sends the real last message ID so server returns messages newer than that.
     // We store the raw ext8 data hex from op:48/op:53 and reconstruct it exactly here.
     const msgIdsKey  = Buffer.from([0xaa, 0x6d, 0x65, 0x73, 0x73, 0x61, 0x67, 0x65, 0x49, 0x64, 0x73])
-    const storedHex  = anchorHexOverride ? String(anchorHexOverride) : this._lastMsgRawHex.get(String(chatId))
+    const storedCandidate = anchorHexOverride ? String(anchorHexOverride) : this._lastMsgRawHex.get(String(chatId))
+    if (storedCandidate && !isUsableMaxMessageHex(storedCandidate)) {
+      throw new Error(`Refusing op:71 with invalid provider anchor: ${String(storedCandidate).slice(0, 16)}`)
+    }
+    const storedHex = storedCandidate
     let msgIdEncoded
     if (storedHex) {
       // Reconstruct ext8(type=1, data=rawBytes): c7 [len] 01 [rawBytes]
@@ -1848,6 +2005,18 @@ class TransportInterceptor {
     return Buffer.from([0xce, (n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff])
   }
 
+  _mpInt(value) {
+    const n = Number(value)
+    if (!Number.isSafeInteger(n) || n < -0x80000000 || n > 0xffffffff) {
+      throw new Error(`Invalid msgpack int: ${value}`)
+    }
+    if (n >= 0) return this._mpUInt(n)
+    if (n >= -32) return Buffer.from([0x100 + n])
+    if (n >= -128) return Buffer.from([0xd0, 0x100 + n])
+    if (n >= -32768) return Buffer.from([0xd1, (n >> 8) & 0xff, n & 0xff])
+    return Buffer.from([0xd2, (n >> 24) & 0xff, (n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff])
+  }
+
   _maxExtFromLower32(value) {
     const shortId = Number(value) >>> 0
     return Buffer.from([
@@ -1866,6 +2035,57 @@ class TransportInterceptor {
     const raw = Buffer.from(clean, 'hex')
     if (preferUnsigned && raw[0] === 0xd3) raw[0] = 0xcf
     return Buffer.concat([Buffer.from([0xc7, raw.length, 0x01]), raw])
+  }
+
+  _buildBinaryReplyFrame(chatId, text, replyToMessageId, cid) {
+    const replyId = String(replyToMessageId || '')
+    if (!isUsableMaxMessageHex(replyId)) {
+      throw new Error('Reply requires real MAX provider message id')
+    }
+
+    const linkMap = Buffer.concat([
+      Buffer.from([0x82]),
+      this._mpStr('type'), this._mpStr('REPLY'),
+      this._mpStr('messageId'), this._maxExtFromIdHex(replyId, true),
+    ])
+    const messageMap = Buffer.concat([
+      Buffer.from([0x85]),
+      this._mpStr('text'), this._mpStr(text),
+      this._mpStr('cid'), this._mpInt(cid),
+      this._mpStr('elements'), Buffer.from([0x90]),
+      this._mpStr('link'), linkMap,
+      this._mpStr('attaches'), Buffer.from([0x90]),
+    ])
+    const payloadMap = Buffer.concat([
+      Buffer.from([0x83]),
+      this._mpStr('chatId'), this._maxExtFromLower32(chatId),
+      this._mpStr('message'), messageMap,
+      this._mpStr('notify'), Buffer.from([0xc3]),
+    ])
+
+    const frameSeq = (++this._browserLastBinFrameSeq) & 0xffff
+    const header = Buffer.alloc(9)
+    header[0] = 0x0a
+    header[1] = 0x00
+    header[2] = (frameSeq >> 8) & 0xff
+    header[3] = frameSeq & 0xff
+    header[4] = 0x00
+    header[5] = OP.SEND_MESSAGE
+    header[6] = 0x01
+    header[7] = 0x00
+    header[8] = 0x00
+
+    // Browser frames carry the low payload-length byte before the msgpack map.
+    return Buffer.concat([header, Buffer.from([payloadMap.length & 0xff]), payloadMap])
+  }
+
+  async sendBinaryReply(chatId, text, replyToMessageId, cid) {
+    if (!this._page) throw new Error('No page')
+    const frame = this._buildBinaryReplyFrame(chatId, text, replyToMessageId, cid)
+    const result = await this._page.evaluate(b => window.__maxWsSendBinary(b), frame.toString('base64'))
+    if (!result || !result.ok) throw new Error(`Binary op:64 send failed: ${result?.error}`)
+    console.log(`[replybin] sent op:64 chatId:${chatId} replyTo:${String(replyToMessageId).slice(0,18)} fseq:${(frame[2] << 8) | frame[3]}`)
+    return true
   }
 
   async sendBinaryReaction(chatId, messageId, reactionId, remove = false, preferUnsignedMessageId = true) {
@@ -1955,30 +2175,6 @@ class TransportInterceptor {
   _fireWsReady() {
     const cbs = this._wsReadyCallbacks.splice(0)
     for (const cb of cbs) try { cb() } catch {}
-    // On every WS ready (including reconnects), retry catch-up op:71 for chats
-    // that haven't gotten a response yet. The first attempt (from op:48 setTimeout)
-    // often races with the browser's early reconnect (~3s into startup). The second
-    // connection is stable and the server actually responds.
-    if (this._catchUpChatIds?.size > 0) {
-      const snapshot = [...this._catchUpChatIds.keys()]
-      console.log(`[catchup] WS ready — scheduling retry for ${snapshot.length} chat(s) in 5s`)
-      setTimeout(() => {
-        for (const cid of snapshot) {
-          if (!this._catchUpChatIds.has(cid)) continue  // already resolved by op:71 response
-          const retries = this._catchUpChatIds.get(cid) || 0
-          if (retries >= 5) {
-            console.warn(`[catchup] gave up on chatId:${cid} after ${retries} retries`)
-            this._catchUpChatIds.delete(cid)
-            continue
-          }
-          this._catchUpChatIds.set(cid, retries + 1)
-          console.log(`[catchup] retry #${retries + 1} for chatId:${cid}`)
-          this.sendBinaryOp71(cid).catch(e => {
-            console.warn(`[catchup] retry #${retries + 1} failed chatId:${cid}: ${e.message}`)
-          })
-        }
-      }, 5000)
-    }
   }
 
   /**
@@ -2172,4 +2368,5 @@ module.exports = {
   OP,
   evaluatePhoneResolutionUiSend,
   isUiTextSubmitObserved,
+  selectPendingLiveDomCandidates,
 }

@@ -8,7 +8,10 @@ source = SRC.read_text(encoding='utf-8')
 def test_resolve_phone_persists_discovered_route():
     assert 'function normalizePhoneForCrmPayload(phone)' in source
     assert 'function cachedPhoneForChatId(...chatIds)' in source
-    assert 'savePhoneChatId(digits, dialogId)' in source
+    # The phone lookup can return either a plain chat id or the UI-send result
+    # object, so only a normalized string may ever reach the phone cache.
+    assert 'if (resolvedDialogChatId) savePhoneChatId(digits, resolvedDialogChatId)' in source
+    assert 'savePhoneChatId(digits, dialogId)' not in source
     assert 'savePhoneChatId(digits, chatIdStr)' in source
 
 

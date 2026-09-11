@@ -6,9 +6,11 @@ INDEX = (ROOT / 'index.js').read_text(encoding='utf-8')
 
 
 def test_missing_protocol_anchor_requests_dom_recovery():
-    assert 'const anchorHex = transport?._op71AnchorForLiveNotification?.(String(chatId)) || null' in INDEX
-    assert 'const hasPendingLive = (transport?._pendingLiveMessageIds?.get(String(chatId)) || []).length > 0' in INDEX
-    assert "scheduleAutomaticDomMirrorRecovery(String(chatId), 'missing_protocol_anchor')" in INDEX
+    # An op:128 notification followed by an empty op:71 is exactly the case where no
+    # protocol anchor is available, so recovery is requested unconditionally rather
+    # than re-deriving the anchor that is known to be absent.
+    assert "scheduleAutomaticDomMirrorRecovery(String(chatId), 'empty_op71_after_op128')" in INDEX
+    assert "const chatId = latestRecentOp128ChatId()" in INDEX
 
 
 def test_automatic_recovery_reads_only_fresh_dom_messages():

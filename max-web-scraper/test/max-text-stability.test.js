@@ -2,10 +2,12 @@
 
 const test = require('node:test')
 const assert = require('node:assert/strict')
+const fs = require('node:fs')
 
 const { MessageSync } = require('../sync/MessageSync')
 const {
   TransportInterceptor,
+  selectPendingLiveDomCandidates,
   evaluatePhoneResolutionUiSend,
   isUiTextSubmitObserved,
 } = require('../transport/TransportInterceptor')
@@ -16,91 +18,6 @@ function isolatedSync() {
   sync._save = () => {}
   return sync
 }
-
-test('phone UI compose observation recognizes only the exact submitted text clearing', () => {
-  assert.equal(isUiTextSubmitObserved('Bounded repair', '', 'Bounded repair'), true)
-  assert.equal(isUiTextSubmitObserved('', '', 'Bounded repair'), false)
-  assert.equal(isUiTextSubmitObserved('Other text', '', 'Bounded repair'), false)
-  assert.equal(isUiTextSubmitObserved('Bounded repair', 'Bounded repair', 'Bounded repair'), false)
-})
-
-test('phone UI compose clear without an operation-bound proof stays pending', () => {
-  assert.deepEqual(evaluatePhoneResolutionUiSend({
-    beforeText: 'Bounded repair',
-    afterText: '',
-    expectedText: 'Bounded repair',
-    postActionFrames: [],
-  }), {
-    chatId: null,
-    uiSendAttempted: true,
-    deliveryConfirmed: false,
-    confirmationSource: 'send_requested_no_authoritative_proof',
-    submitObserved: true,
-    observedFrameCount: 0,
-  })
-})
-
-test('phone UI delayed identical-text own echo stays pending', () => {
-  const delayedEcho = [
-    {
-      opcode: 128,
-      payload: {
-        chatId: '902000000888',
-        message: { sender: 'self-1', text: 'Bounded repair' },
-      },
-    },
-  ]
-
-  const result = evaluatePhoneResolutionUiSend({
-    beforeText: 'Bounded repair',
-    afterText: '',
-    expectedText: 'Bounded repair',
-    postActionFrames: delayedEcho,
-  })
-
-  assert.equal(result.deliveryConfirmed, false)
-  assert.equal(result.chatId, null)
-})
-
-test('phone UI own echo from the wrong chat stays pending', () => {
-  const wrongChatEcho = [
-    {
-      opcode: 128,
-      payload: {
-        chatId: '902000000999',
-        message: { sender: 'self-1', text: 'Bounded repair' },
-      },
-    },
-  ]
-
-  const result = evaluatePhoneResolutionUiSend({
-    beforeText: 'Bounded repair',
-    afterText: '',
-    expectedText: 'Bounded repair',
-    postActionFrames: wrongChatEcho,
-  })
-
-  assert.equal(result.deliveryConfirmed, false)
-  assert.equal(result.chatId, null)
-})
-
-test('phone UI unrelated and background frames stay pending', () => {
-  const backgroundFrames = [
-    { opcode: 198, payload: { commonChats: [{ id: '902000000001' }] } },
-    { opcode: 72, payload: { chatId: '902000000003' } },
-  ]
-
-  const result = evaluatePhoneResolutionUiSend({
-    beforeText: 'Bounded repair',
-    afterText: '',
-    expectedText: 'Bounded repair',
-    postActionFrames: backgroundFrames,
-  })
-
-  assert.equal(result.deliveryConfirmed, false)
-  assert.equal(result.chatId, null)
-  assert.equal(result.observedFrameCount, 2)
-})
 
 test('dedups MAX text replay only by provider message id', () => {
   const sync = isolatedSync()
@@ -249,7 +166,7 @@ test('op128 live marks keep a bounded recent event count per chat for DOM recove
   assert.equal(transport.recentOp128SeriesKeyForChat('902000000000', 15_000), null)
 })
 
-test('pending live queue drains after first confirmed op71 without clearing catch-up early', async () => {
+test('pending live queue stays available for DOM recovery without injecting another op71', async () => {
   const transport = new TransportInterceptor()
   transport._lastMsgRawHex.clear()
   transport._lastSeenMsgId.clear()
@@ -281,10 +198,10 @@ test('pending live queue drains after first confirmed op71 without clearing catc
   await new Promise(resolve => setTimeout(resolve, 20))
 
   assert.equal(state.pendingLiveCount, 2)
-  assert.equal(state.scheduledDrain, true)
+  assert.equal(state.scheduledDrain, false)
   assert.equal(transport._catchUpChatIds.has(chatId), true)
   assert.deepEqual((transport._pendingLiveMessageIds.get(chatId) || []).map(item => item.pendingHex), ids.slice(1))
-  assert.deepEqual(op71Calls, [{ cid: chatId, anchorHex: ids[0] }])
+  assert.deepEqual(op71Calls, [])
 })
 
 test('three identical inbound text events with different provider ids are forwarded separately', () => {
@@ -307,4 +224,390 @@ test('three identical inbound text events with different provider ids are forwar
 
   assert.equal(forwarded.length, 3)
   assert.deepEqual(forwarded.map(item => item.externalId), messages.map(msg => msg.id))
+})
+
+test('confirmed provider id replaces a malformed persisted anchor', () => {
+  const transport = new TransportInterceptor()
+  transport._lastMsgRawHex.clear()
+  transport._lastSeenMsgId.clear()
+  transport._persistLastMsgRawHex = () => {}
+
+  const chatId = '902454841098'
+  const malformedAnchor = 'd31c00786efba474'
+  const confirmedId = 'd3019f4aff6c135642'
+
+  transport._lastMsgRawHex.set(chatId, malformedAnchor)
+
+  assert.equal(transport._rememberConfirmedMessageAnchor(chatId, confirmedId), true)
+  assert.equal(transport._lastMsgRawHex.get(chatId), confirmedId)
+  assert.equal(transport._op71AnchorForLiveNotification(chatId), confirmedId)
+})
+
+test('malformed previous anchor cannot reject a pending live provider id', () => {
+  const transport = new TransportInterceptor()
+  transport._lastMsgRawHex.clear()
+  transport._pendingLiveMessageIds.clear()
+
+  const chatId = '902454841098'
+  const pendingId = 'd3019f4aff70000001'
+  transport._lastMsgRawHex.set(chatId, 'd31c00786efba474')
+
+  const registration = transport._registerPendingLiveMessageId(chatId, pendingId)
+
+  assert.equal(registration.registered, true)
+  assert.equal(registration.anchorHex, null)
+  assert.deepEqual(
+    (transport._pendingLiveMessageIds.get(chatId) || []).map(item => item.pendingHex),
+    [pendingId],
+  )
+})
+
+test('binary op71 refuses a malformed stored provider anchor without touching the socket', async () => {
+  const transport = new TransportInterceptor()
+  let socketCalls = 0
+  transport._page = {
+    evaluate: async () => {
+      socketCalls += 1
+      return { ok: true }
+    },
+  }
+  transport._lastMsgRawHex.clear()
+  transport._lastMsgRawHex.set('902454841098', 'd31c00786efba474')
+
+  await assert.rejects(
+    transport.sendBinaryOp71('902454841098'),
+    /Refusing op:71 with invalid provider anchor/,
+  )
+  assert.equal(socketCalls, 0)
+})
+
+test('live op128 and startup chat scan only retain validated provider anchors', () => {
+  const source = fs.readFileSync(require.resolve('../transport/TransportInterceptor'), 'utf8')
+
+  assert.match(source, /this\._rememberConfirmedMessageAnchor\(cidStr, hex, \{ markSeen: true \}\)/)
+  assert.match(source, /key\?\.__maxId && isUsableMaxMessageHex\(key\.hex\)/)
+  assert.match(source, /msgIdStr && isUsableMaxMessageHex\(storedHex\)/)
+  assert.doesNotMatch(source, /!stored \|\| hex\.slice\(2\) > stored\.slice\(2\)/)
+})
+
+test('live inbound recovery uses guarded DOM batches without injecting active op71', () => {
+  const transportSource = fs.readFileSync(require.resolve('../transport/TransportInterceptor'), 'utf8')
+  const scraperSource = fs.readFileSync(require.resolve('../index'), 'utf8')
+
+  const markStart = transportSource.indexOf('// op:128 cmd:1 (browser mark-as-received)')
+  const markEnd = transportSource.indexOf('const maxHex', markStart)
+  assert.notEqual(markStart, -1)
+  assert.notEqual(markEnd, -1)
+  const markBlock = transportSource.slice(markStart, markEnd)
+  assert.doesNotMatch(markBlock, /sendBinaryOp71/)
+
+  const op48Start = transportSource.indexOf('// Active op:71 injection is intentionally disabled')
+  const op48End = transportSource.indexOf('// op:71 —', op48Start)
+  assert.notEqual(op48Start, -1)
+  assert.notEqual(op48End, -1)
+  assert.doesNotMatch(transportSource.slice(op48Start, op48End), /sendBinaryOp71/)
+
+  const readyStart = transportSource.indexOf('\n  _fireWsReady() {')
+  const readyEnd = transportSource.indexOf('waitForWsReady(', readyStart)
+  assert.notEqual(readyStart, -1)
+  assert.notEqual(readyEnd, -1)
+  assert.doesNotMatch(transportSource.slice(readyStart, readyEnd), /sendBinaryOp71/)
+
+  const drainStart = transportSource.indexOf('\n  _schedulePendingLiveDrain(')
+  const drainEnd = transportSource.indexOf('\n  _finalizeOp71CatchUpState(', drainStart)
+  assert.notEqual(drainStart, -1)
+  assert.notEqual(drainEnd, -1)
+  assert.doesNotMatch(transportSource.slice(drainStart, drainEnd), /sendBinaryOp71/)
+
+  const backfillStart = transportSource.indexOf('\n  _scheduleDirectBackfill(')
+  const backfillEnd = transportSource.indexOf('_detectMaxType(', backfillStart)
+  assert.notEqual(backfillStart, -1)
+  assert.notEqual(backfillEnd, -1)
+  assert.doesNotMatch(transportSource.slice(backfillStart, backfillEnd), /_sendDirectBackfillOp71|sendBinaryOp71/)
+
+  const rawStart = scraperSource.indexOf('transport.onRawFrame(async data =>')
+  const incomingStart = scraperSource.indexOf('if (data.opcode === OP.INCOMING_MSG) {', rawStart)
+  const incomingEnd = scraperSource.indexOf('// Логируем остальные неизвестные push-опкоды', incomingStart)
+  assert.notEqual(rawStart, -1)
+  assert.notEqual(incomingStart, -1)
+  assert.notEqual(incomingEnd, -1)
+  const incomingBlock = scraperSource.slice(incomingStart, incomingEnd)
+  assert.match(incomingBlock, /scheduleAutomaticDomMirrorRecovery\(String\(chatId\), 'empty_op71_after_op128'\)/)
+  assert.doesNotMatch(incomingBlock, /const anchorHex|hasPendingLive/)
+})
+
+test('DOM recovery calculates ordering while real direct anchors are still present', () => {
+  const source = fs.readFileSync(require.resolve('../index'), 'utf8')
+  const estimateStart = source.indexOf('function estimateDomRecoveryTimestampMs(')
+  const estimateEnd = source.indexOf('\nfunction stableDomMessageId(', estimateStart)
+  const liveRecoveryStart = source.indexOf("if (reason === 'empty_op71_after_op128') {")
+  const anchorFilter = source.indexOf('const beforeAnchorFilter', liveRecoveryStart)
+  const timestampAssignment = source.indexOf('_recoveryTimestamp = new Date(', liveRecoveryStart)
+
+  assert.notEqual(estimateStart, -1)
+  assert.notEqual(estimateEnd, -1)
+  assert.notEqual(liveRecoveryStart, -1)
+  assert.notEqual(anchorFilter, -1)
+  assert.notEqual(timestampAssignment, -1)
+  assert.doesNotMatch(source.slice(estimateStart, estimateEnd), /findRecentDirectInboundText/)
+  assert.ok(timestampAssignment < anchorFilter, 'timestamps must be assigned before direct anchors are filtered out')
+})
+
+test('provider-backed live DOM recovery survives a media-to-text transition', () => {
+  const transport = new TransportInterceptor()
+  const chatId = '902454841098'
+  const previousMediaId = 'd3010000000000000010'
+  const liveTextId = 'd3010000000000000011'
+
+  transport._lastMsgRawHex.clear()
+  transport._pendingLiveMessageIds.clear()
+  transport._lastMsgRawHex.set(chatId, previousMediaId)
+
+  const registration = transport.registerPendingLiveTextIdForDomRecovery(chatId, liveTextId)
+  assert.equal(registration.registered, true)
+  assert.equal(transport.pendingLiveTextCountForDomRecovery(chatId), 1)
+  assert.equal(transport.peekPendingLiveTextIdForDomRecovery(chatId), liveTextId)
+
+  const selected = selectPendingLiveDomCandidates([
+    { text: 'old history', attachments: [], isOutgoing: false, displayMinute: 840 },
+    { text: '????????????????', attachments: [], isOutgoing: false, displayMinute: 845 },
+    { text: 'own message', attachments: [], isOutgoing: true, displayMinute: 845 },
+  ], 1)
+
+  assert.deepEqual(selected.map(candidate => candidate.text), ['????????????????'])
+
+  transport.confirmPendingLiveTextIdForDomRecovery(chatId, liveTextId)
+  assert.equal(transport.pendingLiveTextCountForDomRecovery(chatId), 0)
+})
+
+test('anchorless live DOM text is gated by a correlated provider identity', () => {
+  const source = fs.readFileSync(require.resolve('../index'), 'utf8')
+  const liveRecoveryStart = source.indexOf("if (reason === 'empty_op71_after_op128') {")
+  const liveRecoveryEnd = source.indexOf('const results = []', liveRecoveryStart)
+  const liveRecoveryBlock = source.slice(liveRecoveryStart, liveRecoveryEnd)
+
+  assert.notEqual(liveRecoveryStart, -1)
+  assert.notEqual(liveRecoveryEnd, -1)
+  assert.match(source, /registerPendingLiveTextIdForDomRecovery/)
+  assert.match(liveRecoveryBlock, /pendingLiveTextCountForDomRecovery/)
+  assert.match(liveRecoveryBlock, /selectPendingLiveDomCandidates/)
+  assert.match(liveRecoveryBlock, /no_recent_direct_time_anchor/)
+})
+
+
+test('provider-backed DOM reply recovery forwards only reply body text', () => {
+  const source = fs.readFileSync(require.resolve('../index'), 'utf8')
+  const helperStart = source.indexOf('function domReplyQuoteParts(')
+  const helperEnd = source.indexOf('function decodeBase64Payload(', helperStart)
+  const forwardStart = source.indexOf('async function forwardDomCandidate(')
+  const forwardEnd = source.indexOf('async function forwardRecentDomMessages(', forwardStart)
+
+  assert.notEqual(helperStart, -1)
+  assert.notEqual(helperEnd, -1)
+  assert.notEqual(forwardStart, -1)
+  assert.notEqual(forwardEnd, -1)
+
+  const helperBlock = source.slice(helperStart, helperEnd)
+  assert.match(helperBlock, /quotedText: lines\.slice\(1, -1\)\.join\('\\n'\)\.trim\(\)/)
+  assert.match(helperBlock, /recentDirectInboundTextHits\(chatId, parts\.quotedText\)/)
+
+  const forwardBlock = source.slice(forwardStart, forwardEnd)
+  const pendingIndex = forwardBlock.indexOf('const pendingProviderId =')
+  const quoteIndex = forwardBlock.indexOf("looksLikeDomReplyQuoteText(chatId, latest)")
+  const leafIndex = forwardBlock.indexOf('latest = { ...latest, text: leafText')
+  const externalIndex = forwardBlock.indexOf('const externalId = isOutgoingCandidate')
+
+  assert.ok(pendingIndex > -1 && quoteIndex > -1 && leafIndex > -1 && externalIndex > -1)
+  assert.ok(pendingIndex < quoteIndex, 'provider id must be checked before quote handling')
+  assert.ok(quoteIndex < leafIndex, 'quote branch must normalize to leaf text')
+  assert.ok(leafIndex < externalIndex, 'normalized text must be used for webhook payload')
+})
+
+
+test('single live DOM text after unsafe op128 can recover without direct anchor', () => {
+  const source = fs.readFileSync(require.resolve('../index'), 'utf8')
+  const liveRecoveryStart = source.indexOf("if (reason === 'empty_op71_after_op128') {")
+  const liveRecoveryEnd = source.indexOf('const results = []', liveRecoveryStart)
+  const liveRecoveryBlock = source.slice(liveRecoveryStart, liveRecoveryEnd)
+
+  assert.notEqual(liveRecoveryStart, -1)
+  assert.notEqual(liveRecoveryEnd, -1)
+  assert.match(liveRecoveryBlock, /liveWindowDetails\.recentOp128Count > 0/)
+  assert.match(liveRecoveryBlock, /selectPendingLiveDomCandidates\(\s*recoverable,\s*Math\.min\(recoverable\.length, liveWindowDetails\.recentOp128Count\)/s)
+  assert.match(liveRecoveryBlock, /candidate\._liveDomSeriesCandidate = true/)
+  assert.match(source, /source: isOutgoingCandidate \? 'max_web_mirror' : \(resolvedProviderId \? 'live_dom_recovery' : 'dom_fallback'\)/)
+})
+
+
+test('live DOM recovery timestamps provider-backed/no-anchor text at recovery time', () => {
+  const source = fs.readFileSync(require.resolve('../index'), 'utf8')
+  const liveRecoveryStart = source.indexOf("if (reason === 'empty_op71_after_op128') {")
+  const liveRecoveryEnd = source.indexOf('const beforeAnchorFilter', liveRecoveryStart)
+  const liveRecoveryBlock = source.slice(liveRecoveryStart, liveRecoveryEnd)
+
+  assert.notEqual(liveRecoveryStart, -1)
+  assert.notEqual(liveRecoveryEnd, -1)
+  assert.match(liveRecoveryBlock, /candidate\._liveDomNoAnchorCandidate = true/)
+  assert.match(liveRecoveryBlock, /const liveRecoveryNowMs = Date\.now\(\)/)
+  assert.match(liveRecoveryBlock, /const useLiveRecoveryTime = recoverable\[i\]\._pendingLiveProviderCandidate \|\| recoverable\[i\]\._liveDomNoAnchorCandidate/)
+  assert.match(liveRecoveryBlock, /useLiveRecoveryTime\s*\? liveRecoveryNowMs - liveOffsetMs\s*:\s*estimateDomRecoveryTimestampMs\(recoverable, i\)/s)
+})
+
+test('media UI send blocks live DOM recovery until upload/send finishes', () => {
+  const source = fs.readFileSync(require.resolve('../index'), 'utf8')
+  const mediaStart = source.indexOf('async function sendMediaViaUi(')
+  const mediaEnd = source.indexOf('\nconst domFallbackSeen', mediaStart)
+  const mediaBlock = source.slice(mediaStart, mediaEnd)
+  const mirrorStart = source.indexOf('function scheduleAutomaticDomMirrorRecovery(')
+  const mirrorEnd = source.indexOf('\nfunction cleanDomMessageText', mirrorStart)
+  const mirrorBlock = source.slice(mirrorStart, mirrorEnd)
+
+  assert.notEqual(mediaStart, -1)
+  assert.notEqual(mediaEnd, -1)
+  assert.match(mediaBlock, /uiSendInProgress = true/)
+  assert.match(mediaBlock, /finally \{[\s\S]*uiSendInProgress = false[\s\S]*fs\.unlinkSync\(tmpPath\)/)
+  assert.match(mirrorBlock, /if \(uiSendInProgress \|\| domFallbackRunning\) \{[\s\S]*scheduleAutomaticDomMirrorRecovery\(chatIdStr, reason, attempt \+ 1\)/)
+})
+
+test('op180 provider id with loose media is not queued as live text recovery', () => {
+  const source = fs.readFileSync(require.resolve('../index'), 'utf8')
+  const op180Start = source.indexOf('if (data.opcode === 180 && data.payload?.messagesReactions)')
+  const op180End = source.indexOf('const byMessage = extractReactionCountersFromMap', op180Start)
+  const op180Block = source.slice(op180Start, op180End)
+
+  assert.notEqual(op180Start, -1)
+  assert.notEqual(op180End, -1)
+  assert.match(op180Block, /hasRecentLooseMediaForDomRecovery/)
+  assert.match(op180Block, /emitPendingLooseMediaMessage/)
+  assert.ok(op180Block.indexOf('emitPendingLooseMediaMessage') < op180Block.indexOf('registerPendingLiveTextIdForDomRecovery'))
+})
+
+test('loose media provider id emits media message with real provider identity', () => {
+  const transport = new TransportInterceptor()
+  const chatId = '902454841098'
+  const providerId = 'd30100000000000000aa'
+  const emitted = []
+  transport.onMessage(msg => emitted.push(msg))
+
+  transport._pushLooseMedia([{ '476': 'videoId', videoId: '15000000000001', previewData: Buffer.from('preview') }])
+  const result = transport.emitPendingLooseMediaMessage(chatId, providerId)
+
+  assert.equal(result.emitted, true)
+  assert.equal(emitted.length, 1)
+  assert.equal(emitted[0].id, providerId)
+  assert.equal(emitted[0].chatId, chatId)
+  assert.equal(emitted[0].type, 'video')
+  assert.equal(emitted[0].attachments.length, 1)
+  assert.equal(emitted[0].attachments[0].type, 'video')
+  assert.equal(transport.pendingLiveTextCountForDomRecovery(chatId), 0)
+})
+
+test('loose video keeps the direct MP4 source from the live MAX payload', () => {
+  const transport = new TransportInterceptor()
+  const chatId = '902454841098'
+  const providerId = 'd30100000000000000ab'
+  const videoUrl = 'https://maxvd.example.test/video.mp4?expires=9999999999&sig=test'
+  const emitted = []
+  transport.onMessage(msg => emitted.push(msg))
+
+  transport._pushLooseMedia([{
+    '476': 'videoId',
+    videoId: '17000000000001',
+    token: 'video-token',
+    previewData: Buffer.from('preview'),
+    MP4_1080: videoUrl,
+  }])
+  const result = transport.emitPendingLooseMediaMessage(chatId, providerId)
+
+  assert.equal(result.emitted, true)
+  assert.equal(emitted.length, 1)
+  assert.equal(emitted[0].attachments.length, 1)
+  assert.equal(emitted[0].attachments[0].type, 'video')
+  assert.equal(emitted[0].attachments[0].url, videoUrl)
+  assert.equal(emitted[0].attachments[0].videoId, '17000000000001')
+})
+
+test('phone UI compose observation recognizes only the exact submitted text clearing', () => {
+  assert.equal(isUiTextSubmitObserved('Bounded repair', '', 'Bounded repair'), true)
+  assert.equal(isUiTextSubmitObserved('', '', 'Bounded repair'), false)
+  assert.equal(isUiTextSubmitObserved('Other text', '', 'Bounded repair'), false)
+  assert.equal(isUiTextSubmitObserved('Bounded repair', 'Bounded repair', 'Bounded repair'), false)
+})
+
+test('phone UI compose clear without an operation-bound proof stays pending', () => {
+  assert.deepEqual(evaluatePhoneResolutionUiSend({
+    beforeText: 'Bounded repair',
+    afterText: '',
+    expectedText: 'Bounded repair',
+    postActionFrames: [],
+  }), {
+    chatId: null,
+    uiSendAttempted: true,
+    deliveryConfirmed: false,
+    confirmationSource: 'send_requested_no_authoritative_proof',
+    submitObserved: true,
+    observedFrameCount: 0,
+  })
+})
+
+test('phone UI delayed identical-text own echo stays pending', () => {
+  const delayedEcho = [
+    {
+      opcode: 128,
+      payload: {
+        chatId: '902000000888',
+        message: { sender: 'self-1', text: 'Bounded repair' },
+      },
+    },
+  ]
+
+  const result = evaluatePhoneResolutionUiSend({
+    beforeText: 'Bounded repair',
+    afterText: '',
+    expectedText: 'Bounded repair',
+    postActionFrames: delayedEcho,
+  })
+
+  assert.equal(result.deliveryConfirmed, false)
+  assert.equal(result.chatId, null)
+})
+
+test('phone UI own echo from the wrong chat stays pending', () => {
+  const wrongChatEcho = [
+    {
+      opcode: 128,
+      payload: {
+        chatId: '902000000999',
+        message: { sender: 'self-1', text: 'Bounded repair' },
+      },
+    },
+  ]
+
+  const result = evaluatePhoneResolutionUiSend({
+    beforeText: 'Bounded repair',
+    afterText: '',
+    expectedText: 'Bounded repair',
+    postActionFrames: wrongChatEcho,
+  })
+
+  assert.equal(result.deliveryConfirmed, false)
+  assert.equal(result.chatId, null)
+})
+
+test('phone UI unrelated and background frames stay pending', () => {
+  const backgroundFrames = [
+    { opcode: 198, payload: { commonChats: [{ id: '902000000001' }] } },
+    { opcode: 72, payload: { chatId: '902000000003' } },
+  ]
+
+  const result = evaluatePhoneResolutionUiSend({
+    beforeText: 'Bounded repair',
+    afterText: '',
+    expectedText: 'Bounded repair',
+    postActionFrames: backgroundFrames,
+  })
+
+  assert.equal(result.deliveryConfirmed, false)
+  assert.equal(result.chatId, null)
+  assert.equal(result.observedFrameCount, 2)
 })
