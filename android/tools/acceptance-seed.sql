@@ -19,10 +19,14 @@ VALUES
     ('acc_chat_max_0003', 'max', 'max:acceptance-0003', 'Тест · MAX', 'new', NOW(), NOW(), 'private', NOW())
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO "Message" (id, "chatId", direction, content, "createdAt", status)
+-- updatedAt has no default in the migrated schema, and channel must match the
+-- conversation or the channel tabs disagree with the chat they belong to.
+INSERT INTO "Message" (
+    id, "chatId", direction, channel, content, status, "createdAt", "updatedAt"
+)
 VALUES
-    ('acc_msg_0001', 'acc_chat_tg_0001', 'inbound', 'Здравствуйте, это тестовый диалог Telegram.', NOW(), 'delivered'),
-    ('acc_msg_0002', 'acc_chat_tg_0001', 'outbound', 'Это тестовый ответ оператора.', NOW(), 'delivered'),
-    ('acc_msg_0003', 'acc_chat_wa_0002', 'inbound', 'Тестовое сообщение WhatsApp.', NOW(), 'delivered'),
-    ('acc_msg_0004', 'acc_chat_max_0003', 'inbound', 'Тестовое сообщение MAX.', NOW(), 'delivered')
+    ('acc_msg_0001', 'acc_chat_tg_0001', 'inbound', 'telegram', 'Здравствуйте, это тестовый диалог Telegram.', 'delivered', NOW(), NOW()),
+    ('acc_msg_0002', 'acc_chat_tg_0001', 'outbound', 'telegram', 'Это тестовый ответ оператора.', 'delivered', NOW(), NOW()),
+    ('acc_msg_0003', 'acc_chat_wa_0002', 'inbound', 'whatsapp', 'Тестовое сообщение WhatsApp.', 'delivered', NOW(), NOW()),
+    ('acc_msg_0004', 'acc_chat_max_0003', 'inbound', 'max', 'Тестовое сообщение MAX.', 'delivered', NOW(), NOW())
 ON CONFLICT (id) DO NOTHING;
