@@ -1,12 +1,18 @@
 #!/usr/bin/env node
+import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 
 const path = process.argv[2] ?? 'architecture/recovery/whole-project-dod/v2/AMBIGUOUS_WRITE_TRIAGE_RECONCILED_20260811.json'
 const document = JSON.parse(await readFile(path, 'utf8'))
 const records = document.records ?? []
 const ids = records.map(record => record.record_id)
+const signatures = records.map(record => record.site_signature)
 if (records.length !== new Set(ids).size) throw new Error('triage reconciliation has duplicate record IDs')
-if (records.length !== 41) throw new Error('fresh source-freeze ambiguity denominator drift')
+if (records.length !== 44) throw new Error('current exact ambiguity denominator drift')
+if (records.length !== new Set(signatures).size || records.some((record) => record.record_id !== record.site_signature)) throw new Error('triage reconciliation signature identity drift')
+const signatureDigest = createHash('sha256').update(`${[...signatures].sort().join('\n')}\n`).digest('hex')
+if (signatureDigest !== '4e5477bf4ed4c9a375624ba2d98549db255be276e61130ee2f6260191040b3b6') throw new Error('current exact ambiguity signature digest drift')
+if (document.current_exact_review?.ambiguous_denominator !== records.length || document.current_exact_review?.sorted_site_signatures_sha256 !== signatureDigest) throw new Error('current exact ambiguity review binding drift')
 if (document.summary.RAW_BASELINE_AMBIGUOUS !== records.length) throw new Error('raw ambiguous count drift')
 const states = new Set(['RESOLVED_NON_WRITE', 'OWNER_VALID_WRITE', 'CONTROLLED_MIGRATION_WRITE', 'MATERIAL_UNRESOLVED_WRITE_RISK'])
 if (records.some(record => !states.has(record.semantic_state))) throw new Error('record missing semantic state')
@@ -16,12 +22,15 @@ if (document.summary.RECONCILIATION_TOTAL !== records.length || document.summary
 if (document.summary.RESOLVED_NON_WRITE !== counts.RESOLVED_NON_WRITE) throw new Error('resolved non-write count drift')
 if (document.summary.MATERIAL_UNRESOLVED_WRITE_RISK !== counts.MATERIAL_UNRESOLVED_WRITE_RISK) throw new Error('material ambiguity count drift')
 if (counts.RESOLVED_NON_WRITE < 27) throw new Error('static SELECT reclassification regression')
-if (counts.RESOLVED_NON_WRITE !== 34 || counts.OWNER_VALID_WRITE !== 3 || counts.CONTROLLED_MIGRATION_WRITE !== 4 || counts.MATERIAL_UNRESOLVED_WRITE_RISK !== 0) {
-  throw new Error('fresh source-freeze ambiguity disposition count drift')
+if (counts.RESOLVED_NON_WRITE !== 37 || counts.OWNER_VALID_WRITE !== 3 || counts.CONTROLLED_MIGRATION_WRITE !== 4 || counts.MATERIAL_UNRESOLVED_WRITE_RISK !== 0) {
+  throw new Error('current exact ambiguity disposition count drift')
 }
 for (const id of [
   '42c9a964786f29fa8e6708acab43325249eba279ca89559fe07c03e7809bc9af',
   '2bd8011eca9a0188606fa41066e222d13e39e9fbdd930e6d6320422bb6842415',
+  'ba082d04940220ce32fe01b08b2f1ba3228bb7cddf3a009077edd1f2268491d5',
+  '0e6dc117f9fa9bcc96add3f1e71c964eb0dace3b89122ba373acf6891626a8d2',
+  '0efd57ebede126929875fd34e1b7f587b5d6a2404e58679067cf5fcc67fafa90',
 ]) {
   if (records.find(record => record.record_id === id)?.semantic_state !== 'RESOLVED_NON_WRITE') throw new Error(`read-only SQL regression for ${id}`)
 }

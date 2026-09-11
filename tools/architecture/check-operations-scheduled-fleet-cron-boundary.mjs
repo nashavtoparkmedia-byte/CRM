@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
 import { scanArchitecture } from './enforce-architecture.mjs'
@@ -23,12 +23,115 @@ const operations = read(operationsPath)
 const scraperCapability = read(scraperCapabilityPath)
 const syncCapability = read(syncCapabilityPath)
 
-assert.match(scraperRoute, /process\.env\.CRON_SECRET/)
-assert.match(scraperRoute, /authHeader !== `Bearer \$\{process\.env\.CRON_SECRET\}`/)
+// Classify the CRON_SECRET bearer gate a cron route carries. The contract needs
+// four outcomes, not a boolean, because each is a distinct way for the gate to be
+// worthless:
+//   'fail-closed' - an unset CRON_SECRET denies every caller (the required state)
+//   'fail-open'   - an unset CRON_SECRET disables the check entirely
+//   'after-call'  - the gate exists but the protected capability already ran
+//   'absent'      - the route carries no bearer gate at all
+// 'unknown' is reserved for a 401 that never compares the bearer token, so an
+// unrecognised shape can never be mistaken for a passing one.
+const classifyCronRouteGate = (source, capability) => {
+    const guard = source.match(
+        /if \(([\s\S]*?)\) \{\s*return NextResponse\.json\(\{ error: 'Unauthorized' \}, \{ status: 401 \}\)\s*\}/,
+    )
+    if (!guard || !/process\.env\.CRON_SECRET/.test(source)) return 'absent'
+    const condition = guard[1]
+    const alias = source.match(/const (\w+) = process\.env\.CRON_SECRET\b/)
+    const secret = alias ? `(?:${alias[1]}|process\\.env\\.CRON_SECRET)` : 'process\\.env\\.CRON_SECRET'
+    if (!new RegExp(`authHeader !== \`Bearer \\$\\{${secret}\\}\``).test(condition)) return 'unknown'
+    const callIndex = source.indexOf(capability)
+    if (callIndex !== -1 && callIndex < source.indexOf('status: 401')) return 'after-call'
+    if (new RegExp(`^\\s*!\\s*${secret}\\s*\\|\\|`).test(condition)) return 'fail-closed'
+    if (new RegExp(`^\\s*${secret}\\s*&&`).test(condition)) return 'fail-open'
+    return 'unknown'
+}
+
+// Synthetic probes. The classifier is exercised against one source per outcome so a
+// future regression cannot pass by collapsing every branch to a single verdict.
+const PROBE_CAPABILITY = 'runProbeCapabilityV1()'
+const gateProbe = (condition, { afterCall = false } = {}) => [
+    "import { NextResponse } from 'next/server'",
+    'export const dynamic = \'force-dynamic\'',
+    'export async function GET(request: Request) {',
+    ...(afterCall ? [`    const result = await ${PROBE_CAPABILITY}`] : []),
+    '    const cronSecret = process.env.CRON_SECRET',
+    "    const authHeader = request.headers.get('authorization')",
+    `    if (${condition}) {`,
+    "        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })",
+    '    }',
+    `    return ${afterCall ? 'result' : PROBE_CAPABILITY}`,
+    '}',
+].join('\n')
+
+const FAIL_CLOSED_CONDITION = '!cronSecret || authHeader !== `Bearer ${cronSecret}`'
+const FAIL_OPEN_CONDITION = 'process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`'
+const probes = {
+    'fail-closed': gateProbe(FAIL_CLOSED_CONDITION),
+    'fail-open': gateProbe(FAIL_OPEN_CONDITION),
+    'after-call': gateProbe(FAIL_CLOSED_CONDITION, { afterCall: true }),
+    absent: `export async function GET() { return ${PROBE_CAPABILITY} }`,
+    unknown: gateProbe('authHeader === null'),
+}
+const probeVerdicts = Object.fromEntries(
+    Object.keys(probes).map((expected) => [expected, classifyCronRouteGate(probes[expected], PROBE_CAPABILITY)]),
+)
+// Each probe must land on its own outcome...
+for (const [expected, actual] of Object.entries(probeVerdicts)) assert.equal(actual, expected)
+// ...and the five verdicts must be five distinct values, which is what makes the
+// negative probes non-vacuous: a classifier that answered the same thing for every
+// input would satisfy neither this nor the per-probe equality above.
+assert.equal(new Set(Object.values(probeVerdicts)).size, Object.keys(probes).length)
+assert.deepEqual(
+    Object.values(probeVerdicts).slice().sort(),
+    ['absent', 'after-call', 'fail-closed', 'fail-open', 'unknown'],
+)
+// The two shipped shapes are also proved separable from each other, so 'fail-closed'
+// cannot be reached by a route that merely mentions the variable.
+assert.notEqual(probeVerdicts['fail-closed'], probeVerdicts['fail-open'])
+
+const SCRAPER_CAPABILITY = 'runScheduledScraperDispatchCronV1()'
+const SYNC_CAPABILITY = 'runScheduledYandexSyncCronV1()'
+const scraperGate = classifyCronRouteGate(scraperRoute, SCRAPER_CAPABILITY)
+const syncGate = classifyCronRouteGate(syncRoute, SYNC_CAPABILITY)
+
+// Owner decision, 2026-09-11: every cron route that carries a CRON_SECRET gate must
+// fail closed. An unauthenticated /api/cron/sync-trips call loads the clid and apiKey
+// of all six ApiConnection rows and transmits them to fleet-api.taxi.yandex.net; the
+// scraper route reaches the same credential table. An unset CRON_SECRET must therefore
+// deny every caller rather than disable the check.
+for (const [route, source, capability, gate] of [
+    ['sync-scraper', scraperRoute, SCRAPER_CAPABILITY, scraperGate],
+    ['sync-trips', syncRoute, SYNC_CAPABILITY, syncGate],
+]) {
+    assert.match(source, /export async function GET\(request: Request\)/, route)
+    assert.match(source, /request\.headers\.get\('authorization'\)/, route)
+    assert.match(source, /const cronSecret = process\.env\.CRON_SECRET/, route)
+    assert.match(source, /!cronSecret \|\| authHeader !== `Bearer \$\{cronSecret\}`/, route)
+    assert.match(source, /return NextResponse\.json\(\{ error: 'Unauthorized' \}, \{ status: 401 \}\)/, route)
+    // Authorization must precede the protected capability; a gate that runs after it
+    // has already leaked the work it was meant to guard.
+    assert(source.indexOf('status: 401') < source.indexOf(capability), route)
+    assert.equal(gate, 'fail-closed', route)
+}
+
 assert.match(scraperRoute, /runScheduledScraperDispatchCronV1\(\)/)
 assert.doesNotMatch(scraperRoute, /@\/lib\/(?:cron-health|prisma)|\bfetch\s*\(/)
 assert.match(syncRoute, /runScheduledYandexSyncCronV1\(\)/)
 assert.doesNotMatch(syncRoute, /@\/lib\/(?:cron-health|yandexSync)|\bprisma\.|\bfetch\s*\(/)
+
+// The seven remaining /api/cron routes are knowingly ungated and are tracked as a
+// separate security finding, outside this slice. Pinning the count keeps that scope
+// honest: a new cron route cannot be added here without revisiting the decision.
+const cronRouteDirectory = 'gravity-mvp/src/app/api/cron'
+const cronRoutes = readdirSync(path.join(root, cronRouteDirectory), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => `${cronRouteDirectory}/${entry.name}/route.ts`)
+    .sort()
+const gatedCronRoutes = cronRoutes.filter((route) => /process\.env\.CRON_SECRET/.test(read(route)))
+assert.deepEqual(gatedCronRoutes, [scraperRoutePath, syncRoutePath].sort())
+assert.equal(cronRoutes.length - gatedCronRoutes.length, 7)
 
 assert.match(operations, /@\/modules\/fleet-operations\/public\/v1/)
 assert.match(operations, /@\/lib\/cron-health/)
@@ -81,6 +184,11 @@ assert.deepEqual(scan.findings.filter((finding) => finding.rule === 'direct_prov
 process.stdout.write(`${JSON.stringify({
     status: 'PASS',
     routes: 2,
+    scraper_cron_secret_gate: scraperGate,
+    sync_cron_secret_gate: syncGate,
+    gate_classification_probes: probeVerdicts,
+    ungated_cron_routes_tracked_separately: cronRoutes.length - gatedCronRoutes.length,
+    negative_gate_classification_probe: 'REJECTED',
     operations_capabilities: 2,
     fleet_capabilities: 2,
     negative_unrelated_cron_capability_probe: 'REJECTED',
