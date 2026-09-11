@@ -108,8 +108,8 @@
     }
   ],
   "source": {
-    "tracked_executable_surfaces": 2455,
-    "tracked_inventory_sha256": "0643d44833e5374b1991876adc61fb8037187f9bad52ce3bb0c3fbe321e16e00"
+    "tracked_executable_surfaces": 2463,
+    "tracked_inventory_sha256": "7061d69788d5d1708fcf60c037880f3a6f437963f69f14dc3ac21eff024666ec"
   },
   "governed_exclusions": [
     {
@@ -281,22 +281,22 @@
       "review_artifact": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json"
     }
   ],
-  "coverage_sha256": "7b8518709a437c303a7d5b10731b44788bcb01b0284a2791ba850fb5749a40fb",
+  "coverage_sha256": "1ff3c29ab823a044e8675e35352e5e5f2551670abf6ae1e0bcb66507cf6146ed",
   "summary": {
-    "tracked_executable_surfaces": 2455,
-    "context_owned_paths": 1252,
-    "governed_exclusion_paths": 1203
+    "tracked_executable_surfaces": 2463,
+    "context_owned_paths": 1259,
+    "governed_exclusion_paths": 1204
   },
   "reviewed_exact_inventory_materialization": {
     "decision_registry_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_20260813.json",
-    "decision_registry_sha256": "8e400e631b4cb207ecf3620d5543cd7f3b06342c50fef2cab1699dc9c9fce84e",
+    "decision_registry_sha256": "93d5f92162db66a6327954dc31dbde92761ff13417d88bb60d80ef80754f3529",
     "baseline_coverage_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_COVERAGE_BASELINE_2108.json",
     "baseline_coverage_sha256": "bd7df022d08734ec500336907c4c1dadc6c6ac3c7f3df23c1df0d307a4cdfb29",
-    "tracked_inventory_sha256": "0643d44833e5374b1991876adc61fb8037187f9bad52ce3bb0c3fbe321e16e00",
+    "tracked_inventory_sha256": "7061d69788d5d1708fcf60c037880f3a6f437963f69f14dc3ac21eff024666ec",
     "exact_inventory_change_count": 4,
     "reviewed_assignment_count": 294,
     "amendments_path": "architecture/recovery/whole-project-dod/v2/EXECUTABLE_PATH_OWNERSHIP_REVIEW_AMENDMENTS.json",
-    "amendments_sha256": "8ec0734f5ec6da6d25f3113050eb9d5bbaff372e7dab7a3f83066c6f20ab7b25",
+    "amendments_sha256": "15e0f3863f03c7230fef52524492800bf3a7e389dafbb21e5bd15e98a07b995c",
     "amendment_count": 1
   }
 }
