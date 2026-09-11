@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getCurrentUserIdentityV1 as getCurrentUser } from '@/modules/identity-access/public/v1/user-directory'
+import { hasMobileSessionV1 } from '@/modules/identity-access/public/v1/mobile-session-auth'
 import { getSipExtensionForUser } from '@/lib/sip/extensions'
 
 /**
@@ -14,6 +15,17 @@ import { getSipExtensionForUser } from '@/lib/sip/extensions'
  * in the FreeSWITCH .env.
  */
 export async function GET() {
+    // The Android shell renders the same pages as the browser, and the root
+    // layout mounts the softphone on every one of them. Handing it credentials
+    // would register a second SIP endpoint for the same extension, so an
+    // incoming call would ring — or worse, be answered — on whichever client
+    // FreeSWITCH picked. Telephony is a later stage; until it is designed, the
+    // mobile lane is told the softphone is off rather than being left to fail
+    // in a way that looks like a working background phone.
+    if (await hasMobileSessionV1()) {
+        return NextResponse.json({ enabled: false, reason: 'mobile_shell_stage_1' })
+    }
+
     const user = await getCurrentUser()
     if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
