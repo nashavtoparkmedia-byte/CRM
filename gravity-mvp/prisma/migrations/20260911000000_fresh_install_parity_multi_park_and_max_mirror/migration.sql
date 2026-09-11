@@ -77,6 +77,11 @@ DECLARE
     present_tables integer;
     present_columns integer;
 BEGIN
+    -- SELECT ... INTO, not assignment: the repository write analyzer reads an assignment
+    -- from a sub-select as a dynamic DO block and marks every site in the file ambiguous.
+    -- This form keeps every site exactly classified. The guard still writes nothing; INTO
+    -- here assigns a PL/pgSQL variable. Note for future editors: no apostrophes in
+    -- comments inside this block, they open a string literal to several SQL readers.
     SELECT count(*) INTO present_tables
     FROM pg_class c
     JOIN pg_namespace n ON n.oid = c.relnamespace

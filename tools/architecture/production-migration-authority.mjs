@@ -71,12 +71,21 @@ export function scanSql(sql) {
   const commentFree = []
   const topLevel = []
   const routineBody = []
+  const opener = /\$[A-Za-z_]*\$/yu
+  const literal = /'(?:[^']|'')*'/yu
   let index = 0
   let dollarTag = null
   while (index < sql.length) {
-    const rest = sql.slice(index)
+    if (dollarTag !== null && sql.startsWith(dollarTag, index)) {
+      commentFree.push(dollarTag)
+      routineBody.push('\n;\n')
+      index += dollarTag.length
+      dollarTag = null
+      continue
+    }
     if (dollarTag === null) {
-      const opening = rest.match(/^\$[A-Za-z_]*\$/u)
+      opener.lastIndex = index
+      const opening = opener.exec(sql)
       if (opening) {
         dollarTag = opening[0]
         commentFree.push(dollarTag)
@@ -84,26 +93,24 @@ export function scanSql(sql) {
         index += dollarTag.length
         continue
       }
-      if (rest.startsWith('--')) {
-        const end = sql.indexOf('\n', index)
-        index = end === -1 ? sql.length : end
-        continue
-      }
-      if (rest.startsWith('/*')) {
-        const end = sql.indexOf('*/', index + 2)
-        index = end === -1 ? sql.length : end + 2
-        continue
-      }
-    } else if (rest.startsWith(dollarTag)) {
-      commentFree.push(dollarTag)
-      routineBody.push('\n;\n')
-      index += dollarTag.length
-      dollarTag = null
+    }
+    // Comments are comments in both states. Stripping them only at the top level would
+    // let an apostrophe inside a PL/pgSQL comment open a literal that swallows the rest of
+    // the file - which is exactly the kind of blind spot this scan exists to prevent.
+    if (sql.startsWith('--', index)) {
+      const end = sql.indexOf('\n', index)
+      index = end === -1 ? sql.length : end
       continue
     }
-    if (rest.startsWith("'")) {
-      const literal = rest.match(/^'(?:[^']|'')*'/u)
-      const text = literal ? literal[0] : rest
+    if (sql.startsWith('/*', index)) {
+      const end = sql.indexOf('*/', index + 2)
+      index = end === -1 ? sql.length : end + 2
+      continue
+    }
+    if (sql[index] === "'") {
+      literal.lastIndex = index
+      const quoted = literal.exec(sql)
+      const text = quoted ? quoted[0] : sql.slice(index)
       commentFree.push(text)
       ;(dollarTag === null ? topLevel : routineBody).push("''")
       index += text.length

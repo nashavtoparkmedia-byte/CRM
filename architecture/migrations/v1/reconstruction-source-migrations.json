@@ -36,8 +36,8 @@
     {
       "name": "20260911000000_fresh_install_parity_multi_park_and_max_mirror",
       "path": "gravity-mvp/prisma/migrations/20260911000000_fresh_install_parity_multi_park_and_max_mirror/migration.sql",
-      "sha256": "f8203836cac674516e7aef47d99d6d1f8830995585783d79297d3f2dba817923",
-      "size": 126780,
+      "sha256": "c10458a0abff60fb69cb0f6ea82727e19ae23a4eb30a0f81372661f73a9e74a8",
+      "size": 127222,
       "owner_contexts": [
         "contacts",
         "fleet_operations",
