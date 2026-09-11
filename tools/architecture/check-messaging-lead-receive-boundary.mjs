@@ -19,7 +19,15 @@ check('owner idempotency retained', adapter.includes('prisma.message.findUnique'
 check('fixed inbound semantics retained', ["direction: 'inbound'", "type: 'text'", "status: 'delivered'"].every((value) => adapter.includes(value)), 'fixed message semantics drifted')
 check('Avito invokes ReceiveMessage v1', consumer.includes('RECEIVE_MESSAGE_COMMAND_V1') && consumer.includes('receiveMessageV1({'), 'owner command absent')
 check('content fallback retained', ['input.preview.trim()', '`Новый отклик от ${input.candidateName}`', "'Новый отклик'"].every((value) => consumer.includes(value)), 'content derivation drifted')
-check('external id retained', consumer.includes('`${input.source}:msg:${input.sourceExternalId}`'), 'external id drifted')
+// The message key is scoped by provider account: a provider-local id is not
+// unique across accounts, so the account segment is what keeps two accounts'
+// messages from colliding on one key.
+check('external id retained', consumer.includes('`${input.source}:${providerAccountId}:msg:${input.sourceExternalId}`'), 'external id drifted')
+check(
+    'provider account scope enforced',
+    consumer.includes('requireConcreteProviderAccountId(input.providerAccountId)') && consumer.includes("value === 'legacy'"),
+    'provider account scope drifted',
+)
 check('received instant retained', consumer.includes('sentAt: input.receivedAt.toISOString()'), 'sentAt drifted')
 check('metadata retained', consumer.includes('source: input.source') && consumer.includes('sourceExternalId: input.sourceExternalId') && consumer.includes('...input.sourceMeta'), 'metadata drifted')
 check('owner message id returned', consumer.includes('messageId: receivedMessage.messageId'), 'result semantics drifted')

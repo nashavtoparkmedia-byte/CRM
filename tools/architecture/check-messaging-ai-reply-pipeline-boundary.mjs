@@ -28,7 +28,15 @@ assert.deepEqual(
     existsSync(path.join(root, oldDirectory)) ? readdirSync(path.join(root, oldDirectory)) : [],
     [],
 )
-assert.deepEqual(readdirSync(path.join(root, pipelineDirectory)).sort(), exactPipelineFiles)
+// The inventory pins the exact RUNTIME surface of the pipeline. Co-located
+// tests are excluded, as the sibling directory inventories already do, so that
+// adding a test beside the code it covers is not a boundary violation.
+assert.deepEqual(
+    readdirSync(path.join(root, pipelineDirectory))
+        .filter((file) => !/\.(?:test|spec)\.tsx?$/u.test(file))
+        .sort(),
+    exactPipelineFiles,
+)
 assert.equal(existsSync(path.join(root, transportPath)), true)
 
 const worker = read(`${pipelineDirectory}/PipelineWorker.ts`)
