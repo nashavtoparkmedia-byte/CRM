@@ -24,8 +24,6 @@ export {
     getMobileSessionPrincipalV1,
     hasMobileSessionV1,
     isMobileLaneConfigured,
-    MobileSessionRequiredError,
-    requireMobileSessionV1,
     writeDerivedUiIdentityCookie,
 } from './mobile-session-auth'
 export type { MobileLoginFailure } from './mobile-session-auth'

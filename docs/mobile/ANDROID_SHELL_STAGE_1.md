@@ -180,20 +180,25 @@ gated stage. The shape it should take:
   point every inbound channel goes through. **That was wrong**, and a push stage
   built on it would silently miss channels.
 
-  It is reached by five call sites covering the Telegram user account, the
-  current MAX webhook and the WhatsApp live path. At least four inbound paths
-  create `Message` rows without it:
+  It is reached by six call sites in three files, covering the Telegram user
+  account, the current MAX webhook and the WhatsApp live path. At least four
+  inbound paths create `Message` rows without it:
 
   | Path | Where |
   |---|---|
   | Telegram Bot channel, group and private | `src/app/api/webhook/telegram/route.ts` |
   | Avito lead intake | `src/lib/leads/intake.ts` into the receive-message adapter |
-  | Legacy MAX webhook, still the scraper default | `src/app/api/webhook/max/route.ts` |
+  | Legacy MAX webhook, reachable but no longer the scraper's default | `src/app/api/webhook/max/route.ts` |
   | Inbound call-timeline rows | `src/lib/freeswitch/EslClient.ts` via the call-timeline adapter |
 
   History importers for WhatsApp and Telegram also create inbound rows without
   emitting, while the MAX webhook's emit is guarded only on direction and so
   does fire on history replay.
+
+  One correction to an earlier draft of this list: the MAX scraper's live
+  entry point is `max-web-scraper/index.js`, which its `package.json` names as
+  `main` and the Dockerfile runs, and it defaults to `/api/webhooks/max` — the
+  route that does emit. `maxBrowser.js` is not the running scraper.
 
   Before any push work, someone must decide the hook point deliberately.
   Persistence is the narrower truth than this function.

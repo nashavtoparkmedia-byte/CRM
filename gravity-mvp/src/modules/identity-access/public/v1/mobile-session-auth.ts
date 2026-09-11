@@ -36,13 +36,6 @@ export const MOBILE_SHELL_UA_TOKEN = 'YokoShell/'
 
 const LEGACY_UI_IDENTITY_COOKIE = 'crm_user_id'
 
-export class MobileSessionRequiredError extends Error {
-    constructor() {
-        super('mobile_session_required')
-        this.name = 'MobileSessionRequiredError'
-    }
-}
-
 export type MobileLoginFailure =
     | 'not_configured'
     | 'invalid_credentials'
@@ -82,12 +75,6 @@ export async function getMobileSessionPrincipalV1(): Promise<MobileSessionPrinci
 
 export async function hasMobileSessionV1(): Promise<boolean> {
     return (await getMobileSessionPrincipalV1()) !== null
-}
-
-export async function requireMobileSessionV1(): Promise<MobileSessionPrincipalV1> {
-    const principal = await getMobileSessionPrincipalV1()
-    if (principal) return principal
-    throw new MobileSessionRequiredError()
 }
 
 function sessionCookieOptions(maxAge: number) {
