@@ -36,7 +36,11 @@ export class CompensationMoneyErrorV1 extends Error {
  * digits. Anything else is refused outright rather than best-effort parsed: a
  * shape we have never observed is not evidence we can put money behind.
  */
-const VERIFIED_PRICE_PATTERN = /^(0|[1-9][0-9]{0,7})\.([0-9]{4})$/
+// Seven integer digits keep the parsed value inside a 32-bit kopeck column:
+// 9 999 999.9999 RUB is 999 999 999 kopecks, well under 2 147 483 647. A wider
+// pattern would let a provider glitch price reach the database and fail there as
+// a raw driver error instead of a clean domain refusal.
+const VERIFIED_PRICE_PATTERN = /^(0|[1-9][0-9]{0,6})\.([0-9]{4})$/
 
 /** Strict four-decimal price string to integer kopecks, truncating toward zero. */
 export function parseVerifiedAmountKopecksV1(raw: unknown): number {

@@ -178,6 +178,7 @@ export function compensationFinalizeDecisionV1(
     authorization: CompensationPayoutAuthorizationSnapshotV1,
     presentedFence: string,
     now: Date,
+    viaReconciliation = false,
 ): CompensationFinalizeDecisionV1 {
     if (authorization.authorizationFence !== presentedFence) {
         return { kind: 'refuse', code: 'authorization_fenced' }
@@ -186,10 +187,15 @@ export function compensationFinalizeDecisionV1(
     if (authorization.state === 'cancelled') {
         return { kind: 'refuse', code: 'authorization_released' }
     }
-    if (authorization.state === 'unknown_outcome') {
+    if (authorization.state === 'unknown_outcome' && !viaReconciliation) {
         return { kind: 'refuse', code: 'reconciliation_required' }
     }
-    if (now.getTime() - authorization.openedAt.getTime() > COMPENSATION_PAYOUT_FAST_FINALIZE_MAX_AGE_MS) {
+    // The age cut-off exists because a manager cannot honestly recall an
+    // unaided outcome after a day. A reconciliation resolution is not unaided
+    // recall: it carries explicit evidence and is exactly the process that
+    // handles an outcome discovered late, so it is not subject to that gate.
+    if (!viaReconciliation
+        && now.getTime() - authorization.openedAt.getTime() > COMPENSATION_PAYOUT_FAST_FINALIZE_MAX_AGE_MS) {
         return { kind: 'refuse', code: 'authorization_too_old_reconcile' }
     }
     return { kind: 'finalize' }

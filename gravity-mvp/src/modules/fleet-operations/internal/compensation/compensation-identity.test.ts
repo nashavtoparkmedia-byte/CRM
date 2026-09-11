@@ -42,7 +42,13 @@ describe('compensationApplicationIdV1', () => {
 })
 
 describe('compensationSubmitFingerprintV1', () => {
-    const base = { compensationPersonId: 'p1', orderKey, claimedKopecks: 30_000 }
+    const base = {
+        compensationPersonId: 'p1',
+        orderKey,
+        claimedKopecks: 30_000,
+        rawPrice: '306.0000',
+        endedAt: new Date('2026-09-10T10:00:00.000Z'),
+    }
 
     it('is stable for the same intent', () => {
         expect(compensationSubmitFingerprintV1(base)).toBe(compensationSubmitFingerprintV1({ ...base }))
@@ -55,6 +61,10 @@ describe('compensationSubmitFingerprintV1', () => {
             { ...base, orderKey: { ...orderKey, externalParkId: 'other' } },
             { ...base, orderKey: { ...orderKey, externalOrderId: 'other' } },
             { ...base, orderKey: { ...orderKey, provider: 'other' } },
+            // The order facts decide the amount, the budget month and the
+            // deadline, so a retry quoting different ones is not a replay.
+            { ...base, rawPrice: '307.0000' },
+            { ...base, endedAt: new Date('2026-08-31T13:00:00.000Z') },
         ]
         for (const variant of variants) {
             expect(compensationSubmitFingerprintV1(variant)).not.toBe(compensationSubmitFingerprintV1(base))

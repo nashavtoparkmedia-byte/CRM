@@ -67,6 +67,10 @@ export interface CompensationSubmitFingerprintInputV1 {
     compensationPersonId: string
     orderKey: CompensationOrderKeyV1
     claimedKopecks: number
+    /** Provider price verbatim: a retry quoting a different price is not a replay. */
+    rawPrice: string
+    /** Completion instant: it decides the budget month and the deadline. */
+    endedAt: Date
 }
 
 /**
@@ -80,6 +84,8 @@ export function compensationSubmitFingerprintV1(input: CompensationSubmitFingerp
         externalParkId: input.orderKey.externalParkId,
         externalOrderId: input.orderKey.externalOrderId,
         claimedKopecks: input.claimedKopecks,
+        rawPrice: input.rawPrice,
+        endedAt: input.endedAt.toISOString(),
     }))
 }
 

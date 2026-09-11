@@ -37,6 +37,9 @@ describe('parseVerifiedAmountKopecksV1', () => {
         const rejected: unknown[] = [
             '12.999', '12.00000', '12', '12.', '.0000', '-1.0000', '+1.0000',
             '1e3.0000', ' 12.0000', '12.0000 ', '01.0000', 'NaN', '',
+            // Eight integer digits would overflow the integer kopeck column and
+            // surface as a raw driver error instead of a domain refusal.
+            '99999999.9999', '10000000.0000',
             12.0, 1200, null, undefined, {}, ['12.0000'], true,
         ]
         for (const raw of rejected) {

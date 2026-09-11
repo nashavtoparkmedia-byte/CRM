@@ -15,8 +15,10 @@
 import type { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import {
+    FINALIZE_COMPENSATION_PAYOUT_COMMAND_V1,
     FINALIZE_COMPENSATION_PAYOUT_RESULT_V1,
     REJECT_COMPENSATION_APPLICATION_RESULT_V1,
+    RELEASE_COMPENSATION_PAYOUT_COMMAND_V1,
     RELEASE_COMPENSATION_PAYOUT_RESULT_V1,
     RESOLVE_COMPENSATION_RECONCILIATION_RESULT_V1,
     START_COMPENSATION_PAYOUT_RESULT_V1,
@@ -91,6 +93,26 @@ export type CompensationErrorCodeV1 =
     | 'payout_authorization_active'
     | 'already_finalized'
     | 'reconciliation_not_open'
+    | 'payout_clock_skew'
+
+/**
+ * How far a caller's operation timestamp may sit from the database clock.
+ *
+ * The daily payout slot is the one monetary fact that would otherwise be
+ * decided by a caller-supplied instant rather than by verified evidence, so the
+ * slot is taken from the database clock and the caller's timestamp only has to
+ * agree with it.
+ */
+const COMPENSATION_CLOCK_SKEW_TOLERANCE_MS = 5 * 60 * 1000
+
+async function assertAgreesWithDatabaseClock(tx: Tx, claimed: Date): Promise<Date> {
+    const rows = await tx.$queryRawUnsafe<Array<{ now: Date }>>('SELECT NOW() AS now')
+    const serverNow = rows[0].now
+    if (Math.abs(serverNow.getTime() - claimed.getTime()) > COMPENSATION_CLOCK_SKEW_TOLERANCE_MS) {
+        fail('payout_clock_skew', 'operation timestamp disagrees with the database clock')
+    }
+    return serverNow
+}
 
 export class CompensationErrorV1 extends Error {
     readonly code: CompensationErrorCodeV1
@@ -281,10 +303,19 @@ export async function resolveCompensationPersonIdV1(
     return decision.compensationPersonId
 }
 
+/**
+ * Prisma reports a unique violation as P2002 through the model API, but a raw
+ * query surfaces it as P2010 with the PostgreSQL SQLSTATE carried in the meta or
+ * the message. Every write in this module is raw, so both shapes must match or
+ * the retry below never runs.
+ */
 function isUniqueViolation(error: unknown): boolean {
     if (typeof error !== 'object' || error === null) return false
-    const code = (error as { code?: unknown }).code
-    return code === 'P2002' || code === '23505'
+    const candidate = error as { code?: unknown; meta?: { code?: unknown }; message?: unknown }
+    if (candidate.code === 'P2002' || candidate.code === '23505') return true
+    if (candidate.meta?.code === '23505') return true
+    return candidate.code === 'P2010' && typeof candidate.message === 'string'
+        && candidate.message.includes('23505')
 }
 
 /* ------------------------------------------------------------------------ */
@@ -336,13 +367,22 @@ export async function submitCompensationApplicationV1(
         externalParkId: command.order.externalParkId,
         externalOrderId: command.order.externalOrderId,
     }
-    const fingerprint = compensationSubmitFingerprintV1({ compensationPersonId, orderKey, claimedKopecks })
+    const fingerprint = compensationSubmitFingerprintV1({
+        compensationPersonId,
+        orderKey,
+        claimedKopecks,
+        rawPrice: command.order.rawPrice,
+        endedAt: command.order.endedAt,
+    })
     const claimId = compensationDerivedIdV1(
         'comp_claim', orderKey.provider, orderKey.externalParkId, orderKey.externalOrderId,
     )
+    // The price is part of the snapshot's identity: a second attempt quoting a
+    // different verified amount must not silently reuse the first attempt's
+    // evidence row, or the stored evidence would stop proving the amount.
     const verifiedOrderId = compensationDerivedIdV1(
         'comp_order', orderKey.provider, orderKey.externalParkId, orderKey.externalOrderId,
-        command.order.verifiedAt.toISOString(),
+        command.order.verifiedAt.toISOString(), String(verifiedKopecks),
     )
 
     return prisma.$transaction(async (tx) => {
@@ -382,6 +422,12 @@ export async function submitCompensationApplicationV1(
             if (existing.payloadFingerprint !== fingerprint) {
                 fail('idempotency_conflict', 'idempotency key reused for a different submission')
             }
+            // Report the period the stored application actually reserved
+            // against, not one recomputed from the replayed command.
+            const storedPeriod = await tx.$queryRawUnsafe<Array<{ periodKey: string }>>(
+                `SELECT "periodKey" FROM "CompensationBudgetPeriod" WHERE "id" = $1`,
+                existing.budgetPeriodId,
+            )
             return {
                 contract: SUBMIT_COMPENSATION_APPLICATION_RESULT_V1,
                 status: 'replayed' as const,
@@ -389,7 +435,7 @@ export async function submitCompensationApplicationV1(
                 compensationPersonId: existing.compensationPersonId,
                 amountKopecks: existing.amountKopecks,
                 attemptNo: existing.attemptNo as 1 | 2,
-                budgetPeriodKey: window.periodKey,
+                budgetPeriodKey: storedPeriod[0].periodKey,
             }
         }
 
@@ -555,6 +601,29 @@ async function lockApplicationChain(
     return { period: periods[0], application: applications[0] }
 }
 
+/**
+ * The same rows as `lockApplicationChain`, read without locking, for a caller
+ * that already holds those locks in the frozen order.
+ */
+async function readApplicationChain(
+    tx: Tx,
+    applicationId: string,
+): Promise<{ period: PeriodRow; application: ApplicationRow }> {
+    const applications = await tx.$queryRawUnsafe<ApplicationRow[]>(
+        `SELECT "id","idempotencyKey","payloadFingerprint","compensationPersonId","orderClaimId",
+                "budgetPeriodId","attemptNo","amountKopecks","status","version","rejectionKey"
+         FROM "CompensationApplication" WHERE "id" = $1`,
+        applicationId,
+    )
+    if (applications.length === 0) fail('application_not_found', `unknown application ${applicationId}`)
+    const periods = await tx.$queryRawUnsafe<PeriodRow[]>(
+        `SELECT "id","periodKey","state","limitKopecks","reservedKopecks","settledKopecks"
+         FROM "CompensationBudgetPeriod" WHERE "id" = $1`,
+        applications[0].budgetPeriodId,
+    )
+    return { period: periods[0], application: applications[0] }
+}
+
 async function lockOpenAuthorization(
     tx: Tx,
     locks: LockLedger,
@@ -599,7 +668,11 @@ export async function startCompensationPayoutV1(
         // The business day is captured here, atomically, and finalize never
         // recomputes it. That is what stops finalize from discovering a new
         // daily-limit conflict after money has left the dispatcher.
-        const intendedBusinessDay = compensationBusinessDayKeyV1(command.startedAt)
+        // Taken from the database clock, not from the caller: this is the one
+        // monetary fact a caller could otherwise choose, and choosing it would
+        // free a slot the person has already consumed.
+        const serverNow = await assertAgreesWithDatabaseClock(tx, command.startedAt)
+        const intendedBusinessDay = compensationBusinessDayKeyV1(serverNow)
 
         const dayTaken = await tx.$queryRawUnsafe<Array<{ id: string }>>(
             `SELECT "id" FROM "CompensationPayoutAuthorization"
@@ -662,15 +735,31 @@ export async function startCompensationPayoutV1(
 export async function finalizeCompensationPayoutV1(
     command: FinalizeCompensationPayoutCommandV1,
 ): Promise<FinalizeCompensationPayoutResultV1> {
-    return prisma.$transaction(async (tx) => {
+    return prisma.$transaction((tx) => finalizeInTransaction(tx, command, false))
+}
+
+/**
+ * Finalize body, shared by the manager's own confirmation and by a
+ * reconciliation resolution. `viaReconciliation` only relaxes the unaided-recall
+ * age gate; every monetary invariant below is identical on both paths.
+ */
+async function finalizeInTransaction(
+    tx: Tx,
+    command: FinalizeCompensationPayoutCommandV1,
+    viaReconciliation: boolean,
+    presetLocks?: LockLedger,
+): Promise<FinalizeCompensationPayoutResultV1> {
+    {
         const authProbe = await tx.$queryRawUnsafe<Array<{ applicationId: string }>>(
             `SELECT "applicationId" FROM "CompensationPayoutAuthorization" WHERE "id" = $1`,
             command.payoutAuthorizationId,
         )
         if (authProbe.length === 0) fail('unknown_authorization', 'unknown payout authorization')
 
-        const locks = new LockLedger()
-        const { period, application } = await lockApplicationChain(tx, locks, authProbe[0].applicationId)
+        const locks = presetLocks ?? new LockLedger()
+        const { period, application } = presetLocks
+            ? await readApplicationChain(tx, authProbe[0].applicationId)
+            : await lockApplicationChain(tx, locks, authProbe[0].applicationId)
 
         locks.note('CompensationPayoutAuthorization')
         const authorizations = await tx.$queryRawUnsafe<AuthorizationRow[]>(
@@ -680,8 +769,10 @@ export async function finalizeCompensationPayoutV1(
             command.payoutAuthorizationId,
         )
         const authorization = authorizations[0]
+        // The age gate reads this instant, so it may not be caller-chosen either.
+        await assertAgreesWithDatabaseClock(tx, command.finalizedAt)
         const decision = compensationFinalizeDecisionV1(
-            authorization, command.authorizationFence, command.finalizedAt,
+            authorization, command.authorizationFence, command.finalizedAt, viaReconciliation,
         )
         if (decision.kind === 'refuse') fail(decision.code, `finalize refused: ${decision.code}`)
         if (decision.kind === 'replay') {
@@ -772,21 +863,32 @@ export async function finalizeCompensationPayoutV1(
             amountKopecks,
             businessDay: authorization.intendedBusinessDay,
         }
-    })
+    }
 }
 
 export async function releaseCompensationPayoutV1(
     command: ReleaseCompensationPayoutCommandV1,
 ): Promise<ReleaseCompensationPayoutResultV1> {
-    return prisma.$transaction(async (tx) => {
+    return prisma.$transaction((tx) => releaseInTransaction(tx, command))
+}
+
+/** Release body, shared by the manager's own release and by reconciliation. */
+async function releaseInTransaction(
+    tx: Tx,
+    command: ReleaseCompensationPayoutCommandV1,
+    presetLocks?: LockLedger,
+): Promise<ReleaseCompensationPayoutResultV1> {
+    {
         const authProbe = await tx.$queryRawUnsafe<Array<{ applicationId: string }>>(
             `SELECT "applicationId" FROM "CompensationPayoutAuthorization" WHERE "id" = $1`,
             command.payoutAuthorizationId,
         )
         if (authProbe.length === 0) fail('unknown_authorization', 'unknown payout authorization')
 
-        const locks = new LockLedger()
-        const { application } = await lockApplicationChain(tx, locks, authProbe[0].applicationId)
+        const locks = presetLocks ?? new LockLedger()
+        const { application } = presetLocks
+            ? await readApplicationChain(tx, authProbe[0].applicationId)
+            : await lockApplicationChain(tx, locks, authProbe[0].applicationId)
 
         locks.note('CompensationPayoutAuthorization')
         const authorizations = await tx.$queryRawUnsafe<AuthorizationRow[]>(
@@ -815,6 +917,15 @@ export async function releaseCompensationPayoutV1(
                  WHERE "id" = $1`,
                 authorization.id, command.releasedAt, command.reason,
                 command.principal.principalId, command.principal.operatorLabel,
+            )
+            // The authorization id is derived from the application version, so
+            // releasing preparation must advance it. Otherwise a second
+            // preparation for this still-PENDING application would derive the
+            // same primary key and collide with the closed row, leaving a valid
+            // funded application permanently unpayable.
+            await tx.$executeRawUnsafe(
+                `UPDATE "CompensationApplication" SET "version" = "version" + 1, "updatedAt" = NOW() WHERE "id" = $1`,
+                application.id,
             )
             await appendAudit(tx, {
                 action: 'payout_authorization_cancelled',
@@ -894,7 +1005,7 @@ export async function releaseCompensationPayoutV1(
             payoutAuthorizationId: authorization.id,
             reconciliationTaskId: taskId,
         }
-    })
+    }
 }
 
 export async function rejectCompensationApplicationV1(
@@ -953,72 +1064,91 @@ export async function rejectCompensationApplicationV1(
     })
 }
 
+/**
+ * Resolve an unknown external payout outcome.
+ *
+ * One transaction, taking every lock in the frozen order, so a failure cannot
+ * leave the authorization reopened, the task stranded and the reservation held
+ * the way a multi-transaction version would. The resolution runs the ordinary
+ * finalize or release body, so no monetary invariant is special-cased here; the
+ * only relaxation is the unaided-recall age gate, which does not apply to an
+ * evidence-backed resolution.
+ */
 export async function resolveCompensationReconciliationV1(
     command: ResolveCompensationReconciliationCommandV1,
 ): Promise<ResolveCompensationReconciliationResultV1> {
-    const taskProbe = await prisma.$queryRawUnsafe<Array<{ payoutAuthorizationId: string; state: string }>>(
-        `SELECT "payoutAuthorizationId","state" FROM "CompensationReconciliationTask" WHERE "id" = $1`,
-        command.reconciliationTaskId,
-    )
-    if (taskProbe.length === 0) fail('reconciliation_not_open', 'unknown reconciliation task')
-    if (taskProbe[0].state === 'resolved') {
-        const settlements = await prisma.$queryRawUnsafe<Array<{ id: string }>>(
-            `SELECT "id" FROM "CompensationSettlement" WHERE "payoutAuthorizationId" = $1`,
-            taskProbe[0].payoutAuthorizationId,
+    return prisma.$transaction(async (tx) => {
+        const taskProbe = await tx.$queryRawUnsafe<Array<{ payoutAuthorizationId: string }>>(
+            `SELECT "payoutAuthorizationId" FROM "CompensationReconciliationTask" WHERE "id" = $1`,
+            command.reconciliationTaskId,
         )
-        return {
-            contract: RESOLVE_COMPENSATION_RECONCILIATION_RESULT_V1,
-            status: 'replayed',
-            reconciliationTaskId: command.reconciliationTaskId,
-            settlementId: settlements[0]?.id ?? null,
+        if (taskProbe.length === 0) fail('reconciliation_not_open', 'unknown reconciliation task')
+        const authorizationId = taskProbe[0].payoutAuthorizationId
+
+        const authProbe = await tx.$queryRawUnsafe<Array<{ applicationId: string; authorizationFence: string }>>(
+            `SELECT "applicationId","authorizationFence" FROM "CompensationPayoutAuthorization" WHERE "id" = $1`,
+            authorizationId,
+        )
+        if (authProbe.length === 0) fail('unknown_authorization', 'unknown payout authorization')
+
+        const locks = new LockLedger()
+        await lockApplicationChain(tx, locks, authProbe[0].applicationId)
+
+        // Read the task state without locking: the frozen order puts it last,
+        // and the guarded UPDATE at the end is what actually serialises two
+        // concurrent resolutions.
+        const tasks = await tx.$queryRawUnsafe<Array<{ id: string; state: string }>>(
+            `SELECT "id","state" FROM "CompensationReconciliationTask" WHERE "id" = $1`,
+            command.reconciliationTaskId,
+        )
+        if (tasks[0].state === 'resolved') {
+            const settlements = await tx.$queryRawUnsafe<Array<{ id: string }>>(
+                `SELECT "id" FROM "CompensationSettlement" WHERE "payoutAuthorizationId" = $1`,
+                authorizationId,
+            )
+            return {
+                contract: RESOLVE_COMPENSATION_RECONCILIATION_RESULT_V1,
+                status: 'replayed' as const,
+                reconciliationTaskId: command.reconciliationTaskId,
+                settlementId: settlements[0]?.id ?? null,
+            }
         }
-    }
 
-    // The resolution runs the ordinary finalize or cancel path, so no monetary
-    // invariant is special-cased for reconciliation. The authorization is first
-    // returned to a state that path accepts.
-    const authorizationId = taskProbe[0].payoutAuthorizationId
-    const fence = await prisma.$queryRawUnsafe<Array<{ authorizationFence: string }>>(
-        `SELECT "authorizationFence" FROM "CompensationPayoutAuthorization" WHERE "id" = $1`,
-        authorizationId,
-    )
-    await prisma.$executeRawUnsafe(
-        `UPDATE "CompensationPayoutAuthorization" SET "state" = 'active', "closureReason" = NULL, "updatedAt" = NOW()
-         WHERE "id" = $1 AND "state" = 'unknown_outcome'`,
-        authorizationId,
-    )
+        let settlementId: string | null = null
+        if (command.resolution === 'paid') {
+            const settled = await finalizeInTransaction(tx, {
+                contract: FINALIZE_COMPENSATION_PAYOUT_COMMAND_V1,
+                payoutAuthorizationId: authorizationId,
+                authorizationFence: authProbe[0].authorizationFence,
+                principal: command.principal,
+                finalizedAt: command.resolvedAt,
+            }, true, locks)
+            settlementId = settled.settlementId
+        } else {
+            await releaseInTransaction(tx, {
+                contract: RELEASE_COMPENSATION_PAYOUT_COMMAND_V1,
+                payoutAuthorizationId: authorizationId,
+                authorizationFence: authProbe[0].authorizationFence,
+                kind: 'cancel_preparation',
+                reason: command.resolutionEvidence,
+                principal: command.principal,
+                releasedAt: command.resolvedAt,
+            }, locks)
+        }
 
-    let settlementId: string | null = null
-    if (command.resolution === 'paid') {
-        const settled = await finalizeCompensationPayoutV1({
-            contract: 'fleet_operations.FinalizeCompensationPayoutCommand.v1',
-            payoutAuthorizationId: authorizationId,
-            authorizationFence: fence[0].authorizationFence,
-            principal: command.principal,
-            finalizedAt: command.resolvedAt,
-        } as FinalizeCompensationPayoutCommandV1)
-        settlementId = settled.settlementId
-    } else {
-        await releaseCompensationPayoutV1({
-            contract: 'fleet_operations.ReleaseCompensationPayoutCommand.v1',
-            payoutAuthorizationId: authorizationId,
-            authorizationFence: fence[0].authorizationFence,
-            kind: 'cancel_preparation',
-            reason: command.resolutionEvidence,
-            principal: command.principal,
-            releasedAt: command.resolvedAt,
-        } as ReleaseCompensationPayoutCommandV1)
-    }
-
-    await prisma.$transaction(async (tx) => {
-        await tx.$executeRawUnsafe(
+        // Rank 7, taken last: the guarded UPDATE takes the row lock itself, so
+        // a concurrent resolution finds no open task and refuses.
+        locks.note('CompensationReconciliationTask')
+        const resolved = await tx.$executeRawUnsafe(
             `UPDATE "CompensationReconciliationTask"
              SET "state" = 'resolved', "resolvedAt" = $2, "resolution" = $3,
                  "resolutionEvidence" = $4, "resolvedByPrincipal" = $5, "updatedAt" = NOW()
-             WHERE "id" = $1`,
+             WHERE "id" = $1 AND "state" = 'open'`,
             command.reconciliationTaskId, command.resolvedAt, command.resolution,
             command.resolutionEvidence, command.principal.principalId,
         )
+        if (resolved !== 1) fail('reconciliation_not_open', 'reconciliation task is no longer open')
+
         await appendAudit(tx, {
             action: 'reconciliation_resolved',
             subjectType: 'CompensationReconciliationTask',
@@ -1033,14 +1163,14 @@ export async function resolveCompensationReconciliationV1(
             correlationId: command.reconciliationTaskId,
             occurredAt: command.resolvedAt,
         })
-    })
 
-    return {
-        contract: RESOLVE_COMPENSATION_RECONCILIATION_RESULT_V1,
-        status: command.resolution === 'paid' ? 'settled' : 'released',
-        reconciliationTaskId: command.reconciliationTaskId,
-        settlementId,
-    }
+        return {
+            contract: RESOLVE_COMPENSATION_RECONCILIATION_RESULT_V1,
+            status: command.resolution === 'paid' ? 'settled' as const : 'released' as const,
+            reconciliationTaskId: command.reconciliationTaskId,
+            settlementId,
+        }
+    })
 }
 
 /** Public statistics: all-time paid amount and count, derived from settlements. */

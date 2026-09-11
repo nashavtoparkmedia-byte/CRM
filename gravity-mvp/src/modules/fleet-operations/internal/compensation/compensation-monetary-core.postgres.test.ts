@@ -25,7 +25,11 @@ import {
     submitCompensationApplicationV1,
 } from './compensation-prisma-adapter'
 import { compensationPeriodSubmissionClosesAtV1 } from './compensation-submission-window'
-import { compensationMonthEndInstantV1, compensationMonthStartInstantV1 } from './compensation-calendar'
+import {
+    compensationBusinessDayKeyV1,
+    compensationMonthEndInstantV1,
+    compensationMonthStartInstantV1,
+} from './compensation-calendar'
 import type { ProvenCanonicalPersonV1 } from './compensation-ports'
 
 const proof = process.env.YOKO_COMPENSATION_MONETARY_POSTGRES_PROOF === '1' ? describe : describe.skip
@@ -36,6 +40,10 @@ const database = prisma as unknown as {
 }
 
 const PRINCIPAL = { principalId: 'u1', principalKind: 'crm_user' as const, operatorLabel: 'Test Manager' }
+
+// Payout operations are checked against the database clock, so their
+// timestamps are anchored to real time rather than to the fixed order dates.
+const at = (minutes: number): Date => new Date(Date.now() + minutes * 60_000)
 const AUGUST = { year: 2026, month: 8 }
 const SEPTEMBER = { year: 2026, month: 9 }
 
@@ -220,7 +228,7 @@ proof('compensation monetary core on real PostgreSQL', () => {
             contract: START_COMPENSATION_PAYOUT_COMMAND_V1,
             applicationId: submitted.applicationId,
             principal: PRINCIPAL,
-            startedAt: new Date('2026-09-10T12:00:00.000Z'),
+            startedAt: at(0),
         })
         expect(started.status).toBe('opened')
         expect(started.amountKopecks).toBe(submitted.amountKopecks)
@@ -230,7 +238,7 @@ proof('compensation monetary core on real PostgreSQL', () => {
             payoutAuthorizationId: started.payoutAuthorizationId,
             authorizationFence: started.authorizationFence,
             principal: PRINCIPAL,
-            finalizedAt: new Date('2026-09-10T12:10:00.000Z'),
+            finalizedAt: at(2),
         } as const
         const settled = await finalizeCompensationPayoutV1(finalizeCommand)
         expect(settled.status).toBe('settled')
@@ -249,29 +257,27 @@ proof('compensation monetary core on real PostgreSQL', () => {
         })
     })
 
-    it('captures the business day at start and never recomputes it across midnight', async () => {
+    it('takes the payout business day from the database clock, not from the caller', async () => {
         const submitted = await submitCompensationApplicationV1(submitCommand())
-        // 10 Sep 23:59 Yekaterinburg is 18:59Z.
         const started = await startCompensationPayoutV1({
             contract: START_COMPENSATION_PAYOUT_COMMAND_V1,
             applicationId: submitted.applicationId,
             principal: PRINCIPAL,
-            startedAt: new Date('2026-09-10T18:59:00.000Z'),
+            startedAt: at(0),
         })
-        expect(started.intendedBusinessDay).toBe('2026-09-10')
+        expect(started.intendedBusinessDay).toBe(compensationBusinessDayKeyV1(new Date()))
 
-        // Confirmed after local midnight; the settlement still belongs to 10 Sep.
-        const settled = await finalizeCompensationPayoutV1({
+        // Settle it so the person's active-PENDING slot is free; the day slot
+        // stays consumed by the finalized authorization.
+        await finalizeCompensationPayoutV1({
             contract: FINALIZE_COMPENSATION_PAYOUT_COMMAND_V1,
             payoutAuthorizationId: started.payoutAuthorizationId,
             authorizationFence: started.authorizationFence,
             principal: PRINCIPAL,
-            finalizedAt: new Date('2026-09-10T19:03:00.000Z'),
+            finalizedAt: at(1),
         })
-        expect(settled.businessDay).toBe('2026-09-10')
 
-        // The same person, a different order: the claimed day is refused and the
-        // next business day is allowed.
+        // A caller cannot name a different day to free a slot already consumed.
         const second = await submitCompensationApplicationV1(submitCommand())
         await database.$executeRawUnsafe(
             `UPDATE "CompensationApplication" SET "compensationPersonId" = $2 WHERE "id" = $1`,
@@ -282,18 +288,161 @@ proof('compensation monetary core on real PostgreSQL', () => {
                 contract: START_COMPENSATION_PAYOUT_COMMAND_V1,
                 applicationId: second.applicationId,
                 principal: PRINCIPAL,
-                startedAt: new Date('2026-09-10T18:30:00.000Z'),
+                startedAt: new Date(Date.now() + 26 * 60 * 60 * 1000),
+            }),
+            'payout_clock_skew',
+        )
+        // An honest second preparation on the same day is refused by the slot.
+        await expectCode(
+            startCompensationPayoutV1({
+                contract: START_COMPENSATION_PAYOUT_COMMAND_V1,
+                applicationId: second.applicationId,
+                principal: PRINCIPAL,
+                startedAt: at(0),
             }),
             'daily_limit_reached',
         )
+    })
 
-        const nextDay = await startCompensationPayoutV1({
+    it('finalizes on the day the authorization stored, never recomputing it', async () => {
+        const submitted = await submitCompensationApplicationV1(submitCommand())
+        const started = await startCompensationPayoutV1({
             contract: START_COMPENSATION_PAYOUT_COMMAND_V1,
-            applicationId: second.applicationId,
+            applicationId: submitted.applicationId,
             principal: PRINCIPAL,
-            startedAt: new Date('2026-09-10T19:30:00.000Z'),
+            startedAt: at(0),
         })
-        expect(nextDay.intendedBusinessDay).toBe('2026-09-11')
+        // Stands in for a preparation opened just before local midnight: the
+        // stored day is deliberately not today's.
+        await database.$executeRawUnsafe(
+            `UPDATE "CompensationPayoutAuthorization" SET "intendedBusinessDay" = '2026-09-10' WHERE "id" = $1`,
+            started.payoutAuthorizationId,
+        )
+        const settled = await finalizeCompensationPayoutV1({
+            contract: FINALIZE_COMPENSATION_PAYOUT_COMMAND_V1,
+            payoutAuthorizationId: started.payoutAuthorizationId,
+            authorizationFence: started.authorizationFence,
+            principal: PRINCIPAL,
+            finalizedAt: at(1),
+        })
+        expect(settled.businessDay).toBe('2026-09-10')
+        expect(settled.businessDay).not.toBe(compensationBusinessDayKeyV1(new Date()))
+    })
+
+    it('lets a released preparation be prepared again instead of bricking the application', async () => {
+        const submitted = await submitCompensationApplicationV1(submitCommand())
+        const first = await startCompensationPayoutV1({
+            contract: START_COMPENSATION_PAYOUT_COMMAND_V1,
+            applicationId: submitted.applicationId,
+            principal: PRINCIPAL,
+            startedAt: at(0),
+        })
+        await releaseCompensationPayoutV1({
+            contract: RELEASE_COMPENSATION_PAYOUT_COMMAND_V1,
+            payoutAuthorizationId: first.payoutAuthorizationId,
+            authorizationFence: first.authorizationFence,
+            kind: 'cancel_preparation',
+            reason: 'manager did not pay',
+            principal: PRINCIPAL,
+            releasedAt: at(1),
+        })
+        const second = await startCompensationPayoutV1({
+            contract: START_COMPENSATION_PAYOUT_COMMAND_V1,
+            applicationId: submitted.applicationId,
+            principal: PRINCIPAL,
+            startedAt: at(1),
+        })
+        expect(second.status).toBe('opened')
+        expect(second.payoutAuthorizationId).not.toBe(first.payoutAuthorizationId)
+        // The superseded preparation no longer finalizes.
+        await expectCode(
+            finalizeCompensationPayoutV1({
+                contract: FINALIZE_COMPENSATION_PAYOUT_COMMAND_V1,
+                payoutAuthorizationId: first.payoutAuthorizationId,
+                authorizationFence: first.authorizationFence,
+                principal: PRINCIPAL,
+                finalizedAt: at(2),
+            }),
+            'authorization_released',
+        )
+        const settled = await finalizeCompensationPayoutV1({
+            contract: FINALIZE_COMPENSATION_PAYOUT_COMMAND_V1,
+            payoutAuthorizationId: second.payoutAuthorizationId,
+            authorizationFence: second.authorizationFence,
+            principal: PRINCIPAL,
+            finalizedAt: at(2),
+        })
+        expect(settled.status).toBe('settled')
+    })
+
+    it('resolves a reconciliation opened more than a day earlier', async () => {
+        const submitted = await submitCompensationApplicationV1(submitCommand())
+        const started = await startCompensationPayoutV1({
+            contract: START_COMPENSATION_PAYOUT_COMMAND_V1,
+            applicationId: submitted.applicationId,
+            principal: PRINCIPAL,
+            startedAt: at(0),
+        })
+        const released = await releaseCompensationPayoutV1({
+            contract: RELEASE_COMPENSATION_PAYOUT_COMMAND_V1,
+            payoutAuthorizationId: started.payoutAuthorizationId,
+            authorizationFence: started.authorizationFence,
+            kind: 'declare_outcome_unknown',
+            reason: 'dispatcher did not confirm',
+            principal: PRINCIPAL,
+            releasedAt: at(1),
+        })
+        // Age the preparation past the unaided-recall cut-off. Reconciliation
+        // carries evidence, so it is deliberately not subject to that gate.
+        await database.$executeRawUnsafe(
+            `UPDATE "CompensationPayoutAuthorization" SET "openedAt" = NOW() - INTERVAL '3 days' WHERE "id" = $1`,
+            started.payoutAuthorizationId,
+        )
+        const resolved = await resolveCompensationReconciliationV1({
+            contract: RESOLVE_COMPENSATION_RECONCILIATION_COMMAND_V1,
+            reconciliationTaskId: released.reconciliationTaskId as string,
+            resolution: 'paid',
+            resolutionEvidence: 'dispatcher statement line 42',
+            principal: PRINCIPAL,
+            resolvedAt: at(2),
+        })
+        expect(resolved.status).toBe('settled')
+        const period = await periodRow('2026-09')
+        expect(period.reservedKopecks).toBe(0)
+        expect(period.settledKopecks).toBe(submitted.amountKopecks)
+    })
+
+    it('keeps separate verified-order evidence for a second attempt at a different price', async () => {
+        const person = evidence()
+        const sharedOrder = order({ rawPrice: '100.0000' })
+        const first = await submitCompensationApplicationV1(submitCommand({
+            person, order: sharedOrder, claimedRubles: 900,
+        }))
+        expect(first.amountKopecks).toBe(10_000)
+        await rejectCompensationApplicationV1({
+            contract: REJECT_COMPENSATION_APPLICATION_COMMAND_V1,
+            applicationId: first.applicationId,
+            rejectionKey: uuid(),
+            reason: 'wrong amount',
+            principal: PRINCIPAL,
+            rejectedAt: at(0),
+        })
+        const second = await submitCompensationApplicationV1(submitCommand({
+            person, order: { ...sharedOrder, rawPrice: '500.0000' }, claimedRubles: 900,
+        }))
+        expect(second.amountKopecks).toBe(50_000)
+
+        // Each application points at evidence that proves its own amount.
+        const evidenceRows = await database.$queryRawUnsafe<Array<{ verifiedKopecks: number; appAmount: number }>>(
+            `SELECT v."amountKopecks" AS "verifiedKopecks", a."amountKopecks" AS "appAmount"
+             FROM "CompensationApplication" a
+             JOIN "CompensationVerifiedOrder" v ON v."id" = a."verifiedOrderId"
+             ORDER BY a."attemptNo"`,
+        )
+        expect(evidenceRows).toHaveLength(2)
+        for (const row of evidenceRows) {
+            expect(row.appAmount).toBeLessThanOrEqual(row.verifiedKopecks)
+        }
     })
 
     it('forbids rejection while a payout authorization is unresolved', async () => {
@@ -302,7 +451,7 @@ proof('compensation monetary core on real PostgreSQL', () => {
             contract: START_COMPENSATION_PAYOUT_COMMAND_V1,
             applicationId: submitted.applicationId,
             principal: PRINCIPAL,
-            startedAt: new Date('2026-09-10T12:00:00.000Z'),
+            startedAt: at(0),
         })
         await expectCode(
             rejectCompensationApplicationV1({
@@ -311,7 +460,7 @@ proof('compensation monetary core on real PostgreSQL', () => {
                 rejectionKey: uuid(),
                 reason: 'no receipt',
                 principal: PRINCIPAL,
-                rejectedAt: new Date('2026-09-10T12:05:00.000Z'),
+                rejectedAt: at(1),
             }),
             'payout_authorization_active',
         )
@@ -323,7 +472,7 @@ proof('compensation monetary core on real PostgreSQL', () => {
             kind: 'cancel_preparation',
             reason: 'manager did not pay',
             principal: PRINCIPAL,
-            releasedAt: new Date('2026-09-10T12:06:00.000Z'),
+            releasedAt: at(1),
         })
         const rejected = await rejectCompensationApplicationV1({
             contract: REJECT_COMPENSATION_APPLICATION_COMMAND_V1,
@@ -331,7 +480,7 @@ proof('compensation monetary core on real PostgreSQL', () => {
             rejectionKey: uuid(),
             reason: 'no receipt',
             principal: PRINCIPAL,
-            rejectedAt: new Date('2026-09-10T12:07:00.000Z'),
+            rejectedAt: at(2),
         })
         expect(rejected.status).toBe('rejected')
         expect((await periodRow('2026-09')).reservedKopecks).toBe(0)
@@ -343,7 +492,7 @@ proof('compensation monetary core on real PostgreSQL', () => {
             contract: START_COMPENSATION_PAYOUT_COMMAND_V1,
             applicationId: submitted.applicationId,
             principal: PRINCIPAL,
-            startedAt: new Date('2026-09-10T12:00:00.000Z'),
+            startedAt: at(0),
         })
         const released = await releaseCompensationPayoutV1({
             contract: RELEASE_COMPENSATION_PAYOUT_COMMAND_V1,
@@ -352,7 +501,7 @@ proof('compensation monetary core on real PostgreSQL', () => {
             kind: 'declare_outcome_unknown',
             reason: 'dispatcher did not confirm',
             principal: PRINCIPAL,
-            releasedAt: new Date('2026-09-10T12:05:00.000Z'),
+            releasedAt: at(1),
         })
         expect(released.status).toBe('reconciliation_opened')
         expect(released.reconciliationTaskId).not.toBeNull()
@@ -366,7 +515,7 @@ proof('compensation monetary core on real PostgreSQL', () => {
                 rejectionKey: uuid(),
                 reason: 'attempted while unresolved',
                 principal: PRINCIPAL,
-                rejectedAt: new Date('2026-09-10T12:06:00.000Z'),
+                rejectedAt: at(1),
             }),
             'payout_authorization_active',
         )
@@ -377,7 +526,7 @@ proof('compensation monetary core on real PostgreSQL', () => {
             resolution: 'paid',
             resolutionEvidence: 'dispatcher statement line 42',
             principal: PRINCIPAL,
-            resolvedAt: new Date('2026-09-10T13:00:00.000Z'),
+            resolvedAt: at(3),
         })
         expect(resolved.status).toBe('settled')
         const period = await periodRow('2026-09')
@@ -395,7 +544,7 @@ proof('compensation monetary core on real PostgreSQL', () => {
             rejectionKey: uuid(),
             reason: 'photo unreadable',
             principal: PRINCIPAL,
-            rejectedAt: new Date('2026-09-10T12:00:00.000Z'),
+            rejectedAt: at(0),
         })
         const second = await submitCompensationApplicationV1(submitCommand({ person, order: sharedOrder }))
         expect(second.attemptNo).toBe(2)
@@ -406,7 +555,7 @@ proof('compensation monetary core on real PostgreSQL', () => {
             rejectionKey: uuid(),
             reason: 'still unreadable',
             principal: PRINCIPAL,
-            rejectedAt: new Date('2026-09-10T12:30:00.000Z'),
+            rejectedAt: at(2),
         })
         await expectCode(
             submitCompensationApplicationV1(submitCommand({ person, order: sharedOrder })),
@@ -453,7 +602,7 @@ proof('compensation monetary core on real PostgreSQL', () => {
             contract: START_COMPENSATION_PAYOUT_COMMAND_V1,
             applicationId: submitted.applicationId,
             principal: PRINCIPAL,
-            startedAt: new Date('2026-09-10T12:00:00.000Z'),
+            startedAt: at(0),
         })
         await database.$executeRawUnsafe(
             `UPDATE "CompensationBudgetPeriod" SET "state" = 'closed', "closedAt" = NOW() WHERE "periodKey" = '2026-09'`,
@@ -463,7 +612,7 @@ proof('compensation monetary core on real PostgreSQL', () => {
             payoutAuthorizationId: started.payoutAuthorizationId,
             authorizationFence: started.authorizationFence,
             principal: PRINCIPAL,
-            finalizedAt: new Date('2026-09-10T12:10:00.000Z'),
+            finalizedAt: at(2),
         })
         expect(settled.status).toBe('settled')
     })
@@ -488,7 +637,7 @@ proof('compensation monetary core on real PostgreSQL', () => {
             contract: START_COMPENSATION_PAYOUT_COMMAND_V1,
             applicationId: submitted.applicationId,
             principal: PRINCIPAL,
-            startedAt: new Date('2026-09-10T12:00:00.000Z'),
+            startedAt: at(0),
         })
         const results = await Promise.allSettled([start(), start(), start()])
         const granted = results.filter((entry) => entry.status === 'fulfilled')
@@ -521,14 +670,14 @@ proof('compensation monetary core on real PostgreSQL', () => {
             contract: START_COMPENSATION_PAYOUT_COMMAND_V1,
             applicationId: submitted.applicationId,
             principal: PRINCIPAL,
-            startedAt: new Date('2026-09-10T12:00:00.000Z'),
+            startedAt: at(0),
         })
         await finalizeCompensationPayoutV1({
             contract: FINALIZE_COMPENSATION_PAYOUT_COMMAND_V1,
             payoutAuthorizationId: started.payoutAuthorizationId,
             authorizationFence: started.authorizationFence,
             principal: PRINCIPAL,
-            finalizedAt: new Date('2026-09-10T12:10:00.000Z'),
+            finalizedAt: at(2),
         })
         const audit = await database.$queryRawUnsafe<Array<{ action: string; principalId: string; operatorLabel: string | null }>>(
             `SELECT "action","principalId","operatorLabel" FROM "CompensationAuditEvent" ORDER BY "occurredAt","id"`,
