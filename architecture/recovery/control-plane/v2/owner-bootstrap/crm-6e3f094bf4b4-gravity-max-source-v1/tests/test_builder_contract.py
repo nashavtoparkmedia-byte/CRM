@@ -563,6 +563,24 @@ class IndependentReviewBindingTests(unittest.TestCase):
                 continue
             self.assertIn(name, sealer, f"sealer never writes payload member {name}")
 
+    def test_every_installer_version_reference_agrees_with_the_package_being_installed(self) -> None:
+        """B-1: the unpack-directory regex escapes its dots, so a literal grep for the version misses it.
+
+        Collect every version literal in the installer, however it is written, and require each to be
+        either the successor being installed or the predecessor being rolled back to — nothing else.
+        """
+        import re
+        installer = (ROOT / "templates/install.sh.in").read_text(encoding="utf-8")
+        new_version = re.search(r"NEW_DEB='yoko-privileged-runtime_([0-9.-]+)_all\.deb'", installer).group(1)
+        old_version = re.search(r"OLD_DEB='yoko-privileged-runtime_([0-9.-]+)_all\.deb'", installer).group(1)
+        self.assertNotEqual(new_version, old_version)
+        found = {literal.replace("\\", "") for literal in re.findall(r"2(?:\\?\.)0(?:\\?\.)0-\d+", installer)}
+        self.assertTrue(found, "installer names no version at all")
+        self.assertEqual(found - {new_version, old_version}, set(),
+                         f"installer names versions that are neither successor nor rollback: {sorted(found)}")
+        unpack = re.search(r"yoko-coordinated-runtime-(2(?:\\?\.)0(?:\\?\.)0-\d+)", installer).group(1).replace("\\", "")
+        self.assertEqual(unpack, new_version, "unpack directory names a different release than the package")
+
     def test_installer_rollback_seal_digest_is_rendered_not_hardcoded(self) -> None:
         installer = (ROOT / "templates/install.sh.in").read_text(encoding="utf-8")
         sealer = (ROOT / "packaging/seal-release.py").read_text(encoding="utf-8")

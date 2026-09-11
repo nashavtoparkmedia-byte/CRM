@@ -103,7 +103,7 @@ trap on_exit EXIT
 test "$#" -eq 0
 test "$(/usr/bin/id -u)" = '0'
 test "$(/usr/bin/id -ru)" = '0'
-[[ "$EXPECTED_DIR" =~ ^/root/yoko-coordinated-runtime-2\.0\.0-15\.[A-Za-z0-9]{6,}/payload$ ]]
+[[ "$EXPECTED_DIR" =~ ^/root/yoko-coordinated-runtime-2\.0\.0-16\.[A-Za-z0-9]{6,}/payload$ ]]
 test "$(/usr/bin/readlink -f -- "$0")" = "$EXPECTED_DIR/install.sh"
 test "$(/bin/hostname)" = "$EXPECTED_HOST"
 
