@@ -14,9 +14,28 @@ assert.equal(existsSync(removedRoute), false, 'credential-leaking list-connectio
 const removedCleanupRoute = join(appRoot, 'src/app/api/debug-db/cleanup-chats/route.ts')
 assert.equal(existsSync(removedCleanupRoute), false, 'foreign-writing cleanup-chats route must be absent')
 
+// The proxy matcher widened when the Android shell lane was closed at the
+// request boundary, so pinning the old literal matcher would now fail on a
+// change that strengthened the file. What has to hold is the guarantee, not
+// the spelling: the debug-db denial still runs inside the app, it still
+// answers 404, and the matcher still reaches /api/. Behavioural proof that the
+// denial actually fires for both lanes lives in
+// src/lib/security/mobile-shell-lane.test.ts, which imports the proxy and
+// calls it — strictly stronger than the regex this replaces.
 const proxySource = readFileSync(join(appRoot, 'src/proxy.ts'), 'utf8')
-assert.match(proxySource, /matcher:\s*\[\s*['"]\/api\/debug-db\/:path\*['"]\s*\]/)
+assert.match(
+    proxySource,
+    /pathname\.startsWith\(\s*['"]\/api\/debug-db['"]\s*\)/,
+    'the application-level debug-db denial must remain in the proxy',
+)
 assert.match(proxySource, /status:\s*404/)
+const proxyMatchers = proxySource.match(/matcher:\s*\[([\s\S]*?)\]/)?.[1] ?? ''
+assert.notEqual(proxyMatchers.trim(), '', 'the proxy must declare a matcher')
+assert.equal(
+    /api/.test(proxyMatchers) && !/\/api\/debug-db/.test(proxyMatchers),
+    false,
+    'the proxy matcher must still reach /api/debug-db',
+)
 
 const nginxSource = readFileSync(join(repositoryRoot, 'deploy/nginx/templates/crm.conf.template'), 'utf8')
 const nginxDenials = nginxSource.match(/location\s+\^~\s+\/api\/debug-db\s*\{[\s\S]*?return\s+404\s*;/g) ?? []

@@ -4,11 +4,11 @@
   "baseline_sha256": "d033acb250e219bb7b06da78de72b799f3544d2384df23b3f136e512ea93693a",
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
-    "total_entries": 710,
-    "test": 35,
+    "total_entries": 713,
+    "test": 36,
     "dead_historical": 92,
     "migration_only": 80,
-    "active_operational": 498,
+    "active_operational": 505,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
   "surfaces": [
@@ -55,6 +55,24 @@
       "production_capability": "POSSIBLE",
       "rationale": "Content-specific hosted Stage A builder for one fixed accepted application revision. It produces a bounded coordinated Gravity and MAX artifact and has no registry, deployment, activation, production-secret, database, or live-provider mutation capability; lifecycle classification grants no such authority.",
       "classification_artifact": "architecture/recovery/control-plane/v2/hosted-artifacts/crm-6e3f094bf4b4-gravity-max-source-v1/README.md",
+      "functional_owner": "platform_engineering"
+    },
+    {
+      "path": "android/tools/acceptance-seed.sql",
+      "lifecycle": "TEST",
+      "disposition": "TEST_SUPPORT",
+      "production_capability": "NONE",
+      "functional_owner": "messaging",
+      "rationale": "Messaging-owned data fixture for Android shell acceptance. Its only executable consumer is the disposable PostgreSQL container the acceptance runbook creates on the loopback interface. It inserts three synthetic conversations and four messages whose external identifiers are literal 'acceptance' strings that no provider can match, is guarded by ON CONFLICT DO NOTHING, reads nothing, and is outside the sealed production migration inventory. This classification grants no production application, deployment, or cross-context write authority.",
+      "classification_artifact": "docs/mobile/ANDROID_SHELL_STAGE_1.md"
+    },
+    {
+      "path": "android/tools/bootstrap-gradle.sh",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "production_capability": "NONE",
+      "rationale": "Developer build entry point for the Android shell. It downloads the Gradle distribution pinned in android/gradle/wrapper/gradle-wrapper.properties, refuses to proceed on a SHA-256 mismatch, and then execs Gradle against the android project only. It reads no credential, touches no database, provider, or deployment surface, and produces no production artifact; the CRM build does not invoke it.",
+      "classification_artifact": "android/README.md",
       "functional_owner": "platform_engineering"
     },
     {

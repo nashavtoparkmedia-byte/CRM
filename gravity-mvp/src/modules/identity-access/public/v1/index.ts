@@ -18,3 +18,20 @@ export type { IntegrationAdminPrincipalV1 } from './integration-admin-auth'
 export {
     normalizeIntegrationAdminReturnTo,
 } from './integration-admin-credentials'
+export {
+    clearMobileSessionV1,
+    establishMobileSessionV1,
+    getMobileSessionPrincipalV1,
+    hasMobileSessionV1,
+    isMobileLaneConfigured,
+    writeDerivedUiIdentityCookie,
+} from './mobile-session-auth'
+export type { MobileLoginFailure } from './mobile-session-auth'
+export {
+    getMobileSessionRevocationEpoch,
+    isMobileAccessConfigured,
+    MOBILE_SESSION_COOKIE,
+    MOBILE_SESSION_TTL_SECONDS,
+    normalizeMobileReturnTo,
+} from './mobile-session-credentials'
+export type { MobileSessionPrincipalV1 } from './mobile-session-credentials'

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ACCEPTANCE VARIANT ONLY. Overrides the release configuration for this build type.
+
+  A disposable backend on a laptop has no certificate a phone will trust, so
+  this variant permits cleartext. That is a real reduction and it is why the
+  variant carries its own applicationId suffix: it can never be mistaken for,
+  or installed over, the build that talks to production.
+
+  The origin is still pinned at compile time by BuildConfig.CRM_ORIGIN, so the
+  shell still renders exactly one host. Release keeps cleartext off everywhere
+  and is unaffected by this file.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

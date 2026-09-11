@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">YOKO CRM</string>
+
+    <string name="error_title">Нет связи с CRM</string>
+    <string name="error_network">Не удалось загрузить CRM. Проверьте интернет и повторите.</string>
+    <string name="error_server">CRM временно недоступна (ошибка %1$d). Повторите через минуту.</string>
+    <string name="error_tls">Защищённое соединение с CRM не подтверждено. Вход остановлен.</string>
+    <string name="error_retry">Повторить</string>
+
+    <string name="notification_channel_name">Сообщения</string>
+    <string name="notification_channel_description">Уведомления о новых сообщениях в чатах CRM</string>
+
+    <string name="diagnostics_channel_name">Проверка уведомлений</string>
+    <string name="diagnostics_title">YOKO CRM · проверка перехода</string>
+    <string name="diagnostics_text">Откройте диалог, затем нажмите кнопку ниже</string>
+    <string name="diagnostics_action">Создать уведомление</string>
+
+    <string name="test_chat_title">Новое сообщение</string>
+    <string name="test_chat_text">Тестовое уведомление. Нажмите, чтобы открыть этот диалог.</string>
+    <string name="test_no_chat_title">Диалог не выбран</string>
+    <string name="test_no_chat_text">Сначала откройте диалог в мессенджере, затем повторите.</string>
+</resources>

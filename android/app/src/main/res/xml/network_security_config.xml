@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext is off everywhere, including for the pinned CRM origin. There is no
+  debug-overrides block and no trust-anchors override: the shell validates the
+  CRM certificate against the system store and nothing else. An SSL error is
+  cancelled by WebViewClient.onReceivedSslError, never proceeded through.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">yokoone.ru</domain>
+    </domain-config>
+</network-security-config>
