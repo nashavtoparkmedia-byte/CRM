@@ -2,13 +2,14 @@ const http = require('http');
 const https = require('https');
 const logger = require('../utils/logger');
 const config = require('../config');
+const { resolveCrmWebhookUrl } = require('./crmWebhookUrl');
 
 /**
  * Service to forward incoming Telegram events to the CRM system's Webhook.
  */
 class CrmIntegrationService {
     constructor() {
-        this.crmWebhookUrl = process.env.CRM_WEBHOOK_URL || 'http://localhost:3002/api/webhook/telegram';
+        this.crmWebhookUrl = resolveCrmWebhookUrl(process.env.CRM_WEBHOOK_URL);
         this.isEnabled = process.env.CRM_INTEGRATION_ENABLED !== 'false';
     }
 
@@ -117,7 +118,7 @@ class CrmIntegrationService {
                     telegramId: telegramId.toString(),
                     text: text,
                     direction: direction,
-                    username: username,
+                    username: username || null,
                     timestamp: new Date().toISOString(),
                     chatId: chatId?.toString() || null,
                     chatType: chatType || null,

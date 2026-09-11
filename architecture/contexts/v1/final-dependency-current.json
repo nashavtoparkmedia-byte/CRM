@@ -1,6 +1,6 @@
 {
   "generated_from": "architecture/contexts/v1/final-dependency-source.json",
-  "source_sha256": "9162f73ae98aecbce8d0caf24cef8cbabb5f05e46698f4cb62d048d70c6264eb",
+  "source_sha256": "174a689523a8d59f6a24eab7403c6e3b531a84ea65410d9213b3c1e90da3a928",
   "schema": "yoko.crm.final-dependency-current.v1",
   "summary": {
     "architecture_findings": 0,

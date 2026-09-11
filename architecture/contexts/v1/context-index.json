@@ -112,7 +112,7 @@
     },
     "executable_path_ownership_validator": {
       "path": "tools/architecture/validate-executable-path-ownership.mjs",
-      "sha256": "9643df17f47eb550440ade4b68535cc7c65aef12ae28183227e6ff65e3a009b8"
+      "sha256": "29245ec44f968214c14296d8dc73c41da1c6c80abba6f42d97f8c6c8a7d6bd53"
     },
     "final_dependency_source_deriver": {
       "path": "tools/architecture/derive-final-dependency-source.mjs",
@@ -124,7 +124,7 @@
     },
     "lifecycle_surface_registry": {
       "path": "architecture/recovery/whole-project-dod/v2/LIFECYCLE_SURFACE_CLASSIFICATION_REGISTRY.json",
-      "sha256": "e87f32b20a9fa817ad25914918a53a92b4696e402b1f192e03c3913722c13eaf"
+      "sha256": "50372431c9543d0affc8a15b4114dcd952e70e32509cea9bc2f57dc6bb64b98b"
     },
     "module_inventory": {
       "path": "architecture/evidence/v1/module-inventory.json",
@@ -159,7 +159,7 @@
     },
     "executable_path_ownership_coverage": {
       "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
-      "sha256": "8069cda6fe9710ec75903ef09f291df20522ae8cf16a14d93d40b733dadc255e"
+      "sha256": "b81330022beaf0aa1e6df6733d6b0b1e0eee3f52dfe5ed9242c726597bf62fce"
     },
     "executable_path_ownership_current_dependencies": {
       "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json",
@@ -167,11 +167,11 @@
     },
     "final_dependency_current": {
       "path": "architecture/contexts/v1/final-dependency-current.json",
-      "sha256": "3dd2a8fce1ea9425befebd03ff9cb42e1e2939d3b180d01eea688dcc4a3f204f"
+      "sha256": "aa3ff37c483328258445f1b8f4793f8ef6a40f7b943be8629434187092c6009a"
     },
     "final_dependency_source": {
       "path": "architecture/contexts/v1/final-dependency-source.json",
-      "sha256": "9162f73ae98aecbce8d0caf24cef8cbabb5f05e46698f4cb62d048d70c6264eb"
+      "sha256": "174a689523a8d59f6a24eab7403c6e3b531a84ea65410d9213b3c1e90da3a928"
     },
     "foreign_write_migration_plan": {
       "path": "architecture/contexts/v1/foreign-write-migration-plan.json",
