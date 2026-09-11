@@ -5,10 +5,10 @@
   "policy": "Lifecycle-only classification; no owner_context or ownership manifest is changed. Test and dead-historical writes remain visible and fail-closed.",
   "summary": {
     "total_entries": 713,
-    "test": 35,
+    "test": 36,
     "dead_historical": 92,
     "migration_only": 80,
-    "active_operational": 506,
+    "active_operational": 505,
     "policy": "Lifecycle registry classifies proven test, dead historical and controlled migration surfaces only where exact evidence exists; it never grants write ownership."
   },
   "surfaces": [
@@ -59,12 +59,12 @@
     },
     {
       "path": "android/tools/acceptance-seed.sql",
-      "lifecycle": "OPERATIONAL_SCRIPT",
-      "disposition": "ACTIVE",
+      "lifecycle": "TEST",
+      "disposition": "TEST_SUPPORT",
       "production_capability": "NONE",
-      "rationale": "Synthetic seed rows for Android shell acceptance. Two literal INSERTs of invented conversations and messages whose external identifiers are 'acceptance' strings no provider can match. Applied only by run-acceptance-backend.sh against the disposable loopback container it creates, never against a shared database, and it reads no credential entity.",
-      "classification_artifact": "docs/mobile/ANDROID_SHELL_STAGE_1.md",
-      "functional_owner": "platform_engineering"
+      "functional_owner": "messaging",
+      "rationale": "Messaging-owned data fixture for Android shell acceptance. Its only executable consumer is the disposable PostgreSQL container the acceptance runbook creates on the loopback interface. It inserts three synthetic conversations and four messages whose external identifiers are literal 'acceptance' strings that no provider can match, is guarded by ON CONFLICT DO NOTHING, reads nothing, and is outside the sealed production migration inventory. This classification grants no production application, deployment, or cross-context write authority.",
+      "classification_artifact": "docs/mobile/ANDROID_SHELL_STAGE_1.md"
     },
     {
       "path": "android/tools/bootstrap-gradle.sh",
