@@ -145,11 +145,19 @@ class LockLedger {
     }
 }
 
-async function lockRows(tx: Tx, table: string, ids: readonly string[]): Promise<void> {
+/**
+ * Locks several monetary-person rows together, in ascending id order.
+ *
+ * The table is a literal rather than a parameter: a generic helper that
+ * interpolated a table name would make this dynamic SQL that the write
+ * analyzer cannot resolve to an entity, and the only caller locks this one
+ * table anyway.
+ */
+async function lockCompensationPersonRows(tx: Tx, ids: readonly string[]): Promise<void> {
     const ordered = compensationRowLockOrderV1(ids)
     if (ordered.length === 0) return
     await tx.$queryRawUnsafe(
-        `SELECT "id" FROM "${table}" WHERE "id" = ANY($1::text[]) ORDER BY "id" FOR UPDATE`,
+        'SELECT "id" FROM "CompensationPerson" WHERE "id" = ANY($1::text[]) ORDER BY "id" FOR UPDATE',
         ordered,
     )
 }
@@ -237,7 +245,7 @@ export async function resolveCompensationPersonIdV1(
 
         if (resolution.status === 'fail_closed') {
             // Lock the equivalent people in deterministic id order before marking.
-            await lockRows(tx, 'CompensationPerson', resolution.compensationPersonIds)
+            await lockCompensationPersonRows(tx, resolution.compensationPersonIds)
             await tx.$executeRawUnsafe(
                 `UPDATE "CompensationPerson" SET "state" = 'reconciliation_required', "updatedAt" = NOW()
                  WHERE "id" = ANY($1::text[])`,
