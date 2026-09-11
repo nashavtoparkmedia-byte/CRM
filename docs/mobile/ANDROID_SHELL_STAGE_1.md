@@ -250,16 +250,23 @@ Acceptance runs against a disposable backend.
 
 ### Why this is a runbook and not a script
 
-An earlier revision shipped `android/tools/run-acceptance-backend.sh`. It was
-removed rather than kept, because a tracked shell script that runs
-`prisma migrate deploy` is, in this repository's model, a production migration
-surface: the credential control requires such a site to carry `MIGRATION`
-lifecycle with a confirmed production reachability, which is what
-`scripts/deploy.sh` and the Dockerfile legitimately declare. A throwaway test
-harness is not that, and declaring it so to satisfy a control would be a false
-statement in the evidence chain. Removing the executable surface is the honest
-option; the commands below are identical, and a document cannot be invoked by a
-deploy path.
+An earlier revision shipped `android/tools/run-acceptance-backend.sh`. A tracked
+shell script that runs `prisma migrate deploy` is, in this repository's model, a
+production migration surface: the credential control requires such a site to
+carry `MIGRATION` lifecycle with confirmed production reachability, which is what
+`scripts/deploy.sh` and the Dockerfile legitimately declare. A throwaway harness
+is not that, and declaring it so would put a false statement in the evidence
+chain.
+
+Being a document is not, by itself, evidence that the procedure is sound. What
+makes it acceptable is that every step below operates only on a disposable
+container created moments earlier on the loopback interface, uses the same
+committed-migrations mechanism production uses, and carries no production
+reachability. The seed it applies stays in the repository as a governed fixture
+rather than moving out of view: `android/tools/acceptance-seed.sql` is declared
+in the lifecycle registry as a messaging-owned `TEST` surface, because it really
+does write `Chat` and `Message` and that ownership is the honest description of
+it.
 
 ### Standing up the backend
 
@@ -308,11 +315,29 @@ and `SIP_WS_URL` being absent means the softphone is off for every client.
 
 Tear down with `docker rm -f yoko-acceptance-pg`.
 
+### Reaching it from the phone
+
+The backend binds to `127.0.0.1` only and no firewall port is opened for it, so
+the phone reaches it over a tunnel rather than the network. Two commands on a
+laptop that can see both the VPS and the phone:
+
+```
+ssh -N -L 3002:127.0.0.1:3002 root@<vps>
+```
+
+```
+adb reverse tcp:3002 tcp:3002
+```
+
+The first forwards the laptop's loopback port to the backend. The second makes
+the phone's own `127.0.0.1:3002` reach the laptop over USB. Nothing is exposed
+to the internet at any point, and no production nginx or firewall rule changes.
+
 ### Building the matching APK
 
 ```
 cd android && YOKO_SHELL_KEYSTORE_PROPERTIES=<path> \
-  bash tools/bootstrap-gradle.sh :app:assembleAcceptance -PyokoTestOrigin=http://<lan-ip>:3002
+  bash tools/bootstrap-gradle.sh :app:assembleAcceptance -PyokoTestOrigin=http://127.0.0.1:3002
 ```
 
 The artifact lands at `app/build/outputs/apk/acceptance/app-acceptance.apk` and
