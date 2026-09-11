@@ -4026,6 +4026,7 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
             // Chat-list, common-chats and generic frames can describe any conversation,
             // so they must never define the target of this send.
             const expectedSubmittedText = normalizeUiSendText(messageToSend)
+            const echoCandidates = new Set()
             let boundChatId = null
             let boundChatIdSource = null
             try {
@@ -4054,8 +4055,18 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
                 if (normalizeUiSendText(fp.message.text) !== expectedSubmittedText) continue
                 const cId = String(fp.chatId)
                 if (!/^\d{10,15}$/.test(cId)) continue
-                boundChatId = cId
+                // This is a first send to a phone with no known chat, so the conversation
+                // it creates is new. An id we already know belongs to some other thread.
+                if (chatCache.has(cId)) continue
+                echoCandidates.add(cId)
+              }
+              // Exactly one candidate is a binding. Two mean we cannot tell which chat
+              // this message went to, and guessing is what this path exists to avoid.
+              if (echoCandidates.size === 1) {
+                boundChatId = [...echoCandidates][0]
                 boundChatIdSource = 'op128_self_echo'
+              } else if (echoCandidates.size > 1) {
+                console.warn(`[ResolvePhone] ${echoCandidates.size} self-echo candidates; refusing to guess the target`)
                 break
               }
             }

@@ -136,8 +136,26 @@ def test_self_echo_must_carry_this_requests_text():
     poll = source[poll_start:poll_end]
     sender_check = poll.index('String(sender) !== String(transport._myUserId)')
     text_check = poll.index('!== expectedSubmittedText')
+    collect = poll.index('echoCandidates.add(cId)')
     bind = poll.index("boundChatIdSource = 'op128_self_echo'")
-    assert sender_check < bind and text_check < bind, 'both guards must precede the binding'
+    assert sender_check < collect and text_check < collect, 'both guards must precede collection'
+    assert collect < bind, 'a candidate is collected before anything is bound'
+
+
+def test_echo_target_must_be_a_conversation_we_do_not_already_know():
+    # A first send to an unknown phone creates a new chat. An id already in the cache
+    # belongs to some other thread, so binding it would cross two conversations.
+    assert 'if (chatCache.has(cId)) continue' in source
+
+
+def test_ambiguous_echo_candidates_bind_nothing():
+    # Two candidates mean we cannot tell which chat received the message, and guessing
+    # is exactly what this path exists to avoid.
+    assert 'if (echoCandidates.size === 1) {' in source
+    assert 'else if (echoCandidates.size > 1) {' in source
+    ambiguous = source.index('else if (echoCandidates.size > 1) {')
+    nxt = source.index('}', source.index('break', ambiguous))
+    assert 'boundChatId =' not in source[ambiguous:nxt]
 
 
 def test_shared_page_is_claimed_for_the_whole_compose_and_bind_window():
