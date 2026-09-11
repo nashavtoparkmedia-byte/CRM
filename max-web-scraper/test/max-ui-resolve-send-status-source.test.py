@@ -11,6 +11,15 @@ def test_send_bound_chat_id_comes_only_from_action_bound_signals():
     assert "boundChatIdSource = 'ui_route_url'" in source
     assert "boundChatIdSource = 'op128_self_echo'" in source
     assert "if (!transport?._myUserId || String(sender) !== String(transport._myUserId)) continue" in source
+    # The echo scan must only see frames from this send. The capture buffer starts
+    # filling when the phone-lookup dialog opens, so an earlier self echo from another
+    # chat would otherwise bind the wrong conversation to this message.
+    assert 'for (const f of capturedFrames.slice(sendFrameStartIndex)) {' in source
+    assert 'const sendFrameStartIndex = capturedFrames.length' in source
+    poll_start = source.index('Waiting for a send signal bound to this action')
+    poll_end = source.index('await returnHome(); cleanup()', poll_start)
+    poll = source[poll_start:poll_end]
+    assert 'for (const f of capturedFrames)' not in poll, 'unscoped frame scan in the bound-signal poll'
     # Only those two assignments exist; nothing else may set the source.
     import re
     assert len(re.findall(r"boundChatIdSource = '", source)) == 2

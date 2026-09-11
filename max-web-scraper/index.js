@@ -4009,7 +4009,10 @@ async function resolveViaPhoneLookupDialog(digits, messageToSend = null) {
                 boundChatIdSource = 'ui_route_url'
                 break
               }
-              for (const f of capturedFrames) {
+              // Only frames captured after the submit belong to this send. The buffer
+              // starts filling when the phone-lookup dialog opens, so an earlier self
+              // echo from another chat would otherwise bind the wrong conversation.
+              for (const f of capturedFrames.slice(sendFrameStartIndex)) {
                 if (f.opcode !== 128) continue
                 const fp = Array.isArray(f.payload)
                   ? f.payload.find(x => x && typeof x === 'object' && !Array.isArray(x) && x.message)
