@@ -32,13 +32,13 @@ const OWNERSHIP_VALIDATOR_PATH = 'tools/architecture/validate-executable-path-ow
 // the amendment document was rewritten around it.
 const ACCEPTED_AUTHORITY_ANCHORS = new Map([
   ['UPSTREAM_MAIN', {
-    commit: '69672fb5e8ec67efb27dfd62c685f1f4d59c5660',
+    commit: 'b49af1cf34c02cbdf1889d9b7c5dc1683854c753',
     accepted_evidence_path: REVIEWED_DECISION_PATH,
-    accepted_evidence_sha256: '30f563624148fe2cfe77e2e9807bd799f02121e4ba2c7396595370cf311d1d7f',
+    accepted_evidence_sha256: '819cb20b5666f49ac5bc013473808520f77121e252a0edf25eaf7032db73d241',
     current: {
-      tracked_executable_surfaces: 2304,
-      tracked_inventory_sha256: 'ad56f93977b2edbfaf187526cddd898f9d0c2f601ae3a9b4de15d70d3ed22c01',
-      coverage_sha256: '38c844bae3a5b1c9d6e19b209cf92f31175cfb847b80b6cb2f1e464d5202ba2d',
+      tracked_executable_surfaces: 2318,
+      tracked_inventory_sha256: '5d593e5b9a4be3bcbe1d7658e9e9d2e7e8fdca65022296d0ffc5ecdd78cf9f84',
+      coverage_sha256: 'd0c57e220d4ed0c3399ba377f87481466e419c912b89df41ebc0501d093daf16',
     },
   }],
   ['IDENTITY_CANDIDATE', {

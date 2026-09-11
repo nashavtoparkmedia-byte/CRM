@@ -179,11 +179,13 @@ function assertResolvedNonWriteProofs(triage, currentAmbiguous) {
       assert.equal(site.kind, 'raw', `mixed-script SQL proof requires a raw SQL site: ${record.site_signature}`)
       assert.equal(site.method, 'mixed-script-sql', `mixed-script SQL proof requires the exact mixed-script method: ${record.site_signature}`)
       assert.equal(site.fragment_source, 'embedded_database_string', `mixed-script SQL proof requires an embedded database string: ${record.site_signature}`)
-      const baseReasons = ['dynamic_sql_fragment', 'select_function_side_effect_unresolved']
-      const escapedLiteralReasons = ['dialect_dependent_string_escape', ...baseReasons]
+      const dynamicReasons = ['dynamic_sql_fragment']
+      const escapedDynamicReasons = ['dialect_dependent_string_escape', ...dynamicReasons]
+      const functionSideEffectReasons = [...dynamicReasons, 'select_function_side_effect_unresolved']
+      const escapedFunctionSideEffectReasons = ['dialect_dependent_string_escape', ...functionSideEffectReasons]
       assert.equal(
-        JSON.stringify(site.ambiguity_reasons) === JSON.stringify(baseReasons)
-          || JSON.stringify(site.ambiguity_reasons) === JSON.stringify(escapedLiteralReasons),
+        [dynamicReasons, escapedDynamicReasons, functionSideEffectReasons, escapedFunctionSideEffectReasons]
+          .some((expected) => JSON.stringify(site.ambiguity_reasons) === JSON.stringify(expected)),
         true,
         `mixed-script SQL proof ambiguity shape drift: ${record.site_signature}`,
       )

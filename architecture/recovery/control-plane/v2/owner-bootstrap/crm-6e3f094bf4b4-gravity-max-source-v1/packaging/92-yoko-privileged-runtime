@@ -1,0 +1,26 @@
+Defaults!/usr/local/sbin/yoko-privileged-runtime env_reset, !set_home, secure_path=/usr/sbin:/usr/bin:/sbin:/bin
+codexbot ALL=(root) NOSETENV: NOPASSWD: /usr/local/sbin/yoko-privileged-runtime version, \
+    /usr/local/sbin/yoko-privileged-runtime self-check, \
+    /usr/local/sbin/yoko-privileged-runtime capabilities, \
+    /usr/local/sbin/yoko-privileged-runtime policy-status, \
+    /usr/local/sbin/yoko-privileged-runtime registry-status, \
+    /usr/local/sbin/yoko-privileged-runtime audit-status, \
+    /usr/local/sbin/yoko-privileged-runtime storage-status, \
+    /usr/local/sbin/yoko-privileged-runtime recovery-status, \
+    /usr/local/sbin/yoko-privileged-runtime predecessor-observe, \
+    /usr/local/sbin/yoko-privileged-runtime docker-provenance, \
+    /usr/local/sbin/yoko-privileged-runtime fs-stat *, \
+    /usr/local/sbin/yoko-privileged-runtime fs-read * *, \
+    /usr/local/sbin/yoko-privileged-runtime fs-tree *, \
+    /usr/local/sbin/yoko-privileged-runtime snapshot-manifest *, \
+    /usr/local/sbin/yoko-privileged-runtime git-index *, \
+    /usr/local/sbin/yoko-privileged-runtime docker-inspect *, \
+    /usr/local/sbin/yoko-privileged-runtime service-status *, \
+    /usr/local/sbin/yoko-privileged-runtime service-health *, \
+    /usr/local/sbin/yoko-privileged-runtime service-restart *, \
+    /usr/local/sbin/yoko-privileged-runtime release-preflight, \
+    /usr/local/sbin/yoko-privileged-runtime release-activate, \
+    /usr/local/sbin/yoko-privileged-runtime config-activate, \
+    /usr/local/sbin/yoko-privileged-runtime database-status, \
+    /usr/local/sbin/yoko-privileged-runtime database-migrate, \
+    /usr/local/sbin/yoko-privileged-runtime rollback
