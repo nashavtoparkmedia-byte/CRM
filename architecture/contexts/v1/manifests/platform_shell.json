@@ -112,6 +112,7 @@
   ],
   "owned_data": [],
   "owned_paths": [
+    "android",
     "gravity-mvp/src/app/layout.tsx",
     "gravity-mvp/src/components",
     "gravity-mvp/src/instrumentation.ts",
