@@ -30,8 +30,6 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.webkit.WebViewCompat
-import androidx.webkit.WebViewFeature
 
 /**
  * The whole shell.
@@ -54,9 +52,6 @@ class MainActivity : AppCompatActivity() {
 
     /** URL the shell most recently decided to load; the retry button reuses it. */
     private var currentTargetUrl: String = CrmOrigin.startUrl()
-
-    /** Set while a notification target has not yet been rendered. */
-    private var pendingDeepLinkUrl: String? = null
 
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
 
@@ -90,19 +85,15 @@ class MainActivity : AppCompatActivity() {
 
         applyWindowInsets()
         configureWebView()
-        installBridge()
         installBackHandler()
         ChatNotifications.ensureChannel(this)
         requestNotificationPermissionIfNeeded()
 
-        val fromNotification = deepLinkUrlFrom(intent)
+        val fromNotification = consumeDeepLinkUrl(intent)
         when {
             // A notification tap always wins over restored state: the operator
             // asked for a specific conversation.
-            fromNotification != null -> {
-                pendingDeepLinkUrl = fromNotification
-                load(fromNotification)
-            }
+            fromNotification != null -> load(fromNotification)
             // Process recreation with live state: put back the history stack and
             // the scroll position instead of reloading from scratch.
             savedInstanceState != null && webView.restoreState(savedInstanceState) != null -> {
@@ -121,8 +112,7 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        val target = deepLinkUrlFrom(intent) ?: return
-        pendingDeepLinkUrl = target
+        val target = consumeDeepLinkUrl(intent) ?: return
         load(target)
     }
 
@@ -259,33 +249,21 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ── Bridge ───────────────────────────────────────────────────────────
-
-    private fun installBridge() {
-        if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
-            // Older WebView: the shell simply has no bridge. Everything the
-            // operator needs still works, because the bridge only carries
-            // hints. It is never a fallback to addJavascriptInterface, which
-            // cannot be restricted to one origin.
-            Log.i(TAG, "WebMessageListener unsupported; shell runs without a bridge")
-            return
-        }
-
-        val bridge = ShellBridge(
-            onDeepLinkApplied = { pendingDeepLinkUrl = null },
-            onSessionExpired = {
-                pendingDeepLinkUrl = null
-                runOnUiThread { load(CrmOrigin.startUrl()) }
-            },
-        )
-
-        WebViewCompat.addWebMessageListener(
-            webView,
-            ShellBridge.JS_OBJECT_NAME,
-            // Enforced by the WebView: a page from any other origin never sees
-            // the object. This is the whole reason for using this API.
-            setOf(CrmOrigin.ORIGIN),
-        ) { _, message, _, _, _ -> bridge.handle(message.data) }
-    }
+    //
+    // There is none, deliberately.
+    //
+    // Stage 1 needs no native operation from the page. Session expiry is
+    // handled by the CRM redirecting to the mobile login, a notification target
+    // is consumed natively from the Intent, and every other decision is the
+    // CRM's. Injecting an object into the page to carry messages nothing sends
+    // would be attack surface bought for nothing.
+    //
+    // When push lands it will need exactly one operation, to hand the FCM
+    // registration token to the page so it can be bound to the session that
+    // owns the device. That will use WebViewCompat.addWebMessageListener with
+    // an allowed-origin rule of BuildConfig.CRM_ORIGIN — never
+    // addJavascriptInterface, which injects into every frame regardless of
+    // origin and cannot be restricted.
 
     // ── Navigation and state ─────────────────────────────────────────────
 
@@ -313,13 +291,27 @@ class MainActivity : AppCompatActivity() {
         load(currentTargetUrl)
     }
 
-    private fun deepLinkUrlFrom(intent: Intent?): String? {
+    /**
+     * Read a notification target and then strip it from the Intent.
+     *
+     * The strip is the point. Android keeps the launching Intent attached to
+     * the activity, so without it a target would be replayed every time the
+     * activity is recreated — after a process kill the operator would be pulled
+     * back to whichever conversation they last tapped, losing wherever they had
+     * navigated since. A notification opens a conversation once.
+     */
+    private fun consumeDeepLinkUrl(intent: Intent?): String? {
         val chatId = intent?.getStringExtra(ChatNotifications.EXTRA_CHAT_ID) ?: return null
         val url = CrmOrigin.buildOpenChatUrl(
             chatId = chatId,
             channelTab = intent.getStringExtra(ChatNotifications.EXTRA_CHANNEL_TAB),
             messageId = intent.getStringExtra(ChatNotifications.EXTRA_MESSAGE_ID),
         )
+
+        intent.removeExtra(ChatNotifications.EXTRA_CHAT_ID)
+        intent.removeExtra(ChatNotifications.EXTRA_CHANNEL_TAB)
+        intent.removeExtra(ChatNotifications.EXTRA_MESSAGE_ID)
+
         if (url == null) {
             // A payload the shell will not act on. Fall back to the Messenger
             // rather than guessing.

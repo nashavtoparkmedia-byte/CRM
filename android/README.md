@@ -66,9 +66,12 @@ release artifact.
 |---|---|
 | One origin, compile-time constant | `BuildConfig.CRM_ORIGIN`, enforced by `CrmOrigin.isInAppUrl` |
 | A notification payload can never become a URL | `CrmOrigin.buildOpenChatUrl` validates, then targets the CRM gate |
+| A notification target is acted on once, not replayed | `consumeDeepLinkUrl` strips the extras from the Intent |
 | No cleartext, no click-through on a bad certificate | `network_security_config.xml`, `onReceivedSslError` cancels |
-| The bridge is invisible off-origin | `WebViewCompat.addWebMessageListener` allowed-origin rule |
+| No JavaScript bridge at all | Nothing is injected into the page; see the Bridge note in `MainActivity` |
 | The shell never becomes a second softphone | `onPermissionRequest` denies; the CRM also withholds SIP credentials from a mobile session |
 | A notification never marks a message read | The shell issues no network request of its own |
 
-Each row is covered by a test in `app/src/test/java/ru/yokoone/crm/shell/`.
+The URL and payload rules are covered by 16 JVM tests in
+`app/src/test/java/ru/yokoone/crm/shell/`. The rest are structural: there is no
+bridge to test, and the shell has no HTTP client to make a request with.

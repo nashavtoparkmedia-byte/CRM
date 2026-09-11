@@ -128,6 +128,13 @@ gated stage. The shape it should take:
   function an FCM message handler would call. Nothing else in the shell
   changes, and the payload stays `{chatId, channelTab, messageId}` — never a
   URL.
+- **Bridge**: stage 1 ships none. Nothing the page could tell the shell was
+  needed, and an injected object carrying messages nothing sends is attack
+  surface bought for nothing. The push stage adds exactly one operation, to
+  hand the registration token to the page, using
+  `WebViewCompat.addWebMessageListener` with an allowed-origin rule of the
+  pinned origin — never `addJavascriptInterface`, which injects into every
+  frame regardless of origin.
 - **Fan-out hook**: `emitMessageReceived` in `gravity-mvp/src/lib/messageEvents.ts`
   is the one entry point every inbound channel goes through. It is the correct
   place for a push fan-out and was not modified in this stage.
