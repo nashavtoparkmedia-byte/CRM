@@ -43,6 +43,14 @@ Unit tests (JVM, no device or emulator needed):
 bash tools/bootstrap-gradle.sh :app:testReleaseUnitTest
 ```
 
+## Acceptance build
+
+`:app:assembleAcceptance -PyokoTestOrigin=<origin>` produces a build that talks
+to a disposable backend instead of production. It carries its own
+`applicationId` suffix, so it installs alongside the production-origin build and
+can never be confused with it. The steps for standing that backend up are in
+`docs/mobile/ANDROID_SHELL_STAGE_1.md`.
+
 ## Signing
 
 Release signing reads a properties file whose path comes from
@@ -67,9 +75,10 @@ release artifact.
 | One origin, compile-time constant | `BuildConfig.CRM_ORIGIN`, enforced by `CrmOrigin.isInAppUrl` |
 | A notification payload can never become a URL | `CrmOrigin.buildOpenChatUrl` validates, then targets the CRM gate |
 | A notification target is acted on once, not replayed | `consumeDeepLinkUrl` strips the extras from the Intent |
+| The shell lane reaches nothing without a live session | `gravity-mvp/src/proxy.ts`, keyed on the User-Agent marker |
 | No cleartext, no click-through on a bad certificate | `network_security_config.xml`, `onReceivedSslError` cancels |
 | No JavaScript bridge at all | Nothing is injected into the page; see the Bridge note in `MainActivity` |
-| The shell never becomes a second softphone | `onPermissionRequest` denies; the CRM also withholds SIP credentials from a mobile session |
+| The shell never becomes a second softphone | `onPermissionRequest` denies; the CRM withholds SIP credentials from this client whatever its session state |
 | A notification never marks a message read | The shell issues no network request of its own |
 
 The URL and payload rules are covered by 16 JVM tests in

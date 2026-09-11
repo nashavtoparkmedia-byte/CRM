@@ -242,23 +242,95 @@ conversation. Remote push is not implemented, so no push result can be claimed.
 
 ## Acceptance on a phone
 
-**Installing an APK adds no server routes.** `/login/mobile` and
-`/messages/open` exist only in a backend running this branch, and the request
-boundary that closes the shell lane is part of it too. Production does not have
-them, and production has no `MOBILE_ACCESS_*` provisioned, so the
-production-origin build cannot log in. Acceptance runs against a disposable
-backend:
+**Installing an APK adds no server routes.** `/login/mobile`, the request
+boundary that closes the shell lane, and `/messages/open` exist only in a
+backend running this branch. Production has none of them and has no
+`MOBILE_ACCESS_*` provisioned, so the production-origin build cannot log in.
+Acceptance runs against a disposable backend.
+
+### Why this is a runbook and not a script
+
+An earlier revision shipped `android/tools/run-acceptance-backend.sh`. It was
+removed rather than kept, because a tracked shell script that runs
+`prisma migrate deploy` is, in this repository's model, a production migration
+surface: the credential control requires such a site to carry `MIGRATION`
+lifecycle with a confirmed production reachability, which is what
+`scripts/deploy.sh` and the Dockerfile legitimately declare. A throwaway test
+harness is not that, and declaring it so to satisfy a control would be a false
+statement in the evidence chain. Removing the executable surface is the honest
+option; the commands below are identical, and a document cannot be invoked by a
+deploy path.
+
+### Standing up the backend
+
+Isolation is the point of these steps, not the database. A stray provider token
+in the ambient environment or in a dotenv file would let an acceptance run send
+a real message to a real customer. So the app is started under `env -i` with an
+explicit allowlist, and nothing else survives.
+
+First refuse to proceed if any dotenv file exists where Next or Prisma would
+auto-load one, because it would bypass the allowlist:
 
 ```
-bash android/tools/run-acceptance-backend.sh
+ls gravity-mvp/.env gravity-mvp/.env.local gravity-mvp/.env.production .env 2>/dev/null
 ```
 
-It starts its own PostgreSQL container, applies this branch's schema, seeds
-three synthetic conversations, and prints the LAN origin plus the exact command
-to build the matching APK. `--stop` removes the database. It never touches
-production and leaves `SIP_WS_URL` unset, so no telephony can start.
+Then, from the repository root:
 
-Build and install the matching artifact it names, then:
+```
+docker run -d --name yoko-acceptance-pg \
+  -e POSTGRES_USER=acceptance -e POSTGRES_PASSWORD=acceptance -e POSTGRES_DB=acceptance \
+  -p 127.0.0.1:55432:5432 postgres:16-alpine
+```
+
+```
+cd gravity-mvp && env -i PATH="$PATH" HOME="$HOME" \
+  DATABASE_URL='postgresql://acceptance:acceptance@127.0.0.1:55432/acceptance?schema=public' \
+  npx prisma migrate deploy
+```
+
+```
+docker exec -i yoko-acceptance-pg psql -U acceptance -d acceptance -v ON_ERROR_STOP=1 \
+  < android/tools/acceptance-seed.sql
+```
+
+```
+cd gravity-mvp && env -i PATH="$PATH" HOME="$HOME" NODE_ENV=development \
+  DATABASE_URL='postgresql://acceptance:acceptance@127.0.0.1:55432/acceptance?schema=public' \
+  MOBILE_ACCESS_USER='acceptance' MOBILE_ACCESS_PASS='<choose one, 12+ chars>' \
+  npx next dev -p 3002 -H 0.0.0.0
+```
+
+`env -i` is what makes this safe: no Telegram, WhatsApp, MAX, Avito, bot, SIP,
+TURN, Redis, MinIO, S3 or Yandex credential is passed, so every outbound
+transport is unconfigured and inert. Nothing seeded can reach a real recipient,
+and `SIP_WS_URL` being absent means the softphone is off for every client.
+
+Tear down with `docker rm -f yoko-acceptance-pg`.
+
+### Building the matching APK
+
+```
+cd android && YOKO_SHELL_KEYSTORE_PROPERTIES=<path> \
+  bash tools/bootstrap-gradle.sh :app:assembleAcceptance -PyokoTestOrigin=http://<lan-ip>:3002
+```
+
+The artifact lands at `app/build/outputs/apk/acceptance/app-acceptance.apk` and
+installs alongside the production-origin build rather than over it.
+
+### What this proves and what it does not
+
+Verifiable on the test backend: the login gate, credential refusal, session
+expiry, revocation, logout, reading seeded conversations, deep-link navigation,
+Back and keyboard behaviour, and that no softphone ever registers.
+
+NOT verifiable on it: actual outbound delivery. With no provider configured, a
+send fails at the transport after the CRM has accepted and authorised the
+request, so it proves the request path, not that a customer receives anything.
+Remote push is not implemented at all.
+
+### Steps on the phone
+
 
 1. Install the APK. Android will warn about an unknown source; allow it.
 2. Open the app. It must show the mobile login screen, not the Messenger.
