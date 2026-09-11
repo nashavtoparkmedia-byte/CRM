@@ -139,6 +139,19 @@ gated stage. The shape it should take:
   is the one entry point every inbound channel goes through. It is the correct
   place for a push fan-out and was not modified in this stage.
 
+## Known functional cost
+
+Hold-to-record voice messages do not work in the shell. The composer records
+through `getUserMedia`, the shell denies every device-capability request, and
+the CRM swallows the rejection, so the button does nothing visible. Typed
+messages, photo and file attachments are unaffected.
+
+This was a choice, not an oversight. Granting audio means declaring
+`RECORD_AUDIO` and prompting for the microphone on a CRM app whose next stage
+is telephony, at exactly the moment the shell must not suggest it handles
+calls. Re-enabling it later is small: declare the permission, request it on
+first use, and grant only `RESOURCE_AUDIO_CAPTURE`.
+
 ## Still unproven
 
 Everything on a physical device: real keyboard and inset behaviour, WebView

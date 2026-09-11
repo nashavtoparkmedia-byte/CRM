@@ -222,11 +222,21 @@ class MainActivity : AppCompatActivity() {
         /**
          * Deny every device capability the page asks for.
          *
-         * Stage 1 is messaging only. The CRM root layout mounts a browser
-         * softphone on every page; refusing the microphone here means the shell
-         * can never become a second, competing call endpoint even if a future
-         * change re-enables SIP for a mobile session. Telephony is a later
-         * stage and will be an explicit decision, not an inherited default.
+         * This has a known cost: the composer's hold-to-record voice message
+         * calls getUserMedia, so holding the microphone button does nothing in
+         * the shell. It fails silently, because the CRM swallows the rejection.
+         * Typed messages, photo and file attachments are unaffected.
+         *
+         * It is still the right default for stage 1. Granting audio would mean
+         * declaring RECORD_AUDIO and asking the operator for the microphone on
+         * a CRM app whose next stage is telephony — which reads as "this app is
+         * about to start taking calls" at exactly the moment the shell must not
+         * suggest that. The softphone itself is already stopped server-side, so
+         * this is defence in depth, not the mechanism.
+         *
+         * Re-enabling voice messages is a small, separate change: declare
+         * RECORD_AUDIO, request it on first use, and grant only
+         * PermissionRequest.RESOURCE_AUDIO_CAPTURE — never the whole request.
          */
         override fun onPermissionRequest(request: PermissionRequest) = request.deny()
 
