@@ -77,7 +77,7 @@
       "capability_id": "mmc.reviewed.v1.production_migration_authority.deploy_script_migrate_deploy",
       "status": "APPROVED",
       "approved": true,
-      "source": { "path": "scripts/deploy.sh", "source_sha256": "289f1e2309d0c43a05de24480face07c7579c5a79e457b02e7d381930e4fa4c8", "entrypoint": "project deployment script migration step", "site_signatures": ["c6687956981285330bc22e89d2b134cf4e70ebb217de1642f59d51ad782ba261"] },
+      "source": { "path": "scripts/deploy.sh", "source_sha256": "289f1e2309d0c43a05de24480face07c7579c5a79e457b02e7d381930e4fa4c8", "entrypoint": "project deployment script migration step", "site_signatures": ["b62b9eb6579fa17a9e302818a760596fb888e018033c57f66e6940aa04614189"] },
       "lifecycle": "MIGRATION",
       "lifecycle_evidence_status": "REVIEWED_ACTIVE_DEPLOYMENT_ENTRYPOINT",
       "lifecycle_evidence": "The deployment script explicitly applies the checked Prisma migration catalog for gravity-mvp.",

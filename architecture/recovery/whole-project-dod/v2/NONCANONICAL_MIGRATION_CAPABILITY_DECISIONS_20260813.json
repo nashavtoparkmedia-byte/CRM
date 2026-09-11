@@ -201,7 +201,7 @@
       "lifecycle_evidence_status": "REVIEWED_OPERATOR_MIGRATE_DEPLOY_COMMAND",
       "rationale": "Explicit deployment entrypoint invokes Prisma migrate deploy before application startup, so its database write is migration-only.",
       "expected_site_signatures": [
-        "c6687956981285330bc22e89d2b134cf4e70ebb217de1642f59d51ad782ba261"
+        "b62b9eb6579fa17a9e302818a760596fb888e018033c57f66e6940aa04614189"
       ]
     },
     {
@@ -536,7 +536,7 @@
       "existing_capability_id": "mmc.reviewed.v1.production_migration_authority.migrate_data_restore"
     },
     {
-      "site_signature": "c6687956981285330bc22e89d2b134cf4e70ebb217de1642f59d51ad782ba261",
+      "site_signature": "b62b9eb6579fa17a9e302818a760596fb888e018033c57f66e6940aa04614189",
       "path": "scripts/deploy.sh",
       "source_sha256": "289f1e2309d0c43a05de24480face07c7579c5a79e457b02e7d381930e4fa4c8",
       "line": 115,

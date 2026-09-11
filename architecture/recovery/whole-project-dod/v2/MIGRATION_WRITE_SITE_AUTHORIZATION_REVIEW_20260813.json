@@ -8,7 +8,7 @@
   },
   "noncanonical_review": {
     "path": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-    "source_sha256": "5c2f684e741b8534b48774fa0adfa85141d7ae3d6b7c93ff643a2062b99fa650",
+    "source_sha256": "fe5e274534d4837f13d95e21d411de92f58f894248e5f574a0722af42e13e9de",
     "reviewed_path_count": 18,
     "policy": "Noncanonical sites are materialized only from exact committed source-specific decisions; absent sites fail materialization."
   },
@@ -20,7 +20,7 @@
   },
   "denominator": {
     "non_test_migration_only_sites": 829,
-    "sorted_site_signatures_sha256": "da0387fbe1a79dbd0d1d375b3b695c6a125d77311765bb4c0b47b099e9ed1f72"
+    "sorted_site_signatures_sha256": "242352203309b989461d970247db3012d1aa7e542d779eacb9b090fa5a6b7041"
   },
   "authorizations": [
     {
@@ -6149,8 +6149,8 @@
       }
     },
     {
-      "capability_id": "mmc.migration-site.v1.production_migration_authority.c668795698128533",
-      "site_signature": "c6687956981285330bc22e89d2b134cf4e70ebb217de1642f59d51ad782ba261",
+      "capability_id": "mmc.migration-site.v1.production_migration_authority.b62b9eb6579fa17a",
+      "site_signature": "b62b9eb6579fa17a9e302818a760596fb888e018033c57f66e6940aa04614189",
       "status": "APPROVED",
       "approved": true,
       "source": {
