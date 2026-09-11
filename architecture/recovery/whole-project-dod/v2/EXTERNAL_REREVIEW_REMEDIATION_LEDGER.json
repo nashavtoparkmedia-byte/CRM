@@ -23,13 +23,13 @@
     "final_output_sha256_without_added_newline": "0655008414018f50153c07655fdb235fe94964253ad11f928cf7c933c9f59a2c"
   },
   "external_review_r1_multi_park_trip_sync_20260911": {
-    "task_id": null,
-    "session_jsonl": null,
-    "session_jsonl_sha256": null,
-    "review_prompt": null,
-    "review_prompt_sha256": null,
-    "final_output_timestamp": null,
-    "final_output_sha256_without_added_newline": null
+    "task_id": "6915801a-227c-47af-be06-1e8ec3a05c61",
+    "session_jsonl": "/root/.claude/projects/-opt-codex-work/6915801a-227c-47af-be06-1e8ec3a05c61.jsonl",
+    "session_jsonl_sha256": "a4ed5ebec4488684667fcbaf4890272d597b5f7369be01b2a04edf5f2db8bcf9",
+    "review_prompt": "architecture/recovery/whole-project-dod/v2/INDEPENDENT_REVIEWER_PROMPT_R1_MULTI_PARK_TRIP_SYNC_20260911.md",
+    "review_prompt_sha256": "135439ca3b5476ab4f54761734925cddc410c7de42af5acad4d9e80929a28321",
+    "final_output_timestamp": "2026-09-11T10:19:29Z",
+    "final_output_sha256_without_added_newline": "65dc8b4f9cc211ef75382ccceafa92d135bfcf316d24cd2e2a1cd91e2efece87"
   },
   "canonical_dod": "architecture/recovery/whole-project-dod/v2/ORIGINAL_DOD_CANONICAL_MAPPING.json",
   "findings": [
