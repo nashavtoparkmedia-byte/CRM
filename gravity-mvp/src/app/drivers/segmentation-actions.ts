@@ -47,6 +47,7 @@ export async function getSegmentationPreview(settings: Thresholds): Promise<Reco
 
 import { YandexFleetService } from '@/lib/YandexFleetService'
 import { runYandexSync, getYandexSyncStatus as getYandexSyncStatusInternal, type SyncStatusView } from '@/lib/yandexSync'
+import { requireIntegrationAdminAccess } from '@/modules/identity-access/public/v1'
 
 /**
  * Trigger bulk recalculation.
@@ -55,6 +56,7 @@ import { runYandexSync, getYandexSyncStatus as getYandexSyncStatusInternal, type
  * data being recalculated is stale).
  */
 export async function triggerRecalculation(): Promise<{ count: number; syncError?: string }> {
+    await requireIntegrationAdminAccess()
     const thresholds = await getThresholds()
     let syncError: string | undefined
 
@@ -103,6 +105,7 @@ export interface ManualSyncResult {
  * red toast with the actual cause (auth issue, network timeout, etc).
  */
 export async function triggerYandexSync(): Promise<ManualSyncResult> {
+    await requireIntegrationAdminAccess()
     const result = await runYandexSync()
     if (result.ok) {
         revalidatePath('/drivers')

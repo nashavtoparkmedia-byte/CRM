@@ -104,6 +104,12 @@ describe('integration credential authorization source boundary', () => {
         expect(exportedFunction(source, 'testAiConnection')).toMatch(/await assertCanEditAi\(\)/)
     })
 
+    test('Yandex Fleet sync triggers authorize before reaching the fleet capability', () => {
+        const source = read('src/app/drivers/segmentation-actions.ts')
+        expectGuardBefore(source, 'triggerYandexSync', /runYandexSync\(/)
+        expectGuardBefore(source, 'triggerRecalculation', /YandexFleetService\.syncTrips/)
+    })
+
     test('protected pages establish the login flow and sessions are hardened', () => {
         for (const path of [
             'src/app/settings/api/page.tsx',
