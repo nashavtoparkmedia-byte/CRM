@@ -4089,7 +4089,7 @@
       "rationale": "Explicit deployment entrypoint invokes Prisma migrate deploy before application startup, so its database write is migration-only.",
       "classification_artifact": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
       "functional_owner": "production_migration_authority",
-      "source_sha256": "a0205db0f22fbd8a3c123a4c04776538f88118906e3abb26f51fa000d5dca371"
+      "source_sha256": "289f1e2309d0c43a05de24480face07c7579c5a79e457b02e7d381930e4fa4c8"
     },
     {
       "path": "scripts/get-ssl.sh",

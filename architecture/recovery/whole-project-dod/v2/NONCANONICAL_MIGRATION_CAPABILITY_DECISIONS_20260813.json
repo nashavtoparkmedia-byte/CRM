@@ -538,7 +538,7 @@
     {
       "site_signature": "c6687956981285330bc22e89d2b134cf4e70ebb217de1642f59d51ad782ba261",
       "path": "scripts/deploy.sh",
-      "source_sha256": "a0205db0f22fbd8a3c123a4c04776538f88118906e3abb26f51fa000d5dca371",
+      "source_sha256": "289f1e2309d0c43a05de24480face07c7579c5a79e457b02e7d381930e4fa4c8",
       "line": 115,
       "column": 41,
       "method": "mixed-script-command:prisma migrate deploy",

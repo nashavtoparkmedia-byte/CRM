@@ -123,7 +123,6 @@ fi
 # default on any project that carries a service declared elsewhere. Deploying
 # does not require it, so it is opt-in: set DEPLOY_REMOVE_ORPHANS=true only when
 # you actually intend to prune deleted services.
-REMOVE_ORPHANS_FLAG=""
 if [ "${DEPLOY_REMOVE_ORPHANS:-false}" = "true" ]; then
     # Requested — now prove it is safe. Every running container in the project
     # must be defined by the compose files we are about to apply; if one is not,
@@ -144,14 +143,19 @@ if [ "${DEPLOY_REMOVE_ORPHANS:-false}" = "true" ]; then
         printf '  - %s\n' ${UNDECLARED} >&2
         fail "добавьте их compose-файлы в COMPOSE_OVERLAY_FILES (.env.production) или снимите DEPLOY_REMOVE_ORPHANS, иначе --remove-orphans их уничтожит"
     fi
-    REMOVE_ORPHANS_FLAG="--remove-orphans"
-else
-    log "Шаг 4/5: --remove-orphans отключён (DEPLOY_REMOVE_ORPHANS не равен true)"
-fi
 
-log "Шаг 4/5: docker compose up -d"
-# shellcheck disable=SC2086
-${COMPOSE} up -d ${REMOVE_ORPHANS_FLAG} ${TARGET_SERVICES} || fail "up упал"
+    log "Шаг 4/5: docker compose up -d --remove-orphans"
+    # Both branches are spelled out rather than assembling the flag into a
+    # variable, so the deployment form stays literally greppable: the accepted
+    # migration authority control locates this exact step to prove migrations are
+    # applied, and verified, before application code is replaced.
+    # shellcheck disable=SC2086
+    ${COMPOSE} up -d --remove-orphans ${TARGET_SERVICES} || fail "up упал"
+else
+    log "Шаг 4/5: docker compose up -d (--remove-orphans отключён)"
+    # shellcheck disable=SC2086
+    ${COMPOSE} up -d ${TARGET_SERVICES} || fail "up упал"
+fi
 
 # ─── 5. Ждём healthy ─────────────────────────────────────────────────────────
 log "Шаг 5/5: проверка healthcheck'ов (до 120 сек)"
