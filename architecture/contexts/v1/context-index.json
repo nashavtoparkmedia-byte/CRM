@@ -63,7 +63,7 @@
     {
       "context": "platform_shell",
       "path": "architecture/contexts/v1/manifests/platform_shell.json",
-      "sha256": "46c3f74bf9a6104283f88ef583ac249c39e96a99e2d0795028d37280351a1500"
+      "sha256": "27a40fbda2e7f06a0d690ae7d7b41c855b19927916eca7a4b9f7065c03b1c3a1"
     },
     {
       "context": "telegram_channel",
@@ -159,7 +159,7 @@
     },
     "executable_path_ownership_coverage": {
       "path": "architecture/contexts/v1/executable-path-ownership-coverage.json",
-      "sha256": "94ae06b05beed2f2d3fd8f35dbc604229f367c98a37dc007e16c5284d32aa460"
+      "sha256": "c11a01219cf9b84a1623f7ff6b431c3a3ec3df7b602367a4dccb7e3e2d9f4334"
     },
     "executable_path_ownership_current_dependencies": {
       "path": "architecture/contexts/v1/executable-path-ownership-current-dependencies.json",
@@ -167,11 +167,11 @@
     },
     "final_dependency_current": {
       "path": "architecture/contexts/v1/final-dependency-current.json",
-      "sha256": "6d9e47dc325f649545f7fdc858070ec8b990bd4ce05d359a3ca51f8ff75b25e7"
+      "sha256": "e5414a65e01cbc8869b24662fde370ccf067227f635b74b17bf84913a9c42b14"
     },
     "final_dependency_source": {
       "path": "architecture/contexts/v1/final-dependency-source.json",
-      "sha256": "25da684d697d43e4cbef4802b0be5714f94fbc04de489fb8da8e006cbdf50d18"
+      "sha256": "e6dcb7f1e6a4a0686b3675f3e901c26c7744797b04f421ff73a6903c77615400"
     },
     "foreign_write_migration_plan": {
       "path": "architecture/contexts/v1/foreign-write-migration-plan.json",
