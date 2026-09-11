@@ -8398,7 +8398,7 @@
         "path": "scripts/deploy.sh",
         "entrypoint": "scripts/deploy.sh",
         "site_signatures": [
-          "f22dde2540f0913d791494702399cad8f917a81d77e03a911b5fdfc7537f18cf"
+          "c6687956981285330bc22e89d2b134cf4e70ebb217de1642f59d51ad782ba261"
         ]
       },
       "lifecycle": "ONE_SHOT_PENDING_RETIREMENT",

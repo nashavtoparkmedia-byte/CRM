@@ -8,7 +8,7 @@
   },
   "noncanonical_review": {
     "path": "architecture/recovery/whole-project-dod/v2/NONCANONICAL_MIGRATION_CAPABILITY_DECISIONS_20260813.json",
-    "source_sha256": "79ffc25daca4aa6b865564dd06993cfaa45824abbcc4f485ef0068d4fc6239d7",
+    "source_sha256": "5c2f684e741b8534b48774fa0adfa85141d7ae3d6b7c93ff643a2062b99fa650",
     "reviewed_path_count": 18,
     "policy": "Noncanonical sites are materialized only from exact committed source-specific decisions; absent sites fail materialization."
   },
@@ -20,7 +20,7 @@
   },
   "denominator": {
     "non_test_migration_only_sites": 829,
-    "sorted_site_signatures_sha256": "7856bb1e010007a59fc577e690490f4f0c78a1bdda5b32208dfb52b20c4a33e9"
+    "sorted_site_signatures_sha256": "da0387fbe1a79dbd0d1d375b3b695c6a125d77311765bb4c0b47b099e9ed1f72"
   },
   "authorizations": [
     {
@@ -6149,13 +6149,13 @@
       }
     },
     {
-      "capability_id": "mmc.migration-site.v1.production_migration_authority.f22dde2540f0913d",
-      "site_signature": "f22dde2540f0913d791494702399cad8f917a81d77e03a911b5fdfc7537f18cf",
+      "capability_id": "mmc.migration-site.v1.production_migration_authority.c668795698128533",
+      "site_signature": "c6687956981285330bc22e89d2b134cf4e70ebb217de1642f59d51ad782ba261",
       "status": "APPROVED",
       "approved": true,
       "source": {
         "path": "scripts/deploy.sh",
-        "source_sha256": "095ca3f026df3ad9a2cbb48af0110f7d461fb8404e8dd65e18b275433ab08d32",
+        "source_sha256": "a0205db0f22fbd8a3c123a4c04776538f88118906e3abb26f51fa000d5dca371",
         "line": 115,
         "column": 41,
         "method": "mixed-script-command:prisma migrate deploy"
@@ -27404,14 +27404,14 @@
       }
     },
     {
-      "capability_id": "mmc.migration-site.v1.fleet_operations.71409502638773f9",
-      "site_signature": "71409502638773f9b0f86beaba866569821fc64e5f82c3d0f18c46b850871f6e",
+      "capability_id": "mmc.migration-site.v1.fleet_operations.c3dd5cc57fd2a1d3",
+      "site_signature": "c3dd5cc57fd2a1d33155f1e70b7e82adcaffb2cb011e170e77a31ca496683f27",
       "status": "APPROVED",
       "approved": true,
       "source": {
         "path": "deploy/docker-compose.production.yml",
-        "source_sha256": "1b60e1e610712bfbca42f00a28afdfb61703c1fdc8ff29c931d89f5558f7908e",
-        "line": 482,
+        "source_sha256": "1f2c09f719b798d40cbb7cc736b9998664e2ab4205a19649d5972136a7f0cc34",
+        "line": 487,
         "column": 54,
         "method": "mixed-script-command:prisma db push"
       },

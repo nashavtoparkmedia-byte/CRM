@@ -14,7 +14,7 @@
       "lifecycle_evidence_status": "REVIEWED_DEPLOYMENT_SCHEMA_COMMAND",
       "rationale": "Production compose executes the Yandex fleet Prisma schema command during deployment, so its database write is migration-only rather than application runtime.",
       "expected_site_signatures": [
-        "71409502638773f9b0f86beaba866569821fc64e5f82c3d0f18c46b850871f6e"
+        "c3dd5cc57fd2a1d33155f1e70b7e82adcaffb2cb011e170e77a31ca496683f27"
       ]
     },
     {
@@ -201,7 +201,7 @@
       "lifecycle_evidence_status": "REVIEWED_OPERATOR_MIGRATE_DEPLOY_COMMAND",
       "rationale": "Explicit deployment entrypoint invokes Prisma migrate deploy before application startup, so its database write is migration-only.",
       "expected_site_signatures": [
-        "f22dde2540f0913d791494702399cad8f917a81d77e03a911b5fdfc7537f18cf"
+        "c6687956981285330bc22e89d2b134cf4e70ebb217de1642f59d51ad782ba261"
       ]
     },
     {
@@ -263,10 +263,10 @@
       "review_rationale": "Explicit one-shot script creates and indexes only scenario_field_settings under operator invocation."
     },
     {
-      "site_signature": "71409502638773f9b0f86beaba866569821fc64e5f82c3d0f18c46b850871f6e",
+      "site_signature": "c3dd5cc57fd2a1d33155f1e70b7e82adcaffb2cb011e170e77a31ca496683f27",
       "path": "deploy/docker-compose.production.yml",
-      "source_sha256": "1b60e1e610712bfbca42f00a28afdfb61703c1fdc8ff29c931d89f5558f7908e",
-      "line": 482,
+      "source_sha256": "1f2c09f719b798d40cbb7cc736b9998664e2ab4205a19649d5972136a7f0cc34",
+      "line": 487,
       "column": 54,
       "method": "mixed-script-command:prisma db push",
       "functional_owner": "fleet_operations",
@@ -536,9 +536,9 @@
       "existing_capability_id": "mmc.reviewed.v1.production_migration_authority.migrate_data_restore"
     },
     {
-      "site_signature": "f22dde2540f0913d791494702399cad8f917a81d77e03a911b5fdfc7537f18cf",
+      "site_signature": "c6687956981285330bc22e89d2b134cf4e70ebb217de1642f59d51ad782ba261",
       "path": "scripts/deploy.sh",
-      "source_sha256": "095ca3f026df3ad9a2cbb48af0110f7d461fb8404e8dd65e18b275433ab08d32",
+      "source_sha256": "a0205db0f22fbd8a3c123a4c04776538f88118906e3abb26f51fa000d5dca371",
       "line": 115,
       "column": 41,
       "method": "mixed-script-command:prisma migrate deploy",
