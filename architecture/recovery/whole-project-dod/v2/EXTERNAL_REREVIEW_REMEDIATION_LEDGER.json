@@ -25,7 +25,7 @@
   "external_review_r1_multi_park_trip_sync_20260911": {
     "task_id": "6915801a-227c-47af-be06-1e8ec3a05c61",
     "session_jsonl": "/root/.claude/projects/-opt-codex-work/6915801a-227c-47af-be06-1e8ec3a05c61.jsonl",
-    "session_jsonl_sha256": "a4ed5ebec4488684667fcbaf4890272d597b5f7369be01b2a04edf5f2db8bcf9",
+    "session_jsonl_sha256": "861a1db230aa4508ca379df5418e3223ebf992557e40996351e46f8020a76c10",
     "review_prompt": "architecture/recovery/whole-project-dod/v2/INDEPENDENT_REVIEWER_PROMPT_R1_MULTI_PARK_TRIP_SYNC_20260911.md",
     "review_prompt_sha256": "135439ca3b5476ab4f54761734925cddc410c7de42af5acad4d9e80929a28321",
     "final_output_timestamp": "2026-09-11T10:19:29Z",
