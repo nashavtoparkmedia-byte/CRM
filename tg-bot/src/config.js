@@ -8,8 +8,13 @@ const config = {
     // Admin configuration
     adminId: parseInt(process.env.ADMIN_IDS) || null,
     
-    // Database configuration
-    databasePath: './database.sqlite',
+    // Database configuration. The production compose mounts a named volume at
+    // /app/data and points BOT_SQLITE_PATH at it, so the bot's SQLite file
+    // survives container recreation; without this read the path would resolve
+    // inside the container and the database would be lost on every deploy.
+    // The fallback is the original in-image path, so hosts that do not set the
+    // variable are unaffected.
+    databasePath: process.env.BOT_SQLITE_PATH || './database.sqlite',
     
     // Bot settings
     botName: 'SurveyBot',
