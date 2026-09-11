@@ -1,6 +1,8 @@
 const http = require('http');
 const https = require('https');
 const logger = require('../utils/logger');
+const config = require('../config');
+const { resolveCrmWebhookUrl } = require('./crmWebhookUrl');
 
 function concreteProviderId(value) {
     if (typeof value !== 'string' && typeof value !== 'number') return null;
@@ -41,31 +43,12 @@ function extractTelegramProviderEvidence(ctx) {
     };
 }
 
-const DEFAULT_CRM_TELEGRAM_WEBHOOK_URL = 'http://localhost:3002/api/webhook/telegram';
-
-function normalizeCrmTelegramWebhookUrl(value) {
-    const configured = typeof value === 'string' && value.trim()
-        ? value.trim()
-        : DEFAULT_CRM_TELEGRAM_WEBHOOK_URL;
-    try {
-        const parsed = new URL(configured);
-        if (parsed.pathname === '' || parsed.pathname === '/') {
-            parsed.pathname = '/api/webhook/telegram';
-        }
-        return parsed.toString();
-    } catch {
-        // Preserve the invalid value so the existing request path fails closed
-        // and is reported by the forwarding error handler.
-        return configured;
-    }
-}
-
 /**
  * Service to forward incoming Telegram events to the CRM system's Webhook.
  */
 class CrmIntegrationService {
     constructor() {
-        this.crmWebhookUrl = normalizeCrmTelegramWebhookUrl(process.env.CRM_WEBHOOK_URL);
+        this.crmWebhookUrl = resolveCrmWebhookUrl(process.env.CRM_WEBHOOK_URL);
         this.isEnabled = process.env.CRM_INTEGRATION_ENABLED !== 'false';
     }
 
@@ -189,7 +172,7 @@ class CrmIntegrationService {
                     telegramId: telegramId.toString(),
                     text: text,
                     direction: direction,
-                    username: username,
+                    username: username || null,
                     timestamp: providerEvidence.observedAt || new Date().toISOString(),
                     chatId: chatId?.toString() || null,
                     chatType: chatType || null,
@@ -265,4 +248,7 @@ class CrmIntegrationService {
 module.exports = new CrmIntegrationService();
 module.exports.CrmIntegrationService = CrmIntegrationService;
 module.exports.extractTelegramProviderEvidence = extractTelegramProviderEvidence;
-module.exports.normalizeCrmTelegramWebhookUrl = normalizeCrmTelegramWebhookUrl;
+// The Telegram webhook origin normalisation now lives in its own unit-tested
+// module. The former name stays exported so the identity ingress-evidence test
+// keeps asserting the same behaviour against the single implementation.
+module.exports.normalizeCrmTelegramWebhookUrl = resolveCrmWebhookUrl;

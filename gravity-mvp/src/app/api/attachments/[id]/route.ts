@@ -25,6 +25,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import sharp from 'sharp'
+import { inlineContentDisposition } from '@/modules/messaging/internal/content-disposition'
 
 const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365
 
@@ -93,7 +94,7 @@ export async function GET(
                     'Content-Length': String(bytes.length),
                     'Accept-Ranges': 'bytes',
                     'Cache-Control': `public, max-age=${ONE_YEAR_SECONDS}, immutable`,
-                    'Content-Disposition': `inline; filename="${outputFileName!.replace(/"/g, '')}"`,
+                    'Content-Disposition': inlineContentDisposition(outputFileName!),
                 },
             })
         } catch {
@@ -146,7 +147,7 @@ export async function GET(
                     'Content-Length': String(chunk.length),
                     'Cache-Control':  `public, max-age=${ONE_YEAR_SECONDS}, immutable`,
                 }
-                if (outputFileName) rangeHeaders['Content-Disposition'] = `inline; filename="${outputFileName.replace(/"/g, '')}"`
+                if (outputFileName) rangeHeaders['Content-Disposition'] = inlineContentDisposition(outputFileName)
                 return new NextResponse(new Uint8Array(chunk), { status: 206, headers: rangeHeaders })
             }
         }
@@ -160,7 +161,7 @@ export async function GET(
             'Cache-Control': `public, max-age=${ONE_YEAR_SECONDS}, immutable`,
         }
         if (outputFileName) {
-            headers['Content-Disposition'] = `inline; filename="${outputFileName.replace(/"/g, '')}"`
+            headers['Content-Disposition'] = inlineContentDisposition(outputFileName)
         }
         return new NextResponse(new Uint8Array(outputBytes), { status: 200, headers })
     }

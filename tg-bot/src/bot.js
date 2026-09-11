@@ -2,6 +2,7 @@ require('./utils/log-interceptor');
 const { Telegraf, Scenes, session, Markup } = require('telegraf');
 const config = require('./config');
 const db = require('./database');
+const botRuntime = require('./services/botRuntime');
 const logger = require('./utils/logger');
 const { ensureBotMappingV1 } = require('./public-bot-maintenance');
 const sheetsService = require('./services/sheets');
@@ -39,6 +40,9 @@ if (socksUrl) {
 
 // Create bot instance
 const bot = new Telegraf(config.botToken, telegrafOptions);
+// The runtime needs the instance for webhook registration and update dispatch;
+// attaching is inert until start() is called.
+botRuntime.attach(bot);
 
 // 1. Session middleware (Must be first)
 bot.use(session());
@@ -398,11 +402,21 @@ Promise.all([
     initializeBotInDb().then(() => logger.info('Database bot mapping verified')),
     userService.syncPendingCrmUsers()
 ]).then(() => {
+    userService.startPeriodicCrmSync();
+
+    // Webhook mode is opt-in. When BOT_UPDATE_MODE is webhook the runtime
+    // registers the webhook with Telegram and re-asserts it if Telegram drops
+    // it; getUpdates polling must not run at the same time or Telegram answers
+    // 409. Any other value keeps the polling path below exactly as it was.
+    if (botRuntime.mode === 'webhook') {
+        logger.info('Bot starting in webhook mode');
+        return botRuntime.start();
+    }
+
     // bot.launch() returns a Promise that never resolves in polling mode —
     // we intentionally don't .then() it. We just need it kicked off.
     bot.launch().catch((err) => logger.error(`Bot launch error: ${err?.message || err}`));
     logger.info('Bot launching, heartbeat armed every ' + (HEARTBEAT_INTERVAL_MS / 1000) + 's');
-    userService.startPeriodicCrmSync();
 
     setInterval(async () => {
         const idleSec = Math.floor((Date.now() - lastActivityAt) / 1000);
@@ -411,6 +425,7 @@ Promise.all([
             await relaunchPolling('getMe failed');
         }
     }, HEARTBEAT_INTERVAL_MS);
+    return undefined;
 }).catch((err) => {
     logger.error('Startup error:', err);
 });
@@ -418,12 +433,14 @@ Promise.all([
 // Graceful shutdown
 process.once('SIGINT', () => {
     logger.info('SIGINT received, stopping bot...');
+    botRuntime.stop();
     bot.stop('SIGINT');
     db.close().then(() => process.exit(0));
 });
 
 process.once('SIGTERM', () => {
     logger.info('SIGTERM received, stopping bot...');
+    botRuntime.stop();
     bot.stop('SIGTERM');
     db.close().then(() => process.exit(0));
 });

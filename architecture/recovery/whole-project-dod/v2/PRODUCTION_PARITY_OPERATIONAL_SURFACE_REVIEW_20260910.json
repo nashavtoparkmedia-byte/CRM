@@ -1,0 +1,26 @@
+{
+  "schema": "yoko.crm.operational-surface-classification-batch.v1",
+  "authority": "Exact reviewed disposition of the tg-bot container entrypoint introduced by the production parity and release safety recovery.",
+  "summary": {
+    "total": 1,
+    "classified": 1,
+    "unclassified": 0,
+    "active_operational": 1
+  },
+  "policy": "Lifecycle classification records repository-tooling ownership and exact reviewed reachability only; it grants no credential access, business-data ownership, production write capability, provider access, telephony capability, or scan exemption.",
+  "surfaces": [
+    {
+      "path": "tg-bot/docker-entrypoint.sh",
+      "source_sha256": "42c9fcf9641a8f27bbb3025e58a268afa04b83654d072b600389ea449659d5e0",
+      "lifecycle": "OPERATIONAL_SCRIPT",
+      "disposition": "ACTIVE",
+      "functional_owner": "telegram_bot_operations",
+      "data_written": [],
+      "affected_domains": [],
+      "approved_architecture_path": "container entrypoint that repairs ownership of the tg-bot data volume and drops privileges before executing the image command",
+      "production_capability": "NONE",
+      "credential_capability": "NONE_IN_REVIEWED_SOURCE",
+      "evidence": "The exact ten-line POSIX shell script runs `set -eu`, `mkdir -p /app/data`, `chown -R app:app /app/data`, and `exec gosu app \"$@\"`. It exists because the tg_bot_data volume mount replaces /app/data and hides the ownership prepared at image build time, which would otherwise leave the unprivileged account unable to write the bot-local SQLite file. Both filesystem operations are confined to that one container-internal directory. The script reads no environment variable, opens no file, contacts no network, holds no database, provider or telephony client, and reaches no credential; its final action reduces privilege rather than raising it, handing control to the unchanged image command as the same non-root account used before. The tracked-surface scanner nevertheless conservatively enrolls every .sh file as an operational surface."
+    }
+  ]
+}
