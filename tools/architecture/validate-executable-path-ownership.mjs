@@ -33,6 +33,12 @@ const stable = (value) => {
   return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stable(value[key])]))
 }
 const digest = (value) => createHash('sha256').update(JSON.stringify(stable(value))).digest('hex')
+// One canonical ordering for exact executable path inventories. digest() preserves
+// array order — stable() sorts object keys only — so coverage derivation and the
+// reviewed-decision check must order the same path set identically or an unchanged
+// set hashes to two different values. Both sides go through these helpers.
+const comparePaths = (left, right) => left.localeCompare(right)
+const canonicalPathOrder = (paths) => [...paths].sort(comparePaths)
 const byteDigest = (value) => createHash('sha256').update(value).digest('hex')
 const assert = (value, message) => { if (!value) throw new Error(message) }
 const contains = (ownerPath, candidatePath) => candidatePath === ownerPath || candidatePath.startsWith(`${ownerPath}/`)
@@ -360,7 +366,7 @@ function deriveExecutablePathOwnershipCoverage(inventory, manifests, coverage, o
       assert(rule.exact_runtime_inventory && owner.owner_class === 'LEGACY_RUNTIME' || rule.exact_runtime_inventory && owner.owner_class === 'EVIDENCE', `application-runtime path requires exact legacy/evidence inventory ownership: ${surface.path}`)
     }
     return { exclusion: rule.id, functional_owner: rule.functional_owner, lifecycle: surface.lifecycle, path: surface.path, type: 'governed_exclusion' }
-  }).sort((left, right) => left.path.localeCompare(right.path))
+  }).sort((left, right) => comparePaths(left.path, right.path))
   for (const rule of coverage.governed_exclusions.filter((candidate) => candidate.exact_runtime_inventory)) {
     const paths = records.filter((record) => record.type === 'governed_exclusion' && record.exclusion === rule.id && record.lifecycle === 'APPLICATION_RUNTIME').map((record) => record.path)
     if (!options.allowExactInventoryRefresh) assert(paths.length === rule.exact_runtime_inventory.path_count && digest(paths) === rule.exact_runtime_inventory.path_sha256, `exact runtime inventory drift: ${rule.id} (${paths.length}/${digest(paths)})`)
@@ -464,7 +470,7 @@ function validateReviewedExactInventoryDecisions(coverage, derived, decisions, o
       && new Set(decisionChange.previous_paths).size === decisionChange.previous_paths.length
       && decisionChange.previous_paths.every((entry) => typeof entry === 'string' && entry.length > 0)
       && decisionChange.previous_paths.length === expectedChange.previous_inventory.path_count
-      && digest([...decisionChange.previous_paths].sort()) === expectedChange.previous_inventory.path_sha256, `reviewed previous exact path inventory mismatch: ${key}`)
+      && digest(canonicalPathOrder(decisionChange.previous_paths)) === expectedChange.previous_inventory.path_sha256, `reviewed previous exact path inventory mismatch: ${key}`)
   }
   assert(Array.isArray(decisions.assignments), 'reviewed exact inventory assignments missing')
 

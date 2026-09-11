@@ -362,6 +362,18 @@ services:
       # сессия писалась в node_modules/.wwebjs_auth внутри образа и стиралась при
       # каждом редеплое → WA-подключение слетало. Должен совпадать с mount ниже.
       WA_AUTH_PATH: /app/whatsapp_auth
+      # Egress bridges. Some hosts cannot reach Meta/Telegram endpoints directly
+      # and route them through a host-side proxy instead. Chromium does not read
+      # HTTP(S)_PROXY on its own, and GramJS needs an explicit HTTP CONNECT peer
+      # for the MTProto socket, so both are passed through here. The defaults are
+      # the addresses production runs today; a host with direct egress overrides
+      # them to empty in .env.production.
+      WA_CHROMIUM_PROXY_SERVER: ${WA_CHROMIUM_PROXY_SERVER:-http://172.19.0.1:10810}
+      TG_HTTP_PROXY_HOST: ${TG_HTTP_PROXY_HOST:-172.19.0.1}
+      TG_HTTP_PROXY_PORT: ${TG_HTTP_PROXY_PORT:-10810}
+      # Docker-internal bot API. Production sets this explicitly so a stale shared
+      # value cannot redirect manager identification; the code default matches.
+      TG_BOT_API_URL: ${TG_BOT_API_URL:-http://tg-bot:3001}
     volumes:
       # Записи звонков и медиа — write-through в S3, но локальный кэш нужен
       - gravity_recordings:/app/recordings
@@ -397,6 +409,21 @@ services:
       NODE_ENV: production
       # gravity-mvp callbacks — через внутреннюю сеть
       CRM_WEBHOOK_URL: http://gravity-mvp:3002
+      # Update transport. `webhook` requires TELEGRAM_WEBHOOK_URL to be a public
+      # HTTPS endpoint terminated by nginx. Production runs webhook mode, so that
+      # is the default here; a host without inbound TLS sets BOT_UPDATE_MODE
+      # explicitly to `polling` in .env.production.
+      BOT_UPDATE_MODE: ${BOT_UPDATE_MODE:-webhook}
+      TELEGRAM_WEBHOOK_URL: ${TELEGRAM_WEBHOOK_URL:-https://${BOT_ADMIN_DOMAIN}/api/telegram/webhook}
+      # Self-healing: re-assert the webhook registration if Telegram drops it.
+      BOT_WEBHOOK_CHECK_INTERVAL_MS: ${BOT_WEBHOOK_CHECK_INTERVAL_MS:-60000}
+      # Optional SOCKS egress for hosts that cannot reach Telegram directly.
+      TELEGRAM_SOCKS_PROXY: ${TELEGRAM_SOCKS_PROXY:-}
+      # Bot-local SQLite must live on a volume; inside the image it is wiped on
+      # every redeploy, which loses per-bot runtime registration state.
+      BOT_SQLITE_PATH: /app/data/database.sqlite
+    volumes:
+      - tg_bot_data:/app/data
     networks:
       - crm_internal
     depends_on:
@@ -487,6 +514,16 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       CRM_WEBHOOK_URL: http://gravity-mvp:3002
       PLAYWRIGHT_HEADLESS: "true"
+      # CANCEL_ORDER actually confirms the cancellation in the Yandex UI only
+      # when this is explicitly enabled; the worker defaults it to false and
+      # otherwise stops before the confirming click. Kept fail-closed here too.
+      CANCEL_ORDER_LIVE_ENABLED: ${CANCEL_ORDER_LIVE_ENABLED:-false}
+      # Capture the confirmation modal without acting on it (diagnostics only).
+      CANCEL_ORDER_SCREENSHOT_PROBE: ${CANCEL_ORDER_SCREENSHOT_PROBE:-false}
+      # `persistent` reuses one browser profile across runs, which is what
+      # production does; hosts that cannot keep a stable profile directory
+      # override this to empty in .env.production.
+      FLEET_BROWSER_SESSION_MODE: ${FLEET_BROWSER_SESSION_MODE:-persistent}
     command: ["npm", "run", "start:worker"]
     volumes:
       # SQLite БД — общий с api
@@ -575,6 +612,8 @@ volumes:
     name: crm_yfs_chrome_user_data
   max_user_data:
     name: crm_max_user_data
+  tg_bot_data:
+    name: crm_tg_bot_data
   minio_data:
     name: crm_minio_data
   freeswitch_recordings:

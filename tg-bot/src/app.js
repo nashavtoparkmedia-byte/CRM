@@ -23,11 +23,15 @@ app.use((req, res, next) => {
 const adminRouter = require('./routes/admin/index');
 const webhooksRouter = require('./routes/webhooks');
 const crmRouter = require('./routes/crm');
+const telegramRouter = require('./routes/telegram');
 
 // Mount routes
 app.use('/api/admin', adminRouter);
 app.use('/api/webhooks', webhooksRouter);
 app.use('/api/bot', crmRouter);
+// Telegram webhook receiver. Inert while BOT_UPDATE_MODE is polling: the route
+// only accepts updates whose secret token matches the registered webhook.
+app.use('/api/telegram', telegramRouter);
 
 // Global Error Handler
 app.use((err, req, res, next) => {
