@@ -53,6 +53,17 @@ class MainActivity : AppCompatActivity() {
     /** URL the shell most recently decided to load; the retry button reuses it. */
     private var currentTargetUrl: String = CrmOrigin.startUrl()
 
+    /**
+     * Whether the load now in flight has already failed.
+     *
+     * `onPageFinished` fires even for a navigation that errored, and it fires
+     * AFTER `onReceivedError`, carrying the URL that was being attempted. Without
+     * this flag the finish handler saw an in-app URL, called `showContent`, and
+     * revealed the WebView's own technical error page — the operator lost the
+     * retry screen a fraction of a second after seeing it.
+     */
+    private var currentLoadFailed = false
+
     private var fileChooserCallback: ValueCallback<Array<Uri>>? = null
 
     private val filePicker = registerForActivityResult(
@@ -171,6 +182,11 @@ class MainActivity : AppCompatActivity() {
 
     private inner class ShellWebViewClient : WebViewClient() {
 
+        override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+            super.onPageStarted(view, url, favicon)
+            currentLoadFailed = false
+        }
+
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
             val url = request.url?.toString()
             if (CrmOrigin.isInAppUrl(url)) return false
@@ -181,6 +197,10 @@ class MainActivity : AppCompatActivity() {
 
         override fun onPageFinished(view: WebView, url: String?) {
             super.onPageFinished(view, url)
+            // A failed navigation still finishes, and the URL it reports is the
+            // one we asked for. Showing content here would put the WebView's own
+            // error page back on screen in place of ours.
+            if (currentLoadFailed) return
             if (CrmOrigin.isInAppUrl(url)) {
                 showContent()
                 currentTargetUrl = url ?: currentTargetUrl
@@ -197,6 +217,7 @@ class MainActivity : AppCompatActivity() {
             // Only a failed main-frame load is worth a full error screen; a
             // missing avatar is not.
             if (request.isForMainFrame) {
+                currentLoadFailed = true
                 showError(getString(R.string.error_network))
             }
         }
@@ -223,6 +244,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             if (request.isForMainFrame && errorResponse.statusCode >= 500) {
+                currentLoadFailed = true
                 showError(getString(R.string.error_server, errorResponse.statusCode))
             }
         }
@@ -235,7 +257,21 @@ class MainActivity : AppCompatActivity() {
             // Never proceed. A certificate problem on the CRM origin is a hard
             // stop, not something an operator should be able to click through.
             handler.cancel()
+            currentLoadFailed = true
             showError(getString(R.string.error_tls))
+        }
+
+        /**
+         * The renderer died, usually out of memory. Without this the shell keeps
+         * a dead grey WebView on screen with no way forward.
+         */
+        override fun onRenderProcessGone(
+            view: WebView,
+            detail: android.webkit.RenderProcessGoneDetail,
+        ): Boolean {
+            currentLoadFailed = true
+            showError(getString(R.string.error_network))
+            return true
         }
     }
 
@@ -315,6 +351,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun load(url: String) {
         currentTargetUrl = url
+        currentLoadFailed = false
         showContent()
         webView.loadUrl(url)
     }

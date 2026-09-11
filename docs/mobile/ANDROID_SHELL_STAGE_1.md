@@ -343,6 +343,32 @@ cd android && YOKO_SHELL_KEYSTORE_PROPERTIES=<path> \
 The artifact lands at `app/build/outputs/apk/acceptance/app-acceptance.apk` and
 installs alongside the production-origin build rather than over it.
 
+### Two errors you will see on the test backend, neither of them the shell
+
+`401 GET /api/calls/sip-credentials` before login, and `500 POST /messages`
+shortly after the messenger opens. Both also occur in the desktop lane, which
+the shell lane touches in no way, so both are pre-existing CRM behaviour on a
+backend with no integration-admin session:
+
+- the 401 is `getCurrentUser()` returning null for a caller with no
+  `crm_user_id`, which is the CRM failing closed as designed;
+- the 500 is a messenger server action guarded by `requireIntegrationAdminAccess()`,
+  which throws unless somebody has signed in at
+  `/settings/integrations/access`. Provisioning `ADMIN_USER` and `ADMIN_PASS` is
+  not enough; the guard wants the signed session, not the configured credential.
+
+The messenger still renders and the conversation list still loads. Neither error
+blocks any acceptance step. They are recorded here so nobody spends time on them
+believing the mobile work caused them.
+
+### Run the backend as a production build
+
+Use `next build` then `next start`, not `next dev`. The development server ships
+an error overlay, hot reload and the Next dev indicator, and a transport hiccup
+surfaces through that overlay as a raw technical message rather than anything an
+operator can act on. That is what produced the "Failed to fetch" seen during the
+first acceptance attempt.
+
 ### What this proves and what it does not
 
 Verifiable on the test backend: the login gate, credential refusal, session
