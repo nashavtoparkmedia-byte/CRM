@@ -1614,8 +1614,22 @@ async function doInitializeClient(connectionId: string): Promise<void> {
             if (existingUnified) {
                 console.log(`[WA-SERVICE] DB-DEDUP: skipped duplicate ${direction} msgId=${msg.id._serialized} (existing=${existingUnified.id})`)
                 if (!existingUnified.externalId) {
+                    // A CRM-initiated send creates the optimistic Message before the
+                    // provider echo arrives. The echo is the authority for the provider
+                    // id, the delivered state and the time the message actually left.
+                    // Only a validated provider timestamp is applied: a corrupt or
+                    // implausible one must never rewrite chronology, so in that case the
+                    // optimistic CRM time stands. This reconciles the record we already
+                    // hold by its exact id and never re-resolves a conversation.
+                    const providerSentAt = isOutbound ? validateMessageTs(msg.timestamp) : null
                     try {
-                        await patchMessageDeliveryV1({ contract: PATCH_MESSAGE_DELIVERY_COMMAND_V1, messageId: existingUnified.id, externalId: msg.id._serialized })
+                        await patchMessageDeliveryV1({
+                            contract: PATCH_MESSAGE_DELIVERY_COMMAND_V1,
+                            messageId: existingUnified.id,
+                            externalId: msg.id._serialized,
+                            ...(isOutbound ? { status: 'delivered' as const } : {}),
+                            ...(providerSentAt ? { sentAt: providerSentAt } : {}),
+                        })
                     } catch (updErr: any) {
                         if (updErr.code !== 'P2002') throw updErr
                     }

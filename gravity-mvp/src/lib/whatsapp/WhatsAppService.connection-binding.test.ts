@@ -821,6 +821,55 @@ describe('WhatsApp private conversation connection ownership', () => {
         expect(mocks.recordExactProviderReachability).not.toHaveBeenCalled()
     })
 
+    test('reconciles a matched optimistic outbound Message with the provider id, delivered state and provider send time', async () => {
+        await initializeClient(INCOMING_CONNECTION_ID)
+        const handler = mocks.clients.get(INCOMING_CONNECTION_ID)?.handlers.get('message')
+        mocks.messageFindFirst.mockResolvedValue({ id: 'optimistic-1', externalId: null })
+        const providerSeconds = Math.floor(Date.now() / 1000) - 30
+
+        await handler?.({
+            id: { _serialized: 'wa-outbound-echo' },
+            from: '79990009999@c.us',
+            to: PRIVATE_JID,
+            fromMe: true,
+            body: 'manager outbound echo',
+            timestamp: providerSeconds,
+            type: 'chat',
+            hasMedia: false,
+        })
+
+        expect(mocks.createChannelMessage).not.toHaveBeenCalled()
+        expect(mocks.patchMessageDelivery).toHaveBeenCalledOnce()
+        const [command] = mocks.patchMessageDelivery.mock.calls[0]
+        expect(command.messageId).toBe('optimistic-1')
+        expect(command.externalId).toBe('wa-outbound-echo')
+        expect(command.status).toBe('delivered')
+        expect(command.sentAt).toEqual(new Date(providerSeconds * 1000))
+    })
+
+    test('never lets a corrupt provider timestamp rewrite the optimistic send time', async () => {
+        await initializeClient(INCOMING_CONNECTION_ID)
+        const handler = mocks.clients.get(INCOMING_CONNECTION_ID)?.handlers.get('message')
+        mocks.messageFindFirst.mockResolvedValue({ id: 'optimistic-2', externalId: null })
+
+        await handler?.({
+            id: { _serialized: 'wa-outbound-corrupt-ts' },
+            from: '79990009999@c.us',
+            to: PRIVATE_JID,
+            fromMe: true,
+            body: 'manager outbound echo',
+            timestamp: -1,
+            type: 'chat',
+            hasMedia: false,
+        })
+
+        expect(mocks.patchMessageDelivery).toHaveBeenCalledOnce()
+        const [command] = mocks.patchMessageDelivery.mock.calls[0]
+        expect(command.externalId).toBe('wa-outbound-corrupt-ts')
+        expect(command.status).toBe('delivered')
+        expect(command.sentAt).toBeUndefined()
+    })
+
     test('does not record live reachability from a group-room message', async () => {
         await initializeClient(INCOMING_CONNECTION_ID)
         const handler = mocks.clients.get(INCOMING_CONNECTION_ID)?.handlers.get('message')
